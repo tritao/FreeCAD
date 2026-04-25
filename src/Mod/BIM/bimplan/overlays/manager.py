@@ -358,8 +358,9 @@ def _refresh_select_tool_overlays(session, dirty, refresh_all):
         overlay_spaces.sync_secondary_selected_overlays(session)
     if refresh_all or plan_document_visuals.PLAN_VISUAL_SPACE_REGION_PICK in dirty:
         overlay_spaces.clear_space_region_pick_overlays(session)
-    if refresh_all or plan_document_visuals.PLAN_VISUAL_WALL_GRIPS in dirty:
+    if refresh_all or plan_document_visuals.PLAN_VISUAL_SELECTED_WALL in dirty:
         overlay_walls.sync_selected_wall_overlay(session)
+    if refresh_all or plan_document_visuals.PLAN_VISUAL_WALL_GRIPS in dirty:
         overlay_walls.sync_wall_grips(session)
     provider_overlays_dirty = (
         refresh_all or plan_document_visuals.PLAN_VISUAL_PROVIDER_OVERLAYS in dirty

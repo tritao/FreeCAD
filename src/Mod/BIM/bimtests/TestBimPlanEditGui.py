@@ -179,6 +179,66 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
     def _assert_no_selected_plan_target(self, session):
         self._assert_selected_plan_target(session, None, None)
 
+    def _undo_document(self):
+        undo = getattr(self.document, "undo", None)
+        if callable(undo):
+            undo()
+        else:
+            FreeCADGui.runCommand("Std_Undo", 0)
+        self.pump_gui_events(timeout_ms=500)
+
+    def _redo_document(self):
+        redo = getattr(self.document, "redo", None)
+        if callable(redo):
+            redo()
+        else:
+            FreeCADGui.runCommand("Std_Redo", 0)
+        self.pump_gui_events(timeout_ms=500)
+
+    def _get_wall_endpoints(self, wall):
+        start, end = wall.Proxy.calc_endpoints(wall)
+        return (FreeCAD.Vector(start), FreeCAD.Vector(end))
+
+    def _get_hosted_opening_center_u(self, opening):
+        proxy = opening.ViewObject.Proxy
+        context = proxy.get_plan_move_context()
+        center = proxy.get_plan_center_point()
+        self.assertIsNotNone(center)
+        return (
+            FreeCAD.Vector(center).sub(context["origin"]).dot(context["axis_u"]),
+            float(context["opening_half_width_u"]),
+        )
+
+    def _assert_wall_grips_match_wall(self, session, wall):
+        endpoints = self._get_wall_endpoints(wall)
+        midpoint = (endpoints[0] + endpoints[1]) * 0.5
+        self.assertEqual(len(session._grip_trackers), 3)
+        expected_points = (endpoints[0], endpoints[1], midpoint)
+        for tracker, expected in zip(session._grip_trackers, expected_points):
+            self.assertLess(tracker.get().distanceToPoint(expected), 1e-6)
+
+    def _assert_selected_wall_visuals(self, session, wall):
+        self.assertIs(session.selection.get_selected_target_for_kind("wall"), wall)
+        self.assertGreater(len(session._wall_overlay_trackers), 0)
+        self._assert_wall_grips_match_wall(session, wall)
+
+    def _assert_no_wall_edit_preview_visuals(self, session):
+        self.assertEqual(len(session._preview_grip_trackers), 0)
+        self.assertEqual(len(session._wall_edit_readout_trackers), 0)
+        self.assertEqual(len(session._wall_edit_opening_preview_trackers), 0)
+
+    def _assert_wall_selection_visual_consistency(self, session):
+        selected_wall = session.selection.get_selected_target_for_kind("wall")
+        if selected_wall is None:
+            self.assertEqual(len(session._wall_overlay_trackers), 0)
+            self.assertEqual(len(session._grip_trackers), 0)
+            return
+        self.assertGreater(len(session._wall_overlay_trackers), 0)
+        if session.wall_edit.is_selected_wall_endpoint_editable():
+            self._assert_wall_grips_match_wall(session, selected_wall)
+        else:
+            self.assertEqual(len(session._grip_trackers), 0)
+
     def _get_scenegraph_named_switches(self, session, switch_name):
         view = getattr(session, "view", None)
         scene_graph = view.getSceneGraph() if view else None
@@ -1330,6 +1390,62 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
             self.pump_gui_events()
         finally:
             arch_params.SetBool("autoJoinWalls", original_autojoin)
+
+    def test_plan_edit_rect_wall_tool_undo_redo_roundtrip(self):
+        """Rect wall creation should roundtrip cleanly through document undo/redo."""
+
+        level = Arch.makeFloor(name="Level 0")
+        self.document.recompute()
+
+        FreeCADGui.Selection.clearSelection()
+        FreeCADGui.Selection.addSelection(level)
+
+        session = BimPlanSession.start_session()
+        self.assertIsNotNone(session)
+        self.pump_gui_events()
+
+        initial_wall_names = {
+            obj.Name for obj in self.document.Objects if Draft.getType(obj) == "Wall"
+        }
+
+        session.lifecycle.activate_rect_wall_tool()
+        self.pump_gui_events()
+        session.wall_create.handle_rect_wall_point(FreeCAD.Vector(0, 0, 0))
+        session.wall_create.handle_rect_wall_point(FreeCAD.Vector(3000, 2000, 0))
+        self.pump_gui_events()
+
+        created_walls = [
+            obj
+            for obj in self.document.Objects
+            if Draft.getType(obj) == "Wall" and obj.Name not in initial_wall_names
+        ]
+        self.assertEqual(len(created_walls), 4)
+        for wall in created_walls:
+            self.assertIn(level, wall.InListRecursive)
+        self._assert_wall_selection_visual_consistency(session)
+
+        self._undo_document()
+        undone_walls = [
+            obj
+            for obj in self.document.Objects
+            if Draft.getType(obj) == "Wall" and obj.Name not in initial_wall_names
+        ]
+        self.assertEqual(len(undone_walls), 0)
+        self._assert_wall_selection_visual_consistency(session)
+
+        self._redo_document()
+        redone_walls = [
+            obj
+            for obj in self.document.Objects
+            if Draft.getType(obj) == "Wall" and obj.Name not in initial_wall_names
+        ]
+        self.assertEqual(len(redone_walls), 4)
+        for wall in redone_walls:
+            self.assertIn(level, wall.InListRecursive)
+        self._assert_wall_selection_visual_consistency(session)
+
+        session.shutdown(close_dialog=False)
+        self.pump_gui_events()
 
     def test_plan_edit_hides_joined_wall_additions(self):
         """Joined child walls should stay hidden so their footprints do not overdraw the host."""
@@ -4046,6 +4162,94 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         self.assertIn("Candidate wall", body)
         self.assertIn("create a miter joint", body.lower())
 
+    def test_plan_edit_join_mode_undo_redo_roundtrip(self):
+        """Wall join creation should roundtrip cleanly through document undo/redo."""
+
+        source_wall = Arch.makeWall(length=3000, width=200, height=2500)
+        source_wall.Placement = FreeCAD.Placement(FreeCAD.Vector(0, 0, 0), FreeCAD.Rotation())
+        target_wall = Arch.makeWall(length=3000, width=200, height=2500)
+        target_wall.Placement = FreeCAD.Placement(
+            FreeCAD.Vector(1500, 1500, 0), FreeCAD.Rotation(FreeCAD.Vector(0, 0, 1), 90)
+        )
+        self.document.recompute()
+
+        session = BimPlanSession.start_session()
+        self.assertIsNotNone(session)
+        self.pump_gui_events()
+
+        session.selection.select_wall_for_plan_edit(source_wall)
+        session.lifecycle.activate_join_tool()
+
+        from pivy import coin
+
+        class _FakeMousePosition:
+            def __init__(self, x, y):
+                self._value = (x, y)
+
+            def getValue(self):
+                return self._value
+
+        class _FakeMouseEvent:
+            def __init__(self, x, y):
+                self._position = _FakeMousePosition(x, y)
+
+            def getButton(self):
+                return coin.SoMouseButtonEvent.BUTTON1
+
+            def getState(self):
+                return coin.SoMouseButtonEvent.DOWN
+
+            def getPosition(self):
+                return self._position
+
+        with (
+            patch.object(session.selection, "get_edit_node", return_value=None),
+            patch.object(
+                session.selection,
+                "get_plan_target_at_position",
+                return_value=("wall", target_wall),
+            ),
+        ):
+            session.input.on_mouse_pressed(self._FakeEventCallback(_FakeMouseEvent(250, 250)))
+
+        joints = [
+            obj
+            for obj in self.document.Objects
+            if getattr(getattr(obj, "Proxy", None), "Type", None) == "WallJoint"
+        ]
+        self.assertEqual(len(joints), 1)
+        joint = joints[0]
+        self.assertEqual(joint.JointType, "Miter")
+        self.assertEqual({joint.WallA, joint.WallB}, {source_wall, target_wall})
+        self._assert_selected_wall_visuals(session, source_wall)
+        self.assertEqual(len(session._wall_hover_trackers), 0)
+
+        self._undo_document()
+        joints = [
+            obj
+            for obj in self.document.Objects
+            if getattr(getattr(obj, "Proxy", None), "Type", None) == "WallJoint"
+        ]
+        self.assertEqual(joints, [])
+        self._assert_selected_wall_visuals(session, source_wall)
+        self.assertEqual(len(session._wall_hover_trackers), 0)
+
+        self._redo_document()
+        joints = [
+            obj
+            for obj in self.document.Objects
+            if getattr(getattr(obj, "Proxy", None), "Type", None) == "WallJoint"
+        ]
+        self.assertEqual(len(joints), 1)
+        joint = joints[0]
+        self.assertEqual(joint.JointType, "Miter")
+        self.assertEqual({joint.WallA, joint.WallB}, {source_wall, target_wall})
+        self._assert_selected_wall_visuals(session, source_wall)
+        self.assertEqual(len(session._wall_hover_trackers), 0)
+
+        session.shutdown(close_dialog=False)
+        self.pump_gui_events()
+
     def test_plan_edit_selected_wall_shows_junction_node_overlay(self):
         """Selecting a wall in a wall junction should show the junction node overlay."""
 
@@ -5082,6 +5286,82 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         updated_center_u = FreeCAD.Vector(updated_center).sub(wall_start).dot(wall_axis_u)
         updated_left_clearance = updated_center_u - updated_context["opening_half_width_u"]
         self.assertAlmostEqual(updated_left_clearance, initial_left_clearance, delta=1e-6)
+
+    def test_plan_edit_wall_stretch_undo_redo_roundtrip_with_hosted_opening(self):
+        """Wall stretch undo/redo should restore both wall geometry and hosted opening layout."""
+
+        wall = Arch.makeWall(length=3000, width=200, height=2500)
+        self.document.recompute()
+        door = self._make_hosted_door(wall, name="UndoRedoStretchDoor", width=900.0)
+        self.document.recompute()
+
+        door_proxy = door.ViewObject.Proxy
+        move_context = door_proxy.get_plan_move_context()
+        target_center_u = 750.0
+        target_point = move_context["origin"].add(
+            FreeCAD.Vector(move_context["axis_u"]).multiply(target_center_u)
+        )
+        target_point.z = move_context["base_z"]
+        self.assertTrue(door_proxy.move_along_host(target_point))
+        self.document.recompute()
+
+        initial_start, initial_end = self._get_wall_endpoints(wall)
+        initial_center_u, half_width = self._get_hosted_opening_center_u(door)
+        initial_left_clearance = initial_center_u - half_width
+
+        session = BimPlanSession.start_session()
+        self.assertIsNotNone(session)
+        self.pump_gui_events()
+
+        FreeCADGui.Selection.clearSelection()
+        FreeCADGui.Selection.addSelection(self.document.Name, wall.Name)
+        self.pump_gui_events()
+        session.selection.refresh_primary_selected_plan_target()
+
+        captured = {}
+
+        def fake_get_point(**kwargs):
+            captured.update(kwargs)
+
+        new_start = FreeCAD.Vector(initial_start).add(FreeCAD.Vector(200.0, 0.0, 0.0))
+        with (
+            patch.object(FreeCADGui.Snapper, "getPoint", side_effect=fake_get_point),
+            patch.object(FreeCADGui.Snapper, "setSelectMode", return_value=None),
+        ):
+            session.wall_edit.start_wall_grip_edit(0)
+            captured["callback"](new_start, None)
+
+        updated_start, updated_end = self._get_wall_endpoints(wall)
+        self.assertGreater(updated_start.distanceToPoint(initial_start), 1e-6)
+        self.assertLess(updated_end.distanceToPoint(initial_end), 1e-6)
+        updated_center_u, updated_half_width = self._get_hosted_opening_center_u(door)
+        updated_left_clearance = updated_center_u - updated_half_width
+        self.assertAlmostEqual(updated_left_clearance, initial_left_clearance, delta=1e-6)
+        self._assert_selected_wall_visuals(session, wall)
+        self._assert_no_wall_edit_preview_visuals(session)
+
+        self._undo_document()
+        undo_start, undo_end = self._get_wall_endpoints(wall)
+        self.assertLess(undo_start.distanceToPoint(initial_start), 1e-6)
+        self.assertLess(undo_end.distanceToPoint(initial_end), 1e-6)
+        undo_center_u, undo_half_width = self._get_hosted_opening_center_u(door)
+        self.assertAlmostEqual(undo_center_u, initial_center_u, delta=1e-6)
+        self.assertAlmostEqual(undo_center_u - undo_half_width, initial_left_clearance, delta=1e-6)
+        self._assert_wall_selection_visual_consistency(session)
+        self._assert_no_wall_edit_preview_visuals(session)
+
+        self._redo_document()
+        redo_start, redo_end = self._get_wall_endpoints(wall)
+        self.assertLess(redo_start.distanceToPoint(updated_start), 1e-6)
+        self.assertLess(redo_end.distanceToPoint(updated_end), 1e-6)
+        redo_center_u, redo_half_width = self._get_hosted_opening_center_u(door)
+        self.assertAlmostEqual(redo_center_u, updated_center_u, delta=1e-6)
+        self.assertAlmostEqual(redo_center_u - redo_half_width, updated_left_clearance, delta=1e-6)
+        self._assert_wall_selection_visual_consistency(session)
+        self._assert_no_wall_edit_preview_visuals(session)
+
+        session.shutdown(close_dialog=False)
+        self.pump_gui_events()
 
     def test_plan_edit_wall_stretch_keeps_opening_symbol_centered_on_slot(self):
         """Hosted opening symbols should stay centered on the actual slot after wall resize."""
