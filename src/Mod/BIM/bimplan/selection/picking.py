@@ -308,7 +308,7 @@ def get_plan_space_instances(session):
     return _get_cached_plan_instances(
         session,
         "plan_space_instances_cache",
-        session._is_plan_space_object,
+        lambda obj: plan_targets.is_plan_space_object(session, obj),
         "plan_space_instance_objects_scanned",
         "build_plan_space_instances_cache",
     )
@@ -318,7 +318,7 @@ def get_plan_region_instances(session):
     return _get_cached_plan_instances(
         session,
         "plan_region_instances_cache",
-        session._is_plan_region_object,
+        lambda obj: plan_targets.is_plan_region_object(session, obj),
         "plan_region_instance_objects_scanned",
         "build_plan_region_instances_cache",
     )
@@ -1037,7 +1037,7 @@ def pick_plan_space_target_from_footprints(session, mouse_pos):
     return pick_plan_target_from_footprint_faces(
         session,
         mouse_pos,
-        session._is_plan_space_object,
+        lambda obj: plan_targets.is_plan_space_object(session, obj),
         session.overlays.get_space_footprint_faces,
         target_label="space",
     )
@@ -1047,7 +1047,7 @@ def pick_plan_region_target_from_footprints(session, mouse_pos):
     return pick_plan_target_from_footprint_faces(
         session,
         mouse_pos,
-        session._is_plan_region_object,
+        lambda obj: plan_targets.is_plan_region_object(session, obj),
         session.overlays.get_region_footprint_faces,
         target_label="region",
     )
