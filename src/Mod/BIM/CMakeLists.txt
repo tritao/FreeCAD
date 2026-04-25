@@ -251,6 +251,11 @@ SET(bimplan_SRCS
     bimplan/tools/__init__.py
     bimplan/tools/hosted_openings.py
     bimplan/tools/opening_edit.py
+    bimplan/tools/space_boundaries.py
+    bimplan/tools/space_editing.py
+    bimplan/tools/space_geometry.py
+    bimplan/tools/space_interaction.py
+    bimplan/tools/space_regions.py
     bimplan/tools/spaces.py
     bimplan/tools/symbol_edit.py
     bimplan/tools/wall_create.py
