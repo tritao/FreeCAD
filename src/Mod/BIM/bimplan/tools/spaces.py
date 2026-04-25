@@ -38,7 +38,7 @@ reset_space_text_pick_state = plan_space_interaction.reset_space_text_pick_state
 start_space_text_position_pick = plan_space_interaction.start_space_text_position_pick
 finish_space_text_position_pick = plan_space_interaction.finish_space_text_position_pick
 cancel_space_text_position_pick = plan_space_interaction.cancel_space_text_position_pick
-get_space_region_candidate_report = plan_space_regions.get_space_region_candidate_report
+build_space_region_candidate_report = plan_space_regions.build_space_region_candidate_report
 report_space_region_candidate_failure = plan_space_regions.report_space_region_candidate_failure
 set_space_region_pick_state = plan_space_regions.set_space_region_pick_state
 reset_space_region_pick_state = plan_space_regions.reset_space_region_pick_state
@@ -50,7 +50,7 @@ get_space_region_candidate_segments = plan_space_regions.get_space_region_candid
 pick_space_region_candidate = plan_space_regions.pick_space_region_candidate
 set_hovered_space_region_candidate = plan_space_regions.set_hovered_space_region_candidate
 create_space_region_base_object = plan_space_regions.create_space_region_base_object
-begin_space_region_pick = plan_space_regions.begin_space_region_pick
+start_space_region_pick = plan_space_regions.start_space_region_pick
 cancel_space_region_pick = plan_space_regions.cancel_space_region_pick
 create_space_from_region_candidate = plan_space_regions.create_space_from_region_candidate
 activate_space_region_candidate = plan_space_regions.activate_space_region_candidate
@@ -62,13 +62,13 @@ get_space_boundary_reference_point = plan_space_boundaries.get_space_boundary_re
 get_space_boundary_entries = plan_space_boundaries.get_space_boundary_entries
 space_boundary_key = plan_space_boundaries.space_boundary_key
 get_selected_space_boundary_links = plan_space_boundaries.get_selected_space_boundary_links
-get_space_region_seed_targets = plan_space_boundaries.get_space_region_seed_targets
-get_selected_space_region_seed = plan_space_boundaries.get_selected_space_region_seed
-get_space_creation_request = plan_space_boundaries.get_space_creation_request
+resolve_space_region_seed_targets = plan_space_boundaries.resolve_space_region_seed_targets
+resolve_selected_space_region_seed = plan_space_boundaries.resolve_selected_space_region_seed
+build_space_creation_request = plan_space_boundaries.build_space_creation_request
 should_run_space_preflight_for_targets = (
     plan_space_boundaries.should_run_space_preflight_for_targets
 )
-get_space_preflight_report = plan_space_boundaries.get_space_preflight_report
+build_space_preflight_report = plan_space_boundaries.build_space_preflight_report
 format_space_preflight_text = plan_space_boundaries.format_space_preflight_text
 set_selected_space_label = plan_space_editing.set_selected_space_label
 set_selected_space_type = plan_space_editing.set_selected_space_type
@@ -129,17 +129,17 @@ class PlanSpacesAPI(_SessionAPI):
     def get_selected_space_boundary_links(self, *args, **kwargs):
         return get_selected_space_boundary_links(self.session, *args, **kwargs)
 
-    def get_space_region_seed_targets(self, *args, **kwargs):
-        return get_space_region_seed_targets(self.session, *args, **kwargs)
+    def resolve_space_region_seed_targets(self, *args, **kwargs):
+        return resolve_space_region_seed_targets(self.session, *args, **kwargs)
 
-    def get_selected_space_region_seed(self, *args, **kwargs):
-        return get_selected_space_region_seed(self.session, *args, **kwargs)
+    def resolve_selected_space_region_seed(self, *args, **kwargs):
+        return resolve_selected_space_region_seed(self.session, *args, **kwargs)
 
-    def get_space_creation_request(self, *args, **kwargs):
-        return get_space_creation_request(self.session, *args, **kwargs)
+    def build_space_creation_request(self, *args, **kwargs):
+        return build_space_creation_request(self.session, *args, **kwargs)
 
-    def get_space_region_candidate_report(self, *args, **kwargs):
-        return get_space_region_candidate_report(self.session, *args, **kwargs)
+    def build_space_region_candidate_report(self, *args, **kwargs):
+        return build_space_region_candidate_report(self.session, *args, **kwargs)
 
     def get_space_region_pick_candidates(self, *args, **kwargs):
         return get_space_region_pick_candidates(self.session, *args, **kwargs)
@@ -150,8 +150,8 @@ class PlanSpacesAPI(_SessionAPI):
     def get_hovered_space_region_candidate(self, *args, **kwargs):
         return get_hovered_space_region_candidate(self.session, *args, **kwargs)
 
-    def get_space_preflight_report(self, *args, **kwargs):
-        return get_space_preflight_report(self.session, *args, **kwargs)
+    def build_space_preflight_report(self, *args, **kwargs):
+        return build_space_preflight_report(self.session, *args, **kwargs)
 
     def has_active_space_separator_tool(self, *args, **kwargs):
         return has_active_space_separator_tool(self.session, *args, **kwargs)
@@ -204,8 +204,8 @@ class PlanSpacesAPI(_SessionAPI):
     def pick_space_region_candidate(self, *args, **kwargs):
         return pick_space_region_candidate(self.session, *args, **kwargs)
 
-    def begin_space_region_pick(self, *args, **kwargs):
-        return begin_space_region_pick(self.session, *args, **kwargs)
+    def start_space_region_pick(self, *args, **kwargs):
+        return start_space_region_pick(self.session, *args, **kwargs)
 
     def cancel_space_region_pick(self, *args, **kwargs):
         return cancel_space_region_pick(self.session, *args, **kwargs)

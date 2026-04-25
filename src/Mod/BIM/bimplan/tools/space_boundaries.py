@@ -272,7 +272,7 @@ def _resolve_space_creation_request(session, targets=None):
     return _build_seeded_region_space_creation_request(session, selection_shape)
 
 
-def get_space_region_seed_targets(session, targets=None):
+def resolve_space_region_seed_targets(session, targets=None):
     targets = _get_space_selection_targets(session, targets=targets)
     selection_shape = _resolve_space_selection_shape(targets)
     if selection_shape.mode == _SPACE_SELECTION_SEEDED_REGION:
@@ -285,12 +285,12 @@ def get_space_region_seed_targets(session, targets=None):
     return (None, [])
 
 
-def get_selected_space_region_seed(session, targets=None):
-    region_seed_space, _wall_targets = get_space_region_seed_targets(session, targets)
+def resolve_selected_space_region_seed(session, targets=None):
+    region_seed_space, _wall_targets = resolve_space_region_seed_targets(session, targets)
     return region_seed_space
 
 
-def get_space_creation_request(session, targets=None):
+def build_space_creation_request(session, targets=None):
     request = _resolve_space_creation_request(session, targets=targets)
     return request.to_dict() if request else None
 
@@ -299,7 +299,7 @@ def should_run_space_preflight_for_targets(targets):
     return _resolve_space_selection_shape(targets).should_run_preflight
 
 
-def get_space_preflight_report(session, targets=None):
+def build_space_preflight_report(session, targets=None):
     if session.current_tool != "Select":
         return None
 

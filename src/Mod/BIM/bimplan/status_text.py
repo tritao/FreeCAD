@@ -94,11 +94,11 @@ def get_plan_selection_summary_text(session):
         return ""
     targets = session.selection.get_selected_plan_targets()
     preflight_text = session.spaces.format_space_preflight_text(
-        session.spaces.get_space_preflight_report(targets)
+        session.spaces.build_space_preflight_report(targets)
     )
     if len(targets) <= 1:
         return preflight_text
-    region_seed_space, wall_targets = session.spaces.get_space_region_seed_targets(targets)
+    region_seed_space, wall_targets = session.spaces.resolve_space_region_seed_targets(targets)
     if region_seed_space is not None and wall_targets:
         summary = translate("BIM_PlanEdit", "Boundary candidates: {summary}").format(
             summary=summarize_plan_targets(wall_targets)
