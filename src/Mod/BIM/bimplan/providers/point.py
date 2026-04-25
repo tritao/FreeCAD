@@ -7,6 +7,7 @@ import FreeCADGui
 
 from bimplan import document_visuals as plan_document_visuals
 from bimplan.providers import host_targets as plan_host_targets
+from bimplan.providers import payloads as plan_provider_payloads
 from bimplan.selection import target_kinds as plan_target_kinds
 
 translate = FreeCAD.Qt.translate
@@ -360,21 +361,21 @@ def build_provider_point_tool_payload(
     )
     if placement_point is None:
         placement_point = plan_point
-    return {
-        "tool": tool,
-        "point": plan_point,
-        "placement_point": placement_point,
-        "raw_point": raw_point,
-        "snap_info": snap_info,
-        "snap_object": snap_object,
-        "snap_target": snap_target,
-        "snap_document_name": snap_document_name,
-        "snap_object_name": snap_object_name,
-        "snap_component": snap_component,
-        "snap_subname": snap_subname,
-        "selected_target": selected_target,
-        "selected_targets": selected_targets,
-        "hovered_target": hovered_target,
-        "host_target": host_target,
-        "host_source": host_source,
-    }
+    return plan_provider_payloads.ProviderPointActionPayload(
+        tool=tool,
+        point=plan_point,
+        placement_point=placement_point,
+        raw_point=raw_point,
+        snap_info=snap_info,
+        snap_object=snap_object,
+        snap_target=snap_target,
+        snap_document_name=snap_document_name,
+        snap_object_name=snap_object_name,
+        snap_component=snap_component,
+        snap_subname=snap_subname,
+        selected_target=selected_target,
+        selected_targets=selected_targets,
+        hovered_target=hovered_target,
+        host_target=host_target,
+        host_source=host_source,
+    )
