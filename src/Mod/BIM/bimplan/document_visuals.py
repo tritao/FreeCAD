@@ -774,7 +774,7 @@ class PlanDocumentVisualsAPI:
         return self._session
 
     def is_hidden_library_definition_object(self, *args, **kwargs):
-        return is_hidden_library_definition_object(self.session, *args, **kwargs)
+        return is_hidden_library_definition_object(*args, **kwargs)
 
     def should_register_created_plan_object(self, *args, **kwargs):
         return should_register_created_plan_object(self.session, *args, **kwargs)
