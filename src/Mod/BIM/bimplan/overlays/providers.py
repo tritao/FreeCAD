@@ -7,6 +7,7 @@ import math
 import FreeCAD
 from bimplan.providers import host_targets as plan_host_targets
 from bimplan.providers import PlanOverlayMarkerKind
+from . import manager as overlay_manager
 from .. import selection as plan_selection
 
 _PROVIDER_OVERLAY_POINT_PREFIX = "ProviderOverlayPoint"
@@ -72,7 +73,7 @@ def sync_provider_overlays(session):
 
 
 def clear_provider_overlays(session):
-    session.overlays.finalize_trackers(session._provider_overlay_trackers)
+    overlay_manager.finalize_trackers(session._provider_overlay_trackers)
     session._provider_overlay_trackers = []
     session._provider_overlay_state = None
 
@@ -100,7 +101,7 @@ def sync_hovered_provider_overlay(session):
         if not specs:
             return
         for spec in specs:
-            tracker = session.overlays.make_plan_line_tracker(
+            tracker = overlay_manager.make_plan_line_tracker(
                 DraftTrackers,
                 spec["label"],
                 dotted=spec["dotted"],
@@ -116,7 +117,7 @@ def sync_hovered_provider_overlay(session):
 
 
 def clear_hovered_provider_overlay(session):
-    session.overlays.finalize_trackers(session._provider_hover_trackers)
+    overlay_manager.finalize_trackers(session._provider_hover_trackers)
     session._provider_hover_trackers = []
 
 
@@ -161,7 +162,7 @@ def sync_selected_provider_overlay(session):
             return
         clear_selected_provider_overlay(session)
         for spec in specs:
-            tracker = session.overlays.make_plan_line_tracker(
+            tracker = overlay_manager.make_plan_line_tracker(
                 DraftTrackers,
                 spec["label"],
                 dotted=spec["dotted"],
@@ -178,7 +179,7 @@ def sync_selected_provider_overlay(session):
 
 
 def clear_selected_provider_overlay(session):
-    session.overlays.finalize_trackers(session._provider_selected_trackers)
+    overlay_manager.finalize_trackers(session._provider_selected_trackers)
     session._provider_selected_trackers = []
     session._selected_provider_overlay_render_state = None
 
@@ -253,7 +254,7 @@ def sync_selected_provider_handles(session):
 
 
 def clear_selected_provider_handles(session):
-    session.overlays.finalize_trackers(session._provider_handle_trackers)
+    overlay_manager.finalize_trackers(session._provider_handle_trackers)
     session._provider_handle_trackers = []
     session._selected_provider_handle_render_state = None
 
@@ -314,7 +315,7 @@ def sync_provider_point_preview(session):
         _clear_provider_point_preview_trackers(session)
         session._provider_point_preview_style_state = style_state
         for spec in specs:
-            tracker = session.overlays.make_plan_line_tracker(
+            tracker = overlay_manager.make_plan_line_tracker(
                 DraftTrackers,
                 spec["label"],
                 dotted=spec["dotted"],
@@ -325,7 +326,7 @@ def sync_provider_point_preview(session):
             session._provider_point_preview_trackers.append(tracker)
 
     for tracker, spec in zip(session._provider_point_preview_trackers, specs):
-        session.overlays.set_plan_line_tracker_width(tracker, spec["width"])
+        overlay_manager.set_plan_line_tracker_width(tracker, spec["width"])
         tracker.setColor(spec["color"])
         tracker.p1(spec["start"])
         tracker.p2(spec["end"])
@@ -348,7 +349,7 @@ def clear_provider_point_preview(session):
 
 
 def _clear_provider_point_preview_trackers(session):
-    session.overlays.finalize_trackers(session._provider_point_preview_trackers)
+    overlay_manager.finalize_trackers(session._provider_point_preview_trackers)
     session._provider_point_preview_trackers = []
     session._provider_point_preview_render_state = None
     session._provider_point_preview_style_state = None
@@ -576,8 +577,10 @@ def _get_polyline_marker_segment_specs(points, *, label, color, width, dotted, c
 
 
 def _get_provider_point_host_segment_specs(session, host_wall, *, color, width):
+    from . import walls as overlay_walls
+
     specs = []
-    for polyline in session.overlays.get_wall_overlay_polylines(host_wall):
+    for polyline in overlay_walls.get_wall_overlay_polylines(session, host_wall):
         points = tuple(_to_vector(point) for point in tuple(polyline or ()))
         points = tuple(point for point in points if point is not None)
         if len(points) < 2:
@@ -762,7 +765,7 @@ def _create_polyline_trackers(session, DraftTrackers, label, polyline, *, color,
     if len(points) < 2:
         return
     for start, end in zip(points, points[1:]):
-        tracker = session.overlays.make_plan_line_tracker(
+        tracker = overlay_manager.make_plan_line_tracker(
             DraftTrackers,
             label,
             dotted=dotted,
@@ -801,7 +804,7 @@ def _create_point_marker_trackers(
         marker_size=marker_size,
         marker_kind=marker_kind,
     ):
-        tracker = session.overlays.make_plan_line_tracker(
+        tracker = overlay_manager.make_plan_line_tracker(
             DraftTrackers,
             spec["label"],
             dotted=spec["dotted"],
@@ -857,7 +860,7 @@ def _create_target_pick_tracker(
     except Exception:
         return
     if not _retarget_pick_tracker(session, tracker, target, target_index):
-        session.overlays.finalize_trackers([tracker])
+        overlay_manager.finalize_trackers([tracker])
         return
     try:
         tracker.on()
