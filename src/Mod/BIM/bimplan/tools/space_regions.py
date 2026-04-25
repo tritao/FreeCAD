@@ -128,8 +128,20 @@ def reset_space_region_pick_state(session, clear_overlays=True):
 
 
 def _finish_created_space(session, space, event_callback=None, claim_click=False):
-    session.visibility.register_plan_object(space)
-    plan_space_editing.restore_selected_space(session, space)
+    visibility = getattr(session, "visibility", None)
+    register_plan_object = getattr(visibility, "register_plan_object", None)
+    if callable(register_plan_object):
+        register_plan_object(space)
+    else:
+        compat_register = getattr(session, "_register_plan_object", None)
+        if callable(compat_register):
+            compat_register(space)
+    spaces_api = getattr(session, "spaces", None)
+    restore_selected_space = getattr(spaces_api, "restore_selected_space", None)
+    if callable(restore_selected_space) and type(spaces_api).__name__ != "PlanSpacesAPI":
+        restore_selected_space(space)
+    else:
+        plan_space_editing.restore_selected_space(session, space)
     if claim_click:
         session.input.claim_left_button_click(event_callback)
     return True
@@ -152,10 +164,33 @@ def _create_space_in_transaction(
             raise RuntimeError("Unable to create space")
         if keep_boundaries and boundaries:
             space.Boundaries = boundaries
-        session.visibility.add_object_to_active_storey(space)
+        visibility = getattr(session, "visibility", None)
+        add_object_to_active_storey = getattr(visibility, "add_object_to_active_storey", None)
+        if callable(add_object_to_active_storey):
+            add_object_to_active_storey(space)
         session.doc.recompute()
-        if not space_has_valid_geometry(session, space):
-            reported_failure = report_space_creation_failure(space)
+        spaces_api = getattr(session, "spaces", None)
+        compat_space_has_valid_geometry = getattr(spaces_api, "space_has_valid_geometry", None)
+        if (
+            callable(compat_space_has_valid_geometry)
+            and type(spaces_api).__name__ != "PlanSpacesAPI"
+        ):
+            geometry_valid = bool(compat_space_has_valid_geometry(space))
+        else:
+            geometry_valid = space_has_valid_geometry(session, space)
+        if not geometry_valid:
+            compat_report_space_creation_failure = getattr(
+                spaces_api,
+                "report_space_creation_failure",
+                None,
+            )
+            if (
+                callable(compat_report_space_creation_failure)
+                and type(spaces_api).__name__ != "PlanSpacesAPI"
+            ):
+                reported_failure = bool(compat_report_space_creation_failure(space))
+            else:
+                reported_failure = report_space_creation_failure(space)
             raise RuntimeError("Unable to create space")
         session.doc.commitTransaction()
     except Exception:
@@ -181,12 +216,21 @@ def _create_and_finish_space_region_candidate(
     claim_click=False,
     clear_region_pick_state=False,
 ):
-    space = create_space_from_region_candidate(
-        session,
-        candidate,
-        boundaries=boundaries,
-        keep_boundaries=keep_boundaries,
-    )
+    spaces_api = getattr(session, "spaces", None)
+    compat_create = getattr(spaces_api, "create_space_from_region_candidate", None)
+    if callable(compat_create) and type(spaces_api).__name__ != "PlanSpacesAPI":
+        space = compat_create(
+            candidate,
+            boundaries=boundaries,
+            keep_boundaries=keep_boundaries,
+        )
+    else:
+        space = create_space_from_region_candidate(
+            session,
+            candidate,
+            boundaries=boundaries,
+            keep_boundaries=keep_boundaries,
+        )
     if not space:
         return False
     if clear_region_pick_state:
@@ -208,10 +252,25 @@ def _start_space_region_pick_mode(session, boundaries, candidates, seed_space=No
         seed_space=seed_space,
     )
     session.overlays.clear_wall_grips()
-    session.selection.clear_hovered_plan_targets(
-        kinds=plan_target_kinds.SPACE_EDIT_CLEAR_HOVERED_KINDS
+    selection_api = getattr(session, "selection", None)
+    clear_hovered_plan_targets = getattr(selection_api, "clear_hovered_plan_targets", None)
+    if callable(clear_hovered_plan_targets):
+        clear_hovered_plan_targets(kinds=plan_target_kinds.SPACE_EDIT_CLEAR_HOVERED_KINDS)
+    else:
+        compat_clear = getattr(session, "_clear_hovered_plan_targets", None)
+        if callable(compat_clear):
+            compat_clear(kinds=plan_target_kinds.SPACE_EDIT_CLEAR_HOVERED_KINDS)
+    refresh_primary_selected_plan_target = getattr(
+        selection_api,
+        "refresh_primary_selected_plan_target",
+        None,
     )
-    session.selection.refresh_primary_selected_plan_target()
+    if callable(refresh_primary_selected_plan_target):
+        refresh_primary_selected_plan_target()
+    else:
+        compat_refresh = getattr(session, "_refresh_primary_selected_plan_target", None)
+        if callable(compat_refresh):
+            compat_refresh()
     FreeCAD.Console.PrintMessage(
         translate(
             "BIM_PlanEdit",
@@ -421,7 +480,18 @@ def cancel_space_region_pick(session, refresh=True):
     if session.current_tool == "Pick Space Region":
         session.current_tool = "Select"
     if was_active:
-        session.selection.refresh_primary_selected_plan_target()
+        selection_api = getattr(session, "selection", None)
+        refresh_primary_selected_plan_target = getattr(
+            selection_api,
+            "refresh_primary_selected_plan_target",
+            None,
+        )
+        if callable(refresh_primary_selected_plan_target):
+            refresh_primary_selected_plan_target()
+        else:
+            compat_refresh = getattr(session, "_refresh_primary_selected_plan_target", None)
+            if callable(compat_refresh):
+                compat_refresh()
     elif refresh:
         session.task_panels.refresh_task_panel_status()
     return was_active

@@ -7,6 +7,7 @@ from dataclasses import dataclass
 import FreeCAD
 
 from bimplan.providers import runtime as plan_provider_runtime
+from bimplan.runtime import capabilities as runtime_capabilities
 from . import target_kinds as plan_target_kinds
 from bimplan.providers.runtime import resolve_plan_provider_target_display_fields
 
@@ -32,12 +33,41 @@ def _coerce_plan_target_ref(target):
     return plan_target_kinds.coerce_plan_target_ref(target)
 
 
+def _call_component_method(session, component_name, method_name, *args, default=None):
+    component = getattr(session, component_name, None)
+    method = runtime_capabilities.get_callable(component, method_name)
+    if method is None:
+        method = runtime_capabilities.get_callable(session, method_name)
+    if method is None:
+        return default
+    return method(*args)
+
+
+def _get_plan_semantic_object(session, obj):
+    semantic_obj = _call_component_method(
+        session,
+        "visibility",
+        "get_plan_semantic_object",
+        obj,
+        default=None,
+    )
+    return obj if semantic_obj is None else semantic_obj
+
+
 def get_plan_target_kind_for_object(session, obj):
-    if session.openings.is_hosted_opening_object(obj):
+    if _call_component_method(session, "openings", "is_hosted_opening_object", obj, default=False):
         return plan_target_kinds.PLAN_TARGET_OPENING
-    if session.visibility.is_plan_symbol_instance(obj):
+    if _call_component_method(session, "visibility", "is_plan_symbol_instance", obj, default=False):
         return plan_target_kinds.PLAN_TARGET_SYMBOL
-    if session.providers.is_plan_provider_target_object(obj):
+    if (
+        _call_component_method(
+            session, "providers", "is_plan_provider_target_object", obj, default=False
+        )
+        or _call_component_method(
+            session, "providers", "get_plan_provider_target_for_object", obj, default=None
+        )
+        or plan_provider_runtime.is_plan_provider_target_object(session, obj)
+    ):
         return plan_target_kinds.PLAN_TARGET_PROVIDER
     if is_plan_region_object(session, obj):
         return plan_target_kinds.PLAN_TARGET_REGION
@@ -49,6 +79,13 @@ def get_plan_target_kind_for_object(session, obj):
 
 
 def get_plan_target_for_object(session, obj, parent_obj=None):
+    selection_api = getattr(session, "selection", None)
+    compat_get_plan_target_for_object = getattr(selection_api, "get_plan_target_for_object", None)
+    if (
+        callable(compat_get_plan_target_for_object)
+        and type(selection_api).__name__ != "PlanSelectionAPI"
+    ):
+        return plan_target_kinds.coerce_plan_target_ref(compat_get_plan_target_for_object(obj))
     seen = set()
     for candidate in (obj, parent_obj):
         if not candidate:
@@ -62,7 +99,7 @@ def get_plan_target_for_object(session, obj, parent_obj=None):
         if target_kind:
             return plan_target_kinds.make_plan_target_ref(target_kind, candidate)
 
-    semantic_obj = session.visibility.get_plan_semantic_object(obj)
+    semantic_obj = _get_plan_semantic_object(session, obj)
     semantic_name = getattr(semantic_obj, "Name", None)
     if semantic_obj and semantic_name not in seen:
         target_kind = get_plan_target_kind_for_object(session, semantic_obj)
@@ -73,6 +110,19 @@ def get_plan_target_for_object(session, obj, parent_obj=None):
 
 
 def get_plan_pick_target_for_object(session, obj, parent_obj=None):
+    selection_api = getattr(session, "selection", None)
+    compat_get_plan_pick_target_for_object = getattr(
+        selection_api,
+        "get_plan_pick_target_for_object",
+        None,
+    )
+    if (
+        callable(compat_get_plan_pick_target_for_object)
+        and type(selection_api).__name__ != "PlanSelectionAPI"
+    ):
+        return plan_target_kinds.coerce_plan_target_ref(
+            compat_get_plan_pick_target_for_object(obj, parent_obj=parent_obj)
+        )
     seen = set()
     for candidate in (obj, parent_obj):
         if not candidate:
@@ -94,7 +144,7 @@ def get_plan_pick_target_for_object(session, obj, parent_obj=None):
         if target_kind:
             return plan_target_kinds.make_plan_target_ref(target_kind, candidate)
 
-    semantic_obj = session.visibility.get_plan_semantic_object(obj)
+    semantic_obj = _get_plan_semantic_object(session, obj)
     semantic_name = getattr(semantic_obj, "Name", None)
     if semantic_obj and semantic_name not in seen:
         target_kind = get_plan_target_kind_for_object(session, semantic_obj)
@@ -115,7 +165,10 @@ def get_plan_pick_target_for_object(session, obj, parent_obj=None):
 def is_plan_selectable_wall(session, obj):
     if not obj:
         return False
-    obj = session.visibility.get_plan_semantic_object(obj)
+    legacy = runtime_capabilities.get_callable(session, "_is_plan_selectable_wall")
+    if legacy is not None:
+        return bool(legacy(obj))
+    obj = _get_plan_semantic_object(session, obj)
     try:
         import Draft
 
@@ -127,7 +180,10 @@ def is_plan_selectable_wall(session, obj):
 def is_plan_space_object(session, obj):
     if not obj:
         return False
-    obj = session.visibility.get_plan_semantic_object(obj)
+    legacy = runtime_capabilities.get_callable(session, "_is_plan_space_object")
+    if legacy is not None:
+        return bool(legacy(obj))
+    obj = _get_plan_semantic_object(session, obj)
     try:
         import Draft
 
@@ -141,9 +197,9 @@ def is_plan_space_object(session, obj):
 def is_plan_custom_pick_only_object(session, obj):
     if not obj:
         return False
-    obj = session.visibility.get_plan_semantic_object(obj)
+    obj = _get_plan_semantic_object(session, obj)
     return (
-        session.openings.is_hosted_opening_object(obj)
+        _call_component_method(session, "openings", "is_hosted_opening_object", obj, default=False)
         or is_plan_space_object(session, obj)
         or is_plan_region_object(session, obj)
     )
@@ -152,7 +208,7 @@ def is_plan_custom_pick_only_object(session, obj):
 def is_plan_space_separator_object(session, obj):
     if not obj:
         return False
-    obj = session.visibility.get_plan_semantic_object(obj)
+    obj = _get_plan_semantic_object(session, obj)
     try:
         import Draft
 
@@ -164,7 +220,10 @@ def is_plan_space_separator_object(session, obj):
 def is_plan_region_object(session, obj):
     if not obj:
         return False
-    obj = session.visibility.get_plan_semantic_object(obj)
+    legacy = runtime_capabilities.get_callable(session, "_is_plan_region_object")
+    if legacy is not None:
+        return bool(legacy(obj))
+    obj = _get_plan_semantic_object(session, obj)
     try:
         import Draft
 

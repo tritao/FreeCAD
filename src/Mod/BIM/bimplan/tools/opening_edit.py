@@ -485,7 +485,7 @@ class _SessionAPI:
 class PlanOpeningsAPI(_SessionAPI):
     """Owned session surface for Plan Edit opening behavior."""
 
-    __slots__ = ()
+    __slots__ = ("__dict__",)
 
     def get_selected_opening_edit_handles(self, *args, **kwargs):
         return get_selected_opening_edit_handles(self.session, *args, **kwargs)

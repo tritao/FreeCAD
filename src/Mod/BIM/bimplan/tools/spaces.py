@@ -23,6 +23,42 @@ class _SessionAPI:
         return self._session
 
 
+def resolve_space_region_seed_targets(session, *args, **kwargs):
+    return plan_space_boundaries.resolve_space_region_seed_targets(session, *args, **kwargs)
+
+
+def build_space_creation_request(session, *args, **kwargs):
+    return plan_space_boundaries.build_space_creation_request(session, *args, **kwargs)
+
+
+def should_run_space_preflight_for_targets(*args, **kwargs):
+    return plan_space_boundaries.should_run_space_preflight_for_targets(*args, **kwargs)
+
+
+def start_space_region_pick(session, *args, **kwargs):
+    return plan_space_regions.start_space_region_pick(session, *args, **kwargs)
+
+
+def create_space_from_current_selection(session, *args, **kwargs):
+    return plan_space_regions.create_space_from_current_selection(session, *args, **kwargs)
+
+
+def prepare_plan_region_tool_state(session, *args, **kwargs):
+    return plan_space_interaction.prepare_plan_region_tool_state(session, *args, **kwargs)
+
+
+def prepare_space_separator_tool_state(session, *args, **kwargs):
+    return plan_space_interaction.prepare_space_separator_tool_state(session, *args, **kwargs)
+
+
+def reset_space_region_pick_state(session, *args, **kwargs):
+    return plan_space_regions.reset_space_region_pick_state(session, *args, **kwargs)
+
+
+def reset_space_text_pick_state(session, *args, **kwargs):
+    return plan_space_interaction.reset_space_text_pick_state(session, *args, **kwargs)
+
+
 class PlanSpacesAPI(_SessionAPI):
     """Owned session surface for Plan Edit space and region behavior."""
 

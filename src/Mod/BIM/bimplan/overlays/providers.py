@@ -7,6 +7,7 @@ import math
 import FreeCAD
 from bimplan.providers import host_targets as plan_host_targets
 from bimplan.providers import PlanOverlayMarkerKind
+from bimplan.providers import runtime as plan_provider_runtime
 from . import manager as overlay_manager
 from . import tracker_pool as overlay_tracker_pool
 from .. import selection as plan_selection
@@ -40,17 +41,17 @@ def sync_provider_overlays(session):
             or getattr(session, "_finishing", False)
             or not session.document_visuals.document_is_alive()
             or session.current_tool not in ("Select", "Provider Point")
-            or session.providers.plan_provider_integrations_disabled()
+            or plan_provider_runtime.plan_provider_integrations_disabled(session)
         ):
             clear_provider_overlays(session)
             return
 
-        with session.providers.plan_provider_refresh_cache_scope():
+        with plan_provider_runtime.plan_provider_refresh_cache_scope(session):
             overlays = tuple(
                 overlay
-                for overlay in session.providers.get_plan_provider_overlays()
+                for overlay in plan_provider_runtime.get_plan_provider_overlays(session)
                 if bool(getattr(overlay, "visible", True))
-                and session.providers.is_plan_provider_overlay_visible(overlay)
+                and plan_provider_runtime.is_plan_provider_overlay_visible(session, overlay)
             )
         render_state = (
             overlays,
@@ -84,10 +85,7 @@ def sync_hovered_provider_overlay(session):
         clear_hovered_provider_overlay(session)
         if session.current_tool != "Select":
             return
-        plan_provider_integrations_disabled = getattr(
-            session.providers, "plan_provider_integrations_disabled", None
-        )
-        if callable(plan_provider_integrations_disabled) and plan_provider_integrations_disabled():
+        if plan_provider_runtime.plan_provider_integrations_disabled(session):
             return
         provider_obj = getattr(session, "hovered_provider", None)
         if provider_obj is None:
@@ -246,7 +244,7 @@ def sync_selected_provider_handles(session):
         if session.current_tool != "Select":
             clear_selected_provider_handles(session)
             return
-        if not session.providers.is_plan_provider_target_object(provider_obj):
+        if not plan_provider_runtime.is_plan_provider_target_object(session, provider_obj):
             clear_selected_provider_handles(session)
             return
         specs = tuple(get_selected_provider_handle_specs(session, provider_obj))
@@ -297,7 +295,10 @@ def clear_selected_provider_handles(session):
 
 def pick_selected_provider_handle(session, mouse_pos, radius_px=10):
     provider_obj = plan_selection.get_selected_plan_target_object(session, "provider")
-    if not session.providers.is_plan_provider_target_object(provider_obj) or not session.view:
+    if (
+        not plan_provider_runtime.is_plan_provider_target_object(session, provider_obj)
+        or not session.view
+    ):
         return None
     try:
         cursor_x = int(mouse_pos[0])
@@ -751,12 +752,12 @@ def _get_hovered_provider_segment_specs(session):
 
 
 def _get_visible_provider_overlays(session):
-    with session.providers.plan_provider_refresh_cache_scope():
+    with plan_provider_runtime.plan_provider_refresh_cache_scope(session):
         return tuple(
             overlay
-            for overlay in session.providers.get_plan_provider_overlays()
+            for overlay in plan_provider_runtime.get_plan_provider_overlays(session)
             if bool(getattr(overlay, "visible", True))
-            and session.providers.is_plan_provider_overlay_visible(overlay)
+            and plan_provider_runtime.is_plan_provider_overlay_visible(session, overlay)
         )
 
 

@@ -17,7 +17,11 @@ class PlanEditControlsShellMixin:
             return True
         if getattr(session, "_tearing_down", False) or getattr(session, "_finishing", False):
             return True
-        return not session.document_visuals.document_is_alive()
+        document_visuals = getattr(session, "document_visuals", None)
+        document_is_alive = getattr(document_visuals, "document_is_alive", None)
+        if callable(document_is_alive):
+            return not document_is_alive()
+        return False
 
     def _build_form(self, QtGui):
         outer = QtGui.QWidget()

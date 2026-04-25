@@ -17,7 +17,7 @@ _PLAN_VIEW_SCALE_REFRESH_DELAY_MS = 40
 class PlanOverlaysAPI:
     """Owned session surface for Plan Edit overlay behavior."""
 
-    __slots__ = ("_session",)
+    __slots__ = ("_session", "__dict__")
 
     def __init__(self, session):
         self._session = session
@@ -64,13 +64,13 @@ class PlanOverlaysAPI:
         return overlay_manager.refresh_plan_overlay_visuals(self.session, dirty=dirty)
 
     def finalize_trackers(self, *args, **kwargs):
-        return overlay_manager.finalize_trackers(self.session, *args, **kwargs)
+        return overlay_manager.finalize_trackers(*args, **kwargs)
 
     def make_plan_line_tracker(self, *args, **kwargs):
-        return overlay_manager.make_plan_line_tracker(self.session, *args, **kwargs)
+        return overlay_manager.make_plan_line_tracker(*args, **kwargs)
 
     def set_plan_line_tracker_width(self, *args, **kwargs):
-        return overlay_manager.set_plan_line_tracker_width(self.session, *args, **kwargs)
+        return overlay_manager.set_plan_line_tracker_width(*args, **kwargs)
 
     def get_footprint_overlay_polylines(self, *args, **kwargs):
         return overlay_geometry.get_footprint_overlay_polylines(self.session, *args, **kwargs)
@@ -318,6 +318,9 @@ class PlanOverlaysAPI:
     def clear_selected_opening_handles(self, *args, **kwargs):
         return opening_overlays.clear_selected_opening_handles(self.session, *args, **kwargs)
 
+    def clear_symbol_edit_preview(self, *args, **kwargs):
+        return symbol_overlays.clear_symbol_edit_preview(self.session, *args, **kwargs)
+
     def get_plan_symbol_instances(self, *args, **kwargs):
         return symbol_overlays.get_plan_symbol_instances(self.session, *args, **kwargs)
 
@@ -382,11 +385,20 @@ class PlanOverlaysAPI:
     def get_selected_symbol_handle_specs(self, *args, **kwargs):
         return symbol_overlays.get_selected_symbol_handle_specs(self.session, *args, **kwargs)
 
+    def get_symbol_anchor_point(self, *args, **kwargs):
+        return symbol_overlays.get_symbol_anchor_point(self.session, *args, **kwargs)
+
+    def get_symbol_facing_vector(self, *args, **kwargs):
+        return symbol_overlays.get_symbol_facing_vector(self.session, *args, **kwargs)
+
     def sync_selected_symbol_handles(self, *args, **kwargs):
         return symbol_overlays.sync_selected_symbol_handles(self.session, *args, **kwargs)
 
     def clear_selected_symbol_handles(self, *args, **kwargs):
         return symbol_overlays.clear_selected_symbol_handles(self.session, *args, **kwargs)
+
+    def sync_symbol_edit_preview(self, *args, **kwargs):
+        return symbol_overlays.sync_symbol_edit_preview(self.session, *args, **kwargs)
 
     def pick_selected_symbol_handle(self, *args, **kwargs):
         return symbol_overlays.pick_selected_symbol_handle(self.session, *args, **kwargs)

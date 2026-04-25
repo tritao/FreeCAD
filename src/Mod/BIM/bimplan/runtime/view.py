@@ -12,7 +12,7 @@ _ENABLE_PRESELECTION_PARAM = "EnablePreselection"
 class PlanViewportAPI:
     """Owned session surface for Plan Edit view and viewport behavior."""
 
-    __slots__ = ("_session",)
+    __slots__ = ("_session", "__dict__")
 
     def __init__(self, session):
         self._session = session
