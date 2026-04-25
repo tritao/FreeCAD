@@ -8,6 +8,7 @@ import FreeCAD
 import FreeCADGui
 from bimplan.providers import PlanEditHandleSpec, PlanOverlayMarkerKind, PlanToolInteraction
 from bimplan import selection as plan_selection
+from bimplan.selection import target_kinds as plan_target_kinds
 
 translate = FreeCAD.Qt.translate
 
@@ -414,12 +415,12 @@ def _build_provider_handle_payload(
         snap_object = session.providers.resolve_provider_point_snap_object(snap_object, snap_info)
     except Exception:
         pass
-    snap_target = (None, None)
+    snap_target = plan_target_kinds.make_plan_target_ref()
     if snap_object is not None:
         try:
             snap_target = session.selection.get_plan_target_for_object(snap_object)
         except Exception:
-            snap_target = (None, None)
+            snap_target = plan_target_kinds.make_plan_target_ref()
     snap_component = str(snap_info.get("Component", "") or "").strip()
     snap_subname = str(snap_info.get("SubName", "") or snap_component).strip()
     snap_document_name = str(snap_info.get("Document", "") or "").strip()
