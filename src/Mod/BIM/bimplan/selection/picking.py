@@ -1592,9 +1592,25 @@ def _has_provider_overlay_target_identity(target):
     return bool(str(getattr(target, "object_name", "") or "").strip())
 
 
-clear_hovered_plan_targets = plan_hover_picking.clear_hovered_plan_targets
-get_hovered_plan_target = plan_hover_picking.get_hovered_plan_target
-prime_hover_pick_caches = plan_hover_picking.prime_hover_pick_caches
-queue_prime_hover_pick_caches = plan_hover_picking.queue_prime_hover_pick_caches
-should_skip_hover_pick = plan_hover_picking.should_skip_hover_pick
-update_hovered_plan_target = plan_hover_picking.update_hovered_plan_target
+def clear_hovered_plan_targets(*args, **kwargs):
+    return plan_hover_picking.clear_hovered_plan_targets(*args, **kwargs)
+
+
+def get_hovered_plan_target(*args, **kwargs):
+    return plan_hover_picking.get_hovered_plan_target(*args, **kwargs)
+
+
+def prime_hover_pick_caches(*args, **kwargs):
+    return plan_hover_picking.prime_hover_pick_caches(*args, **kwargs)
+
+
+def queue_prime_hover_pick_caches(*args, **kwargs):
+    return plan_hover_picking.queue_prime_hover_pick_caches(*args, **kwargs)
+
+
+def should_skip_hover_pick(*args, **kwargs):
+    return plan_hover_picking.should_skip_hover_pick(*args, **kwargs)
+
+
+def update_hovered_plan_target(*args, **kwargs):
+    return plan_hover_picking.update_hovered_plan_target(*args, **kwargs)
