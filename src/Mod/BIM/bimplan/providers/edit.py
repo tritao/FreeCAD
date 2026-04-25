@@ -407,21 +407,17 @@ def _build_provider_handle_payload(
     session, provider_obj, handle, *, point, raw_point, snap_object=None
 ):
     provider_target = session.providers.get_plan_provider_target_for_object(provider_obj)
-    get_snap_info = getattr(session.providers, "get_provider_point_snap_info", None)
-    snap_info = get_snap_info() if callable(get_snap_info) else {}
+    snap_info = session.providers.get_provider_point_snap_info()
     if not isinstance(snap_info, dict):
         snap_info = {}
-    resolve_snap_object = getattr(session.providers, "resolve_provider_point_snap_object", None)
-    if callable(resolve_snap_object):
-        try:
-            snap_object = resolve_snap_object(snap_object, snap_info)
-        except Exception:
-            pass
+    try:
+        snap_object = session.providers.resolve_provider_point_snap_object(snap_object, snap_info)
+    except Exception:
+        pass
     snap_target = (None, None)
-    get_plan_target = getattr(session.selection, "get_plan_target_for_object", None)
-    if callable(get_plan_target) and snap_object is not None:
+    if snap_object is not None:
         try:
-            snap_target = get_plan_target(snap_object)
+            snap_target = session.selection.get_plan_target_for_object(snap_object)
         except Exception:
             snap_target = (None, None)
     snap_component = str(snap_info.get("Component", "") or "").strip()
@@ -486,35 +482,29 @@ def _get_provider_handle_payload_host_target(
     hovered_target,
 ):
     role = _get_provider_handle_role(handle)
-    normalize_host_target = getattr(session.providers, "normalize_provider_point_host_target", None)
-    if not callable(normalize_host_target):
-        return (None, None, "")
     if role == "rehost":
-        snap_kind, snap_obj = normalize_host_target(snap_target)
+        snap_kind, snap_obj = session.providers.normalize_provider_point_host_target(snap_target)
         if snap_obj is not None:
             return snap_kind, snap_obj, "snap"
-        hovered_kind, hovered_obj = normalize_host_target(hovered_target)
+        hovered_kind, hovered_obj = session.providers.normalize_provider_point_host_target(
+            hovered_target
+        )
         if hovered_obj is not None:
             return hovered_kind, hovered_obj, "hovered"
         selected_walls = []
         for target in selected_targets or ():
-            target_kind, target_obj = normalize_host_target(target)
+            target_kind, target_obj = session.providers.normalize_provider_point_host_target(target)
             if target_obj is not None and target_obj not in selected_walls:
                 selected_walls.append(target_obj)
         if len(selected_walls) == 1:
             return "wall", selected_walls[0], "selected"
-        selected_kind, selected_obj = normalize_host_target(selected_target)
+        selected_kind, selected_obj = session.providers.normalize_provider_point_host_target(
+            selected_target
+        )
         if selected_obj is not None:
             return selected_kind, selected_obj, "selected"
         return (None, None, "")
-    get_payload_host_target = getattr(
-        session.providers,
-        "get_provider_point_payload_host_target",
-        None,
-    )
-    if not callable(get_payload_host_target):
-        return (None, None, "")
-    return get_payload_host_target(
+    return session.providers.get_provider_point_payload_host_target(
         snap_target=snap_target,
         selected_target=selected_target,
         selected_targets=selected_targets,

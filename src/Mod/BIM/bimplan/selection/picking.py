@@ -204,11 +204,7 @@ def get_screen_distance_sq_to_segment(session, mouse_pos, start, end):
         end_x, end_y = session.view.getPointOnScreen(end)
     except Exception:
         return None
-    selection_api = getattr(session, "selection", None)
-    projector = getattr(selection_api, "get_screen_distance_sq_to_projected_segment", None)
-    if callable(projector):
-        return projector((cursor_x, cursor_y), (start_x, start_y), (end_x, end_y))
-    return get_screen_distance_sq_to_projected_segment(
+    return session.selection.get_screen_distance_sq_to_projected_segment(
         (cursor_x, cursor_y),
         (start_x, start_y),
         (end_x, end_y),
@@ -843,9 +839,9 @@ def pick_plan_target_from_footprint_faces(
         best_area = None
         seen = set()
         objects = getattr(session.doc, "Objects", []) or []
-        if target_label == "space" and hasattr(session.selection, "get_plan_space_instances"):
+        if target_label == "space":
             objects = session.selection.get_plan_space_instances()
-        elif target_label == "region" and hasattr(session.selection, "get_plan_region_instances"):
+        elif target_label == "region":
             objects = session.selection.get_plan_region_instances()
 
         for obj in objects or []:
