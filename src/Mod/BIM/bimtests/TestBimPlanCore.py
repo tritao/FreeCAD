@@ -2034,6 +2034,12 @@ class TestBimPlanCore(unittest.TestCase):
         self.assertEqual(PlanTargetRef("wall", wall), context.get_hovered_target())
         self.assertEqual(PlanTargetRef("wall", wall), context.get_snap_target())
         self.assertEqual(ProviderHostTargetRef("wall", wall), context.get_host_target())
+        self.assertEqual((1.0, 2.0, 0.0), context.get_point())
+        self.assertEqual((1.0, 2.0, 0.0), context.get_placement_point())
+        self.assertEqual((1.0, 2.0, 0.0), context.get_raw_point())
+        self.assertEqual({}, context.get_snap_info())
+        self.assertIs(wall, context.get_snap_object())
+        self.assertEqual("selected", context.get_host_source())
 
     def test_execute_plan_provider_action_passes_action_context_proxy(self):
         from bimplan.providers.runtime import execute_plan_provider_action
