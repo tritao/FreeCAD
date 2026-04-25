@@ -1920,16 +1920,16 @@ class PlanSelectionAPI(_SessionAPI):
         return get_hovered_plan_target(self.session, *args, **kwargs)
 
     def queue_prime_hover_pick_caches(self, *args, **kwargs):
-        return queue_prime_hover_pick_caches(self.session, *args, **kwargs)
+        return plan_selection_picking.queue_prime_hover_pick_caches(self.session, *args, **kwargs)
 
     def prime_hover_pick_caches(self, *args, **kwargs):
-        return prime_hover_pick_caches(self.session, *args, **kwargs)
+        return plan_selection_picking.prime_hover_pick_caches(self.session, *args, **kwargs)
 
     def should_skip_hover_pick(self, *args, **kwargs):
-        return should_skip_hover_pick(self.session, *args, **kwargs)
+        return plan_selection_picking.should_skip_hover_pick(self.session, *args, **kwargs)
 
     def update_hovered_plan_target(self, *args, **kwargs):
-        return update_hovered_plan_target(self.session, *args, **kwargs)
+        return plan_selection_picking.update_hovered_plan_target(self.session, *args, **kwargs)
 
     def addSelection(self, doc, obj, sub, point):
         return selection_observer_add(self.session, doc, obj, sub, point)
