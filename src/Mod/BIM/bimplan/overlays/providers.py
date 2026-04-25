@@ -287,7 +287,8 @@ def pick_selected_provider_handle(session, mouse_pos, radius_px=10):
 
 
 def sync_provider_point_preview(session):
-    if session.current_tool != "Provider Point" or session._provider_point_preview_point is None:
+    state = session.provider_point_state
+    if session.current_tool != "Provider Point" or state.provider_point_preview_point is None:
         clear_provider_point_preview(session)
         return
 
@@ -303,17 +304,17 @@ def sync_provider_point_preview(session):
         return
 
     render_state = _get_provider_segment_render_state(session, specs)
-    if render_state == session._provider_point_preview_render_state:
+    if render_state == state.provider_point_preview_render_state:
         _perf_count(session, "provider_point_preview_cache_hits")
         return
 
     style_state = tuple((spec["label"], spec["dotted"]) for spec in specs)
     if (
-        len(session._provider_point_preview_trackers) != len(specs)
-        or style_state != session._provider_point_preview_style_state
+        len(state.provider_point_preview_trackers) != len(specs)
+        or style_state != state.provider_point_preview_style_state
     ):
         _clear_provider_point_preview_trackers(session)
-        session._provider_point_preview_style_state = style_state
+        state.provider_point_preview_style_state = style_state
         for spec in specs:
             tracker = overlay_manager.make_plan_line_tracker(
                 DraftTrackers,
@@ -323,46 +324,49 @@ def sync_provider_point_preview(session):
                 swidth=spec["width"],
                 ontop=True,
             )
-            session._provider_point_preview_trackers.append(tracker)
+            state.provider_point_preview_trackers.append(tracker)
 
-    for tracker, spec in zip(session._provider_point_preview_trackers, specs):
+    for tracker, spec in zip(state.provider_point_preview_trackers, specs):
         overlay_manager.set_plan_line_tracker_width(tracker, spec["width"])
         tracker.setColor(spec["color"])
         tracker.p1(spec["start"])
         tracker.p2(spec["end"])
         tracker.on()
 
-    session._provider_point_preview_render_state = render_state
+    state.provider_point_preview_render_state = render_state
     _perf_count(
         session,
         "provider_point_preview_trackers",
-        len(session._provider_point_preview_trackers),
+        len(state.provider_point_preview_trackers),
     )
 
 
 def clear_provider_point_preview(session):
+    state = session.provider_point_state
     _clear_provider_point_preview_trackers(session)
-    session._provider_point_preview_source_point = None
-    session._provider_point_preview_point = None
-    session._provider_point_preview_host_target = None
-    session._provider_point_preview_host_source = ""
+    state.provider_point_preview_source_point = None
+    state.provider_point_preview_point = None
+    state.provider_point_preview_host_target = None
+    state.provider_point_preview_host_source = ""
 
 
 def _clear_provider_point_preview_trackers(session):
-    overlay_manager.finalize_trackers(session._provider_point_preview_trackers)
-    session._provider_point_preview_trackers = []
-    session._provider_point_preview_render_state = None
-    session._provider_point_preview_style_state = None
+    state = session.provider_point_state
+    overlay_manager.finalize_trackers(state.provider_point_preview_trackers)
+    state.provider_point_preview_trackers = []
+    state.provider_point_preview_render_state = None
+    state.provider_point_preview_style_state = None
 
 
 def _get_provider_point_preview_segment_specs(session):
-    point = _to_vector(session._provider_point_preview_point)
+    state = session.provider_point_state
+    point = _to_vector(state.provider_point_preview_point)
     if point is None:
         return ()
-    source = _to_vector(session._provider_point_preview_source_point)
+    source = _to_vector(state.provider_point_preview_source_point)
     if source is None:
         source = point
-    host_kind, host_obj = _normalize_host_target(session._provider_point_preview_host_target)
+    host_kind, host_obj = _normalize_host_target(state.provider_point_preview_host_target)
     hosted = host_kind == "wall" and host_obj is not None
     preview_color = (
         _PROVIDER_POINT_PREVIEW_HOSTED_COLOR if hosted else _PROVIDER_POINT_PREVIEW_UNHOSTED_COLOR

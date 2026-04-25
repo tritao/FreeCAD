@@ -59,9 +59,6 @@ class PlanInteractionAPI:
 @dataclass
 class PlanTaskPanelState:
     relation_status_message: str | None = None
-    space_region_candidates: list = field(default_factory=list)
-    hovered_space_region_candidate: object = None
-    plan_region_parent_space: object = None
 
 
 @dataclass
@@ -76,7 +73,6 @@ class PlanInteractionState:
     embedded_host: object = None
     embedded_tool: object = None
     embedded_tool_name: str | None = None
-    provider_point_tool: object = None
     edit_opening: object = None
     edit_opening_handle_index: object = None
     edit_symbol: object = None
@@ -102,7 +98,7 @@ class PlanSelectionState:
 
 
 @dataclass
-class PlanWallEditState:
+class WallEditState:
     wall_edit_modal_active: bool = False
     edit_wall: object = None
     edit_endpoint: object = None
@@ -120,6 +116,35 @@ class PlanWallEditState:
     wall_edit_active_readout_mode: object = None
     wall_edit_length_edit_queued: bool = False
     edit_wall_visibility: object = None
+
+
+@dataclass
+class ProviderPointState:
+    provider_point_tool: object = None
+    provider_point_host_target: object = None
+    provider_point_host_source: str = ""
+    provider_point_preview_trackers: list = field(default_factory=list)
+    provider_point_preview_render_state: object = None
+    provider_point_preview_style_state: object = None
+    provider_point_preview_source_point: object = None
+    provider_point_preview_point: object = None
+    provider_point_preview_host_target: object = None
+    provider_point_preview_host_source: str = ""
+
+
+@dataclass
+class SpaceRegionPickState:
+    boundaries: list = field(default_factory=list)
+    seed_space: object = None
+    candidates: list = field(default_factory=list)
+    hovered_candidate: object = None
+
+
+@dataclass
+class PlanRegionToolState:
+    points: list = field(default_factory=list)
+    preview_trackers: list = field(default_factory=list)
+    parent_space: object = None
 
 
 @dataclass
@@ -192,15 +217,6 @@ class PlanProviderTransientState:
     provider_handle_trackers: list = field(default_factory=list)
     selected_provider_handle_render_state: object = None
     provider_selected_objects: list = field(default_factory=list)
-    provider_point_host_target: object = None
-    provider_point_host_source: str = ""
-    provider_point_preview_trackers: list = field(default_factory=list)
-    provider_point_preview_render_state: object = None
-    provider_point_preview_style_state: object = None
-    provider_point_preview_source_point: object = None
-    provider_point_preview_point: object = None
-    provider_point_preview_host_target: object = None
-    provider_point_preview_host_source: str = ""
 
 
 @dataclass
@@ -287,8 +303,9 @@ class PlanCreationPreviewState:
     space_separator_preview_trackers: list = field(default_factory=list)
     window_host_wall: object = None
     window_preview_trackers: list = field(default_factory=list)
-    plan_region_points: list = field(default_factory=list)
-    plan_region_preview_trackers: list = field(default_factory=list)
+
+
+PlanWallEditState = WallEditState
 
 
 def _coerce_identity(value):
@@ -385,7 +402,10 @@ _PLAN_EDIT_SESSION_STATE_ENSURERS = (
     ),
     ("_ensure_interaction_state", "interaction_state", PlanInteractionState),
     ("_ensure_selection_state", "selection_state", PlanSelectionState),
-    ("_ensure_wall_edit_state", "wall_edit_state", PlanWallEditState),
+    ("_ensure_wall_edit_state", "wall_edit_state", WallEditState),
+    ("_ensure_provider_point_state", "provider_point_state", ProviderPointState),
+    ("_ensure_space_region_pick_state", "space_region_pick_state", SpaceRegionPickState),
+    ("_ensure_plan_region_tool_state", "plan_region_tool_state", PlanRegionToolState),
     ("_ensure_hover_pick_state", "hover_pick_state", PlanHoverPickState),
     ("_ensure_selection_sync_state", "selection_sync_state", PlanSelectionSyncState),
     ("_ensure_input_event_state", "input_event_state", PlanInputEventState),
@@ -405,12 +425,7 @@ _PLAN_EDIT_SESSION_STATE_ENSURERS = (
 _PLAN_EDIT_SESSION_STATE_PROPERTIES = (
     (
         "_ensure_task_panel_state",
-        (
-            ("_plan_relation_status_message", "relation_status_message", _coerce_identity),
-            ("_space_region_candidates", "space_region_candidates", _coerce_list),
-            ("_hovered_space_region_candidate", "hovered_space_region_candidate", _coerce_identity),
-            ("_plan_region_parent_space", "plan_region_parent_space", _coerce_identity),
-        ),
+        (("_plan_relation_status_message", "relation_status_message", _coerce_identity),),
     ),
     (
         "_ensure_provider_overlay_read_state",
@@ -482,12 +497,67 @@ _PLAN_EDIT_SESSION_STATE_PROPERTIES = (
         ),
     ),
     (
+        "_ensure_provider_point_state",
+        (
+            ("_provider_point_tool", "provider_point_tool", _coerce_identity),
+            (
+                "_provider_point_host_target",
+                "provider_point_host_target",
+                _coerce_optional_provider_host_target_ref,
+            ),
+            ("_provider_point_host_source", "provider_point_host_source", _make_str_coercer("")),
+            ("_provider_point_preview_trackers", "provider_point_preview_trackers", _coerce_list),
+            (
+                "_provider_point_preview_render_state",
+                "provider_point_preview_render_state",
+                _coerce_identity,
+            ),
+            (
+                "_provider_point_preview_style_state",
+                "provider_point_preview_style_state",
+                _coerce_identity,
+            ),
+            (
+                "_provider_point_preview_source_point",
+                "provider_point_preview_source_point",
+                _coerce_identity,
+            ),
+            ("_provider_point_preview_point", "provider_point_preview_point", _coerce_identity),
+            (
+                "_provider_point_preview_host_target",
+                "provider_point_preview_host_target",
+                _coerce_optional_provider_host_target_ref,
+            ),
+            (
+                "_provider_point_preview_host_source",
+                "provider_point_preview_host_source",
+                _make_str_coercer(""),
+            ),
+        ),
+    ),
+    (
+        "_ensure_space_region_pick_state",
+        (
+            ("_space_region_pick_boundaries", "boundaries", _coerce_list),
+            ("_space_region_pick_seed_space", "seed_space", _coerce_identity),
+            ("_space_region_candidates", "candidates", _coerce_list),
+            ("_hovered_space_region_candidate", "hovered_candidate", _coerce_identity),
+        ),
+    ),
+    (
+        "_ensure_plan_region_tool_state",
+        (
+            ("_plan_region_points", "points", _coerce_list),
+            ("_plan_region_preview_trackers", "preview_trackers", _coerce_list),
+            ("_plan_region_parent_space", "parent_space", _coerce_identity),
+        ),
+    ),
+    (
         "_ensure_interaction_state",
         (
             ("_embedded_host", "embedded_host", _coerce_identity),
             ("_embedded_tool", "embedded_tool", _coerce_identity),
             ("_embedded_tool_name", "embedded_tool_name", _coerce_optional_nonempty_str),
-            ("_provider_point_tool", "provider_point_tool", _coerce_identity),
             ("_edit_opening", "edit_opening", _coerce_identity),
             ("_edit_opening_handle_index", "edit_opening_handle_index", _coerce_identity),
             ("_edit_symbol", "edit_symbol", _coerce_identity),
@@ -600,39 +670,6 @@ _PLAN_EDIT_SESSION_STATE_PROPERTIES = (
                 _coerce_identity,
             ),
             ("_provider_selected_objects", "provider_selected_objects", _coerce_list),
-            (
-                "_provider_point_host_target",
-                "provider_point_host_target",
-                _coerce_optional_provider_host_target_ref,
-            ),
-            ("_provider_point_host_source", "provider_point_host_source", _make_str_coercer("")),
-            ("_provider_point_preview_trackers", "provider_point_preview_trackers", _coerce_list),
-            (
-                "_provider_point_preview_render_state",
-                "provider_point_preview_render_state",
-                _coerce_identity,
-            ),
-            (
-                "_provider_point_preview_style_state",
-                "provider_point_preview_style_state",
-                _coerce_identity,
-            ),
-            (
-                "_provider_point_preview_source_point",
-                "provider_point_preview_source_point",
-                _coerce_identity,
-            ),
-            ("_provider_point_preview_point", "provider_point_preview_point", _coerce_identity),
-            (
-                "_provider_point_preview_host_target",
-                "provider_point_preview_host_target",
-                _coerce_optional_provider_host_target_ref,
-            ),
-            (
-                "_provider_point_preview_host_source",
-                "provider_point_preview_host_source",
-                _make_str_coercer(""),
-            ),
         ),
     ),
     (
@@ -745,8 +782,6 @@ _PLAN_EDIT_SESSION_STATE_PROPERTIES = (
             ),
             ("_window_host_wall", "window_host_wall", _coerce_identity),
             ("_window_preview_trackers", "window_preview_trackers", _coerce_list),
-            ("_plan_region_points", "plan_region_points", _coerce_list),
-            ("_plan_region_preview_trackers", "plan_region_preview_trackers", _coerce_list),
         ),
     ),
 )
@@ -788,8 +823,6 @@ def initialize_session_state(session):
     session._plan_join_type = "Miter"
     session.storeys = []
     session.active_storey = None
-    session._space_region_pick_boundaries = []
-    session._space_region_pick_seed_space = None
     session._selection_observer_added = False
     session._document_observer_added = False
     session._pending_selected_wall_reset = False

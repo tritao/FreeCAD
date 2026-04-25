@@ -4,6 +4,9 @@
 
 from __future__ import annotations
 
+from bimplan.runtime import capabilities as runtime_capabilities
+from bimplan.runtime import view_properties as runtime_view_properties
+
 
 def _perf_count(session, name, delta=1):
     return session.performance.plan_perf_count(name, delta=delta)
@@ -18,40 +21,23 @@ def _perf_describe_object(session, obj):
 
 
 def _get_callable(obj, method_name):
-    method = getattr(obj, method_name, None)
-    return method if callable(method) else None
+    return runtime_capabilities.get_callable(obj, method_name)
 
 
 def _has_view_object_property(view_object, property_name):
-    return view_object is not None and hasattr(view_object, property_name)
+    return runtime_view_properties.has_view_property(view_object, property_name)
 
 
 def _set_view_object_property(view_object, property_name, value):
-    if not _has_view_object_property(view_object, property_name):
-        return False
-    try:
-        setattr(view_object, property_name, value)
-        return True
-    except Exception:
-        return False
+    return runtime_view_properties.set_view_property(view_object, property_name, value)
 
 
 def _get_view_object_property(view_object, property_name):
-    if not _has_view_object_property(view_object, property_name):
-        return None
-    try:
-        return getattr(view_object, property_name)
-    except Exception:
-        return None
+    return runtime_view_properties.get_view_property(view_object, property_name)
 
 
 def _capture_view_object_state(view_object, property_names):
-    state = {}
-    for property_name in property_names:
-        value = _get_view_object_property(view_object, property_name)
-        if value is not None:
-            state[property_name] = value
-    return state
+    return runtime_view_properties.capture_view_properties(view_object, property_names)
 
 
 def _get_global_placement_if_available(obj):
@@ -510,8 +496,7 @@ def restore_object_view_state(session):
         view_object = getattr(obj, "ViewObject", None)
         if not view_object:
             continue
-        for prop, value in state.items():
-            _set_view_object_property(view_object, prop, value)
+        runtime_view_properties.restore_view_properties(view_object, state)
 
 
 def get_supported_plan_visibility(session, obj, state):

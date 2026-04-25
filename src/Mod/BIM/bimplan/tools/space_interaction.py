@@ -16,37 +16,36 @@ translate = FreeCAD.Qt.translate
 _MIN_WALL_LENGTH = 10.0
 
 
+def _plan_region_tool_state(session):
+    return session.plan_region_tool_state
+
+
 def has_active_space_separator_tool(session):
     return session._space_separator_start is not None or session.current_tool == "Separator"
 
 
 def has_active_plan_region_tool(session):
-    return bool(session._plan_region_points) or session.current_tool == "Region"
+    return bool(_plan_region_tool_state(session).points) or session.current_tool == "Region"
 
 
 def clear_plan_region_preview(session):
-    session.overlays.finalize_trackers(session._plan_region_preview_trackers)
-    session._plan_region_preview_trackers = []
+    state = _plan_region_tool_state(session)
+    session.overlays.finalize_trackers(state.preview_trackers)
+    state.preview_trackers = []
 
 
 def set_plan_region_tool_state(session, points=None, parent_space=None):
-    session._plan_region_points = list(points or [])
-    set_plan_region_parent_space(session, parent_space)
+    state = _plan_region_tool_state(session)
+    state.points = list(points or [])
+    state.parent_space = parent_space
 
 
 def get_plan_region_parent_space(session):
-    state = getattr(session, "task_panel_state", None)
-    if state is not None:
-        return getattr(state, "plan_region_parent_space", None)
-    return getattr(session, "_plan_region_parent_space", None)
+    return _plan_region_tool_state(session).parent_space
 
 
 def set_plan_region_parent_space(session, parent_space):
-    state = getattr(session, "task_panel_state", None)
-    if state is not None:
-        state.plan_region_parent_space = parent_space
-    else:
-        session._plan_region_parent_space = parent_space
+    _plan_region_tool_state(session).parent_space = parent_space
 
 
 def reset_plan_region_tool_state(session, clear_preview=True):
@@ -113,7 +112,7 @@ def get_plan_region_preview_segments(session, point=None):
 
 
 def _get_plan_region_points(session):
-    return [FreeCAD.Vector(item) for item in (session._plan_region_points or [])]
+    return [FreeCAD.Vector(item) for item in (_plan_region_tool_state(session).points or [])]
 
 
 def _request_next_plan_region_point(session, last_point, *, title):
@@ -143,7 +142,7 @@ def _should_ignore_duplicate_plan_region_point(point, points):
 
 
 def _append_plan_region_point(session, point):
-    session._plan_region_points.append(point)
+    _plan_region_tool_state(session).points.append(point)
     update_plan_region_preview(session, None, None)
     _request_next_plan_region_point(
         session,
@@ -177,7 +176,7 @@ def update_plan_region_preview(session, point, info):
         tracker.p1(start)
         tracker.p2(end)
         tracker.on()
-        session._plan_region_preview_trackers.append(tracker)
+        _plan_region_tool_state(session).preview_trackers.append(tracker)
 
 
 def create_plan_region(session, points):

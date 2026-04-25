@@ -13,6 +13,10 @@ from bimplan.tools import space_geometry as plan_space_geometry
 translate = FreeCAD.Qt.translate
 
 
+def _space_region_pick_state(session):
+    return session.space_region_pick_state
+
+
 def build_space_region_candidate_report(session, boundaries, label=None, seed_space=None):
     import ArchSpace
 
@@ -78,22 +82,15 @@ def set_space_region_pick_state(
     seed_space=None,
     hovered_candidate=None,
 ):
-    session._space_region_pick_boundaries = list(boundaries or [])
-    state = getattr(session, "task_panel_state", None)
-    if state is not None:
-        state.space_region_candidates = list(candidates or [])
-        state.hovered_space_region_candidate = hovered_candidate
-    else:
-        session._space_region_candidates = list(candidates or [])
-        session._hovered_space_region_candidate = hovered_candidate
-    session._space_region_pick_seed_space = seed_space
+    state = _space_region_pick_state(session)
+    state.boundaries = list(boundaries or [])
+    state.candidates = list(candidates or [])
+    state.hovered_candidate = hovered_candidate
+    state.seed_space = seed_space
 
 
 def _get_space_region_pick_candidates(session):
-    state = getattr(session, "task_panel_state", None)
-    if state is not None:
-        return list(getattr(state, "space_region_candidates", ()) or ())
-    return list(getattr(session, "_space_region_candidates", ()) or ())
+    return list(_space_region_pick_state(session).candidates or ())
 
 
 def get_space_region_pick_candidates(session):
@@ -105,10 +102,7 @@ def has_space_region_pick_candidates(session):
 
 
 def _get_hovered_space_region_candidate(session):
-    state = getattr(session, "task_panel_state", None)
-    if state is not None:
-        return getattr(state, "hovered_space_region_candidate", None)
-    return getattr(session, "_hovered_space_region_candidate", None)
+    return _space_region_pick_state(session).hovered_candidate
 
 
 def get_hovered_space_region_candidate(session):
@@ -116,17 +110,14 @@ def get_hovered_space_region_candidate(session):
 
 
 def _set_hovered_space_region_candidate_state(session, candidate):
-    state = getattr(session, "task_panel_state", None)
-    if state is not None:
-        state.hovered_space_region_candidate = candidate
-    else:
-        session._hovered_space_region_candidate = candidate
+    _space_region_pick_state(session).hovered_candidate = candidate
 
 
 def _get_space_region_pick_context(session):
+    state = _space_region_pick_state(session)
     return {
-        "boundaries": list(getattr(session, "_space_region_pick_boundaries", ()) or ()),
-        "seed_space": getattr(session, "_space_region_pick_seed_space", None),
+        "boundaries": list(state.boundaries or ()),
+        "seed_space": state.seed_space,
     }
 
 
@@ -424,7 +415,7 @@ def start_space_region_pick(session, boundaries, label=None, seed_space=None, re
 
 def cancel_space_region_pick(session, refresh=True):
     was_active = session.current_tool == "Pick Space Region" or bool(
-        session._space_region_candidates
+        _space_region_pick_state(session).candidates
     )
     reset_space_region_pick_state(session)
     if session.current_tool == "Pick Space Region":

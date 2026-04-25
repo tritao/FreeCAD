@@ -15,6 +15,7 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Sequence, Tuple
 from bimplan.providers import host_targets as plan_host_targets
+from bimplan.runtime import capabilities as runtime_capabilities
 from bimplan.selection import target_kinds as plan_target_kinds
 
 
@@ -909,8 +910,7 @@ def _has_valid_shape(obj):
 
 
 def _get_callable_attr(obj, attr_name):
-    value = getattr(obj, attr_name, None)
-    return value if callable(value) else None
+    return runtime_capabilities.get_callable(obj, attr_name)
 
 
 def _proxy_has_callables(proxy, attrs):
