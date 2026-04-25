@@ -6,6 +6,7 @@ import FreeCAD
 import math
 from bimplan.selection import edit_nodes as plan_edit_nodes
 from bimplan.selection import hover_picking as plan_hover_picking
+from bimplan.selection import target_kinds as plan_target_kinds
 from bimplan.providers import runtime as plan_provider_runtime
 from bimplan import selection as plan_selection
 from bimplan.selection import targets as plan_targets
@@ -1078,7 +1079,7 @@ def _resolve_space_fallback_target(
 def get_plan_target_at_position(session, mouse_pos, *, include_space_fallback=True):
     with _perf_trace_span(session, "get_plan_target_at_position", mouse_pos=mouse_pos):
         if not session.view or not mouse_pos:
-            return (None, None)
+            return plan_target_kinds.make_plan_target_ref()
         prioritize_provider_targets = _should_prioritize_provider_targets_for_mode(session)
         infos = _get_view_objects_info(session, mouse_pos)
         _perf_count(session, "objects_info_entries", len(infos))
@@ -1113,7 +1114,7 @@ def get_plan_target_at_position(session, mouse_pos, *, include_space_fallback=Tr
             },
             result=_describe_pick_target(session, result[0], result[1]),
         )
-        return result
+        return plan_target_kinds.make_plan_target_ref(result[0], result[1])
 
 
 def _resolve_pick_target_from_overlay_stages(
@@ -1142,32 +1143,34 @@ def _resolve_pick_target_from_overlay_stages(
 
 def get_plan_target_from_edit_node(session, node):
     if not node:
-        return (None, None)
+        return plan_target_kinds.make_plan_target_ref()
     node_kind = plan_edit_nodes.get_edit_node_kind(node)
     if node_kind in ("provider_overlay_point", "provider_overlay_target"):
         target_kind, obj = get_provider_overlay_target_from_edit_node(session, node)
         if session.selection.is_valid_plan_target(target_kind, obj):
-            return (target_kind, obj)
-        return session.selection.get_plan_target_for_object(obj)
+            return plan_target_kinds.make_plan_target_ref(target_kind, obj)
+        fallback_kind, fallback_obj = session.selection.get_plan_target_for_object(obj)
+        return plan_target_kinds.make_plan_target_ref(fallback_kind, fallback_obj)
     if node_kind == "opening_handle":
         opening, _index = plan_edit_nodes.get_edit_node_payload(node)
         if session.openings.is_hosted_opening_object(opening):
-            return ("opening", opening)
-        return (None, None)
+            return plan_target_kinds.make_plan_target_ref("opening", opening)
+        return plan_target_kinds.make_plan_target_ref()
     if node_kind == "symbol_handle":
         symbol, _role = plan_edit_nodes.get_edit_node_payload(node)
         if session.visibility.is_plan_symbol_instance(symbol):
-            return ("symbol", symbol)
-        return (None, None)
+            return plan_target_kinds.make_plan_target_ref("symbol", symbol)
+        return plan_target_kinds.make_plan_target_ref()
     try:
         (point,) = plan_edit_nodes.get_edit_node_payload(node)
         doc = FreeCAD.getDocument(str(point.documentName.getValue()))
         obj = doc.getObject(str(point.objectName.getValue()))
     except Exception:
-        return (None, None)
+        return plan_target_kinds.make_plan_target_ref()
     if session.openings.is_hosted_opening_object(obj):
-        return ("opening", obj)
-    return session.selection.get_plan_target_for_object(obj)
+        return plan_target_kinds.make_plan_target_ref("opening", obj)
+    target_kind, target_obj = session.selection.get_plan_target_for_object(obj)
+    return plan_target_kinds.make_plan_target_ref(target_kind, target_obj)
 
 
 def get_edit_node(session, mouse_pos):
@@ -1587,7 +1590,9 @@ def clear_hovered_plan_targets(*args, **kwargs):
 
 
 def get_hovered_plan_target(*args, **kwargs):
-    return plan_hover_picking.get_hovered_plan_target(*args, **kwargs)
+    return plan_target_kinds.coerce_plan_target_ref(
+        plan_hover_picking.get_hovered_plan_target(*args, **kwargs)
+    )
 
 
 def prime_hover_pick_caches(*args, **kwargs):

@@ -2,6 +2,7 @@
 
 """Shared target-kind strings for BIM Plan Edit."""
 
+from dataclasses import dataclass
 from enum import Enum
 
 
@@ -12,6 +13,61 @@ class PlanTargetKind(str, Enum):
     PROVIDER = "provider"
     REGION = "region"
     SPACE = "space"
+
+
+@dataclass(frozen=True, slots=True, eq=False)
+class PlanTargetRef:
+    kind: object = None
+    obj: object = None
+
+    def __iter__(self):
+        yield self.kind
+        yield self.obj
+
+    def __len__(self):
+        return 2
+
+    def __getitem__(self, index):
+        return (self.kind, self.obj)[index]
+
+    def __eq__(self, other):
+        if isinstance(other, PlanTargetRef):
+            return self.kind == other.kind and self.obj == other.obj
+        try:
+            other_kind, other_obj = other
+        except Exception:
+            return False
+        return self.kind == other_kind and self.obj == other_obj
+
+    def __hash__(self):
+        return hash((self.kind, self.obj))
+
+    def as_tuple(self):
+        return (self.kind, self.obj)
+
+
+def normalize_plan_target_kind(kind):
+    return getattr(kind, "value", kind)
+
+
+def make_plan_target_ref(kind=None, obj=None):
+    return PlanTargetRef(normalize_plan_target_kind(kind), obj)
+
+
+def coerce_plan_target_ref(value):
+    if isinstance(value, PlanTargetRef):
+        return value
+    if value is None:
+        return PlanTargetRef()
+    try:
+        kind, obj = value
+    except Exception:
+        return PlanTargetRef()
+    return make_plan_target_ref(kind, obj)
+
+
+def unpack_plan_target_ref(value):
+    return coerce_plan_target_ref(value).as_tuple()
 
 
 PLAN_TARGET_WALL = PlanTargetKind.WALL.value
