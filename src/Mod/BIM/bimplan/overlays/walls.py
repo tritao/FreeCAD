@@ -23,6 +23,19 @@ def _perf_trace_span(session, name, **fields):
     return session.performance.plan_perf_trace_span(name, **fields)
 
 
+def _get_proxy_method(proxy, method_name):
+    method = getattr(proxy, method_name, None)
+    return method if callable(method) else None
+
+
+def _set_selnode_value(selnode, attr_name, value):
+    attr = getattr(selnode, attr_name, None)
+    setter = getattr(attr, "setValue", None)
+    if not callable(setter):
+        return
+    setter(value)
+
+
 def retarget_edit_tracker(tracker, obj, index):
     selnode = getattr(tracker, "selnode", None)
     if selnode is None:
@@ -30,14 +43,13 @@ def retarget_edit_tracker(tracker, obj, index):
     doc_name = getattr(getattr(obj, "Document", None), "Name", None)
     obj_name = getattr(obj, "Name", None)
     try:
-        if hasattr(selnode, "useNewSelection"):
+        if getattr(selnode, "useNewSelection", None) is not None:
             selnode.useNewSelection = False
-        if doc_name and hasattr(selnode, "documentName"):
-            selnode.documentName.setValue(doc_name)
-        if obj_name and hasattr(selnode, "objectName"):
-            selnode.objectName.setValue(obj_name)
-        if hasattr(selnode, "subElementName"):
-            selnode.subElementName.setValue(f"EditNode{index}")
+        if doc_name:
+            _set_selnode_value(selnode, "documentName", doc_name)
+        if obj_name:
+            _set_selnode_value(selnode, "objectName", obj_name)
+        _set_selnode_value(selnode, "subElementName", f"EditNode{index}")
     except Exception:
         pass
 
@@ -60,19 +72,21 @@ def sync_wall_grips(session):
 
         wall = plan_selection.get_selected_plan_target_object(session, "wall")
         proxy = getattr(wall, "Proxy", None)
-        if not proxy or not hasattr(proxy, "calc_endpoints"):
+        calc_endpoints = _get_proxy_method(proxy, "calc_endpoints")
+        if calc_endpoints is None:
             clear_wall_grips(session)
             return
 
         with _perf_trace_span(session, "wall_grips_calc_endpoints"):
-            endpoints = proxy.calc_endpoints(wall)
+            endpoints = calc_endpoints(wall)
         if len(endpoints) != 2:
             clear_wall_grips(session)
             return
 
         with _perf_trace_span(session, "wall_grips_calc_positions"):
-            if hasattr(proxy, "calc_edit_grip_positions"):
-                grip_positions = proxy.calc_edit_grip_positions(wall)
+            calc_edit_grip_positions = _get_proxy_method(proxy, "calc_edit_grip_positions")
+            if calc_edit_grip_positions is not None:
+                grip_positions = calc_edit_grip_positions(wall)
             else:
                 grip_positions = endpoints + [(endpoints[0] + endpoints[1]) * 0.5]
         if len(grip_positions) != 3:
