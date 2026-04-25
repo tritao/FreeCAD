@@ -1456,6 +1456,62 @@ def _execute_plan_provider_action_callback(
     return execute_action(action_key, context, action_context, payload)
 
 
+def _get_plan_provider_action_executor(session, provider_id):
+    provider = session.get_plan_provider_registry().get_provider(provider_id)
+    if provider is None:
+        return None
+    execute_action = getattr(provider, "execute_action", None)
+    if not callable(execute_action):
+        return None
+    return execute_action
+
+
+def _run_plan_provider_action(
+    session,
+    execute_action,
+    action_key,
+    transaction_label="",
+    payload=None,
+):
+    context = session.providers.get_plan_edit_context()
+    action_context = session.providers.get_plan_provider_action_context(payload=payload)
+    transaction_label = str(transaction_label or "").strip()
+    defer_updates = getattr(session, "defer_document_visual_updates", None)
+    visual_update_context = defer_updates() if callable(defer_updates) else nullcontext()
+    with visual_update_context:
+        if transaction_label:
+            with PlanEditTransaction(session.doc, transaction_label):
+                handled = _execute_plan_provider_action_callback(
+                    execute_action,
+                    action_key,
+                    context,
+                    action_context,
+                    payload,
+                )
+        else:
+            handled = _execute_plan_provider_action_callback(
+                execute_action,
+                action_key,
+                context,
+                action_context,
+                payload,
+            )
+        if handled is not False:
+            try:
+                if session.doc is not None:
+                    session.doc.recompute()
+            except Exception:
+                pass
+    return handled
+
+
+def _finalize_plan_provider_action(session):
+    session.selection.refresh_primary_selected_plan_target()
+    session.document_visuals.invalidate_document_dependent_plan_visuals()
+    session.task_panels.refresh_task_panel_status()
+    session.viewport.focus_plan_view()
+
+
 def execute_plan_provider_action(
     session,
     provider_id,
@@ -1465,43 +1521,18 @@ def execute_plan_provider_action(
 ):
     if not session.document_visuals.document_is_alive():
         return False
-    provider = session.get_plan_provider_registry().get_provider(provider_id)
-    if provider is None:
-        return False
-    execute_action = getattr(provider, "execute_action", None)
-    if not callable(execute_action):
+    execute_action = _get_plan_provider_action_executor(session, provider_id)
+    if execute_action is None:
         return False
 
-    context = session.providers.get_plan_edit_context()
-    action_context = session.providers.get_plan_provider_action_context(payload=payload)
-    transaction_label = str(transaction_label or "").strip()
-    defer_updates = getattr(session, "defer_document_visual_updates", None)
-    visual_update_context = defer_updates() if callable(defer_updates) else nullcontext()
     try:
-        with visual_update_context:
-            if transaction_label:
-                with PlanEditTransaction(session.doc, transaction_label):
-                    handled = _execute_plan_provider_action_callback(
-                        execute_action,
-                        action_key,
-                        context,
-                        action_context,
-                        payload,
-                    )
-            else:
-                handled = _execute_plan_provider_action_callback(
-                    execute_action,
-                    action_key,
-                    context,
-                    action_context,
-                    payload,
-                )
-            if handled is not False:
-                try:
-                    if session.doc is not None:
-                        session.doc.recompute()
-                except Exception:
-                    pass
+        handled = _run_plan_provider_action(
+            session,
+            execute_action,
+            action_key,
+            transaction_label=transaction_label,
+            payload=payload,
+        )
     except Exception as exc:
         FreeCAD.Console.PrintError(
             translate(
@@ -1514,10 +1545,7 @@ def execute_plan_provider_action(
     if handled is False:
         return False
 
-    session.selection.refresh_primary_selected_plan_target()
-    session.document_visuals.invalidate_document_dependent_plan_visuals()
-    session.task_panels.refresh_task_panel_status()
-    session.viewport.focus_plan_view()
+    _finalize_plan_provider_action(session)
     return True
 
 
