@@ -58,64 +58,81 @@ def cancel_wall_subtool(session):
     session.lifecycle.cancel_embedded_tool("Wall")
 
 
+def _validate_wall_edit_start(session):
+    if not session.wall_edit.is_selected_wall_endpoint_editable():
+        FreeCAD.Console.PrintError(
+            translate(
+                "BIM_PlanEdit",
+                "Select a straight wall before using wall grips.\n",
+            )
+        )
+        return None, None
+
+    wall = plan_selection.get_selected_plan_target_object(session, "wall")
+    proxy = getattr(wall, "Proxy", None)
+    if (
+        not proxy
+        or not hasattr(proxy, "calc_endpoints")
+        or not hasattr(proxy, "set_from_endpoints")
+    ):
+        return None, None
+
+    endpoints = proxy.calc_endpoints(wall)
+    if len(endpoints) != 2:
+        return None, None
+    return wall, endpoints
+
+
+def _set_wall_edit_start_state(session, wall, endpoints, mode):
+    session.wall_relations.clear_plan_relation_status()
+    session.current_tool = "Move Wall" if mode == "Move" else f"Stretch {mode}"
+    session.selection.set_hovered_wall(None)
+    session.selection.set_hovered_opening(None)
+    session.selection.set_hovered_symbol(None)
+    session.selection.set_hovered_provider(None)
+    if not session.selection.is_selected_plan_target("wall", wall):
+        session.selection.set_selected_plan_target("wall", wall)
+    session.overlays.clear_selected_wall_overlay()
+    session.overlays.clear_selected_wall_opening_context_overlay()
+    session._wall_edit_modal_active = True
+    session._edit_wall = wall
+    session._edit_endpoint = mode
+    session._edit_endpoints = endpoints
+
+
+def _queue_wall_edit_start_opening_clearances(session):
+    session._wall_edit_opening_clearances = {}
+    session.wall_edit.queue_wall_edit_opening_clearances()
+
+
+def _prepare_wall_edit_preview(session, wall, endpoints):
+    session._preview_points = list(endpoints)
+    session._edit_wall_visibility = None
+    try:
+        session._edit_wall_visibility = wall.ViewObject.Visibility
+        wall.ViewObject.Visibility = False
+    except Exception:
+        session._edit_wall_visibility = None
+    session.overlays.clear_wall_grips()
+    session.overlays.clear_selected_wall_overlay()
+    session.wall_edit.sync_wall_edit_preview(session._preview_points, include_opening_preview=False)
+
+
 def start_wall_edit(session, mode):
     with session.performance.plan_perf_trace_span("start_wall_edit"):
         with session.performance.plan_perf_trace_span("start_wall_edit_validate"):
-            if not session.wall_edit.is_selected_wall_endpoint_editable():
-                FreeCAD.Console.PrintError(
-                    translate(
-                        "BIM_PlanEdit",
-                        "Select a straight wall before using wall grips.\n",
-                    )
-                )
-                return
-
-            wall = plan_selection.get_selected_plan_target_object(session, "wall")
-            proxy = getattr(wall, "Proxy", None)
-            if (
-                not proxy
-                or not hasattr(proxy, "calc_endpoints")
-                or not hasattr(proxy, "set_from_endpoints")
-            ):
-                return
-
-            endpoints = proxy.calc_endpoints(wall)
-            if len(endpoints) != 2:
+            wall, endpoints = _validate_wall_edit_start(session)
+            if wall is None or endpoints is None:
                 return
 
         with session.performance.plan_perf_trace_span("start_wall_edit_state"):
-            session.wall_relations.clear_plan_relation_status()
-            session.current_tool = "Move Wall" if mode == "Move" else f"Stretch {mode}"
-            session.selection.set_hovered_wall(None)
-            session.selection.set_hovered_opening(None)
-            session.selection.set_hovered_symbol(None)
-            session.selection.set_hovered_provider(None)
-            if not session.selection.is_selected_plan_target("wall", wall):
-                session.selection.set_selected_plan_target("wall", wall)
-            session.overlays.clear_selected_wall_overlay()
-            session.overlays.clear_selected_wall_opening_context_overlay()
-            session._wall_edit_modal_active = True
-            session._edit_wall = wall
-            session._edit_endpoint = mode
-            session._edit_endpoints = endpoints
+            _set_wall_edit_start_state(session, wall, endpoints, mode)
 
         with session.performance.plan_perf_trace_span("start_wall_edit_queue_opening_clearances"):
-            session._wall_edit_opening_clearances = {}
-            session.wall_edit.queue_wall_edit_opening_clearances()
+            _queue_wall_edit_start_opening_clearances(session)
 
         with session.performance.plan_perf_trace_span("start_wall_edit_preview"):
-            session._preview_points = list(endpoints)
-            session._edit_wall_visibility = None
-            try:
-                session._edit_wall_visibility = wall.ViewObject.Visibility
-                wall.ViewObject.Visibility = False
-            except Exception:
-                session._edit_wall_visibility = None
-            session.overlays.clear_wall_grips()
-            session.overlays.clear_selected_wall_overlay()
-            session.wall_edit.sync_wall_edit_preview(
-                session._preview_points, include_opening_preview=False
-            )
+            _prepare_wall_edit_preview(session, wall, endpoints)
 
         session.wall_edit.queue_wall_edit_task_panel_refresh()
         session.wall_edit.resume_wall_edit_point_pick()
