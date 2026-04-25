@@ -511,6 +511,90 @@ class PlanEditControlsShellMixin:
                 self._set_widget_updates_enabled(self.integration_panel, True)
                 self._refresh_widget_geometry(self.integration_panel)
 
+    def _set_modal_focus_policies(self, modal_active, QtCore):
+        for widget in self._modal_focus_widgets:
+            if widget is None:
+                continue
+            try:
+                widget.setFocusPolicy(
+                    QtCore.Qt.NoFocus
+                    if modal_active
+                    else self._saved_focus_policies.get(widget, QtCore.Qt.StrongFocus)
+                )
+            except Exception:
+                pass
+
+    def _set_modal_enabled_state(self, widgets, enabled):
+        for widget in widgets:
+            if widget is None:
+                continue
+            try:
+                widget.setEnabled(bool(enabled))
+            except Exception:
+                pass
+
+    def _apply_modal_core_action_state(self, modal_active, join_candidate):
+        self._set_modal_enabled_state(
+            (
+                self.storey_combo,
+                self.select_button,
+                self.wall_button,
+                self.rect_wall_button,
+                self.window_button,
+                self.space_button,
+                self.region_button,
+                self.separator_button,
+                self.move_button,
+                self.join_button,
+                self.join_type_combo,
+                self.unjoin_button,
+                self.reapply_button,
+            ),
+            not modal_active,
+        )
+        if self.unjoin_button is not None:
+            try:
+                self.unjoin_button.setEnabled(
+                    not modal_active and self.session.current_tool == "Join" and join_candidate
+                )
+            except Exception:
+                pass
+
+    def _apply_modal_integration_state(self, modal_active):
+        for button in self._integration_action_buttons:
+            if button is None:
+                continue
+            try:
+                base_enabled = button.property("planActionEnabled")
+                button.setEnabled(bool(base_enabled) and not modal_active)
+            except Exception:
+                pass
+        self._set_modal_enabled_state(self._integration_overlay_checkboxes, not modal_active)
+
+    def _apply_modal_editor_state(self, modal_active, selected_kind):
+        has_space = selected_kind == "space"
+        self._set_modal_enabled_state(
+            (
+                self.space_label_edit,
+                self.space_type_combo,
+                self.space_boundary_list,
+                self.space_add_button,
+                self.space_remove_button,
+                self.space_text_button,
+            ),
+            has_space and not modal_active,
+        )
+        has_region = selected_kind == "region"
+        self._set_modal_enabled_state(
+            (
+                self.region_label_edit,
+                self.region_scheme_edit,
+                self.region_type_edit,
+                self.region_parent_space_combo,
+            ),
+            has_region and not modal_active,
+        )
+
     def _apply_modal_interaction_state(self, modal_active):
         from PySide import QtCore
 
@@ -530,93 +614,11 @@ class PlanEditControlsShellMixin:
             return
         self._modal_interaction_state = state
 
-        for widget in self._modal_focus_widgets:
-            if widget is None:
-                continue
-            try:
-                widget.setFocusPolicy(
-                    QtCore.Qt.NoFocus
-                    if modal_active
-                    else self._saved_focus_policies.get(widget, QtCore.Qt.StrongFocus)
-                )
-            except Exception:
-                pass
-
-        for widget in (
-            self.storey_combo,
-            self.select_button,
-            self.wall_button,
-            self.rect_wall_button,
-            self.window_button,
-            self.space_button,
-            self.region_button,
-            self.separator_button,
-            self.move_button,
-            self.join_button,
-            self.join_type_combo,
-            self.unjoin_button,
-            self.reapply_button,
-        ):
-            if widget is None:
-                continue
-            try:
-                widget.setEnabled(not modal_active)
-            except Exception:
-                pass
-        if self.unjoin_button is not None:
-            try:
-                self.unjoin_button.setEnabled(
-                    not modal_active and self.session.current_tool == "Join" and join_candidate
-                )
-            except Exception:
-                pass
-
+        self._set_modal_focus_policies(modal_active, QtCore)
+        self._apply_modal_core_action_state(modal_active, join_candidate)
         self._refresh_action_context(modal_active=modal_active)
-        for button in self._integration_action_buttons:
-            if button is None:
-                continue
-            try:
-                base_enabled = button.property("planActionEnabled")
-                button.setEnabled(bool(base_enabled) and not modal_active)
-            except Exception:
-                pass
-        for checkbox in self._integration_overlay_checkboxes:
-            if checkbox is None:
-                continue
-            try:
-                checkbox.setEnabled(not modal_active)
-            except Exception:
-                pass
-
-        has_space = selected_kind == "space"
-        for widget in (
-            self.space_label_edit,
-            self.space_type_combo,
-            self.space_boundary_list,
-            self.space_add_button,
-            self.space_remove_button,
-            self.space_text_button,
-        ):
-            if widget is None:
-                continue
-            try:
-                widget.setEnabled(bool(has_space and not modal_active))
-            except Exception:
-                pass
-
-        has_region = selected_kind == "region"
-        for widget in (
-            self.region_label_edit,
-            self.region_scheme_edit,
-            self.region_type_edit,
-            self.region_parent_space_combo,
-        ):
-            if widget is None:
-                continue
-            try:
-                widget.setEnabled(bool(has_region and not modal_active))
-            except Exception:
-                pass
+        self._apply_modal_integration_state(modal_active)
+        self._apply_modal_editor_state(modal_active, selected_kind)
 
         can_edit_window_width = (
             selected_kind == "opening"
