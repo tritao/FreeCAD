@@ -265,6 +265,3 @@ class PlanSpacesAPI(_SessionAPI):
 
     def is_plan_space_object(self, *args, **kwargs):
         return plan_targets.is_plan_space_object(self.session, *args, **kwargs)
-
-    def set_hovered_space_region_candidate(self, candidate):
-        return plan_space_regions.set_hovered_space_region_candidate(self.session, candidate)

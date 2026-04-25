@@ -1107,26 +1107,6 @@ class TestBimPlanCore(unittest.TestCase):
             plan_target_kinds.PRIMARY_PLAN_TARGET_KINDS,
         )
 
-    def test_plan_spaces_api_uses_space_region_pick_visual_key(self):
-        from bimplan import document_visuals as plan_document_visuals
-        from bimplan.tools.spaces import PlanSpacesAPI
-
-        session = object()
-        candidate = {"area": 12.0}
-        spaces = PlanSpacesAPI(session)
-
-        with patch(
-            "bimplan.tools.space_regions.set_hovered_space_region_candidate",
-            return_value=True,
-        ) as set_hovered_space_region_candidate:
-            self.assertTrue(spaces.set_hovered_space_region_candidate(candidate))
-
-        set_hovered_space_region_candidate.assert_called_once_with(
-            session,
-            candidate,
-            plan_document_visuals.PLAN_VISUAL_SPACE_REGION_PICK,
-        )
-
     def test_plan_viewport_api_uses_view_policies(self):
         from bimplan.runtime.view import PlanViewportAPI
 

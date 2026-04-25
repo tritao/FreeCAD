@@ -4,7 +4,9 @@
 
 import FreeCAD
 
+from bimplan import document_visuals as plan_document_visuals
 from bimplan import selection as plan_selection
+from bimplan.tools import space_regions as plan_space_regions
 
 
 class PlanInputAPI:
@@ -219,8 +221,10 @@ def on_mouse_moved(session, event_callback):
     ):
         if session.current_tool == "Pick Space Region":
             if mouse_pos is not None:
-                session.spaces.set_hovered_space_region_candidate(
-                    session.spaces.pick_space_region_candidate(mouse_pos)
+                plan_space_regions.set_hovered_space_region_candidate(
+                    session,
+                    session.spaces.pick_space_region_candidate(mouse_pos),
+                    plan_document_visuals.PLAN_VISUAL_SPACE_REGION_PICK,
                 )
                 session.overlays.refresh_plan_overlay_visuals()
             return
