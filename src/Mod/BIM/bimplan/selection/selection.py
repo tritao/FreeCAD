@@ -2122,6 +2122,9 @@ class PlanSelectionAPI(_SessionAPI):
     def add_gui_selection_object(self, obj):
         return add_gui_selection_object(obj)
 
+    def is_plan_additive_selection_active(self):
+        return is_plan_additive_selection_active(self.session)
+
     def normalize_plan_requirement_tags(self, value):
         from . import targets as plan_targets
 
