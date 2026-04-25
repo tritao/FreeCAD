@@ -94,7 +94,7 @@ class Arch_Window:
             try:
                 selected = plan_selection.get_selected_plan_target_object(session, "wall")
                 if selected and self.sel[0] == selected:
-                    session.suspend_selected_wall_state(selected)
+                    session.selection.suspend_selected_wall_state(selected)
             except Exception:
                 pass
 
