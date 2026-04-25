@@ -529,24 +529,21 @@ def get_plan_target_state_key(kind, obj):
 def _iter_normalized_plan_targets(session, targets):
     seen = set()
     for target in targets or []:
-        try:
-            target_kind, target_obj = target
-        except Exception:
-            continue
+        target_kind, target_obj = plan_target_kinds.unpack_plan_target_ref(target)
         if not session.selection.is_valid_plan_target(target_kind, target_obj):
             continue
         key = session.selection.get_plan_target_state_key(target_kind, target_obj)
         if key is None or key in seen:
             continue
         seen.add(key)
-        yield (target_kind, target_obj)
+        yield plan_target_kinds.make_plan_target_ref(target_kind, target_obj)
 
 
 def _filter_secondary_selected_plan_targets(targets, primary_kind, primary_obj):
     for target_kind, target_obj in targets:
         if target_kind == primary_kind and target_obj == primary_obj:
             continue
-        yield (target_kind, target_obj)
+        yield plan_target_kinds.make_plan_target_ref(target_kind, target_obj)
 
 
 def normalize_plan_target_list(session, targets):
@@ -556,12 +553,12 @@ def normalize_plan_target_list(session, targets):
 def normalize_plan_targets_from_selection(session, selection):
     return session.selection.normalize_plan_target_list(
         [
-            (target_kind, target_obj)
-            for target_kind, target_obj in (
+            target_ref
+            for target_ref in (
                 session.selection.get_plan_target_for_object(selected)
                 for selected in (selection or [])
             )
-            if target_kind and target_obj
+            if target_ref.kind and target_ref.obj
         ]
     )
 
@@ -606,7 +603,7 @@ def get_selected_plan_targets(session):
     primary_kind, primary_obj = _get_native_selected_plan_target(session)
     targets = []
     if primary_kind and primary_obj:
-        targets.append((primary_kind, primary_obj))
+        targets.append(plan_target_kinds.make_plan_target_ref(primary_kind, primary_obj))
     targets.extend(
         _filter_secondary_selected_plan_targets(
             _iter_normalized_plan_targets(
