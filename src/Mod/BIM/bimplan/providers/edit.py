@@ -7,6 +7,7 @@ from contextlib import nullcontext
 import FreeCAD
 import FreeCADGui
 from bimplan.providers import host_targets as plan_host_targets
+from bimplan.providers import payloads as plan_provider_payloads
 from bimplan.providers import PlanEditHandleSpec, PlanOverlayMarkerKind, PlanToolInteraction
 from bimplan import selection as plan_selection
 from bimplan.selection import target_kinds as plan_target_kinds
@@ -449,30 +450,30 @@ def _build_provider_handle_payload(
     )
     if placement_point is None and point is not None:
         placement_point = FreeCAD.Vector(point)
-    return {
-        "handle": handle,
-        "handle_key": str(getattr(handle, "key", "") or "").strip(),
-        "handle_role": str(getattr(handle, "role", "") or "").strip(),
-        "point": FreeCAD.Vector(point) if point is not None else None,
-        "placement_point": placement_point,
-        "raw_point": FreeCAD.Vector(raw_point) if raw_point is not None else None,
-        "snap_info": snap_info,
-        "snap_object": snap_object,
-        "snap_target": snap_target,
-        "snap_document_name": snap_document_name,
-        "snap_object_name": snap_object_name,
-        "snap_component": snap_component,
-        "snap_subname": snap_subname,
-        "target_object": provider_obj,
-        "provider_target": provider_target,
-        "target_key": str(getattr(provider_target, "key", "") or "").strip(),
-        "target_provider_id": str(getattr(provider_target, "provider_id", "") or "").strip(),
-        "selected_target": selected_target,
-        "selected_targets": selected_targets,
-        "hovered_target": hovered_target,
-        "host_target": host_target,
-        "host_source": host_source,
-    }
+    return plan_provider_payloads.ProviderHandleActionPayload(
+        handle=handle,
+        handle_key=str(getattr(handle, "key", "") or "").strip(),
+        handle_role=str(getattr(handle, "role", "") or "").strip(),
+        point=FreeCAD.Vector(point) if point is not None else None,
+        placement_point=placement_point,
+        raw_point=FreeCAD.Vector(raw_point) if raw_point is not None else None,
+        snap_info=snap_info,
+        snap_object=snap_object,
+        snap_target=snap_target,
+        snap_document_name=snap_document_name,
+        snap_object_name=snap_object_name,
+        snap_component=snap_component,
+        snap_subname=snap_subname,
+        target_object=provider_obj,
+        provider_target=provider_target,
+        target_key=str(getattr(provider_target, "key", "") or "").strip(),
+        target_provider_id=str(getattr(provider_target, "provider_id", "") or "").strip(),
+        selected_target=selected_target,
+        selected_targets=selected_targets,
+        hovered_target=hovered_target,
+        host_target=host_target,
+        host_source=host_source,
+    )
 
 
 def _get_provider_handle_payload_host_target(
