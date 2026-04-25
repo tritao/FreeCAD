@@ -210,11 +210,14 @@ SET(bimcommands_SRCS
 SET(bimplan_SRCS
     bimplan/__init__.py
     bimplan/benchmark.py
+    bimplan/document_visuals.py
+    bimplan/object_visibility.py
     bimplan/overlays/__init__.py
     bimplan/overlays/geometry.py
     bimplan/overlays/manager.py
     bimplan/overlays/openings.py
     bimplan/overlays/providers.py
+    bimplan/overlays/runtime.py
     bimplan/overlays/spaces.py
     bimplan/overlays/symbols.py
     bimplan/overlays/tracker_pool.py
@@ -247,7 +250,10 @@ SET(bimplan_SRCS
     bimplan/selection/targets.py
     bimplan/semantics.py
     bimplan/snap.py
+    bimplan/status_text.py
+    bimplan/storeys.py
     bimplan/task_panel.py
+    bimplan/task_panel_view_model.py
     bimplan/tools/__init__.py
     bimplan/tools/hosted_openings.py
     bimplan/tools/opening_edit.py
@@ -264,6 +270,9 @@ SET(bimplan_SRCS
     bimplan/tools/window_create.py
     bimplan/transactions.py
     bimplan/ui/__init__.py
+    bimplan/ui/control_editors.py
+    bimplan/ui/control_integrations.py
+    bimplan/ui/control_shell.py
     bimplan/ui/controls.py
 )
 
