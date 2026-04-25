@@ -239,6 +239,25 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         else:
             self.assertEqual(len(session._grip_trackers), 0)
 
+    def _assert_selected_opening_visuals(self, session, opening):
+        self.assertIs(session.selection.get_selected_target_for_kind("opening"), opening)
+        self.assertGreater(len(session._opening_overlay_trackers), 0)
+        self.assertEqual(len(session._opening_handle_trackers), 3)
+
+    def _assert_no_opening_move_preview_visuals(self, session):
+        self.assertEqual(len(session._opening_move_preview_trackers), 0)
+        self.assertIsNone(session._edit_opening)
+        self.assertIsNone(session._edit_opening_handle_index)
+
+    def _assert_opening_selection_visual_consistency(self, session):
+        selected_opening = session.selection.get_selected_target_for_kind("opening")
+        if selected_opening is None:
+            self.assertEqual(len(session._opening_overlay_trackers), 0)
+            self.assertEqual(len(session._opening_handle_trackers), 0)
+            return
+        self.assertGreater(len(session._opening_overlay_trackers), 0)
+        self.assertEqual(len(session._opening_handle_trackers), 3)
+
     def _get_scenegraph_named_switches(self, session, switch_name):
         view = getattr(session, "view", None)
         scene_graph = view.getSceneGraph() if view else None
@@ -3598,6 +3617,74 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
 
             session.openings.cancel_opening_handle_point_pick()
 
+    def test_plan_edit_opening_move_undo_redo_roundtrip(self):
+        """Opening move undo/redo should restore hosted opening layout and selected-opening visuals."""
+
+        level = Arch.makeFloor(name="Level 0")
+        wall = Arch.makeWall(length=3000, width=200, height=2500)
+        level.addObject(wall)
+        self.document.recompute()
+
+        door = self._make_hosted_door(wall, name="UndoRedoOpeningMoveDoor", width=900.0)
+        self.document.recompute()
+
+        FreeCADGui.Selection.clearSelection()
+        FreeCADGui.Selection.addSelection(level)
+
+        session = BimPlanSession.start_session()
+        self.assertIsNotNone(session)
+        self.pump_gui_events()
+
+        FreeCADGui.Selection.clearSelection()
+        FreeCADGui.Selection.addSelection(self.document.Name, door.Name)
+        self.pump_gui_events()
+        session.selection.refresh_primary_selected_plan_target()
+
+        initial_center_u, initial_half_width = self._get_hosted_opening_center_u(door)
+        handle = session.openings.get_selected_opening_edit_handles(door)[0]
+        move_context = door.ViewObject.Proxy.get_plan_move_context()
+        target_center_u = min(move_context["move_u_max"], initial_center_u + 450.0)
+        target_point = move_context["origin"].add(
+            FreeCAD.Vector(move_context["axis_u"]).multiply(target_center_u)
+        )
+        target_point.z = move_context["base_z"]
+        captured = {}
+
+        def fake_get_point(**kwargs):
+            captured.update(kwargs)
+
+        with (
+            patch.object(FreeCADGui.Snapper, "getPoint", side_effect=fake_get_point),
+            patch.object(FreeCADGui.Snapper, "setSelectMode", return_value=None),
+        ):
+            session.openings.start_opening_handle_point_pick(door, 0, handle)
+            captured["callback"](target_point, None)
+
+        self.pump_gui_events()
+
+        updated_center_u, updated_half_width = self._get_hosted_opening_center_u(door)
+        self.assertGreater(abs(updated_center_u - initial_center_u), 1e-6)
+        self.assertAlmostEqual(updated_half_width, initial_half_width, delta=1e-6)
+        self._assert_selected_opening_visuals(session, door)
+        self._assert_no_opening_move_preview_visuals(session)
+
+        self._undo_document()
+        undo_center_u, undo_half_width = self._get_hosted_opening_center_u(door)
+        self.assertAlmostEqual(undo_center_u, initial_center_u, delta=1e-6)
+        self.assertAlmostEqual(undo_half_width, initial_half_width, delta=1e-6)
+        self._assert_opening_selection_visual_consistency(session)
+        self._assert_no_opening_move_preview_visuals(session)
+
+        self._redo_document()
+        redo_center_u, redo_half_width = self._get_hosted_opening_center_u(door)
+        self.assertAlmostEqual(redo_center_u, updated_center_u, delta=1e-6)
+        self.assertAlmostEqual(redo_half_width, updated_half_width, delta=1e-6)
+        self._assert_opening_selection_visual_consistency(session)
+        self._assert_no_opening_move_preview_visuals(session)
+
+        session.shutdown(close_dialog=False)
+        self.pump_gui_events()
+
     def test_plan_edit_opening_move_updates_input_hints(self):
         """Active opening move should publish placement/cancel/anchor hints."""
 
@@ -5030,6 +5117,59 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         self.assertAlmostEqual(endpoints[1].x, original_endpoints[1].x + 500.0, delta=1e-6)
         self.assertEqual(session.current_tool, "Select")
         self.assertIs(session.selection.get_selected_target_for_kind("wall"), wall)
+
+    def test_plan_edit_wall_move_undo_redo_roundtrip(self):
+        """Wall move undo/redo should restore wall geometry and selected-wall visuals."""
+
+        wall = Arch.makeWall(length=3000, width=200, height=2500)
+        self.document.recompute()
+
+        session = BimPlanSession.start_session()
+        self.assertIsNotNone(session)
+        self.pump_gui_events()
+
+        FreeCADGui.Selection.clearSelection()
+        FreeCADGui.Selection.addSelection(self.document.Name, wall.Name)
+        self.pump_gui_events()
+        session.selection.refresh_primary_selected_plan_target()
+
+        initial_start, initial_end = self._get_wall_endpoints(wall)
+        captured = {}
+
+        def fake_get_point(**kwargs):
+            captured.update(kwargs)
+
+        moved_midpoint = None
+        with (
+            patch.object(FreeCADGui.Snapper, "getPoint", side_effect=fake_get_point),
+            patch.object(FreeCADGui.Snapper, "setSelectMode", return_value=None),
+        ):
+            session.wall_edit.start_wall_grip_edit(2)
+            moved_midpoint = FreeCAD.Vector(captured["last"]).add(FreeCAD.Vector(500.0, 0.0, 0.0))
+            captured["callback"](moved_midpoint, None)
+
+        moved_start, moved_end = self._get_wall_endpoints(wall)
+        self.assertAlmostEqual(moved_start.x, initial_start.x + 500.0, delta=1e-6)
+        self.assertAlmostEqual(moved_end.x, initial_end.x + 500.0, delta=1e-6)
+        self._assert_selected_wall_visuals(session, wall)
+        self._assert_no_wall_edit_preview_visuals(session)
+
+        self._undo_document()
+        undo_start, undo_end = self._get_wall_endpoints(wall)
+        self.assertLess(undo_start.distanceToPoint(initial_start), 1e-6)
+        self.assertLess(undo_end.distanceToPoint(initial_end), 1e-6)
+        self._assert_wall_selection_visual_consistency(session)
+        self._assert_no_wall_edit_preview_visuals(session)
+
+        self._redo_document()
+        redo_start, redo_end = self._get_wall_endpoints(wall)
+        self.assertLess(redo_start.distanceToPoint(moved_start), 1e-6)
+        self.assertLess(redo_end.distanceToPoint(moved_end), 1e-6)
+        self._assert_wall_selection_visual_consistency(session)
+        self._assert_no_wall_edit_preview_visuals(session)
+
+        session.shutdown(close_dialog=False)
+        self.pump_gui_events()
 
     def test_plan_edit_wall_stretch_length_edit_commits_wall(self):
         """Accepting a typed wall stretch length should commit the resized wall."""
