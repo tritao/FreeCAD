@@ -109,13 +109,9 @@ class PlanSpacesAPI(_SessionAPI):
 
     __slots__ = ()
 
-    copy_shape_without_element_map = staticmethod(copy_shape_without_element_map)
     space_boundary_key = staticmethod(space_boundary_key)
-    get_xy_bound_box_iou = staticmethod(get_xy_bound_box_iou)
-    report_space_region_candidate_failure = staticmethod(report_space_region_candidate_failure)
     format_space_region_candidate_area = staticmethod(format_space_region_candidate_area)
     format_space_preflight_text = staticmethod(format_space_preflight_text)
-    report_space_creation_failure = staticmethod(report_space_creation_failure)
 
     def get_space_reference_point(self, *args, **kwargs):
         return get_space_reference_point(self.session, *args, **kwargs)
@@ -137,15 +133,6 @@ class PlanSpacesAPI(_SessionAPI):
 
     def get_space_creation_request(self, *args, **kwargs):
         return get_space_creation_request(self.session, *args, **kwargs)
-
-    def get_existing_space_region_filter_spaces(self, *args, **kwargs):
-        return get_existing_space_region_filter_spaces(self.session, *args, **kwargs)
-
-    def is_space_region_candidate_claimed(self, *args, **kwargs):
-        return is_space_region_candidate_claimed(self.session, *args, **kwargs)
-
-    def filter_claimed_space_region_candidates(self, *args, **kwargs):
-        return filter_claimed_space_region_candidates(self.session, *args, **kwargs)
 
     def get_space_region_candidate_report(self, *args, **kwargs):
         return get_space_region_candidate_report(self.session, *args, **kwargs)
@@ -198,17 +185,8 @@ class PlanSpacesAPI(_SessionAPI):
     def handle_space_separator_point(self, *args, **kwargs):
         return handle_space_separator_point(self.session, *args, **kwargs)
 
-    def get_space_region_candidate_polylines(self, *args, **kwargs):
-        return get_space_region_candidate_polylines(self.session, *args, **kwargs)
-
-    def get_space_region_candidate_segments(self, *args, **kwargs):
-        return get_space_region_candidate_segments(self.session, *args, **kwargs)
-
     def pick_space_region_candidate(self, *args, **kwargs):
         return pick_space_region_candidate(self.session, *args, **kwargs)
-
-    def create_space_region_base_object(self, *args, **kwargs):
-        return create_space_region_base_object(self.session, *args, **kwargs)
 
     def begin_space_region_pick(self, *args, **kwargs):
         return begin_space_region_pick(self.session, *args, **kwargs)
@@ -224,9 +202,6 @@ class PlanSpacesAPI(_SessionAPI):
 
     def create_space_from_current_selection(self, *args, **kwargs):
         return create_space_from_current_selection(self.session, *args, **kwargs)
-
-    def space_has_valid_geometry(self, *args, **kwargs):
-        return space_has_valid_geometry(self.session, *args, **kwargs)
 
     def set_selected_space_label(self, *args, **kwargs):
         return set_selected_space_label(self.session, *args, **kwargs)

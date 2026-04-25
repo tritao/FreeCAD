@@ -6,6 +6,7 @@ import FreeCAD
 
 from bimplan import selection as plan_selection
 from bimplan.selection import target_kinds as plan_target_kinds
+from bimplan.tools import space_geometry as plan_space_geometry
 
 translate = FreeCAD.Qt.translate
 
@@ -30,8 +31,9 @@ def _normalize_space_region_candidate_report(session, report, *, seed_space=None
     candidates = list(report.get("candidates", []) or [])
     skipped_claimed = 0
     if seed_space is None:
-        candidates, skipped_claimed = session.spaces.filter_claimed_space_region_candidates(
-            candidates
+        candidates, skipped_claimed = plan_space_geometry.filter_claimed_space_region_candidates(
+            session,
+            candidates,
         )
     report["candidates"] = candidates
     report["candidate_count"] = len(candidates)
@@ -147,8 +149,8 @@ def _create_space_in_transaction(
             space.Boundaries = boundaries
         session.visibility.add_object_to_active_storey(space)
         session.doc.recompute()
-        if not session.spaces.space_has_valid_geometry(space):
-            reported_failure = session.spaces.report_space_creation_failure(space)
+        if not space_has_valid_geometry(session, space):
+            reported_failure = report_space_creation_failure(space)
             raise RuntimeError("Unable to create space")
         session.doc.commitTransaction()
     except Exception:
@@ -254,7 +256,7 @@ def _consume_space_region_candidate_report(
 ):
     candidates = list(report.get("candidates", []) or [])
     if not candidates:
-        session.spaces.report_space_region_candidate_failure(report)
+        report_space_region_candidate_failure(report)
         return False
 
     _announce_skipped_claimed_space_region_candidates(
@@ -288,7 +290,7 @@ def get_space_region_candidate_polylines(session, candidate):
 
 def get_space_region_candidate_segments(session, candidate):
     segments = []
-    for polyline in session.spaces.get_space_region_candidate_polylines(candidate):
+    for polyline in get_space_region_candidate_polylines(session, candidate):
         if len(polyline) < 2:
             continue
         for start, end in zip(polyline, polyline[1:]):
@@ -321,7 +323,7 @@ def pick_space_region_candidate(session, mouse_pos, radius_px=10):
     best_candidate = None
     best_distance_sq = None
     for candidate in candidates:
-        for start, end in session.spaces.get_space_region_candidate_segments(candidate):
+        for start, end in get_space_region_candidate_segments(session, candidate):
             distance_sq = session.selection.get_screen_distance_sq_to_segment(mouse_pos, start, end)
             if distance_sq is None or distance_sq > radius_sq:
                 continue
@@ -349,7 +351,7 @@ def create_space_region_base_object(session, candidate):
     except Exception:
         return None
     try:
-        shape_copy = session.spaces.copy_shape_without_element_map(shape)
+        shape_copy = plan_space_geometry.copy_shape_without_element_map(shape)
         if shape_copy is None:
             return None
         base.Shape = shape_copy
@@ -414,7 +416,7 @@ def create_space_from_region_candidate(session, candidate, boundaries=None, keep
         return None
 
     def create_space():
-        base = session.spaces.create_space_region_base_object(candidate)
+        base = create_space_region_base_object(session, candidate)
         if not base:
             return None
         return Arch.makeSpace(base)

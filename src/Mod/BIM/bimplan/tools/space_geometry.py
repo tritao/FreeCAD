@@ -113,9 +113,7 @@ def is_space_region_candidate_claimed(
                     continue
             except Exception:
                 continue
-            if session.spaces.get_xy_bound_box_iou(candidate_face, footprint_face) >= float(
-                overlap_iou_tolerance
-            ):
+            if get_xy_bound_box_iou(candidate_face, footprint_face) >= float(overlap_iou_tolerance):
                 return True
     return False
 
@@ -125,14 +123,14 @@ def filter_claimed_space_region_candidates(session, candidates, exclude_space=No
     if not candidates:
         return candidates, 0
 
-    spaces = session.spaces.get_existing_space_region_filter_spaces(exclude=exclude_space)
+    spaces = get_existing_space_region_filter_spaces(session, exclude=exclude_space)
     if not spaces:
         return candidates, 0
 
     filtered = []
     skipped = 0
     for candidate in candidates:
-        if session.spaces.is_space_region_candidate_claimed(candidate, spaces):
+        if is_space_region_candidate_claimed(session, candidate, spaces):
             skipped += 1
             continue
         filtered.append(candidate)
