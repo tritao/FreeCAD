@@ -4,6 +4,7 @@
 
 from bimplan.tools import space_regions as plan_space_regions
 
+from . import geometry as overlay_geometry
 from . import manager as overlay_manager
 from .. import selection as plan_selection
 
@@ -126,7 +127,7 @@ def create_space_overlay_trackers(session, space, color, width, tracker_store):
     except ImportError:
         return
 
-    for polyline in get_space_overlay_polylines(session, space):
+    for polyline in overlay_geometry.get_space_overlay_polylines(session, space):
         if len(polyline) < 2:
             continue
         for start, end in zip(polyline, polyline[1:]):
@@ -149,7 +150,7 @@ def create_region_overlay_trackers(session, region, color, width, tracker_store)
     except ImportError:
         return
 
-    for polyline in get_region_overlay_polylines(session, region):
+    for polyline in overlay_geometry.get_region_overlay_polylines(session, region):
         if len(polyline) < 2:
             continue
         for start, end in zip(polyline, polyline[1:]):
@@ -246,7 +247,7 @@ def sync_selected_space_overlay(session):
             segments = session._selected_space_overlay_segments
             _perf_count(session, "selected_space_overlay_segment_cache_hits")
         else:
-            segments = tuple(get_space_overlay_segments(session, space))
+            segments = tuple(overlay_geometry.get_space_overlay_segments(session, space))
             session._selected_space_overlay_geometry_key = geometry_key
             session._selected_space_overlay_segments = segments
         _perf_count(session, "selected_space_overlay_segments", len(segments))
@@ -287,7 +288,7 @@ def sync_selected_region_overlay(session):
         except ImportError:
             clear_selected_region_overlay(session)
             return
-        segments = get_region_overlay_segments(session, region)
+        segments = overlay_geometry.get_region_overlay_segments(session, region)
         _perf_count(session, "selected_region_overlay_segments", len(segments))
         color = (0.12, 0.38, 0.95)
         session._region_overlay_trackers, _, _ = overlay_manager.sync_segment_overlay_trackers(
