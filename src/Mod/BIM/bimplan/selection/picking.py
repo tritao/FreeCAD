@@ -1034,7 +1034,7 @@ def _collect_pick_candidates_from_objects_info(session, infos):
         if obj is None:
             continue
         parent_obj = info.get("ParentObject")
-        target_kind, target_obj = plan_targets.get_plan_pick_target_for_object(
+        target_ref = plan_targets.get_plan_pick_target_for_object(
             session,
             obj,
             parent_obj=parent_obj,
@@ -1044,22 +1044,22 @@ def _collect_pick_candidates_from_objects_info(session, infos):
             {
                 "info": _describe_pick_info_entry(info),
                 "resolved_object": _describe_pick_object(session, obj),
-                "target": _describe_pick_target(session, target_kind, target_obj),
+                "target": _describe_pick_target(session, target_ref.kind, target_ref.obj),
             },
         )
-        if target_kind == "opening":
-            direct_result = plan_target_kinds.make_plan_target_ref("opening", target_obj)
+        if target_ref.kind == "opening":
+            direct_result = plan_target_kinds.make_plan_target_ref("opening", target_ref.obj)
             break
-        if target_kind == "wall" and candidates.wall is None:
-            candidates.wall = target_obj
-        elif target_kind == "symbol" and candidates.symbol is None:
-            candidates.symbol = target_obj
-        elif target_kind == "provider" and candidates.provider is None:
-            candidates.provider = target_obj
-        elif target_kind == "region" and candidates.region is None:
-            candidates.region = target_obj
-        elif target_kind == "space" and candidates.space is None:
-            candidates.space = target_obj
+        if target_ref.kind == "wall" and candidates.wall is None:
+            candidates.wall = target_ref.obj
+        elif target_ref.kind == "symbol" and candidates.symbol is None:
+            candidates.symbol = target_ref.obj
+        elif target_ref.kind == "provider" and candidates.provider is None:
+            candidates.provider = target_ref.obj
+        elif target_ref.kind == "region" and candidates.region is None:
+            candidates.region = target_ref.obj
+        elif target_ref.kind == "space" and candidates.space is None:
+            candidates.space = target_ref.obj
     return direct_result, candidates, debug_infos
 
 

@@ -243,9 +243,9 @@ def resolve_provider_point_snap_object(session, snap_object, snap_info):
 def normalize_provider_point_host_target(session, target):
     if not target:
         return plan_host_targets.make_provider_host_target_ref()
-    target_kind, target_obj = plan_target_kinds.unpack_plan_target_ref(target)
-    if target_kind == "wall" and session.selection.is_plan_selectable_wall(target_obj):
-        return plan_host_targets.make_provider_host_target_ref("wall", target_obj)
+    target_ref = plan_target_kinds.coerce_plan_target_ref(target)
+    if target_ref.kind == "wall" and session.selection.is_plan_selectable_wall(target_ref.obj):
+        return plan_host_targets.make_provider_host_target_ref("wall", target_ref.obj)
     return plan_host_targets.make_provider_host_target_ref()
 
 
@@ -276,9 +276,9 @@ def get_provider_point_payload_host_target(
         return selected_target_ref, "selected"
     selected_walls = []
     for target in selected_targets or ():
-        target_kind, target_obj = session.providers.normalize_provider_point_host_target(target)
-        if target_obj is not None and target_obj not in selected_walls:
-            selected_walls.append(target_obj)
+        target_ref = session.providers.normalize_provider_point_host_target(target)
+        if target_ref.obj is not None and target_ref.obj not in selected_walls:
+            selected_walls.append(target_ref.obj)
     if len(selected_walls) == 1:
         return (
             plan_host_targets.make_provider_host_target_ref("wall", selected_walls[0]),
