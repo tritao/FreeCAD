@@ -919,20 +919,18 @@ def format_plan_provider_target_help(session, obj) -> str:
     )
 
 
-def resolve_plan_provider_target_display_fields(
-    session,
-    semantic_obj,
-    provider_target: PlanProviderTargetSpec | None,
-    fallback_label,
-) -> _PlanProviderTargetDisplayFields:
+def _get_provider_target_semantic_resolution(session, semantic_obj, provider_target):
     semantic_resolved = None
     if provider_target is not None:
         semantic_resolved = session.selection.resolve_plan_semantic_object(provider_target)
         if semantic_resolved is not None:
             semantic_obj = semantic_resolved
+    return semantic_obj, semantic_resolved
 
+
+def _build_provider_target_display_fields(semantic_obj, fallback_label):
     semantic_doc = getattr(semantic_obj, "Document", None)
-    fields = {
+    return {
         "label": str(fallback_label or ""),
         "provider_id": "",
         "target_key": "",
@@ -944,9 +942,9 @@ def resolve_plan_provider_target_display_fields(
             getattr(semantic_obj, "Label", getattr(semantic_obj, "Name", "")) or ""
         ),
     }
-    if provider_target is None:
-        return fields
 
+
+def _apply_provider_target_display_overrides(fields, provider_target, semantic_resolved):
     provider_label = str(provider_target.label or "").strip()
     if provider_label:
         fields["label"] = provider_label
@@ -964,17 +962,27 @@ def resolve_plan_provider_target_display_fields(
         fields["semantic_label"] = str(
             getattr(semantic_resolved, "Label", getattr(semantic_resolved, "Name", "")) or ""
         )
+
+
+def resolve_plan_provider_target_display_fields(
+    session,
+    semantic_obj,
+    provider_target: PlanProviderTargetSpec | None,
+    fallback_label,
+) -> _PlanProviderTargetDisplayFields:
+    semantic_obj, semantic_resolved = _get_provider_target_semantic_resolution(
+        session,
+        semantic_obj,
+        provider_target,
+    )
+    fields = _build_provider_target_display_fields(semantic_obj, fallback_label)
+    if provider_target is None:
+        return fields
+    _apply_provider_target_display_overrides(fields, provider_target, semantic_resolved)
     return fields
 
 
-def build_plan_semantic_record(session, target_kind, target_obj):
-    if not target_kind or target_obj is None:
-        return None
-    semantic_obj = session.visibility.get_plan_semantic_object(target_obj)
-    if semantic_obj is None:
-        return None
-    doc = getattr(target_obj, "Document", None)
-    semantic_doc = getattr(semantic_obj, "Document", None)
+def _get_plan_semantic_record_fields(session, semantic_obj, target_kind):
     space_label = session.visibility.get_plan_text_property(
         semantic_obj,
         ("SpaceLabel", "RoomLabel", "Label"),
@@ -989,9 +997,35 @@ def build_plan_semantic_record(session, target_kind, target_obj):
         semantic_obj,
         ("UsageCategory", "SpaceType"),
     )
-    requirement_tags = session.selection.normalize_plan_requirement_tags(
-        getattr(semantic_obj, "RequirementTags", None)
-    )
+    return {
+        "space_key": session.visibility.get_plan_text_property(semantic_obj, ("SpaceKey",)),
+        "space_label": str(space_label or ""),
+        "source_space_name": str(source_space_name or ""),
+        "usage_category": str(usage_category or ""),
+        "object_role": session.visibility.get_plan_text_property(semantic_obj, ("ObjectRole",)),
+        "semantic_preset": session.visibility.get_plan_text_property(
+            semantic_obj, ("SemanticPreset",)
+        ),
+        "host_ref": session.selection.get_plan_host_ref(semantic_obj),
+        "mount_height_mm": session.visibility.get_plan_float_property(
+            semantic_obj,
+            ("MountHeight", "MEPMountHeight", "PlumbingMountHeight"),
+        ),
+        "requirement_tags": session.selection.normalize_plan_requirement_tags(
+            getattr(semantic_obj, "RequirementTags", None)
+        ),
+    }
+
+
+def build_plan_semantic_record(session, target_kind, target_obj):
+    if not target_kind or target_obj is None:
+        return None
+    semantic_obj = session.visibility.get_plan_semantic_object(target_obj)
+    if semantic_obj is None:
+        return None
+    doc = getattr(target_obj, "Document", None)
+    semantic_doc = getattr(semantic_obj, "Document", None)
+    fields = _get_plan_semantic_record_fields(session, semantic_obj, target_kind)
     return PlanSemanticRecord(
         target_kind=str(target_kind or ""),
         document_name=str(getattr(doc, "Name", "") or ""),
@@ -1000,20 +1034,15 @@ def build_plan_semantic_record(session, target_kind, target_obj):
         semantic_document_name=str(getattr(semantic_doc, "Name", "") or ""),
         semantic_object_name=str(getattr(semantic_obj, "Name", "") or ""),
         semantic_label=str(getattr(semantic_obj, "Label", getattr(semantic_obj, "Name", "")) or ""),
-        space_key=session.visibility.get_plan_text_property(semantic_obj, ("SpaceKey",)),
-        space_label=str(space_label or ""),
-        source_space_name=str(source_space_name or ""),
-        usage_category=str(usage_category or ""),
-        object_role=session.visibility.get_plan_text_property(semantic_obj, ("ObjectRole",)),
-        semantic_preset=session.visibility.get_plan_text_property(
-            semantic_obj, ("SemanticPreset",)
-        ),
-        host_ref=session.selection.get_plan_host_ref(semantic_obj),
-        mount_height_mm=session.visibility.get_plan_float_property(
-            semantic_obj,
-            ("MountHeight", "MEPMountHeight", "PlumbingMountHeight"),
-        ),
-        requirement_tags=requirement_tags,
+        space_key=fields["space_key"],
+        space_label=fields["space_label"],
+        source_space_name=fields["source_space_name"],
+        usage_category=fields["usage_category"],
+        object_role=fields["object_role"],
+        semantic_preset=fields["semantic_preset"],
+        host_ref=fields["host_ref"],
+        mount_height_mm=fields["mount_height_mm"],
+        requirement_tags=fields["requirement_tags"],
     )
 
 
