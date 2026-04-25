@@ -43,10 +43,8 @@ class TargetActivationBehavior:
 
 @dataclass(frozen=True)
 class GuiSelectionResolutionState:
-    pending_kind: object = None
-    pending_target: object = None
-    preserved_kind: object = None
-    preserved_target: object = None
+    pending_target_ref: object = None
+    preserved_target_ref: object = None
 
 
 def _make_select_plan_target_function(kind):
@@ -123,38 +121,39 @@ def resolve_selected_target_for_gui_object(
     session,
     selected,
     *,
-    pending_kind=None,
-    pending_target=None,
-    preserved_kind=None,
-    preserved_target=None,
+    pending_target_ref=None,
+    preserved_target_ref=None,
 ):
     if selected is None:
-        return (None, None)
+        return plan_target_kinds.make_plan_target_ref()
+    pending_kind, pending_target = plan_target_kinds.unpack_plan_target_ref(pending_target_ref)
     if selected == pending_target and session.selection.is_valid_plan_target(
         pending_kind, pending_target
     ):
-        return (pending_kind, pending_target)
+        return plan_target_kinds.make_plan_target_ref(pending_kind, pending_target)
+    preserved_kind, preserved_target = plan_target_kinds.unpack_plan_target_ref(
+        preserved_target_ref
+    )
     if _should_preserve_provider_selected_target(
         session,
         preserved_kind,
         preserved_target,
         selected,
     ):
-        return (preserved_kind, preserved_target)
+        return plan_target_kinds.make_plan_target_ref(preserved_kind, preserved_target)
     return session.selection.get_plan_target_for_object(selected)
 
 
 def _get_gui_selection_resolution_state(session, previous_kind, previous_obj):
-    pending_kind, pending_target = session._pending_selected_plan_target or (None, None)
-    preserved_kind = (
-        previous_kind if previous_kind == plan_target_kinds.PLAN_TARGET_PROVIDER else None
+    pending_target_ref = plan_target_kinds.coerce_plan_target_ref(
+        session._pending_selected_plan_target
     )
-    preserved_target = previous_obj if preserved_kind else None
+    preserved_target_ref = plan_target_kinds.make_plan_target_ref()
+    if previous_kind == plan_target_kinds.PLAN_TARGET_PROVIDER:
+        preserved_target_ref = plan_target_kinds.make_plan_target_ref(previous_kind, previous_obj)
     return GuiSelectionResolutionState(
-        pending_kind=pending_kind,
-        pending_target=pending_target,
-        preserved_kind=preserved_kind,
-        preserved_target=preserved_target,
+        pending_target_ref=pending_target_ref,
+        preserved_target_ref=preserved_target_ref,
     )
 
 
@@ -162,10 +161,8 @@ def _resolve_gui_selection_target(session, selected, resolution_state):
     return resolve_selected_target_for_gui_object(
         session,
         selected,
-        pending_kind=resolution_state.pending_kind,
-        pending_target=resolution_state.pending_target,
-        preserved_kind=resolution_state.preserved_kind,
-        preserved_target=resolution_state.preserved_target,
+        pending_target_ref=resolution_state.pending_target_ref,
+        preserved_target_ref=resolution_state.preserved_target_ref,
     )
 
 
@@ -195,20 +192,21 @@ def _clear_gui_preselection():
         return False
 
 
-def _choose_primary_selected_target(selected_targets, pending_kind=None, pending_target=None):
+def _choose_primary_selected_target(selected_targets, pending_target_ref=None):
+    pending_kind, pending_target = plan_target_kinds.unpack_plan_target_ref(pending_target_ref)
     if pending_kind is not None and pending_target is not None:
         for target_kind, target_obj in selected_targets:
             if target_kind == pending_kind and target_obj == pending_target:
-                return (target_kind, target_obj)
+                return plan_target_kinds.make_plan_target_ref(target_kind, target_obj)
     if not selected_targets:
-        return (None, None)
+        return plan_target_kinds.make_plan_target_ref()
     target_kind, target_obj = min(
         selected_targets,
         key=lambda item: _PRIMARY_SELECTED_TARGET_PRIORITY.get(
             item[0], len(_PRIMARY_SELECTED_TARGET_PRIORITY)
         ),
     )
-    return (target_kind, target_obj)
+    return plan_target_kinds.make_plan_target_ref(target_kind, target_obj)
 
 
 def _apply_selection_refresh_result(session, refresh_result):
@@ -225,7 +223,7 @@ def _apply_selection_refresh_result(session, refresh_result):
         if refresh_result.pending_target is None:
             session.selection.set_pending_selected_plan_target()
         else:
-            session.selection.set_pending_selected_plan_target(*refresh_result.pending_target)
+            session.selection.set_pending_selected_plan_target(refresh_result.pending_target)
     if refresh_result.wall_grip_action == _WALL_GRIP_CLEAR:
         session.overlays.clear_wall_grips()
     elif refresh_result.wall_grip_action == _WALL_GRIP_SYNC:
@@ -297,31 +295,32 @@ def _collect_selected_targets_from_gui_selection(session, selection, previous_ki
             if target_kind:
                 selected_targets.append((target_kind, target_obj))
     session.performance.plan_perf_count("selected_targets_considered", len(selected_targets))
-    return selected_targets, resolution_state.pending_kind, resolution_state.pending_target
+    return selected_targets, resolution_state.pending_target_ref
 
 
 def _resolve_gui_selection_refresh_result(session, selection, previous_kind, previous_obj):
     if not selection:
-        pending_kind, pending_target = session.selection.consume_pending_selected_plan_target()
+        pending_target_ref = session.selection.consume_pending_selected_plan_target()
+        pending_kind, pending_target = plan_target_kinds.unpack_plan_target_ref(pending_target_ref)
         return SelectionRefreshResult(
             primary_kind=pending_kind,
             primary_obj=pending_target,
         )
 
-    selected_targets, pending_kind, pending_target = _collect_selected_targets_from_gui_selection(
+    selected_targets, pending_target_ref = _collect_selected_targets_from_gui_selection(
         session,
         selection,
         previous_kind,
         previous_obj,
     )
-    target_kind, target_obj = _choose_primary_selected_target(
+    primary_target_ref = _choose_primary_selected_target(
         selected_targets,
-        pending_kind=pending_kind,
-        pending_target=pending_target,
+        pending_target_ref=pending_target_ref,
     )
+    target_kind, target_obj = plan_target_kinds.unpack_plan_target_ref(primary_target_ref)
     if target_kind is None:
         return SelectionRefreshResult(pending_target=None)
-    pending_selection = (target_kind, target_obj)
+    pending_selection = primary_target_ref
     if len(selection) == 1 and target_kind not in (
         plan_target_kinds.PLAN_TARGET_SPACE,
         plan_target_kinds.PLAN_TARGET_REGION,
@@ -488,20 +487,20 @@ def is_valid_plan_target(session, kind, obj):
 
 
 def set_pending_selected_plan_target(session, kind=None, obj=None):
+    if obj is None and kind is not None:
+        kind, obj = plan_target_kinds.unpack_plan_target_ref(kind)
     if is_valid_plan_target(session, kind, obj):
-        session._pending_selected_plan_target = (kind, obj)
+        session._pending_selected_plan_target = plan_target_kinds.make_plan_target_ref(kind, obj)
         return
     session._pending_selected_plan_target = None
 
 
 def consume_pending_selected_plan_target(session):
-    pending_target = session._pending_selected_plan_target
+    pending_target = plan_target_kinds.coerce_plan_target_ref(session._pending_selected_plan_target)
     session._pending_selected_plan_target = None
-    if not pending_target:
-        return plan_target_kinds.make_plan_target_ref()
     kind, obj = pending_target
     if is_valid_plan_target(session, kind, obj):
-        return plan_target_kinds.make_plan_target_ref(kind, obj)
+        return pending_target
     return plan_target_kinds.make_plan_target_ref()
 
 
