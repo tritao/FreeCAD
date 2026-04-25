@@ -7,6 +7,7 @@ from dataclasses import dataclass, field
 
 import FreeCADGui
 from bimplan.providers import runtime as plan_provider_runtime
+from bimplan.runtime import tools as plan_runtime_tools
 from . import edit_nodes as plan_edit_nodes
 from . import picking as plan_selection_picking
 from . import target_dispatch as plan_target_dispatch
@@ -17,7 +18,10 @@ _PRIMARY_SELECTED_TARGET_PRIORITY = {
     kind: index
     for index, kind in enumerate(plan_target_kinds.PRIMARY_SELECTED_TARGET_PRIORITY_KINDS)
 }
-_GUI_SELECTION_TOOL_NAMES = ("Select", "Pick Space Region")
+_GUI_SELECTION_TOOL_NAMES = (
+    plan_runtime_tools.PlanTool.SELECT,
+    plan_runtime_tools.PlanTool.PICK_SPACE_REGION,
+)
 _PENDING_TARGET_UNCHANGED = object()
 _WALL_GRIP_NONE = "none"
 _WALL_GRIP_CLEAR = "clear"
@@ -274,7 +278,7 @@ def _resolve_direct_selection_refresh_result(session, previous_wall):
             ),
             wall_grip_action=_WALL_GRIP_SYNC,
         )
-    if session.current_tool == "Set Space Text":
+    if session.current_tool == plan_runtime_tools.PlanTool.SET_SPACE_TEXT:
         return SelectionRefreshResult(
             primary_target_ref=plan_target_kinds.make_plan_target_ref(
                 plan_target_kinds.PLAN_TARGET_SPACE,
@@ -286,10 +290,10 @@ def _resolve_direct_selection_refresh_result(session, previous_wall):
             ),
             wall_grip_action=_WALL_GRIP_CLEAR,
         )
-    if session.current_tool == "Join":
+    if session.current_tool == plan_runtime_tools.PlanTool.JOIN:
         wall = previous_wall
         if not plan_targets.is_plan_selectable_wall(session, wall):
-            session.current_tool = "Select"
+            session.current_tool = plan_runtime_tools.PlanTool.SELECT
             wall = None
         return SelectionRefreshResult(
             primary_target_ref=plan_target_kinds.make_plan_target_ref(
@@ -755,7 +759,10 @@ def schedule_selected_wall_reset(session, reason, obj):
 
 def reset_selected_wall_after_change(session):
     session._pending_selected_wall_reset = False
-    if session.lifecycle_state.tearing_down or session.current_tool != "Select":
+    if (
+        session.lifecycle_state.tearing_down
+        or session.current_tool != plan_runtime_tools.PlanTool.SELECT
+    ):
         return
     wall = get_selected_plan_target_object(session, "wall")
     if not wall:
@@ -787,11 +794,14 @@ def suspend_selected_wall_state(session, wall=None, clear_gui_selection=True):
 
 def sync_primary_selected_plan_target_visuals(session, previous_kind=None, previous_obj=None):
     with session.performance.plan_perf_trace_span("sync_primary_selected_plan_target_visuals"):
-        if session.current_tool != "Select" or selected_plan_target_changed(
-            session,
-            previous_kind,
-            previous_obj,
-            plan_target_kinds.PLAN_TARGET_WALL,
+        if (
+            session.current_tool != plan_runtime_tools.PlanTool.SELECT
+            or selected_plan_target_changed(
+                session,
+                previous_kind,
+                previous_obj,
+                plan_target_kinds.PLAN_TARGET_WALL,
+            )
         ):
             with session.performance.plan_perf_trace_span("sync_selected_wall_overlay"):
                 session.overlays.sync_selected_wall_overlay()
@@ -836,7 +846,7 @@ def sync_primary_selected_plan_target_visuals(session, previous_kind=None, previ
         with session.performance.plan_perf_trace_span("sync_active_plan_target_object"):
             session.viewport.sync_active_plan_target_object()
         session.task_panels.refresh_task_panel_status(
-            selection_only=session.current_tool == "Select"
+            selection_only=session.current_tool == plan_runtime_tools.PlanTool.SELECT
         )
 
 
@@ -853,9 +863,9 @@ def set_hovered_wall(session, wall):
     session.overlays.sync_junction_node_overlays()
     session.overlays.sync_hovered_wall_overlay()
     session.overlays.sync_hovered_wall_opening_context_overlay()
-    if session.current_tool == "Join":
+    if session.current_tool == plan_runtime_tools.PlanTool.JOIN:
         session.task_panels.refresh_task_panel_status(
-            selection_only=session.current_tool == "Select"
+            selection_only=session.current_tool == plan_runtime_tools.PlanTool.SELECT
             and is_selected_plan_target(session, "wall")
         )
 
@@ -891,7 +901,7 @@ def select_plan_target_for_plan_edit(
     if not plan_target_dispatch.validate_plan_target(session, kind, obj):
         return False
     previous_kind, previous_obj = get_selected_plan_target(session)
-    session.current_tool = "Select"
+    session.current_tool = plan_runtime_tools.PlanTool.SELECT
     session._provider_selected_objects = []
     preserve_hovered_symbol_overlay = (
         kind == plan_target_kinds.PLAN_TARGET_SYMBOL
@@ -926,7 +936,9 @@ def select_plan_target_for_plan_edit(
         previous_obj=previous_obj,
     )
     session.overlays.sync_secondary_selected_overlays()
-    session.task_panels.refresh_task_panel_status(selection_only=session.current_tool == "Select")
+    session.task_panels.refresh_task_panel_status(
+        selection_only=session.current_tool == plan_runtime_tools.PlanTool.SELECT
+    )
     if queue_restore:
         queue_restore_selected_plan_target(session, kind, obj)
     return True
@@ -1203,7 +1215,7 @@ def clear_plan_selection_state(session):
         )
         with session.performance.plan_perf_trace_span("clear_plan_selection_task_status"):
             session.task_panels.refresh_task_panel_status(
-                selection_only=session.current_tool == "Select"
+                selection_only=session.current_tool == plan_runtime_tools.PlanTool.SELECT
             )
         selected_kind, selected_obj = get_selected_plan_target(session)
         session.performance.plan_perf_set_fields(
@@ -1216,7 +1228,7 @@ def clear_plan_selection_state(session):
 
 
 def is_plan_additive_selection_active(session):
-    if session.current_tool != "Select":
+    if session.current_tool != plan_runtime_tools.PlanTool.SELECT:
         return False
     try:
         from PySide import QtCore, QtGui

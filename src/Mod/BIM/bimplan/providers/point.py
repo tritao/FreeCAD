@@ -9,6 +9,7 @@ from bimplan import document_visuals as plan_document_visuals
 from bimplan.providers import host_targets as plan_host_targets
 from bimplan.providers import payloads as plan_provider_payloads
 from bimplan.providers import runtime as plan_provider_runtime
+from bimplan.runtime import tools as plan_runtime_tools
 from bimplan.selection import target_kinds as plan_target_kinds
 
 translate = FreeCAD.Qt.translate
@@ -20,7 +21,7 @@ def _provider_point_state(session):
 
 def has_active_provider_point_tool(session):
     return (
-        session.current_tool == "Provider Point"
+        session.current_tool == plan_runtime_tools.PlanTool.PROVIDER_POINT
         and _provider_point_state(session).provider_point_tool is not None
     )
 
@@ -87,7 +88,7 @@ def cancel_provider_point_tool(session, refresh=True):
     state.provider_point_host_source = ""
     session.overlays.clear_provider_point_preview()
     FreeCAD.activeDraftCommand = None
-    session.current_tool = "Select"
+    session.current_tool = plan_runtime_tools.PlanTool.SELECT
     if refresh:
         session.task_panels.refresh_task_panel_status()
     session.overlays.queue_plan_overlay_visual_refresh(plan_document_visuals.PLAN_VISUAL_ALL)
@@ -103,9 +104,12 @@ def start_plan_provider_point_tool(session, tool):
     session.spaces.cancel_plan_region_tool(refresh=False)
     session.wall_create.cancel_rect_wall_tool(refresh=False)
     session.spaces.cancel_space_separator_tool(refresh=False)
-    if session.current_tool == "Set Space Text":
+    if session.current_tool == plan_runtime_tools.PlanTool.SET_SPACE_TEXT:
         session.spaces.cancel_space_text_position_pick()
-    if session.current_tool in ("Move Symbol", "Rotate Symbol"):
+    if session.current_tool in (
+        plan_runtime_tools.PlanTool.MOVE_SYMBOL,
+        plan_runtime_tools.PlanTool.ROTATE_SYMBOL,
+    ):
         session.symbols.cancel_symbol_handle_point_pick()
     if session.lifecycle.has_active_embedded_tool():
         session.lifecycle.cancel_embedded_tool()
@@ -137,7 +141,7 @@ def start_plan_provider_point_tool(session, tool):
     state.provider_point_host_target = host_target
     state.provider_point_host_source = host_source
     state.provider_point_tool = tool
-    session.current_tool = "Provider Point"
+    session.current_tool = plan_runtime_tools.PlanTool.PROVIDER_POINT
     session.task_panels.refresh_task_panel_status()
     session.overlays.queue_plan_overlay_visual_refresh(plan_document_visuals.PLAN_VISUAL_ALL)
     if arm_provider_point_tool(session):
@@ -145,7 +149,7 @@ def start_plan_provider_point_tool(session, tool):
     state.provider_point_tool = None
     state.provider_point_host_target = None
     state.provider_point_host_source = ""
-    session.current_tool = "Select"
+    session.current_tool = plan_runtime_tools.PlanTool.SELECT
     session.task_panels.refresh_task_panel_status()
     return False
 

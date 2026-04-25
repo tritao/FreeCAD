@@ -346,28 +346,28 @@ class CleanupProfile:
 
 
 _FINISH_TOOL_HANDLER_SPECS = {
-    "Move Provider": "providers.cancel_provider_handle_point_pick",
-    "Move Opening": "openings.cancel_opening_handle_point_pick",
-    "Move Symbol": "symbols.cancel_symbol_handle_point_pick",
-    "Rotate Symbol": "symbols.cancel_symbol_handle_point_pick",
-    "Pick Space Region": "spaces.cancel_space_region_pick",
-    "Region": "spaces.cancel_plan_region_tool",
-    "Set Space Text": "spaces.cancel_space_text_position_pick",
-    "Window": "windows.cancel_window_tool",
+    plan_runtime_tools.PlanTool.MOVE_PROVIDER: "providers.cancel_provider_handle_point_pick",
+    plan_runtime_tools.PlanTool.MOVE_OPENING: "openings.cancel_opening_handle_point_pick",
+    plan_runtime_tools.PlanTool.MOVE_SYMBOL: "symbols.cancel_symbol_handle_point_pick",
+    plan_runtime_tools.PlanTool.ROTATE_SYMBOL: "symbols.cancel_symbol_handle_point_pick",
+    plan_runtime_tools.PlanTool.PICK_SPACE_REGION: "spaces.cancel_space_region_pick",
+    plan_runtime_tools.PlanTool.REGION: "spaces.cancel_plan_region_tool",
+    plan_runtime_tools.PlanTool.SET_SPACE_TEXT: "spaces.cancel_space_text_position_pick",
+    plan_runtime_tools.PlanTool.WINDOW: "windows.cancel_window_tool",
 }
 
 _BEGIN_TEARDOWN_TOOL_HANDLER_SPECS = {
-    "Move Provider": "providers.cancel_provider_handle_point_pick",
-    "Move Opening": "openings.cancel_opening_handle_point_pick",
-    "Move Symbol": "symbols.cancel_symbol_handle_point_pick",
-    "Rotate Symbol": "symbols.cancel_symbol_handle_point_pick",
-    "Set Space Text": _clear_space_text_pick_state,
-    "Pick Space Region": _clear_space_region_pick_state,
+    plan_runtime_tools.PlanTool.MOVE_PROVIDER: "providers.cancel_provider_handle_point_pick",
+    plan_runtime_tools.PlanTool.MOVE_OPENING: "openings.cancel_opening_handle_point_pick",
+    plan_runtime_tools.PlanTool.MOVE_SYMBOL: "symbols.cancel_symbol_handle_point_pick",
+    plan_runtime_tools.PlanTool.ROTATE_SYMBOL: "symbols.cancel_symbol_handle_point_pick",
+    plan_runtime_tools.PlanTool.SET_SPACE_TEXT: _clear_space_text_pick_state,
+    plan_runtime_tools.PlanTool.PICK_SPACE_REGION: _clear_space_region_pick_state,
 }
 
 _SHUTDOWN_TOOL_HANDLER_SPECS = {
-    "Move Symbol": "symbols.cancel_symbol_handle_point_pick",
-    "Rotate Symbol": "symbols.cancel_symbol_handle_point_pick",
+    plan_runtime_tools.PlanTool.MOVE_SYMBOL: "symbols.cancel_symbol_handle_point_pick",
+    plan_runtime_tools.PlanTool.ROTATE_SYMBOL: "symbols.cancel_symbol_handle_point_pick",
 }
 
 _ACTION_CANCEL_SPACE_REGION_PICK = ActivationActionSpec(
@@ -376,7 +376,7 @@ _ACTION_CANCEL_SPACE_REGION_PICK = ActivationActionSpec(
 )
 _ACTION_CANCEL_SPACE_REGION_PICK_AND_RETURN = ActivationActionSpec(
     "spaces.cancel_space_region_pick",
-    current_tools=("Pick Space Region",),
+    current_tools=(plan_runtime_tools.PlanTool.PICK_SPACE_REGION,),
     stop_after=True,
 )
 _ACTION_CANCEL_PLAN_REGION_TOOL = ActivationActionSpec(
@@ -432,7 +432,10 @@ _ACTION_CANCEL_EMBEDDED_TOOL = ActivationActionSpec(
 )
 _ACTION_CANCEL_SYMBOL_HANDLE_PICK_AND_RETURN = ActivationActionSpec(
     "symbols.cancel_symbol_handle_point_pick",
-    current_tools=("Move Symbol", "Rotate Symbol"),
+    current_tools=(
+        plan_runtime_tools.PlanTool.MOVE_SYMBOL,
+        plan_runtime_tools.PlanTool.ROTATE_SYMBOL,
+    ),
     stop_after=True,
 )
 _ACTION_CANCEL_PENDING_EDIT = ActivationActionSpec("lifecycle.cancel_pending_edit")
@@ -448,7 +451,7 @@ _ACTION_CANCEL_WALL_EDIT_NO_REFRESH = ActivationActionSpec(
 )
 _ACTION_CANCEL_SPACE_TEXT_PICK = ActivationActionSpec(
     "spaces.cancel_space_text_position_pick",
-    current_tools=("Set Space Text",),
+    current_tools=(plan_runtime_tools.PlanTool.SET_SPACE_TEXT,),
 )
 _ACTION_CANCEL_JOIN_TOOL = ActivationActionSpec("_cancel_join_tool")
 _ACTION_CLEAR_VIEWPORT_STATUS_CHIP = ActivationActionSpec("viewport.clear_viewport_status_chip")
@@ -579,7 +582,7 @@ def _start_snap_tool(session, tool_name, callback, title, *, movecallback=None):
 def _start_plan_region_tool(session, context):
     return _start_snap_tool(
         session,
-        "Region",
+        plan_runtime_tools.PlanTool.REGION,
         session.spaces.handle_plan_region_point,
         translate("BIM_PlanEdit", "First region point"),
         movecallback=session.spaces.update_plan_region_preview,
@@ -600,7 +603,7 @@ def _start_space_separator_tool(session, context):
     del context
     return _start_snap_tool(
         session,
-        "Separator",
+        plan_runtime_tools.PlanTool.SEPARATOR,
         session.spaces.handle_space_separator_point,
         translate("BIM_PlanEdit", "Separator start point"),
     )
@@ -615,7 +618,7 @@ def _start_move_tool(session, context):
     del context
     from draftguitools import gui_move
 
-    return session.lifecycle.start_embedded_tool("Move", gui_move.Move())
+    return session.lifecycle.start_embedded_tool(plan_runtime_tools.PlanTool.MOVE, gui_move.Move())
 
 
 _WINDOW_TOOL_ACTIVATION_PROFILE = ToolActivationProfile(
