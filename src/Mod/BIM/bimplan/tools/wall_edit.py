@@ -696,16 +696,7 @@ def get_opening_move_readout_offset(session, opening):
     return session.wall_edit.get_aligned_readout_offset_for_wall(host)
 
 
-def update_wall_edit_preview_geometry(session, points):
-    if not points or len(points) != 2:
-        return
-
-    try:
-        import draftguitools.gui_trackers as DraftTrackers
-        from draftutils import params
-    except Exception:
-        return
-
+def _ensure_wall_edit_preview_axis_tracker(session, DraftTrackers):
     if session._preview_line_tracker is None:
         session._preview_line_tracker = session.overlays.make_plan_line_tracker(
             DraftTrackers,
@@ -714,11 +705,11 @@ def update_wall_edit_preview_geometry(session, points):
             ontop=True,
         )
         session._preview_line_tracker.on()
-    session._preview_line_tracker.p1(points[0])
-    session._preview_line_tracker.p2(points[1])
+    return session._preview_line_tracker
 
+
+def _update_wall_edit_preview_relation_status(session, relation_warnings):
     previous_relation_status = session._plan_relation_status_message
-    polylines, relation_warnings = session.wall_edit.get_preview_footprint_polylines(points)
     if relation_warnings:
         label, status, _detail = relation_warnings[0]
         session._plan_relation_status_message = translate(
@@ -726,15 +717,19 @@ def update_wall_edit_preview_geometry(session, points):
         ).format(label=label, status=status)
     elif session.wall_edit.is_wall_edit_modal_active():
         session.wall_relations.clear_plan_relation_status()
+    return previous_relation_status
 
+
+def _get_wall_edit_preview_segments(polylines):
     segments = []
     for polyline in polylines:
         if len(polyline) < 2:
             continue
         segments.extend(zip(polyline, polyline[1:]))
+    return segments
 
-    color = (0.22, 0.53, 0.98)
-    width = session.viewport.scaled_line_width(2)
+
+def _ensure_wall_edit_preview_footprint_trackers(session, segments, DraftTrackers, color, width):
     if len(session._preview_footprint_trackers) != len(segments):
         session.overlays.finalize_trackers(session._preview_footprint_trackers)
         session._preview_footprint_trackers = []
@@ -748,24 +743,35 @@ def update_wall_edit_preview_geometry(session, points):
             )
             session._preview_footprint_trackers.append(tracker)
 
+
+def _sync_wall_edit_preview_footprint_trackers(session, segments, DraftTrackers):
+    color = (0.22, 0.53, 0.98)
+    width = session.viewport.scaled_line_width(2)
+    _ensure_wall_edit_preview_footprint_trackers(
+        session,
+        segments,
+        DraftTrackers,
+        color,
+        width,
+    )
     for tracker, (start, end) in zip(session._preview_footprint_trackers, segments):
         tracker.setColor(color)
         tracker.p1(start)
         tracker.p2(end)
         tracker.on()
 
-    if previous_relation_status != session._plan_relation_status_message:
-        session.task_panels.refresh_task_panel_status()
 
+def _get_wall_edit_preview_grip_specs(session, points, marker_size):
     midpoint = (points[0] + points[1]) * 0.5
-    marker_size = session.viewport.scaled_marker_size(params.get_param_view("MarkerSize"))
     midpoint_marker = FreeCADGui.getMarkerIndex("DIAMOND_FILLED", marker_size)
-
-    grip_specs = (
+    return (
         (points[0], 0, None),
         (points[1], 1, None),
         (midpoint, 2, midpoint_marker),
     )
+
+
+def _sync_wall_edit_preview_grip_trackers(session, grip_specs, DraftTrackers):
     if not session._preview_grip_trackers:
         for position, idx, marker in grip_specs:
             tracker = DraftTrackers.editTracker(
@@ -781,6 +787,36 @@ def update_wall_edit_preview_geometry(session, points):
     for tracker, (position, _idx, _marker) in zip(session._preview_grip_trackers, grip_specs):
         tracker.set(position)
         tracker.on()
+
+
+def update_wall_edit_preview_geometry(session, points):
+    if not points or len(points) != 2:
+        return
+
+    try:
+        import draftguitools.gui_trackers as DraftTrackers
+        from draftutils import params
+    except Exception:
+        return
+
+    axis_tracker = _ensure_wall_edit_preview_axis_tracker(session, DraftTrackers)
+    axis_tracker.p1(points[0])
+    axis_tracker.p2(points[1])
+
+    polylines, relation_warnings = session.wall_edit.get_preview_footprint_polylines(points)
+    previous_relation_status = _update_wall_edit_preview_relation_status(
+        session,
+        relation_warnings,
+    )
+    segments = _get_wall_edit_preview_segments(polylines)
+    _sync_wall_edit_preview_footprint_trackers(session, segments, DraftTrackers)
+
+    if previous_relation_status != session._plan_relation_status_message:
+        session.task_panels.refresh_task_panel_status()
+
+    marker_size = session.viewport.scaled_marker_size(params.get_param_view("MarkerSize"))
+    grip_specs = _get_wall_edit_preview_grip_specs(session, points, marker_size)
+    _sync_wall_edit_preview_grip_trackers(session, grip_specs, DraftTrackers)
 
 
 def sync_wall_edit_preview(session, points, include_opening_preview=True):
