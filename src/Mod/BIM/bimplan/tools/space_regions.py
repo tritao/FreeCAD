@@ -6,6 +6,8 @@ import FreeCAD
 
 from bimplan import selection as plan_selection
 from bimplan.selection import target_kinds as plan_target_kinds
+from bimplan.tools import space_boundaries as plan_space_boundaries
+from bimplan.tools import space_editing as plan_space_editing
 from bimplan.tools import space_geometry as plan_space_geometry
 
 translate = FreeCAD.Qt.translate
@@ -136,7 +138,7 @@ def reset_space_region_pick_state(session, clear_overlays=True):
 
 def _finish_created_space(session, space, event_callback=None, claim_click=False):
     session.visibility.register_plan_object(space)
-    session.spaces.restore_selected_space(space)
+    plan_space_editing.restore_selected_space(session, space)
     if claim_click:
         session.input.claim_left_button_click(event_callback)
     return True
@@ -188,7 +190,8 @@ def _create_and_finish_space_region_candidate(
     claim_click=False,
     clear_region_pick_state=False,
 ):
-    space = session.spaces.create_space_from_region_candidate(
+    space = create_space_from_region_candidate(
+        session,
         candidate,
         boundaries=boundaries,
         keep_boundaries=keep_boundaries,
@@ -392,7 +395,8 @@ def create_space_region_base_object(session, candidate):
 
 def start_space_region_pick(session, boundaries, label=None, seed_space=None, report=None):
     if report is None:
-        report = session.spaces.build_space_region_candidate_report(
+        report = build_space_region_candidate_report(
+            session,
             boundaries,
             label=label,
             seed_space=seed_space,
@@ -466,7 +470,7 @@ def create_space_from_current_selection(session):
     import Arch
     import ArchSpace
 
-    request = session.spaces.build_space_creation_request()
+    request = plan_space_boundaries.build_space_creation_request(session)
     if not request:
         FreeCAD.Console.PrintWarning(
             translate(
@@ -488,7 +492,8 @@ def create_space_from_current_selection(session):
         return False
 
     if region_seed_space is not None:
-        report = session.spaces.build_space_region_candidate_report(
+        report = build_space_region_candidate_report(
+            session,
             boundaries,
             label=request.get("label"),
             seed_space=region_seed_space,
@@ -503,7 +508,8 @@ def create_space_from_current_selection(session):
 
     report = ArchSpace.analyzeBoundaryLinks(boundaries)
     if report.get("code") == "multiple_regions":
-        region_report = session.spaces.build_space_region_candidate_report(
+        region_report = build_space_region_candidate_report(
+            session,
             boundaries,
             label=report.get("label"),
         )
