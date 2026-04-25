@@ -13,7 +13,7 @@ translate = FreeCAD.Qt.translate
 class PlanSymbolsAPI:
     """Owned session surface for Plan Edit symbol behavior."""
 
-    __slots__ = ("_session",)
+    __slots__ = ("_session", "__dict__")
 
     def __init__(self, session):
         self._session = session

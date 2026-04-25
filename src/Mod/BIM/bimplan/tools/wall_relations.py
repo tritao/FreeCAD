@@ -24,7 +24,7 @@ class PlanWallRelationsAPI:
         return self._session
 
     def get_plan_join_type_label(self, join_type=None):
-        return get_plan_join_type_label(self.session, join_type)
+        return get_plan_join_type_label(self.session, join_type=join_type)
 
     def get_plan_join_type(self):
         return get_plan_join_type(self.session)
@@ -54,7 +54,7 @@ class PlanWallRelationsAPI:
         return get_plan_join_candidate_wall(self.session)
 
     def get_plan_candidate_joint(self, target_wall=None):
-        return get_plan_candidate_joint(self.session, target_wall)
+        return get_plan_candidate_joint(self.session, target_wall=target_wall)
 
     def get_plan_join_candidate_state(self):
         return get_plan_join_candidate_state(self.session)

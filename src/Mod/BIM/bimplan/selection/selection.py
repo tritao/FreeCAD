@@ -92,20 +92,24 @@ def _make_set_hovered_target_function(kind):
 def clear_hidden_provider_preselection(session):
     if session.lifecycle_state.tearing_down:
         return False
-    preselected_obj = _get_gui_preselection_object(session)
+    preselected_obj = _call_exported_gui_preselection_object(session)
     if preselected_obj is None:
         return False
     if not _should_filter_hidden_provider_preselection_for_object(session, preselected_obj):
         return False
     session.performance.plan_perf_count("provider_preselection_cleared_for_mode")
-    return _clear_gui_preselection()
+    return _call_exported_clear_gui_preselection()
 
 
 def sanitize_plan_target_references(session):
+    visibility = getattr(session, "visibility", None)
+    is_live_document_object = getattr(visibility, "is_live_document_object", None)
+    if not callable(is_live_document_object):
+        return False
     changed = False
     for kind in ("wall", "opening", "symbol", "region", "space"):
         obj = get_selected_target_for_kind(session, kind)
-        if obj is None or session.visibility.is_live_document_object(obj):
+        if obj is None or is_live_document_object(obj):
             continue
         set_selected_target_for_kind(session, kind, None)
         changed = True
@@ -118,7 +122,7 @@ def sanitize_plan_target_references(session):
         "hovered_space",
     ):
         obj = getattr(session, attr, None)
-        if obj is None or session.visibility.is_live_document_object(obj):
+        if obj is None or is_live_document_object(obj):
             continue
         setattr(session, attr, None)
         changed = True
@@ -137,15 +141,28 @@ def resolve_selected_target_for_gui_object(
     *,
     pending_target_ref=None,
     preserved_target_ref=None,
+    pending_kind=None,
+    pending_target=None,
+    preserved_kind=None,
+    preserved_target=None,
 ):
     if selected is None:
         return plan_target_kinds.make_plan_target_ref()
+    if pending_target_ref is None and (pending_kind is not None or pending_target is not None):
+        pending_target_ref = plan_target_kinds.make_plan_target_ref(pending_kind, pending_target)
     pending_target_ref = plan_target_kinds.coerce_plan_target_ref(pending_target_ref)
     if selected == pending_target_ref.obj and is_valid_plan_target(
         session, pending_target_ref.kind, pending_target_ref.obj
     ):
         return plan_target_kinds.make_plan_target_ref(
             pending_target_ref.kind, pending_target_ref.obj
+        )
+    if preserved_target_ref is None and (
+        preserved_kind is not None or preserved_target is not None
+    ):
+        preserved_target_ref = plan_target_kinds.make_plan_target_ref(
+            preserved_kind,
+            preserved_target,
         )
     preserved_target_ref = plan_target_kinds.coerce_plan_target_ref(preserved_target_ref)
     if _should_preserve_provider_selected_target(
@@ -157,6 +174,10 @@ def resolve_selected_target_for_gui_object(
         return plan_target_kinds.make_plan_target_ref(
             preserved_target_ref.kind, preserved_target_ref.obj
         )
+    selection_api = getattr(session, "selection", None)
+    get_plan_target_for_object = getattr(selection_api, "get_plan_target_for_object", None)
+    if callable(get_plan_target_for_object):
+        return plan_target_kinds.coerce_plan_target_ref(get_plan_target_for_object(selected))
     return plan_targets.get_plan_target_for_object(session, selected)
 
 
@@ -182,7 +203,7 @@ def _resolve_gui_selection_target(session, selected, resolution_state):
     )
 
 
-def _get_gui_preselection_object(session):
+def _get_gui_preselection_object_impl(session):
     try:
         preselection = FreeCADGui.Selection.getPreselection()
     except Exception:
@@ -200,12 +221,50 @@ def _get_gui_preselection_object(session):
     )
 
 
-def _clear_gui_preselection():
+def _call_exported_gui_preselection_object(session):
+    try:
+        import bimplan.selection as plan_selection_pkg
+    except Exception:
+        plan_selection_pkg = None
+    exported = (
+        getattr(plan_selection_pkg, "_get_gui_preselection_object", None)
+        if plan_selection_pkg is not None
+        else None
+    )
+    if callable(exported) and exported is not _get_gui_preselection_object:
+        return exported(session)
+    return _get_gui_preselection_object_impl(session)
+
+
+def _get_gui_preselection_object(session):
+    return _call_exported_gui_preselection_object(session)
+
+
+def _clear_gui_preselection_impl():
     try:
         FreeCADGui.Selection.clearPreselection()
         return True
     except Exception:
         return False
+
+
+def _call_exported_clear_gui_preselection():
+    try:
+        import bimplan.selection as plan_selection_pkg
+    except Exception:
+        plan_selection_pkg = None
+    exported = (
+        getattr(plan_selection_pkg, "_clear_gui_preselection", None)
+        if plan_selection_pkg is not None
+        else None
+    )
+    if callable(exported) and exported is not _clear_gui_preselection:
+        return exported()
+    return _clear_gui_preselection_impl()
+
+
+def _clear_gui_preselection():
+    return _call_exported_clear_gui_preselection()
 
 
 def _choose_primary_selected_target(selected_targets, pending_target_ref=None):
@@ -494,6 +553,10 @@ def get_selected_plan_target_object(session, kind=None):
 
 
 def is_selected_plan_target(session, kind, obj=None):
+    selection_api = getattr(session, "selection", None)
+    predicate = getattr(selection_api, "is_selected_plan_target", None)
+    if callable(predicate) and not isinstance(selection_api, PlanSelectionAPI):
+        return bool(predicate(kind, obj))
     selected_target_ref = get_selected_plan_target(session)
     if selected_target_ref.kind != kind:
         return False
@@ -510,6 +573,9 @@ def clear_selected_plan_target_if_matches(session, kind, obj):
 
 
 def is_valid_plan_target(session, kind, obj):
+    validate = getattr(session, "_is_valid_plan_target", None)
+    if callable(validate):
+        return bool(validate(kind, obj))
     return plan_target_dispatch.validate_plan_target(session, kind, obj)
 
 
@@ -533,6 +599,10 @@ def consume_pending_selected_plan_target(session):
 
 
 def get_selected_plan_target(session):
+    selection_api = getattr(session, "selection", None)
+    getter = getattr(selection_api, "get_selected_plan_target", None)
+    if callable(getter) and not isinstance(selection_api, PlanSelectionAPI):
+        return plan_target_kinds.coerce_plan_target_ref(getter())
     return _get_current_selected_plan_target(session)
 
 
@@ -633,6 +703,12 @@ def get_secondary_selected_plan_targets(session):
 
 
 def get_selected_plan_targets(session):
+    selection_api = getattr(session, "selection", None)
+    getter = getattr(selection_api, "get_selected_plan_targets", None)
+    if callable(getter) and not isinstance(selection_api, PlanSelectionAPI):
+        return tuple(
+            plan_target_kinds.coerce_plan_target_ref(target) for target in (getter() or ())
+        )
     primary_target_ref = _get_native_selected_plan_target(session)
     targets = []
     if primary_target_ref.kind and primary_target_ref.obj:
@@ -1010,6 +1086,18 @@ def _activate_configured_plan_target(
         defer_gui_selection = behavior.defer_gui_selection
     if defer_wall_grips is None:
         defer_wall_grips = behavior.defer_wall_grips
+    compat_activate = getattr(session, "_activate_plan_target", None)
+    if callable(compat_activate):
+        return compat_activate(
+            kind,
+            mouse_pos,
+            event_callback=event_callback,
+            sync_gui_selection=behavior.sync_gui_selection,
+            clear_hovered_kinds=behavior.clear_hovered_kinds,
+            resolved_target=resolved_target,
+            defer_gui_selection=defer_gui_selection,
+            defer_wall_grips=defer_wall_grips,
+        )
     return activate_plan_target(
         session,
         kind,
@@ -1056,7 +1144,9 @@ def activate_plan_target(
     defer_wall_grips=False,
 ):
     if resolved_target is None:
-        target_ref = plan_selection_picking.get_plan_target_at_position(session, mouse_pos)
+        target_ref = plan_target_kinds.coerce_plan_target_ref(
+            session.selection.get_plan_target_at_position(mouse_pos)
+        )
     else:
         target_ref = plan_target_kinds.coerce_plan_target_ref(resolved_target)
     with session.performance.plan_perf_trace_span(
@@ -1090,21 +1180,29 @@ def activate_plan_target(
 
 
 def activate_semantic_plan_target(session, mouse_pos, event_callback=None):
-    target_ref = plan_selection_picking.get_hovered_plan_target(session)
-    if target_ref.obj is None or session._hover_pick_dirty:
-        target_ref = plan_selection_picking.get_plan_target_at_position(session, mouse_pos)
-        source = "picked_after_throttled_hover" if session._hover_pick_dirty else "picked"
-        session._hover_pick_dirty = False
-        session.performance.plan_perf_count(f"semantic_target_source_{source}")
-        session.performance.plan_perf_set_fields(semantic_target_source=source)
+    hovered_target = getattr(getattr(session, "selection", None), "get_hovered_plan_target", None)
+    if callable(hovered_target):
+        target_ref = plan_target_kinds.coerce_plan_target_ref(hovered_target())
     else:
-        session.performance.plan_perf_count("semantic_target_source_hovered")
-        session.performance.plan_perf_set_fields(
-            semantic_target_source="hovered",
-            hovered_target=session.performance.plan_perf_describe_target(
-                target_ref.kind, target_ref.obj
-            ),
+        target_ref = plan_selection_picking.get_hovered_plan_target(session)
+    hover_pick_dirty = bool(getattr(session, "_hover_pick_dirty", False))
+    perf = getattr(session, "performance", None)
+    if target_ref.obj is None or hover_pick_dirty:
+        target_ref = plan_target_kinds.coerce_plan_target_ref(
+            session.selection.get_plan_target_at_position(mouse_pos)
         )
+        source = "picked_after_throttled_hover" if hover_pick_dirty else "picked"
+        session._hover_pick_dirty = False
+        if perf is not None:
+            perf.plan_perf_count(f"semantic_target_source_{source}")
+            perf.plan_perf_set_fields(semantic_target_source=source)
+    else:
+        if perf is not None:
+            perf.plan_perf_count("semantic_target_source_hovered")
+            perf.plan_perf_set_fields(
+                semantic_target_source="hovered",
+                hovered_target=perf.plan_perf_describe_target(target_ref.kind, target_ref.obj),
+            )
     if _get_target_activation_behavior(target_ref.kind) is None:
         return False
     if target_ref.kind == plan_target_kinds.PLAN_TARGET_WALL:
@@ -1343,7 +1441,9 @@ def toggle_plan_target_selection_at_position(session, mouse_pos, event_callback=
     else:
         target_ref = get_plan_target_from_edit_node(session, node)
     if target_ref.kind is None:
-        target_ref = plan_selection_picking.get_plan_target_at_position(session, mouse_pos)
+        target_ref = plan_target_kinds.coerce_plan_target_ref(
+            session.selection.get_plan_target_at_position(mouse_pos)
+        )
     if not target_ref.kind or not target_ref.obj:
         return False
 
@@ -1639,6 +1739,9 @@ def _should_filter_hidden_provider_preselection(session, doc_name, obj_name):
 
 
 def _is_visible_provider_target_object(session, obj):
+    validate = getattr(session, "_is_valid_plan_target", None)
+    if callable(validate) and validate(plan_target_kinds.PLAN_TARGET_PROVIDER, obj):
+        return bool(plan_provider_runtime.is_plan_provider_target_visible_for_mode(session, obj))
     if not plan_provider_runtime.is_plan_provider_target_object(session, obj):
         return False
     return bool(plan_provider_runtime.is_plan_provider_target_visible_for_mode(session, obj))
@@ -1691,7 +1794,7 @@ class _SessionAPI:
 class PlanSelectionAPI(_SessionAPI):
     """Owned session surface for Plan Edit selection behavior."""
 
-    __slots__ = ()
+    __slots__ = ("__dict__",)
 
     get_plan_target_object_from_state = staticmethod(get_plan_target_object_from_state)
     get_plan_target_state_key = staticmethod(get_plan_target_state_key)
@@ -1896,25 +1999,33 @@ class PlanSelectionAPI(_SessionAPI):
         return run_scheduled_gui_selection_sync(self.session, *args, **kwargs)
 
     def get_plan_target_kind_for_object(self, *args, **kwargs):
-        return get_plan_target_kind_for_object(self.session, *args, **kwargs)
+        return plan_targets.get_plan_target_kind_for_object(self.session, *args, **kwargs)
 
     def get_plan_target_for_object(self, *args, **kwargs):
-        return get_plan_target_for_object(self.session, *args, **kwargs)
+        return plan_targets.get_plan_target_for_object(self.session, *args, **kwargs)
 
     def get_plan_target_at_position(self, *args, **kwargs):
-        return get_plan_target_at_position(self.session, *args, **kwargs)
+        return plan_selection_picking.get_plan_target_at_position(self.session, *args, **kwargs)
 
     def get_plan_space_instances(self, *args, **kwargs):
-        return get_plan_space_instances(self.session, *args, **kwargs)
+        return plan_selection_picking.get_plan_space_instances(self.session, *args, **kwargs)
 
     def get_plan_region_instances(self, *args, **kwargs):
-        return get_plan_region_instances(self.session, *args, **kwargs)
+        return plan_selection_picking.get_plan_region_instances(self.session, *args, **kwargs)
 
     def get_plan_target_from_edit_node(self, *args, **kwargs):
-        return get_plan_target_from_edit_node(self.session, *args, **kwargs)
+        return plan_selection_picking.get_plan_target_from_edit_node(
+            self.session,
+            *args,
+            **kwargs,
+        )
 
     def get_provider_overlay_target_from_edit_node(self, *args, **kwargs):
-        return get_provider_overlay_target_from_edit_node(self.session, *args, **kwargs)
+        return plan_selection_picking.get_provider_overlay_target_from_edit_node(
+            self.session,
+            *args,
+            **kwargs,
+        )
 
     def get_hovered_plan_target(self, *args, **kwargs):
         return plan_selection_picking.get_hovered_plan_target(self.session, *args, **kwargs)

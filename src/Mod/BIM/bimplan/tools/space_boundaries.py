@@ -210,13 +210,21 @@ def _get_selected_space_boundary_link_entries(session, selection_ex):
 
 
 def _get_selected_space_boundary_links(session, fallback_space=None):
+    spaces_api = getattr(session, "spaces", None)
+    getter = getattr(spaces_api, "get_selected_space_boundary_links", None)
+    if callable(getter) and type(spaces_api).__name__ != "PlanSpacesAPI":
+        return getter(fallback_space=fallback_space)
     return get_selected_space_boundary_links(session, fallback_space=fallback_space)
 
 
 def _get_space_selection_targets(session, targets=None):
-    return tuple(
-        targets if targets is not None else plan_selection.get_selected_plan_targets(session)
-    )
+    if targets is not None:
+        return tuple(targets)
+    selection_api = getattr(session, "selection", None)
+    getter = getattr(selection_api, "get_selected_plan_targets", None)
+    if callable(getter) and type(selection_api).__name__ != "PlanSelectionAPI":
+        return tuple(getter() or ())
+    return tuple(plan_selection.get_selected_plan_targets(session))
 
 
 def _build_wall_boundary_space_creation_request(session, selection_shape):

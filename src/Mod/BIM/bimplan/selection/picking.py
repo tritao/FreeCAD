@@ -21,6 +21,7 @@ _PROVIDER_OVERLAY_PICK_PADDING_RATIO = 0.15
 _PROVIDER_OVERLAY_MARKER_TOLERANCE_BASE_PX = 4.5
 _PROVIDER_OVERLAY_MARKER_TOLERANCE_WIDTH_SCALE = 1.25
 _MAX_PICK_DEBUG_ITEMS = 40
+_EXTERNAL_PICK_MISSING = object()
 
 
 @dataclass(frozen=True)
@@ -144,7 +145,7 @@ def _replace_provider_overlay_debug_candidate(debug_candidate, **changes):
 
 
 def _get_plan_provider_overlay_pick_mode(session):
-    mode = str(session.providers.get_plan_provider_overlay_mode() or "").strip().lower()
+    mode = str(plan_provider_runtime.get_plan_provider_overlay_mode(session) or "").strip().lower()
     return mode or "all"
 
 
@@ -593,9 +594,9 @@ def pick_provider_overlay_target_from_overlays(
 def _get_visible_provider_overlays(session):
     return tuple(
         overlay
-        for overlay in tuple(session.providers.get_plan_provider_overlays() or ())
+        for overlay in tuple(plan_provider_runtime.get_plan_provider_overlays(session) or ())
         if bool(getattr(overlay, "visible", True))
-        and session.providers.is_plan_provider_overlay_visible(overlay)
+        and plan_provider_runtime.is_plan_provider_overlay_visible(session, overlay)
     )
 
 
@@ -1078,10 +1079,12 @@ def _collect_pick_candidates_from_objects_info(session, infos):
         if obj is None:
             continue
         parent_obj = info.get("ParentObject")
-        target_ref = plan_targets.get_plan_pick_target_for_object(
-            session,
-            obj,
-            parent_obj=parent_obj,
+        target_ref = plan_target_kinds.coerce_plan_target_ref(
+            plan_targets.get_plan_pick_target_for_object(
+                session,
+                obj,
+                parent_obj=parent_obj,
+            )
         )
         _append_pick_debug_item(
             debug_infos,
@@ -1122,11 +1125,28 @@ def _resolve_provider_overlay_priority_target(
     prioritize_provider_targets,
 ):
     if candidates.provider.obj is None:
-        provider_overlay_target = pick_provider_overlay_target_from_overlays(
-            session,
-            mouse_pos,
-            radius_px=_PROVIDER_OVERLAY_PICK_RADIUS_PX,
+        selection_api = getattr(session, "selection", None)
+        pick_provider_overlay_target = getattr(
+            selection_api,
+            "pick_provider_overlay_target_from_overlays",
+            None,
         )
+        if (
+            callable(pick_provider_overlay_target)
+            and type(selection_api).__name__ != "PlanSelectionAPI"
+        ):
+            provider_overlay_target = plan_target_kinds.coerce_plan_target_ref(
+                pick_provider_overlay_target(
+                    mouse_pos,
+                    radius_px=_PROVIDER_OVERLAY_PICK_RADIUS_PX,
+                )
+            )
+        else:
+            provider_overlay_target = pick_provider_overlay_target_from_overlays(
+                session,
+                mouse_pos,
+                radius_px=_PROVIDER_OVERLAY_PICK_RADIUS_PX,
+            )
         if provider_overlay_target.kind == "provider" and provider_overlay_target.obj is not None:
             candidates.provider = provider_overlay_target
     if prioritize_provider_targets and candidates.provider.obj is not None:
@@ -1135,6 +1155,14 @@ def _resolve_provider_overlay_priority_target(
             stage="provider_overlay_priority",
         )
     return _PickResolutionResult(target_ref=plan_target_kinds.make_plan_target_ref())
+
+
+def _call_external_selection_pick(session, method_name, *args, default=None, **kwargs):
+    selection_api = getattr(session, "selection", None)
+    method = getattr(selection_api, method_name, None)
+    if callable(method) and type(selection_api).__name__ != "PlanSelectionAPI":
+        return method(*args, **kwargs)
+    return default
 
 
 def _resolve_structural_overlay_priority_target(session, mouse_pos, candidates):
@@ -1154,11 +1182,19 @@ def _resolve_opening_overlay_priority_target(session, mouse_pos, candidates):
     opening_candidates = None
     if candidates.wall.obj is not None:
         opening_candidates = session.openings.get_wall_hosted_openings(candidates.wall.obj)
-    opening_candidate = pick_plan_opening_target_from_overlays(
+    opening_candidate = _call_external_selection_pick(
         session,
+        "pick_plan_opening_target_from_overlays",
         mouse_pos,
         candidates=opening_candidates,
+        default=_EXTERNAL_PICK_MISSING,
     )
+    if opening_candidate is _EXTERNAL_PICK_MISSING:
+        opening_candidate = pick_plan_opening_target_from_overlays(
+            session,
+            mouse_pos,
+            candidates=opening_candidates,
+        )
     if opening_candidate is not None:
         return _PickResolutionResult(
             target_ref=plan_target_kinds.make_plan_target_ref("opening", opening_candidate),
@@ -1169,9 +1205,15 @@ def _resolve_opening_overlay_priority_target(session, mouse_pos, candidates):
 
 def _resolve_symbol_or_terminal_overlay_target(session, mouse_pos, candidates):
     if candidates.symbol.obj is None:
-        candidates.store_if_empty(
-            "symbol", pick_plan_symbol_target_from_overlays(session, mouse_pos)
+        symbol_candidate = _call_external_selection_pick(
+            session,
+            "pick_plan_symbol_target_from_overlays",
+            mouse_pos,
+            default=_EXTERNAL_PICK_MISSING,
         )
+        if symbol_candidate is _EXTERNAL_PICK_MISSING:
+            symbol_candidate = pick_plan_symbol_target_from_overlays(session, mouse_pos)
+        candidates.store_if_empty("symbol", symbol_candidate)
     if candidates.symbol.obj is not None:
         return _PickResolutionResult(
             target_ref=plan_target_kinds.make_plan_target_ref("symbol", candidates.symbol.obj),
@@ -1210,17 +1252,35 @@ def _resolve_region_or_space_fallback_target(
 
 def _resolve_region_fallback_target(session, mouse_pos, candidates):
     if candidates.region.obj is None:
-        candidates.store_if_empty(
-            "region", pick_plan_region_target_from_polylines(session, mouse_pos)
+        region_candidate = _call_external_selection_pick(
+            session,
+            "pick_plan_region_target_from_polylines",
+            mouse_pos,
+            default=_EXTERNAL_PICK_MISSING,
         )
+        if region_candidate is _EXTERNAL_PICK_MISSING:
+            region_candidate = pick_plan_region_target_from_polylines(session, mouse_pos)
+        candidates.store_if_empty("region", region_candidate)
     if candidates.region.obj is None:
-        candidates.store_if_empty(
-            "region", pick_plan_region_target_from_footprints(session, mouse_pos)
+        region_candidate = _call_external_selection_pick(
+            session,
+            "pick_plan_region_target_from_footprints",
+            mouse_pos,
+            default=_EXTERNAL_PICK_MISSING,
         )
+        if region_candidate is _EXTERNAL_PICK_MISSING:
+            region_candidate = pick_plan_region_target_from_footprints(session, mouse_pos)
+        candidates.store_if_empty("region", region_candidate)
     if candidates.region.obj is None:
-        candidates.store_if_empty(
-            "region", pick_plan_region_target_from_overlays(session, mouse_pos)
+        region_candidate = _call_external_selection_pick(
+            session,
+            "pick_plan_region_target_from_overlays",
+            mouse_pos,
+            default=_EXTERNAL_PICK_MISSING,
         )
+        if region_candidate is _EXTERNAL_PICK_MISSING:
+            region_candidate = pick_plan_region_target_from_overlays(session, mouse_pos)
+        candidates.store_if_empty("region", region_candidate)
     if candidates.region.obj is not None:
         return _PickResolutionResult(
             target_ref=plan_target_kinds.make_plan_target_ref("region", candidates.region.obj),
@@ -1239,11 +1299,25 @@ def _resolve_space_fallback_target(
     if not include_space_fallback:
         return _PickResolutionResult(target_ref=plan_target_kinds.make_plan_target_ref())
     if candidates.space.obj is None:
-        candidates.store_if_empty(
-            "space", pick_plan_space_target_from_footprints(session, mouse_pos)
+        space_candidate = _call_external_selection_pick(
+            session,
+            "pick_plan_space_target_from_footprints",
+            mouse_pos,
+            default=_EXTERNAL_PICK_MISSING,
         )
+        if space_candidate is _EXTERNAL_PICK_MISSING:
+            space_candidate = pick_plan_space_target_from_footprints(session, mouse_pos)
+        candidates.store_if_empty("space", space_candidate)
     if candidates.space.obj is None:
-        candidates.store_if_empty("space", pick_plan_space_target_from_overlays(session, mouse_pos))
+        space_candidate = _call_external_selection_pick(
+            session,
+            "pick_plan_space_target_from_overlays",
+            mouse_pos,
+            default=_EXTERNAL_PICK_MISSING,
+        )
+        if space_candidate is _EXTERNAL_PICK_MISSING:
+            space_candidate = pick_plan_space_target_from_overlays(session, mouse_pos)
+        candidates.store_if_empty("space", space_candidate)
     if candidates.space.obj is not None:
         return _PickResolutionResult(
             target_ref=plan_target_kinds.make_plan_target_ref("space", candidates.space.obj),
@@ -1326,7 +1400,9 @@ def get_plan_target_from_edit_node(session, node):
         target_ref = get_provider_overlay_target_from_edit_node(session, node)
         if plan_selection.is_valid_plan_target(session, target_ref.kind, target_ref.obj):
             return plan_target_kinds.make_plan_target_ref(target_ref.kind, target_ref.obj)
-        fallback_target_ref = plan_targets.get_plan_target_for_object(session, target_ref.obj)
+        fallback_target_ref = plan_target_kinds.coerce_plan_target_ref(
+            plan_targets.get_plan_target_for_object(session, target_ref.obj)
+        )
         return plan_target_kinds.make_plan_target_ref(
             fallback_target_ref.kind, fallback_target_ref.obj
         )
@@ -1348,7 +1424,9 @@ def get_plan_target_from_edit_node(session, node):
         return plan_target_kinds.make_plan_target_ref()
     if session.openings.is_hosted_opening_object(obj):
         return plan_target_kinds.make_plan_target_ref("opening", obj)
-    target_ref = plan_targets.get_plan_target_for_object(session, obj)
+    target_ref = plan_target_kinds.coerce_plan_target_ref(
+        plan_targets.get_plan_target_for_object(session, obj)
+    )
     return plan_target_kinds.make_plan_target_ref(target_ref.kind, target_ref.obj)
 
 
@@ -1602,16 +1680,21 @@ def _iter_provider_overlay_targets_from_info(session, info, visible_targets):
         target = visible_targets.get(identity)
         if target is None:
             continue
-        yielded.append((target.target_kind.value if target.target_kind is not None else "", obj))
+        yielded.append(
+            plan_target_kinds.make_plan_target_ref(
+                target.target_kind.value if target.target_kind is not None else "",
+                obj,
+            )
+        )
     return tuple(yielded)
 
 
 def _iter_visible_provider_overlay_targets(session):
     yielded = []
-    for overlay in tuple(session.providers.get_plan_provider_overlays() or ()):
+    for overlay in tuple(plan_provider_runtime.get_plan_provider_overlays(session) or ()):
         if not bool(getattr(overlay, "visible", True)):
             continue
-        if not session.providers.is_plan_provider_overlay_visible(overlay):
+        if not plan_provider_runtime.is_plan_provider_overlay_visible(session, overlay):
             continue
         for target in tuple(getattr(overlay, "point_targets", ()) or ()):
             if not _has_provider_overlay_target_identity(target):

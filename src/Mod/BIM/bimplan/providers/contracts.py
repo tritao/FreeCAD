@@ -12,6 +12,17 @@ from typing import Sequence, Tuple
 import FreeCAD
 
 from . import host_targets as plan_host_targets
+from bimplan.runtime import capabilities as runtime_capabilities
+
+
+def _call_component_method(session, component_name, method_name, *args, default=None, **kwargs):
+    component = getattr(session, component_name, None)
+    method = runtime_capabilities.get_callable(component, method_name)
+    if method is None:
+        method = runtime_capabilities.get_callable(session, method_name)
+    if method is None:
+        return default
+    return method(*args, **kwargs)
 
 
 @dataclass(frozen=True)
@@ -32,19 +43,48 @@ class PlanEditContext:
         )
 
     def get_selected_targets(self):
-        return tuple(self.session.selection.get_plan_targets(selected_only=True) or ())
+        return tuple(
+            _call_component_method(
+                self.session,
+                "selection",
+                "get_plan_targets",
+                selected_only=True,
+                default=(),
+            )
+            or ()
+        )
 
     def get_all_targets(self):
-        return tuple(self.session.selection.get_plan_targets(selected_only=False) or ())
+        return tuple(
+            _call_component_method(
+                self.session,
+                "selection",
+                "get_plan_targets",
+                selected_only=False,
+                default=(),
+            )
+            or ()
+        )
 
     def get_primary_target(self):
         targets = self.get_selected_targets()
         return targets[0] if targets else None
 
     def get_selected_objects(self):
-        return tuple(self.session.selection.get_selected_objects() or ())
+        return tuple(
+            _call_component_method(
+                self.session,
+                "selection",
+                "get_selected_objects",
+                default=(),
+            )
+            or ()
+        )
 
     def get_selected_semantic_records(self):
+        getter = runtime_capabilities.get_callable(self.session, "get_plan_semantic_records")
+        if getter is not None:
+            return tuple(getter(targets=self.get_selected_targets()) or ())
         from . import runtime as plan_provider_runtime
 
         return tuple(
@@ -60,18 +100,31 @@ class PlanEditContext:
         return records[0] if records else None
 
     def resolve_object(self, target):
-        return self.session.selection.resolve_plan_target_object(target)
+        return _call_component_method(
+            self.session,
+            "selection",
+            "resolve_plan_target_object",
+            target,
+        )
 
     def resolve_semantic_object(self, target):
-        return self.session.selection.resolve_plan_semantic_object(target)
+        return _call_component_method(
+            self.session,
+            "selection",
+            "resolve_plan_semantic_object",
+            target,
+        )
 
     def get_semantic_object(self, obj):
-        try:
-            semantic_obj = self.session.visibility.get_plan_semantic_object(obj)
-            if semantic_obj is not None:
-                return semantic_obj
-        except Exception:
-            pass
+        semantic_obj = _call_component_method(
+            self.session,
+            "visibility",
+            "get_plan_semantic_object",
+            obj,
+            default=None,
+        )
+        if semantic_obj is not None:
+            return semantic_obj
         return obj
 
     def get_document(self):
@@ -81,22 +134,37 @@ class PlanEditContext:
         return tuple(getattr(self.get_document(), "Objects", ()) or ())
 
     def is_selectable_wall(self, obj):
-        try:
-            return bool(self.session.selection.is_plan_selectable_wall(obj))
-        except Exception:
-            return False
+        return bool(
+            _call_component_method(
+                self.session,
+                "selection",
+                "is_plan_selectable_wall",
+                obj,
+                default=False,
+            )
+        )
 
     def get_wall_hosted_openings(self, wall):
-        try:
-            return tuple(self.session.openings.get_wall_hosted_openings(wall) or ())
-        except Exception:
-            return ()
+        return tuple(
+            _call_component_method(
+                self.session,
+                "openings",
+                "get_wall_hosted_openings",
+                wall,
+                default=(),
+            )
+            or ()
+        )
 
     def get_opening_plan_proxy(self, opening, *attrs):
-        try:
-            return self.session.openings.get_opening_plan_proxy(opening, *attrs)
-        except Exception:
-            return None
+        return _call_component_method(
+            self.session,
+            "openings",
+            "get_opening_plan_proxy",
+            opening,
+            *attrs,
+            default=None,
+        )
 
 
 @dataclass(frozen=True)

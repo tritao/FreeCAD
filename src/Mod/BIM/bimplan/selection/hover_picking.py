@@ -8,6 +8,7 @@ from bimplan.providers import runtime as plan_provider_runtime
 from bimplan.selection import selection as plan_selection_runtime
 from bimplan.selection import picking as plan_selection_picking
 from bimplan.selection import target_dispatch as plan_target_dispatch
+from bimplan.selection import target_kinds as plan_target_kinds
 from bimplan.selection import targets as plan_selection_targets
 
 _HOVER_PICK_INTERVAL_MS = 80
@@ -99,7 +100,9 @@ def update_hovered_plan_target(session, mouse_pos, force=False):
             return False
         session.performance.plan_perf_count("hover_pick_resolved")
         with session.performance.plan_perf_trace_span("hover_pick_resolve"):
-            target_ref = plan_selection_picking.get_plan_target_at_position(session, mouse_pos)
+            target_ref = plan_target_kinds.coerce_plan_target_ref(
+                session.selection.get_plan_target_at_position(mouse_pos)
+            )
         session._hover_pick_dirty = False
         target_kind = getattr(target_ref, "kind", None)
         target_obj = getattr(target_ref, "obj", None)
@@ -124,10 +127,11 @@ def update_hovered_plan_target(session, mouse_pos, force=False):
         overlay_mode
     )
     with session.performance.plan_perf_trace_span("hover_pick_resolve"):
-        target_ref = plan_selection_picking.get_plan_target_at_position(
-            session,
-            mouse_pos,
-            include_space_fallback=include_space_fallback,
+        target_ref = plan_target_kinds.coerce_plan_target_ref(
+            session.selection.get_plan_target_at_position(
+                mouse_pos,
+                include_space_fallback=include_space_fallback,
+            )
         )
     session._hover_pick_dirty = False
     target_kind = getattr(target_ref, "kind", None)

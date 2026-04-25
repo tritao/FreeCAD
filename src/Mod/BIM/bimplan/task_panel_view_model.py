@@ -76,13 +76,23 @@ class _TaskPanelInteractionReads(_TaskPanelReadsBase):
 class _TaskPanelSelectionReads(_TaskPanelReadsBase):
     __slots__ = ()
 
+    @property
+    def selection(self):
+        return getattr(self.session, "selection", None)
+
     def get_current_tool(self):
         return str(getattr(self.session, "current_tool", "") or "")
 
     def get_selected_plan_target(self):
+        getter = getattr(self.selection, "get_selected_plan_target", None)
+        if callable(getter):
+            return getter()
         return plan_selection.get_selected_plan_target(self.session)
 
     def get_selected_plan_targets(self):
+        getter = getattr(self.selection, "get_selected_plan_targets", None)
+        if callable(getter):
+            return tuple(getter() or ())
         return plan_selection.get_selected_plan_targets(self.session)
 
 
@@ -705,7 +715,7 @@ def build_action_context_view_model(session_or_context, modal_active=None):
     has_wall = selected_kind == "wall" and selected_obj is not None
     can_place_window = context.windows.can_place_plan_window()
     in_join_mode = current_tool == "Join"
-    join_candidate = context.has_plan_candidate_joint() if in_join_mode else False
+    join_candidate = context.wall_relations.has_plan_candidate_joint() if in_join_mode else False
     enabled = not bool(modal_active)
     mode_label = (
         context.providers.get_provider_point_tool_label()

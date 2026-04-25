@@ -18,6 +18,24 @@ from bimplan.tools.hosted_openings import _PlanEditCommandHost, _PlanEditWallHos
 translate = FreeCAD.Qt.translate
 
 
+def _get_lifecycle_state(session):
+    return getattr(session, "lifecycle_state", None)
+
+
+def _is_tearing_down(session):
+    lifecycle_state = _get_lifecycle_state(session)
+    if lifecycle_state is not None:
+        return bool(getattr(lifecycle_state, "tearing_down", False))
+    return bool(getattr(session, "_tearing_down", False))
+
+
+def _set_tearing_down(session, value):
+    lifecycle_state = _get_lifecycle_state(session)
+    if lifecycle_state is not None:
+        lifecycle_state.tearing_down = bool(value)
+    session._tearing_down = bool(value)
+
+
 class PlanLifecycleAPI:
     """Owned session surface for Plan Edit lifecycle helpers."""
 
@@ -303,6 +321,21 @@ def _dispatch_current_tool(session, handler_specs):
 
 
 def _resolve_action_callable(session, method_name):
+    compat_action_names = {
+        "providers.cancel_provider_point_tool": "_cancel_provider_point_tool",
+        "providers.has_active_provider_point_tool": "_has_active_provider_point_tool",
+        "status_text.clear_input_hints": "_clear_input_hints",
+        "wall_relations.clear_plan_relation_status": "_clear_plan_relation_status",
+        "wall_create.cancel_rect_wall_tool": "_cancel_rect_wall_tool",
+        "wall_create.has_active_rect_wall_tool": "_has_active_rect_wall_tool",
+        "selection.set_selected_plan_target": "_set_selected_plan_target",
+        "selection.clear_hovered_plan_targets": "_clear_hovered_plan_targets",
+        "wall_relations.cancel_join_tool": "_cancel_join_tool",
+    }
+    compat_name = compat_action_names.get(str(method_name or ""))
+    compat_callable = getattr(session, compat_name, None) if compat_name else None
+    if callable(compat_callable):
+        return compat_callable
     target = session
     parts = str(method_name or "").split(".")
     for part in parts:
@@ -388,12 +421,12 @@ _ACTION_CANCEL_PLAN_REGION_TOOL_IF_ACTIVE = ActivationActionSpec(
     predicate_name="spaces.has_active_plan_region_tool",
 )
 _ACTION_CANCEL_RECT_WALL_TOOL = ActivationActionSpec(
-    "_cancel_rect_wall_tool",
+    "wall_create.cancel_rect_wall_tool",
     kwargs=(("refresh", False),),
 )
 _ACTION_CANCEL_RECT_WALL_TOOL_IF_ACTIVE = ActivationActionSpec(
-    "_cancel_rect_wall_tool",
-    predicate_name="_has_active_rect_wall_tool",
+    "wall_create.cancel_rect_wall_tool",
+    predicate_name="wall_create.has_active_rect_wall_tool",
 )
 _ACTION_CANCEL_WINDOW_TOOL = ActivationActionSpec(
     "windows.cancel_window_tool",
@@ -453,7 +486,7 @@ _ACTION_CANCEL_SPACE_TEXT_PICK = ActivationActionSpec(
     "spaces.cancel_space_text_position_pick",
     current_tools=(plan_runtime_tools.PlanTool.SET_SPACE_TEXT,),
 )
-_ACTION_CANCEL_JOIN_TOOL = ActivationActionSpec("_cancel_join_tool")
+_ACTION_CANCEL_JOIN_TOOL = ActivationActionSpec("wall_relations.cancel_join_tool")
 _ACTION_CLEAR_VIEWPORT_STATUS_CHIP = ActivationActionSpec("viewport.clear_viewport_status_chip")
 _ACTION_CLEAR_INPUT_HINTS = ActivationActionSpec("status_text.clear_input_hints")
 _ACTION_CANCEL_WALL_EDIT_NO_RESTORE_NO_REFRESH = ActivationActionSpec(
@@ -510,11 +543,11 @@ def _activate_tool_with_profile(session, profile):
     context = profile.capture_state(session) if callable(profile.capture_state) else None
     _run_activation_action_specs(session, profile.preflight_actions)
     if profile.clear_plan_relation_status:
-        session.wall_relations.clear_plan_relation_status()
+        _resolve_action_callable(session, "wall_relations.clear_plan_relation_status")()
     if profile.clear_selected_target:
-        session.selection.set_selected_plan_target()
+        _resolve_action_callable(session, "selection.set_selected_plan_target")()
     if profile.clear_hovered_targets:
-        session.selection.clear_hovered_plan_targets()
+        _resolve_action_callable(session, "selection.clear_hovered_plan_targets")()
     if profile.clear_selection_kinds:
         clear_selection_visuals(
             session,
@@ -545,11 +578,21 @@ def _apply_cleanup_profile(session, profile):
         detach_runtime_observers(session)
 
 
-def _capture_selected_space(session):
+def _get_selected_space_for_activation(session):
+    selection_api = getattr(session, "selection", None)
+    get_selected_plan_target_object = getattr(
+        selection_api, "get_selected_plan_target_object", None
+    )
+    if callable(get_selected_plan_target_object):
+        return get_selected_plan_target_object(plan_target_kinds.PLAN_TARGET_SPACE)
     return plan_selection.get_selected_plan_target_object(
         session,
         plan_target_kinds.PLAN_TARGET_SPACE,
     )
+
+
+def _capture_selected_space(session):
+    return _get_selected_space_for_activation(session)
 
 
 def _prepare_window_tool(session, context):
@@ -591,12 +634,14 @@ def _start_plan_region_tool(session, context):
 
 def _prepare_space_separator_tool(session, context):
     del context
-    from bimplan.tools import wall_create as plan_wall_create
+    get_wall_defaults = getattr(session, "_get_wall_defaults", None)
+    if callable(get_wall_defaults):
+        defaults = get_wall_defaults() or {}
+    else:
+        from bimplan.tools import wall_create as plan_wall_create
 
-    plan_spaces.prepare_space_separator_tool_state(
-        session,
-        height=plan_wall_create.get_wall_defaults(session)["height"],
-    )
+        defaults = plan_wall_create.get_wall_defaults(session) or {}
+    plan_spaces.prepare_space_separator_tool_state(session, height=defaults["height"])
 
 
 def _start_space_separator_tool(session, context):
@@ -719,8 +764,8 @@ _FINISH_FALLBACK_ACTION_SPECS = (
     _ACTION_CANCEL_PROVIDER_POINT_TOOL_AND_RETURN,
     _ACTION_CANCEL_EMBEDDED_TOOL_AND_RETURN,
     ActivationActionSpec(
-        "_cancel_rect_wall_tool",
-        predicate_name="_has_active_rect_wall_tool",
+        "wall_create.cancel_rect_wall_tool",
+        predicate_name="wall_create.has_active_rect_wall_tool",
         stop_after=True,
     ),
     _ACTION_CANCEL_WALL_EDIT_AND_RETURN,
@@ -837,9 +882,9 @@ def finish(session, close_dialog=True):
 
 
 def begin_teardown(session):
-    if session.lifecycle_state.tearing_down:
+    if _is_tearing_down(session):
         return
-    session.lifecycle_state.tearing_down = True
+    _set_tearing_down(session, True)
     plan_command_gate.uninstall(session)
     _apply_cleanup_profile(session, _BEGIN_TEARDOWN_CLEANUP_PROFILE)
 
@@ -848,7 +893,7 @@ def shutdown(session, close_dialog=True, teardown=False):
     plan_command_gate.uninstall(session)
     if not session.document_visuals.document_is_alive():
         session.begin_teardown()
-    teardown = teardown or session.lifecycle_state.tearing_down
+    teardown = teardown or _is_tearing_down(session)
     panel = session.task_panel
     session.task_panel = None
     profile = _TEARDOWN_SHUTDOWN_CLEANUP_PROFILE if teardown else _SHUTDOWN_CLEANUP_PROFILE
@@ -877,7 +922,11 @@ def shutdown(session, close_dialog=True, teardown=False):
     if teardown:
         session.lifecycle.discard_runtime_references()
     else:
-        session.viewport.restore_state()
+        restore_state = getattr(getattr(session, "viewport", None), "restore_state", None)
+        if callable(restore_state):
+            restore_state()
+        else:
+            session.restore_state()
         if session.doc:
             try:
                 session.doc.recompute()

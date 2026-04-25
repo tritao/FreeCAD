@@ -3,6 +3,8 @@
 """Overlay geometry and cache helpers for BIM Plan Edit."""
 
 import ArchPlanGeometry
+from bimplan.overlays import openings as opening_overlays
+from bimplan.overlays import spaces as space_overlays
 
 
 def _perf_count(session, name, delta=1):
@@ -50,9 +52,9 @@ def invalidate_plan_overlay_geometry_cache(session, obj=None, kinds=None):
             if cache is not None:
                 cache.clear()
         invalidate_opening_overlay_screen_cache(session)
-        invalidate_hovered_opening_overlay_cache(session)
-        invalidate_selected_opening_overlay_cache(session)
-        invalidate_selected_space_overlay_cache(session)
+        opening_overlays.invalidate_hovered_opening_overlay_cache(session)
+        opening_overlays.invalidate_selected_opening_overlay_cache(session)
+        space_overlays.invalidate_selected_space_overlay_cache(session)
         return
     semantic_obj, key, _entry = get_plan_overlay_geometry_cache_entry(
         session, target_kinds[0], obj, create=False
@@ -66,11 +68,11 @@ def invalidate_plan_overlay_geometry_cache(session, obj=None, kinds=None):
     if "opening" in target_kinds:
         invalidate_opening_overlay_screen_cache(session)
     if session.hovered_opening == semantic_obj:
-        invalidate_hovered_opening_overlay_cache(session)
+        opening_overlays.invalidate_hovered_opening_overlay_cache(session)
     if session.selection.is_selected_plan_target("opening", semantic_obj):
-        invalidate_selected_opening_overlay_cache(session)
+        opening_overlays.invalidate_selected_opening_overlay_cache(session)
     if session.selection.is_selected_plan_target("space", semantic_obj):
-        invalidate_selected_space_overlay_cache(session)
+        space_overlays.invalidate_selected_space_overlay_cache(session)
 
 
 def get_cached_plan_overlay_geometry(session, kind, obj, field_name, compute):

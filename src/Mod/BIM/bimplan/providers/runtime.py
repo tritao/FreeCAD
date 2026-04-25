@@ -47,11 +47,50 @@ FOCUSED_PROVIDER_OVERLAY_PICK_MODES = frozenset(
 
 
 def _perf_trace_span(session, name, **fields):
-    return session.performance.plan_perf_trace_span(name, **fields)
+    performance = getattr(session, "performance", None)
+    if performance is None:
+        return nullcontext()
+    return performance.plan_perf_trace_span(name, **fields)
 
 
 def _perf_count(session, name, delta=1):
-    return session.performance.plan_perf_count(name, delta=delta)
+    performance = getattr(session, "performance", None)
+    if performance is None:
+        return 0
+    try:
+        return performance.plan_perf_count(name, delta=delta)
+    except TypeError:
+        return performance.plan_perf_count(name)
+
+
+def _get_instance_override(obj, method_name):
+    obj_dict = getattr(obj, "__dict__", None)
+    if not isinstance(obj_dict, dict) or method_name not in obj_dict:
+        return None
+    method = getattr(obj, method_name, None)
+    if callable(method):
+        return method
+    return None
+
+
+def _get_external_provider_api(session, method_name=None):
+    providers = getattr(session, "providers", None)
+    if isinstance(providers, PlanProvidersAPI):
+        if method_name and _get_instance_override(providers, method_name) is not None:
+            return providers
+        return None
+    return providers
+
+
+def _call_provider_method(session, method_name, *args, default=None, **kwargs):
+    providers = _get_external_provider_api(session, method_name)
+    method = getattr(providers, method_name, None) if providers is not None else None
+    if callable(method):
+        return method(*args, **kwargs)
+    method = _get_instance_override(session, method_name)
+    if callable(method):
+        return method(*args, **kwargs)
+    return default
 
 
 @dataclass
@@ -73,7 +112,7 @@ _MISSING = object()
 class PlanProvidersAPI:
     """Owned session surface for Plan Edit provider behavior."""
 
-    __slots__ = ("_session",)
+    __slots__ = ("_session", "__dict__")
 
     def __init__(self, session):
         self._session = session
@@ -446,10 +485,12 @@ class PlanProviderSnapshot:
 
 
 def _is_active_provider_session(session):
+    document_visuals = getattr(session, "document_visuals", None)
+    document_is_alive = getattr(document_visuals, "document_is_alive", None)
     return not (
         getattr(session, "_tearing_down", False)
         or getattr(session, "_finishing", False)
-        or not session.document_visuals.document_is_alive()
+        or (callable(document_is_alive) and not document_is_alive())
     )
 
 
@@ -471,6 +512,21 @@ def invalidate_plan_provider_document_cache(session):
 
 @contextmanager
 def plan_provider_refresh_cache_scope(session):
+    external_scope = _call_provider_method(
+        session,
+        "plan_provider_refresh_cache_scope",
+        default=None,
+    )
+    if external_scope is None:
+        external_scope = _call_provider_method(
+            session,
+            "_plan_provider_refresh_cache_scope",
+            default=None,
+        )
+    if external_scope is not None:
+        with external_scope:
+            yield external_scope
+        return
     previous_cache = session._plan_provider_refresh_cache
     session._plan_provider_refresh_cache = {}
     try:
@@ -518,6 +574,9 @@ def _set_cached_provider_snapshot(session, snapshot):
 
 
 def _get_plan_edit_context_or_none(session):
+    context = _call_provider_method(session, "get_plan_edit_context", default=_MISSING)
+    if context is not _MISSING:
+        return context
     try:
         return get_plan_edit_context(session)
     except (ReferenceError, RuntimeError):
@@ -693,6 +752,9 @@ def normalize_plan_provider_overlay_mode(mode):
 
 
 def get_plan_provider_overlay_mode(session):
+    external_mode = _call_provider_method(session, "get_plan_provider_overlay_mode", default=None)
+    if external_mode is not None:
+        return normalize_plan_provider_overlay_mode(external_mode)
     state = getattr(session, "provider_overlay_read_state", None)
     mode = (
         getattr(state, "mode", PLAN_PROVIDER_OVERLAY_MODE_ARCHITECTURE)
@@ -832,6 +894,9 @@ def normalize_plan_provider_target(
 
 
 def get_plan_provider_targets(session) -> tuple[PlanProviderTargetSpec, ...]:
+    external_targets = _call_provider_method(session, "get_plan_provider_targets", default=None)
+    if external_targets is not None:
+        return tuple(external_targets or ())
     depth = int(getattr(session, "_plan_provider_target_collection_depth", 0) or 0)
     if depth > 0:
         return ()
@@ -855,6 +920,28 @@ def get_plan_provider_target_for_object(session, obj) -> PlanProviderTargetSpec 
         getattr(obj, "Name", ""),
     )
     if object_key is None:
+        return None
+    direct_get_plan_provider_targets = _get_instance_override(session, "get_plan_provider_targets")
+    if callable(direct_get_plan_provider_targets):
+        for target in tuple(direct_get_plan_provider_targets() or ()):
+            target_key = _make_plan_provider_target_object_key(
+                getattr(target, "document_name", "")
+                or _get_default_plan_provider_target_document_name(session),
+                getattr(target, "object_name", ""),
+            )
+            if target_key == object_key:
+                return target
+        return None
+    direct_targets = _call_provider_method(session, "get_plan_provider_targets", default=_MISSING)
+    if direct_targets is not _MISSING:
+        for target in tuple(direct_targets or ()):
+            target_key = _make_plan_provider_target_object_key(
+                getattr(target, "document_name", "")
+                or _get_default_plan_provider_target_document_name(session),
+                getattr(target, "object_name", ""),
+            )
+            if target_key == object_key:
+                return target
         return None
     return _get_plan_provider_target_lookup(session).get(object_key)
 
@@ -921,7 +1008,19 @@ def format_plan_provider_target_help(session, obj) -> str:
 def _get_provider_target_semantic_resolution(session, semantic_obj, provider_target):
     semantic_resolved = None
     if provider_target is not None:
-        semantic_resolved = session.selection.resolve_plan_semantic_object(provider_target)
+        selection_api = getattr(session, "selection", None)
+        resolve_plan_semantic_object = getattr(
+            selection_api,
+            "resolve_plan_semantic_object",
+            None,
+        )
+        if not callable(resolve_plan_semantic_object):
+            resolve_plan_semantic_object = getattr(session, "resolve_plan_semantic_object", None)
+        semantic_resolved = (
+            resolve_plan_semantic_object(provider_target)
+            if callable(resolve_plan_semantic_object)
+            else None
+        )
         if semantic_resolved is not None:
             semantic_obj = semantic_resolved
     return semantic_obj, semantic_resolved
@@ -1043,14 +1142,25 @@ def get_plan_semantic_records(session, targets=None):
     from bimplan.selection.targets import PlanTarget
 
     if targets is None:
-        targets = session.selection.get_plan_targets(selected_only=True)
+        targets = _call_provider_method(
+            session, "get_plan_targets", selected_only=True, default=None
+        )
+        if targets is None:
+            selection_api = getattr(session, "selection", None)
+            get_plan_targets = getattr(selection_api, "get_plan_targets", None)
+            targets = get_plan_targets(selected_only=True) if callable(get_plan_targets) else ()
     records = []
+    selection_api = getattr(session, "selection", None)
+    resolve_plan_target_object = getattr(selection_api, "resolve_plan_target_object", None)
+    if not callable(resolve_plan_target_object):
+        resolve_plan_target_object = getattr(session, "resolve_plan_target_object", None)
     for target in targets or ():
         target_kind = None
         target_obj = None
         if isinstance(target, PlanTarget):
             target_kind = target.kind
-            target_obj = session.selection.resolve_plan_target_object(target)
+            if callable(resolve_plan_target_object):
+                target_obj = resolve_plan_target_object(target)
         else:
             try:
                 target_kind, target_obj = target
@@ -1563,6 +1673,9 @@ def collect_plan_provider_contributions(session, method_name, normalizer):
 
 def _make_plan_provider_contribution_getter(surface_spec):
     def _get_plan_provider_contributions(session):
+        external_results = _call_provider_method(session, surface_spec.function_name, default=None)
+        if external_results is not None:
+            return tuple(external_results or ())
         return collect_plan_provider_contributions(
             session,
             surface_spec.method_name,
@@ -1616,7 +1729,9 @@ def _run_plan_provider_action(
     transaction_label="",
     payload=None,
 ):
-    context = get_plan_edit_context(session)
+    context = _get_plan_edit_context_or_none(session)
+    if context is None:
+        return False
     action_context = get_plan_provider_action_context(session, payload=payload)
     transaction_label = str(transaction_label or "").strip()
     defer_updates = getattr(session, "defer_document_visual_updates", None)
@@ -1649,7 +1764,18 @@ def _run_plan_provider_action(
 
 
 def _finalize_plan_provider_action(session):
-    session.selection.refresh_primary_selected_plan_target()
+    selection_api = getattr(session, "selection", None)
+    refresh_primary_selected_plan_target = getattr(
+        selection_api,
+        "refresh_primary_selected_plan_target",
+        None,
+    )
+    if callable(refresh_primary_selected_plan_target):
+        refresh_primary_selected_plan_target()
+    else:
+        compat_refresh = getattr(session, "_refresh_primary_selected_plan_target", None)
+        if callable(compat_refresh):
+            compat_refresh()
     session.document_visuals.invalidate_document_dependent_plan_visuals()
     session.task_panels.refresh_task_panel_status()
     session.viewport.focus_plan_view()
@@ -1693,22 +1819,45 @@ def execute_plan_provider_action(
 
 
 def get_plan_edit_context(session):
-    doc = session.doc if session.document_visuals.document_is_alive() else None
-    active_storey = session.active_storey
-    active_storey_name = session.visibility.safe_plan_object_name(active_storey)
+    document_visuals = getattr(session, "document_visuals", None)
+    document_is_alive = getattr(document_visuals, "document_is_alive", None)
+    doc = getattr(session, "doc", None)
+    if callable(document_is_alive) and not document_is_alive():
+        doc = None
+    active_storey = getattr(session, "active_storey", None)
+    visibility = getattr(session, "visibility", None)
+    safe_plan_object_name = getattr(visibility, "safe_plan_object_name", None)
+    if callable(safe_plan_object_name):
+        active_storey_name = safe_plan_object_name(active_storey)
+        document_name = safe_plan_object_name(doc)
+    else:
+        active_storey_name = str(getattr(active_storey, "Name", "") or "")
+        document_name = str(getattr(doc, "Name", "") or "")
     if active_storey is not None and not active_storey_name:
         active_storey = None
         session.active_storey = None
+    storey = getattr(session, "storey", None)
+    get_storey_label = getattr(storey, "get_storey_label", None)
     return PlanEditContext(
         session=session,
-        document_name=session.visibility.safe_plan_object_name(doc),
+        document_name=document_name,
         active_storey_name=active_storey_name,
-        active_storey_label=str(session.storey.get_storey_label(active_storey) or ""),
-        current_tool=str(session.current_tool or ""),
+        active_storey_label=(
+            str(get_storey_label(active_storey) or "") if callable(get_storey_label) else ""
+        ),
+        current_tool=str(getattr(session, "current_tool", "") or ""),
     )
 
 
 def get_plan_provider_action_context(session, payload=None):
+    action_context = _call_provider_method(
+        session,
+        "get_plan_provider_action_context",
+        payload=payload,
+        default=_MISSING,
+    )
+    if action_context is not _MISSING:
+        return action_context
     doc = session.doc if session.document_visuals.document_is_alive() else None
     return PlanEditContext.make_action_context(
         session,
