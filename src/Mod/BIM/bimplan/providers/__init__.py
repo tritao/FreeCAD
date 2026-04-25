@@ -34,84 +34,41 @@ class PlanEditContext:
         )
 
     def get_selected_targets(self):
-        getter = getattr(getattr(self.session, "selection", None), "get_plan_targets", None)
-        if callable(getter):
-            return tuple(getter(selected_only=True) or ())
-        getter = getattr(self.session, "get_plan_targets", None)
-        if callable(getter):
-            return tuple(getter(selected_only=True) or ())
-        return ()
+        return tuple(self.session.selection.get_plan_targets(selected_only=True) or ())
 
     def get_all_targets(self):
-        getter = getattr(getattr(self.session, "selection", None), "get_plan_targets", None)
-        if callable(getter):
-            return tuple(getter(selected_only=False) or ())
-        getter = getattr(self.session, "get_plan_targets", None)
-        if callable(getter):
-            return tuple(getter(selected_only=False) or ())
-        return ()
+        return tuple(self.session.selection.get_plan_targets(selected_only=False) or ())
 
     def get_primary_target(self):
         targets = self.get_selected_targets()
         return targets[0] if targets else None
 
     def get_selected_objects(self):
-        getter = getattr(getattr(self.session, "selection", None), "get_selected_objects", None)
-        if callable(getter):
-            return tuple(getter() or ())
-        getter = getattr(self.session, "get_selected_objects", None)
-        if callable(getter):
-            return tuple(getter() or ())
-        return ()
+        return tuple(self.session.selection.get_selected_objects() or ())
 
     def get_selected_semantic_records(self):
-        getter = getattr(
-            getattr(self.session, "providers", None), "get_plan_semantic_records", None
+        return tuple(
+            self.session.providers.get_plan_semantic_records(targets=self.get_selected_targets())
+            or ()
         )
-        if callable(getter):
-            return tuple(getter(targets=self.get_selected_targets()) or ())
-        getter = getattr(self.session, "get_plan_semantic_records", None)
-        if callable(getter):
-            return tuple(getter(targets=self.get_selected_targets()) or ())
-        return ()
 
     def get_primary_semantic_record(self):
         records = self.get_selected_semantic_records()
         return records[0] if records else None
 
     def resolve_object(self, target):
-        resolver = getattr(
-            getattr(self.session, "selection", None), "resolve_plan_target_object", None
-        )
-        if callable(resolver):
-            return resolver(target)
-        resolver = getattr(self.session, "resolve_plan_target_object", None)
-        if callable(resolver):
-            return resolver(target)
-        return None
+        return self.session.selection.resolve_plan_target_object(target)
 
     def resolve_semantic_object(self, target):
-        resolver = getattr(
-            getattr(self.session, "selection", None), "resolve_plan_semantic_object", None
-        )
-        if callable(resolver):
-            return resolver(target)
-        resolver = getattr(self.session, "resolve_plan_semantic_object", None)
-        if callable(resolver):
-            return resolver(target)
-        return None
+        return self.session.selection.resolve_plan_semantic_object(target)
 
     def get_semantic_object(self, obj):
-        getter = getattr(
-            getattr(self.session, "visibility", None), "get_plan_semantic_object", None
-        )
-        if callable(getter):
-            try:
-                semantic_obj = getter(obj)
-                if semantic_obj is not None:
-                    return semantic_obj
-            except Exception:
-                pass
+        try:
+            semantic_obj = self.session.visibility.get_plan_semantic_object(obj)
+            if semantic_obj is not None:
+                return semantic_obj
+        except Exception:
+            pass
         return obj
 
     def get_document(self):
@@ -121,32 +78,22 @@ class PlanEditContext:
         return tuple(getattr(self.get_document(), "Objects", ()) or ())
 
     def is_selectable_wall(self, obj):
-        checker = getattr(getattr(self.session, "selection", None), "is_plan_selectable_wall", None)
-        if callable(checker):
-            try:
-                return bool(checker(obj))
-            except Exception:
-                return False
-        return False
+        try:
+            return bool(self.session.selection.is_plan_selectable_wall(obj))
+        except Exception:
+            return False
 
     def get_wall_hosted_openings(self, wall):
-        getter = getattr(getattr(self.session, "openings", None), "get_wall_hosted_openings", None)
-        if callable(getter):
-            try:
-                return tuple(getter(wall) or ())
-            except Exception:
-                return ()
-        return ()
+        try:
+            return tuple(self.session.openings.get_wall_hosted_openings(wall) or ())
+        except Exception:
+            return ()
 
     def get_opening_plan_proxy(self, opening, *attrs):
-        openings_api = getattr(self.session, "openings", None)
-        getter = getattr(openings_api, "get_opening_plan_proxy", None)
-        if callable(getter):
-            try:
-                return getter(opening, *attrs)
-            except Exception:
-                return None
-        return None
+        try:
+            return self.session.openings.get_opening_plan_proxy(opening, *attrs)
+        except Exception:
+            return None
 
 
 @dataclass(frozen=True)
@@ -168,21 +115,16 @@ class PlanProviderActionContext:
         return self.payload
 
     def select_wall_for_plan_edit(self, wall, sync_gui_selection=True):
-        selector = getattr(
-            getattr(self._session, "selection", None), "select_wall_for_plan_edit", None
+        return bool(
+            self._session.selection.select_wall_for_plan_edit(
+                wall,
+                sync_gui_selection=sync_gui_selection,
+            )
         )
-        if not callable(selector):
-            return False
-        return bool(selector(wall, sync_gui_selection=sync_gui_selection))
 
     def queue_recompute_opening_hosts(self, opening):
-        recompute_hosts = getattr(
-            getattr(self._session, "document_visuals", None), "queue_recompute_opening_hosts", None
-        )
-        if callable(recompute_hosts):
-            recompute_hosts(opening)
-            return True
-        return False
+        self._session.document_visuals.queue_recompute_opening_hosts(opening)
+        return True
 
     def recompute_document(self, doc=None):
         doc = doc if doc is not None else self.doc
@@ -195,17 +137,9 @@ class PlanProviderActionContext:
             return False
 
     def refresh_opening_visuals(self, opening):
-        openings_api = getattr(self._session, "openings", None)
-        invalidate_cache = getattr(openings_api, "invalidate_wall_hosted_openings_cache", None)
-        if callable(invalidate_cache):
-            invalidate_cache()
-        document_visuals = getattr(self._session, "document_visuals", None)
-        refresh_hosts = getattr(document_visuals, "refresh_opening_host_footprint_displays", None)
-        if callable(refresh_hosts):
-            refresh_hosts(opening)
-        refresh_opening = getattr(document_visuals, "refresh_opening_footprint_display", None)
-        if callable(refresh_opening):
-            refresh_opening(opening)
+        self._session.openings.invalidate_wall_hosted_openings_cache()
+        self._session.document_visuals.refresh_opening_host_footprint_displays(opening)
+        self._session.document_visuals.refresh_opening_footprint_display(opening)
 
 
 class PlanEditRegistry:
