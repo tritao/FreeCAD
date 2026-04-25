@@ -275,6 +275,121 @@ def on_mouse_wheel(session, event_callback):
         session.overlays.queue_plan_overlay_view_scale_refresh()
 
 
+def _set_key_event_handled(event_callback):
+    if hasattr(event_callback, "setHandled"):
+        event_callback.setHandled()
+
+
+def _handle_direct_tool_key_press(session, key, event_callback, coin):
+    if session.current_tool == "Move Opening" and key == coin.SoKeyboardEvent.A:
+        if session.openings.cycle_opening_move_anchor():
+            session.openings.refresh_opening_move_preview_from_raw_point()
+            session.task_panels.refresh_task_panel_status()
+        return True
+    if (
+        session.current_tool in ("Move Symbol", "Rotate Symbol")
+        and key == coin.SoKeyboardEvent.ESCAPE
+    ):
+        session.symbols.cancel_symbol_handle_point_pick()
+        return True
+    if session.current_tool == "Pick Space Region" and key == coin.SoKeyboardEvent.ESCAPE:
+        session.spaces.cancel_space_region_pick()
+        return True
+    if session.current_tool == "Region" and key in (
+        coin.SoKeyboardEvent.RETURN,
+        coin.SoKeyboardEvent.ENTER,
+    ):
+        if session.spaces.finalize_plan_region():
+            _set_key_event_handled(event_callback)
+        return True
+    if session.current_tool == "Region" and key == coin.SoKeyboardEvent.ESCAPE:
+        session.spaces.cancel_plan_region_tool()
+        return True
+    if session.current_tool == "Provider Point" and key == coin.SoKeyboardEvent.ESCAPE:
+        session.providers.cancel_provider_point_tool()
+        return True
+    if session.current_tool == "Move Provider" and key == coin.SoKeyboardEvent.ESCAPE:
+        session.providers.cancel_provider_handle_point_pick()
+        return True
+    if session.current_tool == "Window" and key == coin.SoKeyboardEvent.ESCAPE:
+        session.windows.cancel_window_tool()
+        return True
+    return False
+
+
+def _handle_join_tool_key_press(session, key, event_callback, coin):
+    if session.current_tool != "Join":
+        return False
+    if key == coin.SoKeyboardEvent.TAB:
+        if session.wall_relations.cycle_plan_join_type():
+            _set_key_event_handled(event_callback)
+        return True
+    if key in (
+        getattr(coin.SoKeyboardEvent, "DELETE", None),
+        getattr(coin.SoKeyboardEvent, "BACKSPACE", None),
+    ):
+        if session.wall_relations.unjoin_current_plan_wall_pair():
+            _set_key_event_handled(event_callback)
+        return True
+    if key == coin.SoKeyboardEvent.ESCAPE:
+        session.wall_relations.cancel_join_tool()
+        return True
+    return False
+
+
+def _handle_wall_edit_key_press(session, key, event_callback, coin):
+    if session.wall_edit.is_wall_move_edit_active() and key == coin.SoKeyboardEvent.TAB:
+        if session.wall_edit.start_wall_readout_edit(cycle=True):
+            _set_key_event_handled(event_callback)
+        return True
+    if session.wall_edit.is_wall_readout_edit_active() and key in (
+        coin.SoKeyboardEvent.RETURN,
+        coin.SoKeyboardEvent.ENTER,
+    ):
+        if session.wall_edit.start_wall_readout_edit():
+            _set_key_event_handled(event_callback)
+        return True
+    if session.wall_edit.is_wall_stretch_edit_active() and key == coin.SoKeyboardEvent.TAB:
+        if session.wall_edit.start_wall_readout_edit():
+            _set_key_event_handled(event_callback)
+        return True
+    return False
+
+
+def _handle_escape_cancels(session):
+    if session._edit_wall and session.current_tool != "Select":
+        session.wall_edit.cancel_wall_edit_point_pick()
+        return True
+    if session.current_tool == "Move Opening":
+        session.openings.cancel_opening_handle_point_pick()
+        return True
+    if session.current_tool == "Move Provider":
+        session.providers.cancel_provider_handle_point_pick()
+        return True
+    if session.current_tool in ("Move Symbol", "Rotate Symbol"):
+        session.symbols.cancel_symbol_handle_point_pick()
+        return True
+    if session.current_tool == "Set Space Text":
+        session.spaces.cancel_space_text_position_pick()
+        return True
+    if session.providers.has_active_provider_point_tool():
+        session.providers.cancel_provider_point_tool()
+        return True
+    if session.windows.has_active_window_tool():
+        session.windows.cancel_window_tool()
+        return True
+    if session.wall_create.has_active_rect_wall_tool():
+        session.wall_create.cancel_rect_wall_tool()
+        return True
+    if session.spaces.has_active_plan_region_tool():
+        session.spaces.cancel_plan_region_tool()
+        return True
+    if session.spaces.has_active_space_separator_tool():
+        session.spaces.cancel_space_separator_tool()
+        return True
+    return False
+
+
 def on_key_pressed(session, event_callback):
     if session._tearing_down:
         return
@@ -284,102 +399,13 @@ def on_key_pressed(session, event_callback):
         return
     event = event_callback.getEvent()
     key = event.getKey()
-    if session.current_tool == "Move Opening" and key == coin.SoKeyboardEvent.A:
-        if session.openings.cycle_opening_move_anchor():
-            session.openings.refresh_opening_move_preview_from_raw_point()
-            session.task_panels.refresh_task_panel_status()
+    if _handle_direct_tool_key_press(session, key, event_callback, coin):
         return
-    if (
-        session.current_tool in ("Move Symbol", "Rotate Symbol")
-        and key == coin.SoKeyboardEvent.ESCAPE
-    ):
-        session.symbols.cancel_symbol_handle_point_pick()
+    if _handle_join_tool_key_press(session, key, event_callback, coin):
         return
-    if session.current_tool == "Join" and key == coin.SoKeyboardEvent.TAB:
-        if session.wall_relations.cycle_plan_join_type() and hasattr(event_callback, "setHandled"):
-            event_callback.setHandled()
-        return
-    if session.current_tool == "Join" and key in (
-        getattr(coin.SoKeyboardEvent, "DELETE", None),
-        getattr(coin.SoKeyboardEvent, "BACKSPACE", None),
-    ):
-        if session.wall_relations.unjoin_current_plan_wall_pair() and hasattr(
-            event_callback, "setHandled"
-        ):
-            event_callback.setHandled()
-        return
-    if session.current_tool == "Join" and key == coin.SoKeyboardEvent.ESCAPE:
-        session.wall_relations.cancel_join_tool()
-        return
-    if session.current_tool == "Pick Space Region" and key == coin.SoKeyboardEvent.ESCAPE:
-        session.spaces.cancel_space_region_pick()
-        return
-    if session.current_tool == "Region" and key in (
-        coin.SoKeyboardEvent.RETURN,
-        coin.SoKeyboardEvent.ENTER,
-    ):
-        if session.spaces.finalize_plan_region():
-            if hasattr(event_callback, "setHandled"):
-                event_callback.setHandled()
-        return
-    if session.current_tool == "Region" and key == coin.SoKeyboardEvent.ESCAPE:
-        session.spaces.cancel_plan_region_tool()
-        return
-    if session.current_tool == "Provider Point" and key == coin.SoKeyboardEvent.ESCAPE:
-        session.providers.cancel_provider_point_tool()
-        return
-    if session.current_tool == "Move Provider" and key == coin.SoKeyboardEvent.ESCAPE:
-        session.providers.cancel_provider_handle_point_pick()
-        return
-    if session.current_tool == "Window" and key == coin.SoKeyboardEvent.ESCAPE:
-        session.windows.cancel_window_tool()
-        return
-    if session.wall_edit.is_wall_move_edit_active() and key == coin.SoKeyboardEvent.TAB:
-        if session.wall_edit.start_wall_readout_edit(cycle=True):
-            if hasattr(event_callback, "setHandled"):
-                event_callback.setHandled()
-        return
-    if session.wall_edit.is_wall_readout_edit_active() and key in (
-        coin.SoKeyboardEvent.RETURN,
-        coin.SoKeyboardEvent.ENTER,
-    ):
-        if session.wall_edit.start_wall_readout_edit():
-            if hasattr(event_callback, "setHandled"):
-                event_callback.setHandled()
-        return
-    if session.wall_edit.is_wall_stretch_edit_active() and key == coin.SoKeyboardEvent.TAB:
-        if session.wall_edit.start_wall_readout_edit():
-            if hasattr(event_callback, "setHandled"):
-                event_callback.setHandled()
+    if _handle_wall_edit_key_press(session, key, event_callback, coin):
         return
     if key != coin.SoKeyboardEvent.ESCAPE:
         return
-    if session._edit_wall and session.current_tool != "Select":
-        session.wall_edit.cancel_wall_edit_point_pick()
+    if _handle_escape_cancels(session):
         return
-    if session.current_tool == "Move Opening":
-        session.openings.cancel_opening_handle_point_pick()
-        return
-    if session.current_tool == "Move Provider":
-        session.providers.cancel_provider_handle_point_pick()
-        return
-    if session.current_tool in ("Move Symbol", "Rotate Symbol"):
-        session.symbols.cancel_symbol_handle_point_pick()
-        return
-    if session.current_tool == "Set Space Text":
-        session.spaces.cancel_space_text_position_pick()
-        return
-    if session.providers.has_active_provider_point_tool():
-        session.providers.cancel_provider_point_tool()
-        return
-    if session.windows.has_active_window_tool():
-        session.windows.cancel_window_tool()
-        return
-    if session.wall_create.has_active_rect_wall_tool():
-        session.wall_create.cancel_rect_wall_tool()
-        return
-    if session.spaces.has_active_plan_region_tool():
-        session.spaces.cancel_plan_region_tool()
-        return
-    if session.spaces.has_active_space_separator_tool():
-        session.spaces.cancel_space_separator_tool()
