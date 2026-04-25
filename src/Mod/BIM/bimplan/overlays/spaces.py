@@ -2,6 +2,8 @@
 
 """Space and region overlay helpers for BIM Plan Edit."""
 
+from bimplan.tools import space_regions as plan_space_regions
+
 from . import manager as overlay_manager
 from .. import selection as plan_selection
 
@@ -84,7 +86,10 @@ def sync_space_region_pick_overlays(session):
         color = (0.90, 0.52, 0.10) if hovered else (0.22, 0.44, 0.88)
         width = session.viewport.scaled_line_width(3 if hovered else 2)
         dotted = not hovered
-        for polyline in session.spaces.get_space_region_candidate_polylines(candidate):
+        for polyline in plan_space_regions.get_space_region_candidate_polylines(
+            session,
+            candidate,
+        ):
             if len(polyline) < 2:
                 continue
             for start, end in zip(polyline, polyline[1:]):
