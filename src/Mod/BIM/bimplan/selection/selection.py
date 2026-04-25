@@ -3,7 +3,7 @@
 """Selection state helpers for BIM Plan Edit."""
 
 from contextlib import contextmanager
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 import FreeCADGui
 from bimplan.providers import runtime as plan_provider_runtime
@@ -25,11 +25,18 @@ _MISSING = object()
 
 @dataclass(frozen=True)
 class SelectionRefreshResult:
-    primary_kind: object = None
-    primary_obj: object = None
+    primary_target_ref: object = field(default_factory=plan_target_kinds.make_plan_target_ref)
     secondary_targets: tuple = ()
     pending_target: object = _PENDING_TARGET_UNCHANGED
     wall_grip_action: str = _WALL_GRIP_NONE
+
+    @property
+    def primary_kind(self):
+        return self.primary_target_ref.kind
+
+    @property
+    def primary_obj(self):
+        return self.primary_target_ref.obj
 
 
 @dataclass(frozen=True)
@@ -210,14 +217,17 @@ def _choose_primary_selected_target(selected_targets, pending_target_ref=None):
 
 
 def _apply_selection_refresh_result(session, refresh_result):
+    primary_kind, primary_obj = plan_target_kinds.unpack_plan_target_ref(
+        refresh_result.primary_target_ref
+    )
     session.selection.set_selected_plan_target_state(
-        refresh_result.primary_kind,
-        refresh_result.primary_obj,
+        primary_kind,
+        primary_obj,
     )
     session.selection.set_secondary_selected_plan_targets(
         refresh_result.secondary_targets,
-        primary_kind=refresh_result.primary_kind,
-        primary_obj=refresh_result.primary_obj,
+        primary_kind=primary_kind,
+        primary_obj=primary_obj,
     )
     if refresh_result.pending_target is not _PENDING_TARGET_UNCHANGED:
         if refresh_result.pending_target is None:
@@ -247,17 +257,21 @@ def _get_selection_refresh_baseline(session):
 def _resolve_direct_selection_refresh_result(session, previous_wall):
     if session.wall_edit.is_wall_edit_modal_active():
         return SelectionRefreshResult(
-            primary_kind=plan_target_kinds.PLAN_TARGET_WALL,
-            primary_obj=session._edit_wall,
+            primary_target_ref=plan_target_kinds.make_plan_target_ref(
+                plan_target_kinds.PLAN_TARGET_WALL,
+                session._edit_wall,
+            ),
             wall_grip_action=_WALL_GRIP_SYNC,
         )
     if session.current_tool == "Set Space Text":
         return SelectionRefreshResult(
-            primary_kind=plan_target_kinds.PLAN_TARGET_SPACE,
-            primary_obj=(
-                session._edit_space
-                if session.selection.is_plan_space_object(session._edit_space)
-                else None
+            primary_target_ref=plan_target_kinds.make_plan_target_ref(
+                plan_target_kinds.PLAN_TARGET_SPACE,
+                (
+                    session._edit_space
+                    if session.selection.is_plan_space_object(session._edit_space)
+                    else None
+                ),
             ),
             wall_grip_action=_WALL_GRIP_CLEAR,
         )
@@ -267,8 +281,10 @@ def _resolve_direct_selection_refresh_result(session, previous_wall):
             session.current_tool = "Select"
             wall = None
         return SelectionRefreshResult(
-            primary_kind=plan_target_kinds.PLAN_TARGET_WALL,
-            primary_obj=wall,
+            primary_target_ref=plan_target_kinds.make_plan_target_ref(
+                plan_target_kinds.PLAN_TARGET_WALL,
+                wall,
+            ),
             wall_grip_action=_WALL_GRIP_CLEAR,
         )
     if session.current_tool not in _GUI_SELECTION_TOOL_NAMES:
@@ -301,10 +317,8 @@ def _collect_selected_targets_from_gui_selection(session, selection, previous_ki
 def _resolve_gui_selection_refresh_result(session, selection, previous_kind, previous_obj):
     if not selection:
         pending_target_ref = session.selection.consume_pending_selected_plan_target()
-        pending_kind, pending_target = plan_target_kinds.unpack_plan_target_ref(pending_target_ref)
         return SelectionRefreshResult(
-            primary_kind=pending_kind,
-            primary_obj=pending_target,
+            primary_target_ref=plan_target_kinds.coerce_plan_target_ref(pending_target_ref),
         )
 
     selected_targets, pending_target_ref = _collect_selected_targets_from_gui_selection(
@@ -317,18 +331,16 @@ def _resolve_gui_selection_refresh_result(session, selection, previous_kind, pre
         selected_targets,
         pending_target_ref=pending_target_ref,
     )
-    target_kind, target_obj = plan_target_kinds.unpack_plan_target_ref(primary_target_ref)
-    if target_kind is None:
+    if primary_target_ref.kind is None:
         return SelectionRefreshResult(pending_target=None)
     pending_selection = primary_target_ref
-    if len(selection) == 1 and target_kind not in (
+    if len(selection) == 1 and primary_target_ref.kind not in (
         plan_target_kinds.PLAN_TARGET_SPACE,
         plan_target_kinds.PLAN_TARGET_REGION,
     ):
         pending_selection = None
     return SelectionRefreshResult(
-        primary_kind=target_kind,
-        primary_obj=target_obj,
+        primary_target_ref=primary_target_ref,
         secondary_targets=tuple(selected_targets),
         pending_target=pending_selection,
     )
