@@ -35,6 +35,7 @@ import Part
 import Sketcher
 from bimcommands import BimPlanSession
 from bimplan import document_visuals as plan_document_visuals
+from bimplan.selection import edit_nodes as plan_edit_nodes
 from bimplan.providers import (
     PlanActionSpec,
     PlanContextPanelSpec,
@@ -1149,7 +1150,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
                 patch.object(session, "is_plan_provider_overlay_visible", return_value=True),
             ):
                 self.assertEqual(
-                    ("provider_overlay_target", "object", marker),
+                    plan_edit_nodes.ProviderOverlayTargetEditNode("object", marker),
                     session.selection.get_edit_node((100, 100)),
                 )
         finally:

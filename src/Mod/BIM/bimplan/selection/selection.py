@@ -7,6 +7,7 @@ from dataclasses import dataclass
 
 import FreeCADGui
 from bimplan.providers import runtime as plan_provider_runtime
+from . import edit_nodes as plan_edit_nodes
 from . import target_dispatch as plan_target_dispatch
 from . import target_kinds as plan_target_kinds
 
@@ -1275,7 +1276,10 @@ def toggle_raw_plan_object_selection(session, obj, event_callback=None):
 
 def toggle_plan_target_selection_at_position(session, mouse_pos, event_callback=None):
     node = session.selection.get_edit_node(mouse_pos)
-    if node and node[0] in ("provider_overlay_point", "provider_overlay_target"):
+    if plan_edit_nodes.get_edit_node_kind(node) in (
+        "provider_overlay_point",
+        "provider_overlay_target",
+    ):
         target_kind, target_obj = session.selection.get_provider_overlay_target_from_edit_node(node)
         if target_obj is not None and not session.selection.is_valid_plan_target(
             target_kind,
