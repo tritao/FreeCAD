@@ -2,7 +2,7 @@
 
 """Runtime helpers for BIM Plan Edit provider integrations."""
 
-from contextlib import nullcontext
+from contextlib import contextmanager, nullcontext
 from dataclasses import dataclass, replace
 
 import FreeCAD
