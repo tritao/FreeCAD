@@ -49,7 +49,10 @@ def project_opening_handle_point(session, opening, handle, point):
     proxy = session.openings.get_opening_plan_proxy(opening, "project_point_to_host_axis")
     if not proxy:
         return point
-    return proxy.project_point_to_host_axis(point, anchor=session._edit_opening_move_anchor)
+    return proxy.project_point_to_host_axis(
+        point,
+        anchor=session.opening_transient_state.edit_opening_move_anchor,
+    )
 
 
 def get_opening_move_anchor_modes(session, opening):
@@ -68,7 +71,7 @@ def execute_opening_handle(session, opening, handle_index, point=None):
         proxy.execute_plan_edit_handle(
             handle_index,
             point,
-            anchor=session._edit_opening_move_anchor,
+            anchor=session.opening_transient_state.edit_opening_move_anchor,
         )
     )
 
@@ -79,7 +82,10 @@ def get_opening_move_preview_state(session, opening, point):
     proxy = session.openings.get_opening_view_proxy(opening, "get_plan_move_preview_state")
     if not proxy:
         return None
-    return proxy.get_plan_move_preview_state(point, anchor=session._edit_opening_move_anchor)
+    return proxy.get_plan_move_preview_state(
+        point,
+        anchor=session.opening_transient_state.edit_opening_move_anchor,
+    )
 
 
 def sync_opening_move_preview(session, opening, point):
@@ -110,7 +116,7 @@ def sync_opening_move_preview(session, opening, point):
             tracker.p1(start)
             tracker.p2(end)
             tracker.on()
-            session._opening_move_preview_trackers.append(tracker)
+            session.opening_transient_state.opening_move_preview_trackers.append(tracker)
 
     guide_start = preview_state.get("guide_start")
     guide_end = preview_state.get("guide_end")
@@ -128,7 +134,7 @@ def sync_opening_move_preview(session, opening, point):
     guide.p1(guide_start)
     guide.p2(guide_end)
     guide.on()
-    session._opening_move_preview_trackers.append(guide)
+    session.opening_transient_state.opening_move_preview_trackers.append(guide)
 
     try:
         dim = DraftTrackers.archDimTracker(mode=1)
@@ -139,36 +145,43 @@ def sync_opening_move_preview(session, opening, point):
     dim.p1(guide_start)
     dim.p2(guide_end)
     dim.on()
-    session._opening_move_preview_trackers.append(dim)
+    session.opening_transient_state.opening_move_preview_trackers.append(dim)
 
 
 def clear_opening_move_preview(session):
-    session.overlays.finalize_trackers(session._opening_move_preview_trackers)
-    session._opening_move_preview_trackers = []
+    opening_transient_state = session.opening_transient_state
+    session.overlays.finalize_trackers(opening_transient_state.opening_move_preview_trackers)
+    opening_transient_state.opening_move_preview_trackers = []
 
 
 def cycle_opening_move_anchor(session):
     if session.current_tool != "Move Opening":
         return False
-    anchor_modes = session.openings.get_opening_move_anchor_modes(session._edit_opening)
+    interaction_state = session.interaction_state
+    opening_transient_state = session.opening_transient_state
+    anchor_modes = session.openings.get_opening_move_anchor_modes(interaction_state.edit_opening)
     try:
-        current_index = anchor_modes.index(session._edit_opening_move_anchor)
+        current_index = anchor_modes.index(opening_transient_state.edit_opening_move_anchor)
     except ValueError:
         current_index = 0
-    session._edit_opening_move_anchor = anchor_modes[(current_index + 1) % len(anchor_modes)]
+    opening_transient_state.edit_opening_move_anchor = anchor_modes[
+        (current_index + 1) % len(anchor_modes)
+    ]
     return True
 
 
 def refresh_opening_move_preview_from_raw_point(session):
-    opening = session._edit_opening
-    handle_index = session._edit_opening_handle_index
+    interaction_state = session.interaction_state
+    opening_transient_state = session.opening_transient_state
+    opening = interaction_state.edit_opening
+    handle_index = interaction_state.edit_opening_handle_index
     if not opening or handle_index is None:
         return
     handles = session.openings.get_selected_opening_edit_handles(opening)
     if handle_index < 0 or handle_index >= len(handles):
         return
     handle = handles[handle_index]
-    raw_point = session._edit_opening_move_raw_point
+    raw_point = opening_transient_state.edit_opening_move_raw_point
     if raw_point is None:
         raw_point = handle.point
     point = session.openings.project_opening_handle_point(opening, handle, raw_point)
@@ -232,10 +245,12 @@ def start_opening_handle_point_pick(session, opening, handle_index, handle):
             session.selection.set_hovered_wall(None)
             session.selection.set_hovered_opening(None)
             session.overlays.sync_secondary_selected_overlays()
-            session._edit_opening = opening
-            session._edit_opening_handle_index = handle_index
-            session._edit_opening_move_anchor = "center"
-            session._edit_opening_move_raw_point = FreeCAD.Vector(handle.point)
+            interaction_state = session.interaction_state
+            opening_transient_state = session.opening_transient_state
+            interaction_state.edit_opening = opening
+            interaction_state.edit_opening_handle_index = handle_index
+            opening_transient_state.edit_opening_move_anchor = "center"
+            opening_transient_state.edit_opening_move_raw_point = FreeCAD.Vector(handle.point)
             session.overlays.clear_selected_opening_overlay()
             session.overlays.clear_selected_opening_handles()
         with session.performance.plan_perf_trace_span("start_opening_handle_preview"):
@@ -260,8 +275,10 @@ def start_opening_handle_point_pick(session, opening, handle_index, handle):
 
 def update_opening_handle_point_pick(session, point=None, snap_info=None):
     del snap_info
-    opening = session._edit_opening
-    handle_index = session._edit_opening_handle_index
+    interaction_state = session.interaction_state
+    opening_transient_state = session.opening_transient_state
+    opening = interaction_state.edit_opening
+    handle_index = interaction_state.edit_opening_handle_index
     if not opening or handle_index is None:
         session.openings.clear_opening_move_preview()
         return
@@ -270,25 +287,29 @@ def update_opening_handle_point_pick(session, point=None, snap_info=None):
         session.openings.clear_opening_move_preview()
         return
     handle = handles[handle_index]
-    session._edit_opening_move_raw_point = FreeCAD.Vector(point) if point is not None else None
+    opening_transient_state.edit_opening_move_raw_point = (
+        FreeCAD.Vector(point) if point is not None else None
+    )
     point = session.openings.project_opening_handle_point(opening, handle, point)
     session.openings.sync_opening_move_preview(opening, point)
 
 
 def finish_opening_handle_point_pick(session, point=None, obj=None):
     del obj
-    opening = session._edit_opening
-    handle_index = session._edit_opening_handle_index
-    session._edit_opening = None
-    session._edit_opening_handle_index = None
+    interaction_state = session.interaction_state
+    opening_transient_state = session.opening_transient_state
+    opening = interaction_state.edit_opening
+    handle_index = interaction_state.edit_opening_handle_index
+    interaction_state.edit_opening = None
+    interaction_state.edit_opening_handle_index = None
     session.snap.pop_opening_move_snap_profile()
     FreeCAD.activeDraftCommand = None
     session.openings.clear_opening_move_preview()
-    session._edit_opening_move_raw_point = None
+    opening_transient_state.edit_opening_move_raw_point = None
 
     if point is None or not opening:
         session.current_tool = "Select"
-        session._edit_opening_move_anchor = "center"
+        opening_transient_state.edit_opening_move_anchor = "center"
         session.overlays.sync_selected_opening_overlay()
         session.overlays.sync_selected_opening_handles()
         session.task_panels.refresh_task_panel_status()
@@ -297,7 +318,7 @@ def finish_opening_handle_point_pick(session, point=None, obj=None):
     handles = session.openings.get_selected_opening_edit_handles(opening)
     if handle_index is None or handle_index < 0 or handle_index >= len(handles):
         session.current_tool = "Select"
-        session._edit_opening_move_anchor = "center"
+        opening_transient_state.edit_opening_move_anchor = "center"
         session.task_panels.refresh_task_panel_status()
         return
     handle = handles[handle_index]
@@ -313,28 +334,30 @@ def finish_opening_handle_point_pick(session, point=None, obj=None):
     except Exception:
         try:
             session.doc.abortTransaction()
-        except Exception:
+        except (ReferenceError, RuntimeError):
             pass
-        session._edit_opening_move_anchor = "center"
+        opening_transient_state.edit_opening_move_anchor = "center"
         session.openings.restore_selected_opening(opening)
         return
 
-    session._edit_opening_move_anchor = "center"
+    opening_transient_state.edit_opening_move_anchor = "center"
     session.current_tool = "Select"
     session.task_panels.refresh_task_panel_status()
     session.openings.queue_restore_selected_opening(opening)
 
 
 def cancel_opening_handle_point_pick(session):
-    opening = session._edit_opening
-    session._edit_opening = None
-    session._edit_opening_handle_index = None
+    interaction_state = session.interaction_state
+    opening_transient_state = session.opening_transient_state
+    opening = interaction_state.edit_opening
+    interaction_state.edit_opening = None
+    interaction_state.edit_opening_handle_index = None
     session.lifecycle.stop_snapper()
     session.snap.pop_opening_move_snap_profile()
     FreeCAD.activeDraftCommand = None
     session.openings.clear_opening_move_preview()
-    session._edit_opening_move_anchor = "center"
-    session._edit_opening_move_raw_point = None
+    opening_transient_state.edit_opening_move_anchor = "center"
+    opening_transient_state.edit_opening_move_raw_point = None
     session.current_tool = "Select"
     if opening:
         session.selection.set_selected_plan_target("opening", opening, pending_restore=True)
@@ -380,7 +403,7 @@ def execute_selected_opening_handle(session, opening, handle_index, handle):
     except Exception:
         try:
             session.doc.abortTransaction()
-        except Exception:
+        except (ReferenceError, RuntimeError):
             pass
         return
     session.selection.set_selected_plan_target("opening", opening, pending_restore=True)

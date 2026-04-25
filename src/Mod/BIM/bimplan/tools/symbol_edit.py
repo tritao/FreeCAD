@@ -77,7 +77,8 @@ class PlanSymbolsAPI:
 def get_symbol_handle_placement(session, symbol, handle_role, point):
     if not session.visibility.is_plan_symbol_instance(symbol) or point is None or not handle_role:
         return None
-    start_placement = session._edit_symbol_start_placement
+    interaction_state = session.interaction_state
+    start_placement = interaction_state.edit_symbol_start_placement
     if start_placement is None:
         start_placement = session.visibility.copy_placement(getattr(symbol, "Placement", None))
     point = session.overlays.resolve_symbol_handle_target_point(
@@ -107,7 +108,7 @@ def get_symbol_handle_placement(session, symbol, handle_role, point):
         return None
 
     anchor = FreeCAD.Vector(anchor_global.x, anchor_global.y, anchor_global.z)
-    reference_point = session._edit_symbol_reference_point
+    reference_point = interaction_state.edit_symbol_reference_point
     if reference_point is None:
         specs = dict(
             (role, handle_point)
@@ -220,21 +221,22 @@ def start_symbol_handle_point_pick(session, symbol, handle_role):
             session.selection.set_hovered_opening(None)
             session.selection.set_hovered_symbol(None)
             session.overlays.sync_secondary_selected_overlays()
-            session._edit_symbol = symbol
-            session._edit_symbol_handle_role = handle_role
-            session._edit_symbol_start_placement = session.visibility.copy_placement(
+            interaction_state = session.interaction_state
+            interaction_state.edit_symbol = symbol
+            interaction_state.edit_symbol_handle_role = handle_role
+            interaction_state.edit_symbol_start_placement = session.visibility.copy_placement(
                 getattr(symbol, "Placement", None)
             )
-            session._edit_symbol_reference_point = FreeCAD.Vector(start_point)
+            interaction_state.edit_symbol_reference_point = FreeCAD.Vector(start_point)
             session.overlays.clear_selected_symbol_overlay()
             session.overlays.clear_selected_symbol_handles()
         with session.performance.plan_perf_trace_span("start_symbol_handle_preview"):
             anchor = session.symbols.get_symbol_anchor_point(
-                symbol, placement=session._edit_symbol_start_placement
+                symbol, placement=interaction_state.edit_symbol_start_placement
             )
             session.symbols.sync_symbol_edit_preview(
                 symbol,
-                session._edit_symbol_start_placement,
+                interaction_state.edit_symbol_start_placement,
                 guide_start=anchor,
                 guide_end=start_point,
             )
@@ -260,13 +262,14 @@ def start_symbol_handle_point_pick(session, symbol, handle_role):
 
 def update_symbol_handle_point_pick(session, point=None, snap_info=None):
     del snap_info
-    symbol = session._edit_symbol
-    handle_role = session._edit_symbol_handle_role
+    interaction_state = session.interaction_state
+    symbol = interaction_state.edit_symbol
+    handle_role = interaction_state.edit_symbol_handle_role
     if not symbol or not handle_role:
         session.symbols.clear_symbol_edit_preview()
         return
     target_point = session.overlays.resolve_symbol_handle_target_point(
-        symbol, handle_role, point, placement=session._edit_symbol_start_placement
+        symbol, handle_role, point, placement=interaction_state.edit_symbol_start_placement
     )
     if target_point is None:
         session.symbols.clear_symbol_edit_preview()
@@ -276,7 +279,7 @@ def update_symbol_handle_point_pick(session, point=None, snap_info=None):
         session.symbols.clear_symbol_edit_preview()
         return
     guide_start = session.symbols.get_symbol_anchor_point(
-        symbol, placement=session._edit_symbol_start_placement
+        symbol, placement=interaction_state.edit_symbol_start_placement
     )
     guide_end = (
         session.symbols.get_symbol_anchor_point(symbol, placement=placement)
@@ -290,14 +293,15 @@ def update_symbol_handle_point_pick(session, point=None, snap_info=None):
 
 def finish_symbol_handle_point_pick(session, point=None, obj=None):
     del obj
-    symbol = session._edit_symbol
-    handle_role = session._edit_symbol_handle_role
-    start_placement = session._edit_symbol_start_placement
-    reference_point = session._edit_symbol_reference_point
-    session._edit_symbol = None
-    session._edit_symbol_handle_role = None
-    session._edit_symbol_start_placement = None
-    session._edit_symbol_reference_point = None
+    interaction_state = session.interaction_state
+    symbol = interaction_state.edit_symbol
+    handle_role = interaction_state.edit_symbol_handle_role
+    start_placement = interaction_state.edit_symbol_start_placement
+    reference_point = interaction_state.edit_symbol_reference_point
+    interaction_state.edit_symbol = None
+    interaction_state.edit_symbol_handle_role = None
+    interaction_state.edit_symbol_start_placement = None
+    interaction_state.edit_symbol_reference_point = None
     FreeCAD.activeDraftCommand = None
     session.symbols.clear_symbol_edit_preview()
 
@@ -306,11 +310,11 @@ def finish_symbol_handle_point_pick(session, point=None, obj=None):
         session.symbols.restore_selected_symbol(symbol)
         return
 
-    session._edit_symbol_start_placement = start_placement
-    session._edit_symbol_reference_point = reference_point
+    interaction_state.edit_symbol_start_placement = start_placement
+    interaction_state.edit_symbol_reference_point = reference_point
     placement = session.symbols.get_symbol_handle_placement(symbol, handle_role, point)
-    session._edit_symbol_start_placement = None
-    session._edit_symbol_reference_point = None
+    interaction_state.edit_symbol_start_placement = None
+    interaction_state.edit_symbol_reference_point = None
     if placement is None:
         session.current_tool = "Select"
         session.symbols.restore_selected_symbol(symbol)
@@ -329,7 +333,7 @@ def finish_symbol_handle_point_pick(session, point=None, obj=None):
     except Exception:
         try:
             session.doc.abortTransaction()
-        except Exception:
+        except (ReferenceError, RuntimeError):
             pass
         session.current_tool = "Select"
         session.symbols.restore_selected_symbol(symbol)
@@ -340,11 +344,12 @@ def finish_symbol_handle_point_pick(session, point=None, obj=None):
 
 
 def cancel_symbol_handle_point_pick(session):
-    symbol = session._edit_symbol
-    session._edit_symbol = None
-    session._edit_symbol_handle_role = None
-    session._edit_symbol_start_placement = None
-    session._edit_symbol_reference_point = None
+    interaction_state = session.interaction_state
+    symbol = interaction_state.edit_symbol
+    interaction_state.edit_symbol = None
+    interaction_state.edit_symbol_handle_role = None
+    interaction_state.edit_symbol_start_placement = None
+    interaction_state.edit_symbol_reference_point = None
     session.lifecycle.stop_snapper()
     FreeCAD.activeDraftCommand = None
     session.symbols.clear_symbol_edit_preview()
