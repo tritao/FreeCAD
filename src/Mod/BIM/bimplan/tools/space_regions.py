@@ -11,7 +11,7 @@ from bimplan.tools import space_geometry as plan_space_geometry
 translate = FreeCAD.Qt.translate
 
 
-def get_space_region_candidate_report(session, boundaries, label=None, seed_space=None):
+def build_space_region_candidate_report(session, boundaries, label=None, seed_space=None):
     import ArchSpace
 
     report = ArchSpace.getBoundaryRegionCandidates(
@@ -390,9 +390,9 @@ def create_space_region_base_object(session, candidate):
     return base
 
 
-def begin_space_region_pick(session, boundaries, label=None, seed_space=None, report=None):
+def start_space_region_pick(session, boundaries, label=None, seed_space=None, report=None):
     if report is None:
-        report = session.spaces.get_space_region_candidate_report(
+        report = session.spaces.build_space_region_candidate_report(
             boundaries,
             label=label,
             seed_space=seed_space,
@@ -466,7 +466,7 @@ def create_space_from_current_selection(session):
     import Arch
     import ArchSpace
 
-    request = session.spaces.get_space_creation_request()
+    request = session.spaces.build_space_creation_request()
     if not request:
         FreeCAD.Console.PrintWarning(
             translate(
@@ -488,7 +488,7 @@ def create_space_from_current_selection(session):
         return False
 
     if region_seed_space is not None:
-        report = session.spaces.get_space_region_candidate_report(
+        report = session.spaces.build_space_region_candidate_report(
             boundaries,
             label=request.get("label"),
             seed_space=region_seed_space,
@@ -503,7 +503,7 @@ def create_space_from_current_selection(session):
 
     report = ArchSpace.analyzeBoundaryLinks(boundaries)
     if report.get("code") == "multiple_regions":
-        region_report = session.spaces.get_space_region_candidate_report(
+        region_report = session.spaces.build_space_region_candidate_report(
             boundaries,
             label=report.get("label"),
         )

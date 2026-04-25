@@ -7086,7 +7086,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         self.pump_gui_events()
         session.selection.refresh_primary_selected_plan_target()
 
-        request = session.spaces.get_space_creation_request()
+        request = session.spaces.build_space_creation_request()
         self.assertIsNotNone(request)
         self.assertIn(separator, [obj for obj, _subnames in request["boundaries"]])
 
@@ -7125,7 +7125,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         session.selection.refresh_primary_selected_plan_target()
 
         self.assertIs(session.selection.get_selected_target_for_kind("space"), space)
-        request = session.spaces.get_space_creation_request()
+        request = session.spaces.build_space_creation_request()
         self.assertIsNotNone(request)
         self.assertIs(request["region_seed_space"], space)
         self.assertIn(separator, [obj for obj, _subnames in request["boundaries"]])
@@ -7373,7 +7373,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
 
         before = {obj.Name for obj in self.document.Objects}
 
-        self.assertTrue(session.spaces.begin_space_region_pick(boundaries, label="Two Rooms"))
+        self.assertTrue(session.spaces.start_space_region_pick(boundaries, label="Two Rooms"))
         self.pump_gui_events()
 
         self.assertEqual(session.current_tool, "Pick Space Region")
@@ -7595,7 +7595,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
 
         before = {obj.Name for obj in self.document.Objects}
 
-        self.assertTrue(session.spaces.begin_space_region_pick(boundaries, label="Two Rooms"))
+        self.assertTrue(session.spaces.start_space_region_pick(boundaries, label="Two Rooms"))
         self.pump_gui_events()
 
         created_spaces = [

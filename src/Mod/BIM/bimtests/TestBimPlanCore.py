@@ -111,10 +111,10 @@ from bimplan.selection import (
     resolve_selected_target_for_gui_object,
 )
 from bimplan.tools.spaces import (
-    begin_space_region_pick,
+    start_space_region_pick,
     create_space_from_current_selection,
-    get_space_creation_request,
-    get_space_region_seed_targets,
+    build_space_creation_request,
+    resolve_space_region_seed_targets,
     should_run_space_preflight_for_targets,
 )
 from bimplan.selection.target_dispatch import (
@@ -480,10 +480,10 @@ class TestBimPlanCore(unittest.TestCase):
             return_value=wall,
         ) as get_selected_target_for_kind, patch.object(
             PlanSpacesAPI,
-            "get_space_preflight_report",
+            "build_space_preflight_report",
             autospec=True,
             return_value={"ready": True},
-        ) as get_space_preflight_report, patch.object(
+        ) as build_space_preflight_report, patch.object(
             PlanStatusTextAPI,
             "get_status_chip_text",
             autospec=True,
@@ -546,7 +546,7 @@ class TestBimPlanCore(unittest.TestCase):
             self.assertIs(wall, session.selection.get_selected_target_for_kind("wall"))
             self.assertEqual(
                 {"ready": True},
-                session.spaces.get_space_preflight_report(targets=targets),
+                session.spaces.build_space_preflight_report(targets=targets),
             )
             self.assertTrue(session.windows.can_place_window())
             self.assertTrue(session.interaction.is_modal_plan_interaction_active())
@@ -571,7 +571,7 @@ class TestBimPlanCore(unittest.TestCase):
             )
 
         get_selected_target_for_kind.assert_called_once_with(session.selection, "wall")
-        get_space_preflight_report.assert_called_once_with(session.spaces, targets=targets)
+        build_space_preflight_report.assert_called_once_with(session.spaces, targets=targets)
         get_status_chip_text.assert_called_once_with(session.status_text)
         get_plan_view_height.assert_called_once_with(session.viewport)
         is_modal_plan_interaction_active.assert_called_once_with(session.interaction)
@@ -1267,7 +1267,7 @@ class TestBimPlanCore(unittest.TestCase):
             events,
         )
 
-    def test_begin_space_region_pick_auto_creates_single_remaining_candidate(self):
+    def test_start_space_region_pick_auto_creates_single_remaining_candidate(self):
         candidate = {"area": 12.0}
         created_space = SimpleNamespace(Name="Space001")
         calls = []
@@ -1299,7 +1299,7 @@ class TestBimPlanCore(unittest.TestCase):
         }
 
         with patch("FreeCAD.Console.PrintMessage") as print_message:
-            self.assertTrue(begin_space_region_pick(session, boundaries, report=report))
+            self.assertTrue(start_space_region_pick(session, boundaries, report=report))
 
         self.assertEqual("Select", session.current_tool)
         self.assertEqual(
@@ -1332,7 +1332,7 @@ class TestBimPlanCore(unittest.TestCase):
             ),
         )
 
-        request = get_space_creation_request(session)
+        request = build_space_creation_request(session)
 
         self.assertTrue(
             should_run_space_preflight_for_targets([("wall", wall_a), ("wall", wall_b)])
@@ -1350,8 +1350,8 @@ class TestBimPlanCore(unittest.TestCase):
             ),
             selection=SimpleNamespace(get_selected_plan_targets=lambda: [("space", space)]),
         )
-        self.assertEqual((None, []), get_space_region_seed_targets(empty_session))
-        self.assertIsNone(get_space_creation_request(empty_session))
+        self.assertEqual((None, []), resolve_space_region_seed_targets(empty_session))
+        self.assertIsNone(build_space_creation_request(empty_session))
 
         seeded_session = SimpleNamespace(
             spaces=SimpleNamespace(
@@ -1361,8 +1361,8 @@ class TestBimPlanCore(unittest.TestCase):
             ),
             selection=SimpleNamespace(get_selected_plan_targets=lambda: [("space", space)]),
         )
-        self.assertEqual((space, []), get_space_region_seed_targets(seeded_session))
-        request = get_space_creation_request(seeded_session)
+        self.assertEqual((space, []), resolve_space_region_seed_targets(seeded_session))
+        request = build_space_creation_request(seeded_session)
         self.assertIsNotNone(request)
         self.assertEqual("Living Room", request["label"])
         self.assertIs(space, request["region_seed_space"])
@@ -1383,8 +1383,8 @@ class TestBimPlanCore(unittest.TestCase):
         )
 
         self.assertTrue(should_run_space_preflight_for_targets(targets))
-        self.assertEqual((space, [("wall", wall)]), get_space_region_seed_targets(session))
-        request = get_space_creation_request(session)
+        self.assertEqual((space, [("wall", wall)]), resolve_space_region_seed_targets(session))
+        request = build_space_creation_request(session)
         self.assertIsNotNone(request)
         self.assertIs(space, request["region_seed_space"])
         self.assertEqual([boundary], request["boundaries"])
