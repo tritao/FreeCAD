@@ -49,8 +49,13 @@ class PlanEditContext:
         return tuple(self.session.selection.get_selected_objects() or ())
 
     def get_selected_semantic_records(self):
+        from bimplan.providers import runtime as plan_provider_runtime
+
         return tuple(
-            self.session.providers.get_plan_semantic_records(targets=self.get_selected_targets())
+            plan_provider_runtime.get_plan_semantic_records(
+                self.session,
+                targets=self.get_selected_targets(),
+            )
             or ()
         )
 
