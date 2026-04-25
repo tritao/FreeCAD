@@ -1090,7 +1090,7 @@ def activate_plan_target(
 
 
 def activate_semantic_plan_target(session, mouse_pos, event_callback=None):
-    target_ref = get_hovered_plan_target(session)
+    target_ref = plan_selection_picking.get_hovered_plan_target(session)
     if target_ref.obj is None or session._hover_pick_dirty:
         target_ref = plan_selection_picking.get_plan_target_at_position(session, mouse_pos)
         source = "picked_after_throttled_hover" if session._hover_pick_dirty else "picked"
