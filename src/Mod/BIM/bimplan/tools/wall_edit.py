@@ -1214,6 +1214,55 @@ def update_wall_edit_readouts_in_place(session, points, active_mode=None):
         tracker.on()
 
 
+def _make_wall_edit_readout_tracker(session, DraftTrackers, mode):
+    try:
+        if session.wall_edit.is_wall_readout_edit_active():
+            return DraftTrackers.editableArchDimTracker(mode=mode)
+        return DraftTrackers.archDimTracker(mode=mode)
+    except Exception:
+        return None
+
+
+def _configure_wall_edit_readout_tracker(session, dim, mode, start, end, readout_color):
+    try:
+        if hasattr(dim, "dimnode"):
+            dim.dimnode.textColor.setValue(readout_color)
+        else:
+            dim.setColor(readout_color)
+    except Exception:
+        pass
+    offset = session.wall_edit.get_wall_edit_readout_offset(mode)
+    if offset is not None:
+        dim.offset = offset
+    dim.p1(start)
+    dim.p2(end)
+    dim.on()
+    if session.wall_edit.is_wall_readout_edit_active() and hasattr(dim, "setValueChangedCallback"):
+        session.wall_edit.bind_wall_edit_readout_callbacks(dim, mode)
+
+
+def _track_active_wall_edit_readout(session, dim, mode, active_mode):
+    if (
+        session.wall_edit.is_wall_readout_edit_active()
+        and hasattr(dim, "setValueChangedCallback")
+        and mode == active_mode
+    ):
+        session._wall_edit_active_readout_mode = mode
+        session._wall_edit_active_readout_tracker = dim
+    if session._wall_edit_active_readout_tracker is None:
+        session._wall_edit_active_readout_tracker = dim
+
+
+def _sync_wall_edit_readout_trackers(session, DraftTrackers, dims, active_mode, readout_color):
+    for mode, start, end in dims:
+        dim = _make_wall_edit_readout_tracker(session, DraftTrackers, mode)
+        if dim is None:
+            continue
+        _configure_wall_edit_readout_tracker(session, dim, mode, start, end, readout_color)
+        _track_active_wall_edit_readout(session, dim, mode, active_mode)
+        session._wall_edit_readout_trackers.append(dim)
+
+
 def sync_wall_edit_readout(session, points):
     session.wall_edit.clear_wall_edit_readout()
     if not points or len(points) != 2 or not session._edit_endpoints:
@@ -1227,38 +1276,13 @@ def sync_wall_edit_readout(session, points):
     dims = session.wall_edit.get_wall_edit_readout_specs(points)
     active_mode = session.wall_edit.get_default_wall_edit_readout_mode(dims)
     session._wall_edit_active_readout_mode = active_mode
-
-    for mode, start, end in dims:
-        try:
-            if session.wall_edit.is_wall_readout_edit_active():
-                dim = DraftTrackers.editableArchDimTracker(mode=mode)
-            else:
-                dim = DraftTrackers.archDimTracker(mode=mode)
-        except Exception:
-            continue
-        try:
-            if hasattr(dim, "dimnode"):
-                dim.dimnode.textColor.setValue(readout_color)
-            else:
-                dim.setColor(readout_color)
-        except Exception:
-            pass
-        offset = session.wall_edit.get_wall_edit_readout_offset(mode)
-        if offset is not None:
-            dim.offset = offset
-        dim.p1(start)
-        dim.p2(end)
-        dim.on()
-        if session.wall_edit.is_wall_readout_edit_active() and hasattr(
-            dim, "setValueChangedCallback"
-        ):
-            session.wall_edit.bind_wall_edit_readout_callbacks(dim, mode)
-            if mode == active_mode:
-                session._wall_edit_active_readout_mode = mode
-                session._wall_edit_active_readout_tracker = dim
-        if session._wall_edit_active_readout_tracker is None:
-            session._wall_edit_active_readout_tracker = dim
-        session._wall_edit_readout_trackers.append(dim)
+    _sync_wall_edit_readout_trackers(
+        session,
+        DraftTrackers,
+        dims,
+        active_mode,
+        readout_color,
+    )
 
 
 def clear_wall_edit_readout(session):
