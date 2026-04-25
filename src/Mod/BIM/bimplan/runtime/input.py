@@ -62,7 +62,7 @@ def claim_left_button_click(session, event_callback):
     # Plan Edit owns overlay-driven picks, so also swallow the matching
     # button release to prevent the base 3D view selection pass from
     # clearing or replacing the GUI selection afterwards.
-    session._consume_left_button_release = True
+    session.input_event_state.consume_left_button_release = True
     session.input.set_event_handled(event_callback)
 
 
@@ -151,15 +151,15 @@ def _handle_select_tool_mouse_down(session, mouse_pos, event_callback):
 
 
 def _handle_left_mouse_button_release(session, event_callback):
-    if not session._consume_left_button_release:
+    if not session.input_event_state.consume_left_button_release:
         return False
-    session._consume_left_button_release = False
+    session.input_event_state.consume_left_button_release = False
     session.input.set_event_handled(event_callback)
     return True
 
 
 def _handle_left_mouse_button_down(session, mouse_pos, event_callback):
-    session._consume_left_button_release = False
+    session.input_event_state.consume_left_button_release = False
     if session.current_tool == "Join":
         _handle_join_tool_mouse_down(session, mouse_pos, event_callback)
         return
@@ -259,7 +259,10 @@ def on_mouse_moved(session, event_callback):
             return
         if not session.selection.update_hovered_plan_target(mouse_pos):
             return
-        if session._grip_trackers or session.selection.is_selected_plan_target("wall"):
+        if (
+            session.overlay_tracker_state.grip_trackers
+            or session.selection.is_selected_plan_target("wall")
+        ):
             session.overlays.sync_wall_grips()
         session.viewport.request_view_redraw()
         hovered_after = session.selection.get_hovered_plan_target()
@@ -367,7 +370,7 @@ def _handle_wall_edit_key_press(session, key, event_callback, coin):
 
 
 def _handle_escape_cancels(session):
-    if session._edit_wall and session.current_tool != "Select":
+    if session.wall_edit_state.edit_wall and session.current_tool != "Select":
         session.wall_edit.cancel_wall_edit_point_pick()
         return True
     if session.current_tool == "Move Opening":

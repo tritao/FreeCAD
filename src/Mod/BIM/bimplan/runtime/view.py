@@ -228,14 +228,15 @@ def find_main_window_action(session, command_name):
 
 
 def capture_view_action_state(session, locked_actions):
+    viewport_state = session.viewport_state
     for command_name in locked_actions:
-        if command_name in session._saved_view_action_state:
+        if command_name in viewport_state.saved_view_action_state:
             continue
         action = find_main_window_action(session, command_name)
         if action is None:
             continue
         try:
-            session._saved_view_action_state[command_name] = bool(action.isEnabled())
+            viewport_state.saved_view_action_state[command_name] = bool(action.isEnabled())
         except Exception:
             pass
 
@@ -253,7 +254,7 @@ def apply_locked_view_actions(session, locked_actions):
 
 
 def restore_locked_view_actions(session):
-    for command_name, enabled in session._saved_view_action_state.items():
+    for command_name, enabled in session.viewport_state.saved_view_action_state.items():
         action = find_main_window_action(session, command_name)
         if action is None:
             continue
@@ -264,19 +265,20 @@ def restore_locked_view_actions(session):
 
 
 def capture_navigation_flag(session, target, getter_name, state_key):
-    if state_key in session._saved_navigation_state:
+    viewport_state = session.viewport_state
+    if state_key in viewport_state.saved_navigation_state:
         return
     getter = session.viewport.get_runtime_attr(target, getter_name)
     if getter is None:
         return
     try:
-        session._saved_navigation_state[state_key] = bool(getter())
+        viewport_state.saved_navigation_state[state_key] = bool(getter())
     except (AttributeError, ReferenceError, RuntimeError):
         session.viewport.discard_stale_runtime_object(target)
 
 
 def apply_navigation_flag(session, target, setter_name, state_key, enabled):
-    if state_key not in session._saved_navigation_state:
+    if state_key not in session.viewport_state.saved_navigation_state:
         return
     setter = session.viewport.get_runtime_attr(target, setter_name)
     if setter is None:
@@ -288,9 +290,10 @@ def apply_navigation_flag(session, target, setter_name, state_key, enabled):
 
 
 def capture_navigation_state(session):
+    viewport_state = session.viewport_state
     nav_style = get_navigation_style(session)
     if nav_style:
-        session._saved_navigation_style = nav_style
+        viewport_state.saved_navigation_style = nav_style
     capture_navigation_flag(session, nav_style, "isRotationEnabled", "rotation_enabled")
     capture_navigation_flag(session, nav_style, "isOrientationLocked", "orientation_locked")
     if session.viewport.get_runtime_attr(session.viewer, "setNaviCubeEnabledOverride") is None:
@@ -336,7 +339,7 @@ def clear_plan_background_override(session):
 
 def apply_plan_navigation_profile(session, locked_actions):
     capture_navigation_state(session)
-    nav_style = session._saved_navigation_style or get_navigation_style(session)
+    nav_style = session.viewport_state.saved_navigation_style or get_navigation_style(session)
     apply_navigation_flag(
         session,
         nav_style,
@@ -370,20 +373,21 @@ def apply_plan_navigation_profile(session, locked_actions):
 
 
 def restore_navigation_state(session):
-    nav_style = session._saved_navigation_style or get_navigation_style(session)
+    viewport_state = session.viewport_state
+    nav_style = viewport_state.saved_navigation_style or get_navigation_style(session)
     apply_navigation_flag(
         session,
         nav_style,
         "setRotationEnabled",
         "rotation_enabled",
-        session._saved_navigation_state.get("rotation_enabled"),
+        viewport_state.saved_navigation_state.get("rotation_enabled"),
     )
     apply_navigation_flag(
         session,
         nav_style,
         "setOrientationLocked",
         "orientation_locked",
-        session._saved_navigation_state.get("orientation_locked"),
+        viewport_state.saved_navigation_state.get("orientation_locked"),
     )
     clear_navicube_override = session.viewport.get_runtime_attr(
         session.viewer, "clearNaviCubeEnabledOverride"
@@ -399,14 +403,14 @@ def restore_navigation_state(session):
             session.viewer,
             "setEnabledNaviCube",
             "navicube_enabled",
-            session._saved_navigation_state.get("navicube_enabled"),
+            viewport_state.saved_navigation_state.get("navicube_enabled"),
         )
     apply_navigation_flag(
         session,
         session.view,
         "setCornerCrossVisible",
         "corner_cross_visible",
-        session._saved_navigation_state.get("corner_cross_visible"),
+        viewport_state.saved_navigation_state.get("corner_cross_visible"),
     )
     restore_locked_view_actions(session)
 
@@ -416,7 +420,7 @@ def _get_view_preferences():
 
 
 def capture_preselection_state(session):
-    if getattr(session, "_saved_preselection_state", None) is not None:
+    if session.viewport_state.saved_preselection_state is not None:
         return
     params = _get_view_preferences()
     try:
@@ -427,7 +431,7 @@ def capture_preselection_state(session):
         enabled = bool(params.GetBool(_ENABLE_PRESELECTION_PARAM, True))
     except Exception:
         enabled = True
-    session._saved_preselection_state = (has_preselection_param, enabled)
+    session.viewport_state.saved_preselection_state = (has_preselection_param, enabled)
 
 
 def force_plan_preselection(session):
@@ -437,17 +441,18 @@ def force_plan_preselection(session):
         if bool(params.GetBool(_ENABLE_PRESELECTION_PARAM, True)):
             return
         params.SetBool(_ENABLE_PRESELECTION_PARAM, True)
-        session._plan_preselection_forced = True
+        session.viewport_state.plan_preselection_forced = True
     except Exception:
         pass
 
 
 def restore_preselection_state(session):
-    state = getattr(session, "_saved_preselection_state", None)
+    viewport_state = session.viewport_state
+    state = viewport_state.saved_preselection_state
     if state is None:
         return
-    session._saved_preselection_state = None
-    session._plan_preselection_forced = False
+    viewport_state.saved_preselection_state = None
+    viewport_state.plan_preselection_forced = False
     had_preselection_param, enabled = state
     params = _get_view_preferences()
     try:
@@ -488,8 +493,8 @@ def apply_plan_view(session, fit=True):
         wp.set_to_top(offset=offset)
         _update_working_plane(wp)
 
-        session._interaction_plane = WorkingPlane.PlaneBase()
-        session._interaction_plane.set_to_top(offset=offset)
+        session.viewport_state.interaction_plane = WorkingPlane.PlaneBase()
+        session.viewport_state.interaction_plane.set_to_top(offset=offset)
 
     if session.active_storey:
         with session.performance.plan_perf_trace_span("apply_plan_view_set_active_object"):
@@ -512,7 +517,7 @@ def restore_state(session):
     restore_preselection_state(session)
     session.visibility.restore_object_view_state()
     session.snap.restore_snap_profile()
-    session._interaction_plane = None
+    session.viewport_state.interaction_plane = None
 
     if session.viewer:
         try:
@@ -521,18 +526,19 @@ def restore_state(session):
         except RuntimeError:
             session.viewer = None
 
-    if session.view and session._saved_camera_type:
+    viewport_state = session.viewport_state
+    if session.view and viewport_state.saved_camera_type:
         try:
-            session.view.setCameraType(session._saved_camera_type)
+            session.view.setCameraType(viewport_state.saved_camera_type)
         except RuntimeError:
             session.view = None
-    if session.view and session._saved_camera:
+    if session.view and viewport_state.saved_camera:
         try:
-            session.view.setCamera(session._saved_camera)
+            session.view.setCamera(viewport_state.saved_camera)
         except RuntimeError:
             session.view = None
 
-    wp = session._working_plane or WorkingPlane.get_working_plane(update=False)
+    wp = viewport_state.working_plane or WorkingPlane.get_working_plane(update=False)
     restore = getattr(wp, "restore", None)
     if callable(restore):
         try:
@@ -550,18 +556,18 @@ def capture_state(session):
     get_camera = session.viewport.get_runtime_attr(session.view, "getCamera")
     if get_camera is not None:
         try:
-            session._saved_camera = get_camera()
+            session.viewport_state.saved_camera = get_camera()
         except (AttributeError, ReferenceError, RuntimeError):
             session.viewport.discard_stale_runtime_object(session.view)
     get_camera_type = session.viewport.get_runtime_attr(session.view, "getCameraType")
     if get_camera_type is not None:
         try:
-            session._saved_camera_type = get_camera_type()
+            session.viewport_state.saved_camera_type = get_camera_type()
         except (AttributeError, ReferenceError, RuntimeError):
             session.viewport.discard_stale_runtime_object(session.view)
 
-    session._working_plane = WorkingPlane.get_working_plane(update=False)
-    save = getattr(session._working_plane, "save", None)
+    session.viewport_state.working_plane = WorkingPlane.get_working_plane(update=False)
+    save = getattr(session.viewport_state.working_plane, "save", None)
     if callable(save):
         save()
 
@@ -569,8 +575,8 @@ def capture_state(session):
 def get_interaction_plane(session):
     import WorkingPlane
 
-    if session._interaction_plane is not None:
-        return _copy_plane(session._interaction_plane)
+    if session.viewport_state.interaction_plane is not None:
+        return _copy_plane(session.viewport_state.interaction_plane)
     return WorkingPlane.get_working_plane(update=False)
 
 
@@ -750,25 +756,26 @@ def register_edit_callbacks(session):
             session.viewer = viewer
         get_render_manager = session.viewport.get_runtime_attr(viewer, "getSoRenderManager")
         session._render_manager = get_render_manager() if get_render_manager is not None else None
-        if session._key_pressed_cb is None:
-            session._key_pressed_cb = add_event_callback(
+        input_event_state = session.input_event_state
+        if input_event_state.key_pressed_cb is None:
+            input_event_state.key_pressed_cb = add_event_callback(
                 coin.SoKeyboardEvent.getClassTypeId(), session.input.on_key_pressed
             )
-        if session._mouse_moved_cb is None:
-            session._mouse_moved_cb = add_event_callback(
+        if input_event_state.mouse_moved_cb is None:
+            input_event_state.mouse_moved_cb = add_event_callback(
                 coin.SoLocation2Event.getClassTypeId(), session.input.on_mouse_moved
             )
-        if session._mouse_wheel_cb is None:
+        if input_event_state.mouse_wheel_cb is None:
             event_type = getattr(coin, "SoMouseWheelEvent", None)
             if event_type is not None:
-                session._mouse_wheel_event_type = event_type.getClassTypeId()
+                input_event_state.mouse_wheel_event_type = event_type.getClassTypeId()
             else:
-                session._mouse_wheel_event_type = coin.SoEvent.getClassTypeId()
-            session._mouse_wheel_cb = add_event_callback(
-                session._mouse_wheel_event_type, session.input.on_mouse_wheel
+                input_event_state.mouse_wheel_event_type = coin.SoEvent.getClassTypeId()
+            input_event_state.mouse_wheel_cb = add_event_callback(
+                input_event_state.mouse_wheel_event_type, session.input.on_mouse_wheel
             )
-        if session._mouse_pressed_cb is None:
-            session._mouse_pressed_cb = add_event_callback(
+        if input_event_state.mouse_pressed_cb is None:
+            input_event_state.mouse_pressed_cb = add_event_callback(
                 coin.SoMouseButtonEvent.getClassTypeId(), session.input.on_mouse_pressed
             )
     except (AttributeError, ReferenceError, RuntimeError):
@@ -777,11 +784,12 @@ def register_edit_callbacks(session):
 
 
 def _clear_edit_callbacks(session):
-    session._key_pressed_cb = None
-    session._mouse_moved_cb = None
-    session._mouse_wheel_cb = None
-    session._mouse_wheel_event_type = None
-    session._mouse_pressed_cb = None
+    input_event_state = session.input_event_state
+    input_event_state.key_pressed_cb = None
+    input_event_state.mouse_moved_cb = None
+    input_event_state.mouse_wheel_cb = None
+    input_event_state.mouse_wheel_event_type = None
+    input_event_state.mouse_pressed_cb = None
     session._render_manager = None
 
 
@@ -797,21 +805,22 @@ def unregister_edit_callbacks(session):
         return
 
     try:
-        if session._key_pressed_cb:
+        input_event_state = session.input_event_state
+        if input_event_state.key_pressed_cb:
             session.view.removeEventCallbackSWIG(
-                coin.SoKeyboardEvent.getClassTypeId(), session._key_pressed_cb
+                coin.SoKeyboardEvent.getClassTypeId(), input_event_state.key_pressed_cb
             )
-        if session._mouse_moved_cb:
+        if input_event_state.mouse_moved_cb:
             session.view.removeEventCallbackSWIG(
-                coin.SoLocation2Event.getClassTypeId(), session._mouse_moved_cb
+                coin.SoLocation2Event.getClassTypeId(), input_event_state.mouse_moved_cb
             )
-        if session._mouse_wheel_cb and session._mouse_wheel_event_type:
+        if input_event_state.mouse_wheel_cb and input_event_state.mouse_wheel_event_type:
             session.view.removeEventCallbackSWIG(
-                session._mouse_wheel_event_type, session._mouse_wheel_cb
+                input_event_state.mouse_wheel_event_type, input_event_state.mouse_wheel_cb
             )
-        if session._mouse_pressed_cb:
+        if input_event_state.mouse_pressed_cb:
             session.view.removeEventCallbackSWIG(
-                coin.SoMouseButtonEvent.getClassTypeId(), session._mouse_pressed_cb
+                coin.SoMouseButtonEvent.getClassTypeId(), input_event_state.mouse_pressed_cb
             )
     except RuntimeError:
         pass
@@ -865,7 +874,8 @@ def ensure_viewport_status_chip(session, chip_factory):
     if widget is None:
         clear_viewport_status_chip(session)
         return None
-    chip = session._viewport_status_chip
+    viewport_state = session.viewport_state
+    chip = viewport_state.status_chip
     if chip is not None and getattr(chip, "host_widget", None) is widget:
         return chip
     clear_viewport_status_chip(session)
@@ -873,7 +883,7 @@ def ensure_viewport_status_chip(session, chip_factory):
         chip = chip_factory(session, widget)
     except Exception:
         return None
-    session._viewport_status_chip = chip
+    viewport_state.status_chip = chip
     return chip
 
 
@@ -891,8 +901,9 @@ def refresh_viewport_status_chip(session, chip_factory):
 
 
 def clear_viewport_status_chip(session):
-    chip = session._viewport_status_chip
-    session._viewport_status_chip = None
+    viewport_state = session.viewport_state
+    chip = viewport_state.status_chip
+    viewport_state.status_chip = None
     if chip is None:
         return
     try:
