@@ -31,11 +31,11 @@ def queue_plan_overlay_visual_refresh(session, visuals, visual_all, visual_selec
     try:
         from PySide import QtCore
     except ImportError:
-        dirty = session.overlays.consume_dirty_plan_visuals()
-        session.overlays.refresh_plan_overlay_visuals(dirty)
+        dirty = consume_dirty_plan_visuals(session, plan_document_visuals.PLAN_VISUAL_ALL)
+        refresh_plan_overlay_visuals(session, dirty)
         return
     session._overlay_refresh_queued = True
-    QtCore.QTimer.singleShot(0, session.overlays.flush_plan_overlay_visual_refresh)
+    QtCore.QTimer.singleShot(0, lambda: flush_plan_overlay_visual_refresh(session))
 
 
 def queue_plan_overlay_view_scale_refresh(session, visual_view_scale, delay_ms):
@@ -47,13 +47,17 @@ def queue_plan_overlay_view_scale_refresh(session, visual_view_scale, delay_ms):
     try:
         from PySide import QtCore
     except ImportError:
-        dirty = session.overlays.consume_dirty_plan_visuals(default_all=False)
+        dirty = consume_dirty_plan_visuals(
+            session,
+            plan_document_visuals.PLAN_VISUAL_ALL,
+            default_all=False,
+        )
         if dirty:
-            session.overlays.refresh_plan_overlay_visuals(dirty)
+            refresh_plan_overlay_visuals(session, dirty)
         return
     session._view_scale_overlay_refresh_queued = True
     QtCore.QTimer.singleShot(
-        max(0, int(delay_ms)), session.overlays.flush_view_scale_overlay_refresh
+        max(0, int(delay_ms)), lambda: flush_view_scale_overlay_refresh(session)
     )
 
 
@@ -70,23 +74,35 @@ def consume_dirty_plan_visuals(session, visual_all, default_all=True):
 def flush_plan_overlay_visual_refresh(session):
     session._overlay_refresh_queued = False
     if _session_is_inactive(session):
-        session.overlays.consume_dirty_plan_visuals(default_all=False)
+        consume_dirty_plan_visuals(
+            session,
+            plan_document_visuals.PLAN_VISUAL_ALL,
+            default_all=False,
+        )
         return
-    dirty = session.overlays.consume_dirty_plan_visuals()
-    session.overlays.refresh_plan_overlay_visuals(dirty)
+    dirty = consume_dirty_plan_visuals(session, plan_document_visuals.PLAN_VISUAL_ALL)
+    refresh_plan_overlay_visuals(session, dirty)
 
 
 def flush_view_scale_overlay_refresh(session):
     session._view_scale_overlay_refresh_queued = False
     if _session_is_inactive(session):
-        session.overlays.consume_dirty_plan_visuals(default_all=False)
+        consume_dirty_plan_visuals(
+            session,
+            plan_document_visuals.PLAN_VISUAL_ALL,
+            default_all=False,
+        )
         return
     if session._overlay_refresh_queued:
         return
-    dirty = session.overlays.consume_dirty_plan_visuals(default_all=False)
+    dirty = consume_dirty_plan_visuals(
+        session,
+        plan_document_visuals.PLAN_VISUAL_ALL,
+        default_all=False,
+    )
     if not dirty:
         return
-    session.overlays.refresh_plan_overlay_visuals(dirty)
+    refresh_plan_overlay_visuals(session, dirty)
 
 
 def refresh_plan_overlay_view_scale(session):
@@ -336,7 +352,7 @@ def refresh_plan_overlay_visuals(session, dirty=None):
     dirty = set(dirty or {plan_document_visuals.PLAN_VISUAL_ALL})
     refresh_all = plan_document_visuals.PLAN_VISUAL_ALL in dirty
     if not refresh_all and plan_document_visuals.PLAN_VISUAL_VIEW_SCALE in dirty:
-        session.overlays.refresh_plan_overlay_view_scale()
+        refresh_plan_overlay_view_scale(session)
         dirty.discard(plan_document_visuals.PLAN_VISUAL_VIEW_SCALE)
         if not dirty:
             return
@@ -430,7 +446,7 @@ def sync_segment_overlay_trackers(
             clear_fn()
             current_trackers = []
             for _start, _end in segments:
-                tracker = session.overlays.make_plan_line_tracker(
+                tracker = make_plan_line_tracker(
                     DraftTrackers,
                     label,
                     scolor=color,
@@ -439,7 +455,7 @@ def sync_segment_overlay_trackers(
                 )
                 current_trackers.append(tracker)
     for tracker, (start, end) in zip(current_trackers, segments):
-        session.overlays.set_plan_line_tracker_width(tracker, width)
+        set_plan_line_tracker_width(tracker, width)
         tracker.setColor(color)
         if not transferred:
             tracker.p1(start)
