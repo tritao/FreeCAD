@@ -355,10 +355,11 @@ def _coerce_length(value, default=0.0):
 
 def _get_wall_axis_context(wall):
     proxy = getattr(wall, "Proxy", None)
-    if proxy is None or not hasattr(proxy, "calc_endpoints"):
+    calc_endpoints = getattr(proxy, "calc_endpoints", None)
+    if not callable(calc_endpoints):
         return None
     try:
-        endpoints = proxy.calc_endpoints(wall)
+        endpoints = calc_endpoints(wall)
         start = FreeCAD.Vector(endpoints[0])
         end = FreeCAD.Vector(endpoints[1])
     except Exception:

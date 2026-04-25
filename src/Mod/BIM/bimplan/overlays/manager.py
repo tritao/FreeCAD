@@ -443,7 +443,7 @@ def set_plan_line_tracker_width(tracker, width):
     try:
         separator = switch.getChild(0)
         drawstyle = separator.getChild(0) if separator is not None else None
-        if drawstyle is not None and hasattr(drawstyle, "lineWidth"):
+        if drawstyle is not None and getattr(drawstyle, "lineWidth", None) is not None:
             drawstyle.lineWidth = width
     except Exception:
         return

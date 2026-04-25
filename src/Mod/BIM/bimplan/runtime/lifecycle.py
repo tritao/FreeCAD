@@ -1036,7 +1036,7 @@ def _set_toolbar_point_focus_suppressed(toolbar, suppressed):
         except Exception:
             pass
         return
-    if hasattr(toolbar, "suppress_point_focus"):
+    if getattr(toolbar, "suppress_point_focus", None) is not None:
         try:
             toolbar.suppress_point_focus = bool(suppressed)
         except Exception:

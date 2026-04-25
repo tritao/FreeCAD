@@ -579,7 +579,7 @@ def _apply_provider_placement_move(session, provider_obj, point):
     if _has_provider_coordinate_properties(provider_obj):
         provider_obj.X = float(point.x)
         provider_obj.Y = float(point.y)
-        if hasattr(provider_obj, "Z"):
+        if getattr(provider_obj, "Z", None) is not None:
             provider_obj.Z = float(point.z)
         return True
     placement = session.visibility.copy_placement(getattr(provider_obj, "Placement", None))
@@ -591,7 +591,10 @@ def _apply_provider_placement_move(session, provider_obj, point):
 
 
 def _has_provider_coordinate_properties(provider_obj):
-    return hasattr(provider_obj, "X") and hasattr(provider_obj, "Y")
+    return (
+        getattr(provider_obj, "X", None) is not None
+        and getattr(provider_obj, "Y", None) is not None
+    )
 
 
 def _get_provider_coordinate_point(provider_obj):
