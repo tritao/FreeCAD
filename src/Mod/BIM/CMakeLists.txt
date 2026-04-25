@@ -217,6 +217,7 @@ SET(bimplan_SRCS
     bimplan/overlays/providers.py
     bimplan/overlays/spaces.py
     bimplan/overlays/symbols.py
+    bimplan/overlays/tracker_pool.py
     bimplan/overlays/walls.py
     bimplan/performance.py
     bimplan/providers/__init__.py
