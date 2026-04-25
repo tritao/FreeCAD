@@ -230,6 +230,8 @@ SET(bimplan_SRCS
     bimplan/performance.py
     bimplan/providers/__init__.py
     bimplan/providers/edit.py
+    bimplan/providers/host_targets.py
+    bimplan/providers/payloads.py
     bimplan/providers/point.py
     bimplan/providers/runtime.py
     bimplan/runtime/__init__.py
