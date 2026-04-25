@@ -938,15 +938,7 @@ def _append_status_help_line(text, line):
     return "{}\n{}".format(text, line)
 
 
-def build_status_text_view_model(session_or_context):
-    context = as_task_panel_context(session_or_context)
-    tool = context.selection.get_current_tool()
-    selected_kind, selected_obj = context.selection.get_selected_plan_target()
-    selected_state = context.status_text.format_plan_target_selection_state(
-        selected_kind,
-        selected_obj,
-    )
-    provider_state = context.status_text.format_provider_selected_object_state()
+def _get_direct_tool_status_text_view(context, tool, selected_kind, selected_obj):
     if tool == "Join" and selected_kind == "wall" and selected_obj is not None:
         target_wall, joint, detail = context.wall_relations.get_plan_join_candidate_state()
         selection_state = translate("BIM_PlanEdit", "Source wall: {label}").format(
@@ -960,7 +952,9 @@ def build_status_text_view_model(session_or_context):
             pair_state=detail or translate("BIM_PlanEdit", "Candidate wall: none"),
             action=context.wall_relations.get_plan_join_mode_action_text(target_wall, joint),
         )
-    elif tool == "Pick Space Region":
+        return selection_state, selection_help
+
+    if tool == "Pick Space Region":
         selection_state = translate("BIM_PlanEdit", "Space creation: pick region")
         selection_help = translate(
             "BIM_PlanEdit",
@@ -990,7 +984,9 @@ def build_status_text_view_model(session_or_context):
                     area=context.spaces.format_space_region_candidate_area(hovered_candidate)
                 ),
             )
-    elif tool == "Region":
+        return selection_state, selection_help
+
+    if tool == "Region":
         selection_state = translate("BIM_PlanEdit", "Region: draw polygon")
         selection_help = translate(
             "BIM_PlanEdit",
@@ -1002,26 +998,42 @@ def build_status_text_view_model(session_or_context):
                 selection_help,
                 translate("BIM_PlanEdit", "Parent space: {label}").format(label=parent_space.Label),
             )
-    elif tool == "Separator":
-        selection_state = translate("BIM_PlanEdit", "Separator: place divider")
-        selection_help = translate(
-            "BIM_PlanEdit",
-            "Click two points to place a room divider that can split Arch Spaces.",
+        return selection_state, selection_help
+
+    if tool == "Separator":
+        return (
+            translate("BIM_PlanEdit", "Separator: place divider"),
+            translate(
+                "BIM_PlanEdit",
+                "Click two points to place a room divider that can split Arch Spaces.",
+            ),
         )
-    elif tool == "Window":
-        selection_state = translate("BIM_PlanEdit", "Window: place on wall")
-        selection_help = translate(
-            "BIM_PlanEdit",
-            "Click along the selected or hovered wall to place a hosted window.",
+
+    if tool == "Window":
+        return (
+            translate("BIM_PlanEdit", "Window: place on wall"),
+            translate(
+                "BIM_PlanEdit",
+                "Click along the selected or hovered wall to place a hosted window.",
+            ),
         )
-    elif tool == "Provider Point":
-        selection_state = context.providers.get_provider_point_tool_label()
-        selection_help = context.providers.get_provider_point_tool_prompt()
-    elif selected_kind == "opening" and selected_obj is not None:
-        selection_state = selected_state
-        selection_help = context.status_text.format_opening_selection_help(selected_obj)
-    elif selected_kind == "symbol" and selected_obj is not None:
-        selection_state = selected_state
+
+    if tool == "Provider Point":
+        return (
+            context.providers.get_provider_point_tool_label(),
+            context.providers.get_provider_point_tool_prompt(),
+        )
+
+    return None
+
+
+def _get_selected_target_status_text_view(
+    context, tool, selected_kind, selected_obj, selected_state, provider_state
+):
+    if selected_kind == "opening" and selected_obj is not None:
+        return selected_state, context.status_text.format_opening_selection_help(selected_obj)
+
+    if selected_kind == "symbol" and selected_obj is not None:
         if tool == "Rotate Symbol":
             if context.symbols.symbol_rotation_snap_enabled():
                 selection_help = translate(
@@ -1038,23 +1050,30 @@ def build_status_text_view_model(session_or_context):
                 "BIM_PlanEdit",
                 "Use in-view handles to move or rotate the selected symbol instance.",
             )
-    elif selected_kind == "region" and selected_obj is not None:
-        selection_state = selected_state
-        selection_help = translate(
-            "BIM_PlanEdit",
-            "Use the region controls below to edit label, scheme, type, and parent space.",
+        return selected_state, selection_help
+
+    if selected_kind == "region" and selected_obj is not None:
+        return (
+            selected_state,
+            translate(
+                "BIM_PlanEdit",
+                "Use the region controls below to edit label, scheme, type, and parent space.",
+            ),
         )
-    elif selected_kind == "space" and selected_obj is not None:
-        selection_state = selected_state
-        selection_help = translate(
-            "BIM_PlanEdit",
-            "Use the space controls below to edit label, type, boundaries, and text position.",
+
+    if selected_kind == "space" and selected_obj is not None:
+        return (
+            selected_state,
+            translate(
+                "BIM_PlanEdit",
+                "Use the space controls below to edit label, type, boundaries, and text position.",
+            ),
         )
-    elif selected_kind == "provider" and selected_obj is not None:
-        selection_state = selected_state
-        selection_help = context.status_text.format_provider_target_help(selected_obj)
-    elif selected_kind == "wall" and selected_obj is not None:
-        selection_state = selected_state
+
+    if selected_kind == "provider" and selected_obj is not None:
+        return selected_state, context.status_text.format_provider_target_help(selected_obj)
+
+    if selected_kind == "wall" and selected_obj is not None:
         if context.wall_edit.is_selected_wall_endpoint_editable():
             selection_help = translate(
                 "BIM_PlanEdit",
@@ -1065,16 +1084,21 @@ def build_status_text_view_model(session_or_context):
                 "BIM_PlanEdit",
                 "This wall can be reviewed in plan, but grip editing is unavailable.",
             )
-    elif provider_state:
-        selection_state = provider_state
-        selection_help = context.status_text.format_provider_selected_object_help()
-    else:
-        selection_state = translate("BIM_PlanEdit", "No target selected")
-        selection_help = translate(
+        return selected_state, selection_help
+
+    if provider_state:
+        return provider_state, context.status_text.format_provider_selected_object_help()
+
+    return (
+        translate("BIM_PlanEdit", "No target selected"),
+        translate(
             "BIM_PlanEdit",
             "Click a wall, opening, symbol, integration target, region, or space. Use create tools to add plan geometry.",
-        )
+        ),
+    )
 
+
+def _apply_status_text_view_suffixes(context, tool, selection_help):
     selection_summary = context.status_text.get_plan_selection_summary_text()
     if selection_summary:
         selection_help = _append_status_help_line(selection_help, selection_summary)
@@ -1089,6 +1113,36 @@ def build_status_text_view_model(session_or_context):
     relation_status = context.wall_relations.get_plan_relation_status_message()
     if relation_status:
         selection_help = _append_status_help_line(selection_help, relation_status)
+    return selection_help
+
+
+def build_status_text_view_model(session_or_context):
+    context = as_task_panel_context(session_or_context)
+    tool = context.selection.get_current_tool()
+    selected_kind, selected_obj = context.selection.get_selected_plan_target()
+    selected_state = context.status_text.format_plan_target_selection_state(
+        selected_kind,
+        selected_obj,
+    )
+    provider_state = context.status_text.format_provider_selected_object_state()
+    direct_view = _get_direct_tool_status_text_view(
+        context,
+        tool,
+        selected_kind,
+        selected_obj,
+    )
+    if direct_view is not None:
+        selection_state, selection_help = direct_view
+    else:
+        selection_state, selection_help = _get_selected_target_status_text_view(
+            context,
+            tool,
+            selected_kind,
+            selected_obj,
+            selected_state,
+            provider_state,
+        )
+    selection_help = _apply_status_text_view_suffixes(context, tool, selection_help)
     return PlanStatusTextViewModel(
         text="{selection_state}\n{selection_help}".format(
             selection_state=selection_state,
