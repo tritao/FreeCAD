@@ -410,29 +410,12 @@ def slot_created_object(session, obj):
     queue_created_plan_object(session, obj)
 
 
-def slot_changed_object(session, obj, prop):
-    if session._tearing_down:
-        return
-    session.providers.invalidate_plan_provider_document_cache()
-    session._provider_overlay_state = None
-    session.visibility.invalidate_plan_classification_cache()
-    session.openings.invalidate_wall_hosted_openings_cache()
-    if are_document_visual_updates_deferred(session):
-        defer_document_visual_refresh(session)
-        return
-    if session.current_tool != "Select":
-        return
-    session.selection.sanitize_plan_target_references()
-    selected_wall = plan_selection.get_selected_plan_target_object(session, "wall")
-    selected_opening = plan_selection.get_selected_plan_target_object(session, "opening")
-    selected_symbol = plan_selection.get_selected_plan_target_object(session, "symbol")
-    selected_region = plan_selection.get_selected_plan_target_object(session, "region")
-    selected_space = plan_selection.get_selected_plan_target_object(session, "space")
+def _refresh_region_or_space_visuals(session, obj, prop, selected_region, selected_space):
     if selected_region and obj == selected_region and prop in _REGION_VISUAL_PROPERTIES:
         refresh_plan_object_footprint_display(session, selected_region)
         session.overlays.queue_plan_overlay_visual_refresh(_PLAN_VISUAL_SELECTED_REGION)
         session.task_panels.refresh_task_panel_status()
-        return
+        return True
     if (
         session.hovered_region
         and not session.selection.is_selected_plan_target("region", session.hovered_region)
@@ -441,12 +424,12 @@ def slot_changed_object(session, obj, prop):
     ):
         refresh_plan_object_footprint_display(session, session.hovered_region)
         session.overlays.queue_plan_overlay_visual_refresh(_PLAN_VISUAL_HOVERED_REGION)
-        return
+        return True
     if selected_space and obj == selected_space and prop in _SPACE_VISUAL_PROPERTIES:
         refresh_plan_object_footprint_display(session, selected_space)
         session.overlays.queue_plan_overlay_visual_refresh(_PLAN_VISUAL_SELECTED_SPACE)
         session.task_panels.refresh_task_panel_status()
-        return
+        return True
     if (
         session.hovered_space
         and not session.selection.is_selected_plan_target("space", session.hovered_space)
@@ -455,7 +438,11 @@ def slot_changed_object(session, obj, prop):
     ):
         refresh_plan_object_footprint_display(session, session.hovered_space)
         session.overlays.queue_plan_overlay_visual_refresh(_PLAN_VISUAL_HOVERED_SPACE)
-        return
+        return True
+    return False
+
+
+def _refresh_secondary_selection_visuals(session, obj, prop):
     secondary_overlay_refresh = False
     for target_kind, target_obj in plan_selection.get_secondary_selected_plan_targets(session):
         if target_kind == "region" and obj == target_obj and prop in _REGION_VISUAL_PROPERTIES:
@@ -481,23 +468,29 @@ def slot_changed_object(session, obj, prop):
             secondary_overlay_refresh = True
         elif target_kind == "wall" and obj == target_obj and prop in _WALL_VISUAL_PROPERTIES:
             secondary_overlay_refresh = True
-    if secondary_overlay_refresh:
-        session.overlays.queue_plan_overlay_visual_refresh(_PLAN_VISUAL_SECONDARY_SELECTION)
-        return
+    if not secondary_overlay_refresh:
+        return False
+    session.overlays.queue_plan_overlay_visual_refresh(_PLAN_VISUAL_SECONDARY_SELECTION)
+    return True
+
+
+def _refresh_symbol_or_opening_dependency_visuals(
+    session, obj, prop, selected_opening, selected_symbol
+):
     if (
         is_symbol_visual_dependency(session, selected_symbol, obj)
         and prop in _SYMBOL_VISUAL_PROPERTIES
     ):
         refresh_plan_object_footprint_display(session, selected_symbol)
         session.overlays.queue_plan_overlay_visual_refresh(_PLAN_VISUAL_SELECTED_SYMBOL)
-        return
+        return True
     if (
         is_symbol_visual_dependency(session, session.hovered_symbol, obj)
         and prop in _SYMBOL_VISUAL_PROPERTIES
     ):
         refresh_plan_object_footprint_display(session, session.hovered_symbol)
         session.overlays.queue_plan_overlay_visual_refresh(_PLAN_VISUAL_HOVERED_SYMBOL)
-        return
+        return True
     if is_opening_visual_dependency(selected_opening, obj) and prop in _OPENING_VISUAL_PROPERTIES:
         refresh_opening_footprint_display(session, selected_opening)
         refresh_opening_host_footprint_displays(session, selected_opening)
@@ -505,7 +498,7 @@ def slot_changed_object(session, obj, prop):
             _PLAN_VISUAL_SELECTED_OPENING,
             _PLAN_VISUAL_HOVERED_OPENING,
         )
-        return
+        return True
     if (
         is_opening_visual_dependency(session.hovered_opening, obj)
         and prop in _OPENING_VISUAL_PROPERTIES
@@ -513,7 +506,11 @@ def slot_changed_object(session, obj, prop):
         refresh_opening_footprint_display(session, session.hovered_opening)
         refresh_opening_host_footprint_displays(session, session.hovered_opening)
         session.overlays.queue_plan_overlay_visual_refresh(_PLAN_VISUAL_HOVERED_OPENING)
-        return
+        return True
+    return False
+
+
+def _refresh_wall_related_visuals(session, obj, prop, selected_wall):
     if (
         session.hovered_wall
         and obj in session.openings.get_wall_hosted_openings(session.hovered_wall)
@@ -522,7 +519,7 @@ def slot_changed_object(session, obj, prop):
         refresh_opening_footprint_display(session, obj)
         refresh_opening_host_footprint_displays(session, obj)
         session.overlays.queue_plan_overlay_visual_refresh(_PLAN_VISUAL_HOVERED_WALL)
-        return
+        return True
     if (
         selected_wall
         and obj in session.openings.get_wall_hosted_openings(selected_wall)
@@ -531,16 +528,45 @@ def slot_changed_object(session, obj, prop):
         refresh_opening_footprint_display(session, obj)
         refresh_opening_host_footprint_displays(session, obj)
         session.overlays.queue_plan_overlay_visual_refresh(_PLAN_VISUAL_WALL_GRIPS)
-        return
+        return True
     if obj == session.hovered_wall and prop in _WALL_VISUAL_PROPERTIES:
         session.overlays.queue_plan_overlay_visual_refresh(_PLAN_VISUAL_HOVERED_WALL)
-        return
-    if obj != selected_wall:
-        return
-    if prop not in _WALL_VISUAL_PROPERTIES:
-        return
+        return True
+    if obj != selected_wall or prop not in _WALL_VISUAL_PROPERTIES:
+        return False
     session.openings.refresh_wall_hosted_opening_footprints(obj)
     session.selection.schedule_selected_wall_reset(prop, obj)
+    return True
+
+
+def slot_changed_object(session, obj, prop):
+    if session._tearing_down:
+        return
+    session.providers.invalidate_plan_provider_document_cache()
+    session._provider_overlay_state = None
+    session.visibility.invalidate_plan_classification_cache()
+    session.openings.invalidate_wall_hosted_openings_cache()
+    if are_document_visual_updates_deferred(session):
+        defer_document_visual_refresh(session)
+        return
+    if session.current_tool != "Select":
+        return
+    session.selection.sanitize_plan_target_references()
+    selected_wall = plan_selection.get_selected_plan_target_object(session, "wall")
+    selected_opening = plan_selection.get_selected_plan_target_object(session, "opening")
+    selected_symbol = plan_selection.get_selected_plan_target_object(session, "symbol")
+    selected_region = plan_selection.get_selected_plan_target_object(session, "region")
+    selected_space = plan_selection.get_selected_plan_target_object(session, "space")
+    if _refresh_region_or_space_visuals(session, obj, prop, selected_region, selected_space):
+        return
+    if _refresh_secondary_selection_visuals(session, obj, prop):
+        return
+    if _refresh_symbol_or_opening_dependency_visuals(
+        session, obj, prop, selected_opening, selected_symbol
+    ):
+        return
+    if _refresh_wall_related_visuals(session, obj, prop, selected_wall):
+        return
 
 
 def slot_deleted_object(session, obj):
