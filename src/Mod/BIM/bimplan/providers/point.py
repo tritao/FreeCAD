@@ -6,6 +6,7 @@ import FreeCAD
 import FreeCADGui
 
 from bimplan import document_visuals as plan_document_visuals
+from bimplan.providers import host_targets as plan_host_targets
 from bimplan.selection import target_kinds as plan_target_kinds
 
 translate = FreeCAD.Qt.translate
@@ -113,14 +114,16 @@ def start_plan_provider_point_tool(session, tool):
     session.overlays.clear_selected_opening_handles()
     session.overlays.clear_selected_symbol_handles()
     session.overlays.clear_provider_point_preview()
-    host_kind, host_obj, host_source = session.providers.get_provider_point_context_host_state()
+    host_target, host_source = session.providers.get_provider_point_context_host_state()
+    host_kind, host_obj = plan_host_targets.unpack_provider_host_target_ref(host_target)
     if host_obj is None:
-        host_kind, host_obj = session.providers.normalize_provider_point_host_target(
+        host_target = session.providers.normalize_provider_point_host_target(
             getattr(tool, "default_host_target", ())
         )
+        host_kind, host_obj = plan_host_targets.unpack_provider_host_target_ref(host_target)
         if host_obj is not None:
             host_source = "tool"
-    session._provider_point_host_target = (host_kind, host_obj)
+    session._provider_point_host_target = host_target
     session._provider_point_host_source = host_source
     session._provider_point_tool = tool
     session.current_tool = "Provider Point"
@@ -184,12 +187,13 @@ def update_provider_point_tool_preview(session, point=None, obj=None):
     snap_target = plan_target_kinds.make_plan_target_ref()
     if snap_object is not None:
         snap_target = session.selection.get_plan_target_for_object(snap_object)
-    host_kind, host_obj, host_source = session.providers.get_provider_point_payload_host_target(
+    host_target, host_source = session.providers.get_provider_point_payload_host_target(
         snap_target=snap_target,
         selected_target=session.selection.get_selected_plan_target(),
         selected_targets=session.selection.get_selected_plan_targets(),
         hovered_target=session.selection.get_hovered_plan_target(),
     )
+    host_kind, host_obj = plan_host_targets.unpack_provider_host_target_ref(host_target)
     placement_point = (
         session.providers.project_provider_point_to_host(plan_point, host_obj)
         if host_kind == "wall"
@@ -199,7 +203,7 @@ def update_provider_point_tool_preview(session, point=None, obj=None):
         placement_point = plan_point
     session._provider_point_preview_source_point = plan_point
     session._provider_point_preview_point = placement_point
-    session._provider_point_preview_host_target = (host_kind, host_obj)
+    session._provider_point_preview_host_target = host_target
     session._provider_point_preview_host_source = host_source
     session.overlays.sync_provider_point_preview()
 
@@ -237,25 +241,25 @@ def resolve_provider_point_snap_object(session, snap_object, snap_info):
 
 def normalize_provider_point_host_target(session, target):
     if not target:
-        return (None, None)
+        return plan_host_targets.make_provider_host_target_ref()
     target_kind, target_obj = plan_target_kinds.unpack_plan_target_ref(target)
     if target_kind == "wall" and session.selection.is_plan_selectable_wall(target_obj):
-        return ("wall", target_obj)
-    return (None, None)
+        return plan_host_targets.make_provider_host_target_ref("wall", target_obj)
+    return plan_host_targets.make_provider_host_target_ref()
 
 
 def get_provider_point_context_host_state(session):
-    selected_kind, selected_obj = session.providers.normalize_provider_point_host_target(
+    selected_target = session.providers.normalize_provider_point_host_target(
         session.selection.get_selected_plan_target()
     )
-    if selected_obj is not None:
-        return selected_kind, selected_obj, "selected"
-    hovered_kind, hovered_obj = session.providers.normalize_provider_point_host_target(
+    if selected_target.obj is not None:
+        return selected_target, "selected"
+    hovered_target = session.providers.normalize_provider_point_host_target(
         session.selection.get_hovered_plan_target()
     )
-    if hovered_obj is not None:
-        return hovered_kind, hovered_obj, "hovered"
-    return None, None, ""
+    if hovered_target.obj is not None:
+        return hovered_target, "hovered"
+    return plan_host_targets.make_provider_host_target_ref(), ""
 
 
 def get_provider_point_payload_host_target(
@@ -266,32 +270,31 @@ def get_provider_point_payload_host_target(
     selected_targets,
     hovered_target,
 ):
-    selected_kind, selected_obj = session.providers.normalize_provider_point_host_target(
-        selected_target
-    )
-    if selected_obj is not None:
-        return selected_kind, selected_obj, "selected"
+    selected_target_ref = session.providers.normalize_provider_point_host_target(selected_target)
+    if selected_target_ref.obj is not None:
+        return selected_target_ref, "selected"
     selected_walls = []
     for target in selected_targets or ():
         target_kind, target_obj = session.providers.normalize_provider_point_host_target(target)
         if target_obj is not None and target_obj not in selected_walls:
             selected_walls.append(target_obj)
     if len(selected_walls) == 1:
-        return "wall", selected_walls[0], "selected"
-    snap_kind, snap_obj = session.providers.normalize_provider_point_host_target(snap_target)
-    if snap_obj is not None:
-        return snap_kind, snap_obj, "snap"
-    stored_kind, stored_obj = session.providers.normalize_provider_point_host_target(
+        return (
+            plan_host_targets.make_provider_host_target_ref("wall", selected_walls[0]),
+            "selected",
+        )
+    snap_target_ref = session.providers.normalize_provider_point_host_target(snap_target)
+    if snap_target_ref.obj is not None:
+        return snap_target_ref, "snap"
+    stored_target_ref = session.providers.normalize_provider_point_host_target(
         session._provider_point_host_target
     )
-    if stored_obj is not None:
-        return stored_kind, stored_obj, session._provider_point_host_source or "stored"
-    hovered_kind, hovered_obj = session.providers.normalize_provider_point_host_target(
-        hovered_target
-    )
-    if hovered_obj is not None:
-        return hovered_kind, hovered_obj, "hovered"
-    return None, None, ""
+    if stored_target_ref.obj is not None:
+        return stored_target_ref, session._provider_point_host_source or "stored"
+    hovered_target_ref = session.providers.normalize_provider_point_host_target(hovered_target)
+    if hovered_target_ref.obj is not None:
+        return hovered_target_ref, "hovered"
+    return plan_host_targets.make_provider_host_target_ref(), ""
 
 
 def project_provider_point_to_host(point, host_wall):
@@ -343,12 +346,13 @@ def build_provider_point_tool_payload(
     selected_target = session.selection.get_selected_plan_target()
     selected_targets = session.selection.get_selected_plan_targets()
     hovered_target = session.selection.get_hovered_plan_target()
-    host_kind, host_obj, host_source = session.providers.get_provider_point_payload_host_target(
+    host_target, host_source = session.providers.get_provider_point_payload_host_target(
         snap_target=snap_target,
         selected_target=selected_target,
         selected_targets=selected_targets,
         hovered_target=hovered_target,
     )
+    host_kind, host_obj = plan_host_targets.unpack_provider_host_target_ref(host_target)
     placement_point = (
         session.providers.project_provider_point_to_host(plan_point, host_obj)
         if host_kind == "wall"
@@ -371,6 +375,6 @@ def build_provider_point_tool_payload(
         "selected_target": selected_target,
         "selected_targets": selected_targets,
         "hovered_target": hovered_target,
-        "host_target": (host_kind, host_obj),
+        "host_target": host_target,
         "host_source": host_source,
     }

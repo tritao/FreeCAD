@@ -5,6 +5,7 @@
 import math
 
 import FreeCAD
+from bimplan.providers import host_targets as plan_host_targets
 from bimplan.providers import PlanOverlayMarkerKind
 from .. import selection as plan_selection
 
@@ -928,12 +929,7 @@ def _to_vector(point):
 
 
 def _normalize_host_target(target):
-    if not target:
-        return (None, None)
-    try:
-        host_kind, host_obj = target
-    except Exception:
-        return (None, None)
+    host_kind, host_obj = plan_host_targets.unpack_provider_host_target_ref(target)
     if host_kind == "wall" and host_obj is not None:
         return host_kind, host_obj
     return (None, None)
