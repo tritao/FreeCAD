@@ -2,8 +2,6 @@
 
 """Draft snap profile helpers for BIM Plan Edit."""
 
-from functools import wraps
-
 import FreeCADGui
 
 
@@ -59,14 +57,6 @@ def pop_opening_move_snap_profile(session):
     except Exception:
         pass
     session._opening_move_snap_profile_pushed = False
-
-
-def _bind_snap_call(func):
-    @wraps(func)
-    def method(self, *args, **kwargs):
-        return func(self.session, *args, **kwargs)
-
-    return method
 
 
 class PlanSnapAPI:

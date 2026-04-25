@@ -2,8 +2,6 @@
 
 """Opening edit interaction helpers for BIM Plan Edit."""
 
-from functools import wraps
-
 import FreeCAD
 import FreeCADGui
 
@@ -446,14 +444,6 @@ def resolve_wall_hosted_opening_layout(session, wall):
     return wall_edit.resolve_wall_hosted_opening_layout(session, wall)
 
 
-def _bind_session_call(func):
-    @wraps(func)
-    def method(self, *args, **kwargs):
-        return func(self.session, *args, **kwargs)
-
-    return method
-
-
 class _SessionAPI:
     __slots__ = ("_session",)
 
@@ -470,46 +460,95 @@ class PlanOpeningsAPI(_SessionAPI):
 
     __slots__ = ()
 
-    get_selected_opening_edit_handles = _bind_session_call(get_selected_opening_edit_handles)
-    get_opening_plan_proxy = _bind_session_call(get_opening_plan_proxy)
-    get_opening_view_proxy = _bind_session_call(get_opening_view_proxy)
-    project_opening_handle_point = _bind_session_call(project_opening_handle_point)
-    get_opening_move_anchor_modes = _bind_session_call(get_opening_move_anchor_modes)
-    execute_opening_handle = _bind_session_call(execute_opening_handle)
-    get_opening_move_preview_state = _bind_session_call(get_opening_move_preview_state)
-    sync_opening_move_preview = _bind_session_call(sync_opening_move_preview)
-    clear_opening_move_preview = _bind_session_call(clear_opening_move_preview)
-    cycle_opening_move_anchor = _bind_session_call(cycle_opening_move_anchor)
-    refresh_opening_move_preview_from_raw_point = _bind_session_call(
-        refresh_opening_move_preview_from_raw_point
-    )
-    activate_opening_handle = _bind_session_call(activate_opening_handle)
-    activate_opening_handle_now = _bind_session_call(activate_opening_handle_now)
-    start_opening_handle_point_pick = _bind_session_call(start_opening_handle_point_pick)
-    update_opening_handle_point_pick = _bind_session_call(update_opening_handle_point_pick)
-    finish_opening_handle_point_pick = _bind_session_call(finish_opening_handle_point_pick)
-    cancel_opening_handle_point_pick = _bind_session_call(cancel_opening_handle_point_pick)
-    restore_selected_opening = _bind_session_call(restore_selected_opening)
-    queue_restore_selected_opening = _bind_session_call(queue_restore_selected_opening)
-    execute_selected_opening_handle = _bind_session_call(execute_selected_opening_handle)
-    invalidate_wall_hosted_openings_cache = _bind_session_call(
-        invalidate_wall_hosted_openings_cache
-    )
-    queue_prime_wall_hosted_openings_cache = _bind_session_call(
-        queue_prime_wall_hosted_openings_cache
-    )
-    prime_wall_hosted_openings_cache = _bind_session_call(prime_wall_hosted_openings_cache)
-    build_wall_hosted_openings_cache = _bind_session_call(build_wall_hosted_openings_cache)
-    collect_opening_instances_from_host_cache = _bind_session_call(
-        collect_opening_instances_from_host_cache
-    )
-    get_plan_opening_instances = _bind_session_call(get_plan_opening_instances)
-    get_wall_hosted_openings = _bind_session_call(get_wall_hosted_openings)
-    refresh_wall_hosted_opening_footprints = _bind_session_call(
-        refresh_wall_hosted_opening_footprints
-    )
-    compute_wall_hosted_opening_layout = _bind_session_call(compute_wall_hosted_opening_layout)
-    resolve_wall_hosted_opening_layout = _bind_session_call(resolve_wall_hosted_opening_layout)
+    def get_selected_opening_edit_handles(self, *args, **kwargs):
+        return get_selected_opening_edit_handles(self.session, *args, **kwargs)
+
+    def get_opening_plan_proxy(self, *args, **kwargs):
+        return get_opening_plan_proxy(self.session, *args, **kwargs)
+
+    def get_opening_view_proxy(self, *args, **kwargs):
+        return get_opening_view_proxy(self.session, *args, **kwargs)
+
+    def project_opening_handle_point(self, *args, **kwargs):
+        return project_opening_handle_point(self.session, *args, **kwargs)
+
+    def get_opening_move_anchor_modes(self, *args, **kwargs):
+        return get_opening_move_anchor_modes(self.session, *args, **kwargs)
+
+    def execute_opening_handle(self, *args, **kwargs):
+        return execute_opening_handle(self.session, *args, **kwargs)
+
+    def get_opening_move_preview_state(self, *args, **kwargs):
+        return get_opening_move_preview_state(self.session, *args, **kwargs)
+
+    def sync_opening_move_preview(self, *args, **kwargs):
+        return sync_opening_move_preview(self.session, *args, **kwargs)
+
+    def clear_opening_move_preview(self, *args, **kwargs):
+        return clear_opening_move_preview(self.session, *args, **kwargs)
+
+    def cycle_opening_move_anchor(self, *args, **kwargs):
+        return cycle_opening_move_anchor(self.session, *args, **kwargs)
+
+    def refresh_opening_move_preview_from_raw_point(self, *args, **kwargs):
+        return refresh_opening_move_preview_from_raw_point(self.session, *args, **kwargs)
+
+    def activate_opening_handle(self, *args, **kwargs):
+        return activate_opening_handle(self.session, *args, **kwargs)
+
+    def activate_opening_handle_now(self, *args, **kwargs):
+        return activate_opening_handle_now(self.session, *args, **kwargs)
+
+    def start_opening_handle_point_pick(self, *args, **kwargs):
+        return start_opening_handle_point_pick(self.session, *args, **kwargs)
+
+    def update_opening_handle_point_pick(self, *args, **kwargs):
+        return update_opening_handle_point_pick(self.session, *args, **kwargs)
+
+    def finish_opening_handle_point_pick(self, *args, **kwargs):
+        return finish_opening_handle_point_pick(self.session, *args, **kwargs)
+
+    def cancel_opening_handle_point_pick(self, *args, **kwargs):
+        return cancel_opening_handle_point_pick(self.session, *args, **kwargs)
+
+    def restore_selected_opening(self, *args, **kwargs):
+        return restore_selected_opening(self.session, *args, **kwargs)
+
+    def queue_restore_selected_opening(self, *args, **kwargs):
+        return queue_restore_selected_opening(self.session, *args, **kwargs)
+
+    def execute_selected_opening_handle(self, *args, **kwargs):
+        return execute_selected_opening_handle(self.session, *args, **kwargs)
+
+    def invalidate_wall_hosted_openings_cache(self, *args, **kwargs):
+        return invalidate_wall_hosted_openings_cache(self.session, *args, **kwargs)
+
+    def queue_prime_wall_hosted_openings_cache(self, *args, **kwargs):
+        return queue_prime_wall_hosted_openings_cache(self.session, *args, **kwargs)
+
+    def prime_wall_hosted_openings_cache(self, *args, **kwargs):
+        return prime_wall_hosted_openings_cache(self.session, *args, **kwargs)
+
+    def build_wall_hosted_openings_cache(self, *args, **kwargs):
+        return build_wall_hosted_openings_cache(self.session, *args, **kwargs)
+
+    def collect_opening_instances_from_host_cache(self, *args, **kwargs):
+        return collect_opening_instances_from_host_cache(self.session, *args, **kwargs)
+
+    def get_plan_opening_instances(self, *args, **kwargs):
+        return get_plan_opening_instances(self.session, *args, **kwargs)
+
+    def get_wall_hosted_openings(self, *args, **kwargs):
+        return get_wall_hosted_openings(self.session, *args, **kwargs)
+
+    def refresh_wall_hosted_opening_footprints(self, *args, **kwargs):
+        return refresh_wall_hosted_opening_footprints(self.session, *args, **kwargs)
+
+    def compute_wall_hosted_opening_layout(self, *args, **kwargs):
+        return compute_wall_hosted_opening_layout(self.session, *args, **kwargs)
+
+    def resolve_wall_hosted_opening_layout(self, *args, **kwargs):
+        return resolve_wall_hosted_opening_layout(self.session, *args, **kwargs)
 
     def is_hosted_opening_object(self, obj):
         from bimplan.tools import hosted_openings as plan_hosted_openings

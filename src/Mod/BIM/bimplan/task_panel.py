@@ -3,24 +3,6 @@
 """Task panel ownership, refresh helpers, and viewport chip for BIM Plan Edit."""
 
 
-def _bind_task_panel_call(func):
-    def method(self, *args, **kwargs):
-        return func(self.session, *args, **kwargs)
-
-    return method
-
-
-_PLAN_TASK_PANELS_API_BOUND_METHODS = (
-    "attach_task_panel",
-    "attach_aux_task_panel",
-    "detach_aux_task_panel",
-    "detach_task_panel",
-    "on_panel_closed",
-    "refresh_task_panel_status",
-    "refresh_provider_overlay_mode_panels",
-)
-
-
 class PlanTaskPanelsAPI:
     """Owned session surface for Plan Edit task-panel wiring and refresh."""
 
@@ -32,6 +14,27 @@ class PlanTaskPanelsAPI:
     @property
     def session(self):
         return self._session
+
+    def attach_task_panel(self, *args, **kwargs):
+        return attach_task_panel(self.session, *args, **kwargs)
+
+    def attach_aux_task_panel(self, *args, **kwargs):
+        return attach_aux_task_panel(self.session, *args, **kwargs)
+
+    def detach_aux_task_panel(self, *args, **kwargs):
+        return detach_aux_task_panel(self.session, *args, **kwargs)
+
+    def detach_task_panel(self, *args, **kwargs):
+        return detach_task_panel(self.session, *args, **kwargs)
+
+    def on_panel_closed(self, *args, **kwargs):
+        return on_panel_closed(self.session, *args, **kwargs)
+
+    def refresh_task_panel_status(self, *args, **kwargs):
+        return refresh_task_panel_status(self.session, *args, **kwargs)
+
+    def refresh_provider_overlay_mode_panels(self, *args, **kwargs):
+        return refresh_provider_overlay_mode_panels(self.session, *args, **kwargs)
 
 
 class _PlanEditViewportStatusChip:
@@ -264,7 +267,3 @@ def refresh_provider_overlay_mode_panels(session):
                 stale_panels.append(extra_panel)
         for extra_panel in stale_panels:
             session.task_panels.detach_aux_task_panel(extra_panel)
-
-
-for _method_name in _PLAN_TASK_PANELS_API_BOUND_METHODS:
-    setattr(PlanTaskPanelsAPI, _method_name, _bind_task_panel_call(globals()[_method_name]))

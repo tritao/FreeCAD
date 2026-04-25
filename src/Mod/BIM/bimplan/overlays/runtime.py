@@ -17,162 +17,6 @@ _PLAN_VISUAL_VIEW_SCALE = plan_document_visuals.PLAN_VISUAL_VIEW_SCALE
 _PLAN_VIEW_SCALE_REFRESH_DELAY_MS = 40
 
 
-def _bind_overlay_call(func):
-    @wraps(func)
-    def method(self, *args, **kwargs):
-        return func(self.session, *args, **kwargs)
-
-    return method
-
-
-_PLAN_OVERLAYS_API_MODULES = (
-    (
-        overlay_manager,
-        (
-            "finalize_trackers",
-            "make_plan_line_tracker",
-            "set_plan_line_tracker_width",
-        ),
-    ),
-    (
-        overlay_geometry,
-        (
-            "get_footprint_overlay_polylines",
-            "build_overlay_segments_from_polylines",
-            "get_plan_overlay_geometry_kinds_for_object",
-            "get_plan_overlay_geometry_cache_entry",
-            "invalidate_plan_overlay_geometry_cache",
-            "get_cached_plan_overlay_geometry",
-            "get_wall_overlay_polylines",
-            "get_space_footprint_faces",
-            "get_space_overlay_polylines",
-            "get_space_overlay_segments",
-            "get_region_footprint_faces",
-            "get_region_overlay_polylines",
-            "get_region_overlay_segments",
-            "get_opening_overlay_polylines",
-            "get_opening_overlay_screen_polylines",
-            "get_opening_overlay_segments",
-        ),
-    ),
-    (
-        space_overlays,
-        (
-            "sync_secondary_selected_overlays",
-            "clear_secondary_selected_overlays",
-            "sync_space_region_pick_overlays",
-            "clear_space_region_pick_overlays",
-            "create_space_overlay_trackers",
-            "create_region_overlay_trackers",
-            "sync_hovered_space_overlay",
-            "clear_hovered_space_overlay",
-            "sync_hovered_region_overlay",
-            "clear_hovered_region_overlay",
-            "invalidate_selected_space_overlay_cache",
-            "sync_selected_space_overlay",
-            "clear_selected_space_overlay",
-            "sync_selected_region_overlay",
-            "clear_selected_region_overlay",
-        ),
-    ),
-    (
-        wall_overlays,
-        (
-            "retarget_edit_tracker",
-            "sync_wall_grips",
-            "schedule_wall_grip_sync",
-            "run_scheduled_wall_grip_sync",
-            "clear_wall_grips",
-            "sync_hovered_wall_overlay",
-            "clear_hovered_wall_overlay",
-            "sync_selected_wall_overlay",
-            "clear_selected_wall_overlay",
-            "get_plan_context_junctions",
-            "create_junction_node_trackers",
-            "sync_junction_node_overlays",
-            "clear_junction_node_overlays",
-            "sync_hovered_wall_opening_context_overlay",
-            "clear_hovered_wall_opening_context_overlay",
-            "create_wall_overlay_trackers",
-        ),
-    ),
-    (
-        provider_overlays,
-        (
-            "sync_provider_overlays",
-            "clear_provider_overlays",
-            "sync_hovered_provider_overlay",
-            "clear_hovered_provider_overlay",
-            "sync_selected_provider_overlay",
-            "clear_selected_provider_overlay",
-            "get_selected_provider_handle_specs",
-            "sync_selected_provider_handles",
-            "clear_selected_provider_handles",
-            "pick_selected_provider_handle",
-            "sync_provider_point_preview",
-            "clear_provider_point_preview",
-        ),
-    ),
-    (
-        opening_overlays,
-        (
-            "get_opening_handle_markers",
-            "set_opening_handle_tracker_marker",
-            "discard_opening_handle_tracker_pool",
-            "queue_prime_opening_handle_tracker_pool",
-            "prime_opening_handle_tracker_pool",
-            "sync_hovered_opening_overlay",
-            "clear_hovered_opening_overlay",
-            "invalidate_hovered_opening_overlay_cache",
-            "create_opening_overlay_trackers",
-            "sync_selected_opening_overlay",
-            "clear_selected_opening_overlay",
-            "invalidate_selected_opening_overlay_cache",
-            "sync_selected_wall_opening_context_overlay",
-            "clear_selected_wall_opening_context_overlay",
-            "get_selected_opening_handle_specs",
-            "sync_selected_opening_handles",
-            "clear_selected_opening_handles",
-        ),
-    ),
-    (
-        symbol_overlays,
-        (
-            "get_plan_symbol_instances",
-            "get_symbol_global_placement",
-            "get_symbol_parent_global_placement",
-            "get_symbol_plan_proxy",
-            "get_symbol_semantic_proxy",
-            "get_symbol_overlay_polylines",
-            "get_symbol_overlay_segments",
-            "get_symbol_overlay_screen_polylines",
-            "refresh_selected_symbol_visuals",
-            "create_symbol_overlay_trackers",
-            "sync_hovered_symbol_overlay",
-            "clear_hovered_symbol_overlay",
-            "sync_selected_symbol_overlay",
-            "clear_selected_symbol_overlay",
-            "get_symbol_rotation_snap_increment_degrees",
-            "get_symbol_rotation_snap_step_radians",
-            "symbol_rotation_free_angle_override_active",
-            "resolve_symbol_handle_target_point",
-            "get_symbol_handle_radius",
-            "get_selected_symbol_handle_specs",
-            "sync_selected_symbol_handles",
-            "clear_selected_symbol_handles",
-            "pick_selected_symbol_handle",
-            "get_symbol_local_anchor",
-            "get_symbol_local_facing",
-        ),
-    ),
-)
-
-_PLAN_OVERLAYS_API_BOUND_METHODS = {}
-for _module, _method_names in _PLAN_OVERLAYS_API_MODULES:
-    for _method_name in _method_names:
-        _PLAN_OVERLAYS_API_BOUND_METHODS[_method_name] = getattr(_module, _method_name)
-
-
 class PlanOverlaysAPI:
     """Owned session surface for Plan Edit overlay behavior."""
 
@@ -222,6 +66,336 @@ class PlanOverlaysAPI:
     def refresh_plan_overlay_visuals(self, dirty=None):
         return overlay_manager.refresh_plan_overlay_visuals(self.session, dirty=dirty)
 
+    def finalize_trackers(self, *args, **kwargs):
+        return overlay_manager.finalize_trackers(self.session, *args, **kwargs)
 
-for _method_name, _method in _PLAN_OVERLAYS_API_BOUND_METHODS.items():
-    setattr(PlanOverlaysAPI, _method_name, _bind_overlay_call(_method))
+    def make_plan_line_tracker(self, *args, **kwargs):
+        return overlay_manager.make_plan_line_tracker(self.session, *args, **kwargs)
+
+    def set_plan_line_tracker_width(self, *args, **kwargs):
+        return overlay_manager.set_plan_line_tracker_width(self.session, *args, **kwargs)
+
+    def get_footprint_overlay_polylines(self, *args, **kwargs):
+        return overlay_geometry.get_footprint_overlay_polylines(self.session, *args, **kwargs)
+
+    def build_overlay_segments_from_polylines(self, *args, **kwargs):
+        return overlay_geometry.build_overlay_segments_from_polylines(self.session, *args, **kwargs)
+
+    def get_plan_overlay_geometry_kinds_for_object(self, *args, **kwargs):
+        return overlay_geometry.get_plan_overlay_geometry_kinds_for_object(
+            self.session, *args, **kwargs
+        )
+
+    def get_plan_overlay_geometry_cache_entry(self, *args, **kwargs):
+        return overlay_geometry.get_plan_overlay_geometry_cache_entry(self.session, *args, **kwargs)
+
+    def invalidate_plan_overlay_geometry_cache(self, *args, **kwargs):
+        return overlay_geometry.invalidate_plan_overlay_geometry_cache(
+            self.session, *args, **kwargs
+        )
+
+    def get_cached_plan_overlay_geometry(self, *args, **kwargs):
+        return overlay_geometry.get_cached_plan_overlay_geometry(self.session, *args, **kwargs)
+
+    def get_wall_overlay_polylines(self, *args, **kwargs):
+        return overlay_geometry.get_wall_overlay_polylines(self.session, *args, **kwargs)
+
+    def get_space_footprint_faces(self, *args, **kwargs):
+        return overlay_geometry.get_space_footprint_faces(self.session, *args, **kwargs)
+
+    def get_space_overlay_polylines(self, *args, **kwargs):
+        return overlay_geometry.get_space_overlay_polylines(self.session, *args, **kwargs)
+
+    def get_space_overlay_segments(self, *args, **kwargs):
+        return overlay_geometry.get_space_overlay_segments(self.session, *args, **kwargs)
+
+    def get_region_footprint_faces(self, *args, **kwargs):
+        return overlay_geometry.get_region_footprint_faces(self.session, *args, **kwargs)
+
+    def get_region_overlay_polylines(self, *args, **kwargs):
+        return overlay_geometry.get_region_overlay_polylines(self.session, *args, **kwargs)
+
+    def get_region_overlay_segments(self, *args, **kwargs):
+        return overlay_geometry.get_region_overlay_segments(self.session, *args, **kwargs)
+
+    def get_opening_overlay_polylines(self, *args, **kwargs):
+        return overlay_geometry.get_opening_overlay_polylines(self.session, *args, **kwargs)
+
+    def get_opening_overlay_screen_polylines(self, *args, **kwargs):
+        return overlay_geometry.get_opening_overlay_screen_polylines(self.session, *args, **kwargs)
+
+    def get_opening_overlay_segments(self, *args, **kwargs):
+        return overlay_geometry.get_opening_overlay_segments(self.session, *args, **kwargs)
+
+    def sync_secondary_selected_overlays(self, *args, **kwargs):
+        return space_overlays.sync_secondary_selected_overlays(self.session, *args, **kwargs)
+
+    def clear_secondary_selected_overlays(self, *args, **kwargs):
+        return space_overlays.clear_secondary_selected_overlays(self.session, *args, **kwargs)
+
+    def sync_space_region_pick_overlays(self, *args, **kwargs):
+        return space_overlays.sync_space_region_pick_overlays(self.session, *args, **kwargs)
+
+    def clear_space_region_pick_overlays(self, *args, **kwargs):
+        return space_overlays.clear_space_region_pick_overlays(self.session, *args, **kwargs)
+
+    def create_space_overlay_trackers(self, *args, **kwargs):
+        return space_overlays.create_space_overlay_trackers(self.session, *args, **kwargs)
+
+    def create_region_overlay_trackers(self, *args, **kwargs):
+        return space_overlays.create_region_overlay_trackers(self.session, *args, **kwargs)
+
+    def sync_hovered_space_overlay(self, *args, **kwargs):
+        return space_overlays.sync_hovered_space_overlay(self.session, *args, **kwargs)
+
+    def clear_hovered_space_overlay(self, *args, **kwargs):
+        return space_overlays.clear_hovered_space_overlay(self.session, *args, **kwargs)
+
+    def sync_hovered_region_overlay(self, *args, **kwargs):
+        return space_overlays.sync_hovered_region_overlay(self.session, *args, **kwargs)
+
+    def clear_hovered_region_overlay(self, *args, **kwargs):
+        return space_overlays.clear_hovered_region_overlay(self.session, *args, **kwargs)
+
+    def invalidate_selected_space_overlay_cache(self, *args, **kwargs):
+        return space_overlays.invalidate_selected_space_overlay_cache(self.session, *args, **kwargs)
+
+    def sync_selected_space_overlay(self, *args, **kwargs):
+        return space_overlays.sync_selected_space_overlay(self.session, *args, **kwargs)
+
+    def clear_selected_space_overlay(self, *args, **kwargs):
+        return space_overlays.clear_selected_space_overlay(self.session, *args, **kwargs)
+
+    def sync_selected_region_overlay(self, *args, **kwargs):
+        return space_overlays.sync_selected_region_overlay(self.session, *args, **kwargs)
+
+    def clear_selected_region_overlay(self, *args, **kwargs):
+        return space_overlays.clear_selected_region_overlay(self.session, *args, **kwargs)
+
+    def retarget_edit_tracker(self, *args, **kwargs):
+        return wall_overlays.retarget_edit_tracker(self.session, *args, **kwargs)
+
+    def sync_wall_grips(self, *args, **kwargs):
+        return wall_overlays.sync_wall_grips(self.session, *args, **kwargs)
+
+    def schedule_wall_grip_sync(self, *args, **kwargs):
+        return wall_overlays.schedule_wall_grip_sync(self.session, *args, **kwargs)
+
+    def run_scheduled_wall_grip_sync(self, *args, **kwargs):
+        return wall_overlays.run_scheduled_wall_grip_sync(self.session, *args, **kwargs)
+
+    def clear_wall_grips(self, *args, **kwargs):
+        return wall_overlays.clear_wall_grips(self.session, *args, **kwargs)
+
+    def sync_hovered_wall_overlay(self, *args, **kwargs):
+        return wall_overlays.sync_hovered_wall_overlay(self.session, *args, **kwargs)
+
+    def clear_hovered_wall_overlay(self, *args, **kwargs):
+        return wall_overlays.clear_hovered_wall_overlay(self.session, *args, **kwargs)
+
+    def sync_selected_wall_overlay(self, *args, **kwargs):
+        return wall_overlays.sync_selected_wall_overlay(self.session, *args, **kwargs)
+
+    def clear_selected_wall_overlay(self, *args, **kwargs):
+        return wall_overlays.clear_selected_wall_overlay(self.session, *args, **kwargs)
+
+    def get_plan_context_junctions(self, *args, **kwargs):
+        return wall_overlays.get_plan_context_junctions(self.session, *args, **kwargs)
+
+    def create_junction_node_trackers(self, *args, **kwargs):
+        return wall_overlays.create_junction_node_trackers(self.session, *args, **kwargs)
+
+    def sync_junction_node_overlays(self, *args, **kwargs):
+        return wall_overlays.sync_junction_node_overlays(self.session, *args, **kwargs)
+
+    def clear_junction_node_overlays(self, *args, **kwargs):
+        return wall_overlays.clear_junction_node_overlays(self.session, *args, **kwargs)
+
+    def sync_hovered_wall_opening_context_overlay(self, *args, **kwargs):
+        return wall_overlays.sync_hovered_wall_opening_context_overlay(
+            self.session, *args, **kwargs
+        )
+
+    def clear_hovered_wall_opening_context_overlay(self, *args, **kwargs):
+        return wall_overlays.clear_hovered_wall_opening_context_overlay(
+            self.session, *args, **kwargs
+        )
+
+    def create_wall_overlay_trackers(self, *args, **kwargs):
+        return wall_overlays.create_wall_overlay_trackers(self.session, *args, **kwargs)
+
+    def sync_provider_overlays(self, *args, **kwargs):
+        return provider_overlays.sync_provider_overlays(self.session, *args, **kwargs)
+
+    def clear_provider_overlays(self, *args, **kwargs):
+        return provider_overlays.clear_provider_overlays(self.session, *args, **kwargs)
+
+    def sync_hovered_provider_overlay(self, *args, **kwargs):
+        return provider_overlays.sync_hovered_provider_overlay(self.session, *args, **kwargs)
+
+    def clear_hovered_provider_overlay(self, *args, **kwargs):
+        return provider_overlays.clear_hovered_provider_overlay(self.session, *args, **kwargs)
+
+    def sync_selected_provider_overlay(self, *args, **kwargs):
+        return provider_overlays.sync_selected_provider_overlay(self.session, *args, **kwargs)
+
+    def clear_selected_provider_overlay(self, *args, **kwargs):
+        return provider_overlays.clear_selected_provider_overlay(self.session, *args, **kwargs)
+
+    def get_selected_provider_handle_specs(self, *args, **kwargs):
+        return provider_overlays.get_selected_provider_handle_specs(self.session, *args, **kwargs)
+
+    def sync_selected_provider_handles(self, *args, **kwargs):
+        return provider_overlays.sync_selected_provider_handles(self.session, *args, **kwargs)
+
+    def clear_selected_provider_handles(self, *args, **kwargs):
+        return provider_overlays.clear_selected_provider_handles(self.session, *args, **kwargs)
+
+    def pick_selected_provider_handle(self, *args, **kwargs):
+        return provider_overlays.pick_selected_provider_handle(self.session, *args, **kwargs)
+
+    def sync_provider_point_preview(self, *args, **kwargs):
+        return provider_overlays.sync_provider_point_preview(self.session, *args, **kwargs)
+
+    def clear_provider_point_preview(self, *args, **kwargs):
+        return provider_overlays.clear_provider_point_preview(self.session, *args, **kwargs)
+
+    def get_opening_handle_markers(self, *args, **kwargs):
+        return opening_overlays.get_opening_handle_markers(self.session, *args, **kwargs)
+
+    def set_opening_handle_tracker_marker(self, *args, **kwargs):
+        return opening_overlays.set_opening_handle_tracker_marker(self.session, *args, **kwargs)
+
+    def discard_opening_handle_tracker_pool(self, *args, **kwargs):
+        return opening_overlays.discard_opening_handle_tracker_pool(self.session, *args, **kwargs)
+
+    def queue_prime_opening_handle_tracker_pool(self, *args, **kwargs):
+        return opening_overlays.queue_prime_opening_handle_tracker_pool(
+            self.session, *args, **kwargs
+        )
+
+    def prime_opening_handle_tracker_pool(self, *args, **kwargs):
+        return opening_overlays.prime_opening_handle_tracker_pool(self.session, *args, **kwargs)
+
+    def sync_hovered_opening_overlay(self, *args, **kwargs):
+        return opening_overlays.sync_hovered_opening_overlay(self.session, *args, **kwargs)
+
+    def clear_hovered_opening_overlay(self, *args, **kwargs):
+        return opening_overlays.clear_hovered_opening_overlay(self.session, *args, **kwargs)
+
+    def invalidate_hovered_opening_overlay_cache(self, *args, **kwargs):
+        return opening_overlays.invalidate_hovered_opening_overlay_cache(
+            self.session, *args, **kwargs
+        )
+
+    def create_opening_overlay_trackers(self, *args, **kwargs):
+        return opening_overlays.create_opening_overlay_trackers(self.session, *args, **kwargs)
+
+    def sync_selected_opening_overlay(self, *args, **kwargs):
+        return opening_overlays.sync_selected_opening_overlay(self.session, *args, **kwargs)
+
+    def clear_selected_opening_overlay(self, *args, **kwargs):
+        return opening_overlays.clear_selected_opening_overlay(self.session, *args, **kwargs)
+
+    def invalidate_selected_opening_overlay_cache(self, *args, **kwargs):
+        return opening_overlays.invalidate_selected_opening_overlay_cache(
+            self.session, *args, **kwargs
+        )
+
+    def sync_selected_wall_opening_context_overlay(self, *args, **kwargs):
+        return opening_overlays.sync_selected_wall_opening_context_overlay(
+            self.session, *args, **kwargs
+        )
+
+    def clear_selected_wall_opening_context_overlay(self, *args, **kwargs):
+        return opening_overlays.clear_selected_wall_opening_context_overlay(
+            self.session, *args, **kwargs
+        )
+
+    def get_selected_opening_handle_specs(self, *args, **kwargs):
+        return opening_overlays.get_selected_opening_handle_specs(self.session, *args, **kwargs)
+
+    def sync_selected_opening_handles(self, *args, **kwargs):
+        return opening_overlays.sync_selected_opening_handles(self.session, *args, **kwargs)
+
+    def clear_selected_opening_handles(self, *args, **kwargs):
+        return opening_overlays.clear_selected_opening_handles(self.session, *args, **kwargs)
+
+    def get_plan_symbol_instances(self, *args, **kwargs):
+        return symbol_overlays.get_plan_symbol_instances(self.session, *args, **kwargs)
+
+    def get_symbol_global_placement(self, *args, **kwargs):
+        return symbol_overlays.get_symbol_global_placement(self.session, *args, **kwargs)
+
+    def get_symbol_parent_global_placement(self, *args, **kwargs):
+        return symbol_overlays.get_symbol_parent_global_placement(self.session, *args, **kwargs)
+
+    def get_symbol_plan_proxy(self, *args, **kwargs):
+        return symbol_overlays.get_symbol_plan_proxy(self.session, *args, **kwargs)
+
+    def get_symbol_semantic_proxy(self, *args, **kwargs):
+        return symbol_overlays.get_symbol_semantic_proxy(self.session, *args, **kwargs)
+
+    def get_symbol_overlay_polylines(self, *args, **kwargs):
+        return symbol_overlays.get_symbol_overlay_polylines(self.session, *args, **kwargs)
+
+    def get_symbol_overlay_segments(self, *args, **kwargs):
+        return symbol_overlays.get_symbol_overlay_segments(self.session, *args, **kwargs)
+
+    def get_symbol_overlay_screen_polylines(self, *args, **kwargs):
+        return symbol_overlays.get_symbol_overlay_screen_polylines(self.session, *args, **kwargs)
+
+    def refresh_selected_symbol_visuals(self, *args, **kwargs):
+        return symbol_overlays.refresh_selected_symbol_visuals(self.session, *args, **kwargs)
+
+    def create_symbol_overlay_trackers(self, *args, **kwargs):
+        return symbol_overlays.create_symbol_overlay_trackers(self.session, *args, **kwargs)
+
+    def sync_hovered_symbol_overlay(self, *args, **kwargs):
+        return symbol_overlays.sync_hovered_symbol_overlay(self.session, *args, **kwargs)
+
+    def clear_hovered_symbol_overlay(self, *args, **kwargs):
+        return symbol_overlays.clear_hovered_symbol_overlay(self.session, *args, **kwargs)
+
+    def sync_selected_symbol_overlay(self, *args, **kwargs):
+        return symbol_overlays.sync_selected_symbol_overlay(self.session, *args, **kwargs)
+
+    def clear_selected_symbol_overlay(self, *args, **kwargs):
+        return symbol_overlays.clear_selected_symbol_overlay(self.session, *args, **kwargs)
+
+    def get_symbol_rotation_snap_increment_degrees(self, *args, **kwargs):
+        return symbol_overlays.get_symbol_rotation_snap_increment_degrees(
+            self.session, *args, **kwargs
+        )
+
+    def get_symbol_rotation_snap_step_radians(self, *args, **kwargs):
+        return symbol_overlays.get_symbol_rotation_snap_step_radians(self.session, *args, **kwargs)
+
+    def symbol_rotation_free_angle_override_active(self, *args, **kwargs):
+        return symbol_overlays.symbol_rotation_free_angle_override_active(
+            self.session, *args, **kwargs
+        )
+
+    def resolve_symbol_handle_target_point(self, *args, **kwargs):
+        return symbol_overlays.resolve_symbol_handle_target_point(self.session, *args, **kwargs)
+
+    def get_symbol_handle_radius(self, *args, **kwargs):
+        return symbol_overlays.get_symbol_handle_radius(self.session, *args, **kwargs)
+
+    def get_selected_symbol_handle_specs(self, *args, **kwargs):
+        return symbol_overlays.get_selected_symbol_handle_specs(self.session, *args, **kwargs)
+
+    def sync_selected_symbol_handles(self, *args, **kwargs):
+        return symbol_overlays.sync_selected_symbol_handles(self.session, *args, **kwargs)
+
+    def clear_selected_symbol_handles(self, *args, **kwargs):
+        return symbol_overlays.clear_selected_symbol_handles(self.session, *args, **kwargs)
+
+    def pick_selected_symbol_handle(self, *args, **kwargs):
+        return symbol_overlays.pick_selected_symbol_handle(self.session, *args, **kwargs)
+
+    def get_symbol_local_anchor(self, *args, **kwargs):
+        return symbol_overlays.get_symbol_local_anchor(self.session, *args, **kwargs)
+
+    def get_symbol_local_facing(self, *args, **kwargs):
+        return symbol_overlays.get_symbol_local_facing(self.session, *args, **kwargs)
