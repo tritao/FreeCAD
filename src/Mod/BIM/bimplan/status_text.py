@@ -316,36 +316,39 @@ def format_provider_selected_object_help(session):
     )
 
 
-def get_status_chip_text(session):
-    title = translate("BIM_PlanEdit", "Plan Edit · {tool}").format(tool=session.current_tool)
-    selected_kind, selected_obj = session.selection.get_selected_plan_target()
-    selected_context = format_plan_target_selection_state(session, selected_kind, selected_obj)
-    provider_context = format_provider_selected_object_state(session)
-    provider_action = format_provider_selected_object_help(session)
+def _format_status_chip_title(tool):
+    return translate("BIM_PlanEdit", "Plan Edit · {tool}").format(tool=tool)
 
+
+def _get_move_status_chip_text(title, context, label):
+    action = translate("BIM_PlanEdit", "Click target point")
+    return title, "{}\n{}".format(context or label, action)
+
+
+def _get_direct_tool_status_chip_text(
+    session, title, selected_kind, selected_obj, selected_context
+):
     if session.current_tool == "Provider Point":
-        title = translate("BIM_PlanEdit", "Plan Edit · {tool}").format(
-            tool=session.providers.get_provider_point_tool_label()
+        return (
+            _format_status_chip_title(session.providers.get_provider_point_tool_label()),
+            session.providers.get_provider_point_tool_prompt(),
         )
-        return title, session.providers.get_provider_point_tool_prompt()
 
     if session.current_tool == "Move Opening":
         context = (
             selected_context
             if selected_kind == "opening" and selected_obj is not None
-            else translate("BIM_PlanEdit", "Opening move")
+            else (translate("BIM_PlanEdit", "Opening move"))
         )
-        action = translate("BIM_PlanEdit", "Click target point")
-        return title, "{}\n{}".format(context, action)
+        return _get_move_status_chip_text(title, context, translate("BIM_PlanEdit", "Opening move"))
 
     if session.current_tool == "Move Symbol":
         context = (
             selected_context
             if selected_kind == "symbol" and selected_obj is not None
-            else translate("BIM_PlanEdit", "Symbol move")
+            else (translate("BIM_PlanEdit", "Symbol move"))
         )
-        action = translate("BIM_PlanEdit", "Click target point")
-        return title, "{}\n{}".format(context, action)
+        return _get_move_status_chip_text(title, context, translate("BIM_PlanEdit", "Symbol move"))
 
     if session.current_tool == "Move Provider":
         context = (
@@ -353,8 +356,11 @@ def get_status_chip_text(session):
             if selected_kind == "provider" and selected_obj is not None
             else translate("BIM_PlanEdit", "Integration move")
         )
-        action = translate("BIM_PlanEdit", "Click target point")
-        return title, "{}\n{}".format(context, action)
+        return _get_move_status_chip_text(
+            title,
+            context,
+            translate("BIM_PlanEdit", "Integration move"),
+        )
 
     if session.current_tool == "Rotate Symbol":
         context = (
@@ -376,8 +382,7 @@ def get_status_chip_text(session):
             if selected_kind == "wall" and selected_obj is not None
             else translate("BIM_PlanEdit", "Wall move")
         )
-        action = translate("BIM_PlanEdit", "Click target point")
-        return title, "{}\n{}".format(context, action)
+        return _get_move_status_chip_text(title, context, translate("BIM_PlanEdit", "Wall move"))
 
     if session.current_tool == "Join":
         target_wall, joint, detail = session.wall_relations.get_plan_join_candidate_state()
@@ -416,6 +421,10 @@ def get_status_chip_text(session):
         )
         return title, "{}\n{}".format(context, action)
 
+    return None
+
+
+def _get_default_status_chip_context(session, selected_context, provider_context):
     if selected_context:
         context = selected_context
     elif provider_context:
@@ -424,11 +433,19 @@ def get_status_chip_text(session):
         context = translate("BIM_PlanEdit", "Storey: {label}").format(
             label=session.storey.get_storey_label(session.active_storey)
         )
-
     selection_summary = get_plan_selection_summary_text(session)
     if selection_summary:
         context = "{}\n{}".format(context, selection_summary)
+    return context
 
+
+def _get_default_status_chip_action(
+    session,
+    selected_kind,
+    selected_obj,
+    provider_context,
+    provider_action,
+):
     hints = get_input_hint_specs(session)
     action = format_status_chip_action(hints[0][0]) if hints else ""
     if selected_kind == "region" and session.current_tool == "Select":
@@ -445,6 +462,32 @@ def get_status_chip_text(session):
         action = session._plan_relation_status_message
     if not action:
         action = translate("BIM_PlanEdit", "Work directly in the viewport")
+    return action
+
+
+def get_status_chip_text(session):
+    title = _format_status_chip_title(session.current_tool)
+    selected_kind, selected_obj = session.selection.get_selected_plan_target()
+    selected_context = format_plan_target_selection_state(session, selected_kind, selected_obj)
+    provider_context = format_provider_selected_object_state(session)
+    provider_action = format_provider_selected_object_help(session)
+    direct_text = _get_direct_tool_status_chip_text(
+        session,
+        title,
+        selected_kind,
+        selected_obj,
+        selected_context,
+    )
+    if direct_text is not None:
+        return direct_text
+    context = _get_default_status_chip_context(session, selected_context, provider_context)
+    action = _get_default_status_chip_action(
+        session,
+        selected_kind,
+        selected_obj,
+        provider_context,
+        provider_action,
+    )
     return title, "{}\n{}".format(context, action)
 
 
