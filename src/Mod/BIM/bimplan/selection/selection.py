@@ -1643,17 +1643,13 @@ class PlanSelectionAPI(_SessionAPI):
     get_plan_target_state_key = staticmethod(get_plan_target_state_key)
 
     def get_selected_plan_target_state(self):
-        from bimplan.runtime import session_components as plan_session_components
-
-        return plan_session_components.plan_selection.get_selected_plan_target_state(
+        return get_selected_plan_target_state(
             self.session,
             plan_target_kinds.PRIMARY_PLAN_TARGET_KINDS,
         )
 
     def set_selected_plan_target_state(self, kind=None, obj=None):
-        from bimplan.runtime import session_components as plan_session_components
-
-        return plan_session_components.plan_selection.set_selected_plan_target_state(
+        return set_selected_plan_target_state(
             self.session,
             plan_target_kinds.PRIMARY_PLAN_TARGET_KINDS,
             kind=kind,

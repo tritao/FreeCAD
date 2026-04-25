@@ -36,7 +36,6 @@ from .runtime import (
     input,
     lifecycle,
     session,
-    session_components,
     session_state,
     view,
 )
@@ -80,7 +79,6 @@ __all__ = [
     "lifecycle",
     "picking",
     "session",
-    "session_components",
     "session_state",
     "view",
 ]
