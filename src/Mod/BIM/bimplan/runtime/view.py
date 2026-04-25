@@ -2,58 +2,11 @@
 
 """View and viewport helpers for BIM Plan Edit."""
 
-from functools import wraps
-
 import FreeCAD
 import FreeCADGui
 
 _VIEW_PREFERENCES_PATH = "User parameter:BaseApp/Preferences/View"
 _ENABLE_PRESELECTION_PARAM = "EnablePreselection"
-
-
-def _bind_viewport_call(func):
-    @wraps(func)
-    def method(self, *args, **kwargs):
-        return func(self.session, *args, **kwargs)
-
-    return method
-
-
-_PLAN_VIEWPORT_API_BOUND_METHODS = (
-    "discard_stale_runtime_object",
-    "get_runtime_attr",
-    "get_navigation_style",
-    "get_main_window",
-    "find_main_window_action",
-    "capture_navigation_flag",
-    "apply_navigation_flag",
-    "capture_navigation_state",
-    "clear_plan_background_override",
-    "restore_navigation_state",
-    "force_plan_preselection",
-    "restore_preselection_state",
-    "apply_plan_view",
-    "restore_state",
-    "capture_state",
-    "get_interaction_plane",
-    "project_plan_point",
-    "get_plan_view_height",
-    "get_plan_overlay_scale",
-    "scaled_line_width",
-    "scaled_marker_size",
-    "get_plan_view_units_per_pixel",
-    "get_plan_projection_cache_key",
-    "get_plan_point_from_mouse_pos",
-    "set_active_object",
-    "sync_active_plan_target_object",
-    "register_edit_callbacks",
-    "unregister_edit_callbacks",
-    "focus_plan_view",
-    "queue_focus_plan_view",
-    "get_plan_view_widget",
-    "clear_viewport_status_chip",
-    "request_view_redraw",
-)
 
 
 class PlanViewportAPI:
@@ -108,9 +61,104 @@ class PlanViewportAPI:
             _PlanEditViewportStatusChip,
         )
 
+    def discard_stale_runtime_object(self, *args, **kwargs):
+        return discard_stale_runtime_object(self.session, *args, **kwargs)
 
-for _method_name in _PLAN_VIEWPORT_API_BOUND_METHODS:
-    setattr(PlanViewportAPI, _method_name, _bind_viewport_call(globals()[_method_name]))
+    def get_runtime_attr(self, *args, **kwargs):
+        return get_runtime_attr(self.session, *args, **kwargs)
+
+    def get_navigation_style(self, *args, **kwargs):
+        return get_navigation_style(self.session, *args, **kwargs)
+
+    def get_main_window(self, *args, **kwargs):
+        return get_main_window(self.session, *args, **kwargs)
+
+    def find_main_window_action(self, *args, **kwargs):
+        return find_main_window_action(self.session, *args, **kwargs)
+
+    def capture_navigation_flag(self, *args, **kwargs):
+        return capture_navigation_flag(self.session, *args, **kwargs)
+
+    def apply_navigation_flag(self, *args, **kwargs):
+        return apply_navigation_flag(self.session, *args, **kwargs)
+
+    def capture_navigation_state(self, *args, **kwargs):
+        return capture_navigation_state(self.session, *args, **kwargs)
+
+    def clear_plan_background_override(self, *args, **kwargs):
+        return clear_plan_background_override(self.session, *args, **kwargs)
+
+    def restore_navigation_state(self, *args, **kwargs):
+        return restore_navigation_state(self.session, *args, **kwargs)
+
+    def force_plan_preselection(self, *args, **kwargs):
+        return force_plan_preselection(self.session, *args, **kwargs)
+
+    def restore_preselection_state(self, *args, **kwargs):
+        return restore_preselection_state(self.session, *args, **kwargs)
+
+    def apply_plan_view(self, *args, **kwargs):
+        return apply_plan_view(self.session, *args, **kwargs)
+
+    def restore_state(self, *args, **kwargs):
+        return restore_state(self.session, *args, **kwargs)
+
+    def capture_state(self, *args, **kwargs):
+        return capture_state(self.session, *args, **kwargs)
+
+    def get_interaction_plane(self, *args, **kwargs):
+        return get_interaction_plane(self.session, *args, **kwargs)
+
+    def project_plan_point(self, *args, **kwargs):
+        return project_plan_point(self.session, *args, **kwargs)
+
+    def get_plan_view_height(self, *args, **kwargs):
+        return get_plan_view_height(self.session, *args, **kwargs)
+
+    def get_plan_overlay_scale(self, *args, **kwargs):
+        return get_plan_overlay_scale(self.session, *args, **kwargs)
+
+    def scaled_line_width(self, *args, **kwargs):
+        return scaled_line_width(self.session, *args, **kwargs)
+
+    def scaled_marker_size(self, *args, **kwargs):
+        return scaled_marker_size(self.session, *args, **kwargs)
+
+    def get_plan_view_units_per_pixel(self, *args, **kwargs):
+        return get_plan_view_units_per_pixel(self.session, *args, **kwargs)
+
+    def get_plan_projection_cache_key(self, *args, **kwargs):
+        return get_plan_projection_cache_key(self.session, *args, **kwargs)
+
+    def get_plan_point_from_mouse_pos(self, *args, **kwargs):
+        return get_plan_point_from_mouse_pos(self.session, *args, **kwargs)
+
+    def set_active_object(self, *args, **kwargs):
+        return set_active_object(self.session, *args, **kwargs)
+
+    def sync_active_plan_target_object(self, *args, **kwargs):
+        return sync_active_plan_target_object(self.session, *args, **kwargs)
+
+    def register_edit_callbacks(self, *args, **kwargs):
+        return register_edit_callbacks(self.session, *args, **kwargs)
+
+    def unregister_edit_callbacks(self, *args, **kwargs):
+        return unregister_edit_callbacks(self.session, *args, **kwargs)
+
+    def focus_plan_view(self, *args, **kwargs):
+        return focus_plan_view(self.session, *args, **kwargs)
+
+    def queue_focus_plan_view(self, *args, **kwargs):
+        return queue_focus_plan_view(self.session, *args, **kwargs)
+
+    def get_plan_view_widget(self, *args, **kwargs):
+        return get_plan_view_widget(self.session, *args, **kwargs)
+
+    def clear_viewport_status_chip(self, *args, **kwargs):
+        return clear_viewport_status_chip(self.session, *args, **kwargs)
+
+    def request_view_redraw(self, *args, **kwargs):
+        return request_view_redraw(self.session, *args, **kwargs)
 
 
 def _copy_plane(plane):
