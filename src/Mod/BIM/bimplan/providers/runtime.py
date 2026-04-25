@@ -1282,17 +1282,13 @@ def normalize_plan_provider_context_panel(session, provider_id, panel):
     return replace(panel, **replacements)
 
 
-def normalize_plan_provider_overlay(provider_id, overlay):
-    if not isinstance(overlay, PlanOverlaySpec):
-        return None
-    if not isinstance(overlay.marker_kind, PlanOverlayMarkerKind):
-        return None
-    replacements = {}
-    if overlay.provider_id != provider_id:
-        replacements["provider_id"] = str(provider_id or "")
-    target_keys = tuple(str(key or "") for key in tuple(overlay.target_keys or ()) if key)
-    if target_keys != tuple(overlay.target_keys or ()):
-        replacements["target_keys"] = target_keys
+def _normalize_plan_overlay_target_keys(target_keys):
+    raw_target_keys = tuple(target_keys or ())
+    normalized_target_keys = tuple(str(key or "") for key in raw_target_keys if key)
+    return raw_target_keys, normalized_target_keys
+
+
+def _normalize_plan_overlay_points_and_targets(overlay):
     raw_points = tuple(overlay.points or ())
     raw_point_targets = tuple(overlay.point_targets or ())
     point_pairs = []
@@ -1305,24 +1301,58 @@ def normalize_plan_provider_overlay(provider_id, overlay):
             raw_target = raw_point_targets[index] if index < len(raw_point_targets) else None
             target = _normalize_plan_overlay_target(raw_target)
             if raw_target is not None and target is None:
-                return None
+                return None, None, None
         point_pairs.append((point, target))
     points = tuple(point for point, _target in point_pairs)
-    if points != tuple(overlay.points or ()):
-        replacements["points"] = points
+    point_targets = None
     if raw_point_targets:
         point_targets = tuple(target or PlanOverlayTargetSpec() for _point, target in point_pairs)
-        if point_targets != raw_point_targets:
-            replacements["point_targets"] = point_targets
-    polylines = tuple(
-        _coerce_plan_overlay_polyline(polyline) for polyline in tuple(overlay.polylines or ())
+    return raw_points, raw_point_targets, (points, point_targets)
+
+
+def _normalize_plan_overlay_polylines(polylines):
+    normalized_polylines = tuple(
+        _coerce_plan_overlay_polyline(polyline) for polyline in tuple(polylines or ())
     )
-    polylines = tuple(polyline for polyline in polylines if len(polyline) >= 2)
+    return tuple(polyline for polyline in normalized_polylines if len(polyline) >= 2)
+
+
+def _collect_overlay_normalization_replacements(provider_id, overlay):
+    replacements = {}
+    if overlay.provider_id != provider_id:
+        replacements["provider_id"] = str(provider_id or "")
+
+    raw_target_keys, target_keys = _normalize_plan_overlay_target_keys(overlay.target_keys)
+    if target_keys != raw_target_keys:
+        replacements["target_keys"] = target_keys
+
+    raw_points, raw_point_targets, point_data = _normalize_plan_overlay_points_and_targets(overlay)
+    if point_data is None:
+        return None
+    points, point_targets = point_data
+    if points != raw_points:
+        replacements["points"] = points
+    if raw_point_targets and point_targets != raw_point_targets:
+        replacements["point_targets"] = point_targets
+
+    polylines = _normalize_plan_overlay_polylines(overlay.polylines)
     if polylines != tuple(overlay.polylines or ()):
         replacements["polylines"] = polylines
+
     color = _coerce_plan_overlay_color(overlay.color)
     if color != overlay.color:
         replacements["color"] = color
+    return replacements
+
+
+def normalize_plan_provider_overlay(provider_id, overlay):
+    if not isinstance(overlay, PlanOverlaySpec):
+        return None
+    if not isinstance(overlay.marker_kind, PlanOverlayMarkerKind):
+        return None
+    replacements = _collect_overlay_normalization_replacements(provider_id, overlay)
+    if replacements is None:
+        return None
     if not replacements:
         return overlay
     return replace(overlay, **replacements)
