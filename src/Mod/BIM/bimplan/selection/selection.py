@@ -1016,18 +1016,19 @@ def activate_plan_target(
     defer_wall_grips=False,
 ):
     if resolved_target is None:
-        target_kind, target_obj = session.selection.get_plan_target_at_position(mouse_pos)
+        target_ref = session.selection.get_plan_target_at_position(mouse_pos)
     else:
-        target_kind, target_obj = resolved_target
+        target_ref = plan_target_kinds.coerce_plan_target_ref(resolved_target)
     with session.performance.plan_perf_trace_span(
         f"activate_plan_target_{kind}", requested_kind=kind, mouse_pos=mouse_pos
     ):
         session.performance.plan_perf_count(f"activate_plan_target_attempts_{kind}")
         session.performance.plan_perf_set_fields(
-            resolved_target=session.performance.plan_perf_describe_target(target_kind, target_obj)
+            resolved_target=session.performance.plan_perf_describe_target(
+                target_ref.kind, target_ref.obj
+            )
         )
-        if target_kind != kind:
-            target_obj = None
+        target_obj = target_ref.obj if target_ref.kind == kind else None
         behavior = _get_target_activation_behavior(kind)
         if behavior is None or not behavior.select_target(
             session,
@@ -1049,9 +1050,9 @@ def activate_plan_target(
 
 
 def activate_semantic_plan_target(session, mouse_pos, event_callback=None):
-    target_kind, target_obj = session.selection.get_hovered_plan_target()
-    if target_obj is None or session._hover_pick_dirty:
-        target_kind, target_obj = session.selection.get_plan_target_at_position(mouse_pos)
+    target_ref = session.selection.get_hovered_plan_target()
+    if target_ref.obj is None or session._hover_pick_dirty:
+        target_ref = session.selection.get_plan_target_at_position(mouse_pos)
         source = "picked_after_throttled_hover" if session._hover_pick_dirty else "picked"
         session._hover_pick_dirty = False
         session.performance.plan_perf_count(f"semantic_target_source_{source}")
@@ -1060,26 +1061,28 @@ def activate_semantic_plan_target(session, mouse_pos, event_callback=None):
         session.performance.plan_perf_count("semantic_target_source_hovered")
         session.performance.plan_perf_set_fields(
             semantic_target_source="hovered",
-            hovered_target=session.performance.plan_perf_describe_target(target_kind, target_obj),
+            hovered_target=session.performance.plan_perf_describe_target(
+                target_ref.kind, target_ref.obj
+            ),
         )
-    if _get_target_activation_behavior(target_kind) is None:
+    if _get_target_activation_behavior(target_ref.kind) is None:
         return False
-    if target_kind == plan_target_kinds.PLAN_TARGET_WALL:
+    if target_ref.kind == plan_target_kinds.PLAN_TARGET_WALL:
         return _activate_configured_plan_target(
             session,
-            target_kind,
+            target_ref.kind,
             mouse_pos,
             event_callback=event_callback,
-            resolved_target=(target_kind, target_obj),
+            resolved_target=target_ref,
             defer_gui_selection=True,
             defer_wall_grips=True,
         )
     return _activate_configured_plan_target(
         session,
-        target_kind,
+        target_ref.kind,
         mouse_pos,
         event_callback=event_callback,
-        resolved_target=(target_kind, target_obj),
+        resolved_target=target_ref,
     )
 
 
@@ -1197,30 +1200,30 @@ def is_plan_additive_selection_active(session):
 
 
 def activate_provider_overlay_target_node(session, node, event_callback=None):
-    target_kind, target_obj = session.selection.get_provider_overlay_target_from_edit_node(node)
-    if target_obj is None:
+    target_ref = session.selection.get_provider_overlay_target_from_edit_node(node)
+    if target_ref.obj is None:
         return False
-    if session.selection.is_valid_plan_target(target_kind, target_obj):
+    if session.selection.is_valid_plan_target(target_ref.kind, target_ref.obj):
         session._provider_selected_objects = []
-        session.selection.set_pending_selected_plan_target(target_kind, target_obj)
+        session.selection.set_pending_selected_plan_target(target_ref)
     else:
-        session._provider_selected_objects = [target_obj]
+        session._provider_selected_objects = [target_ref.obj]
         session.selection.set_pending_selected_plan_target()
     plan_target_dispatch.clear_hovered_targets(session)
-    session.selection.set_gui_selection_object(target_obj)
+    session.selection.set_gui_selection_object(target_ref.obj)
     session.selection.refresh_primary_selected_plan_target()
     session.input.claim_left_button_click(event_callback)
     return True
 
 
 def _get_current_additive_gui_selection(session):
-    primary_kind, primary_obj = session.selection.get_selected_plan_target()
+    primary_target_ref = session.selection.get_selected_plan_target()
     selection = session.selection.get_gui_selection()
-    if primary_obj is not None and primary_obj not in selection:
-        selection = [primary_obj] + selection
+    if primary_target_ref.obj is not None and primary_target_ref.obj not in selection:
+        selection = [primary_target_ref.obj] + selection
     return (
-        primary_kind,
-        primary_obj,
+        primary_target_ref.kind,
+        primary_target_ref.obj,
         session.selection.normalize_gui_object_selection(selection),
     )
 
@@ -1262,7 +1265,7 @@ def toggle_raw_plan_object_selection(session, obj, event_callback=None):
         [
             selected
             for selected in selection
-            if session.selection.get_plan_target_for_object(selected)[0]
+            if session.selection.get_plan_target_for_object(selected).kind
         ],
     )
     next_kind, next_obj = _resolve_next_selected_target(
@@ -1286,25 +1289,27 @@ def toggle_plan_target_selection_at_position(session, mouse_pos, event_callback=
         "provider_overlay_point",
         "provider_overlay_target",
     ):
-        target_kind, target_obj = session.selection.get_provider_overlay_target_from_edit_node(node)
-        if target_obj is not None and not session.selection.is_valid_plan_target(
-            target_kind,
-            target_obj,
+        target_ref = session.selection.get_provider_overlay_target_from_edit_node(node)
+        if target_ref.obj is not None and not session.selection.is_valid_plan_target(
+            target_ref.kind,
+            target_ref.obj,
         ):
-            return session.selection.toggle_raw_plan_object_selection(target_obj, event_callback)
+            return session.selection.toggle_raw_plan_object_selection(
+                target_ref.obj, event_callback
+            )
     else:
-        target_kind, target_obj = session.selection.get_plan_target_from_edit_node(node)
-    if target_kind is None:
-        target_kind, target_obj = session.selection.get_plan_target_at_position(mouse_pos)
-    if not target_kind or not target_obj:
+        target_ref = session.selection.get_plan_target_from_edit_node(node)
+    if target_ref.kind is None:
+        target_ref = session.selection.get_plan_target_at_position(mouse_pos)
+    if not target_ref.kind or not target_ref.obj:
         return False
 
     primary_kind, primary_obj, selection = _get_current_additive_gui_selection(session)
 
-    was_selected = target_obj in selection
+    was_selected = target_ref.obj in selection
     if was_selected:
-        new_selection = [selected for selected in selection if selected != target_obj]
-        fallback_target = None if primary_obj == target_obj else (target_kind, target_obj)
+        new_selection = [selected for selected in selection if selected != target_ref.obj]
+        fallback_target = None if primary_obj == target_ref.obj else target_ref
         next_kind, next_obj = _resolve_next_selected_target(
             session,
             new_selection,
@@ -1314,13 +1319,13 @@ def toggle_plan_target_selection_at_position(session, mouse_pos, event_callback=
         )
     else:
         new_selection = list(selection)
-        new_selection.append(target_obj)
+        new_selection.append(target_ref.obj)
         next_kind, next_obj = _resolve_next_selected_target(
             session,
             new_selection,
             primary_kind,
             primary_obj,
-            fallback_target=(target_kind, target_obj),
+            fallback_target=target_ref,
         )
 
     return _apply_additive_selection_update(
