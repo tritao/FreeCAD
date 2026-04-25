@@ -30,6 +30,7 @@ import FreeCAD
 import FreeCADGui
 from bimplan.providers import host_targets as plan_host_targets
 from bimplan.providers import runtime as plan_provider_runtime
+from bimplan.runtime import tools as plan_runtime_tools
 from bimplan.selection import target_kinds as plan_target_kinds
 
 
@@ -39,7 +40,13 @@ class PlanInteractionAPI:
     __slots__ = ("_session",)
 
     _MODAL_TOOLS = frozenset(
-        ("Move Opening", "Move Symbol", "Rotate Symbol", "Set Space Text", "Window")
+        (
+            plan_runtime_tools.PlanTool.MOVE_OPENING,
+            plan_runtime_tools.PlanTool.MOVE_SYMBOL,
+            plan_runtime_tools.PlanTool.ROTATE_SYMBOL,
+            plan_runtime_tools.PlanTool.SET_SPACE_TEXT,
+            plan_runtime_tools.PlanTool.WINDOW,
+        )
     )
 
     def __init__(self, session):
@@ -869,7 +876,7 @@ def initialize_session_state(session):
     session.task_panel = None
     session._aux_task_panels = []
     initialize_session_read_state(session)
-    session.current_tool = "Select"
+    session.current_tool = plan_runtime_tools.PlanTool.SELECT
     session._plan_join_type = "Miter"
     session.storeys = []
     session.active_storey = None

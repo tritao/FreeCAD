@@ -231,6 +231,7 @@ SET(bimplan_SRCS
     bimplan/runtime/lifecycle.py
     bimplan/runtime/session.py
     bimplan/runtime/session_state.py
+    bimplan/runtime/tools.py
     bimplan/runtime/view.py
     bimplan/runtime/view_properties.py
     bimplan/selection/__init__.py

@@ -6,6 +6,7 @@ import FreeCAD
 
 from bimplan import document_visuals as plan_document_visuals
 from bimplan import selection as plan_selection
+from bimplan.runtime import tools as plan_runtime_tools
 from bimplan.selection import edit_nodes as plan_edit_nodes
 from bimplan.selection import target_kinds as plan_target_kinds
 from bimplan.tools import space_regions as plan_space_regions
@@ -160,13 +161,13 @@ def _handle_left_mouse_button_release(session, event_callback):
 
 def _handle_left_mouse_button_down(session, mouse_pos, event_callback):
     session.input_event_state.consume_left_button_release = False
-    if session.current_tool == "Join":
+    if session.current_tool == plan_runtime_tools.PlanTool.JOIN:
         _handle_join_tool_mouse_down(session, mouse_pos, event_callback)
         return
-    if session.current_tool == "Pick Space Region":
+    if session.current_tool == plan_runtime_tools.PlanTool.PICK_SPACE_REGION:
         _handle_pick_space_region_mouse_down(session, mouse_pos, event_callback)
         return
-    if session.current_tool != "Select":
+    if session.current_tool != plan_runtime_tools.PlanTool.SELECT:
         return
     _handle_select_tool_mouse_down(session, mouse_pos, event_callback)
 
@@ -238,7 +239,7 @@ def on_mouse_moved(session, event_callback):
             hovered_before.kind, hovered_before.obj
         ),
     ):
-        if session.current_tool == "Pick Space Region":
+        if session.current_tool == plan_runtime_tools.PlanTool.PICK_SPACE_REGION:
             if mouse_pos is not None:
                 plan_space_regions.set_hovered_space_region_candidate(
                     session,
@@ -247,7 +248,10 @@ def on_mouse_moved(session, event_callback):
                 )
                 session.overlays.refresh_plan_overlay_visuals()
             return
-        if session.current_tool not in ("Select", "Join"):
+        if session.current_tool not in (
+            plan_runtime_tools.PlanTool.SELECT,
+            plan_runtime_tools.PlanTool.JOIN,
+        ):
             session.selection.set_hovered_wall(None)
             session.selection.set_hovered_opening(None)
             session.selection.set_hovered_symbol(None)
@@ -294,44 +298,66 @@ def _set_key_event_handled(event_callback):
 
 
 def _handle_direct_tool_key_press(session, key, event_callback, coin):
-    if session.current_tool == "Move Opening" and key == coin.SoKeyboardEvent.A:
+    if (
+        session.current_tool == plan_runtime_tools.PlanTool.MOVE_OPENING
+        and key == coin.SoKeyboardEvent.A
+    ):
         if session.openings.cycle_opening_move_anchor():
             session.openings.refresh_opening_move_preview_from_raw_point()
             session.task_panels.refresh_task_panel_status()
         return True
     if (
-        session.current_tool in ("Move Symbol", "Rotate Symbol")
+        session.current_tool
+        in (
+            plan_runtime_tools.PlanTool.MOVE_SYMBOL,
+            plan_runtime_tools.PlanTool.ROTATE_SYMBOL,
+        )
         and key == coin.SoKeyboardEvent.ESCAPE
     ):
         session.symbols.cancel_symbol_handle_point_pick()
         return True
-    if session.current_tool == "Pick Space Region" and key == coin.SoKeyboardEvent.ESCAPE:
+    if (
+        session.current_tool == plan_runtime_tools.PlanTool.PICK_SPACE_REGION
+        and key == coin.SoKeyboardEvent.ESCAPE
+    ):
         session.spaces.cancel_space_region_pick()
         return True
-    if session.current_tool == "Region" and key in (
+    if session.current_tool == plan_runtime_tools.PlanTool.REGION and key in (
         coin.SoKeyboardEvent.RETURN,
         coin.SoKeyboardEvent.ENTER,
     ):
         if session.spaces.finalize_plan_region():
             _set_key_event_handled(event_callback)
         return True
-    if session.current_tool == "Region" and key == coin.SoKeyboardEvent.ESCAPE:
+    if (
+        session.current_tool == plan_runtime_tools.PlanTool.REGION
+        and key == coin.SoKeyboardEvent.ESCAPE
+    ):
         session.spaces.cancel_plan_region_tool()
         return True
-    if session.current_tool == "Provider Point" and key == coin.SoKeyboardEvent.ESCAPE:
+    if (
+        session.current_tool == plan_runtime_tools.PlanTool.PROVIDER_POINT
+        and key == coin.SoKeyboardEvent.ESCAPE
+    ):
         session.providers.cancel_provider_point_tool()
         return True
-    if session.current_tool == "Move Provider" and key == coin.SoKeyboardEvent.ESCAPE:
+    if (
+        session.current_tool == plan_runtime_tools.PlanTool.MOVE_PROVIDER
+        and key == coin.SoKeyboardEvent.ESCAPE
+    ):
         session.providers.cancel_provider_handle_point_pick()
         return True
-    if session.current_tool == "Window" and key == coin.SoKeyboardEvent.ESCAPE:
+    if (
+        session.current_tool == plan_runtime_tools.PlanTool.WINDOW
+        and key == coin.SoKeyboardEvent.ESCAPE
+    ):
         session.windows.cancel_window_tool()
         return True
     return False
 
 
 def _handle_join_tool_key_press(session, key, event_callback, coin):
-    if session.current_tool != "Join":
+    if session.current_tool != plan_runtime_tools.PlanTool.JOIN:
         return False
     if key == coin.SoKeyboardEvent.TAB:
         if session.wall_relations.cycle_plan_join_type():
@@ -370,19 +396,25 @@ def _handle_wall_edit_key_press(session, key, event_callback, coin):
 
 
 def _handle_escape_cancels(session):
-    if session.wall_edit_state.edit_wall and session.current_tool != "Select":
+    if (
+        session.wall_edit_state.edit_wall
+        and session.current_tool != plan_runtime_tools.PlanTool.SELECT
+    ):
         session.wall_edit.cancel_wall_edit_point_pick()
         return True
-    if session.current_tool == "Move Opening":
+    if session.current_tool == plan_runtime_tools.PlanTool.MOVE_OPENING:
         session.openings.cancel_opening_handle_point_pick()
         return True
-    if session.current_tool == "Move Provider":
+    if session.current_tool == plan_runtime_tools.PlanTool.MOVE_PROVIDER:
         session.providers.cancel_provider_handle_point_pick()
         return True
-    if session.current_tool in ("Move Symbol", "Rotate Symbol"):
+    if session.current_tool in (
+        plan_runtime_tools.PlanTool.MOVE_SYMBOL,
+        plan_runtime_tools.PlanTool.ROTATE_SYMBOL,
+    ):
         session.symbols.cancel_symbol_handle_point_pick()
         return True
-    if session.current_tool == "Set Space Text":
+    if session.current_tool == plan_runtime_tools.PlanTool.SET_SPACE_TEXT:
         session.spaces.cancel_space_text_position_pick()
         return True
     if session.providers.has_active_provider_point_tool():
