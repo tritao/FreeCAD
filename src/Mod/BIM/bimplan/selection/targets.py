@@ -56,16 +56,16 @@ def get_plan_target_for_object(session, obj, parent_obj=None):
             seen.add(name)
         target_kind = session.selection.get_plan_target_kind_for_object(candidate)
         if target_kind:
-            return (target_kind, candidate)
+            return plan_target_kinds.make_plan_target_ref(target_kind, candidate)
 
     semantic_obj = session.visibility.get_plan_semantic_object(obj)
     semantic_name = getattr(semantic_obj, "Name", None)
     if semantic_obj and semantic_name not in seen:
         target_kind = session.selection.get_plan_target_kind_for_object(semantic_obj)
         if target_kind:
-            return (target_kind, semantic_obj)
+            return plan_target_kinds.make_plan_target_ref(target_kind, semantic_obj)
 
-    return (None, None)
+    return plan_target_kinds.make_plan_target_ref()
 
 
 def get_plan_pick_target_for_object(session, obj, parent_obj=None):
@@ -88,7 +88,7 @@ def get_plan_pick_target_for_object(session, obj, parent_obj=None):
         ):
             continue
         if target_kind:
-            return (target_kind, candidate)
+            return plan_target_kinds.make_plan_target_ref(target_kind, candidate)
 
     semantic_obj = session.visibility.get_plan_semantic_object(obj)
     semantic_name = getattr(semantic_obj, "Name", None)
@@ -101,11 +101,11 @@ def get_plan_pick_target_for_object(session, obj, parent_obj=None):
                 semantic_obj,
             )
         ):
-            return (None, None)
+            return plan_target_kinds.make_plan_target_ref()
         if target_kind:
-            return (target_kind, semantic_obj)
+            return plan_target_kinds.make_plan_target_ref(target_kind, semantic_obj)
 
-    return (None, None)
+    return plan_target_kinds.make_plan_target_ref()
 
 
 def is_plan_selectable_wall(session, obj):

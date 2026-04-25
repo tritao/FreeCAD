@@ -6,6 +6,7 @@ import FreeCAD
 import FreeCADGui
 
 from bimplan import document_visuals as plan_document_visuals
+from bimplan.selection import target_kinds as plan_target_kinds
 
 translate = FreeCAD.Qt.translate
 
@@ -180,7 +181,7 @@ def update_provider_point_tool_preview(session, point=None, obj=None):
         return
     snap_info = session.providers.get_provider_point_snap_info()
     snap_object = session.providers.resolve_provider_point_snap_object(obj, snap_info)
-    snap_target = (None, None)
+    snap_target = plan_target_kinds.make_plan_target_ref()
     if snap_object is not None:
         snap_target = session.selection.get_plan_target_for_object(snap_object)
     host_kind, host_obj, host_source = session.providers.get_provider_point_payload_host_target(
@@ -237,10 +238,7 @@ def resolve_provider_point_snap_object(session, snap_object, snap_info):
 def normalize_provider_point_host_target(session, target):
     if not target:
         return (None, None)
-    try:
-        target_kind, target_obj = target
-    except Exception:
-        return (None, None)
+    target_kind, target_obj = plan_target_kinds.unpack_plan_target_ref(target)
     if target_kind == "wall" and session.selection.is_plan_selectable_wall(target_obj):
         return ("wall", target_obj)
     return (None, None)
@@ -331,7 +329,7 @@ def build_provider_point_tool_payload(
     snap_object,
     snap_info,
 ):
-    snap_target = (None, None)
+    snap_target = plan_target_kinds.make_plan_target_ref()
     if snap_object is not None:
         snap_target = session.selection.get_plan_target_for_object(snap_object)
     snap_component = str(snap_info.get("Component", "") or "").strip()
