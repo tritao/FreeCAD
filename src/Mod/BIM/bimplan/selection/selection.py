@@ -41,7 +41,7 @@ class SelectionRefreshResult:
 
 @dataclass(frozen=True)
 class TargetActivationBehavior:
-    select_method_name: str
+    select_target: object
     clear_hovered_kinds: tuple[str, ...]
     sync_gui_selection: bool = True
     defer_gui_selection: bool = False
@@ -928,23 +928,23 @@ select_wall_for_plan_edit = _make_select_plan_target_function(plan_target_kinds.
 
 _TARGET_ACTIVATION_BEHAVIORS = {
     plan_target_kinds.PLAN_TARGET_OPENING: TargetActivationBehavior(
-        select_method_name="select_opening_for_plan_edit",
+        select_target=select_opening_for_plan_edit,
         clear_hovered_kinds=plan_target_kinds.SEMANTIC_TARGET_CLEAR_HOVERED_KINDS,
     ),
     plan_target_kinds.PLAN_TARGET_SYMBOL: TargetActivationBehavior(
-        select_method_name="select_symbol_for_plan_edit",
+        select_target=select_symbol_for_plan_edit,
         clear_hovered_kinds=plan_target_kinds.SEMANTIC_TARGET_CLEAR_HOVERED_KINDS,
     ),
     plan_target_kinds.PLAN_TARGET_REGION: TargetActivationBehavior(
-        select_method_name="select_region_for_plan_edit",
+        select_target=select_region_for_plan_edit,
         clear_hovered_kinds=plan_target_kinds.SEMANTIC_TARGET_CLEAR_HOVERED_KINDS,
     ),
     plan_target_kinds.PLAN_TARGET_SPACE: TargetActivationBehavior(
-        select_method_name="select_space_for_plan_edit",
+        select_target=select_space_for_plan_edit,
         clear_hovered_kinds=plan_target_kinds.SPACE_TARGET_CLEAR_HOVERED_KINDS,
     ),
     plan_target_kinds.PLAN_TARGET_WALL: TargetActivationBehavior(
-        select_method_name="select_wall_for_plan_edit",
+        select_target=select_wall_for_plan_edit,
         clear_hovered_kinds=plan_target_kinds.WALL_TARGET_CLEAR_HOVERED_KINDS,
     ),
 }
@@ -1029,10 +1029,8 @@ def activate_plan_target(
         if target_kind != kind:
             target_obj = None
         behavior = _get_target_activation_behavior(kind)
-        select_target = (
-            getattr(session.selection, behavior.select_method_name, None) if behavior else None
-        )
-        if select_target is None or not select_target(
+        if behavior is None or not behavior.select_target(
+            session,
             target_obj,
             queue_restore=True,
             sync_gui_selection=sync_gui_selection,

@@ -414,14 +414,14 @@ class PlanProvidersAPI:
 class _PlanProviderSnapshotSurfaceSpec:
     field_name: str
     method_name: str
-    normalizer_name: str
+    normalizer: object
 
 
 @dataclass(frozen=True)
 class _PlanProviderContributionSurfaceSpec:
     function_name: str
     method_name: str
-    normalizer_name: str
+    normalizer: object
 
 
 @dataclass(frozen=True)
@@ -442,73 +442,6 @@ class PlanProviderSnapshot:
             or self.context_panels
             or self.inspector_sections
         )
-
-
-_PLAN_PROVIDER_SNAPSHOT_SURFACES = (
-    _PlanProviderSnapshotSurfaceSpec(
-        field_name="tools",
-        method_name="get_tools",
-        normalizer_name="normalize_plan_provider_tool",
-    ),
-    _PlanProviderSnapshotSurfaceSpec(
-        field_name="overlays",
-        method_name="get_overlays",
-        normalizer_name="normalize_plan_provider_overlay",
-    ),
-    _PlanProviderSnapshotSurfaceSpec(
-        field_name="issues",
-        method_name="get_issues",
-        normalizer_name="normalize_plan_provider_issue",
-    ),
-    _PlanProviderSnapshotSurfaceSpec(
-        field_name="context_panels",
-        method_name="get_context_panels",
-        normalizer_name="normalize_plan_provider_context_panel",
-    ),
-    _PlanProviderSnapshotSurfaceSpec(
-        field_name="inspector_sections",
-        method_name="get_inspector_sections",
-        normalizer_name="normalize_plan_provider_section",
-    ),
-)
-
-_PLAN_PROVIDER_CONTRIBUTION_SURFACES = (
-    _PlanProviderContributionSurfaceSpec(
-        function_name="get_plan_provider_edit_handles",
-        method_name="get_edit_handles",
-        normalizer_name="normalize_plan_provider_edit_handle",
-    ),
-    _PlanProviderContributionSurfaceSpec(
-        function_name="get_plan_provider_issues",
-        method_name="get_issues",
-        normalizer_name="normalize_plan_provider_issue",
-    ),
-    _PlanProviderContributionSurfaceSpec(
-        function_name="get_plan_provider_suggestions",
-        method_name="get_suggestions",
-        normalizer_name="normalize_plan_provider_suggestion",
-    ),
-    _PlanProviderContributionSurfaceSpec(
-        function_name="get_plan_provider_tools",
-        method_name="get_tools",
-        normalizer_name="normalize_plan_provider_tool",
-    ),
-    _PlanProviderContributionSurfaceSpec(
-        function_name="get_plan_provider_inspector_sections",
-        method_name="get_inspector_sections",
-        normalizer_name="normalize_plan_provider_section",
-    ),
-    _PlanProviderContributionSurfaceSpec(
-        function_name="get_plan_provider_context_panels",
-        method_name="get_context_panels",
-        normalizer_name="normalize_plan_provider_context_panel",
-    ),
-    _PlanProviderContributionSurfaceSpec(
-        function_name="get_plan_provider_overlays",
-        method_name="get_overlays",
-        normalizer_name="normalize_plan_provider_overlay",
-    ),
-)
 
 
 def _is_active_provider_session(session):
@@ -685,7 +618,7 @@ def collect_plan_provider_snapshot(session) -> PlanProviderSnapshot:
         if context is None:
             return PlanProviderSnapshot()
         normalized_surfaces = tuple(
-            (surface_spec, getattr(session.providers, surface_spec.normalizer_name))
+            (surface_spec, surface_spec.normalizer)
             for surface_spec in _PLAN_PROVIDER_SNAPSHOT_SURFACES
         )
         collected = _collect_plan_provider_snapshot_surfaces(
@@ -1518,6 +1451,73 @@ def _coerce_plan_overlay_color(color):
     return values[:3]
 
 
+_PLAN_PROVIDER_SNAPSHOT_SURFACES = (
+    _PlanProviderSnapshotSurfaceSpec(
+        field_name="tools",
+        method_name="get_tools",
+        normalizer=normalize_plan_provider_tool,
+    ),
+    _PlanProviderSnapshotSurfaceSpec(
+        field_name="overlays",
+        method_name="get_overlays",
+        normalizer=normalize_plan_provider_overlay,
+    ),
+    _PlanProviderSnapshotSurfaceSpec(
+        field_name="issues",
+        method_name="get_issues",
+        normalizer=normalize_plan_provider_issue,
+    ),
+    _PlanProviderSnapshotSurfaceSpec(
+        field_name="context_panels",
+        method_name="get_context_panels",
+        normalizer=normalize_plan_provider_context_panel,
+    ),
+    _PlanProviderSnapshotSurfaceSpec(
+        field_name="inspector_sections",
+        method_name="get_inspector_sections",
+        normalizer=normalize_plan_provider_section,
+    ),
+)
+
+_PLAN_PROVIDER_CONTRIBUTION_SURFACES = (
+    _PlanProviderContributionSurfaceSpec(
+        function_name="get_plan_provider_edit_handles",
+        method_name="get_edit_handles",
+        normalizer=normalize_plan_provider_edit_handle,
+    ),
+    _PlanProviderContributionSurfaceSpec(
+        function_name="get_plan_provider_issues",
+        method_name="get_issues",
+        normalizer=normalize_plan_provider_issue,
+    ),
+    _PlanProviderContributionSurfaceSpec(
+        function_name="get_plan_provider_suggestions",
+        method_name="get_suggestions",
+        normalizer=normalize_plan_provider_suggestion,
+    ),
+    _PlanProviderContributionSurfaceSpec(
+        function_name="get_plan_provider_tools",
+        method_name="get_tools",
+        normalizer=normalize_plan_provider_tool,
+    ),
+    _PlanProviderContributionSurfaceSpec(
+        function_name="get_plan_provider_inspector_sections",
+        method_name="get_inspector_sections",
+        normalizer=normalize_plan_provider_section,
+    ),
+    _PlanProviderContributionSurfaceSpec(
+        function_name="get_plan_provider_context_panels",
+        method_name="get_context_panels",
+        normalizer=normalize_plan_provider_context_panel,
+    ),
+    _PlanProviderContributionSurfaceSpec(
+        function_name="get_plan_provider_overlays",
+        method_name="get_overlays",
+        normalizer=normalize_plan_provider_overlay,
+    ),
+)
+
+
 def collect_plan_provider_contributions(session, method_name, normalizer):
     with _perf_trace_span(session, f"collect_plan_provider_contributions_{method_name}"):
         if not _is_active_provider_session(session):
@@ -1546,7 +1546,7 @@ def _make_plan_provider_contribution_getter(surface_spec):
     def _get_plan_provider_contributions(session):
         return session.providers.collect_plan_provider_contributions(
             surface_spec.method_name,
-            getattr(session.providers, surface_spec.normalizer_name),
+            surface_spec.normalizer,
         )
 
     _get_plan_provider_contributions.__name__ = surface_spec.function_name
