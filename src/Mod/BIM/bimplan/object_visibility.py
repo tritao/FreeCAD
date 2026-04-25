@@ -4,6 +4,8 @@
 
 from __future__ import annotations
 
+import FreeCAD
+
 from bimplan.runtime import capabilities as runtime_capabilities
 from bimplan.runtime import view_properties as runtime_view_properties
 
