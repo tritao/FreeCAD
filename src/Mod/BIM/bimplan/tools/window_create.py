@@ -302,8 +302,16 @@ def activate_window_tool(session):
         pass
     session.lifecycle.set_draft_point_focus_suppressed(True)
     FreeCADGui.Snapper.getPoint(
-        callback=session.windows.handle_window_tool_point,
-        movecallback=session.windows.update_window_tool_preview,
+        callback=lambda point=None, obj=None: handle_window_tool_point(
+            session,
+            point=point,
+            obj=obj,
+        ),
+        movecallback=lambda point=None, info=None: update_window_tool_preview(
+            session,
+            point=point,
+            info=info,
+        ),
         title=translate("BIM_PlanEdit", "Window location"),
         noTracker=True,
     )
