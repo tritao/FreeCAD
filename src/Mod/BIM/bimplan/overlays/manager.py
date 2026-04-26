@@ -431,12 +431,17 @@ def finalize_trackers(trackers):
     if not finalized_any:
         return
     try:
-        from PySide import QtCore
         from draftutils.todo import ToDo
 
-        QtCore.QTimer.singleShot(0, ToDo.doTasks)
+        ToDo.doTasks()
     except Exception:
-        pass
+        try:
+            from PySide import QtCore
+            from draftutils.todo import ToDo
+
+            QtCore.QTimer.singleShot(0, ToDo.doTasks)
+        except Exception:
+            pass
 
 
 def make_plan_line_tracker(DraftTrackers, label, **kwargs):

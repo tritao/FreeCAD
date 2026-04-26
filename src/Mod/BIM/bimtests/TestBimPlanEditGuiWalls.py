@@ -411,6 +411,7 @@ class BimPlanEditGuiWallsMixin:
         self._assert_no_selected_plan_target(session)
         self.assertIsNone(session._pending_selected_plan_target)
         self.assertEqual(len(session._grip_trackers), 0)
+        self.assertEqual(self._get_scenegraph_edit_nodes(session), [])
 
     def test_plan_edit_empty_canvas_click_clears_lingering_storey_gui_selection(self):
         """Select-mode empty clicks should clear the initial storey GUI selection."""
@@ -1755,6 +1756,64 @@ class BimPlanEditGuiWallsMixin:
         self.assertEqual(session.selection.get_selected_plan_target(), (None, None))
         self.assertEqual(len(session._grip_trackers), 0)
         self.assertEqual(len(session._preview_grip_trackers), 0)
+        self.assertEqual(self._get_scenegraph_edit_nodes(session), [])
+
+    def test_plan_edit_gui_wall_deselection_removes_edit_nodes_from_scenegraph(self):
+        """GUI deselection should not leave stale EditNode grips in the viewer scene graph."""
+
+        wall = Arch.makeWall(length=3000, width=200, height=2500)
+        self.document.recompute()
+
+        session = BimPlanSession.start_session()
+        self.assertIsNotNone(session)
+        self.pump_gui_events()
+
+        FreeCADGui.Selection.clearSelection()
+        FreeCADGui.Selection.addSelection(self.document.Name, wall.Name)
+        self.pump_gui_events(timeout_ms=500)
+        session.selection.refresh_primary_selected_plan_target()
+        self.pump_gui_events(timeout_ms=500)
+
+        self.assertEqual(
+            self._get_scenegraph_edit_nodes(session),
+            [(wall.Name, "EditNode2"), (wall.Name, "EditNode1"), (wall.Name, "EditNode0")],
+        )
+
+        FreeCADGui.Selection.clearSelection()
+        self.pump_gui_events(timeout_ms=500)
+
+        self.assertEqual(session.selection.get_selected_plan_target(), (None, None))
+        self.assertEqual(len(session._grip_trackers), 0)
+        self.assertEqual(len(session._preview_grip_trackers), 0)
+        self.assertEqual(self._get_scenegraph_edit_nodes(session), [])
+
+    def test_plan_edit_wall_tool_activation_clears_selected_wall_edit_nodes(self):
+        """Entering the embedded Wall tool should not leave selected-wall EditNode grips behind."""
+
+        wall = Arch.makeWall(length=3000, width=200, height=2500)
+        self.document.recompute()
+
+        session = BimPlanSession.start_session()
+        self.assertIsNotNone(session)
+        self.pump_gui_events()
+
+        FreeCADGui.Selection.clearSelection()
+        FreeCADGui.Selection.addSelection(self.document.Name, wall.Name)
+        self.pump_gui_events(timeout_ms=500)
+        session.selection.refresh_primary_selected_plan_target()
+        self.pump_gui_events(timeout_ms=500)
+
+        self.assertEqual(
+            self._get_scenegraph_edit_nodes(session),
+            [(wall.Name, "EditNode2"), (wall.Name, "EditNode1"), (wall.Name, "EditNode0")],
+        )
+
+        session.lifecycle.activate_wall_tool()
+        self.pump_gui_events(timeout_ms=500)
+
+        self.assertEqual(session.current_tool, "Wall")
+        self.assertEqual(session.selection.get_selected_plan_target(), (None, None))
+        self.assertEqual(len(session._grip_trackers), 0)
         self.assertEqual(self._get_scenegraph_edit_nodes(session), [])
 
     def test_plan_edit_wall_move_preview_shows_delta_readouts(self):
