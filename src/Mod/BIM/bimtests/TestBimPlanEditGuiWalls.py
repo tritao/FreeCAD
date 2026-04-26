@@ -927,7 +927,7 @@ class BimPlanEditGuiWallsMixin:
         ]
         self.assertEqual(len(joints), 0)
         self.assertEqual(session.current_tool, "Join")
-        self._assert_selected_wall_visuals(session, source_wall)
+        self.assertIs(session.selection.get_selected_target_for_kind("wall"), source_wall)
         self.assertIs(session.hovered_wall, target_wall)
         self.assertFalse(session.task_panel.unjoin_button.isEnabled())
         _title, body = session._get_status_chip_text()
@@ -1300,6 +1300,132 @@ class BimPlanEditGuiWallsMixin:
             ),
         ):
             session.input.on_mouse_pressed(self._FakeEventCallback(_FakeMouseEvent(250, 250)))
+
+        joints = [
+            obj
+            for obj in self.document.Objects
+            if getattr(getattr(obj, "Proxy", None), "Type", None) == "WallJoint"
+        ]
+        junctions = [
+            obj
+            for obj in self.document.Objects
+            if getattr(getattr(obj, "Proxy", None), "Type", None) == "WallJunction"
+        ]
+        self.assertEqual(len(joints), 0)
+        self.assertEqual(len(junctions), 1)
+        junction = junctions[0]
+        self.assertEqual(junction.Status, "OK")
+        self.assertEqual(
+            {wall.Name for wall in junction.Walls},
+            {carrier_wall.Name, branch_up.Name, branch_down.Name},
+        )
+        self.assertIs(session.selection.get_selected_target_for_kind("wall"), carrier_wall)
+        self.assertGreater(len(session._junction_node_trackers), 0)
+
+    def test_plan_edit_join_promotion_undo_redo_roundtrip(self):
+        """Junction promotion should roundtrip cleanly through undo/redo."""
+
+        carrier_wall = Arch.makeWall(length=3000, width=200, height=2500)
+        carrier_wall.Placement = FreeCAD.Placement(FreeCAD.Vector(1500, 0, 0), FreeCAD.Rotation())
+        branch_up = Arch.makeWall(length=1500, width=200, height=2500)
+        branch_up.Placement = FreeCAD.Placement(
+            FreeCAD.Vector(1500, 750, 0), FreeCAD.Rotation(FreeCAD.Vector(0, 0, 1), 90)
+        )
+        branch_down = Arch.makeWall(length=1500, width=200, height=2500)
+        branch_down.Placement = FreeCAD.Placement(
+            FreeCAD.Vector(1500, -750, 0), FreeCAD.Rotation(FreeCAD.Vector(0, 0, 1), 90)
+        )
+        self.document.recompute()
+
+        from bimcommands.BimJoin import BIM_Join_Tee
+
+        initial_joint = Arch.makeWallJoint(branch_up, carrier_wall, "Tee")
+        self.assertIsNotNone(initial_joint)
+        self.assertTrue(BIM_Join_Tee()._configure_joint(initial_joint, branch_up, carrier_wall))
+        self.document.recompute()
+        self.assertEqual(initial_joint.Status, "OK")
+
+        session = BimPlanSession.start_session()
+        self.assertIsNotNone(session)
+        self.pump_gui_events()
+
+        session.selection.select_wall_for_plan_edit(carrier_wall)
+        session.lifecycle.activate_join_tool()
+
+        from pivy import coin
+
+        class _FakeMousePosition:
+            def __init__(self, x, y):
+                self._value = (x, y)
+
+            def getValue(self):
+                return self._value
+
+        class _FakeMouseEvent:
+            def __init__(self, x, y):
+                self._position = _FakeMousePosition(x, y)
+
+            def getButton(self):
+                return coin.SoMouseButtonEvent.BUTTON1
+
+            def getState(self):
+                return coin.SoMouseButtonEvent.DOWN
+
+            def getPosition(self):
+                return self._position
+
+        with (
+            patch.object(session.selection, "get_edit_node", return_value=None),
+            patch.object(
+                session.selection,
+                "get_plan_target_at_position",
+                return_value=("wall", branch_down),
+            ),
+        ):
+            session.input.on_mouse_pressed(self._FakeEventCallback(_FakeMouseEvent(250, 250)))
+
+        joints = [
+            obj
+            for obj in self.document.Objects
+            if getattr(getattr(obj, "Proxy", None), "Type", None) == "WallJoint"
+        ]
+        junctions = [
+            obj
+            for obj in self.document.Objects
+            if getattr(getattr(obj, "Proxy", None), "Type", None) == "WallJunction"
+        ]
+        self.assertEqual(len(joints), 0)
+        self.assertEqual(len(junctions), 1)
+        junction = junctions[0]
+        self.assertEqual(junction.Status, "OK")
+        self.assertEqual(
+            {wall.Name for wall in junction.Walls},
+            {carrier_wall.Name, branch_up.Name, branch_down.Name},
+        )
+        self.assertIs(session.selection.get_selected_target_for_kind("wall"), carrier_wall)
+        self.assertGreater(len(session._junction_node_trackers), 0)
+
+        self._undo_document()
+
+        joints = [
+            obj
+            for obj in self.document.Objects
+            if getattr(getattr(obj, "Proxy", None), "Type", None) == "WallJoint"
+        ]
+        junctions = [
+            obj
+            for obj in self.document.Objects
+            if getattr(getattr(obj, "Proxy", None), "Type", None) == "WallJunction"
+        ]
+        self.assertEqual(len(junctions), 0)
+        self.assertEqual(len(joints), 1)
+        joint = joints[0]
+        self.assertEqual(joint.JointType, "Tee")
+        self.assertEqual({joint.WallA, joint.WallB}, {branch_up, carrier_wall})
+        self.assertIs(session.selection.get_selected_target_for_kind("wall"), carrier_wall)
+        self.assertEqual(len(session._junction_node_trackers), 0)
+
+        self._redo_document()
 
         joints = [
             obj
