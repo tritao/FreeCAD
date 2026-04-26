@@ -553,8 +553,8 @@ class TestArchFootprintGui(TestArchBaseGui.TestArchBaseGui):
         self.assertFalse(ArchSpace._bounds_intersect_xy(text_bounds, obstacle_bounds[0]))
         self.assertGreaterEqual(clearance, preferred_clearance - 1e-6)
 
-    def test_space_auto_text_position_prefers_obstacle_aligned_candidate(self):
-        """Automatic space text should try the obvious aligned position before drifting to a coarse grid point."""
+    def test_space_auto_text_position_prefers_open_side_over_obstacle_column(self):
+        """Automatic space text should prefer a clearer open side over staying directly above furniture."""
 
         base = self.document.addObject("Part::Feature", "AlignedLabelBase")
         base.Shape = Part.makeBox(5200, 4600, 2500)
@@ -571,14 +571,16 @@ class TestArchFootprintGui(TestArchBaseGui.TestArchBaseGui):
 
         text_box = ArchSpace._estimate_space_text_box(space.ViewObject)
         default_point = ArchSpace._get_default_space_text_position(space)
+        default_bounds = ArchSpace._get_label_candidate_bounds(default_point, text_box, "Center")
         faces = ArchSpace._get_space_footprint_faces(space)
+        obstacle_xmax = default_bounds[2] - 100.0
         obstacle_polyline = [
             [
-                [1900.0, 900.0, 0.0],
-                [3200.0, 900.0, 0.0],
-                [3200.0, 2800.0, 0.0],
-                [1900.0, 2800.0, 0.0],
-                [1900.0, 900.0, 0.0],
+                [250.0, 900.0, 0.0],
+                [obstacle_xmax, 900.0, 0.0],
+                [obstacle_xmax, 2800.0, 0.0],
+                [250.0, 2800.0, 0.0],
+                [250.0, 900.0, 0.0],
             ]
         ]
 
@@ -597,10 +599,10 @@ class TestArchFootprintGui(TestArchBaseGui.TestArchBaseGui):
         text_bounds = ArchSpace._get_label_candidate_bounds(text_point, text_box, "Center")
 
         self.assertEqual(len(obstacle_bounds), 1)
+        self.assertTrue(ArchSpace._bounds_intersect_xy(default_bounds, obstacle_bounds[0]))
         self.assertTrue(ArchSpace._point_in_space_footprint(faces, text_point))
         self.assertFalse(ArchSpace._bounds_intersect_xy(text_bounds, obstacle_bounds[0]))
-        self.assertAlmostEqual(text_point.x, default_point.x, delta=1e-6)
-        self.assertGreater(text_point.y, default_point.y)
+        self.assertGreater(text_point.x, default_point.x)
 
     def test_space_auto_text_refreshes_after_equipment_footprint_update_without_recompute(self):
         """Updating an equipment plan footprint should refresh auto-positioned space labels in the live view."""

@@ -3546,6 +3546,12 @@ def _get_space_text_preferred_clearance(text_box):
     return max(width * 0.6, padding * 4.0, 50.0)
 
 
+def _bounds_projection_overlap_xy(bounds_a, bounds_b):
+    x_overlap = min(bounds_a[2], bounds_b[2]) - max(bounds_a[0], bounds_b[0])
+    y_overlap = min(bounds_a[3], bounds_b[3]) - max(bounds_a[1], bounds_b[1])
+    return max(0.0, x_overlap), max(0.0, y_overlap)
+
+
 def _score_space_text_candidate(
     point, default_point, candidate_bounds, obstacle_bounds, space_bounds, preferred_clearance=0.0
 ):
@@ -3566,10 +3572,15 @@ def _score_space_text_candidate(
         space_bounds[3] - point.y,
     )
     achieved_clearance = min(clearance, preferred_clearance)
+    projection_overlap = sum(
+        sum(_bounds_projection_overlap_xy(candidate_bounds, obstacle))
+        for obstacle in obstacle_bounds
+    )
     return (
         1 if overlap_area <= 1e-6 else 0,
         -overlap_area,
         achieved_clearance,
+        -projection_overlap,
         -center_distance,
         boundary_margin,
     )
