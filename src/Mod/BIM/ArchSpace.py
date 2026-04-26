@@ -3412,6 +3412,30 @@ def _iter_space_text_candidates(default_point, space_bounds):
                 yield candidate
 
 
+def _iter_space_text_obstacle_candidates(
+    default_point, obstacle_bounds, text_box, preferred_clearance, z_value
+):
+    width = float(text_box.get("width", 0.0) or 0.0)
+    below = float(text_box.get("below", 0.0) or 0.0)
+    above = float(text_box.get("above", 0.0) or 0.0)
+    half_width = width * 0.5
+
+    for obstacle in obstacle_bounds or ():
+        xmin, ymin, xmax, ymax, _zmin, _zmax = obstacle
+        center_x = (xmin + xmax) * 0.5
+        center_y = (ymin + ymax) * 0.5
+
+        yield FreeCAD.Vector(default_point.x, ymax + preferred_clearance + below, z_value)
+        yield FreeCAD.Vector(default_point.x, ymin - preferred_clearance - above, z_value)
+        yield FreeCAD.Vector(xmin - preferred_clearance - half_width, default_point.y, z_value)
+        yield FreeCAD.Vector(xmax + preferred_clearance + half_width, default_point.y, z_value)
+
+        yield FreeCAD.Vector(center_x, ymax + preferred_clearance + below, z_value)
+        yield FreeCAD.Vector(center_x, ymin - preferred_clearance - above, z_value)
+        yield FreeCAD.Vector(xmin - preferred_clearance - half_width, center_y, z_value)
+        yield FreeCAD.Vector(xmax + preferred_clearance + half_width, center_y, z_value)
+
+
 def _collect_space_label_obstacle_bounds(space, faces):
     doc = getattr(space, "Document", None) or FreeCAD.ActiveDocument
     if doc is None:
@@ -3529,6 +3553,27 @@ def _get_automatic_space_text_position(space, text_box=None, text_align="Center"
         space_bounds,
         preferred_clearance,
     )
+    for candidate in _iter_space_text_obstacle_candidates(
+        default_point,
+        obstacles,
+        text_box,
+        preferred_clearance,
+        space_bounds[4],
+    ):
+        if not _point_in_space_footprint(faces, candidate):
+            continue
+        candidate_bounds = _get_label_candidate_bounds(candidate, text_box, text_align)
+        score = _score_space_text_candidate(
+            candidate,
+            default_point,
+            candidate_bounds,
+            obstacles,
+            space_bounds,
+            preferred_clearance,
+        )
+        if score > best_score:
+            best_point = candidate
+            best_score = score
     for candidate in _iter_space_text_candidates(default_point, space_bounds):
         if not _point_in_space_footprint(faces, candidate):
             continue
