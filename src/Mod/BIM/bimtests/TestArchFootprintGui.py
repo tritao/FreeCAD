@@ -25,10 +25,12 @@
 """GUI regressions for footprint display data."""
 
 import Arch
+import ArchSpace
 import FreeCAD
 import Part
 from bimtests import TestArchBaseGui
 from draftutils import params
+from unittest.mock import patch
 
 
 class TestArchFootprintGui(TestArchBaseGui.TestArchBaseGui):
@@ -417,6 +419,76 @@ class TestArchFootprintGui(TestArchBaseGui.TestArchBaseGui):
         source_vmax = float(profile.get("source_vmax", profile["vmax"]))
         expected_hinge_v = source_vmin if swing_sign < 0 else source_vmax
         self.assertAlmostEqual(hinge_v, expected_hinge_v, delta=1e-6)
+
+    def test_space_auto_text_position_avoids_hosted_door_footprint_symbol(self):
+        """Automatic space text should avoid hosted door plan symbols, not only equipment."""
+
+        previous_cut_height = params.get_param_arch("FootprintCutHeight")
+        params.set_param_arch("FootprintCutHeight", 1000.0)
+        self.addCleanup(params.set_param_arch, "FootprintCutHeight", previous_cut_height)
+
+        base = self.document.addObject("Part::Feature", "DoorLabelAvoidanceBase")
+        base.Shape = Part.makeBox(6000, 4000, 2500)
+        space = Arch.makeSpace(base, name="Living Room")
+
+        wall = Arch.makeWall(length=2500, width=200, height=2500)
+        wall.Placement.Base = FreeCAD.Vector(1750, 2000, 0)
+        door = self._make_hosted_door(
+            wall,
+            "CenteredFootprintDoor",
+            x_start=800,
+            z_start=0,
+            width=900.0,
+            height=2100.0,
+        )
+        self.document.recompute()
+        self.pump_gui_events()
+
+        text_box = ArchSpace._estimate_space_text_box(space.ViewObject)
+        default_point = ArchSpace._get_default_space_text_position(space)
+        default_bounds = ArchSpace._get_label_candidate_bounds(default_point, text_box, "Center")
+        faces = ArchSpace._get_space_footprint_faces(space)
+        placement = ArchSpace._get_object_global_placement(door)
+        inverse_placement = placement.inverse()
+
+        def to_local(offset_x, offset_y):
+            point = inverse_placement.multVec(
+                default_point.add(FreeCAD.Vector(offset_x, offset_y, 0))
+            )
+            return [point.x, point.y, 0.0]
+
+        centered_symbol = [
+            [
+                to_local(-700, -500),
+                to_local(700, -500),
+                to_local(700, 500),
+                to_local(-700, 500),
+                to_local(-700, -500),
+            ]
+        ]
+
+        with patch.object(
+            door.ViewObject.Proxy,
+            "_collect_local_footprint_polylines",
+            return_value=centered_symbol,
+        ):
+            obstacle_bounds = ArchSpace._collect_space_label_obstacle_bounds(space, faces)
+
+            self.assertEqual(len(obstacle_bounds), 1)
+            self.assertTrue(ArchSpace._bounds_intersect_xy(default_bounds, obstacle_bounds[0]))
+
+            text_point = ArchSpace._get_automatic_space_text_position(
+                space,
+                text_box=text_box,
+                text_align="Center",
+            )
+
+        text_bounds = ArchSpace._get_label_candidate_bounds(text_point, text_box, "Center")
+
+        self.assertTrue(ArchSpace._point_in_space_footprint(faces, text_point))
+        self.assertFalse(ArchSpace._bounds_intersect_xy(text_bounds, obstacle_bounds[0]))
+        self.assertGreater(text_point.distanceToPoint(default_point), 1.0)
+        self.assertEqual(door.IfcType, "Door")
 
     def test_rotated_wall_door_footprint_stays_in_host_frame(self):
         """Hosted door symbols should use the real host frame on rotated walls."""

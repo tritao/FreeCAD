@@ -3113,6 +3113,12 @@ def _has_authored_plan_symbols(obj):
         return False
 
 
+def _has_local_plan_footprint_provider(obj):
+    view_object = getattr(obj, "ViewObject", None)
+    view_proxy = getattr(view_object, "Proxy", None) if view_object else None
+    return bool(view_proxy and hasattr(view_proxy, "_collect_local_footprint_polylines"))
+
+
 def _get_space_label_obstacle_semantic_object(obj):
     if not obj:
         return None
@@ -3128,6 +3134,8 @@ def _get_space_label_obstacle_semantic_object(obj):
                 return None
         except Exception:
             pass
+    if _has_local_plan_footprint_provider(obj):
+        return obj
 
     semantic = obj
     seen = set()
@@ -3142,6 +3150,8 @@ def _get_space_label_obstacle_semantic_object(obj):
             break
         semantic = linked
 
+    if _has_local_plan_footprint_provider(semantic):
+        return semantic
     if _is_direct_equipment_object(semantic):
         return semantic
     return None
@@ -3157,8 +3167,8 @@ def _vector_from_point(point):
         return None
 
 
-def _iter_equipment_local_plan_points(equipment):
-    view_object = getattr(equipment, "ViewObject", None)
+def _iter_plan_obstacle_local_points(obj):
+    view_object = getattr(obj, "ViewObject", None)
     view_proxy = getattr(view_object, "Proxy", None) if view_object else None
     if view_proxy and hasattr(view_proxy, "_collect_local_footprint_polylines"):
         try:
@@ -3174,13 +3184,13 @@ def _iter_equipment_local_plan_points(equipment):
         except Exception:
             pass
 
-    if not _has_authored_plan_symbols(equipment):
+    if not _is_direct_equipment_object(obj) or not _has_authored_plan_symbols(obj):
         return
 
     try:
         import ArchEquipment
 
-        shapes = ArchEquipment.get_plan_representation_shapes(equipment)
+        shapes = ArchEquipment.get_plan_representation_shapes(obj)
     except Exception:
         shapes = ()
 
@@ -3425,7 +3435,7 @@ def _collect_space_label_obstacle_bounds(space, faces):
         semantic = _get_space_label_obstacle_semantic_object(obj)
         if semantic is None or semantic is space:
             continue
-        local_points = list(_iter_equipment_local_plan_points(semantic))
+        local_points = list(_iter_plan_obstacle_local_points(semantic))
         if not local_points:
             continue
         placement = _get_object_global_placement(obj)
