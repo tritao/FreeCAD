@@ -1036,6 +1036,7 @@ ToolBarItem* StdWorkbench::setupToolBars() const
     setSharedToolbarMetadata(treeControls, "Tree Controls", ToolBarItem::Tier::Secondary);
     treeControls->setHost(ToolBarItem::Host::Panel);
     treeControls->setPanelRole(ToolBarItem::PanelRole::ModelTree);
+    treeControls->setPanelPlacement(ToolBarItem::PanelPlacement::Bottom);
     treeControls->setSize(ToolBarItem::Size::Slim);
     *treeControls << "Std_TreeSelection"
                   << "Std_TreeExpand"
