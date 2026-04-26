@@ -3244,10 +3244,8 @@ class _ViewProviderWindow(ArchComponent.ViewProviderComponent):
             context="ArchWindow.updateFootprint",
         )
 
-        if FreeCAD.GuiUp and hasattr(self, "Object"):
-            import ArchSpace
-
-            ArchSpace.refresh_auto_space_text_positions(getattr(self.Object, "Document", None))
+        if FreeCAD.GuiUp:
+            ArchComponent.notify_plan_footprint_changed(self)
 
     def updateData(self, obj, prop):
 
