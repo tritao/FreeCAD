@@ -741,7 +741,7 @@ class BimPlanEditGuiWallsMixin:
         self.assertEqual({joint.WallA, joint.WallB}, {source_wall, target_wall})
 
         self.assertEqual(session.current_tool, "Select")
-        self.assertIs(session.selection.get_selected_target_for_kind("wall"), source_wall)
+        self._assert_selected_wall_visuals(session, source_wall)
         self.assertIsNone(session.selection.get_selected_target_for_kind("opening"))
         self.assertEqual(len(session._grip_trackers), 3)
         self.assertEqual(len(session._wall_hover_trackers), 0)
@@ -927,7 +927,7 @@ class BimPlanEditGuiWallsMixin:
         ]
         self.assertEqual(len(joints), 0)
         self.assertEqual(session.current_tool, "Join")
-        self.assertIs(session.selection.get_selected_target_for_kind("wall"), source_wall)
+        self._assert_selected_wall_visuals(session, source_wall)
         self.assertIs(session.hovered_wall, target_wall)
         self.assertFalse(session.task_panel.unjoin_button.isEnabled())
         _title, body = session._get_status_chip_text()
@@ -1003,7 +1003,7 @@ class BimPlanEditGuiWallsMixin:
             if getattr(getattr(obj, "Proxy", None), "Type", None) == "WallJoint"
         ]
         self.assertEqual(joints, [])
-        self._assert_selected_wall_visuals(session, source_wall)
+        self.assertIs(session.selection.get_selected_target_for_kind("wall"), source_wall)
         self.assertEqual(len(session._wall_hover_trackers), 0)
 
         self._redo_document()
@@ -1016,14 +1016,14 @@ class BimPlanEditGuiWallsMixin:
         joint = joints[0]
         self.assertEqual(joint.JointType, "Miter")
         self.assertEqual({joint.WallA, joint.WallB}, {source_wall, target_wall})
-        self._assert_selected_wall_visuals(session, source_wall)
+        self.assertIs(session.selection.get_selected_target_for_kind("wall"), source_wall)
         self.assertEqual(len(session._wall_hover_trackers), 0)
 
         session.shutdown(close_dialog=False)
         self.pump_gui_events()
 
     def test_plan_edit_join_update_undo_keeps_adjacent_wall_linked_spaces_distinct(self):
-        """Updating an existing wall joint should keep adjacent spaces distinct through undo."""
+        """Updating an existing wall joint should keep adjacent spaces distinct through undo/redo."""
 
         from bimcommands.BimJoin import BIM_Join_Miter
 
@@ -1075,7 +1075,10 @@ class BimPlanEditGuiWallsMixin:
         self.assertEqual(len(joints), 1)
         joint = joints[0]
         self.assertEqual(joint.JointType, "Butt")
-        self._assert_spaces_stay_distinct(created_spaces)
+        updated_spaces = self._assert_spaces_stay_distinct(created_spaces)
+        updated_centers = [float(space.Shape.CenterOfMass.x) for space in updated_spaces]
+        updated_areas = [float(space.Proxy.getArea(space)) for space in updated_spaces]
+        self.assertIs(session.selection.get_selected_target_for_kind("wall"), source_wall)
 
         self._undo_document()
 
@@ -1095,12 +1098,33 @@ class BimPlanEditGuiWallsMixin:
             self.assertAlmostEqual(restored_center, initial_center, delta=1e-6)
         for initial_area, restored_area in zip(initial_areas, restored_areas):
             self.assertAlmostEqual(restored_area, initial_area, delta=1e-6)
+        self.assertIs(session.selection.get_selected_target_for_kind("wall"), source_wall)
+
+        self._redo_document()
+
+        joints = [
+            obj
+            for obj in self.document.Objects
+            if getattr(getattr(obj, "Proxy", None), "Type", None) == "WallJoint"
+        ]
+        self.assertEqual(len(joints), 1)
+        joint = joints[0]
+        self.assertEqual(joint.JointType, "Butt")
+
+        redone_spaces = self._assert_spaces_stay_distinct(created_spaces)
+        redone_centers = [float(space.Shape.CenterOfMass.x) for space in redone_spaces]
+        redone_areas = [float(space.Proxy.getArea(space)) for space in redone_spaces]
+        for updated_center, redone_center in zip(updated_centers, redone_centers):
+            self.assertAlmostEqual(redone_center, updated_center, delta=1e-6)
+        for updated_area, redone_area in zip(updated_areas, redone_areas):
+            self.assertAlmostEqual(redone_area, updated_area, delta=1e-6)
+        self.assertIs(session.selection.get_selected_target_for_kind("wall"), source_wall)
 
         session.shutdown(close_dialog=False)
         self.pump_gui_events()
 
     def test_plan_edit_unjoin_undo_keeps_adjacent_wall_linked_spaces_distinct(self):
-        """Unjoining a wall pair should keep adjacent spaces distinct through undo."""
+        """Unjoining a wall pair should keep adjacent spaces distinct through undo/redo."""
 
         from bimcommands.BimJoin import BIM_Join_Miter
 
@@ -1142,7 +1166,10 @@ class BimPlanEditGuiWallsMixin:
             if getattr(getattr(obj, "Proxy", None), "Type", None) == "WallJoint"
         ]
         self.assertEqual(joints, [])
-        self._assert_spaces_stay_distinct(created_spaces)
+        updated_spaces = self._assert_spaces_stay_distinct(created_spaces)
+        updated_centers = [float(space.Shape.CenterOfMass.x) for space in updated_spaces]
+        updated_areas = [float(space.Proxy.getArea(space)) for space in updated_spaces]
+        self.assertIs(session.selection.get_selected_target_for_kind("wall"), source_wall)
 
         self._undo_document()
 
@@ -1162,6 +1189,25 @@ class BimPlanEditGuiWallsMixin:
             self.assertAlmostEqual(restored_center, initial_center, delta=1e-6)
         for initial_area, restored_area in zip(initial_areas, restored_areas):
             self.assertAlmostEqual(restored_area, initial_area, delta=1e-6)
+        self.assertIs(session.selection.get_selected_target_for_kind("wall"), source_wall)
+
+        self._redo_document()
+
+        joints = [
+            obj
+            for obj in self.document.Objects
+            if getattr(getattr(obj, "Proxy", None), "Type", None) == "WallJoint"
+        ]
+        self.assertEqual(joints, [])
+
+        redone_spaces = self._assert_spaces_stay_distinct(created_spaces)
+        redone_centers = [float(space.Shape.CenterOfMass.x) for space in redone_spaces]
+        redone_areas = [float(space.Proxy.getArea(space)) for space in redone_spaces]
+        for updated_center, redone_center in zip(updated_centers, redone_centers):
+            self.assertAlmostEqual(redone_center, updated_center, delta=1e-6)
+        for updated_area, redone_area in zip(updated_areas, redone_areas):
+            self.assertAlmostEqual(redone_area, updated_area, delta=1e-6)
+        self.assertIs(session.selection.get_selected_target_for_kind("wall"), source_wall)
 
         session.shutdown(close_dialog=False)
         self.pump_gui_events()

@@ -609,6 +609,119 @@ class BimPlanEditGuiOpeningsMixin:
         self.assertEqual(target_style, str(panel.window_preset_combo.currentText()))
         self.assertFalse(panel.window_preset_apply_button.isEnabled())
 
+    def test_plan_edit_selected_window_preset_undo_redo_roundtrip(self):
+        """Built-in window preset rewrites should roundtrip cleanly through undo/redo."""
+
+        from ArchWindowPresets import WindowPresets
+
+        def get_shape_center(obj):
+            bound_box = obj.Shape.BoundBox
+            return FreeCAD.Vector(
+                (float(bound_box.XMin) + float(bound_box.XMax)) * 0.5,
+                (float(bound_box.YMin) + float(bound_box.YMax)) * 0.5,
+                (float(bound_box.ZMin) + float(bound_box.ZMax)) * 0.5,
+            )
+
+        def get_shape_size(obj):
+            bound_box = obj.Shape.BoundBox
+            return (
+                max(float(bound_box.XLength), float(bound_box.YLength)),
+                float(bound_box.ZLength),
+            )
+
+        level, wall, window = self._make_windowed_plan_wall()
+        original_parts = list(window.WindowParts)
+        original_preset = int(getattr(window, "Preset", 0) or 0)
+        original_center = get_shape_center(window.Base)
+        original_width, original_height = get_shape_size(window.Base)
+
+        FreeCADGui.Selection.clearSelection()
+        FreeCADGui.Selection.addSelection(level)
+
+        session = BimPlanSession.start_session()
+        self.assertIsNotNone(session)
+        self.pump_gui_events()
+
+        self.assertTrue(
+            session.selection.select_opening_for_plan_edit(window, sync_gui_selection=True)
+        )
+        session.task_panel.refresh_from_session()
+        self.pump_gui_events(timeout_ms=500)
+
+        panel = session.task_panel
+        combo = panel.window_preset_combo
+        target_style = "Sliding 2-pane"
+        target_index = combo.findText(target_style)
+
+        self.assertGreaterEqual(target_index, 0)
+        combo.setCurrentIndex(target_index)
+        self.pump_gui_events()
+        self.assertTrue(panel.window_preset_apply_button.isEnabled())
+
+        panel.window_preset_apply_button.click()
+        self.pump_gui_events(timeout_ms=500)
+        panel.refresh_from_session()
+        self.pump_gui_events(timeout_ms=500)
+
+        updated_parts = list(window.WindowParts)
+        updated_center = get_shape_center(window.Base)
+        updated_width, updated_height = get_shape_size(window.Base)
+        updated_preset = int(getattr(window, "Preset", 0) or 0)
+
+        self.assertIn(wall, window.Hosts)
+        self.assertNotEqual(original_parts, updated_parts)
+        self.assertNotEqual(original_preset, updated_preset)
+        self.assertEqual(WindowPresets.index(target_style) + 1, updated_preset)
+        self.assertEqual(target_style, session.windows.get_selected_window_style_preset())
+        self.assertAlmostEqual(original_center.x, updated_center.x, delta=1e-6)
+        self.assertAlmostEqual(original_center.y, updated_center.y, delta=1e-6)
+        self.assertAlmostEqual(original_center.z, updated_center.z, delta=1e-6)
+        self.assertAlmostEqual(original_width, updated_width, delta=1e-6)
+        self.assertAlmostEqual(original_height, updated_height, delta=1e-6)
+        self.assertIs(session.selection.get_selected_target_for_kind("opening"), window)
+        self.assertGreater(len(session._opening_overlay_trackers), 0)
+        self.assertGreaterEqual(len(session._opening_handle_trackers), 1)
+        self._assert_no_opening_move_preview_visuals(session)
+
+        self._undo_document()
+        panel.refresh_from_session()
+        self.pump_gui_events(timeout_ms=500)
+
+        self.assertIn(wall, window.Hosts)
+        self.assertEqual(original_parts, list(window.WindowParts))
+        self.assertEqual(original_preset, int(getattr(window, "Preset", 0) or 0))
+        restored_center = get_shape_center(window.Base)
+        restored_width, restored_height = get_shape_size(window.Base)
+        self.assertAlmostEqual(original_center.x, restored_center.x, delta=1e-6)
+        self.assertAlmostEqual(original_center.y, restored_center.y, delta=1e-6)
+        self.assertAlmostEqual(original_center.z, restored_center.z, delta=1e-6)
+        self.assertAlmostEqual(original_width, restored_width, delta=1e-6)
+        self.assertAlmostEqual(original_height, restored_height, delta=1e-6)
+        self.assertIs(session.selection.get_selected_target_for_kind("opening"), window)
+        self.assertGreater(len(session._opening_overlay_trackers), 0)
+        self.assertGreaterEqual(len(session._opening_handle_trackers), 1)
+        self._assert_no_opening_move_preview_visuals(session)
+
+        self._redo_document()
+        panel.refresh_from_session()
+        self.pump_gui_events(timeout_ms=500)
+
+        self.assertIn(wall, window.Hosts)
+        self.assertEqual(updated_parts, list(window.WindowParts))
+        self.assertEqual(updated_preset, int(getattr(window, "Preset", 0) or 0))
+        redone_center = get_shape_center(window.Base)
+        redone_width, redone_height = get_shape_size(window.Base)
+        self.assertAlmostEqual(updated_center.x, redone_center.x, delta=1e-6)
+        self.assertAlmostEqual(updated_center.y, redone_center.y, delta=1e-6)
+        self.assertAlmostEqual(updated_center.z, redone_center.z, delta=1e-6)
+        self.assertAlmostEqual(updated_width, redone_width, delta=1e-6)
+        self.assertAlmostEqual(updated_height, redone_height, delta=1e-6)
+        self.assertEqual(target_style, session.windows.get_selected_window_style_preset())
+        self.assertIs(session.selection.get_selected_target_for_kind("opening"), window)
+        self.assertGreater(len(session._opening_overlay_trackers), 0)
+        self.assertGreaterEqual(len(session._opening_handle_trackers), 1)
+        self._assert_no_opening_move_preview_visuals(session)
+
     def test_plan_edit_selected_window_shows_contextual_window_guidance(self):
         """Selected hosted windows should contribute BIM window guidance."""
 
