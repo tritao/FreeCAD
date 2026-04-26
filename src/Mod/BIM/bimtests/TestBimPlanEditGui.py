@@ -325,6 +325,8 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
                 keep_boundaries=True,
             )
             self.assertIsNotNone(space)
+            if hasattr(space, "BoundaryWalls"):
+                space.BoundaryWalls = []
             space.Boundaries = list(boundaries)
             created_spaces.append(space)
         self.document.recompute()

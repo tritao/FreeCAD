@@ -216,6 +216,19 @@ class _Space(ArchComponent.Component):
                 ),
                 locked=True,
             )
+        if not "BoundaryWalls" in pl:
+            obj.addProperty(
+                "App::PropertyLinkList",
+                "BoundaryWalls",
+                "Space",
+                QT_TRANSLATE_NOOP(
+                    "App::Property",
+                    "Hidden wall boundary objects used to resolve stable wall-side faces after topology changes",
+                ),
+                locked=True,
+            )
+        if "BoundaryWalls" in obj.PropertiesList:
+            obj.setEditorMode("BoundaryWalls", 2)
         if not "BoundarySideHints" in pl:
             obj.addProperty(
                 "App::PropertyStringList",
@@ -424,27 +437,50 @@ class _Space(ArchComponent.Component):
 
     def addSubobjects(self, obj, subobjects):
         "adds subobjects to this space"
-        objs = obj.Boundaries
+        objs = list(getattr(obj, "Boundaries", []) or [])
+        wall_objs = list(getattr(obj, "BoundaryWalls", []) or [])
         for o in subobjects:
-            if isinstance(o, tuple) or isinstance(o, list):
-                if o[0].Name != obj.Name:
-                    objs.append(tuple(o))
+            if isinstance(o, (tuple, list)):
+                boundary_obj, subnames = self._get_boundary_entry_object_and_subnames(o)
+                if not boundary_obj or boundary_obj.Name == obj.Name:
+                    continue
+                face_names = self.normalizeBoundarySubnames(subnames)
+                if self._is_wall_object(boundary_obj):
+                    if face_names:
+                        objs.append((boundary_obj, tuple(face_names)))
+                    elif boundary_obj not in wall_objs:
+                        wall_objs.append(boundary_obj)
+                elif face_names:
+                    objs.append((boundary_obj, tuple(face_names)))
             else:
                 for el in o.SubElementNames:
                     if "Face" in el:
                         if o.Object.Name != obj.Name:
                             objs.append((o.Object, el))
         obj.Boundaries = objs
+        if hasattr(obj, "BoundaryWalls"):
+            obj.BoundaryWalls = wall_objs
 
     def removeSubobjects(self, obj, subobjects):
         "removes subobjects to this space"
-        bounds = obj.Boundaries
+        bounds = list(getattr(obj, "Boundaries", []) or [])
+        wall_bounds = list(getattr(obj, "BoundaryWalls", []) or [])
+        removed_names = set()
         for o in subobjects:
+            object_name = getattr(o, "Name", None)
+            if not object_name and hasattr(o, "Object"):
+                object_name = getattr(o.Object, "Name", None)
+            if object_name:
+                removed_names.add(object_name)
             for b in bounds:
-                if o.Name == b[0].Name:
+                if object_name and object_name == b[0].Name:
                     bounds.remove(b)
                     break
         obj.Boundaries = bounds
+        if hasattr(obj, "BoundaryWalls"):
+            obj.BoundaryWalls = [
+                wall for wall in wall_bounds if getattr(wall, "Name", None) not in removed_names
+            ]
 
     def addObject(self, obj, child):
         "Adds an object to this Space"
@@ -677,6 +713,9 @@ class _Space(ArchComponent.Component):
     def _get_boundary_faces(self, obj):
         boundaries = self._get_stable_boundary_links(obj)
         return self._get_boundary_faces_from_links(boundaries)
+
+    def getStableBoundaryLinks(self, obj):
+        return self._get_stable_boundary_links(obj)
 
     def _get_shape_reference_point(self, shape):
         if shape is None:
@@ -999,14 +1038,14 @@ class _Space(ArchComponent.Component):
         return False
 
     def _get_stable_boundary_links(self, obj):
-        boundaries = list(getattr(obj, "Boundaries", []) or [])
+        boundaries = self._get_boundary_storage_links(obj)
         if not boundaries:
             return boundaries
 
         hints = self._load_boundary_side_hints(obj)
         fallback_reference = self._get_space_reference_point(obj)
+        use_wall_face_sets = self._get_boundary_region_reference_point(obj) is not None
         stable_boundaries = []
-        changed = False
 
         for entry in boundaries:
             boundary_obj, subnames = self._get_boundary_entry_object_and_subnames(entry)
@@ -1014,28 +1053,12 @@ class _Space(ArchComponent.Component):
                 continue
             face_names = self.normalizeBoundarySubnames(subnames)
             object_name = getattr(boundary_obj, "Name", None)
-            try:
-                is_wall = Draft.getType(boundary_obj) == "Wall"
-            except Exception:
-                is_wall = False
+            is_wall = self._is_wall_object(boundary_obj)
 
-            if is_wall and object_name and len(face_names) == 1:
-                current_face_name = face_names[0]
+            if is_wall and object_name:
                 hint = hints.get(object_name)
-                hint_face_name = str(hint.get("face", "")) if hint else ""
-                hint_matches_current_face = bool(hint) and (
-                    not hint_face_name or hint_face_name == current_face_name
-                )
-                if (
-                    hint
-                    and not hint_matches_current_face
-                    and self._get_boundary_face(boundary_obj, current_face_name) is not None
-                ):
-                    stable_boundaries.append((boundary_obj, tuple(face_names)))
-                    continue
-
                 reference_point = None
-                if hint_matches_current_face:
+                if hint:
                     reference_point = self._get_boundary_hint_reference_point(
                         boundary_obj,
                         hint,
@@ -1043,40 +1066,197 @@ class _Space(ArchComponent.Component):
                 if reference_point is None:
                     reference_point = fallback_reference
 
-                candidate_face_name = self._get_wall_boundary_face_name(
-                    boundary_obj,
-                    reference_point,
-                )
-                if not candidate_face_name and hint_matches_current_face:
-                    candidate_face_name = self._get_wall_boundary_face_name_for_normal(
-                        boundary_obj,
-                        self._get_boundary_hint_normal(boundary_obj, hint),
-                        reference_point=reference_point,
+                if not face_names:
+                    if use_wall_face_sets:
+                        candidate_face_names = ()
+                        if hint:
+                            candidate_face_names = self._get_wall_boundary_face_names(
+                                boundary_obj,
+                                reference_point=reference_point,
+                                normal=self._get_boundary_hint_normal(boundary_obj, hint),
+                                face_name=str(hint.get("face", "") or ""),
+                            )
+                        if not candidate_face_names:
+                            candidate_face_names = self._get_wall_boundary_face_names(
+                                boundary_obj,
+                                reference_point=reference_point,
+                            )
+                        face_names = tuple(candidate_face_names)
+                    else:
+                        candidate_face_name = None
+                        if hint:
+                            candidate_face_name = self._get_wall_boundary_face_name_for_normal(
+                                boundary_obj,
+                                self._get_boundary_hint_normal(boundary_obj, hint),
+                                reference_point=reference_point,
+                            )
+                            if not candidate_face_name:
+                                hint_face_name = str(hint.get("face", "") or "")
+                                if (
+                                    hint_face_name
+                                    and self._get_boundary_face(boundary_obj, hint_face_name)
+                                    is not None
+                                ):
+                                    candidate_face_name = hint_face_name
+                        if not candidate_face_name:
+                            candidate_face_name = self._get_wall_boundary_face_name(
+                                boundary_obj,
+                                reference_point,
+                            )
+                        face_names = (candidate_face_name,) if candidate_face_name else ()
+                elif len(face_names) == 1:
+                    current_face_name = face_names[0]
+                    hint_face_name = str(hint.get("face", "")) if hint else ""
+                    hint_matches_current_face = bool(hint) and (
+                        not hint_face_name or hint_face_name == current_face_name
                     )
-                if candidate_face_name and candidate_face_name != current_face_name:
-                    should_refresh = (
-                        hint_matches_current_face
-                        or self._should_refresh_wall_boundary_face(
+                    if (
+                        hint
+                        and not hint_matches_current_face
+                        and self._get_boundary_face(boundary_obj, current_face_name) is not None
+                    ):
+                        stable_boundaries.append((boundary_obj, tuple(face_names)))
+                        continue
+
+                    if use_wall_face_sets:
+                        candidate_face_names = self._get_wall_boundary_face_names(
                             boundary_obj,
-                            current_face_name,
-                            candidate_face_name,
+                            reference_point=reference_point,
+                            face_name=current_face_name,
+                        )
+                        if not candidate_face_names and hint_matches_current_face:
+                            candidate_face_names = self._get_wall_boundary_face_names(
+                                boundary_obj,
+                                reference_point=reference_point,
+                                normal=self._get_boundary_hint_normal(boundary_obj, hint),
+                                face_name=current_face_name,
+                            )
+                        if (
+                            candidate_face_names
+                            and tuple(candidate_face_names) != tuple(face_names)
+                            and len(candidate_face_names) > 1
+                        ):
+                            face_names = tuple(candidate_face_names)
+                        elif (
+                            candidate_face_names
+                            and len(candidate_face_names) == 1
+                            and candidate_face_names[0] != current_face_name
+                        ):
+                            candidate_face_name = candidate_face_names[0]
+                            should_refresh = (
+                                hint_matches_current_face
+                                or self._should_refresh_wall_boundary_face(
+                                    boundary_obj,
+                                    current_face_name,
+                                    candidate_face_name,
+                                    reference_point,
+                                )
+                            )
+                            if should_refresh:
+                                face_names = tuple(candidate_face_names)
+                    else:
+                        candidate_face_name = self._get_wall_boundary_face_name(
+                            boundary_obj,
                             reference_point,
                         )
-                    )
-                    if should_refresh:
-                        face_names = (candidate_face_name,)
-                        changed = True
+                        if not candidate_face_name and hint_matches_current_face:
+                            candidate_face_name = self._get_wall_boundary_face_name_for_normal(
+                                boundary_obj,
+                                self._get_boundary_hint_normal(boundary_obj, hint),
+                                reference_point=reference_point,
+                            )
+                        if candidate_face_name and candidate_face_name != current_face_name:
+                            should_refresh = (
+                                hint_matches_current_face
+                                or self._should_refresh_wall_boundary_face(
+                                    boundary_obj,
+                                    current_face_name,
+                                    candidate_face_name,
+                                    reference_point,
+                                )
+                            )
+                            if should_refresh:
+                                face_names = (candidate_face_name,)
 
             if face_names:
                 stable_boundaries.append((boundary_obj, tuple(face_names)))
 
         stable_boundaries = self.normalizeBoundaryLinks(stable_boundaries, exclude_objects=obj)
-        if changed:
+        self._write_boundary_storage(
+            obj,
+            stable_boundaries,
+            hints=hints,
+        )
+        return stable_boundaries
+
+    def _get_boundary_storage_links(self, obj):
+        boundaries = []
+        explicit_wall_names = set()
+        for entry in list(getattr(obj, "Boundaries", []) or []):
+            boundary_obj, subnames = self._get_boundary_entry_object_and_subnames(entry)
+            if not boundary_obj:
+                continue
+            face_names = self.normalizeBoundarySubnames(subnames)
+            if not face_names:
+                continue
+            boundaries.append((boundary_obj, tuple(face_names)))
+            if self._is_wall_object(boundary_obj):
+                object_name = getattr(boundary_obj, "Name", None)
+                if object_name:
+                    explicit_wall_names.add(object_name)
+
+        for wall in list(getattr(obj, "BoundaryWalls", []) or []):
+            if not self._is_wall_object(wall):
+                continue
+            object_name = getattr(wall, "Name", None)
+            if not object_name or object_name in explicit_wall_names:
+                continue
+            boundaries.append((wall, ()))
+        return boundaries
+
+    def _split_boundary_storage_links(self, boundaries, hints=None, store_single_wall_sides=False):
+        hinted_objects = set()
+        if isinstance(hints, dict):
+            hinted_objects = {str(name) for name in hints.keys() if str(name)}
+        explicit_boundaries = []
+        wall_objects = []
+        seen_wall_names = set()
+        for boundary_obj, subnames in boundaries or []:
+            if not boundary_obj:
+                continue
+            object_name = getattr(boundary_obj, "Name", None)
+            is_wall = self._is_wall_object(boundary_obj)
+            face_names = tuple(self.normalizeBoundarySubnames(subnames))
+            if (
+                store_single_wall_sides
+                and is_wall
+                and object_name in hinted_objects
+                and self._is_single_wall_side_face_set(boundary_obj, face_names)
+            ):
+                if object_name not in seen_wall_names:
+                    wall_objects.append(boundary_obj)
+                    seen_wall_names.add(object_name)
+            else:
+                explicit_boundaries.append((boundary_obj, face_names))
+        return (explicit_boundaries, wall_objects)
+
+    def _write_boundary_storage(self, obj, stable_boundaries, hints=None):
+        explicit_boundaries, wall_objects = self._split_boundary_storage_links(
+            stable_boundaries,
+            hints=hints,
+            store_single_wall_sides=self._get_boundary_region_reference_point(obj) is not None,
+        )
+        try:
+            if list(getattr(obj, "Boundaries", []) or []) != explicit_boundaries:
+                obj.Boundaries = explicit_boundaries
+        except Exception:
+            pass
+        if hasattr(obj, "BoundaryWalls"):
             try:
-                obj.Boundaries = stable_boundaries
+                if list(getattr(obj, "BoundaryWalls", []) or []) != wall_objects:
+                    obj.BoundaryWalls = wall_objects
             except Exception:
                 pass
-        return stable_boundaries
 
     def _sync_boundary_side_hints(self, obj, shape=None):
         if not hasattr(obj, "BoundarySideHints"):
@@ -1088,14 +1268,12 @@ class _Space(ArchComponent.Component):
 
         hints = []
         seen = set()
-        for boundary_obj, subnames in getattr(obj, "Boundaries", []) or []:
+        stable_links = self._get_stable_boundary_links(obj)
+        for boundary_obj, subnames in stable_links:
             object_name = getattr(boundary_obj, "Name", None)
             if not object_name or object_name in seen:
                 continue
-            try:
-                if Draft.getType(boundary_obj) != "Wall":
-                    continue
-            except Exception:
+            if not self._is_wall_object(boundary_obj):
                 continue
             face_names = self.normalizeBoundarySubnames(subnames)
             if len(face_names) != 1:
@@ -1149,6 +1327,11 @@ class _Space(ArchComponent.Component):
                 obj.BoundarySideHints = hints
         except Exception:
             pass
+        self._write_boundary_storage(
+            obj,
+            stable_links,
+            hints=self._load_boundary_side_hints(obj),
+        )
 
     def _copy_without_element_map(self, shape):
         if shape is None:
@@ -1776,6 +1959,14 @@ class _Space(ArchComponent.Component):
             pass
         return getattr(obj, "IfcType", "") == "Space"
 
+    def _is_wall_object(self, obj):
+        if not obj or self._is_space_object(obj):
+            return False
+        try:
+            return Draft.getType(obj) == "Wall"
+        except Exception:
+            return False
+
     @staticmethod
     def normalizeBoundarySubnames(subnames):
         """Normalize a boundary subname list down to explicit face references."""
@@ -1858,6 +2049,87 @@ class _Space(ArchComponent.Component):
             return None
         return best_face_name
 
+    def _get_wall_boundary_face_names(
+        self, wall, reference_point=None, normal=None, face_name=None
+    ):
+        if not wall:
+            return ()
+
+        primary_face_name = str(face_name or "")
+        if not primary_face_name:
+            if normal is not None:
+                primary_face_name = str(
+                    self._get_wall_boundary_face_name_for_normal(
+                        wall,
+                        normal,
+                        reference_point=reference_point,
+                    )
+                    or ""
+                )
+            if not primary_face_name:
+                primary_face_name = str(
+                    self._get_wall_boundary_face_name(wall, reference_point) or ""
+                )
+        if not primary_face_name:
+            return ()
+
+        primary_face = self._get_boundary_face(wall, primary_face_name)
+        if primary_face is None:
+            return ()
+        primary_normal, _primary_center = self._get_boundary_face_normal_and_center(primary_face)
+        if primary_normal is None:
+            return (primary_face_name,)
+
+        face_names = [primary_face_name]
+        candidates = []
+        for index, candidate_face in enumerate(
+            getattr(getattr(wall, "Shape", None), "Faces", []) or [], start=1
+        ):
+            candidate_face_name = f"Face{index}"
+            if candidate_face_name == primary_face_name:
+                continue
+            face_normal, face_center = self._get_boundary_face_normal_and_center(candidate_face)
+            if face_normal is None or face_center is None:
+                continue
+            normal_score = float(face_normal.dot(primary_normal))
+            if normal_score <= 0.5:
+                continue
+            facing_score = 0.0
+            if reference_point is not None:
+                facing_score = float(
+                    face_normal.dot(FreeCAD.Vector(reference_point).sub(face_center))
+                )
+                if facing_score <= 1e-7:
+                    continue
+            candidates.append((normal_score, facing_score, candidate_face_name))
+
+        candidates.sort(reverse=True)
+        face_names.extend(
+            candidate_face_name for _score, _facing, candidate_face_name in candidates
+        )
+        return tuple(face_names)
+
+    def _is_single_wall_side_face_set(self, wall, face_names):
+        face_names = tuple(self.normalizeBoundarySubnames(face_names))
+        if not wall or not face_names:
+            return False
+        primary_face = self._get_boundary_face(wall, face_names[0])
+        if primary_face is None:
+            return False
+        primary_normal, _primary_center = self._get_boundary_face_normal_and_center(primary_face)
+        if primary_normal is None:
+            return False
+        for face_name in face_names[1:]:
+            candidate_face = self._get_boundary_face(wall, face_name)
+            if candidate_face is None:
+                return False
+            candidate_normal, _candidate_center = self._get_boundary_face_normal_and_center(
+                candidate_face
+            )
+            if candidate_normal is None or float(candidate_normal.dot(primary_normal)) <= 0.5:
+                return False
+        return True
+
     def getBoundaryFaceNamesForObject(self, obj, reference_point=None):
         """Return boundary face names for a supported object when no explicit subnames are given."""
 
@@ -1875,8 +2147,7 @@ class _Space(ArchComponent.Component):
             return tuple(f"Face{index}" for index, _face in enumerate(shape.Faces, start=1))
 
         if obj_type == "Wall":
-            face_name = self._get_wall_boundary_face_name(obj, reference_point)
-            return (face_name,) if face_name else ()
+            return self._get_wall_boundary_face_names(obj, reference_point=reference_point)
 
         return ()
 
@@ -2707,13 +2978,24 @@ class _SpaceBoundaryAnalyzer:
     _make_seed_space_boundary_face = _Space._make_seed_space_boundary_face
     _get_seed_space_boundary_faces = _Space._get_seed_space_boundary_faces
     _is_space_object = _Space._is_space_object
+    _is_wall_object = _Space._is_wall_object
+    _get_stable_boundary_links = _Space._get_stable_boundary_links
+    _get_boundary_storage_links = _Space._get_boundary_storage_links
+    _split_boundary_storage_links = _Space._split_boundary_storage_links
+    _write_boundary_storage = _Space._write_boundary_storage
     normalizeBoundarySubnames = staticmethod(_Space.normalizeBoundarySubnames)
     _get_boundary_entry_object_and_subnames = staticmethod(
         _Space._get_boundary_entry_object_and_subnames
     )
     _get_excluded_boundary_object_names = staticmethod(_Space._get_excluded_boundary_object_names)
+    _get_boundary_face = _Space._get_boundary_face
+    _get_boundary_face_normal_and_center = _Space._get_boundary_face_normal_and_center
     _get_wall_boundary_face_name = _Space._get_wall_boundary_face_name
+    _get_wall_boundary_face_name_for_normal = _Space._get_wall_boundary_face_name_for_normal
+    _get_wall_boundary_face_names = _Space._get_wall_boundary_face_names
+    _is_single_wall_side_face_set = _Space._is_single_wall_side_face_set
     getBoundaryFaceNamesForObject = _Space.getBoundaryFaceNamesForObject
+    getStableBoundaryLinks = _Space.getStableBoundaryLinks
     normalizeBoundaryLinks = _Space.normalizeBoundaryLinks
     resolveBoundaryLinks = _Space.resolveBoundaryLinks
     getBoundaryFacesFromLinks = _Space.getBoundaryFacesFromLinks
@@ -2763,6 +3045,16 @@ def normalizeBoundaryLinks(boundaries, exclude_objects=None):
         boundaries,
         exclude_objects=exclude_objects,
     )
+
+
+def getStableBoundaryLinks(space):
+    """Resolve the current stable boundary links for a space."""
+
+    proxy = getattr(space, "Proxy", None)
+    stable_links = getattr(proxy, "getStableBoundaryLinks", None)
+    if callable(stable_links):
+        return stable_links(space)
+    return []
 
 
 def resolveBoundaryLinks(entries, reference_point=None, exclude_objects=None):
@@ -3787,7 +4079,17 @@ class SpaceTaskPanel(ArchComponent.ComponentOptionsTaskPanel):
     def updateBoundaries(self):
         self.boundList.clear()
         if self.obj:
-            for b in self.obj.Boundaries:
+            boundaries = []
+            proxy = getattr(self.obj, "Proxy", None)
+            stable_links = getattr(proxy, "getStableBoundaryLinks", None)
+            if callable(stable_links):
+                try:
+                    boundaries = list(stable_links(self.obj) or [])
+                except Exception:
+                    boundaries = []
+            if not boundaries:
+                boundaries = list(getattr(self.obj, "Boundaries", []) or [])
+            for b in boundaries:
                 s = b[0].Label
                 for n in b[1]:
                     s += ", " + n
@@ -3809,10 +4111,15 @@ class SpaceTaskPanel(ArchComponent.ComponentOptionsTaskPanel):
             it = self.boundList.item(self.boundList.currentRow())
             if it and self.obj:
                 on = it.toolTip()
-                bounds = self.obj.Boundaries
-                for b in bounds:
-                    if b[0].Name == on:
-                        bounds.remove(b)
-                        break
-                self.obj.Boundaries = bounds
+                self.obj.Boundaries = [
+                    b
+                    for b in list(getattr(self.obj, "Boundaries", []) or [])
+                    if getattr(b[0], "Name", None) != on
+                ]
+                if hasattr(self.obj, "BoundaryWalls"):
+                    self.obj.BoundaryWalls = [
+                        wall
+                        for wall in list(getattr(self.obj, "BoundaryWalls", []) or [])
+                        if getattr(wall, "Name", None) != on
+                    ]
                 self.updateBoundaries()
