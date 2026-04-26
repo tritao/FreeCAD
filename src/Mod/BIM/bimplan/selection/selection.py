@@ -1656,6 +1656,30 @@ def schedule_selection_refresh(session):
         run_scheduled_selection_refresh(session)
 
 
+def schedule_clear_plan_selection_state(session):
+    if session.lifecycle_state.tearing_down or session.lifecycle_state.ignore_selection_changes:
+        return
+    if getattr(session, "_clear_plan_selection_state_queued", False):
+        return
+    session._clear_plan_selection_state_queued = True
+    try:
+        from PySide import QtCore
+
+        QtCore.QTimer.singleShot(0, lambda: run_scheduled_clear_plan_selection_state(session))
+    except Exception:
+        run_scheduled_clear_plan_selection_state(session)
+
+
+def run_scheduled_clear_plan_selection_state(session):
+    if not getattr(session, "_clear_plan_selection_state_queued", False):
+        return
+    session._clear_plan_selection_state_queued = False
+    with session.performance.plan_perf_trace_event("scheduled_clear_plan_selection_state"):
+        if session.lifecycle_state.tearing_down or session.lifecycle_state.ignore_selection_changes:
+            return
+        clear_plan_selection_state(session)
+
+
 def run_scheduled_selection_refresh(session):
     if not session._selection_refresh_queued:
         return
@@ -2015,6 +2039,12 @@ class PlanSelectionAPI(_SessionAPI):
 
     def run_scheduled_selection_refresh(self, *args, **kwargs):
         return run_scheduled_selection_refresh(self.session, *args, **kwargs)
+
+    def schedule_clear_plan_selection_state(self, *args, **kwargs):
+        return schedule_clear_plan_selection_state(self.session, *args, **kwargs)
+
+    def run_scheduled_clear_plan_selection_state(self, *args, **kwargs):
+        return run_scheduled_clear_plan_selection_state(self.session, *args, **kwargs)
 
     def set_gui_selection(self, *args, **kwargs):
         return set_gui_selection(self.session, *args, **kwargs)
