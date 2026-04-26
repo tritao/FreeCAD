@@ -127,6 +127,8 @@ def set_space_boundaries(session, space, boundaries):
     boundaries = ArchSpace.normalizeBoundaryLinks(boundaries)
     try:
         session.doc.openTransaction(translate("BIM_PlanEdit", "Edit Space Boundaries"))
+        if hasattr(space, "BoundaryWalls"):
+            space.BoundaryWalls = []
         space.Boundaries = boundaries
         session.doc.commitTransaction()
         session.doc.recompute()

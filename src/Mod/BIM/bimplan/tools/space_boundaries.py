@@ -147,6 +147,13 @@ def get_space_boundary_entries(session, space):
         return []
     import ArchSpace
 
+    proxy = getattr(space, "Proxy", None)
+    stable_links = getattr(proxy, "getStableBoundaryLinks", None)
+    if callable(stable_links):
+        try:
+            return ArchSpace.normalizeBoundaryLinks(stable_links(space))
+        except Exception:
+            pass
     return ArchSpace.normalizeBoundaryLinks(
         _iter_normalized_space_boundary_entries(getattr(space, "Boundaries", []) or ())
     )

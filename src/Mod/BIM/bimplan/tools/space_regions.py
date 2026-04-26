@@ -163,6 +163,8 @@ def _create_space_in_transaction(
         if not space:
             raise RuntimeError("Unable to create space")
         if keep_boundaries and boundaries:
+            if hasattr(space, "BoundaryWalls"):
+                space.BoundaryWalls = []
             space.Boundaries = boundaries
         visibility = getattr(session, "visibility", None)
         add_object_to_active_storey = getattr(visibility, "add_object_to_active_storey", None)
