@@ -189,6 +189,7 @@ AreaCalculationType = ["XY-plane projection", "At Center of Mass"]
 
 _BOUNDARY_SIDE_HINT_VERSION = 1
 _BOUNDARY_REGION_HINT_VERSION = 1
+_SCHEDULED_AUTO_SPACE_TEXT_REFRESHES = {}
 
 
 class _Space(ArchComponent.Component):
@@ -3540,6 +3541,48 @@ def refresh_auto_space_text_positions(doc, changed_bounds=None):
     return refreshed
 
 
+def run_scheduled_auto_space_text_refresh(doc_name):
+    changed_bounds = _SCHEDULED_AUTO_SPACE_TEXT_REFRESHES.pop(doc_name, "__missing__")
+    if changed_bounds == "__missing__":
+        return 0
+
+    try:
+        doc = FreeCAD.getDocument(doc_name)
+    except Exception:
+        doc = None
+    if doc is None:
+        return 0
+    return refresh_auto_space_text_positions(doc, changed_bounds=changed_bounds)
+
+
+def schedule_auto_space_text_refresh(doc, changed_bounds=None):
+    if (not FreeCAD.GuiUp) or (doc is None):
+        return 0
+
+    doc_name = getattr(doc, "Name", None)
+    if not doc_name:
+        return 0
+
+    if doc_name in _SCHEDULED_AUTO_SPACE_TEXT_REFRESHES:
+        existing_bounds = _SCHEDULED_AUTO_SPACE_TEXT_REFRESHES[doc_name]
+        if existing_bounds is None or changed_bounds is None:
+            _SCHEDULED_AUTO_SPACE_TEXT_REFRESHES[doc_name] = None
+        else:
+            _SCHEDULED_AUTO_SPACE_TEXT_REFRESHES[doc_name] = ArchComponent._union_bounds(
+                existing_bounds, changed_bounds
+            )
+        return 1
+
+    _SCHEDULED_AUTO_SPACE_TEXT_REFRESHES[doc_name] = changed_bounds
+    try:
+        QtCore.QTimer.singleShot(
+            0, lambda name=doc_name: run_scheduled_auto_space_text_refresh(name)
+        )
+    except Exception:
+        return run_scheduled_auto_space_text_refresh(doc_name)
+    return 1
+
+
 def _get_space_text_preferred_clearance(text_box):
     width = float(text_box.get("width", 0.0) or 0.0)
     padding = float(text_box.get("padding", 0.0) or 0.0)
@@ -3829,6 +3872,7 @@ class _ViewProviderSpace(ArchComponent.ViewProviderComponent):
         self.onChanged(vobj, "LineSpacing")
         self.onChanged(vobj, "DrawStyle")
         self.onChanged(vobj, "FontName")
+        schedule_auto_space_text_refresh(getattr(vobj.Object, "Document", None))
 
     def createFootprintGroup(self):
         """Create the generic Footprint display mode node for spaces."""

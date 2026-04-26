@@ -27,7 +27,10 @@
 import Arch
 import ArchSpace
 import FreeCAD
+import FreeCADGui
+import os
 import Part
+import tempfile
 from bimtests import TestArchBaseGui
 from draftutils import params
 from unittest.mock import patch
@@ -725,6 +728,55 @@ class TestArchFootprintGui(TestArchBaseGui.TestArchBaseGui):
             refreshed_translation = self._get_space_label_translation(space)
 
         self._assert_vector_almost_equal(refreshed_translation, expected_translation)
+
+    def test_space_auto_text_refreshes_after_document_reload(self):
+        """Auto-positioned space labels should refresh to the computed point after reopening a document."""
+
+        base = self.document.addObject("Part::Feature", "ReloadLabelBase")
+        base.Shape = Part.makeBox(6000, 4000, 2500)
+        space = Arch.makeSpace(base, name="Bedroom")
+        space_name = space.Name
+
+        equipment_base = self.document.addObject("Part::Box", "ReloadBedBase")
+        equipment_base.Length = 2200
+        equipment_base.Width = 1900
+        equipment_base.Height = 600
+        equipment = Arch.makeEquipment(equipment_base)
+        equipment.Placement.Base = FreeCAD.Vector(200, 900, 0)
+        self.document.recompute()
+        self.pump_gui_events(timeout_ms=500)
+
+        expected_before = self._get_expected_space_label_translation(space)
+        self._assert_vector_almost_equal(self._get_space_label_translation(space), expected_before)
+
+        tmp = tempfile.NamedTemporaryFile(suffix=".FCStd", delete=False)
+        tmp.close()
+        try:
+            self.document.saveAs(tmp.name)
+            doc_name = self.document.Name
+            FreeCAD.closeDocument(doc_name)
+
+            self.document = FreeCAD.openDocument(tmp.name)
+            if FreeCAD.GuiUp:
+                FreeCAD.setActiveDocument(self.document.Name)
+                FreeCADGui.ActiveDocument = FreeCADGui.getDocument(self.document.Name)
+            self.pump_gui_events(timeout_ms=500)
+
+            restored_space = self.document.getObject(space_name)
+            self.assertIsNotNone(restored_space)
+
+            restored_translation = self._get_space_label_translation(restored_space)
+            expected_after = self._get_expected_space_label_translation(restored_space)
+            default_point = ArchSpace._get_default_space_text_position(restored_space)
+            default_translation = FreeCAD.Vector(
+                default_point.x, default_point.y, default_point.z + 0.01
+            )
+
+            self._assert_vector_almost_equal(restored_translation, expected_after)
+            self.assertGreater(restored_translation.distanceToPoint(default_translation), 1.0)
+        finally:
+            if os.path.exists(tmp.name):
+                os.unlink(tmp.name)
 
     def test_rotated_wall_door_footprint_stays_in_host_frame(self):
         """Hosted door symbols should use the real host frame on rotated walls."""

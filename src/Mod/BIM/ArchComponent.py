@@ -242,7 +242,7 @@ def notify_plan_footprint_changed(view_provider):
 
     import ArchSpace
 
-    return ArchSpace.refresh_auto_space_text_positions(doc, changed_bounds=changed_bounds)
+    return ArchSpace.schedule_auto_space_text_refresh(doc, changed_bounds=changed_bounds)
 
 
 def addToComponent(compobject, addobject, prop):
