@@ -121,7 +121,17 @@ class DraftWorkbench(FreeCADGui.Workbench):
             self, QT_TRANSLATE_NOOP("Workbench", "Draft Utility"), self.utility_commands_toolbar
         )
         it.init_toolbar(
-            self, QT_TRANSLATE_NOOP("Workbench", "Draft Snap"), it.get_draft_snap_commands()
+            self,
+            QT_TRANSLATE_NOOP("Workbench", "Draft Snap"),
+            it.get_draft_snap_commands(),
+            key="shared:Draft Snap",
+            tier=self.ToolbarTier.Secondary,
+            visibility=self.ToolbarVisibility.Visible,
+            host=self.ToolbarHost.ActiveView,
+            view_host_requirement=self.ToolbarViewHostRequirement.View3D,
+            view_presentation=self.ToolbarViewPresentation.CenteredOverlay,
+            view_overlay_edge=self.ToolbarViewOverlayEdge.Bottom,
+            view_overlay_edge_persistence=self.ToolbarViewOverlayEdgePersistence.Shared,
         )
 
         # Set up menus

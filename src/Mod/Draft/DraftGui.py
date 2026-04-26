@@ -226,6 +226,20 @@ class DraftToolBar:
         mw = FreeCADGui.getMainWindow()
         mw.addToolBar(self.tray)
         self.tray.setParent(mw)
+        FreeCADGui.configureToolbar(
+            self.tray,
+            key="shared:Draft tray",
+            tier=FreeCADGui.Workbench.ToolbarTier.Contextual,
+            visibility=FreeCADGui.Workbench.ToolbarVisibility.Unavailable,
+            host=FreeCADGui.Workbench.ToolbarHost.ActiveView,
+            view_host_requirement=FreeCADGui.Workbench.ToolbarViewHostRequirement.View3D,
+            view_presentation=FreeCADGui.Workbench.ToolbarViewPresentation.CenteredOverlay,
+            view_overlay_edge=FreeCADGui.Workbench.ToolbarViewOverlayEdge.Bottom,
+            view_overlay_edge_persistence=(
+                FreeCADGui.Workbench.ToolbarViewOverlayEdgePersistence.Shared
+            ),
+            menu_visible=False,
+        )
         self.tray.hide()
         self.display_point_active = False  # prevent cyclic processing of point values
 

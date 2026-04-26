@@ -191,6 +191,103 @@ class WorkbenchTestCase(unittest.TestCase):
             FreeCADGui.removeWorkbench("UnitToolbarOptionsWorkbench")
             FreeCAD.closeDocument(doc.Name)
 
+    def testConfigureToolbar(self):
+        toolbar = FreeCADGui.UiLoader().createWidget("Gui::ToolBar")
+        toolbar.setObjectName("Python External Toolbar")
+        toolbar.setWindowTitle("Python External Toolbar")
+        main_window = FreeCADGui.getMainWindow()
+        main_window.addToolBar(toolbar)
+
+        try:
+            FreeCADGui.configureToolbar(
+                toolbar,
+                key="shared:Python External Toolbar",
+                tier=FreeCADGui.Workbench.ToolbarTier.Contextual,
+                visibility=FreeCADGui.Workbench.ToolbarVisibility.Unavailable,
+                host=FreeCADGui.Workbench.ToolbarHost.ActiveView,
+                view_host_requirement=FreeCADGui.Workbench.ToolbarViewHostRequirement.View3D,
+                view_presentation=FreeCADGui.Workbench.ToolbarViewPresentation.CenteredOverlay,
+                view_overlay_edge=FreeCADGui.Workbench.ToolbarViewOverlayEdge.Bottom,
+                view_overlay_edge_persistence=(
+                    FreeCADGui.Workbench.ToolbarViewOverlayEdgePersistence.Shared
+                ),
+                menu_visible=False,
+            )
+
+            self.assertEqual(toolbar.property("PersistenceKey"), "shared:Python External Toolbar")
+            self.assertEqual(toolbar.property("Tier"), "contextual")
+            self.assertEqual(toolbar.property("Host"), "view")
+            self.assertEqual(toolbar.property("ViewPresentation"), "centered-overlay")
+            self.assertEqual(toolbar.property("ViewOverlayEdge"), "bottom")
+            self.assertEqual(toolbar.property("ViewOverlayEdgePersistence"), "shared")
+            self.assertEqual(
+                toolbar.toggleViewAction().property("DefaultVisibility"),
+                int(FreeCADGui.Workbench.ToolbarVisibility.Unavailable),
+            )
+            self.assertFalse(toolbar.toggleViewAction().isVisible())
+            self.assertEqual(toolbar.toggleViewAction().text(), "")
+        finally:
+            main_window.removeToolBar(toolbar)
+            toolbar.deleteLater()
+
+    def testDraftAndBimToolbarsUseViewOverlayDefaults(self):
+        doc = FreeCAD.newDocument("DraftToolbarDefaults")
+
+        def find_toolbar(key):
+            for toolbar in FreeCADGui.getMainWindow().findChildren(QtWidgets.QToolBar):
+                if toolbar.property("PersistenceKey") == key:
+                    return toolbar
+            return None
+
+        try:
+            self.assertTrue(FreeCADGui.activateWorkbench("DraftWorkbench"))
+            FreeCADGui.updateGui()
+            QApplication.processEvents()
+
+            draft_snap = find_toolbar("shared:Draft Snap")
+            self.assertIsNotNone(draft_snap)
+            self.assertEqual(draft_snap.property("Host"), "view")
+            self.assertEqual(draft_snap.property("ViewPresentation"), "centered-overlay")
+            self.assertEqual(draft_snap.property("ViewOverlayEdge"), "bottom")
+            self.assertEqual(draft_snap.property("ViewOverlayEdgePersistence"), "shared")
+            self.assertEqual(
+                getattr(draft_snap.parentWidget(), "property", lambda *_: None)("overlayEdge"),
+                "bottom",
+            )
+
+            draft_tray = getattr(getattr(FreeCADGui, "draftToolBar", None), "tray", None)
+            self.assertIsNotNone(draft_tray)
+            self.assertEqual(draft_tray.property("PersistenceKey"), "shared:Draft tray")
+            self.assertEqual(draft_tray.property("Host"), "view")
+            self.assertEqual(draft_tray.property("ViewPresentation"), "centered-overlay")
+            self.assertEqual(draft_tray.property("ViewOverlayEdge"), "bottom")
+            self.assertEqual(draft_tray.property("ViewOverlayEdgePersistence"), "shared")
+            self.assertFalse(draft_tray.toggleViewAction().isVisible())
+            self.assertEqual(draft_tray.toggleViewAction().text(), "")
+            draft_tray.show()
+            QApplication.processEvents()
+            self.assertEqual(
+                getattr(draft_tray.parentWidget(), "property", lambda *_: None)("overlayEdge"),
+                "bottom",
+            )
+
+            self.assertTrue(FreeCADGui.activateWorkbench("BIMWorkbench"))
+            FreeCADGui.updateGui()
+            QApplication.processEvents()
+
+            bim_snap = find_toolbar("shared:Draft Snap")
+            self.assertIsNotNone(bim_snap)
+            self.assertEqual(bim_snap.property("Host"), "view")
+            self.assertEqual(bim_snap.property("ViewPresentation"), "centered-overlay")
+            self.assertEqual(bim_snap.property("ViewOverlayEdge"), "bottom")
+            self.assertEqual(bim_snap.property("ViewOverlayEdgePersistence"), "shared")
+            self.assertEqual(
+                getattr(bim_snap.parentWidget(), "property", lambda *_: None)("overlayEdge"),
+                "bottom",
+            )
+        finally:
+            FreeCAD.closeDocument(doc.Name)
+
     def testInvalidType(self):
         class MyExtWorkbench(FreeCADGui.Workbench):
             def Initialize(self):

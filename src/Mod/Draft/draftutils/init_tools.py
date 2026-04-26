@@ -203,7 +203,7 @@ def get_draft_context_commands():
     ]
 
 
-def init_toolbar(workbench, toolbar, cmd_list):
+def init_toolbar(workbench, toolbar, cmd_list, **toolbar_options):
     """Initialize a toolbar.
 
     Parameters
@@ -220,9 +220,9 @@ def init_toolbar(workbench, toolbar, cmd_list):
     for cmd in cmd_list:
         if isinstance(cmd, tuple):
             if len(cmd) == 1:
-                workbench.appendToolbar(toolbar, [cmd[0]])
+                workbench.appendToolbar(toolbar, [cmd[0]], **toolbar_options)
         else:
-            workbench.appendToolbar(toolbar, [cmd])
+            workbench.appendToolbar(toolbar, [cmd], **toolbar_options)
 
 
 def init_menu(workbench, menu_list, cmd_list):

@@ -516,7 +516,18 @@ class BIMWorkbench(Workbench):
         t9 = QT_TRANSLATE_NOOP("Workbench", "3D Tools")
         t10 = QT_TRANSLATE_NOOP("Workbench", "Working Plane Tools")
         self.appendToolbar(t1, self.draftingtools)
-        self.appendToolbar(t2, self.snapbar)
+        self.appendToolbar(
+            t2,
+            self.snapbar,
+            key="shared:Draft Snap",
+            tier=self.ToolbarTier.Secondary,
+            visibility=self.ToolbarVisibility.Visible,
+            host=self.ToolbarHost.ActiveView,
+            view_host_requirement=self.ToolbarViewHostRequirement.View3D,
+            view_presentation=self.ToolbarViewPresentation.CenteredOverlay,
+            view_overlay_edge=self.ToolbarViewOverlayEdge.Bottom,
+            view_overlay_edge_persistence=self.ToolbarViewOverlayEdgePersistence.Shared,
+        )
         self.appendToolbar(t3, self.bimtools)
         self.appendToolbar(t4, self.annotationtools)
         self.appendToolbar(t7, self.modify_gen)

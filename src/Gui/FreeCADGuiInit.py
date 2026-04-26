@@ -232,6 +232,167 @@ class Workbench:
         return "Gui::PythonWorkbench"
 
 
+_TOOLBAR_TIER_NAMES = {
+    int(Workbench.ToolbarTier.Recommended): "recommended",
+    int(Workbench.ToolbarTier.Secondary): "secondary",
+    int(Workbench.ToolbarTier.Advanced): "advanced",
+    int(Workbench.ToolbarTier.Contextual): "contextual",
+}
+
+_TOOLBAR_HOST_NAMES = {
+    int(Workbench.ToolbarHost.MainWindow): "main-window",
+    int(Workbench.ToolbarHost.ActiveView): "view",
+    int(Workbench.ToolbarHost.Panel): "panel",
+}
+
+_TOOLBAR_PANEL_ROLE_NAMES = {
+    int(Workbench.ToolbarPanelRole.None_): "none",
+    int(Workbench.ToolbarPanelRole.ModelTree): "model-tree",
+}
+
+_TOOLBAR_VIEW_PRESENTATION_NAMES = {
+    int(Workbench.ToolbarViewPresentation.Docked): "docked",
+    int(Workbench.ToolbarViewPresentation.CenteredOverlay): "centered-overlay",
+}
+
+_TOOLBAR_VIEW_OVERLAY_EDGE_NAMES = {
+    int(Workbench.ToolbarViewOverlayEdge.Top): "top",
+    int(Workbench.ToolbarViewOverlayEdge.Bottom): "bottom",
+    int(Workbench.ToolbarViewOverlayEdge.Left): "left",
+    int(Workbench.ToolbarViewOverlayEdge.Right): "right",
+}
+
+_TOOLBAR_VIEW_OVERLAY_EDGE_PERSISTENCE_NAMES = {
+    int(Workbench.ToolbarViewOverlayEdgePersistence.ByScope): "by-scope",
+    int(Workbench.ToolbarViewOverlayEdgePersistence.Shared): "shared",
+    int(Workbench.ToolbarViewOverlayEdgePersistence.Contextual): "contextual",
+}
+
+
+def _toolbar_option_int(value):
+    return Workbench._toolbarOptionValue(value)
+
+
+def _toolbar_option_pair(value, mapping, option_name):
+    if value is None:
+        return None, None
+
+    value = _toolbar_option_int(value)
+    if value not in mapping:
+        raise ValueError(f"invalid {option_name}: {value}")
+
+    return value, mapping[value]
+
+
+def configureToolbar(
+    toolbar,
+    *,
+    key=None,
+    tier=None,
+    visibility=None,
+    host=None,
+    panel_role=None,
+    view_host_requirement=None,
+    view_presentation=None,
+    view_overlay_edge=None,
+    view_overlay_edge_persistence=None,
+    menu_visible=True,
+):
+    """Apply hosted-toolbar metadata to an existing QToolBar instance."""
+
+    if toolbar is None or not hasattr(toolbar, "toggleViewAction"):
+        raise TypeError("toolbar must be a QToolBar-like object")
+
+    action = toolbar.toggleViewAction()
+    if action is None:
+        raise TypeError("toolbar must expose toggleViewAction()")
+
+    if key is not None:
+        if not key:
+            raise ValueError("key must not be empty")
+        toolbar.setProperty("_fc_toolbar_persistence_key", key)
+        toolbar.setProperty("PersistenceKey", key)
+        action.setProperty("PersistenceKey", key)
+
+    tier_value, tier_name = _toolbar_option_pair(tier, _TOOLBAR_TIER_NAMES, "tier")
+    if tier_value is not None:
+        toolbar.setProperty("_fc_toolbar_tier", tier_value)
+        toolbar.setProperty("Tier", tier_name)
+        action.setProperty("Tier", tier_name)
+
+    host_value, host_name = _toolbar_option_pair(host, _TOOLBAR_HOST_NAMES, "host")
+    if host_value is not None:
+        toolbar.setProperty("_fc_toolbar_default_host", host_value)
+        toolbar.setProperty("_fc_toolbar_host", host_value)
+        toolbar.setProperty("Host", host_name)
+        action.setProperty("Host", host_name)
+
+    panel_role_value, panel_role_name = _toolbar_option_pair(
+        panel_role, _TOOLBAR_PANEL_ROLE_NAMES, "panel_role"
+    )
+    if panel_role_value is not None:
+        toolbar.setProperty("_fc_toolbar_panel_role", panel_role_value)
+        toolbar.setProperty("PanelRole", panel_role_name)
+        action.setProperty("PanelRole", panel_role_name)
+
+    if view_host_requirement is not None:
+        toolbar.setProperty(
+            "_fc_toolbar_view_host_requirement", _toolbar_option_int(view_host_requirement)
+        )
+
+    presentation_value, presentation_name = _toolbar_option_pair(
+        view_presentation, _TOOLBAR_VIEW_PRESENTATION_NAMES, "view_presentation"
+    )
+    if presentation_value is not None:
+        toolbar.setProperty("_fc_toolbar_default_view_presentation", presentation_value)
+        toolbar.setProperty("_fc_toolbar_view_presentation", presentation_value)
+        toolbar.setProperty("ViewPresentation", presentation_name)
+        action.setProperty("ViewPresentation", presentation_name)
+
+    overlay_edge_value, overlay_edge_name = _toolbar_option_pair(
+        view_overlay_edge, _TOOLBAR_VIEW_OVERLAY_EDGE_NAMES, "view_overlay_edge"
+    )
+    if overlay_edge_value is not None:
+        toolbar.setProperty("_fc_toolbar_default_view_overlay_edge", overlay_edge_value)
+        toolbar.setProperty("_fc_toolbar_view_overlay_edge", overlay_edge_value)
+        toolbar.setProperty("ViewOverlayEdge", overlay_edge_name)
+        action.setProperty("ViewOverlayEdge", overlay_edge_name)
+
+    overlay_edge_persistence_value, overlay_edge_persistence_name = _toolbar_option_pair(
+        view_overlay_edge_persistence,
+        _TOOLBAR_VIEW_OVERLAY_EDGE_PERSISTENCE_NAMES,
+        "view_overlay_edge_persistence",
+    )
+    if overlay_edge_persistence_value is not None:
+        toolbar.setProperty(
+            "_fc_toolbar_view_overlay_edge_persistence", overlay_edge_persistence_value
+        )
+        toolbar.setProperty("ViewOverlayEdgePersistence", overlay_edge_persistence_name)
+        action.setProperty("ViewOverlayEdgePersistence", overlay_edge_persistence_name)
+
+    if visibility is not None:
+        action.setProperty("DefaultVisibility", _toolbar_option_int(visibility))
+
+    if menu_visible:
+        if not action.text():
+            label = toolbar.windowTitle() or toolbar.objectName()
+            if label:
+                action.setText(label)
+        action.setVisible(
+            visibility is None
+            or _toolbar_option_int(visibility) != int(Workbench.ToolbarVisibility.Unavailable)
+        )
+    else:
+        action.setVisible(False)
+        action.setText("")
+
+    action.setChecked(toolbar.isVisible())
+    return toolbar
+
+
+Gui.configureToolbar = configureToolbar
+
+
 class StandardWorkbench(Workbench):
     """
     A workbench defines the tool bars, command bars, menus,
