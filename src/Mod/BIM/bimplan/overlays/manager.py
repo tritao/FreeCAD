@@ -415,6 +415,7 @@ def refresh_plan_overlay_visuals(session, dirty=None):
 
 
 def finalize_trackers(trackers):
+    finalized_any = False
     for tracker in trackers:
         off = getattr(tracker, "off", None)
         try:
@@ -424,8 +425,18 @@ def finalize_trackers(trackers):
             pass
         try:
             tracker.finalize()
+            finalized_any = True
         except Exception:
             pass
+    if not finalized_any:
+        return
+    try:
+        from PySide import QtCore
+        from draftutils.todo import ToDo
+
+        QtCore.QTimer.singleShot(0, ToDo.doTasks)
+    except Exception:
+        pass
 
 
 def make_plan_line_tracker(DraftTrackers, label, **kwargs):

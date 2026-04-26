@@ -955,20 +955,13 @@ def is_wall_readout_edit_active(session):
 
 def clear_wall_edit_preview(session):
     if session._preview_line_tracker:
-        try:
-            session._preview_line_tracker.finalize()
-        except Exception:
-            pass
+        session.overlays.finalize_trackers([session._preview_line_tracker])
     session._preview_line_tracker = None
 
     session.overlays.finalize_trackers(session._preview_footprint_trackers)
     session._preview_footprint_trackers = []
 
-    for tracker in session._preview_grip_trackers:
-        try:
-            tracker.finalize()
-        except Exception:
-            pass
+    session.overlays.finalize_trackers(session._preview_grip_trackers)
     session._preview_grip_trackers = []
     clear_wall_edit_readout(session)
     clear_wall_hosted_opening_preview(session)

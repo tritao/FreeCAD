@@ -1730,6 +1730,33 @@ class BimPlanEditGuiWallsMixin:
         self.assertEqual(session.current_tool, "Move Wall")
         self._assert_selected_plan_target(session, "wall", wall)
 
+    def test_plan_edit_clearing_wall_selection_removes_edit_nodes_from_scenegraph(self):
+        """Clearing wall selection should not leave stale EditNode grips in the viewer scene graph."""
+
+        wall = Arch.makeWall(length=3000, width=200, height=2500)
+        self.document.recompute()
+
+        session = BimPlanSession.start_session()
+        self.assertIsNotNone(session)
+        self.pump_gui_events()
+
+        self.assertTrue(session.selection.select_wall_for_plan_edit(wall))
+        self.pump_gui_events(timeout_ms=500)
+
+        edit_nodes = self._get_scenegraph_edit_nodes(session)
+        self.assertEqual(
+            edit_nodes,
+            [(wall.Name, "EditNode2"), (wall.Name, "EditNode1"), (wall.Name, "EditNode0")],
+        )
+
+        session.selection.clear_plan_selection_state()
+        self.pump_gui_events(timeout_ms=500)
+
+        self.assertEqual(session.selection.get_selected_plan_target(), (None, None))
+        self.assertEqual(len(session._grip_trackers), 0)
+        self.assertEqual(len(session._preview_grip_trackers), 0)
+        self.assertEqual(self._get_scenegraph_edit_nodes(session), [])
+
     def test_plan_edit_wall_move_preview_shows_delta_readouts(self):
         """Moving a wall should show horizontal and vertical temporary readouts."""
 

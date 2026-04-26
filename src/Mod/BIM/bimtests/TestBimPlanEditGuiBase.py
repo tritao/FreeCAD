@@ -375,6 +375,44 @@ class BimPlanEditGuiBase(ArchWallGuiTestCase):
     def _count_scenegraph_named_switches(self, session, switch_name):
         return len(self._get_scenegraph_named_switches(session, switch_name))
 
+    def _get_scenegraph_edit_nodes(self, session):
+        view = getattr(session, "view", None)
+        scene_graph = view.getSceneGraph() if view else None
+        if scene_graph is None:
+            return []
+
+        nodes = []
+
+        def walk(node):
+            if node is None:
+                return
+            try:
+                type_name = node.getTypeId().getName().getString()
+            except Exception:
+                type_name = ""
+            if type_name == "SoFCSelection":
+                try:
+                    object_name = str(node.objectName.getValue())
+                    subelement_name = str(node.subElementName.getValue())
+                except Exception:
+                    object_name = ""
+                    subelement_name = ""
+                if subelement_name.startswith("EditNode"):
+                    nodes.append((object_name, subelement_name))
+            try:
+                child_count = int(node.getNumChildren())
+            except Exception:
+                child_count = 0
+            for index in range(child_count):
+                try:
+                    child = node.getChild(index)
+                except Exception:
+                    continue
+                walk(child)
+
+        walk(scene_graph)
+        return nodes
+
     def _make_fake_left_mouse_press(self, x=250, y=250):
         return self._make_fake_left_mouse_button_event(x, y, down=True)
 

@@ -124,11 +124,7 @@ def has_active_rect_wall_tool(session):
 
 
 def clear_rect_wall_preview(session):
-    for tracker in session._rect_wall_preview_trackers:
-        try:
-            tracker.finalize()
-        except Exception:
-            pass
+    session.overlays.finalize_trackers(session._rect_wall_preview_trackers)
     session._rect_wall_preview_trackers = []
 
 
