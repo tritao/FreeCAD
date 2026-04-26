@@ -258,6 +258,28 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         self.assertGreater(len(session._opening_overlay_trackers), 0)
         self.assertEqual(len(session._opening_handle_trackers), 3)
 
+    def _get_space_overlap_volume(self, first_space, second_space):
+        try:
+            overlap = first_space.Shape.common(second_space.Shape)
+        except Exception:
+            return float("inf")
+        try:
+            return float(getattr(overlap, "Volume", 0.0) or 0.0)
+        except Exception:
+            return float("inf")
+
+    def _assert_spaces_stay_distinct(self, spaces):
+        self.assertEqual(len(spaces), 2)
+        sorted_spaces = sorted(spaces, key=lambda item: float(item.Shape.CenterOfMass.x))
+        left_space, right_space = sorted_spaces
+        self.assertLess(float(left_space.Shape.CenterOfMass.x), 3000.0)
+        self.assertGreater(float(right_space.Shape.CenterOfMass.x), 3000.0)
+        self.assertLess(self._get_space_overlap_volume(left_space, right_space), 1e-3)
+        for space in sorted_spaces:
+            self.assertGreater(space.Proxy.getArea(space), 1_000_000.0)
+            self.assertEqual(space.Proxy.getLastBoundaryError(space), "")
+        return sorted_spaces
+
     def _get_scenegraph_named_switches(self, session, switch_name):
         view = getattr(session, "view", None)
         scene_graph = view.getSceneGraph() if view else None
@@ -489,17 +511,18 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
     def _make_split_plan_room_walls(self, width=200, height=2500):
         level = Arch.makeFloor(name="Level 0")
         walls = []
-        segments = (
-            ("South Wall", FreeCAD.Vector(0, 0, 0), FreeCAD.Vector(6000, 0, 0)),
-            ("East Wall", FreeCAD.Vector(6000, 0, 0), FreeCAD.Vector(6000, 4000, 0)),
-            ("North Wall", FreeCAD.Vector(6000, 4000, 0), FreeCAD.Vector(0, 4000, 0)),
-            ("West Wall", FreeCAD.Vector(0, 4000, 0), FreeCAD.Vector(0, 0, 0)),
-            ("Divider Wall", FreeCAD.Vector(3000, 0, 0), FreeCAD.Vector(3000, 4000, 0)),
+        placements = (
+            ("South Wall", 6000, FreeCAD.Vector(3000, 0, 0), 0),
+            ("East Wall", 4000, FreeCAD.Vector(6000, 2000, 0), 90),
+            ("North Wall", 6000, FreeCAD.Vector(3000, 4000, 0), 180),
+            ("West Wall", 4000, FreeCAD.Vector(0, 2000, 0), -90),
+            ("Divider Wall", 4000, FreeCAD.Vector(3000, 2000, 0), 90),
         )
-        for label, start, end in segments:
-            base = Draft.makeLine(start, end)
-            wall = Arch.makeWall(base, width=width, height=height, name=label.replace(" ", ""))
+        for label, length, base, angle in placements:
+            wall = Arch.makeWall(length=length, width=width, height=height, align="Left")
             wall.Label = label
+            wall.Placement.Base = base
+            wall.Placement.Rotation = FreeCAD.Rotation(FreeCAD.Vector(0, 0, 1), angle)
             level.addObject(wall)
             walls.append(wall)
 
@@ -7028,6 +7051,108 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         self.assertIs(session.selection.get_selected_target_for_kind("space"), created_space)
         self.assertEqual(session.spaces.get_space_boundary_entries(created_space), [])
         self.assertAlmostEqual(created_space.Proxy.getArea(created_space), candidate["area"])
+
+        session.shutdown(close_dialog=False)
+        self.pump_gui_events()
+
+    def test_plan_edit_wall_stretch_undo_keeps_adjacent_wall_linked_spaces_distinct(self):
+        """Stretch undo should not collapse sibling wall-linked spaces onto the same region."""
+
+        level, walls = self._make_split_plan_room_walls()
+        divider_wall = next(wall for wall in walls if wall.Label == "Divider Wall")
+        left_reference = FreeCAD.Vector(1500.0, 2000.0, 1000.0)
+        right_reference = FreeCAD.Vector(4500.0, 2000.0, 1000.0)
+        center_reference = FreeCAD.Vector(3000.0, 2000.0, 1000.0)
+
+        FreeCADGui.Selection.clearSelection()
+        FreeCADGui.Selection.addSelection(level)
+
+        session = BimPlanSession.start_session()
+        self.assertIsNotNone(session)
+        self.pump_gui_events()
+
+        left_divider_face = ArchSpace.getBoundaryFaceNamesForObject(
+            divider_wall,
+            reference_point=left_reference,
+        )[0]
+        right_divider_face = ArchSpace.getBoundaryFaceNamesForObject(
+            divider_wall,
+            reference_point=right_reference,
+        )[0]
+        boundaries = []
+        for wall in walls:
+            if wall is divider_wall:
+                face_names = tuple(dict.fromkeys((left_divider_face, right_divider_face)))
+            else:
+                face_names = ArchSpace.getBoundaryFaceNamesForObject(
+                    wall,
+                    reference_point=center_reference,
+                )
+            boundaries.append((wall, face_names))
+        self.assertEqual(len(boundaries), 5)
+
+        report = session.spaces.build_space_region_candidate_report(boundaries, label="Two Rooms")
+        major_candidates = [
+            candidate
+            for candidate in report.get("candidates", [])
+            if candidate["area"] > 1_000_000.0
+        ]
+        self.assertEqual(len(major_candidates), 2)
+        major_candidates.sort(key=lambda item: float(item["sample_point"].x))
+
+        created_spaces = []
+        for candidate in major_candidates:
+            space = session.spaces.create_space_from_region_candidate(
+                candidate,
+                boundaries=boundaries,
+                keep_boundaries=True,
+            )
+            self.assertIsNotNone(space)
+            space.Boundaries = list(boundaries)
+            created_spaces.append(space)
+        self.document.recompute()
+        self.pump_gui_events()
+
+        sorted_spaces = self._assert_spaces_stay_distinct(created_spaces)
+        initial_centers = [float(space.Shape.CenterOfMass.x) for space in sorted_spaces]
+        initial_areas = [float(space.Proxy.getArea(space)) for space in sorted_spaces]
+        for space in sorted_spaces:
+            self.assertTrue(str(getattr(space, "BoundaryRegionHint", "") or "").strip())
+            self.assertEqual(len(session.spaces.get_space_boundary_entries(space)), 5)
+
+        FreeCADGui.Selection.clearSelection()
+        FreeCADGui.Selection.addSelection(self.document.Name, divider_wall.Name)
+        self.pump_gui_events()
+        session.selection.refresh_primary_selected_plan_target()
+
+        captured = {}
+
+        def fake_get_point(**kwargs):
+            captured.update(kwargs)
+
+        divider_start, divider_end = self._get_wall_endpoints(divider_wall)
+        new_start = FreeCAD.Vector(divider_start).add(FreeCAD.Vector(400.0, 0.0, 0.0))
+
+        with (
+            patch.object(FreeCADGui.Snapper, "getPoint", side_effect=fake_get_point),
+            patch.object(FreeCADGui.Snapper, "setSelectMode", return_value=None),
+        ):
+            session.wall_edit.start_wall_grip_edit(0)
+            captured["callback"](new_start, None)
+
+        self._assert_no_wall_edit_preview_visuals(session)
+        self._assert_spaces_stay_distinct(created_spaces)
+
+        self._undo_document()
+        self._assert_no_wall_edit_preview_visuals(session)
+
+        restored_spaces = self._assert_spaces_stay_distinct(created_spaces)
+        restored_centers = [float(space.Shape.CenterOfMass.x) for space in restored_spaces]
+        restored_areas = [float(space.Proxy.getArea(space)) for space in restored_spaces]
+        for initial_center, restored_center in zip(initial_centers, restored_centers):
+            self.assertAlmostEqual(restored_center, initial_center, delta=1e-6)
+        for initial_area, restored_area in zip(initial_areas, restored_areas):
+            self.assertAlmostEqual(restored_area, initial_area, delta=1e-6)
 
         session.shutdown(close_dialog=False)
         self.pump_gui_events()
