@@ -126,6 +126,23 @@ std::optional<ToolBarItem::PanelRole> parseToolbarPanelRoleOption(PyObject* valu
     throw Py::ValueError("panel_role has an invalid enum value");
 }
 
+std::optional<ToolBarItem::PanelPlacement> parseToolbarPanelPlacementOption(PyObject* value)
+{
+    const auto rawValue = parseToolbarOptionValue(value, "panel_placement");
+    if (!rawValue) {
+        return std::nullopt;
+    }
+
+    switch (*rawValue) {
+        case static_cast<long>(ToolBarItem::PanelPlacement::Top):
+            return ToolBarItem::PanelPlacement::Top;
+        case static_cast<long>(ToolBarItem::PanelPlacement::Bottom):
+            return ToolBarItem::PanelPlacement::Bottom;
+    }
+
+    throw Py::ValueError("panel_placement has an invalid enum value");
+}
+
 std::optional<ToolBarItem::ViewHostRequirement> parseToolbarViewHostRequirementOption(PyObject* value)
 {
     const auto rawValue = parseToolbarOptionValue(value, "view_host_requirement");
@@ -417,7 +434,7 @@ PyObject* PythonWorkbenchPy::appendToolbar(PyObject* args, PyObject* kwd)
 {
     PY_TRY
     {
-        static constexpr std::array<const char*, 13> keywords = {
+        static constexpr std::array<const char*, 14> keywords = {
             "name",
             "items",
             "key",
@@ -425,6 +442,7 @@ PyObject* PythonWorkbenchPy::appendToolbar(PyObject* args, PyObject* kwd)
             "visibility",
             "host",
             "panel_role",
+            "panel_placement",
             "view_host_requirement",
             "view_presentation",
             "view_overlay_edge",
@@ -440,6 +458,7 @@ PyObject* PythonWorkbenchPy::appendToolbar(PyObject* args, PyObject* kwd)
         PyObject* visibility = nullptr;
         PyObject* host = nullptr;
         PyObject* panelRole = nullptr;
+        PyObject* panelPlacement = nullptr;
         PyObject* viewHostRequirement = nullptr;
         PyObject* viewPresentation = nullptr;
         PyObject* viewOverlayEdge = nullptr;
@@ -448,7 +467,7 @@ PyObject* PythonWorkbenchPy::appendToolbar(PyObject* args, PyObject* kwd)
         if (!Base::Wrapped_ParseTupleAndKeywords(
                 args,
                 kwd,
-                "sO|zOOOOOOOOO:appendToolbar",
+                "sO|zOOOOOOOOOO:appendToolbar",
                 keywords,
                 &psToolBar,
                 &pObject,
@@ -457,6 +476,7 @@ PyObject* PythonWorkbenchPy::appendToolbar(PyObject* args, PyObject* kwd)
                 &visibility,
                 &host,
                 &panelRole,
+                &panelPlacement,
                 &viewHostRequirement,
                 &viewPresentation,
                 &viewOverlayEdge,
@@ -496,6 +516,7 @@ PyObject* PythonWorkbenchPy::appendToolbar(PyObject* args, PyObject* kwd)
         options.visibility = parseToolbarVisibilityOption(visibility);
         options.host = parseToolbarHostOption(host);
         options.panelRole = parseToolbarPanelRoleOption(panelRole);
+        options.panelPlacement = parseToolbarPanelPlacementOption(panelPlacement);
         options.viewHostRequirement = parseToolbarViewHostRequirementOption(viewHostRequirement);
         options.viewPresentation = parseToolbarViewPresentationOption(viewPresentation);
         options.viewOverlayEdge = parseToolbarViewOverlayEdgeOption(viewOverlayEdge);

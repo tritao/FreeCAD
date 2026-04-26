@@ -292,6 +292,7 @@ public:
         std::optional<ToolBarItem::DefaultVisibility> visibility;
         std::optional<ToolBarItem::Host> host;
         std::optional<ToolBarItem::PanelRole> panelRole;
+        std::optional<ToolBarItem::PanelPlacement> panelPlacement;
         std::optional<ToolBarItem::ViewHostRequirement> viewHostRequirement;
         std::optional<ToolBarItem::ViewPresentation> viewPresentation;
         std::optional<ToolBarItem::ViewOverlayEdge> viewOverlayEdge;

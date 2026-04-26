@@ -1446,6 +1446,9 @@ void PythonBaseWorkbench::appendToolbar(
     if (options.panelRole) {
         item->setPanelRole(*options.panelRole);
     }
+    if (options.panelPlacement) {
+        item->setPanelPlacement(*options.panelPlacement);
+    }
     if (options.viewHostRequirement) {
         item->setViewHostRequirement(*options.viewHostRequirement);
     }

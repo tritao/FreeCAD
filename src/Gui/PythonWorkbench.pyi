@@ -52,6 +52,7 @@ class PythonWorkbench(Workbench):
         visibility: int | None = None,
         host: int | None = None,
         panel_role: int | None = None,
+        panel_placement: int | None = None,
         view_host_requirement: int | None = None,
         view_presentation: int | None = None,
         view_overlay_edge: int | None = None,

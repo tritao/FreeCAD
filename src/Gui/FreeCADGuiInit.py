@@ -123,6 +123,10 @@ class Workbench:
         None_ = 0
         ModelTree = 1
 
+    class ToolbarPanelPlacement(IntEnum):
+        Top = 0
+        Bottom = 1
+
     class ToolbarViewHostRequirement(IntEnum):
         AnyView = 0
         View3D = 1
@@ -172,6 +176,7 @@ class Workbench:
         visibility=None,
         host=None,
         panel_role=None,
+        panel_placement=None,
         view_host_requirement=None,
         view_presentation=None,
         view_overlay_edge=None,
@@ -186,6 +191,7 @@ class Workbench:
             self._toolbarOptionValue(visibility),
             self._toolbarOptionValue(host),
             self._toolbarOptionValue(panel_role),
+            self._toolbarOptionValue(panel_placement),
             self._toolbarOptionValue(view_host_requirement),
             self._toolbarOptionValue(view_presentation),
             self._toolbarOptionValue(view_overlay_edge),
@@ -256,6 +262,11 @@ _TOOLBAR_PANEL_ROLE_NAMES = {
     int(Workbench.ToolbarPanelRole.ModelTree): "model-tree",
 }
 
+_TOOLBAR_PANEL_PLACEMENT_NAMES = {
+    int(Workbench.ToolbarPanelPlacement.Top): "top",
+    int(Workbench.ToolbarPanelPlacement.Bottom): "bottom",
+}
+
 _TOOLBAR_VIEW_PRESENTATION_NAMES = {
     int(Workbench.ToolbarViewPresentation.Docked): "docked",
     int(Workbench.ToolbarViewPresentation.CenteredOverlay): "centered-overlay",
@@ -303,6 +314,7 @@ def configureToolbar(
     visibility=None,
     host=None,
     panel_role=None,
+    panel_placement=None,
     view_host_requirement=None,
     view_presentation=None,
     view_overlay_edge=None,
@@ -346,6 +358,15 @@ def configureToolbar(
         toolbar.setProperty("_fc_toolbar_panel_role", panel_role_value)
         toolbar.setProperty("PanelRole", panel_role_name)
         action.setProperty("PanelRole", panel_role_name)
+
+    panel_placement_value, panel_placement_name = _toolbar_option_pair(
+        panel_placement, _TOOLBAR_PANEL_PLACEMENT_NAMES, "panel_placement"
+    )
+    if panel_placement_value is not None:
+        toolbar.setProperty("_fc_toolbar_default_panel_placement", panel_placement_value)
+        toolbar.setProperty("_fc_toolbar_panel_placement", panel_placement_value)
+        toolbar.setProperty("PanelPlacement", panel_placement_name)
+        action.setProperty("PanelPlacement", panel_placement_name)
 
     if view_host_requirement is not None:
         toolbar.setProperty(

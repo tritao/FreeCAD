@@ -4162,7 +4162,16 @@ void TreeWidget::onSelectionChanged(const SelectionChanges& msg)
 TreePanel::TreePanel(const char* name, QWidget* parent)
     : QWidget(parent)
 {
-    this->toolBarHost = new PanelToolBarHost(ToolBarItem::PanelRole::ModelTree, this);
+    this->topToolBarHost = new PanelToolBarHost(
+        ToolBarItem::PanelRole::ModelTree,
+        ToolBarItem::PanelPlacement::Top,
+        this
+    );
+    this->bottomToolBarHost = new PanelToolBarHost(
+        ToolBarItem::PanelRole::ModelTree,
+        ToolBarItem::PanelPlacement::Bottom,
+        this
+    );
     this->treeWidget = new TreeWidget(name, this);
     int indent = TreeParams::getIndentation();
     if (indent) {
@@ -4172,8 +4181,9 @@ TreePanel::TreePanel(const char* name, QWidget* parent)
     auto pLayout = new QVBoxLayout(this);
     pLayout->setSpacing(0);
     pLayout->setContentsMargins(0, 0, 0, 0);
-    pLayout->addWidget(this->toolBarHost);
+    pLayout->addWidget(this->topToolBarHost);
     pLayout->addWidget(this->treeWidget);
+    pLayout->addWidget(this->bottomToolBarHost);
     connect(this->treeWidget, &TreeWidget::emitSearchObjects, this, &TreePanel::showEditor);
     connect(this->treeWidget, &QTreeWidget::itemSelectionChanged, this, [] {
         ToolBarManager::getInstance()->refreshHostedToolBars();
@@ -4198,9 +4208,14 @@ TreePanel* TreePanel::instance()
     return tree ? qobject_cast<TreePanel*>(tree->parentWidget()) : nullptr;
 }
 
-PanelToolBarHost* TreePanel::toolBarHostWidget() const
+PanelToolBarHost* TreePanel::topToolBarHostWidget() const
 {
-    return toolBarHost;
+    return topToolBarHost;
+}
+
+PanelToolBarHost* TreePanel::bottomToolBarHostWidget() const
+{
+    return bottomToolBarHost;
 }
 
 void TreePanel::accept()

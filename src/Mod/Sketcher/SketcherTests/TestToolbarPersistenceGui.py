@@ -326,6 +326,12 @@ class TestToolbarPersistenceGui(unittest.TestCase):
             return str(role)
         return "none"
 
+    def toolbar_panel_placement(self, toolbar):
+        placement = toolbar.property("PanelPlacement")
+        if placement:
+            return str(placement)
+        return "top"
+
     def toolbar_view_presentation(self, toolbar):
         presentation = toolbar.property("ViewPresentation")
         if presentation:
@@ -349,11 +355,12 @@ class TestToolbarPersistenceGui(unittest.TestCase):
             return None
         return lane.parentWidget()
 
-    def model_tree_toolbar_host(self):
+    def model_tree_toolbar_host(self, placement="top"):
         hosts = [
             host
             for host in self.main_window().findChildren(QtGui.QWidget)
-            if host.objectName() == "_fc_panel_toolbar_host_model_tree"
+            if host.property("panelRole") == "model-tree"
+            and host.property("panelPlacement") == placement
         ]
         self.assertTrue(hosts, "Expected a model-tree toolbar host widget")
         for host in hosts:
@@ -516,13 +523,13 @@ class TestToolbarPersistenceGui(unittest.TestCase):
             return self.active_mdi_view()
         return self.main_window()
 
-    def assert_toolbar_panel_host(self, key):
+    def assert_toolbar_panel_host(self, key, placement="top"):
         toolbar = self.wait_for_toolbar(key)
         self.assertIsNotNone(toolbar, f"Expected toolbar {key} to exist")
-        host = self.model_tree_toolbar_host()
+        host = self.model_tree_toolbar_host(placement)
         self.wait_until(
             lambda: toolbar.parentWidget() is host and toolbar.isVisible(),
-            f"toolbar {key} to attach to the model-tree host",
+            f"toolbar {key} to attach to the model-tree host at {placement}",
         )
 
     def toolbars_for_prefix(self, prefix, active_only=False):
@@ -1172,7 +1179,58 @@ class TestToolbarPersistenceGui(unittest.TestCase):
             if had_host_group:
                 params.GetGroup(host_backup_name).CopyTo(params.GetGroup(host_group_name))
             params.RemGroup(host_backup_name)
-            self.activate_workbench("SketcherWorkbench", "wb:SketcherWorkbench:")
+
+    def test_panel_toolbar_position_persists(self):
+        key = "shared:Tree Controls"
+        position_label = QtGui.QApplication.translate("MainWindow", "Position")
+        bottom_label = QtGui.QApplication.translate("MainWindow", "Bottom")
+
+        params = FreeCAD.ParamGet("User parameter:BaseApp/MainWindow")
+        self.backup_group(
+            params,
+            "HostedToolbarHosts",
+            "TestToolbarPersistenceGuiBackupPanelPositionHostedToolbarHosts",
+        )
+        self.backup_group(
+            params,
+            "PanelPlacements",
+            "TestToolbarPersistenceGuiBackupPanelPlacements",
+        )
+        params.RemGroup("HostedToolbarHosts")
+        params.RemGroup("PanelPlacements")
+
+        self.activate_workbench("SketcherWorkbench", "wb:SketcherWorkbench:")
+        tree_controls = self.wait_for_toolbar(key)
+        self.show_toolbar(key)
+        self.assertEqual(self.toolbar_host(tree_controls), "panel")
+        self.assertEqual(self.toolbar_panel_placement(tree_controls), "top")
+        self.assert_toolbar_panel_host(key, "top")
+
+        self.trigger_menu_path(
+            self.toolbar_menu(),
+            self.toolbar_menu_label(tree_controls),
+            position_label,
+            bottom_label,
+        )
+        self.wait_until(
+            lambda: self.toolbar_panel_placement(self.wait_for_toolbar(key)) == "bottom",
+            "panel toolbar placement to change to bottom",
+        )
+        self.assert_toolbar_panel_host(key, "bottom")
+
+        self.activate_workbench("PartWorkbench", "wb:PartWorkbench:")
+        self.wait_until(
+            lambda: self.toolbar_panel_placement(self.wait_for_toolbar(key)) == "bottom",
+            "panel toolbar placement to persist in Part",
+        )
+        self.assert_toolbar_panel_host(key, "bottom")
+
+        self.activate_workbench("SketcherWorkbench", "wb:SketcherWorkbench:")
+        self.wait_until(
+            lambda: self.toolbar_panel_placement(self.wait_for_toolbar(key)) == "bottom",
+            "panel toolbar placement to persist back in Sketcher",
+        )
+        self.assert_toolbar_panel_host(key, "bottom")
 
     def test_view_context_menu_exposes_view_toolbar_submenu(self):
         individual_views_key = "shared:Individual Views"

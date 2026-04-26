@@ -40,11 +40,18 @@ class PanelToolBarHost: public QWidget
 
 public:
     static constexpr auto RoleProperty = "panelRole";
-    static constexpr auto ModelTreeObjectName = "_fc_panel_toolbar_host_model_tree";
+    static constexpr auto PlacementProperty = "panelPlacement";
+    static constexpr auto ModelTreeTopObjectName = "_fc_panel_toolbar_host_model_tree_top";
+    static constexpr auto ModelTreeBottomObjectName = "_fc_panel_toolbar_host_model_tree_bottom";
 
-    explicit PanelToolBarHost(ToolBarItem::PanelRole role, QWidget* parent = nullptr);
+    explicit PanelToolBarHost(
+        ToolBarItem::PanelRole role,
+        ToolBarItem::PanelPlacement placement,
+        QWidget* parent = nullptr
+    );
 
     ToolBarItem::PanelRole panelRole() const;
+    ToolBarItem::PanelPlacement panelPlacement() const;
     void attachToolBar(QToolBar* toolbar);
 
 protected:
@@ -54,6 +61,7 @@ private:
     void refreshVisibility();
 
     ToolBarItem::PanelRole roleValue;
+    ToolBarItem::PanelPlacement placementValue;
     QHBoxLayout* layout;
 };
 

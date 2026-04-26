@@ -75,6 +75,9 @@ constexpr auto ToolBarDefaultHostProperty = "_fc_toolbar_default_host";
 constexpr auto ToolBarPublicHostProperty = "Host";
 constexpr auto ToolBarPanelRoleProperty = "_fc_toolbar_panel_role";
 constexpr auto ToolBarPublicPanelRoleProperty = "PanelRole";
+constexpr auto ToolBarPanelPlacementProperty = "_fc_toolbar_panel_placement";
+constexpr auto ToolBarDefaultPanelPlacementProperty = "_fc_toolbar_default_panel_placement";
+constexpr auto ToolBarPublicPanelPlacementProperty = "PanelPlacement";
 constexpr auto ToolBarViewHostRequirementProperty = "_fc_toolbar_view_host_requirement";
 constexpr auto ToolBarViewPresentationProperty = "_fc_toolbar_view_presentation";
 constexpr auto ToolBarDefaultViewPresentationProperty = "_fc_toolbar_default_view_presentation";
@@ -93,6 +96,7 @@ constexpr auto ViewLeftLayoutKey = "ViewLeft";
 constexpr auto ViewRightLayoutKey = "ViewRight";
 constexpr auto ViewBottomLayoutKey = "ViewBottom";
 constexpr auto HostedToolbarHostsGroupKey = "HostedToolbarHosts";
+constexpr auto PanelPlacementsGroupKey = "PanelPlacements";
 constexpr auto ViewToolbarPresentationsGroupKey = "ViewToolbarPresentations";
 constexpr auto ViewOverlayEdgesGroupKey = "ViewOverlayEdges";
 constexpr auto ToolBarSizesGroupKey = "ToolBarSizes";
@@ -333,6 +337,27 @@ ToolBarItem::PanelRole parseToolBarPanelRole(const QString& roleName)
     return ToolBarItem::PanelRole::None;
 }
 
+QString toolBarPanelPlacementName(ToolBarItem::PanelPlacement placement)
+{
+    switch (placement) {
+        case ToolBarItem::PanelPlacement::Top:
+            return QStringLiteral("top");
+        case ToolBarItem::PanelPlacement::Bottom:
+            return QStringLiteral("bottom");
+    }
+
+    return QStringLiteral("top");
+}
+
+ToolBarItem::PanelPlacement parseToolBarPanelPlacement(const QString& placementName)
+{
+    if (placementName == QLatin1String("bottom")) {
+        return ToolBarItem::PanelPlacement::Bottom;
+    }
+
+    return ToolBarItem::PanelPlacement::Top;
+}
+
 QString toolBarViewPresentationName(ToolBarItem::ViewPresentation presentation)
 {
     switch (presentation) {
@@ -479,6 +504,29 @@ void setDefaultToolBarHost(QToolBar* toolbar, ToolBarItem::Host host)
     toolbar->setProperty(ToolBarDefaultHostProperty, static_cast<int>(host));
 }
 
+ToolBarItem::PanelPlacement defaultToolBarPanelPlacement(const QToolBar* toolbar)
+{
+    if (!toolbar) {
+        return ToolBarItem::PanelPlacement::Top;
+    }
+
+    if (const auto property = toolbar->property(ToolBarDefaultPanelPlacementProperty);
+        property.isValid()) {
+        return static_cast<ToolBarItem::PanelPlacement>(property.toInt());
+    }
+
+    return ToolBarManager::toolBarPanelPlacement(toolbar);
+}
+
+void setDefaultToolBarPanelPlacement(QToolBar* toolbar, ToolBarItem::PanelPlacement placement)
+{
+    if (!toolbar) {
+        return;
+    }
+
+    toolbar->setProperty(ToolBarDefaultPanelPlacementProperty, static_cast<int>(placement));
+}
+
 ToolBarItem::ViewPresentation defaultToolBarViewPresentation(const QToolBar* toolbar)
 {
     if (!toolbar) {
@@ -582,6 +630,18 @@ QString toolBarPanelRoleLabel(ToolBarItem::PanelRole role)
     return QApplication::translate("MainWindow", "Panel");
 }
 
+QString toolBarPanelPlacementLabel(ToolBarItem::PanelPlacement placement)
+{
+    switch (placement) {
+        case ToolBarItem::PanelPlacement::Top:
+            return QApplication::translate("MainWindow", "Top");
+        case ToolBarItem::PanelPlacement::Bottom:
+            return QApplication::translate("MainWindow", "Bottom");
+    }
+
+    return QApplication::translate("MainWindow", "Top");
+}
+
 QString toolBarViewPresentationLabel(ToolBarItem::ViewPresentation presentation)
 {
     switch (presentation) {
@@ -649,14 +709,19 @@ TreePanel* activePanelToolBarHostPanel(ToolBarItem::PanelRole role)
     return nullptr;
 }
 
-PanelToolBarHost* panelToolBarHost(TreePanel* panel, ToolBarItem::PanelRole role)
+PanelToolBarHost* panelToolBarHost(
+    TreePanel* panel,
+    ToolBarItem::PanelRole role,
+    ToolBarItem::PanelPlacement placement
+)
 {
     if (!panel || role == ToolBarItem::PanelRole::None) {
         return nullptr;
     }
 
-    auto* host = panel->toolBarHostWidget();
-    if (host && host->panelRole() == role) {
+    auto* host = placement == ToolBarItem::PanelPlacement::Bottom ? panel->bottomToolBarHostWidget()
+                                                                  : panel->topToolBarHostWidget();
+    if (host && host->panelRole() == role && host->panelPlacement() == placement) {
         return host;
     }
 
@@ -937,6 +1002,16 @@ ToolBarItem::PanelRole ToolBarItem::panelRole() const
     return _panelRole;
 }
 
+void ToolBarItem::setPanelPlacement(PanelPlacement placement)
+{
+    _panelPlacement = placement;
+}
+
+ToolBarItem::PanelPlacement ToolBarItem::panelPlacement() const
+{
+    return _panelPlacement;
+}
+
 void ToolBarItem::setViewHostRequirement(ViewHostRequirement requirement)
 {
     _viewHostRequirement = requirement;
@@ -1017,6 +1092,7 @@ ToolBarItem* ToolBarItem::copy() const
     root->setTier(_tier);
     root->setHost(_host);
     root->setPanelRole(_panelRole);
+    root->setPanelPlacement(_panelPlacement);
     root->setViewHostRequirement(_viewHostRequirement);
     root->setViewPresentation(_viewPresentation);
     root->setViewOverlayEdge(_viewOverlayEdge);
@@ -1507,6 +1583,38 @@ ToolBarItem::PanelRole ToolBarManager::toolBarPanelRole(const QToolBar* toolbar)
     return ToolBarItem::PanelRole::None;
 }
 
+QString ToolBarManager::toolBarPanelPlacementName(ToolBarItem::PanelPlacement placement)
+{
+    return ::toolBarPanelPlacementName(placement);
+}
+
+ToolBarItem::PanelPlacement ToolBarManager::toolBarPanelPlacement(const ToolBarItem* item)
+{
+    if (!item) {
+        return ToolBarItem::PanelPlacement::Top;
+    }
+
+    return item->panelPlacement();
+}
+
+ToolBarItem::PanelPlacement ToolBarManager::toolBarPanelPlacement(const QToolBar* toolbar)
+{
+    if (!toolbar) {
+        return ToolBarItem::PanelPlacement::Top;
+    }
+
+    if (const auto placementName = stringPropertyValue(toolbar, ToolBarPublicPanelPlacementProperty);
+        !placementName.isEmpty()) {
+        return parseToolBarPanelPlacement(placementName);
+    }
+
+    if (const auto property = toolbar->property(ToolBarPanelPlacementProperty); property.isValid()) {
+        return static_cast<ToolBarItem::PanelPlacement>(property.toInt());
+    }
+
+    return ToolBarItem::PanelPlacement::Top;
+}
+
 ToolBarItem::ViewHostRequirement ToolBarManager::toolBarViewHostRequirement(const ToolBarItem* item)
 {
     if (!item) {
@@ -1725,6 +1833,11 @@ QString ToolBarManager::toolBarPanelRoleLabel(ToolBarItem::PanelRole role)
     return ::toolBarPanelRoleLabel(role);
 }
 
+QString ToolBarManager::toolBarPanelPlacementLabel(ToolBarItem::PanelPlacement placement)
+{
+    return ::toolBarPanelPlacementLabel(placement);
+}
+
 void ToolBarManager::setToolBarPersistenceKey(QToolBar* toolbar, const QString& key)
 {
     if (!toolbar) {
@@ -1781,6 +1894,18 @@ void ToolBarManager::setToolBarPanelRole(QToolBar* toolbar, ToolBarItem::PanelRo
     toolbar->setProperty(ToolBarPanelRoleProperty, static_cast<int>(role));
     toolbar->setProperty(ToolBarPublicPanelRoleProperty, roleName);
     toolbar->toggleViewAction()->setProperty(ToolBarPublicPanelRoleProperty, roleName);
+}
+
+void ToolBarManager::setToolBarPanelPlacement(QToolBar* toolbar, ToolBarItem::PanelPlacement placement)
+{
+    if (!toolbar) {
+        return;
+    }
+
+    const auto placementName = toolBarPanelPlacementName(placement);
+    toolbar->setProperty(ToolBarPanelPlacementProperty, static_cast<int>(placement));
+    toolbar->setProperty(ToolBarPublicPanelPlacementProperty, placementName);
+    toolbar->toggleViewAction()->setProperty(ToolBarPublicPanelPlacementProperty, placementName);
 }
 
 void ToolBarManager::setToolBarViewPresentation(
@@ -2105,7 +2230,8 @@ bool ToolBarManager::activePanelSupportsToolBarHost(const QToolBar* toolbar, con
 
     switch (toolBarPanelRole(toolbar)) {
         case ToolBarItem::PanelRole::ModelTree:
-            return panel->toolBarHostWidget() != nullptr;
+            return panel->topToolBarHostWidget() != nullptr
+                && panel->bottomToolBarHostWidget() != nullptr;
         case ToolBarItem::PanelRole::None:
             break;
     }
@@ -2246,6 +2372,22 @@ ParameterGrp::handle ToolBarManager::hostedToolBarHostGroup(const QString& conte
     }
 
     return group->GetGroup(HostedToolbarHostsGroupKey);
+}
+
+ParameterGrp::handle ToolBarManager::globalPanelToolBarPlacementGroup() const
+{
+    auto& mgr = App::GetApplication().GetUserParameter();
+    return mgr.GetGroup("BaseApp/MainWindow/PanelPlacements");
+}
+
+ParameterGrp::handle ToolBarManager::panelToolBarPlacementGroup(const QString& context) const
+{
+    auto group = workbenchLayoutGroup(context);
+    if (!group) {
+        return {};
+    }
+
+    return group->GetGroup(PanelPlacementsGroupKey);
 }
 
 ParameterGrp::handle ToolBarManager::globalViewToolBarPresentationGroup() const
@@ -2674,6 +2816,54 @@ ToolBarItem::Host ToolBarManager::resolvedHostedToolBarHost(
     return defaultToolBarHost(toolbar);
 }
 
+ToolBarItem::PanelPlacement ToolBarManager::resolvedPanelToolBarPlacement(
+    const QToolBar* toolbar,
+    const QString& context,
+    const QString& fallbackContext
+) const
+{
+    if (!toolbar) {
+        return ToolBarItem::PanelPlacement::Top;
+    }
+
+    const auto key = toolBarPersistenceKey(toolbar);
+    const auto lookup =
+        [&key](const ParameterGrp::handle& group, ToolBarItem::PanelPlacement* placement) {
+            if (!group || key.isEmpty()) {
+                return false;
+            }
+
+            const auto value = QString::fromUtf8(group->GetASCII(key.toUtf8().constData()).c_str());
+            if (value.isEmpty()) {
+                return false;
+            }
+
+            *placement = parseToolBarPanelPlacement(value);
+            return true;
+        };
+
+    ToolBarItem::PanelPlacement placement;
+    if (toolBarScopeId(toolbar).scope == Scope::Shared || context.isEmpty()) {
+        if (lookup(globalPanelToolBarPlacementGroup(), &placement)) {
+            return placement;
+        }
+        return defaultToolBarPanelPlacement(toolbar);
+    }
+
+    if (lookup(panelToolBarPlacementGroup(context), &placement)) {
+        return placement;
+    }
+    if (!fallbackContext.isEmpty()
+        && lookup(panelToolBarPlacementGroup(fallbackContext), &placement)) {
+        return placement;
+    }
+    if (lookup(globalPanelToolBarPlacementGroup(), &placement)) {
+        return placement;
+    }
+
+    return defaultToolBarPanelPlacement(toolbar);
+}
+
 ToolBarItem::ViewPresentation ToolBarManager::resolvedViewToolBarPresentation(
     const QToolBar* toolbar,
     const QString& context,
@@ -2745,6 +2935,31 @@ void ToolBarManager::persistHostedToolBarHost(
     }
 
     group->SetASCII(key.toUtf8().constData(), toolBarHostName(host).toUtf8().constData());
+}
+
+void ToolBarManager::persistPanelToolBarPlacement(
+    const QToolBar* toolbar,
+    const QString& context,
+    ToolBarItem::PanelPlacement placement
+) const
+{
+    const auto key = toolBarPersistenceKey(toolbar);
+    if (key.isEmpty()) {
+        return;
+    }
+
+    ParameterGrp::handle group;
+    if (toolBarScopeId(toolbar).scope == Scope::Shared || context.isEmpty()) {
+        group = globalPanelToolBarPlacementGroup();
+    }
+    else {
+        group = panelToolBarPlacementGroup(context);
+    }
+    if (!group) {
+        return;
+    }
+
+    group->SetASCII(key.toUtf8().constData(), toolBarPanelPlacementName(placement).toUtf8().constData());
 }
 
 void ToolBarManager::persistViewToolBarPresentation(
@@ -3305,6 +3520,8 @@ void ToolBarManager::setup(ToolBarItem* toolBarItems)
             setToolBarTier(toolbar, toolBarTier(it));
             setToolBarHost(toolbar, toolBarHost(it));
             setToolBarPanelRole(toolbar, toolBarPanelRole(it));
+            setDefaultToolBarPanelPlacement(toolbar, toolBarPanelPlacement(it));
+            setToolBarPanelPlacement(toolbar, toolBarPanelPlacement(it));
             setDefaultToolBarViewPresentation(toolbar, toolBarViewPresentation(it));
             setToolBarViewPresentation(toolbar, toolBarViewPresentation(it));
             setDefaultToolBarViewOverlayEdge(toolbar, toolBarViewOverlayEdge(it));
@@ -3334,6 +3551,8 @@ void ToolBarManager::setup(ToolBarItem* toolBarItems)
             setToolBarTier(toolbar, toolBarTier(it));
             setToolBarHost(toolbar, toolBarHost(it));
             setToolBarPanelRole(toolbar, toolBarPanelRole(it));
+            setDefaultToolBarPanelPlacement(toolbar, toolBarPanelPlacement(it));
+            setToolBarPanelPlacement(toolbar, toolBarPanelPlacement(it));
             setDefaultToolBarViewPresentation(toolbar, toolBarViewPresentation(it));
             setToolBarViewPresentation(toolbar, toolBarViewPresentation(it));
             setDefaultToolBarViewOverlayEdge(toolbar, toolBarViewOverlayEdge(it));
@@ -3556,6 +3775,10 @@ void ToolBarManager::restoreState()
         QToolBar* toolbar = findToolBar(toolbars, it);
         if (toolbar) {
             setToolBarHost(toolbar, resolvedHostedToolBarHost(toolbar, layoutContext, fallbackContext));
+            setToolBarPanelPlacement(
+                toolbar,
+                resolvedPanelToolBarPlacement(toolbar, layoutContext, fallbackContext)
+            );
             setToolBarViewPresentation(
                 toolbar,
                 resolvedViewToolBarPresentation(toolbar, layoutContext, fallbackContext)
@@ -4122,7 +4345,7 @@ void ToolBarManager::populateSingleToolBarMenu(QMenu* menu, QToolBar* toolbar) c
                 return;
             }
 
-            if (auto host = panelToolBarHost(panel, role)) {
+            if (auto host = panelToolBarHost(panel, role, toolBarPanelPlacement(toolbar))) {
                 host->attachToolBar(toolbar);
             }
         }
@@ -4229,6 +4452,22 @@ void ToolBarManager::populateSingleToolBarMenu(QMenu* menu, QToolBar* toolbar) c
                     setViewOverlayEdge(toolbar, edge);
                 });
             }
+        }
+    }
+    else if (toolBarHost(toolbar) == ToolBarItem::Host::Panel) {
+        auto* positionMenu = menu->addMenu(toolBarViewOverlayPositionMenuLabel());
+        auto* positionGroup = new QActionGroup(positionMenu);
+        positionGroup->setExclusive(true);
+
+        for (auto placement :
+             {ToolBarItem::PanelPlacement::Top, ToolBarItem::PanelPlacement::Bottom}) {
+            auto* placementAction = positionMenu->addAction(toolBarPanelPlacementLabel(placement));
+            placementAction->setCheckable(true);
+            placementAction->setChecked(toolBarPanelPlacement(toolbar) == placement);
+            positionGroup->addAction(placementAction);
+            QObject::connect(placementAction, &QAction::triggered, this, [this, toolbar, placement] {
+                setPanelToolBarPlacement(toolbar, placement);
+            });
         }
     }
 }
@@ -4522,6 +4761,18 @@ void ToolBarManager::refreshHostedToolBars()
     refreshViewHostedToolBars();
 }
 
+void ToolBarManager::setPanelToolBarPlacement(QToolBar* toolbar, ToolBarItem::PanelPlacement placement) const
+{
+    if (!toolbar || toolBarHost(toolbar) != ToolBarItem::Host::Panel) {
+        return;
+    }
+
+    setToolBarPanelPlacement(toolbar, placement);
+
+    persistPanelToolBarPlacement(toolbar, effectiveToolbarLayoutContext(), placement);
+    const_cast<ToolBarManager*>(this)->refreshPanelHostedToolBars();
+}
+
 void ToolBarManager::setViewOverlayEdge(QToolBar* toolbar, ToolBarItem::ViewOverlayEdge edge) const
 {
     if (!toolbar
@@ -4694,7 +4945,7 @@ void ToolBarManager::refreshPanelHostedToolBars()
             continue;
         }
 
-        if (auto host = panelToolBarHost(panel, role)) {
+        if (auto host = panelToolBarHost(panel, role, toolBarPanelPlacement(toolbar))) {
             host->attachToolBar(toolbar);
             setToolBarIconSize(toolbar);
         }

@@ -48,19 +48,34 @@ QString panelRoleName(ToolBarItem::PanelRole role)
     return ToolBarManager::toolBarPanelRoleName(role);
 }
 
+QString panelPlacementName(ToolBarItem::PanelPlacement placement)
+{
+    return ToolBarManager::toolBarPanelPlacementName(placement);
+}
+
 }  // namespace
 
-PanelToolBarHost::PanelToolBarHost(ToolBarItem::PanelRole role, QWidget* parent)
+PanelToolBarHost::PanelToolBarHost(
+    ToolBarItem::PanelRole role,
+    ToolBarItem::PanelPlacement placement,
+    QWidget* parent
+)
     : QWidget(parent)
     , roleValue(role)
+    , placementValue(placement)
     , layout(new QHBoxLayout(this))
 {
     setContentsMargins(0, 0, 0, 0);
     layout->setContentsMargins(0, 0, 0, 0);
     layout->setSpacing(0);
     setProperty(RoleProperty, panelRoleName(role));
+    setProperty(PlacementProperty, panelPlacementName(placement));
     if (role == ToolBarItem::PanelRole::ModelTree) {
-        setObjectName(QString::fromLatin1(ModelTreeObjectName));
+        setObjectName(
+            placement == ToolBarItem::PanelPlacement::Bottom
+                ? QString::fromLatin1(ModelTreeBottomObjectName)
+                : QString::fromLatin1(ModelTreeTopObjectName)
+        );
     }
     hide();
 }
@@ -68,6 +83,11 @@ PanelToolBarHost::PanelToolBarHost(ToolBarItem::PanelRole role, QWidget* parent)
 ToolBarItem::PanelRole PanelToolBarHost::panelRole() const
 {
     return roleValue;
+}
+
+ToolBarItem::PanelPlacement PanelToolBarHost::panelPlacement() const
+{
+    return placementValue;
 }
 
 void PanelToolBarHost::attachToolBar(QToolBar* toolbar)

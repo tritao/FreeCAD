@@ -582,7 +582,8 @@ public:
     explicit TreePanel(const char* name, QWidget* parent = nullptr);
     ~TreePanel() override;
     static TreePanel* instance();
-    PanelToolBarHost* toolBarHostWidget() const;
+    PanelToolBarHost* topToolBarHostWidget() const;
+    PanelToolBarHost* bottomToolBarHostWidget() const;
 
     bool eventFilter(QObject* obj, QEvent* ev) override;
 
@@ -599,7 +600,8 @@ private Q_SLOTS:
 private:
     QLineEdit* searchBox;
     TreeWidget* treeWidget;
-    PanelToolBarHost* toolBarHost = nullptr;
+    PanelToolBarHost* topToolBarHost = nullptr;
+    PanelToolBarHost* bottomToolBarHost = nullptr;
 };
 
 /**

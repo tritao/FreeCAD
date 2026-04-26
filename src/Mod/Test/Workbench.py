@@ -137,6 +137,7 @@ class WorkbenchTestCase(unittest.TestCase):
                     visibility=self.ToolbarVisibility.Hidden,
                     host=self.ToolbarHost.Panel,
                     panel_role=self.ToolbarPanelRole.ModelTree,
+                    panel_placement=self.ToolbarPanelPlacement.Bottom,
                     size=self.ToolbarSize.Slim,
                 )
 
@@ -184,6 +185,7 @@ class WorkbenchTestCase(unittest.TestCase):
             self.assertEqual(panel_toolbar.property("Tier"), "secondary")
             self.assertEqual(panel_toolbar.property("Host"), "panel")
             self.assertEqual(panel_toolbar.property("PanelRole"), "model-tree")
+            self.assertEqual(panel_toolbar.property("PanelPlacement"), "bottom")
             self.assertEqual(panel_toolbar.property("ToolbarSize"), "slim")
             self.assertFalse(panel_toolbar.isVisible())
             self.assertFalse(panel_toolbar.toggleViewAction().isChecked())
