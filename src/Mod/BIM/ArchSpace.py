@@ -3482,6 +3482,38 @@ def _collect_space_label_obstacle_bounds(space, faces):
     return tuple(obstacles)
 
 
+def refresh_auto_space_text_positions(doc):
+    """Refresh auto-positioned space labels in a GUI document without recomputing geometry."""
+
+    if (not FreeCAD.GuiUp) or (doc is None):
+        return 0
+
+    import DraftVecUtils
+
+    refreshed = 0
+    for obj in getattr(doc, "Objects", []) or []:
+        if type(getattr(obj, "Proxy", None)).__name__ != "_Space":
+            continue
+
+        vobj = getattr(obj, "ViewObject", None)
+        if not vobj or not hasattr(vobj, "TextPosition"):
+            continue
+        if not DraftVecUtils.isNull(vobj.TextPosition):
+            continue
+
+        proxy = getattr(vobj, "Proxy", None)
+        if not proxy or not hasattr(proxy, "onChanged"):
+            continue
+
+        try:
+            proxy.onChanged(vobj, "TextPosition")
+        except Exception:
+            continue
+        refreshed += 1
+
+    return refreshed
+
+
 def _get_space_text_preferred_clearance(text_box):
     width = float(text_box.get("width", 0.0) or 0.0)
     padding = float(text_box.get("padding", 0.0) or 0.0)

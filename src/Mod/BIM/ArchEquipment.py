@@ -630,6 +630,11 @@ class _ViewProviderEquipment(ArchComponent.ViewProviderComponent):
             context="ArchEquipment.updateFootprint",
         )
 
+        if FreeCAD.GuiUp and hasattr(self, "Object"):
+            import ArchSpace
+
+            ArchSpace.refresh_auto_space_text_positions(getattr(self.Object, "Document", None))
+
     def setEdit(self, vobj, mode):
         if mode != 0:
             return None
