@@ -145,7 +145,7 @@ def _handle_select_tool_mouse_down(session, mouse_pos, event_callback):
     if not node:
         if session.selection.activate_semantic_plan_target(mouse_pos, event_callback):
             return
-        session.selection.clear_plan_selection_state()
+        session.selection.schedule_clear_plan_selection_state()
         session.input.claim_left_button_click(event_callback)
         return
     _handle_edit_node_activation(session, node, event_callback)

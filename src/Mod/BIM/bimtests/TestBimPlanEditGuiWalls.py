@@ -407,6 +407,7 @@ class BimPlanEditGuiWallsMixin:
             ),
         ):
             session.input.on_mouse_pressed(self._FakeEventCallback(_FakeMouseEvent(250, 250)))
+        self.pump_gui_events(timeout_ms=500)
 
         self._assert_no_selected_plan_target(session)
         self.assertIsNone(session._pending_selected_plan_target)
@@ -438,6 +439,7 @@ class BimPlanEditGuiWallsMixin:
         ):
             callback = self._make_fake_left_mouse_press()
             session.input.on_mouse_pressed(callback)
+        self.pump_gui_events(timeout_ms=500)
 
         self.assertTrue(callback._handled)
         self.assertEqual(FreeCADGui.Selection.getSelection(), [])
