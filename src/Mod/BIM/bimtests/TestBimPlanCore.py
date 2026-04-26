@@ -1623,7 +1623,7 @@ class TestBimPlanCore(unittest.TestCase):
             any(isinstance(ref, weakref.ReferenceType) and ref() is widget for ref in callback_refs)
         )
 
-    def test_plan_controls_dispose_detaches_without_deferred_delete(self):
+    def test_plan_controls_dispose_detaches_and_defers_delete(self):
         class _Signal:
             def __init__(self):
                 self.disconnected = False
@@ -1725,7 +1725,7 @@ class TestBimPlanCore(unittest.TestCase):
         self.assertIs(layout.removed, form)
         self.assertTrue(form.hidden)
         self.assertIsNone(form.parent_set_to)
-        self.assertFalse(form.delete_later_called)
+        self.assertTrue(form.delete_later_called)
         self.assertIsNone(widget.form)
         self.assertIsNone(widget.session)
         widget._run_queued_integration_panel_refresh(widget._integration_refresh_generation)
