@@ -490,6 +490,56 @@ class TestArchFootprintGui(TestArchBaseGui.TestArchBaseGui):
         self.assertGreater(text_point.distanceToPoint(default_point), 1.0)
         self.assertEqual(door.IfcType, "Door")
 
+    def test_space_auto_text_position_prefers_clearance_over_minimal_shift(self):
+        """Automatic space text should keep a real gap from a nearby symbol, not just barely avoid it."""
+
+        base = self.document.addObject("Part::Feature", "BedroomLabelClearanceBase")
+        base.Shape = Part.makeBox(6000, 4000, 2500)
+        space = Arch.makeSpace(base, name="Bedroom")
+
+        equipment_base = self.document.addObject("Part::Box", "BedroomBedBase")
+        equipment_base.Length = 1400
+        equipment_base.Width = 1950
+        equipment_base.Height = 600
+        equipment = Arch.makeEquipment(equipment_base)
+        equipment.Placement.Base = FreeCAD.Vector(0, 0, 0)
+        self.document.recompute()
+        self.pump_gui_events()
+
+        text_box = ArchSpace._estimate_space_text_box(space.ViewObject)
+        default_point = ArchSpace._get_default_space_text_position(space)
+        faces = ArchSpace._get_space_footprint_faces(space)
+        preferred_clearance = ArchSpace._get_space_text_preferred_clearance(text_box)
+        obstacle_polyline = [
+            [
+                [1900.0, 900.0, 0.0],
+                [3200.0, 900.0, 0.0],
+                [3200.0, 2800.0, 0.0],
+                [1900.0, 2800.0, 0.0],
+                [1900.0, 900.0, 0.0],
+            ]
+        ]
+
+        with patch.object(
+            equipment.ViewObject.Proxy,
+            "_collect_local_footprint_polylines",
+            return_value=obstacle_polyline,
+        ):
+            obstacle_bounds = ArchSpace._collect_space_label_obstacle_bounds(space, faces)
+            text_point = ArchSpace._get_automatic_space_text_position(
+                space,
+                text_box=text_box,
+                text_align="Center",
+            )
+
+        text_bounds = ArchSpace._get_label_candidate_bounds(text_point, text_box, "Center")
+        clearance = ArchSpace._bounds_distance_xy(text_bounds, obstacle_bounds[0])
+
+        self.assertEqual(len(obstacle_bounds), 1)
+        self.assertTrue(ArchSpace._point_in_space_footprint(faces, text_point))
+        self.assertFalse(ArchSpace._bounds_intersect_xy(text_bounds, obstacle_bounds[0]))
+        self.assertGreaterEqual(clearance, preferred_clearance - 1e-6)
+
     def test_rotated_wall_door_footprint_stays_in_host_frame(self):
         """Hosted door symbols should use the real host frame on rotated walls."""
 

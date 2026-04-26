@@ -3458,8 +3458,14 @@ def _collect_space_label_obstacle_bounds(space, faces):
     return tuple(obstacles)
 
 
+def _get_space_text_preferred_clearance(text_box):
+    width = float(text_box.get("width", 0.0) or 0.0)
+    padding = float(text_box.get("padding", 0.0) or 0.0)
+    return max(width * 0.6, padding * 4.0, 50.0)
+
+
 def _score_space_text_candidate(
-    point, default_point, candidate_bounds, obstacle_bounds, space_bounds
+    point, default_point, candidate_bounds, obstacle_bounds, space_bounds, preferred_clearance=0.0
 ):
     overlap_area = sum(
         _bounds_intersection_area_xy(candidate_bounds, obstacle) for obstacle in obstacle_bounds
@@ -3477,11 +3483,12 @@ def _score_space_text_candidate(
         point.y - space_bounds[1],
         space_bounds[3] - point.y,
     )
+    achieved_clearance = min(clearance, preferred_clearance)
     return (
         1 if overlap_area <= 1e-6 else 0,
         -overlap_area,
+        achieved_clearance,
         -center_distance,
-        clearance,
         boundary_margin,
     )
 
@@ -3495,6 +3502,7 @@ def _get_automatic_space_text_position(space, text_box=None, text_align="Center"
     if not obstacles:
         return default_point
     text_box = text_box or {"width": 0.0, "below": 0.0, "above": 0.0, "padding": 0.0}
+    preferred_clearance = _get_space_text_preferred_clearance(text_box)
     default_bounds = _get_label_candidate_bounds(default_point, text_box, text_align)
     if all(not _bounds_intersect_xy(default_bounds, obstacle) for obstacle in obstacles):
         return default_point
@@ -3519,6 +3527,7 @@ def _get_automatic_space_text_position(space, text_box=None, text_align="Center"
         default_bounds,
         obstacles,
         space_bounds,
+        preferred_clearance,
     )
     for candidate in _iter_space_text_candidates(default_point, space_bounds):
         if not _point_in_space_footprint(faces, candidate):
@@ -3530,6 +3539,7 @@ def _get_automatic_space_text_position(space, text_box=None, text_align="Center"
             candidate_bounds,
             obstacles,
             space_bounds,
+            preferred_clearance,
         )
         if score > best_score:
             best_point = candidate
