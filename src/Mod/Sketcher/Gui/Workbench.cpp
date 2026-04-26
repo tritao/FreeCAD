@@ -46,31 +46,18 @@ QString sketcherEditContextName()
     return QStringLiteral("edit");
 }
 
-Gui::ToolBarManager::ToolbarScopeId sketcherEditLayoutContextId()
+QString sketcherEditLayoutContext()
 {
-    return {Gui::ToolBarManager::Scope::Contextual, sketcherWorkbenchName(), sketcherEditContextName()};
+    return Gui::ToolBarManager::makeToolBarLayoutContext(
+        {Gui::ToolBarManager::Scope::Contextual, sketcherWorkbenchName(), sketcherEditContextName()}
+    );
 }
 
-Gui::ToolBarManager::PersistenceId sharedToolBarId(const QString& toolbarName)
+QString sharedToolBarKey(const QString& toolbarName)
 {
-    return {Gui::ToolBarManager::Scope::Shared, toolbarName};
-}
-
-Gui::ToolBarManager::PersistenceId workbenchToolBarId(
-    const QString& toolbarName,
-    const QString& workbench = sketcherWorkbenchName()
-)
-{
-    return {Gui::ToolBarManager::Scope::Workbench, toolbarName, workbench};
-}
-
-Gui::ToolBarManager::PersistenceId contextualToolBarId(
-    const QString& toolbarName,
-    const QString& context = sketcherEditContextName(),
-    const QString& workbench = sketcherWorkbenchName()
-)
-{
-    return {Gui::ToolBarManager::Scope::Contextual, toolbarName, workbench, context};
+    return Gui::ToolBarManager::makeToolBarPersistenceKey(
+        {Gui::ToolBarManager::Scope::Shared, toolbarName}
+    );
 }
 
 QString workbenchToolBarKey(
@@ -78,7 +65,9 @@ QString workbenchToolBarKey(
     const QString& workbench = sketcherWorkbenchName()
 )
 {
-    return Gui::ToolBarManager::makeToolBarPersistenceKey(workbenchToolBarId(toolbarName, workbench));
+    return Gui::ToolBarManager::makeToolBarPersistenceKey(
+        {Gui::ToolBarManager::Scope::Workbench, toolbarName, workbench}
+    );
 }
 
 QString contextualToolBarKey(
@@ -88,7 +77,7 @@ QString contextualToolBarKey(
 )
 {
     return Gui::ToolBarManager::makeToolBarPersistenceKey(
-        contextualToolBarId(toolbarName, context, workbench)
+        {Gui::ToolBarManager::Scope::Contextual, toolbarName, workbench, context}
     );
 }
 }  // namespace
@@ -233,27 +222,27 @@ Gui::ToolBarItem* Workbench::setupCommandBars() const
 
 namespace
 {
-inline const QList<Gui::ToolBarManager::PersistenceId>& editModeToolbarIds()
+inline const QStringList& editModeToolbarKeys()
 {
-    static const QList<Gui::ToolBarManager::PersistenceId> ids {
-        contextualToolBarId(QStringLiteral("Edit Mode")),
-        contextualToolBarId(QStringLiteral("Geometries")),
-        contextualToolBarId(QStringLiteral("Constraints")),
-        contextualToolBarId(QStringLiteral("Sketcher Tools")),
-        contextualToolBarId(QStringLiteral("B-Spline Tools")),
-        contextualToolBarId(QStringLiteral("Visual Helpers")),
-        contextualToolBarId(QStringLiteral("Sketcher Edit Tools"))
+    static const QStringList keys {
+        contextualToolBarKey(QStringLiteral("Edit Mode")),
+        contextualToolBarKey(QStringLiteral("Geometries")),
+        contextualToolBarKey(QStringLiteral("Constraints")),
+        contextualToolBarKey(QStringLiteral("Sketcher Tools")),
+        contextualToolBarKey(QStringLiteral("B-Spline Tools")),
+        contextualToolBarKey(QStringLiteral("Visual Helpers")),
+        contextualToolBarKey(QStringLiteral("Sketcher Edit Tools"))
     };
-    return ids;
+    return keys;
 }
 
-inline const QList<Gui::ToolBarManager::PersistenceId>& nonEditModeToolbarIds()
+inline const QStringList& nonEditModeToolbarKeys()
 {
-    static const QList<Gui::ToolBarManager::PersistenceId> ids {
-        sharedToolBarId(QStringLiteral("Structure")),
-        workbenchToolBarId(QStringLiteral("Sketcher"))
+    static const QStringList keys {
+        sharedToolBarKey(QStringLiteral("Structure")),
+        workbenchToolBarKey(QStringLiteral("Sketcher"))
     };
-    return ids;
+    return keys;
 }
 }  // namespace
 
@@ -278,12 +267,12 @@ void Workbench::activated()
         auto* toolbarManager = Gui::ToolBarManager::getInstance();
         toolbarManager->setToolbarLayoutContextOverride(
             sketcherWorkbenchName(),
-            sketcherEditLayoutContextId()
+            sketcherEditLayoutContext()
         );
 
-        toolbarManager->setState(editModeToolbarIds(), Gui::ToolBarManager::State::ForceAvailable);
+        toolbarManager->setState(editModeToolbarKeys(), Gui::ToolBarManager::State::ForceAvailable);
 
-        toolbarManager->setState(nonEditModeToolbarIds(), Gui::ToolBarManager::State::ForceHidden);
+        toolbarManager->setState(nonEditModeToolbarKeys(), Gui::ToolBarManager::State::ForceHidden);
     }
 }
 
@@ -292,11 +281,11 @@ void Workbench::enterEditMode()
     auto* toolbarManager = Gui::ToolBarManager::getInstance();
     toolbarManager->setToolbarLayoutContextOverride(
         sketcherWorkbenchName(),
-        sketcherEditLayoutContextId()
+        sketcherEditLayoutContext()
     );
 
-    toolbarManager->setState(editModeToolbarIds(), Gui::ToolBarManager::State::ForceAvailable);
-    toolbarManager->setState(nonEditModeToolbarIds(), Gui::ToolBarManager::State::ForceHidden);
+    toolbarManager->setState(editModeToolbarKeys(), Gui::ToolBarManager::State::ForceAvailable);
+    toolbarManager->setState(nonEditModeToolbarKeys(), Gui::ToolBarManager::State::ForceHidden);
 }
 
 void Workbench::leaveEditMode()
@@ -307,8 +296,8 @@ void Workbench::leaveEditMode()
     toolbarManager->clearToolbarLayoutContextOverride(sketcherWorkbenchName());
 
     if (workbench->name() == "SketcherWorkbench") {
-        toolbarManager->setState(editModeToolbarIds(), Gui::ToolBarManager::State::RestoreDefault);
-        toolbarManager->setState(nonEditModeToolbarIds(), Gui::ToolBarManager::State::RestoreDefault);
+        toolbarManager->setState(editModeToolbarKeys(), Gui::ToolBarManager::State::RestoreDefault);
+        toolbarManager->setState(nonEditModeToolbarKeys(), Gui::ToolBarManager::State::RestoreDefault);
     }
 }
 

@@ -20,7 +20,12 @@
  *                                                                         *
  ***************************************************************************/
 
+#include <array>
+#include <optional>
+
 // generated out of PythonWorkbench.pyi
+#include <Base/PyWrapParseTupleAndKeywords.h>
+
 #include "PythonWorkbenchPy.h"
 #include "PythonWorkbenchPy.cpp"
 
@@ -28,279 +33,173 @@ using namespace Gui;
 
 namespace
 {
-bool isValidToolbarScopeValue(long value)
+std::optional<long> parseToolbarOptionValue(PyObject* value, const char* optionName)
 {
-    switch (static_cast<ToolBarManager::Scope>(value)) {
-        case ToolBarManager::Scope::Legacy:
-        case ToolBarManager::Scope::Shared:
-        case ToolBarManager::Scope::Workbench:
-        case ToolBarManager::Scope::Contextual:
-            return true;
+    if (!value || value == Py_None) {
+        return std::nullopt;
+    }
+    if (!PyLong_Check(value)) {
+        throw Py::TypeError(std::string(optionName) + " must be an integer enum value");
     }
 
-    return false;
-}
-
-bool isValidToolbarTierValue(long value)
-{
-    switch (static_cast<ToolBarItem::Tier>(value)) {
-        case ToolBarItem::Tier::Recommended:
-        case ToolBarItem::Tier::Secondary:
-        case ToolBarItem::Tier::Advanced:
-        case ToolBarItem::Tier::Contextual:
-            return true;
-    }
-
-    return false;
-}
-
-bool isValidToolbarVisibilityValue(long value)
-{
-    switch (static_cast<ToolBarItem::DefaultVisibility>(value)) {
-        case ToolBarItem::DefaultVisibility::Visible:
-        case ToolBarItem::DefaultVisibility::Hidden:
-        case ToolBarItem::DefaultVisibility::Unavailable:
-            return true;
-    }
-
-    return false;
-}
-
-bool parseStringList(PyObject* object, std::list<std::string>& items, const char* errorMessage)
-{
-    if (PyList_Check(object)) {
-        int nItems = PyList_Size(object);
-        for (int i = 0; i < nItems; ++i) {
-            PyObject* item = PyList_GetItem(object, i);
-            if (PyUnicode_Check(item)) {
-                const char* pItem = PyUnicode_AsUTF8(item);
-                items.emplace_back(pItem);
-            }
-        }
-        return true;
-    }
-
-    if (PyUnicode_Check(object)) {
-        const char* pItem = PyUnicode_AsUTF8(object);
-        items.emplace_back(pItem);
-        return true;
-    }
-
-    PyErr_SetString(PyExc_TypeError, errorMessage);
-    return false;
-}
-
-PyObject* getOptionalAttr(PyObject* object, const char* name)
-{
-    if (!object || object == Py_None) {
-        return nullptr;
-    }
-
-    PyObject* attr = PyObject_GetAttrString(object, name);
-    if (!attr) {
-        if (PyErr_ExceptionMatches(PyExc_AttributeError)) {
-            PyErr_Clear();
-        }
-        return nullptr;
-    }
-
-    return attr;
-}
-
-template<typename Validator>
-bool parseEnumValue(PyObject* object, const char* name, Validator validator, int* value, bool* present)
-{
-    PyObject* attr = getOptionalAttr(object, name);
-    if (!attr) {
-        if (PyErr_Occurred()) {
-            return false;
-        }
-        if (present) {
-            *present = false;
-        }
-        return true;
-    }
-
-    if (attr == Py_None) {
-        Py_DECREF(attr);
-        if (present) {
-            *present = false;
-        }
-        return true;
-    }
-
-    PyObject* number = PyNumber_Long(attr);
-    Py_DECREF(attr);
-    if (!number) {
-        PyErr_Format(PyExc_TypeError, "Expected %s to be an integer enum value", name);
-        return false;
-    }
-
-    const long parsedValue = PyLong_AsLong(number);
-    Py_DECREF(number);
+    const long rawValue = PyLong_AsLong(value);
     if (PyErr_Occurred()) {
-        return false;
-    }
-    if (!validator(parsedValue)) {
-        PyErr_Format(PyExc_ValueError, "Invalid %s enum value", name);
-        return false;
+        throw Py::Exception();
     }
 
-    if (present) {
-        *present = true;
-    }
-    if (value) {
-        *value = static_cast<int>(parsedValue);
-    }
-    return true;
+    return rawValue;
 }
 
-bool parseUnicodeValue(PyObject* object, const char* name, QString* value)
+std::optional<ToolBarItem::Tier> parseToolbarTierOption(PyObject* value)
 {
-    PyObject* attr = getOptionalAttr(object, name);
-    if (!attr) {
-        if (PyErr_Occurred()) {
-            return false;
-        }
-        return true;
+    const auto rawValue = parseToolbarOptionValue(value, "tier");
+    if (!rawValue) {
+        return std::nullopt;
     }
 
-    if (attr == Py_None) {
-        Py_DECREF(attr);
-        return true;
+    switch (*rawValue) {
+        case static_cast<long>(ToolBarItem::Tier::Recommended):
+            return ToolBarItem::Tier::Recommended;
+        case static_cast<long>(ToolBarItem::Tier::Secondary):
+            return ToolBarItem::Tier::Secondary;
+        case static_cast<long>(ToolBarItem::Tier::Advanced):
+            return ToolBarItem::Tier::Advanced;
+        case static_cast<long>(ToolBarItem::Tier::Contextual):
+            return ToolBarItem::Tier::Contextual;
     }
 
-    if (!PyUnicode_Check(attr)) {
-        Py_DECREF(attr);
-        PyErr_Format(PyExc_TypeError, "Expected %s to be a string", name);
-        return false;
-    }
-
-    if (value) {
-        *value = QString::fromUtf8(PyUnicode_AsUTF8(attr));
-    }
-    Py_DECREF(attr);
-    return true;
+    throw Py::ValueError("tier has an invalid enum value");
 }
 
-bool parseToolbarScopeId(PyObject* object, std::optional<ToolBarManager::ToolbarScopeId>* scopeId)
+std::optional<ToolBarItem::DefaultVisibility> parseToolbarVisibilityOption(PyObject* value)
 {
-    PyObject* scopeObject = getOptionalAttr(object, "scope");
-    if (!scopeObject) {
-        return !PyErr_Occurred();
+    const auto rawValue = parseToolbarOptionValue(value, "visibility");
+    if (!rawValue) {
+        return std::nullopt;
     }
 
-    if (scopeObject == Py_None) {
-        Py_DECREF(scopeObject);
-        return true;
+    switch (*rawValue) {
+        case static_cast<long>(ToolBarItem::DefaultVisibility::Visible):
+            return ToolBarItem::DefaultVisibility::Visible;
+        case static_cast<long>(ToolBarItem::DefaultVisibility::Hidden):
+            return ToolBarItem::DefaultVisibility::Hidden;
+        case static_cast<long>(ToolBarItem::DefaultVisibility::Unavailable):
+            return ToolBarItem::DefaultVisibility::Unavailable;
     }
 
-    int scopeValue = 0;
-    bool hasScopeValue = false;
-    if (!parseEnumValue(scopeObject, "scope", isValidToolbarScopeValue, &scopeValue, &hasScopeValue)) {
-        Py_DECREF(scopeObject);
-        return false;
-    }
-    if (!hasScopeValue) {
-        Py_DECREF(scopeObject);
-        PyErr_SetString(PyExc_ValueError, "ToolbarScopeId.scope is required");
-        return false;
-    }
-
-    QString workbench;
-    if (!parseUnicodeValue(scopeObject, "workbench", &workbench)) {
-        Py_DECREF(scopeObject);
-        return false;
-    }
-
-    QString context;
-    if (!parseUnicodeValue(scopeObject, "context", &context)) {
-        Py_DECREF(scopeObject);
-        return false;
-    }
-
-    if (scopeId) {
-        *scopeId = ToolBarManager::ToolbarScopeId {
-            static_cast<ToolBarManager::Scope>(scopeValue),
-            workbench,
-            context
-        };
-    }
-
-    Py_DECREF(scopeObject);
-    return true;
+    throw Py::ValueError("visibility has an invalid enum value");
 }
 
-bool parseToolbarOptions(
-    PythonWorkbenchPy* self,
-    PyObject* optionsObject,
-    PythonBaseWorkbench::ToolBarOptions* options
+std::optional<ToolBarItem::Host> parseToolbarHostOption(PyObject* value)
+{
+    const auto rawValue = parseToolbarOptionValue(value, "host");
+    if (!rawValue) {
+        return std::nullopt;
+    }
+
+    switch (*rawValue) {
+        case static_cast<long>(ToolBarItem::Host::MainWindow):
+            return ToolBarItem::Host::MainWindow;
+        case static_cast<long>(ToolBarItem::Host::ActiveView):
+            return ToolBarItem::Host::ActiveView;
+        case static_cast<long>(ToolBarItem::Host::Panel):
+            return ToolBarItem::Host::Panel;
+    }
+
+    throw Py::ValueError("host has an invalid enum value");
+}
+
+std::optional<ToolBarItem::PanelRole> parseToolbarPanelRoleOption(PyObject* value)
+{
+    const auto rawValue = parseToolbarOptionValue(value, "panel_role");
+    if (!rawValue) {
+        return std::nullopt;
+    }
+
+    switch (*rawValue) {
+        case static_cast<long>(ToolBarItem::PanelRole::None):
+            return ToolBarItem::PanelRole::None;
+        case static_cast<long>(ToolBarItem::PanelRole::ModelTree):
+            return ToolBarItem::PanelRole::ModelTree;
+    }
+
+    throw Py::ValueError("panel_role has an invalid enum value");
+}
+
+std::optional<ToolBarItem::ViewHostRequirement> parseToolbarViewHostRequirementOption(PyObject* value)
+{
+    const auto rawValue = parseToolbarOptionValue(value, "view_host_requirement");
+    if (!rawValue) {
+        return std::nullopt;
+    }
+
+    switch (*rawValue) {
+        case static_cast<long>(ToolBarItem::ViewHostRequirement::AnyView):
+            return ToolBarItem::ViewHostRequirement::AnyView;
+        case static_cast<long>(ToolBarItem::ViewHostRequirement::View3D):
+            return ToolBarItem::ViewHostRequirement::View3D;
+    }
+
+    throw Py::ValueError("view_host_requirement has an invalid enum value");
+}
+
+std::optional<ToolBarItem::ViewPresentation> parseToolbarViewPresentationOption(PyObject* value)
+{
+    const auto rawValue = parseToolbarOptionValue(value, "view_presentation");
+    if (!rawValue) {
+        return std::nullopt;
+    }
+
+    switch (*rawValue) {
+        case static_cast<long>(ToolBarItem::ViewPresentation::Docked):
+            return ToolBarItem::ViewPresentation::Docked;
+        case static_cast<long>(ToolBarItem::ViewPresentation::CenteredOverlay):
+            return ToolBarItem::ViewPresentation::CenteredOverlay;
+    }
+
+    throw Py::ValueError("view_presentation has an invalid enum value");
+}
+
+std::optional<ToolBarItem::ViewOverlayEdge> parseToolbarViewOverlayEdgeOption(PyObject* value)
+{
+    const auto rawValue = parseToolbarOptionValue(value, "view_overlay_edge");
+    if (!rawValue) {
+        return std::nullopt;
+    }
+
+    switch (*rawValue) {
+        case static_cast<long>(ToolBarItem::ViewOverlayEdge::Top):
+            return ToolBarItem::ViewOverlayEdge::Top;
+        case static_cast<long>(ToolBarItem::ViewOverlayEdge::Bottom):
+            return ToolBarItem::ViewOverlayEdge::Bottom;
+        case static_cast<long>(ToolBarItem::ViewOverlayEdge::Left):
+            return ToolBarItem::ViewOverlayEdge::Left;
+        case static_cast<long>(ToolBarItem::ViewOverlayEdge::Right):
+            return ToolBarItem::ViewOverlayEdge::Right;
+    }
+
+    throw Py::ValueError("view_overlay_edge has an invalid enum value");
+}
+
+std::optional<ToolBarItem::ViewOverlayEdgePersistence> parseToolbarViewOverlayEdgePersistenceOption(
+    PyObject* value
 )
 {
-    if (!optionsObject || optionsObject == Py_None) {
-        return true;
+    const auto rawValue = parseToolbarOptionValue(value, "view_overlay_edge_persistence");
+    if (!rawValue) {
+        return std::nullopt;
     }
 
-    QString toolbarId;
-    if (!parseUnicodeValue(optionsObject, "id", &toolbarId)) {
-        return false;
+    switch (*rawValue) {
+        case static_cast<long>(ToolBarItem::ViewOverlayEdgePersistence::ByScope):
+            return ToolBarItem::ViewOverlayEdgePersistence::ByScope;
+        case static_cast<long>(ToolBarItem::ViewOverlayEdgePersistence::Shared):
+            return ToolBarItem::ViewOverlayEdgePersistence::Shared;
+        case static_cast<long>(ToolBarItem::ViewOverlayEdgePersistence::Contextual):
+            return ToolBarItem::ViewOverlayEdgePersistence::Contextual;
     }
 
-    int tierValue = 0;
-    bool hasTier = false;
-    if (!parseEnumValue(optionsObject, "tier", isValidToolbarTierValue, &tierValue, &hasTier)) {
-        return false;
-    }
-    if (hasTier) {
-        options->tier = static_cast<ToolBarItem::Tier>(tierValue);
-    }
-
-    int visibilityValue = 0;
-    bool hasVisibility = false;
-    if (!parseEnumValue(
-            optionsObject,
-            "visibility",
-            isValidToolbarVisibilityValue,
-            &visibilityValue,
-            &hasVisibility
-        )) {
-        return false;
-    }
-    if (hasVisibility) {
-        options->visibility = static_cast<ToolBarItem::DefaultVisibility>(visibilityValue);
-    }
-
-    std::optional<ToolBarManager::ToolbarScopeId> scopeId;
-    if (!parseToolbarScopeId(optionsObject, &scopeId)) {
-        return false;
-    }
-
-    if (!toolbarId.isEmpty()) {
-        if (scopeId) {
-            options->persistenceId = ToolBarManager::PersistenceId(*scopeId, std::move(toolbarId));
-        }
-        else {
-            options->persistenceId = ToolBarManager::PersistenceId(
-                ToolBarManager::Scope::Workbench,
-                std::move(toolbarId),
-                QString::fromStdString(self->getPythonBaseWorkbenchPtr()->name())
-            );
-        }
-
-        if (ToolBarManager::makeToolBarPersistenceKey(*options->persistenceId).isEmpty()) {
-            PyErr_SetString(PyExc_ValueError, "Invalid ToolbarOptions id/scope combination");
-            return false;
-        }
-    }
-    else if (scopeId) {
-        PyErr_SetString(
-            PyExc_ValueError,
-            "ToolbarOptions.scope requires ToolbarOptions.id to define a stable toolbar identity"
-        );
-        return false;
-    }
-
-    return true;
+    throw Py::ValueError("view_overlay_edge_persistence has an invalid enum value");
 }
 }  // namespace
 
@@ -501,24 +400,88 @@ PyObject* PythonWorkbenchPy::appendToolbar(PyObject* args, PyObject* kwd)
 {
     PY_TRY
     {
-        PyObject* pObject;
-        PyObject* pOptions = Py_None;
-        char* psToolBar;
-        static char* kwlist[] = {"name", "cmds", "options", nullptr};
-        if (!PyArg_ParseTupleAndKeywords(args, kwd, "sO|O", kwlist, &psToolBar, &pObject, &pOptions)) {
+        static constexpr std::array<const char*, 12> keywords = {
+            "name",
+            "items",
+            "key",
+            "tier",
+            "visibility",
+            "host",
+            "panel_role",
+            "view_host_requirement",
+            "view_presentation",
+            "view_overlay_edge",
+            "view_overlay_edge_persistence",
+            nullptr,
+        };
+
+        PyObject* pObject = nullptr;
+        char* psToolBar = nullptr;
+        const char* key = nullptr;
+        PyObject* tier = nullptr;
+        PyObject* visibility = nullptr;
+        PyObject* host = nullptr;
+        PyObject* panelRole = nullptr;
+        PyObject* viewHostRequirement = nullptr;
+        PyObject* viewPresentation = nullptr;
+        PyObject* viewOverlayEdge = nullptr;
+        PyObject* viewOverlayEdgePersistence = nullptr;
+        if (!Base::Wrapped_ParseTupleAndKeywords(
+                args,
+                kwd,
+                "sO|zOOOOOOOO:appendToolbar",
+                keywords,
+                &psToolBar,
+                &pObject,
+                &key,
+                &tier,
+                &visibility,
+                &host,
+                &panelRole,
+                &viewHostRequirement,
+                &viewPresentation,
+                &viewOverlayEdge,
+                &viewOverlayEdgePersistence
+            )) {
+            return nullptr;
+        }
+        if (!psToolBar || psToolBar[0] == '\0') {
+            throw Py::ValueError("name must not be empty");
+        }
+        if (key && key[0] == '\0') {
+            throw Py::ValueError("key must not be empty");
+        }
+        if (!PyList_Check(pObject)) {
+            PyErr_SetString(PyExc_AssertionError, "Expected a list as second argument");
             return nullptr;
         }
 
         std::list<std::string> items;
-        if (!parseStringList(pObject, items, "Expected a list or string as second argument")) {
-            return nullptr;
+        int nSize = PyList_Size(pObject);
+        for (int i = 0; i < nSize; ++i) {
+            PyObject* item = PyList_GetItem(pObject, i);
+            if (PyUnicode_Check(item)) {
+                const char* pItem = PyUnicode_AsUTF8(item);
+                items.emplace_back(pItem);
+            }
+            else {
+                continue;
+            }
         }
-
         PythonBaseWorkbench::ToolBarOptions options;
-        if (!parseToolbarOptions(this, pOptions, &options)) {
-            return nullptr;
+        if (key) {
+            options.key = key;
         }
-
+        options.tier = parseToolbarTierOption(tier);
+        options.visibility = parseToolbarVisibilityOption(visibility);
+        options.host = parseToolbarHostOption(host);
+        options.panelRole = parseToolbarPanelRoleOption(panelRole);
+        options.viewHostRequirement = parseToolbarViewHostRequirementOption(viewHostRequirement);
+        options.viewPresentation = parseToolbarViewPresentationOption(viewPresentation);
+        options.viewOverlayEdge = parseToolbarViewOverlayEdgeOption(viewOverlayEdge);
+        options.viewOverlayEdgePersistence = parseToolbarViewOverlayEdgePersistenceOption(
+            viewOverlayEdgePersistence
+        );
         getPythonBaseWorkbenchPtr()->appendToolbar(psToolBar, items, options);
 
         Py_Return;

@@ -22,6 +22,7 @@
 
 
 #include <QAction>
+#include <QActionGroup>
 #include <QApplication>
 #include <QByteArray>
 #include <QHBoxLayout>
@@ -37,6 +38,7 @@
 #include <QStyleOption>
 
 
+#include <array>
 #include <algorithm>
 #include <tuple>
 #include <boost/algorithm/string/predicate.hpp>
@@ -48,7 +50,13 @@
 #include "Application.h"
 #include "Command.h"
 #include "MainWindow.h"
+#include "MDIView.h"
 #include "OverlayWidgets.h"
+#include "PanelToolBarHost.h"
+#include "SplitView3DInventor.h"
+#include "Tree.h"
+#include "ViewToolBarOverlay.h"
+#include "View3DInventor.h"
 #include "Workbench.h"
 #include "WorkbenchManager.h"
 #include "WidgetFactory.h"
@@ -62,6 +70,32 @@ constexpr auto ToolBarPersistenceKeyProperty = "_fc_toolbar_persistence_key";
 constexpr auto ToolBarPublicPersistenceKeyProperty = "PersistenceKey";
 constexpr auto ToolBarTierProperty = "_fc_toolbar_tier";
 constexpr auto ToolBarPublicTierProperty = "Tier";
+constexpr auto ToolBarHostProperty = "_fc_toolbar_host";
+constexpr auto ToolBarDefaultHostProperty = "_fc_toolbar_default_host";
+constexpr auto ToolBarPublicHostProperty = "Host";
+constexpr auto ToolBarPanelRoleProperty = "_fc_toolbar_panel_role";
+constexpr auto ToolBarPublicPanelRoleProperty = "PanelRole";
+constexpr auto ToolBarViewHostRequirementProperty = "_fc_toolbar_view_host_requirement";
+constexpr auto ToolBarViewPresentationProperty = "_fc_toolbar_view_presentation";
+constexpr auto ToolBarDefaultViewPresentationProperty = "_fc_toolbar_default_view_presentation";
+constexpr auto ToolBarPublicViewPresentationProperty = "ViewPresentation";
+constexpr auto ToolBarViewOverlayEdgeProperty = "_fc_toolbar_view_overlay_edge";
+constexpr auto ToolBarDefaultViewOverlayEdgeProperty = "_fc_toolbar_default_view_overlay_edge";
+constexpr auto ToolBarPublicViewOverlayEdgeProperty = "ViewOverlayEdge";
+constexpr auto ToolBarViewOverlayEdgePersistenceProperty
+    = "_fc_toolbar_view_overlay_edge_persistence";
+constexpr auto ToolBarPublicViewOverlayEdgePersistenceProperty = "ViewOverlayEdgePersistence";
+constexpr auto ViewTopLayoutKey = "ViewTop";
+constexpr auto ViewLeftLayoutKey = "ViewLeft";
+constexpr auto ViewRightLayoutKey = "ViewRight";
+constexpr auto ViewBottomLayoutKey = "ViewBottom";
+constexpr auto HostedToolbarHostsGroupKey = "HostedToolbarHosts";
+constexpr auto ViewToolbarPresentationsGroupKey = "ViewToolbarPresentations";
+constexpr auto ViewOverlayEdgesGroupKey = "ViewOverlayEdges";
+}  // namespace
+
+namespace
+{
 
 QStringList splitLayoutState(const std::string& value)
 {
@@ -71,24 +105,6 @@ QStringList splitLayoutState(const std::string& value)
 
     return QString::fromUtf8(value.c_str()).split(QLatin1Char(','), Qt::SkipEmptyParts);
 }
-
-struct ToolBarLayoutEntry
-{
-    bool toolbarBreak = false;
-    QString serializedKey;
-    ToolBarManager::PersistenceId id;
-};
-
-struct ToolBarLayoutState
-{
-    bool saved = false;
-    QList<ToolBarLayoutEntry> top;
-    QList<ToolBarLayoutEntry> left;
-    QList<ToolBarLayoutEntry> right;
-    QList<ToolBarLayoutEntry> bottom;
-};
-
-QString serializeToolBarPersistenceId(const ToolBarManager::PersistenceId& id);
 
 ToolBarManager::PersistenceId makeToolBarPersistenceId(const QString& persistenceKey)
 {
@@ -129,93 +145,6 @@ ToolBarManager::PersistenceId makeToolBarPersistenceId(const QString& persistenc
 
     id.toolbar = parts.back();
     return id;
-}
-
-QString layoutEntryKey(const ToolBarLayoutEntry& entry)
-{
-    if (entry.toolbarBreak) {
-        return QStringLiteral("Break");
-    }
-
-    if (!entry.serializedKey.isEmpty()) {
-        return entry.serializedKey;
-    }
-
-    return serializeToolBarPersistenceId(entry.id);
-}
-
-ToolBarLayoutEntry makeToolBarLayoutEntry(const QString& entry)
-{
-    if (entry == QStringLiteral("Break")) {
-        ToolBarLayoutEntry layoutEntry;
-        layoutEntry.toolbarBreak = true;
-        return layoutEntry;
-    }
-
-    ToolBarLayoutEntry layoutEntry;
-    layoutEntry.serializedKey = entry;
-    layoutEntry.id = makeToolBarPersistenceId(entry);
-    return layoutEntry;
-}
-
-ToolBarLayoutEntry makeToolBarLayoutEntry(const ToolBarManager::PersistenceId& id)
-{
-    ToolBarLayoutEntry layoutEntry;
-    layoutEntry.id = id;
-    return layoutEntry;
-}
-
-QList<ToolBarLayoutEntry> readToolBarLayoutEntries(const std::string& value)
-{
-    QList<ToolBarLayoutEntry> entries;
-    for (const auto& entry : splitLayoutState(value)) {
-        entries.push_back(makeToolBarLayoutEntry(entry));
-    }
-    return entries;
-}
-
-void writeToolBarLayoutEntries(
-    const ParameterGrp::handle& group,
-    const char* key,
-    const QList<ToolBarLayoutEntry>& entries
-)
-{
-    QStringList layout;
-    for (const auto& entry : entries) {
-        const auto serializedKey = layoutEntryKey(entry);
-        if (!serializedKey.isEmpty()) {
-            layout << serializedKey;
-        }
-    }
-    group->SetASCII(key, layout.join(QLatin1Char(',')).toUtf8().constData());
-}
-
-ToolBarLayoutState readToolBarLayoutState(const ParameterGrp::handle& group)
-{
-    if (!group) {
-        return {};
-    }
-
-    return {
-        .saved = group->GetBool("Saved", false),
-        .top = readToolBarLayoutEntries(group->GetASCII("Top")),
-        .left = readToolBarLayoutEntries(group->GetASCII("Left")),
-        .right = readToolBarLayoutEntries(group->GetASCII("Right")),
-        .bottom = readToolBarLayoutEntries(group->GetASCII("Bottom")),
-    };
-}
-
-void writeToolBarLayoutState(const ParameterGrp::handle& group, const ToolBarLayoutState& state)
-{
-    if (!group) {
-        return;
-    }
-
-    group->SetBool("Saved", state.saved);
-    writeToolBarLayoutEntries(group, "Top", state.top);
-    writeToolBarLayoutEntries(group, "Left", state.left);
-    writeToolBarLayoutEntries(group, "Right", state.right);
-    writeToolBarLayoutEntries(group, "Bottom", state.bottom);
 }
 
 QString toolBarScopeLabel(ToolBarManager::Scope scope)
@@ -292,17 +221,6 @@ QString serializeLayoutContextId(const ToolBarManager::ToolbarScopeId& scopeId)
 
     return {};
 }
-
-bool isValidToolbarLayoutContext(const ToolBarManager::ToolbarScopeId& scopeId)
-{
-    return !serializeLayoutContextId(scopeId).isEmpty();
-}
-
-ToolBarManager::ToolbarScopeId usableToolbarLayoutContext(const ToolBarManager::ToolbarScopeId& scopeId)
-{
-    return isValidToolbarLayoutContext(scopeId) ? scopeId : ToolBarManager::ToolbarScopeId {};
-}
-
 ToolBarItem::Tier defaultToolBarTier(ToolBarItem::DefaultVisibility visibility)
 {
     switch (visibility) {
@@ -362,6 +280,353 @@ QString toolBarTierLabel(ToolBarItem::Tier tier)
     }
 
     return {};
+}
+
+QString toolBarHostName(ToolBarItem::Host host)
+{
+    switch (host) {
+        case ToolBarItem::Host::MainWindow:
+            return QStringLiteral("main-window");
+        case ToolBarItem::Host::ActiveView:
+            return QStringLiteral("view");
+        case ToolBarItem::Host::Panel:
+            return QStringLiteral("panel");
+    }
+
+    return QStringLiteral("main-window");
+}
+
+ToolBarItem::Host parseToolBarHost(const QString& hostName)
+{
+    if (hostName == QLatin1String("panel")) {
+        return ToolBarItem::Host::Panel;
+    }
+    if (hostName == QLatin1String("view")) {
+        return ToolBarItem::Host::ActiveView;
+    }
+
+    return ToolBarItem::Host::MainWindow;
+}
+
+QString toolBarPanelRoleName(ToolBarItem::PanelRole role)
+{
+    switch (role) {
+        case ToolBarItem::PanelRole::None:
+            return QStringLiteral("none");
+        case ToolBarItem::PanelRole::ModelTree:
+            return QStringLiteral("model-tree");
+    }
+
+    return QStringLiteral("none");
+}
+
+ToolBarItem::PanelRole parseToolBarPanelRole(const QString& roleName)
+{
+    if (roleName == QLatin1String("model-tree")) {
+        return ToolBarItem::PanelRole::ModelTree;
+    }
+
+    return ToolBarItem::PanelRole::None;
+}
+
+QString toolBarViewPresentationName(ToolBarItem::ViewPresentation presentation)
+{
+    switch (presentation) {
+        case ToolBarItem::ViewPresentation::Docked:
+            return QStringLiteral("docked");
+        case ToolBarItem::ViewPresentation::CenteredOverlay:
+            return QStringLiteral("centered-overlay");
+    }
+
+    return QStringLiteral("docked");
+}
+
+ToolBarItem::ViewPresentation parseToolBarViewPresentation(const QString& presentationName)
+{
+    if (presentationName == QLatin1String("centered-overlay")) {
+        return ToolBarItem::ViewPresentation::CenteredOverlay;
+    }
+
+    return ToolBarItem::ViewPresentation::Docked;
+}
+
+QString toolBarViewOverlayEdgeName(ToolBarItem::ViewOverlayEdge edge)
+{
+    switch (edge) {
+        case ToolBarItem::ViewOverlayEdge::Top:
+            return QStringLiteral("top");
+        case ToolBarItem::ViewOverlayEdge::Bottom:
+            return QStringLiteral("bottom");
+        case ToolBarItem::ViewOverlayEdge::Left:
+            return QStringLiteral("left");
+        case ToolBarItem::ViewOverlayEdge::Right:
+            return QStringLiteral("right");
+    }
+
+    return QStringLiteral("top");
+}
+
+QString toolBarViewOverlayEdgePersistenceName(ToolBarItem::ViewOverlayEdgePersistence persistence)
+{
+    switch (persistence) {
+        case ToolBarItem::ViewOverlayEdgePersistence::ByScope:
+            return QStringLiteral("by-scope");
+        case ToolBarItem::ViewOverlayEdgePersistence::Shared:
+            return QStringLiteral("shared");
+        case ToolBarItem::ViewOverlayEdgePersistence::Contextual:
+            return QStringLiteral("contextual");
+    }
+
+    return QStringLiteral("by-scope");
+}
+
+ToolBarItem::ViewOverlayEdge parseToolBarViewOverlayEdge(const QString& edgeName)
+{
+    if (edgeName == QLatin1String("bottom")) {
+        return ToolBarItem::ViewOverlayEdge::Bottom;
+    }
+    if (edgeName == QLatin1String("left")) {
+        return ToolBarItem::ViewOverlayEdge::Left;
+    }
+    if (edgeName == QLatin1String("right")) {
+        return ToolBarItem::ViewOverlayEdge::Right;
+    }
+
+    return ToolBarItem::ViewOverlayEdge::Top;
+}
+
+ToolBarItem::ViewOverlayEdgePersistence parseToolBarViewOverlayEdgePersistence(
+    const QString& persistenceName
+)
+{
+    if (persistenceName == QLatin1String("shared")) {
+        return ToolBarItem::ViewOverlayEdgePersistence::Shared;
+    }
+    if (persistenceName == QLatin1String("contextual")) {
+        return ToolBarItem::ViewOverlayEdgePersistence::Contextual;
+    }
+
+    return ToolBarItem::ViewOverlayEdgePersistence::ByScope;
+}
+
+ToolBarItem::ViewOverlayEdge defaultToolBarViewOverlayEdge(const QToolBar* toolbar)
+{
+    if (!toolbar) {
+        return ToolBarItem::ViewOverlayEdge::Top;
+    }
+
+    if (const auto property = toolbar->property(ToolBarDefaultViewOverlayEdgeProperty);
+        property.isValid()) {
+        return static_cast<ToolBarItem::ViewOverlayEdge>(property.toInt());
+    }
+
+    return ToolBarManager::toolBarViewOverlayEdge(toolbar);
+}
+
+void setDefaultToolBarViewOverlayEdge(QToolBar* toolbar, ToolBarItem::ViewOverlayEdge edge)
+{
+    if (!toolbar) {
+        return;
+    }
+
+    toolbar->setProperty(ToolBarDefaultViewOverlayEdgeProperty, static_cast<int>(edge));
+}
+
+ToolBarItem::Host defaultToolBarHost(const QToolBar* toolbar)
+{
+    if (!toolbar) {
+        return ToolBarItem::Host::MainWindow;
+    }
+
+    if (const auto property = toolbar->property(ToolBarDefaultHostProperty); property.isValid()) {
+        return static_cast<ToolBarItem::Host>(property.toInt());
+    }
+
+    return ToolBarManager::toolBarHost(toolbar);
+}
+
+void setDefaultToolBarHost(QToolBar* toolbar, ToolBarItem::Host host)
+{
+    if (!toolbar) {
+        return;
+    }
+
+    toolbar->setProperty(ToolBarDefaultHostProperty, static_cast<int>(host));
+}
+
+ToolBarItem::ViewPresentation defaultToolBarViewPresentation(const QToolBar* toolbar)
+{
+    if (!toolbar) {
+        return ToolBarItem::ViewPresentation::Docked;
+    }
+
+    if (const auto property = toolbar->property(ToolBarDefaultViewPresentationProperty);
+        property.isValid()) {
+        return static_cast<ToolBarItem::ViewPresentation>(property.toInt());
+    }
+
+    return ToolBarManager::toolBarViewPresentation(toolbar);
+}
+
+void setDefaultToolBarViewPresentation(QToolBar* toolbar, ToolBarItem::ViewPresentation presentation)
+{
+    if (!toolbar) {
+        return;
+    }
+
+    toolbar->setProperty(ToolBarDefaultViewPresentationProperty, static_cast<int>(presentation));
+}
+
+QString toolBarVisibilityMenuLabel()
+{
+    return QApplication::translate("MainWindow", "Show");
+}
+
+QString toolBarMoveToMenuLabel()
+{
+    return QApplication::translate("MainWindow", "Move To");
+}
+
+QString toolBarPresentationMenuLabel()
+{
+    return QApplication::translate("MainWindow", "Presentation");
+}
+
+QString toolBarHostLabel(ToolBarItem::Host host)
+{
+    switch (host) {
+        case ToolBarItem::Host::MainWindow:
+            return QApplication::translate("MainWindow", "Main Window");
+        case ToolBarItem::Host::ActiveView:
+            return QApplication::translate("MainWindow", "View");
+        case ToolBarItem::Host::Panel:
+            return QApplication::translate("MainWindow", "Panel");
+    }
+
+    return QApplication::translate("MainWindow", "Main Window");
+}
+
+QString toolBarPanelRoleLabel(ToolBarItem::PanelRole role)
+{
+    switch (role) {
+        case ToolBarItem::PanelRole::None:
+            return QApplication::translate("MainWindow", "Panel");
+        case ToolBarItem::PanelRole::ModelTree:
+            return QApplication::translate("MainWindow", "Model Tree");
+    }
+
+    return QApplication::translate("MainWindow", "Panel");
+}
+
+QString toolBarViewPresentationLabel(ToolBarItem::ViewPresentation presentation)
+{
+    switch (presentation) {
+        case ToolBarItem::ViewPresentation::Docked:
+            return QApplication::translate("MainWindow", "Docked");
+        case ToolBarItem::ViewPresentation::CenteredOverlay:
+            return QApplication::translate("MainWindow", "Centered Overlay");
+    }
+
+    return QApplication::translate("MainWindow", "Docked");
+}
+
+QString toolBarViewOverlayPositionMenuLabel()
+{
+    return QApplication::translate("MainWindow", "Position");
+}
+
+QString toolBarViewOverlayEdgeLabel(ToolBarItem::ViewOverlayEdge edge)
+{
+    switch (edge) {
+        case ToolBarItem::ViewOverlayEdge::Top:
+            return QApplication::translate("MainWindow", "Top");
+        case ToolBarItem::ViewOverlayEdge::Bottom:
+            return QApplication::translate("MainWindow", "Bottom");
+        case ToolBarItem::ViewOverlayEdge::Left:
+            return QApplication::translate("MainWindow", "Left");
+        case ToolBarItem::ViewOverlayEdge::Right:
+            return QApplication::translate("MainWindow", "Right");
+    }
+
+    return QApplication::translate("MainWindow", "Top");
+}
+
+QMainWindow* toolBarHostWindow(const QWidget* widget)
+{
+    for (auto current = widget; current; current = current->parentWidget()) {
+        if (auto hostWindow = qobject_cast<QMainWindow*>(const_cast<QWidget*>(current))) {
+            return hostWindow;
+        }
+    }
+
+    return nullptr;
+}
+
+MDIView* activeViewToolBarHostWindow()
+{
+    if (auto mainWindow = getMainWindow()) {
+        if (auto activeWindow = mainWindow->activeWindow()) {
+            return activeWindow;
+        }
+    }
+
+    return qobject_cast<MDIView*>(Application::Instance->activeView());
+}
+
+TreePanel* activePanelToolBarHostPanel(ToolBarItem::PanelRole role)
+{
+    switch (role) {
+        case ToolBarItem::PanelRole::ModelTree:
+            return TreePanel::instance();
+        case ToolBarItem::PanelRole::None:
+            break;
+    }
+
+    return nullptr;
+}
+
+PanelToolBarHost* panelToolBarHost(TreePanel* panel, ToolBarItem::PanelRole role)
+{
+    if (!panel || role == ToolBarItem::PanelRole::None) {
+        return nullptr;
+    }
+
+    auto* host = panel->toolBarHostWidget();
+    if (host && host->panelRole() == role) {
+        return host;
+    }
+
+    return nullptr;
+}
+
+QWidget* viewToolBarOverlayAnchor(MDIView* view)
+{
+    if (!view) {
+        return nullptr;
+    }
+
+    if (auto anchor = view->centralWidget()) {
+        return anchor;
+    }
+
+    return view;
+}
+
+ViewToolBarOverlayHost* viewToolBarOverlayHost(MDIView* view)
+{
+    auto anchor = viewToolBarOverlayAnchor(view);
+    if (!anchor) {
+        return nullptr;
+    }
+
+    if (auto host = anchor->findChild<QObject*>(
+            QString::fromLatin1(ViewToolBarOverlayHost::ObjectName),
+            Qt::FindDirectChildrenOnly
+        )) {
+        return static_cast<ViewToolBarOverlayHost*>(host);
+    }
+
+    return new ViewToolBarOverlayHost(anchor);
 }
 
 QString decoratedToolBarActionText(const QToolBar* toolbar)
@@ -480,38 +745,37 @@ bool lookupToolBarValue(
     return false;
 }
 
-QList<ToolBarLayoutEntry> remapLegacyLayoutEntries(
-    const QList<ToolBarLayoutEntry>& layout,
-    const QMap<QString, QString>& aliases
-)
+QStringList remapLegacyLayoutEntries(const QStringList& layout, const QMap<QString, QString>& aliases)
 {
-    QList<ToolBarLayoutEntry> normalized;
-    QSet<QString> knownKeys;
+    QStringList normalized;
     for (const auto& entry : layout) {
-        if (entry.toolbarBreak) {
+        if (entry == QStringLiteral("Break")) {
             normalized << entry;
             continue;
         }
 
-        const auto mappedEntry = aliases.value(layoutEntryKey(entry), layoutEntryKey(entry));
-        if (!knownKeys.contains(mappedEntry)) {
-            normalized << makeToolBarLayoutEntry(mappedEntry);
-            knownKeys.insert(mappedEntry);
+        const auto mappedEntry = aliases.value(entry, entry);
+        if (!normalized.contains(mappedEntry)) {
+            normalized << mappedEntry;
         }
     }
 
     return normalized;
 }
 
-void moveToolBarPreservingVisibility(MainWindow* mainWindow, QToolBar* toolbar, Qt::ToolBarArea area)
+void moveToolBarPreservingVisibility(QMainWindow* hostWindow, QToolBar* toolbar, Qt::ToolBarArea area)
 {
-    bool visible = toolbar->isVisible();
+    if (!hostWindow || !toolbar) {
+        return;
+    }
+
+    const bool visible = toolbar->isVisible();
     if (!visible) {
         // QMainWindow does not reliably re-place hidden toolbars when restoring a saved layout.
         toolbar->setVisible(true);
     }
 
-    mainWindow->addToolBar(area, toolbar);
+    hostWindow->addToolBar(area, toolbar);
     toolbar->setVisible(visible);
 }
 }  // namespace
@@ -589,6 +853,66 @@ ToolBarItem::Tier ToolBarItem::tier() const
     return _tier;
 }
 
+void ToolBarItem::setHost(Host host)
+{
+    _host = host;
+}
+
+ToolBarItem::Host ToolBarItem::host() const
+{
+    return _host;
+}
+
+void ToolBarItem::setPanelRole(PanelRole role)
+{
+    _panelRole = role;
+}
+
+ToolBarItem::PanelRole ToolBarItem::panelRole() const
+{
+    return _panelRole;
+}
+
+void ToolBarItem::setViewHostRequirement(ViewHostRequirement requirement)
+{
+    _viewHostRequirement = requirement;
+}
+
+ToolBarItem::ViewHostRequirement ToolBarItem::viewHostRequirement() const
+{
+    return _viewHostRequirement;
+}
+
+void ToolBarItem::setViewPresentation(ViewPresentation presentation)
+{
+    _viewPresentation = presentation;
+}
+
+ToolBarItem::ViewPresentation ToolBarItem::viewPresentation() const
+{
+    return _viewPresentation;
+}
+
+void ToolBarItem::setViewOverlayEdge(ViewOverlayEdge edge)
+{
+    _viewOverlayEdge = edge;
+}
+
+ToolBarItem::ViewOverlayEdge ToolBarItem::viewOverlayEdge() const
+{
+    return _viewOverlayEdge;
+}
+
+void ToolBarItem::setViewOverlayEdgePersistence(ViewOverlayEdgePersistence persistence)
+{
+    _viewOverlayEdgePersistence = persistence;
+}
+
+ToolBarItem::ViewOverlayEdgePersistence ToolBarItem::viewOverlayEdgePersistence() const
+{
+    return _viewOverlayEdgePersistence;
+}
+
 bool ToolBarItem::hasItems() const
 {
     return !_items.isEmpty();
@@ -617,6 +941,12 @@ ToolBarItem* ToolBarItem::copy() const
         root->setPersistenceKey(_persistenceKey);
     }
     root->setTier(_tier);
+    root->setHost(_host);
+    root->setPanelRole(_panelRole);
+    root->setViewHostRequirement(_viewHostRequirement);
+    root->setViewPresentation(_viewPresentation);
+    root->setViewOverlayEdge(_viewOverlayEdge);
+    root->setViewOverlayEdgePersistence(_viewOverlayEdgePersistence);
 
     QList<ToolBarItem*> items = getItems();
     for (auto it : items) {
@@ -1043,6 +1373,193 @@ ToolBarItem::Tier ToolBarManager::toolBarTier(const QToolBar* toolbar)
     return ToolBarItem::Tier::Recommended;
 }
 
+ToolBarItem::Host ToolBarManager::toolBarHost(const ToolBarItem* item)
+{
+    if (!item) {
+        return ToolBarItem::Host::MainWindow;
+    }
+
+    return item->host();
+}
+
+ToolBarItem::Host ToolBarManager::toolBarHost(const QToolBar* toolbar)
+{
+    if (!toolbar) {
+        return ToolBarItem::Host::MainWindow;
+    }
+
+    if (const auto hostName = stringPropertyValue(toolbar, ToolBarPublicHostProperty);
+        !hostName.isEmpty()) {
+        return parseToolBarHost(hostName);
+    }
+
+    if (const auto property = toolbar->property(ToolBarHostProperty); property.isValid()) {
+        return static_cast<ToolBarItem::Host>(property.toInt());
+    }
+
+    return ToolBarItem::Host::MainWindow;
+}
+
+QString ToolBarManager::toolBarPanelRoleName(ToolBarItem::PanelRole role)
+{
+    return ::toolBarPanelRoleName(role);
+}
+
+ToolBarItem::PanelRole ToolBarManager::toolBarPanelRole(const ToolBarItem* item)
+{
+    if (!item) {
+        return ToolBarItem::PanelRole::None;
+    }
+
+    return item->panelRole();
+}
+
+ToolBarItem::PanelRole ToolBarManager::toolBarPanelRole(const QToolBar* toolbar)
+{
+    if (!toolbar) {
+        return ToolBarItem::PanelRole::None;
+    }
+
+    if (const auto roleName = stringPropertyValue(toolbar, ToolBarPublicPanelRoleProperty);
+        !roleName.isEmpty()) {
+        return parseToolBarPanelRole(roleName);
+    }
+
+    if (const auto property = toolbar->property(ToolBarPanelRoleProperty); property.isValid()) {
+        return static_cast<ToolBarItem::PanelRole>(property.toInt());
+    }
+
+    return ToolBarItem::PanelRole::None;
+}
+
+ToolBarItem::ViewHostRequirement ToolBarManager::toolBarViewHostRequirement(const ToolBarItem* item)
+{
+    if (!item) {
+        return ToolBarItem::ViewHostRequirement::AnyView;
+    }
+
+    return item->viewHostRequirement();
+}
+
+ToolBarItem::ViewHostRequirement ToolBarManager::toolBarViewHostRequirement(const QToolBar* toolbar)
+{
+    if (!toolbar) {
+        return ToolBarItem::ViewHostRequirement::AnyView;
+    }
+
+    if (const auto property = toolbar->property(ToolBarViewHostRequirementProperty);
+        property.isValid()) {
+        return static_cast<ToolBarItem::ViewHostRequirement>(property.toInt());
+    }
+
+    return ToolBarItem::ViewHostRequirement::AnyView;
+}
+
+QString ToolBarManager::toolBarViewPresentationName(ToolBarItem::ViewPresentation presentation)
+{
+    return ::toolBarViewPresentationName(presentation);
+}
+
+ToolBarItem::ViewPresentation ToolBarManager::toolBarViewPresentation(const ToolBarItem* item)
+{
+    if (!item) {
+        return ToolBarItem::ViewPresentation::Docked;
+    }
+
+    return item->viewPresentation();
+}
+
+ToolBarItem::ViewPresentation ToolBarManager::toolBarViewPresentation(const QToolBar* toolbar)
+{
+    if (!toolbar) {
+        return ToolBarItem::ViewPresentation::Docked;
+    }
+
+    if (const auto presentationName
+        = stringPropertyValue(toolbar, ToolBarPublicViewPresentationProperty);
+        !presentationName.isEmpty()) {
+        return parseToolBarViewPresentation(presentationName);
+    }
+
+    if (const auto property = toolbar->property(ToolBarViewPresentationProperty); property.isValid()) {
+        return static_cast<ToolBarItem::ViewPresentation>(property.toInt());
+    }
+
+    return ToolBarItem::ViewPresentation::Docked;
+}
+
+QString ToolBarManager::toolBarViewOverlayEdgeName(ToolBarItem::ViewOverlayEdge edge)
+{
+    return ::toolBarViewOverlayEdgeName(edge);
+}
+
+ToolBarItem::ViewOverlayEdge ToolBarManager::toolBarViewOverlayEdge(const ToolBarItem* item)
+{
+    if (!item) {
+        return ToolBarItem::ViewOverlayEdge::Top;
+    }
+
+    return item->viewOverlayEdge();
+}
+
+ToolBarItem::ViewOverlayEdge ToolBarManager::toolBarViewOverlayEdge(const QToolBar* toolbar)
+{
+    if (!toolbar) {
+        return ToolBarItem::ViewOverlayEdge::Top;
+    }
+
+    if (const auto edgeName = stringPropertyValue(toolbar, ToolBarPublicViewOverlayEdgeProperty);
+        !edgeName.isEmpty()) {
+        return parseToolBarViewOverlayEdge(edgeName);
+    }
+
+    if (const auto property = toolbar->property(ToolBarViewOverlayEdgeProperty); property.isValid()) {
+        return static_cast<ToolBarItem::ViewOverlayEdge>(property.toInt());
+    }
+
+    return ToolBarItem::ViewOverlayEdge::Top;
+}
+
+QString ToolBarManager::toolBarViewOverlayEdgePersistenceName(
+    ToolBarItem::ViewOverlayEdgePersistence persistence
+)
+{
+    return ::toolBarViewOverlayEdgePersistenceName(persistence);
+}
+
+ToolBarItem::ViewOverlayEdgePersistence ToolBarManager::toolBarViewOverlayEdgePersistence(
+    const ToolBarItem* item
+)
+{
+    if (!item) {
+        return ToolBarItem::ViewOverlayEdgePersistence::ByScope;
+    }
+
+    return item->viewOverlayEdgePersistence();
+}
+
+ToolBarItem::ViewOverlayEdgePersistence ToolBarManager::toolBarViewOverlayEdgePersistence(
+    const QToolBar* toolbar
+)
+{
+    if (!toolbar) {
+        return ToolBarItem::ViewOverlayEdgePersistence::ByScope;
+    }
+
+    if (const auto persistenceName
+        = stringPropertyValue(toolbar, ToolBarPublicViewOverlayEdgePersistenceProperty);
+        !persistenceName.isEmpty()) {
+        return parseToolBarViewOverlayEdgePersistence(persistenceName);
+    }
+
+    if (const auto property = toolbar->property(ToolBarViewOverlayEdgePersistenceProperty);
+        property.isValid()) {
+        return static_cast<ToolBarItem::ViewOverlayEdgePersistence>(property.toInt());
+    }
+
+    return ToolBarItem::ViewOverlayEdgePersistence::ByScope;
+}
+
 ToolBarItem::Tier ToolBarManager::normalizeCustomToolBarTier(ToolBarItem::Tier tier)
 {
     switch (tier) {
@@ -1091,6 +1608,16 @@ QString ToolBarManager::toolBarTierLabel(const QToolBar* toolbar)
     return toolBarTierLabel(toolBarTier(toolbar));
 }
 
+QString ToolBarManager::toolBarHostName(ToolBarItem::Host host)
+{
+    return ::toolBarHostName(host);
+}
+
+QString ToolBarManager::toolBarPanelRoleLabel(ToolBarItem::PanelRole role)
+{
+    return ::toolBarPanelRoleLabel(role);
+}
+
 void ToolBarManager::setToolBarPersistenceKey(QToolBar* toolbar, const QString& key)
 {
     if (!toolbar) {
@@ -1111,6 +1638,75 @@ void ToolBarManager::setToolBarTier(QToolBar* toolbar, ToolBarItem::Tier tier)
     toolbar->setProperty(ToolBarTierProperty, static_cast<int>(tier));
     toolbar->setProperty(ToolBarPublicTierProperty, toolBarTierName(tier));
     toolbar->toggleViewAction()->setProperty(ToolBarPublicTierProperty, toolBarTierName(tier));
+}
+
+void ToolBarManager::setToolBarHost(QToolBar* toolbar, ToolBarItem::Host host)
+{
+    if (!toolbar) {
+        return;
+    }
+
+    const auto hostName = toolBarHostName(host);
+    toolbar->setProperty(ToolBarHostProperty, static_cast<int>(host));
+    toolbar->setProperty(ToolBarPublicHostProperty, hostName);
+    toolbar->toggleViewAction()->setProperty(ToolBarPublicHostProperty, hostName);
+}
+
+void ToolBarManager::setToolBarPanelRole(QToolBar* toolbar, ToolBarItem::PanelRole role)
+{
+    if (!toolbar) {
+        return;
+    }
+
+    const auto roleName = toolBarPanelRoleName(role);
+    toolbar->setProperty(ToolBarPanelRoleProperty, static_cast<int>(role));
+    toolbar->setProperty(ToolBarPublicPanelRoleProperty, roleName);
+    toolbar->toggleViewAction()->setProperty(ToolBarPublicPanelRoleProperty, roleName);
+}
+
+void ToolBarManager::setToolBarViewPresentation(
+    QToolBar* toolbar,
+    ToolBarItem::ViewPresentation presentation
+)
+{
+    if (!toolbar) {
+        return;
+    }
+
+    const auto presentationName = toolBarViewPresentationName(presentation);
+    toolbar->setProperty(ToolBarViewPresentationProperty, static_cast<int>(presentation));
+    toolbar->setProperty(ToolBarPublicViewPresentationProperty, presentationName);
+    toolbar->toggleViewAction()->setProperty(ToolBarPublicViewPresentationProperty, presentationName);
+}
+
+void ToolBarManager::setToolBarViewOverlayEdge(QToolBar* toolbar, ToolBarItem::ViewOverlayEdge edge)
+{
+    if (!toolbar) {
+        return;
+    }
+
+    const auto edgeName = toolBarViewOverlayEdgeName(edge);
+    toolbar->setProperty(ToolBarViewOverlayEdgeProperty, static_cast<int>(edge));
+    toolbar->setProperty(ToolBarPublicViewOverlayEdgeProperty, edgeName);
+    toolbar->toggleViewAction()->setProperty(ToolBarPublicViewOverlayEdgeProperty, edgeName);
+}
+
+void ToolBarManager::setToolBarViewOverlayEdgePersistence(
+    QToolBar* toolbar,
+    ToolBarItem::ViewOverlayEdgePersistence persistence
+)
+{
+    if (!toolbar) {
+        return;
+    }
+
+    const auto persistenceName = toolBarViewOverlayEdgePersistenceName(persistence);
+    toolbar->setProperty(ToolBarViewOverlayEdgePersistenceProperty, static_cast<int>(persistence));
+    toolbar->setProperty(ToolBarPublicViewOverlayEdgePersistenceProperty, persistenceName);
+    toolbar->toggleViewAction()->setProperty(
+        ToolBarPublicViewOverlayEdgePersistenceProperty,
+        persistenceName
+    );
 }
 
 void ToolBarManager::destruct()
@@ -1237,6 +1833,9 @@ void ToolBarManager::setupConnection()
     paramHandlers.addGroupHandler(hMenuBarLeft, [this](const ParamKey* key) {
         onToolbarParametersChanged(key);
     });
+    connectActivateView = Application::Instance->signalActivateView.connect([this](const MDIView*) {
+        refreshViewHostedToolBars();
+    });
 }
 
 void ToolBarManager::onToolbarParametersChanged(const ParamKey*)
@@ -1289,21 +1888,21 @@ void Gui::ToolBarManager::setupWidgetProducers()
     new WidgetProducer<Gui::ToolBar>;
 }
 
-ToolBarManager::ToolbarScopeId ToolBarManager::activeToolbarLayoutContext() const
+QString ToolBarManager::activeToolbarLayoutContext() const
 {
     auto active = WorkbenchManager::instance()->active();
     if (!active) {
         return {};
     }
 
-    return {Scope::Workbench, QString::fromUtf8(active->name().c_str()), {}};
+    return QString::fromUtf8(active->name().c_str());
 }
 
-ToolBarManager::ToolbarScopeId ToolBarManager::effectiveToolbarLayoutContext() const
+QString ToolBarManager::effectiveToolbarLayoutContext() const
 {
     auto activeContext = activeToolbarLayoutContext();
     if (!toolbarLayoutContextOverride.isEmpty() && !toolbarLayoutContextOverrideWorkbench.isEmpty()
-        && toolbarLayoutContextOverrideWorkbench == activeContext.workbench) {
+        && toolbarLayoutContextOverrideWorkbench == activeContext) {
         return toolbarLayoutContextOverride;
     }
 
@@ -1311,19 +1910,26 @@ ToolBarManager::ToolbarScopeId ToolBarManager::effectiveToolbarLayoutContext() c
 }
 
 ToolBarManager::CurrentLayoutScope ToolBarManager::currentToolbarLayoutScope(
-    ToolbarScopeId* layoutContext,
-    ToolbarScopeId* activeContext
+    QString* layoutContext,
+    QString* activeContext
 ) const
 {
     const auto currentLayoutContext = effectiveToolbarLayoutContext();
     if (layoutContext) {
-        *layoutContext = usableToolbarLayoutContext(currentLayoutContext);
+        *layoutContext = currentLayoutContext;
     }
 
-    const auto usableContext = usableToolbarLayoutContext(currentLayoutContext);
-    if (usableContext.isEmpty()) {
+    if (currentLayoutContext.isEmpty()) {
         if (activeContext) {
-            *activeContext = {};
+            activeContext->clear();
+        }
+        return CurrentLayoutScope::None;
+    }
+
+    const auto currentLayout = layoutContextId(currentLayoutContext);
+    if (currentLayout.isEmpty()) {
+        if (activeContext) {
+            activeContext->clear();
         }
         return CurrentLayoutScope::None;
     }
@@ -1333,7 +1939,7 @@ ToolBarManager::CurrentLayoutScope ToolBarManager::currentToolbarLayoutScope(
         *activeContext = currentActiveContext;
     }
 
-    return usableContext.scope == Scope::Contextual ? CurrentLayoutScope::Contextual
+    return currentLayout.scope == Scope::Contextual ? CurrentLayoutScope::Contextual
                                                     : CurrentLayoutScope::Workbench;
 }
 
@@ -1342,36 +1948,135 @@ bool ToolBarManager::rememberToolbarLayoutByWorkbench() const
     return hMainWindow->GetBool("RememberToolbarLayoutByWorkbench", false);
 }
 
-bool ToolBarManager::hasSavedWorkbenchToolBarLayout(const ToolbarScopeId& context) const
+bool ToolBarManager::hasViewHostedToolBars() const
 {
-    const auto usableContext = usableToolbarLayoutContext(context);
-    if (usableContext.isEmpty()) {
+    auto activeView = activeViewToolBarHostWindow();
+    for (auto toolbar : toolBars()) {
+        if (!toolbar || toolBarHost(toolbar) != ToolBarItem::Host::ActiveView
+            || !activeViewSupportsToolBarHost(toolbar, activeView)) {
+            continue;
+        }
+        return true;
+    }
+
+    return false;
+}
+
+bool ToolBarManager::activeViewSupportsToolBarHost(const QToolBar* toolbar, const MDIView* view) const
+{
+    if (!toolbar || !view) {
         return false;
     }
 
-    auto group = workbenchLayoutGroup(usableContext);
+    switch (toolBarViewHostRequirement(toolbar)) {
+        case ToolBarItem::ViewHostRequirement::AnyView:
+            return true;
+        case ToolBarItem::ViewHostRequirement::View3D:
+            return view->isDerivedFrom<View3DInventor>() || view->isDerivedFrom<AbstractSplitView>();
+    }
+
+    return false;
+}
+
+bool ToolBarManager::activePanelSupportsToolBarHost(const QToolBar* toolbar, const TreePanel* panel) const
+{
+    if (!toolbar || !panel) {
+        return false;
+    }
+
+    switch (toolBarPanelRole(toolbar)) {
+        case ToolBarItem::PanelRole::ModelTree:
+            return panel->toolBarHostWidget() != nullptr;
+        case ToolBarItem::PanelRole::None:
+            break;
+    }
+
+    return false;
+}
+bool ToolBarManager::hasSavedWorkbenchToolBarLayout(const QString& context) const
+{
+    auto group = workbenchLayoutGroup(context);
     return group && group->GetBool("Saved", false);
 }
 
-bool ToolBarManager::toolbarBelongsToLayoutContext(
-    const QToolBar* toolbar,
-    const ToolbarScopeId& context
-) const
+bool ToolBarManager::hasSavedViewToolBarLayout(const QString& context) const
 {
-    const auto usableContext = usableToolbarLayoutContext(context);
-    if (!toolbar || usableContext.isEmpty()) {
+    const auto hasSavedEntriesForViewToolBars = [this](const ParameterGrp::handle& group) {
+        if (!group) {
+            return false;
+        }
+
+        for (auto toolbar : toolBars()) {
+            if (!toolbar) {
+                continue;
+            }
+            if (defaultToolBarHost(toolbar) != ToolBarItem::Host::ActiveView
+                && toolBarHost(toolbar) != ToolBarItem::Host::ActiveView) {
+                continue;
+            }
+
+            const auto key = toolBarPersistenceKey(toolbar);
+            if (key.isEmpty()) {
+                continue;
+            }
+            const auto value = QString::fromUtf8(group->GetASCII(key.toUtf8().constData()).c_str());
+            if (!value.isEmpty()) {
+                return true;
+            }
+        }
+
+        return false;
+    };
+
+    if (hasSavedEntriesForViewToolBars(globalHostedToolBarHostGroup())) {
+        return true;
+    }
+    if (hasSavedEntriesForViewToolBars(globalViewToolBarPresentationGroup())) {
+        return true;
+    }
+    if (hasSavedEntriesForViewToolBars(sharedViewOverlayEdgeGroup())) {
+        return true;
+    }
+
+    auto group = workbenchLayoutGroup(context);
+    if (!group || !group->GetBool("Saved", false)) {
+        if (hasSavedEntriesForViewToolBars(hostedToolBarHostGroup(context))) {
+            return true;
+        }
+        if (hasSavedEntriesForViewToolBars(viewToolBarPresentationGroup(context))) {
+            return true;
+        }
+        if (hasSavedEntriesForViewToolBars(viewOverlayEdgeGroup(context))) {
+            return true;
+        }
+        return false;
+    }
+
+    return !splitLayoutState(group->GetASCII(ViewTopLayoutKey)).isEmpty()
+        || !splitLayoutState(group->GetASCII(ViewLeftLayoutKey)).isEmpty()
+        || !splitLayoutState(group->GetASCII(ViewRightLayoutKey)).isEmpty()
+        || !splitLayoutState(group->GetASCII(ViewBottomLayoutKey)).isEmpty()
+        || hasSavedEntriesForViewToolBars(hostedToolBarHostGroup(context))
+        || hasSavedEntriesForViewToolBars(viewToolBarPresentationGroup(context))
+        || hasSavedEntriesForViewToolBars(viewOverlayEdgeGroup(context));
+}
+
+bool ToolBarManager::toolbarBelongsToLayoutContext(const QToolBar* toolbar, const QString& context) const
+{
+    if (!toolbar || context.isEmpty()) {
         return false;
     }
 
     const auto toolbarScope = toolBarScopeId(toolbar);
-    return toolbarScope == usableContext;
+    const auto layoutScope = layoutContextId(context);
+    return toolbarScope.scope == layoutScope.scope && toolbarScope.workbench == layoutScope.workbench
+        && toolbarScope.context == layoutScope.context;
 }
 
-void ToolBarManager::initializeUnsavedToolbarLayoutContext(const ToolbarScopeId& context)
+void ToolBarManager::initializeUnsavedToolbarLayoutContext(const QString& context)
 {
-    const auto usableContext = usableToolbarLayoutContext(context);
-    if (!rememberToolbarLayoutByWorkbench() || usableContext.isEmpty()
-        || hasSavedWorkbenchToolBarLayout(usableContext)) {
+    if (!rememberToolbarLayoutByWorkbench() || context.isEmpty()
+        || hasSavedWorkbenchToolBarLayout(context)) {
         return;
     }
 
@@ -1379,7 +2084,7 @@ void ToolBarManager::initializeUnsavedToolbarLayoutContext(const ToolbarScopeId&
     const QList<ToolBar*> toolbars = toolBars();
     for (const auto& key : toolbarKeys) {
         auto toolbar = findToolBar(toolbars, key);
-        if (!toolbar || !toolbarBelongsToLayoutContext(toolbar, usableContext)) {
+        if (!toolbar || !toolbarBelongsToLayoutContext(toolbar, context)) {
             continue;
         }
 
@@ -1392,18 +2097,64 @@ void ToolBarManager::initializeUnsavedToolbarLayoutContext(const ToolbarScopeId&
     }
 }
 
-ParameterGrp::handle ToolBarManager::workbenchLayoutGroup(const ToolbarScopeId& context) const
+ParameterGrp::handle ToolBarManager::workbenchLayoutGroup(const QString& context) const
 {
-    const auto usableContext = usableToolbarLayoutContext(context);
-    if (!rememberToolbarLayoutByWorkbench() || usableContext.isEmpty()) {
+    if (!rememberToolbarLayoutByWorkbench() || context.isEmpty()) {
         return {};
     }
 
-    const auto contextKey = makeToolBarLayoutContext(usableContext);
-    return hWorkbenchLayouts->GetGroup(contextKey.toUtf8().constData());
+    return hWorkbenchLayouts->GetGroup(context.toUtf8().constData());
 }
 
-void ToolBarManager::updateLayoutParameters(const ToolbarScopeId& context)
+ParameterGrp::handle ToolBarManager::globalHostedToolBarHostGroup() const
+{
+    auto& mgr = App::GetApplication().GetUserParameter();
+    return mgr.GetGroup("BaseApp/MainWindow/HostedToolbarHosts");
+}
+
+ParameterGrp::handle ToolBarManager::hostedToolBarHostGroup(const QString& context) const
+{
+    auto group = workbenchLayoutGroup(context);
+    if (!group) {
+        return {};
+    }
+
+    return group->GetGroup(HostedToolbarHostsGroupKey);
+}
+
+ParameterGrp::handle ToolBarManager::globalViewToolBarPresentationGroup() const
+{
+    auto& mgr = App::GetApplication().GetUserParameter();
+    return mgr.GetGroup("BaseApp/MainWindow/ViewToolbarPresentations");
+}
+
+ParameterGrp::handle ToolBarManager::viewToolBarPresentationGroup(const QString& context) const
+{
+    auto group = workbenchLayoutGroup(context);
+    if (!group) {
+        return {};
+    }
+
+    return group->GetGroup(ViewToolbarPresentationsGroupKey);
+}
+
+ParameterGrp::handle ToolBarManager::sharedViewOverlayEdgeGroup() const
+{
+    auto& mgr = App::GetApplication().GetUserParameter();
+    return mgr.GetGroup("BaseApp/MainWindow/ViewOverlayEdges");
+}
+
+ParameterGrp::handle ToolBarManager::viewOverlayEdgeGroup(const QString& context) const
+{
+    auto group = workbenchLayoutGroup(context);
+    if (!group) {
+        return {};
+    }
+
+    return group->GetGroup(ViewOverlayEdgesGroupKey);
+}
+
+void ToolBarManager::updateLayoutParameters(const QString& context)
 {
     auto workbenchGroup = workbenchLayoutGroup(context);
 
@@ -1445,7 +2196,7 @@ ParameterGrp::handle ToolBarManager::toolbarAreaRestoreParameters(
     return fallback;
 }
 
-void ToolBarManager::saveWorkbenchToolBarLayout(const ToolbarScopeId& context) const
+void ToolBarManager::saveWorkbenchToolBarLayout(const QString& context) const
 {
     auto group = workbenchLayoutGroup(context);
     if (!group) {
@@ -1457,80 +2208,101 @@ void ToolBarManager::saveWorkbenchToolBarLayout(const ToolbarScopeId& context) c
         int primary;
         int secondary;
         bool toolbarBreak;
-        PersistenceId id;
+        QString key;
     };
 
     QList<ToolBarPosition> top;
     QList<ToolBarPosition> left;
     QList<ToolBarPosition> right;
     QList<ToolBarPosition> bottom;
+    QList<ToolBarPosition> viewTop;
+    QList<ToolBarPosition> viewLeft;
+    QList<ToolBarPosition> viewRight;
+    QList<ToolBarPosition> viewBottom;
+    auto activeView = activeViewToolBarHostWindow();
 
     for (auto toolbar : toolBars()) {
         auto key = toolBarPersistenceKey(toolbar);
-        if (key.isEmpty() || toolbar->isFloating() || toolbar->parentWidget() != getMainWindow()) {
+        if (key.isEmpty() || toolbar->isFloating()) {
+            continue;
+        }
+
+        auto hostWindow = toolBarHostWindow(toolbar);
+        if (!hostWindow) {
+            continue;
+        }
+
+        auto* topLayout = &top;
+        auto* leftLayout = &left;
+        auto* rightLayout = &right;
+        auto* bottomLayout = &bottom;
+        if (toolBarHost(toolbar) == ToolBarItem::Host::ActiveView) {
+            if (toolBarViewPresentation(toolbar) == ToolBarItem::ViewPresentation::CenteredOverlay) {
+                continue;
+            }
+            if (hostWindow != activeView) {
+                continue;
+            }
+
+            topLayout = &viewTop;
+            leftLayout = &viewLeft;
+            rightLayout = &viewRight;
+            bottomLayout = &viewBottom;
+        }
+        else if (hostWindow != getMainWindow()) {
             continue;
         }
 
         QRect geometry = toolbar->geometry();
-        bool toolbarBreak = getMainWindow()->toolBarBreak(toolbar);
-        switch (getMainWindow()->toolBarArea(toolbar)) {
+        bool toolbarBreak = hostWindow->toolBarBreak(toolbar);
+        switch (hostWindow->toolBarArea(toolbar)) {
             case Qt::TopToolBarArea:
-                top.push_back(
-                    {geometry.y(), geometry.x(), toolbarBreak, toolBarPersistenceId(toolbar)}
-                );
+                topLayout->push_back({geometry.y(), geometry.x(), toolbarBreak, key});
                 break;
             case Qt::LeftToolBarArea:
-                left.push_back(
-                    {geometry.x(), geometry.y(), toolbarBreak, toolBarPersistenceId(toolbar)}
-                );
+                leftLayout->push_back({geometry.x(), geometry.y(), toolbarBreak, key});
                 break;
             case Qt::RightToolBarArea:
-                right.push_back(
-                    {-geometry.x(), geometry.y(), toolbarBreak, toolBarPersistenceId(toolbar)}
-                );
+                rightLayout->push_back({-geometry.x(), geometry.y(), toolbarBreak, key});
                 break;
             case Qt::BottomToolBarArea:
-                bottom.push_back(
-                    {-geometry.y(), geometry.x(), toolbarBreak, toolBarPersistenceId(toolbar)}
-                );
+                bottomLayout->push_back({-geometry.y(), geometry.x(), toolbarBreak, key});
                 break;
             default:
                 break;
         }
     }
 
-    auto save = [](QList<ToolBarPosition>& positions) {
+    auto save = [group](const char* key, QList<ToolBarPosition>& positions) {
         std::sort(positions.begin(), positions.end(), [](const auto& lhs, const auto& rhs) {
             return std::tie(lhs.primary, lhs.secondary) < std::tie(rhs.primary, rhs.secondary);
         });
 
-        QList<ToolBarLayoutEntry> layout;
+        QStringList layout;
         for (const auto& position : std::as_const(positions)) {
             if (position.toolbarBreak) {
-                layout << makeToolBarLayoutEntry(QStringLiteral("Break"));
+                layout << QStringLiteral("Break");
             }
-            layout << makeToolBarLayoutEntry(position.id);
+            layout << position.key;
         }
-        return layout;
+        group->SetASCII(key, layout.join(QLatin1Char(',')).toUtf8().constData());
     };
 
-    writeToolBarLayoutState(
-        group,
-        {
-            .saved = true,
-            .top = save(top),
-            .left = save(left),
-            .right = save(right),
-            .bottom = save(bottom),
-        }
-    );
+    group->SetBool("Saved", true);
+    save("Top", top);
+    save("Left", left);
+    save("Right", right);
+    save("Bottom", bottom);
+    save(ViewTopLayoutKey, viewTop);
+    save(ViewLeftLayoutKey, viewLeft);
+    save(ViewRightLayoutKey, viewRight);
+    save(ViewBottomLayoutKey, viewBottom);
 }
 
-void ToolBarManager::restoreWorkbenchToolBarLayout(const ToolbarScopeId& context) const
+void ToolBarManager::restoreWorkbenchToolBarLayout(const QString& context) const
 {
     auto group = workbenchLayoutGroup(context);
-    const auto layoutState = readToolBarLayoutState(group);
-    if (!group || !layoutState.saved) {
+    if (!group || !group->GetBool("Saved", false)) {
         return;
     }
 
@@ -1539,7 +2311,7 @@ void ToolBarManager::restoreWorkbenchToolBarLayout(const ToolbarScopeId& context
     QList<ToolBar*> currentToolbars = toolBars();
     for (auto toolbar : std::as_const(currentToolbars)) {
         auto key = toolBarPersistenceKey(toolbar);
-        if (key.isEmpty() || toolbar->isFloating() || toolbar->parentWidget() != getMainWindow()) {
+        if (key.isEmpty() || toolbar->isFloating() || toolBarHostWindow(toolbar) != getMainWindow()) {
             continue;
         }
 
@@ -1553,15 +2325,17 @@ void ToolBarManager::restoreWorkbenchToolBarLayout(const ToolbarScopeId& context
         return;
     }
 
-    auto top = remapLegacyLayoutEntries(layoutState.top, legacyAliases);
-    auto left = remapLegacyLayoutEntries(layoutState.left, legacyAliases);
-    auto right = remapLegacyLayoutEntries(layoutState.right, legacyAliases);
-    auto bottom = remapLegacyLayoutEntries(layoutState.bottom, legacyAliases);
+    QStringList top = remapLegacyLayoutEntries(splitLayoutState(group->GetASCII("Top")), legacyAliases);
+    QStringList left
+        = remapLegacyLayoutEntries(splitLayoutState(group->GetASCII("Left")), legacyAliases);
+    QStringList right
+        = remapLegacyLayoutEntries(splitLayoutState(group->GetASCII("Right")), legacyAliases);
+    QStringList bottom
+        = remapLegacyLayoutEntries(splitLayoutState(group->GetASCII("Bottom")), legacyAliases);
 
     QSet<QString> knownKeys;
-    auto rememberKeys = [&knownKeys](const QList<ToolBarLayoutEntry>& layout) {
-        for (const auto& entry : layout) {
-            const auto key = layoutEntryKey(entry);
+    auto rememberKeys = [&knownKeys](const QStringList& layout) {
+        for (const auto& key : layout) {
             if (key != QStringLiteral("Break")) {
                 knownKeys.insert(key);
             }
@@ -1572,29 +2346,26 @@ void ToolBarManager::restoreWorkbenchToolBarLayout(const ToolbarScopeId& context
     rememberKeys(right);
     rememberKeys(bottom);
 
-    auto appendMissing = [&mainWindowToolbars,
-                          &knownKeys,
-                          this](QList<ToolBarLayoutEntry>& layout, Qt::ToolBarArea area) {
-        for (auto toolbar : toolBars()) {
-            auto key = toolBarPersistenceKey(toolbar);
-            if (!mainWindowToolbars.contains(key) || knownKeys.contains(key)) {
-                continue;
+    auto appendMissing =
+        [&mainWindowToolbars, &knownKeys, this](QStringList& layout, Qt::ToolBarArea area) {
+            for (auto toolbar : toolBars()) {
+                auto key = toolBarPersistenceKey(toolbar);
+                if (!mainWindowToolbars.contains(key) || knownKeys.contains(key)) {
+                    continue;
+                }
+                if (getMainWindow()->toolBarArea(toolbar) == area) {
+                    layout << key;
+                    knownKeys.insert(key);
+                }
             }
-            if (getMainWindow()->toolBarArea(toolbar) == area) {
-                layout << makeToolBarLayoutEntry(toolBarPersistenceId(toolbar));
-                knownKeys.insert(key);
-            }
-        }
-    };
+        };
     appendMissing(top, Qt::TopToolBarArea);
     appendMissing(left, Qt::LeftToolBarArea);
     appendMissing(right, Qt::RightToolBarArea);
     appendMissing(bottom, Qt::BottomToolBarArea);
 
-    auto restore = [&mainWindowToolbars,
-                    this](const QList<ToolBarLayoutEntry>& layout, Qt::ToolBarArea area) {
-        for (const auto& entry : layout) {
-            const auto key = layoutEntryKey(entry);
+    auto restore = [&mainWindowToolbars, this](const QStringList& layout, Qt::ToolBarArea area) {
+        for (const auto& key : layout) {
             if (key == QStringLiteral("Break")) {
                 getMainWindow()->addToolBarBreak(area);
                 continue;
@@ -1623,6 +2394,9 @@ void ToolBarManager::resetMainWindowToolBarLayout() const
         if (!toolbar) {
             continue;
         }
+        if (toolBarHost(toolbar) != ToolBarItem::Host::MainWindow) {
+            continue;
+        }
 
         auto parent = toolbar->parentWidget();
         if (parent == statusBarAreaWidget || parent == menuBarLeftAreaWidget
@@ -1639,6 +2413,324 @@ void ToolBarManager::resetMainWindowToolBarLayout() const
     }
 }
 
+void ToolBarManager::clearViewToolBarLayout(const QString& context) const
+{
+    auto group = workbenchLayoutGroup(context);
+    if (!group) {
+        return;
+    }
+
+    group->SetASCII(ViewTopLayoutKey, "");
+    group->SetASCII(ViewLeftLayoutKey, "");
+    group->SetASCII(ViewRightLayoutKey, "");
+    group->SetASCII(ViewBottomLayoutKey, "");
+
+    const auto clearEntriesForViewToolBars = [this](const ParameterGrp::handle& targetGroup) {
+        if (!targetGroup) {
+            return;
+        }
+
+        for (auto toolbar : toolBars()) {
+            if (!toolbar) {
+                continue;
+            }
+            if (defaultToolBarHost(toolbar) != ToolBarItem::Host::ActiveView
+                && toolBarHost(toolbar) != ToolBarItem::Host::ActiveView) {
+                continue;
+            }
+
+            const auto key = toolBarPersistenceKey(toolbar);
+            if (!key.isEmpty()) {
+                targetGroup->RemoveASCII(key.toUtf8().constData());
+            }
+        }
+    };
+
+    clearEntriesForViewToolBars(hostedToolBarHostGroup(context));
+    clearEntriesForViewToolBars(viewToolBarPresentationGroup(context));
+    clearEntriesForViewToolBars(viewOverlayEdgeGroup(context));
+}
+
+void ToolBarManager::resetViewHostedToolBarLayout(QMainWindow* hostWindow) const
+{
+    if (!hostWindow) {
+        return;
+    }
+
+    QList<ToolBar*> toolbars = toolBars();
+    for (const auto& key : toolbarKeys) {
+        auto toolbar = findToolBar(toolbars, key);
+        if (!toolbar || toolBarHost(toolbar) != ToolBarItem::Host::ActiveView
+            || toolBarHostWindow(toolbar) != hostWindow) {
+            continue;
+        }
+
+        if (toolBarViewPresentation(toolbar) == ToolBarItem::ViewPresentation::CenteredOverlay) {
+            setToolBarViewOverlayEdge(toolbar, defaultToolBarViewOverlayEdge(toolbar));
+            if (auto overlayHost = viewToolBarOverlayHost(qobject_cast<MDIView*>(hostWindow))) {
+                overlayHost->attachToolBar(toolbar, toolBarViewOverlayEdge(toolbar));
+            }
+            continue;
+        }
+        if (toolBarViewPresentation(toolbar) != ToolBarItem::ViewPresentation::Docked) {
+            continue;
+        }
+
+        const bool visible = toolbar->isVisible();
+        hostWindow->removeToolBarBreak(toolbar);
+        hostWindow->removeToolBar(toolbar);
+        toolbar->setOrientation(Qt::Horizontal);
+        hostWindow->addToolBar(Qt::TopToolBarArea, toolbar);
+        toolbar->setVisible(visible);
+    }
+}
+
+ToolBarItem::Host ToolBarManager::resolvedHostedToolBarHost(
+    const QToolBar* toolbar,
+    const QString& context,
+    const QString& fallbackContext
+) const
+{
+    if (!toolbar) {
+        return ToolBarItem::Host::MainWindow;
+    }
+
+    const auto key = toolBarPersistenceKey(toolbar);
+    const auto lookup = [&key](const ParameterGrp::handle& group, ToolBarItem::Host* host) {
+        if (!group || key.isEmpty()) {
+            return false;
+        }
+
+        const auto value = QString::fromUtf8(group->GetASCII(key.toUtf8().constData()).c_str());
+        if (value.isEmpty()) {
+            return false;
+        }
+
+        *host = parseToolBarHost(value);
+        return true;
+    };
+
+    ToolBarItem::Host host;
+    if (toolBarScopeId(toolbar).scope == Scope::Shared || context.isEmpty()) {
+        if (lookup(globalHostedToolBarHostGroup(), &host)) {
+            return host;
+        }
+        return defaultToolBarHost(toolbar);
+    }
+
+    if (lookup(hostedToolBarHostGroup(context), &host)) {
+        return host;
+    }
+    if (!fallbackContext.isEmpty() && lookup(hostedToolBarHostGroup(fallbackContext), &host)) {
+        return host;
+    }
+    if (lookup(globalHostedToolBarHostGroup(), &host)) {
+        return host;
+    }
+
+    return defaultToolBarHost(toolbar);
+}
+
+ToolBarItem::ViewPresentation ToolBarManager::resolvedViewToolBarPresentation(
+    const QToolBar* toolbar,
+    const QString& context,
+    const QString& fallbackContext
+) const
+{
+    if (!toolbar) {
+        return ToolBarItem::ViewPresentation::Docked;
+    }
+
+    const auto key = toolBarPersistenceKey(toolbar);
+    const auto lookup =
+        [&key](const ParameterGrp::handle& group, ToolBarItem::ViewPresentation* presentation) {
+            if (!group || key.isEmpty()) {
+                return false;
+            }
+
+            const auto value = QString::fromUtf8(group->GetASCII(key.toUtf8().constData()).c_str());
+            if (value.isEmpty()) {
+                return false;
+            }
+
+            *presentation = parseToolBarViewPresentation(value);
+            return true;
+        };
+
+    ToolBarItem::ViewPresentation presentation;
+    if (toolBarScopeId(toolbar).scope == Scope::Shared || context.isEmpty()) {
+        if (lookup(globalViewToolBarPresentationGroup(), &presentation)) {
+            return presentation;
+        }
+        return defaultToolBarViewPresentation(toolbar);
+    }
+
+    if (lookup(viewToolBarPresentationGroup(context), &presentation)) {
+        return presentation;
+    }
+    if (!fallbackContext.isEmpty()
+        && lookup(viewToolBarPresentationGroup(fallbackContext), &presentation)) {
+        return presentation;
+    }
+    if (lookup(globalViewToolBarPresentationGroup(), &presentation)) {
+        return presentation;
+    }
+
+    return defaultToolBarViewPresentation(toolbar);
+}
+
+void ToolBarManager::persistHostedToolBarHost(
+    const QToolBar* toolbar,
+    const QString& context,
+    ToolBarItem::Host host
+) const
+{
+    const auto key = toolBarPersistenceKey(toolbar);
+    if (key.isEmpty()) {
+        return;
+    }
+
+    ParameterGrp::handle group;
+    if (toolBarScopeId(toolbar).scope == Scope::Shared || context.isEmpty()) {
+        group = globalHostedToolBarHostGroup();
+    }
+    else {
+        group = hostedToolBarHostGroup(context);
+    }
+    if (!group) {
+        return;
+    }
+
+    group->SetASCII(key.toUtf8().constData(), toolBarHostName(host).toUtf8().constData());
+}
+
+void ToolBarManager::persistViewToolBarPresentation(
+    const QToolBar* toolbar,
+    const QString& context,
+    ToolBarItem::ViewPresentation presentation
+) const
+{
+    const auto key = toolBarPersistenceKey(toolbar);
+    if (key.isEmpty()) {
+        return;
+    }
+
+    ParameterGrp::handle group;
+    if (toolBarScopeId(toolbar).scope == Scope::Shared || context.isEmpty()) {
+        group = globalViewToolBarPresentationGroup();
+    }
+    else {
+        group = viewToolBarPresentationGroup(context);
+    }
+    if (!group) {
+        return;
+    }
+
+    group->SetASCII(
+        key.toUtf8().constData(),
+        toolBarViewPresentationName(presentation).toUtf8().constData()
+    );
+}
+
+ToolBarItem::ViewOverlayEdge ToolBarManager::resolvedViewOverlayEdge(
+    const QToolBar* toolbar,
+    const QString& context,
+    const QString& fallbackContext
+) const
+{
+    if (!toolbar) {
+        return ToolBarItem::ViewOverlayEdge::Top;
+    }
+
+    const auto key = toolBarPersistenceKey(toolbar);
+    const auto lookup =
+        [this, &key](const ParameterGrp::handle& group, ToolBarItem::ViewOverlayEdge* edge) {
+            if (!group || key.isEmpty()) {
+                return false;
+            }
+
+            const auto value = QString::fromUtf8(group->GetASCII(key.toUtf8().constData()).c_str());
+            if (value.isEmpty()) {
+                return false;
+            }
+
+            *edge = parseToolBarViewOverlayEdge(value);
+            return true;
+        };
+    const auto lookupContext =
+        [this, &lookup, &key](const QString& candidateContext, ToolBarItem::ViewOverlayEdge* edge) {
+            if (candidateContext.isEmpty() || key.isEmpty()) {
+                return false;
+            }
+
+            auto group = viewOverlayEdgeGroup(candidateContext);
+            return lookup(group, edge);
+        };
+
+    ToolBarItem::ViewOverlayEdge edge;
+    switch (toolBarViewOverlayEdgePersistence(toolbar)) {
+        case ToolBarItem::ViewOverlayEdgePersistence::Shared:
+            if (lookup(sharedViewOverlayEdgeGroup(), &edge)) {
+                return edge;
+            }
+            return defaultToolBarViewOverlayEdge(toolbar);
+        case ToolBarItem::ViewOverlayEdgePersistence::Contextual:
+            break;
+        case ToolBarItem::ViewOverlayEdgePersistence::ByScope:
+            if (toolBarScopeId(toolbar).scope == Scope::Shared) {
+                if (lookup(sharedViewOverlayEdgeGroup(), &edge)) {
+                    return edge;
+                }
+                return defaultToolBarViewOverlayEdge(toolbar);
+            }
+            break;
+    }
+
+    if (lookupContext(context, &edge)) {
+        return edge;
+    }
+    if (lookupContext(fallbackContext, &edge)) {
+        return edge;
+    }
+
+    return defaultToolBarViewOverlayEdge(toolbar);
+}
+
+void ToolBarManager::persistViewOverlayEdge(
+    const QToolBar* toolbar,
+    const QString& context,
+    ToolBarItem::ViewOverlayEdge edge
+) const
+{
+    const auto key = toolBarPersistenceKey(toolbar);
+    if (key.isEmpty()) {
+        return;
+    }
+
+    ParameterGrp::handle group;
+    switch (toolBarViewOverlayEdgePersistence(toolbar)) {
+        case ToolBarItem::ViewOverlayEdgePersistence::Shared:
+            group = sharedViewOverlayEdgeGroup();
+            break;
+        case ToolBarItem::ViewOverlayEdgePersistence::Contextual:
+            group = viewOverlayEdgeGroup(context);
+            break;
+        case ToolBarItem::ViewOverlayEdgePersistence::ByScope:
+            if (toolBarScopeId(toolbar).scope == Scope::Shared) {
+                group = sharedViewOverlayEdgeGroup();
+            }
+            else {
+                group = viewOverlayEdgeGroup(context);
+            }
+            break;
+    }
+    if (!group) {
+        return;
+    }
+
+    group->SetASCII(key.toUtf8().constData(), toolBarViewOverlayEdgeName(edge).toUtf8().constData());
+}
+
 bool ToolBarManager::recommendedToolBarVisibility(const QToolBar* toolbar) const
 {
     switch (toolBarTier(toolbar)) {
@@ -1651,6 +2743,29 @@ bool ToolBarManager::recommendedToolBarVisibility(const QToolBar* toolbar) const
     }
 
     return true;
+}
+
+static bool defaultToolBarVisibility(const QToolBar* toolbar)
+{
+    if (!toolbar) {
+        return false;
+    }
+
+    auto* action = toolbar->toggleViewAction();
+    const auto property = action ? action->property("DefaultVisibility") : QVariant();
+    const auto policy = property.isNull()
+        ? ToolBarItem::DefaultVisibility::Visible
+        : static_cast<ToolBarItem::DefaultVisibility>(property.toInt());
+
+    switch (policy) {
+        case ToolBarItem::DefaultVisibility::Visible:
+            return true;
+        case ToolBarItem::DefaultVisibility::Hidden:
+        case ToolBarItem::DefaultVisibility::Unavailable:
+            return false;
+    }
+
+    return false;
 }
 
 void ToolBarManager::applyRecommendedToolBarPreferences()
@@ -1690,6 +2805,103 @@ void ToolBarManager::applyRecommendedToolBarVisibility()
     }
 }
 
+void ToolBarManager::applyRecommendedViewToolBarPreferences()
+{
+    Base::ConnectionBlocker block(paramHandlers.connection());
+    QList<ToolBar*> toolbars = toolBars();
+    for (const auto& key : toolbarKeys) {
+        auto toolbar = findToolBar(toolbars, key);
+        if (!toolbar || toolBarHost(toolbar) != ToolBarItem::Host::ActiveView) {
+            continue;
+        }
+
+        const auto toolbarKey = toolBarPersistenceKey(toolbar);
+        if (toolbarKey.isEmpty()) {
+            continue;
+        }
+
+        hPref->SetBool(toolbarKey.toUtf8().constData(), defaultToolBarVisibility(toolbar));
+    }
+}
+
+void ToolBarManager::applyRecommendedViewToolBarVisibility()
+{
+    QList<ToolBar*> toolbars = toolBars();
+    for (const auto& key : toolbarKeys) {
+        auto toolbar = findToolBar(toolbars, key);
+        if (!toolbar || toolBarHost(toolbar) != ToolBarItem::Host::ActiveView) {
+            continue;
+        }
+
+        auto action = toolbar->toggleViewAction();
+        if ((!action || !action->isVisible()) && !toolbar->isVisible()) {
+            continue;
+        }
+
+        toolbar->setVisible(defaultToolBarVisibility(toolbar));
+    }
+}
+
+void ToolBarManager::setHostedToolBarHost(QToolBar* toolbar, ToolBarItem::Host host)
+{
+    if (!toolbar) {
+        return;
+    }
+
+    setToolBarHost(toolbar, host);
+
+    const auto context = effectiveToolbarLayoutContext();
+    persistHostedToolBarHost(toolbar, context, host);
+
+    if (host == ToolBarItem::Host::ActiveView) {
+        refreshViewHostedToolBars();
+        return;
+    }
+
+    if (host == ToolBarItem::Host::Panel) {
+        refreshPanelHostedToolBars();
+        return;
+    }
+
+    const bool visible = toolbar->isVisible();
+    if (auto parentLayout = toolbar->parentWidget() ? toolbar->parentWidget()->layout() : nullptr) {
+        parentLayout->removeWidget(toolbar);
+    }
+    if (auto hostWindow = toolBarHostWindow(toolbar); hostWindow && hostWindow != getMainWindow()) {
+        hostWindow->removeToolBarBreak(toolbar);
+        hostWindow->removeToolBar(toolbar);
+    }
+
+    toolbar->setOrientation(Qt::Horizontal);
+    getMainWindow()->addToolBar(Qt::TopToolBarArea, toolbar);
+    toolbar->setVisible(visible);
+
+    const auto layoutContext = effectiveToolbarLayoutContext();
+    if (!layoutContext.isEmpty() && hasSavedWorkbenchToolBarLayout(layoutContext)) {
+        restoreWorkbenchToolBarLayout(layoutContext);
+    }
+    setToolBarIconSize(toolbar);
+}
+
+void ToolBarManager::setViewToolBarPresentation(
+    QToolBar* toolbar,
+    ToolBarItem::ViewPresentation presentation
+)
+{
+    if (!toolbar) {
+        return;
+    }
+
+    setToolBarViewPresentation(toolbar, presentation);
+
+    const auto context = effectiveToolbarLayoutContext();
+    persistViewToolBarPresentation(toolbar, context, presentation);
+
+    if (toolBarHost(toolbar) == ToolBarItem::Host::ActiveView) {
+        refreshViewHostedToolBars();
+    }
+}
+
 ToolBarArea ToolBarManager::toolBarArea(QWidget* widget) const
 {
     if (auto toolBar = qobject_cast<QToolBar*>(widget)) {
@@ -1697,7 +2909,8 @@ ToolBarArea ToolBarManager::toolBarArea(QWidget* widget) const
             return ToolBarArea::NoToolBarArea;
         }
 
-        auto qtToolBarArea = getMainWindow()->toolBarArea(toolBar);
+        auto hostWindow = qobject_cast<QMainWindow*>(toolBar->parentWidget());
+        auto qtToolBarArea = hostWindow ? hostWindow->toolBarArea(toolBar) : Qt::NoToolBarArea;
         switch (qtToolBarArea) {
             case Qt::LeftToolBarArea:
                 return ToolBarArea::LeftToolBarArea;
@@ -1847,7 +3060,19 @@ void ToolBarManager::setup(ToolBarItem* toolBarItems)
             toolbar->setWindowTitle(QApplication::translate("Workbench", it->command().c_str()));
             toolbar->setObjectName(name);
             setToolBarPersistenceKey(toolbar, key);
+            setDefaultToolBarHost(toolbar, toolBarHost(it));
             setToolBarTier(toolbar, toolBarTier(it));
+            setToolBarHost(toolbar, toolBarHost(it));
+            setToolBarPanelRole(toolbar, toolBarPanelRole(it));
+            setDefaultToolBarViewPresentation(toolbar, toolBarViewPresentation(it));
+            setToolBarViewPresentation(toolbar, toolBarViewPresentation(it));
+            setDefaultToolBarViewOverlayEdge(toolbar, toolBarViewOverlayEdge(it));
+            setToolBarViewOverlayEdge(toolbar, toolBarViewOverlayEdge(it));
+            setToolBarViewOverlayEdgePersistence(toolbar, toolBarViewOverlayEdgePersistence(it));
+            toolbar->setProperty(
+                ToolBarViewHostRequirementProperty,
+                static_cast<int>(toolBarViewHostRequirement(it))
+            );
 
             getMainWindow()->addToolBar(toolbar);
             setToolBarIconSize(toolbar);
@@ -1862,7 +3087,19 @@ void ToolBarManager::setup(ToolBarItem* toolBarItems)
         }
         else {
             setToolBarPersistenceKey(toolbar, key);
+            setDefaultToolBarHost(toolbar, toolBarHost(it));
             setToolBarTier(toolbar, toolBarTier(it));
+            setToolBarHost(toolbar, toolBarHost(it));
+            setToolBarPanelRole(toolbar, toolBarPanelRole(it));
+            setDefaultToolBarViewPresentation(toolbar, toolBarViewPresentation(it));
+            setToolBarViewPresentation(toolbar, toolBarViewPresentation(it));
+            setDefaultToolBarViewOverlayEdge(toolbar, toolBarViewOverlayEdge(it));
+            setToolBarViewOverlayEdge(toolbar, toolBarViewOverlayEdge(it));
+            setToolBarViewOverlayEdgePersistence(toolbar, toolBarViewOverlayEdgePersistence(it));
+            toolbar->setProperty(
+                ToolBarViewHostRequirementProperty,
+                static_cast<int>(toolBarViewHostRequirement(it))
+            );
             int index = toolbars.indexOf(toolbar);
             toolbars.removeAt(index);
         }
@@ -1898,13 +3135,14 @@ void ToolBarManager::setup(ToolBarItem* toolBarItems)
 
         // setup the toolbar
         setup(it, toolbar);
+        toolbar->setVisible(visible);
         auto actions = toolbar->actions();
         for (auto action : actions) {
             actionWidget->addAction(action);
         }
 
         // try to add some breaks to avoid to have all toolbars in one line
-        if (toolbar_added) {
+        if (toolbar_added && toolBarHost(toolbar) == ToolBarItem::Host::MainWindow) {
             if (top_width > 0 && getMainWindow()->toolBarBreak(toolbar)) {
                 top_width = 0;
             }
@@ -1919,6 +3157,9 @@ void ToolBarManager::setup(ToolBarItem* toolBarItems)
             }
         }
     }
+
+    refreshHostedToolBars();
+
     // hide all unneeded toolbars
     for (QToolBar* it : std::as_const(toolbars)) {
         // make sure that the main window has the focus when hiding the toolbar with
@@ -2029,8 +3270,9 @@ void ToolBarManager::saveState() const
 
 void ToolBarManager::restoreState()
 {
-    const auto previousLayoutContext = toolbarLayoutContext;
-    const auto layoutContext = effectiveToolbarLayoutContext();
+    const QString previousLayoutContext = toolbarLayoutContext;
+    const QString layoutContext = effectiveToolbarLayoutContext();
+    const QString activeContext = activeToolbarLayoutContext();
     updateLayoutParameters(layoutContext);
     initializeUnsavedToolbarLayoutContext(layoutContext);
     const auto statusBarParams = toolbarAreaRestoreParameters(hStatusBar, hGlobalStatusBar);
@@ -2062,9 +3304,17 @@ void ToolBarManager::restoreState()
     std::map<int, QToolBar*> mbRightToolBars;
     std::map<int, QToolBar*> mbLeftToolBars;
     QList<ToolBar*> toolbars = toolBars();
+    const auto fallbackContext = layoutContextId(layoutContext).scope == Scope::Contextual
+        ? activeContext
+        : QString();
     for (const QString& it : toolbarKeys) {
         QToolBar* toolbar = findToolBar(toolbars, it);
         if (toolbar) {
+            setToolBarHost(toolbar, resolvedHostedToolBarHost(toolbar, layoutContext, fallbackContext));
+            setToolBarViewPresentation(
+                toolbar,
+                resolvedViewToolBarPresentation(toolbar, layoutContext, fallbackContext)
+            );
             if (getToolbarPolicy(toolbar) != ToolBarItem::DefaultVisibility::Unavailable) {
                 bool visible = toolbar->isVisible();
                 if (lookupToolBarValue(visibilityValues, {}, toolbar, &visible)) {
@@ -2090,7 +3340,20 @@ void ToolBarManager::restoreState()
                 mbRightToolBars[idx] = toolbar;
                 continue;
             }
-            if (toolbar->parentWidget() != getMainWindow()) {
+            if (toolBarHost(toolbar) == ToolBarItem::Host::ActiveView) {
+                if (toolBarViewPresentation(toolbar)
+                    == ToolBarItem::ViewPresentation::CenteredOverlay) {
+                    setToolBarViewOverlayEdge(
+                        toolbar,
+                        resolvedViewOverlayEdge(toolbar, layoutContext, fallbackContext)
+                    );
+                }
+                continue;
+            }
+            if (toolBarHost(toolbar) == ToolBarItem::Host::Panel) {
+                continue;
+            }
+            if (toolBarHostWindow(toolbar) != getMainWindow()) {
                 getMainWindow()->addToolBar(toolbar);
             }
         }
@@ -2102,12 +3365,13 @@ void ToolBarManager::restoreState()
     statusBarAreaWidget->restoreState(sbToolBars, statusBarParams);
     menuBarRightAreaWidget->restoreState(mbRightToolBars, menuBarRightParams);
     menuBarLeftAreaWidget->restoreState(mbLeftToolBars, menuBarLeftParams);
+    refreshHostedToolBars();
 
     toolbarLayoutContext = layoutContext;
     if (previousLayoutContext != layoutContext) {
         Q_EMIT toolbarLayoutContextChanged();
     }
-    Q_EMIT toolbarLayoutRestored(makeToolBarLayoutContext(layoutContext));
+    Q_EMIT toolbarLayoutRestored(layoutContext);
 }
 
 bool ToolBarManager::addToolBarToArea(QObject* source, QMouseEvent* ev)
@@ -2244,6 +3508,22 @@ bool ToolBarManager::addToolBarToArea(QObject* source, QMouseEvent* ev)
 bool ToolBarManager::showContextMenu(QObject* source)
 {
     QMenu menu;
+    if (auto toolbar = qobject_cast<QToolBar*>(source)) {
+        populateSingleToolBarMenu(&menu, toolbar);
+        if (toolBarHost(toolbar) == ToolBarItem::Host::ActiveView) {
+            addCurrentViewToolbarLayoutActions(&menu);
+        }
+        else {
+            addCurrentToolbarLayoutActions(&menu);
+        }
+        if (menu.isEmpty()) {
+            return false;
+        }
+
+        menu.exec(QCursor::pos());
+        return true;
+    }
+
     QLayout* layout = nullptr;
     ToolBarAreaWidget* area = nullptr;
     if (getMainWindow()->statusBar() == source) {
@@ -2291,6 +3571,25 @@ void ToolBarManager::populateToolBarMenu(QMenu* menu)
 
     addToolBarActionsByScope(menu, allToolBars);
     addCurrentToolbarLayoutActions(menu);
+}
+
+bool ToolBarManager::populateViewToolBarMenu(QMenu* menu)
+{
+    if (!menu) {
+        return false;
+    }
+
+    QList<QToolBar*> allToolBars;
+    for (auto toolbar : toolBars()) {
+        allToolBars.push_back(toolbar);
+    }
+
+    const auto viewActions = viewToolBarMenuActions(menu, allToolBars);
+    for (auto action : viewActions) {
+        menu->addAction(action);
+    }
+    addCurrentViewToolbarLayoutActions(menu);
+    return !menu->isEmpty();
 }
 
 QLayout* ToolBarManager::findLayoutOfObject(QObject* source, QWidget* area) const
@@ -2366,12 +3665,12 @@ void ToolBarManager::addToolBarActionsByScope(QMenu* menu, const QList<QToolBar*
         return;
     }
 
+    const auto viewActions = viewToolBarMenuActions(menu, toolbars);
+    const auto panelActions = panelToolBarMenuActions(menu, toolbars);
     QList<QAction*> sharedActions;
     QList<QAction*> workbenchActions;
     QList<QAction*> contextualActions;
     QList<QAction*> legacyActions;
-    const auto toggleLabel = QApplication::translate("MainWindow", "Toggles this toolbar");
-    const auto tierLabelPrefix = QApplication::translate("MainWindow", "Tier: %1");
 
     for (auto toolbar : toolbars) {
         if (!toolbar) {
@@ -2379,23 +3678,30 @@ void ToolBarManager::addToolBarActionsByScope(QMenu* menu, const QList<QToolBar*
         }
 
         auto action = toolbar->toggleViewAction();
-        if ((!action->isVisible() && !toolbar->isVisible()) || action->text().isEmpty()) {
+        if (action->text().isEmpty()) {
+            continue;
+        }
+        if (toolBarHost(toolbar) == ToolBarItem::Host::ActiveView
+            || toolBarHost(toolbar) == ToolBarItem::Host::Panel) {
+            continue;
+        }
+        if (!action->isVisible() && !toolbar->isVisible()) {
             continue;
         }
 
-        auto* menuAction = new QAction(action->icon(), decoratedToolBarActionText(toolbar), menu);
-        menuAction->setCheckable(true);
-        menuAction->setChecked(toolbar->isVisible());
-        menuAction->setEnabled(action->isEnabled());
-
+        const auto toggleLabel = QApplication::translate("MainWindow", "Toggles this toolbar");
+        const auto tierLabelPrefix = QApplication::translate("MainWindow", "Tier: %1");
         const auto tierLabel = toolBarTierLabel(toolbar);
         const auto toolTip = tierLabel.isEmpty()
             ? toggleLabel
             : QStringLiteral("%1. %2").arg(toggleLabel, tierLabelPrefix.arg(tierLabel));
+        auto* menuAction = toolBarMenuAction(menu, toolbar);
+        if (!menuAction) {
+            continue;
+        }
         menuAction->setToolTip(toolTip);
         menuAction->setStatusTip(toolTip);
         menuAction->setWhatsThis(toolTip);
-        QObject::connect(menuAction, &QAction::triggered, action, &QAction::trigger);
 
         switch (toolBarScopeId(toolbar).scope) {
             case Scope::Shared:
@@ -2430,10 +3736,241 @@ void ToolBarManager::addToolBarActionsByScope(QMenu* menu, const QList<QToolBar*
         hasSection = true;
     };
 
+    addToolbarSection(QApplication::translate("MainWindow", "View Toolbars"), viewActions);
+    addToolbarSection(QApplication::translate("MainWindow", "Panel Toolbars"), panelActions);
     addToolbarSection(QApplication::translate("MainWindow", "Shared Toolbars"), sharedActions);
     addToolbarSection(QApplication::translate("MainWindow", "Workbench Toolbars"), workbenchActions);
     addToolbarSection(QApplication::translate("MainWindow", "Contextual Toolbars"), contextualActions);
     addToolbarSection(QApplication::translate("MainWindow", "Other Toolbars"), legacyActions);
+}
+
+QList<QAction*> ToolBarManager::panelToolBarMenuActions(QMenu* menu, const QList<QToolBar*>& toolbars) const
+{
+    QList<QAction*> panelActions;
+    if (!menu) {
+        return panelActions;
+    }
+
+    const auto toggleLabel = QApplication::translate("MainWindow", "Toggles this toolbar");
+    const auto tierLabelPrefix = QApplication::translate("MainWindow", "Tier: %1");
+
+    for (auto toolbar : toolbars) {
+        if (!toolbar || toolBarHost(toolbar) != ToolBarItem::Host::Panel) {
+            continue;
+        }
+
+        auto action = toolbar->toggleViewAction();
+        const auto role = toolBarPanelRole(toolbar);
+        const bool compatible
+            = activePanelSupportsToolBarHost(toolbar, activePanelToolBarHostPanel(role));
+        if (!action || action->text().isEmpty()) {
+            continue;
+        }
+        if (!compatible && !toolbar->isVisible()) {
+            continue;
+        }
+        if (auto* menuAction = toolBarMenuAction(menu, toolbar)) {
+            const auto tierLabel = toolBarTierLabel(toolbar);
+            const auto toolTip = tierLabel.isEmpty()
+                ? toggleLabel
+                : QStringLiteral("%1. %2").arg(toggleLabel, tierLabelPrefix.arg(tierLabel));
+            menuAction->setToolTip(toolTip);
+            menuAction->setStatusTip(toolTip);
+            menuAction->setWhatsThis(toolTip);
+            menuAction->setEnabled(compatible);
+            panelActions.push_back(menuAction);
+        }
+    }
+
+    return panelActions;
+}
+
+QList<QAction*> ToolBarManager::viewToolBarMenuActions(QMenu* menu, const QList<QToolBar*>& toolbars) const
+{
+    QList<QAction*> viewActions;
+    if (!menu) {
+        return viewActions;
+    }
+
+    auto activeView = activeViewToolBarHostWindow();
+    const auto toggleLabel = QApplication::translate("MainWindow", "Toggles this toolbar");
+    const auto tierLabelPrefix = QApplication::translate("MainWindow", "Tier: %1");
+
+    for (auto toolbar : toolbars) {
+        if (!toolbar || toolBarHost(toolbar) != ToolBarItem::Host::ActiveView) {
+            continue;
+        }
+
+        auto action = toolbar->toggleViewAction();
+        if (!action || action->text().isEmpty()
+            || !activeViewSupportsToolBarHost(toolbar, activeView)) {
+            continue;
+        }
+        if (auto* menuAction = toolBarMenuAction(menu, toolbar)) {
+            const auto tierLabel = toolBarTierLabel(toolbar);
+            const auto toolTip = tierLabel.isEmpty()
+                ? toggleLabel
+                : QStringLiteral("%1. %2").arg(toggleLabel, tierLabelPrefix.arg(tierLabel));
+            menuAction->setToolTip(toolTip);
+            menuAction->setStatusTip(toolTip);
+            menuAction->setWhatsThis(toolTip);
+            viewActions.push_back(menuAction);
+        }
+    }
+
+    return viewActions;
+}
+
+QAction* ToolBarManager::toolBarMenuAction(QMenu* menu, QToolBar* toolbar) const
+{
+    if (!menu || !toolbar) {
+        return nullptr;
+    }
+
+    auto* toolbarMenu = new QMenu(decoratedToolBarActionText(toolbar), menu);
+    if (auto action = toolbar->toggleViewAction()) {
+        toolbarMenu->setIcon(action->icon());
+    }
+    populateSingleToolBarMenu(toolbarMenu, toolbar);
+
+    return toolbarMenu->menuAction();
+}
+
+void ToolBarManager::populateSingleToolBarMenu(QMenu* menu, QToolBar* toolbar) const
+{
+    if (!menu || !toolbar) {
+        return;
+    }
+
+    auto* action = toolbar->toggleViewAction();
+    if (!action || action->text().isEmpty()) {
+        return;
+    }
+
+    auto* manager = const_cast<ToolBarManager*>(this);
+    auto toggleToolbar = [this, toolbar](bool checked) {
+        if (toolBarHost(toolbar) == ToolBarItem::Host::ActiveView) {
+            auto hostWindow = activeViewToolBarHostWindow();
+            if (!activeViewSupportsToolBarHost(toolbar, hostWindow)) {
+                return;
+            }
+
+            if (hostWindow) {
+                if (toolBarViewPresentation(toolbar)
+                    == ToolBarItem::ViewPresentation::CenteredOverlay) {
+                    if (auto overlayHost = viewToolBarOverlayHost(hostWindow)) {
+                        overlayHost->attachToolBar(toolbar, toolBarViewOverlayEdge(toolbar));
+                    }
+                }
+                else if (toolBarHostWindow(toolbar) != hostWindow) {
+                    toolbar->setOrientation(Qt::Horizontal);
+                    moveToolBarPreservingVisibility(hostWindow, toolbar, Qt::TopToolBarArea);
+                }
+            }
+        }
+        else if (toolBarHost(toolbar) == ToolBarItem::Host::Panel) {
+            const auto role = toolBarPanelRole(toolbar);
+            auto panel = activePanelToolBarHostPanel(role);
+            if (!activePanelSupportsToolBarHost(toolbar, panel)) {
+                return;
+            }
+
+            if (auto host = panelToolBarHost(panel, role)) {
+                host->attachToolBar(toolbar);
+            }
+        }
+
+        toolbar->setVisible(checked);
+        const auto toolbarKey = toolBarPersistenceKey(toolbar);
+        if (!toolbarKey.isEmpty()) {
+            hPref->SetBool(toolbarKey.toUtf8().constData(), checked);
+        }
+    };
+
+    auto* showAction = menu->addAction(toolBarVisibilityMenuLabel());
+    showAction->setCheckable(true);
+    showAction->setChecked(toolbar->isVisible());
+    showAction->setEnabled(
+        (toolBarHost(toolbar) != ToolBarItem::Host::ActiveView
+         || activeViewSupportsToolBarHost(toolbar, activeViewToolBarHostWindow()))
+        && (toolBarHost(toolbar) != ToolBarItem::Host::Panel
+            || activePanelSupportsToolBarHost(
+                toolbar,
+                activePanelToolBarHostPanel(toolBarPanelRole(toolbar))
+            ))
+    );
+    QObject::connect(showAction, &QAction::triggered, this, toggleToolbar);
+
+    auto* moveMenu = menu->addMenu(toolBarMoveToMenuLabel());
+    auto* moveGroup = new QActionGroup(moveMenu);
+    moveGroup->setExclusive(true);
+
+    const auto activeView = activeViewToolBarHostWindow();
+    const auto panelRole = toolBarPanelRole(toolbar);
+    const auto activePanel = activePanelToolBarHostPanel(panelRole);
+    const bool canUseViewHost = activeViewSupportsToolBarHost(toolbar, activeView);
+    const bool canUsePanelHost = activePanelSupportsToolBarHost(toolbar, activePanel);
+    for (auto host :
+         {ToolBarItem::Host::MainWindow, ToolBarItem::Host::ActiveView, ToolBarItem::Host::Panel}) {
+        if (host == ToolBarItem::Host::Panel && panelRole == ToolBarItem::PanelRole::None) {
+            continue;
+        }
+
+        const auto label = host == ToolBarItem::Host::Panel ? toolBarPanelRoleLabel(panelRole)
+                                                            : toolBarHostLabel(host);
+        auto* hostAction = moveMenu->addAction(label);
+        hostAction->setCheckable(true);
+        hostAction->setChecked(toolBarHost(toolbar) == host);
+        hostAction->setEnabled(
+            (host != ToolBarItem::Host::ActiveView || canUseViewHost)
+            && (host != ToolBarItem::Host::Panel || canUsePanelHost)
+        );
+        moveGroup->addAction(hostAction);
+        QObject::connect(hostAction, &QAction::triggered, this, [manager, toolbar, host] {
+            manager->setHostedToolBarHost(toolbar, host);
+        });
+    }
+
+    if (toolBarHost(toolbar) == ToolBarItem::Host::ActiveView) {
+        auto* presentationMenu = menu->addMenu(toolBarPresentationMenuLabel());
+        auto* presentationGroup = new QActionGroup(presentationMenu);
+        presentationGroup->setExclusive(true);
+
+        for (auto presentation :
+             {ToolBarItem::ViewPresentation::Docked, ToolBarItem::ViewPresentation::CenteredOverlay}) {
+            auto* presentationAction = presentationMenu->addAction(
+                toolBarViewPresentationLabel(presentation)
+            );
+            presentationAction->setCheckable(true);
+            presentationAction->setChecked(toolBarViewPresentation(toolbar) == presentation);
+            presentationGroup->addAction(presentationAction);
+            QObject::connect(
+                presentationAction,
+                &QAction::triggered,
+                this,
+                [manager, toolbar, presentation] {
+                    manager->setViewToolBarPresentation(toolbar, presentation);
+                }
+            );
+        }
+
+        if (toolBarViewPresentation(toolbar) == ToolBarItem::ViewPresentation::CenteredOverlay) {
+            auto* positionMenu = menu->addMenu(toolBarViewOverlayPositionMenuLabel());
+            auto* positionGroup = new QActionGroup(positionMenu);
+            positionGroup->setExclusive(true);
+
+            for (auto edge :
+                 {ToolBarItem::ViewOverlayEdge::Top, ToolBarItem::ViewOverlayEdge::Bottom}) {
+                auto* edgeAction = positionMenu->addAction(toolBarViewOverlayEdgeLabel(edge));
+                edgeAction->setCheckable(true);
+                edgeAction->setChecked(toolBarViewOverlayEdge(toolbar) == edge);
+                positionGroup->addAction(edgeAction);
+                QObject::connect(edgeAction, &QAction::triggered, this, [this, toolbar, edge] {
+                    setViewOverlayEdge(toolbar, edge);
+                });
+            }
+        }
+    }
 }
 
 void ToolBarManager::addCurrentToolbarLayoutActions(QMenu* menu)
@@ -2446,7 +3983,8 @@ void ToolBarManager::addCurrentToolbarLayoutActions(QMenu* menu)
     const auto resetLabel = currentToolbarLayoutResetLabel();
     const auto recommendedResetLabel = currentRecommendedToolbarLayoutResetLabel();
     if (showRecommendedOnlyLabel.isEmpty() && resetLabel.isEmpty()
-        && recommendedResetLabel.isEmpty()) {
+        && recommendedResetLabel.isEmpty() && currentViewToolbarLayoutResetLabel().isEmpty()
+        && currentRecommendedViewToolbarLayoutResetLabel().isEmpty()) {
         return;
     }
 
@@ -2466,10 +4004,39 @@ void ToolBarManager::addCurrentToolbarLayoutActions(QMenu* menu)
         QObject::connect(resetAction, &QAction::triggered, [this] { resetCurrentToolbarLayout(); });
     }
 
+    addCurrentViewToolbarLayoutActions(menu);
+
     if (!recommendedResetLabel.isEmpty()) {
         auto recommendedResetAction = menu->addAction(recommendedResetLabel);
         QObject::connect(recommendedResetAction, &QAction::triggered, [this] {
             resetCurrentToolbarLayoutToRecommended();
+        });
+    }
+}
+
+void ToolBarManager::addCurrentViewToolbarLayoutActions(QMenu* menu)
+{
+    if (!menu) {
+        return;
+    }
+
+    const auto viewResetLabel = currentViewToolbarLayoutResetLabel();
+    const auto recommendedViewResetLabel = currentRecommendedViewToolbarLayoutResetLabel();
+    if (viewResetLabel.isEmpty() && recommendedViewResetLabel.isEmpty()) {
+        return;
+    }
+
+    if (!viewResetLabel.isEmpty()) {
+        auto viewResetAction = menu->addAction(viewResetLabel);
+        QObject::connect(viewResetAction, &QAction::triggered, [this] {
+            resetCurrentViewToolbarLayout();
+        });
+    }
+
+    if (!recommendedViewResetLabel.isEmpty()) {
+        auto recommendedViewResetAction = menu->addAction(recommendedViewResetLabel);
+        QObject::connect(recommendedViewResetAction, &QAction::triggered, [this] {
+            resetCurrentViewToolbarLayoutToRecommended();
         });
     }
 }
@@ -2483,6 +4050,9 @@ bool ToolBarManager::eventFilter(QObject* source, QEvent* ev)
                 auto parent = toolbar->parentWidget();
                 if (parent == menuBarLeftAreaWidget || parent == menuBarRightAreaWidget) {
                     menuBarTimer.start(10);
+                }
+                if (toolBarHost(toolbar) != ToolBarItem::Host::MainWindow) {
+                    refreshHostedToolBars();
                 }
             }
             break;
@@ -2502,6 +4072,9 @@ bool ToolBarManager::eventFilter(QObject* source, QEvent* ev)
             if (auto toolbar = qobject_cast<QToolBar*>(source)) {
                 resizingToolbars[toolbar] = toolbar;
                 resizeTimer.start(100);
+                if (toolBarHost(toolbar) != ToolBarItem::Host::MainWindow) {
+                    refreshHostedToolBars();
+                }
             }
             break;
         default:
@@ -2555,6 +4128,26 @@ QString ToolBarManager::currentRecommendedToolbarLayoutResetLabel() const
     return {};
 }
 
+QString ToolBarManager::currentViewToolbarLayoutResetLabel() const
+{
+    if (!rememberToolbarLayoutByWorkbench()
+        || currentToolbarLayoutScope() == CurrentLayoutScope::None || !hasViewHostedToolBars()) {
+        return {};
+    }
+
+    return QApplication::translate("MainWindow", "Reset Current View Toolbar Layout");
+}
+
+QString ToolBarManager::currentRecommendedViewToolbarLayoutResetLabel() const
+{
+    if (!rememberToolbarLayoutByWorkbench()
+        || currentToolbarLayoutScope() == CurrentLayoutScope::None || !hasViewHostedToolBars()) {
+        return {};
+    }
+
+    return QApplication::translate("MainWindow", "Reset To Recommended View Toolbar Layout");
+}
+
 QString ToolBarManager::currentShowRecommendedOnlyLabel() const
 {
     if (currentToolbarLayoutScope() == CurrentLayoutScope::None) {
@@ -2580,16 +4173,15 @@ QString ToolBarManager::currentToolbarLayoutScopeLabel() const
 
 void ToolBarManager::resetCurrentToolbarLayout()
 {
-    ToolbarScopeId layoutContext;
-    ToolbarScopeId activeContext;
+    QString layoutContext;
+    QString activeContext;
     const auto scope = currentToolbarLayoutScope(&layoutContext, &activeContext);
     if (scope == CurrentLayoutScope::None || !rememberToolbarLayoutByWorkbench()) {
         return;
     }
 
-    const auto layoutContextKey = makeToolBarLayoutContext(layoutContext);
-    if (hWorkbenchLayouts->HasGroup(layoutContextKey.toUtf8().constData())) {
-        hWorkbenchLayouts->RemoveGrp(layoutContextKey.toUtf8().constData());
+    if (hWorkbenchLayouts->HasGroup(layoutContext.toUtf8().constData())) {
+        hWorkbenchLayouts->RemoveGrp(layoutContext.toUtf8().constData());
     }
 
     const bool hasWorkbenchFallback = scope == CurrentLayoutScope::Contextual
@@ -2616,6 +4208,44 @@ void ToolBarManager::resetCurrentToolbarLayoutToRecommended()
     applyRecommendedToolBarVisibility();
 }
 
+void ToolBarManager::resetCurrentViewToolbarLayout()
+{
+    QString layoutContext;
+    QString activeContext;
+    const auto scope = currentToolbarLayoutScope(&layoutContext, &activeContext);
+    if (scope == CurrentLayoutScope::None || !rememberToolbarLayoutByWorkbench()
+        || currentViewToolbarLayoutResetLabel().isEmpty()) {
+        return;
+    }
+
+    auto hostWindow = activeViewToolBarHostWindow();
+    if (!hostWindow) {
+        return;
+    }
+
+    clearViewToolBarLayout(layoutContext);
+
+    const bool hasWorkbenchFallback = scope == CurrentLayoutScope::Contextual
+        && hasSavedViewToolBarLayout(activeContext);
+    if (hasWorkbenchFallback) {
+        restoreViewHostedToolBarLayout(hostWindow, activeContext);
+    }
+    else {
+        resetViewHostedToolBarLayout(hostWindow);
+    }
+}
+
+void ToolBarManager::resetCurrentViewToolbarLayoutToRecommended()
+{
+    if (currentRecommendedViewToolbarLayoutResetLabel().isEmpty()) {
+        return;
+    }
+
+    applyRecommendedViewToolBarPreferences();
+    resetCurrentViewToolbarLayout();
+    applyRecommendedViewToolBarVisibility();
+}
+
 void ToolBarManager::showRecommendedToolBarsOnly()
 {
     if (currentShowRecommendedOnlyLabel().isEmpty()) {
@@ -2626,31 +4256,48 @@ void ToolBarManager::showRecommendedToolBarsOnly()
     applyRecommendedToolBarVisibility();
 }
 
-void ToolBarManager::setToolbarLayoutContextOverride(const QString& workbench, const QString& context)
+void ToolBarManager::refreshHostedToolBars()
 {
-    setToolbarLayoutContextOverride(workbench, layoutContextId(context));
+    refreshPanelHostedToolBars();
+    refreshViewHostedToolBars();
 }
 
-void ToolBarManager::setToolbarLayoutContextOverride(
-    const QString& workbench,
-    const ToolbarScopeId& context
-)
+void ToolBarManager::setViewOverlayEdge(QToolBar* toolbar, ToolBarItem::ViewOverlayEdge edge) const
 {
-    const auto usableContext = usableToolbarLayoutContext(context);
-
-    if (toolbarLayoutContextOverrideWorkbench == workbench
-        && toolbarLayoutContextOverride == usableContext
-        && effectiveToolbarLayoutContext() == usableContext) {
+    if (!toolbar
+        || toolBarViewPresentation(toolbar) != ToolBarItem::ViewPresentation::CenteredOverlay) {
         return;
     }
 
-    bool affectsCurrentLayout = activeToolbarLayoutContext().workbench == workbench;
+    setToolBarViewOverlayEdge(toolbar, edge);
+
+    const auto context = effectiveToolbarLayoutContext();
+    if (!context.isEmpty()) {
+        persistViewOverlayEdge(toolbar, context, edge);
+    }
+
+    auto hostWindow = activeViewToolBarHostWindow();
+    if (hostWindow && activeViewSupportsToolBarHost(toolbar, hostWindow)) {
+        if (auto overlayHost = viewToolBarOverlayHost(hostWindow)) {
+            overlayHost->attachToolBar(toolbar, edge);
+        }
+    }
+}
+
+void ToolBarManager::setToolbarLayoutContextOverride(const QString& workbench, const QString& context)
+{
+    if (toolbarLayoutContextOverrideWorkbench == workbench
+        && toolbarLayoutContextOverride == context && effectiveToolbarLayoutContext() == context) {
+        return;
+    }
+
+    bool affectsCurrentLayout = activeToolbarLayoutContext() == workbench;
     if (affectsCurrentLayout) {
         saveState();
     }
 
     toolbarLayoutContextOverrideWorkbench = workbench;
-    toolbarLayoutContextOverride = usableContext;
+    toolbarLayoutContextOverride = context;
 
     if (affectsCurrentLayout) {
         restoreState();
@@ -2663,13 +4310,13 @@ void ToolBarManager::clearToolbarLayoutContextOverride(const QString& workbench)
         return;
     }
 
-    bool affectsCurrentLayout = activeToolbarLayoutContext().workbench == workbench;
+    bool affectsCurrentLayout = activeToolbarLayoutContext() == workbench;
     if (affectsCurrentLayout) {
         saveState();
     }
 
     toolbarLayoutContextOverrideWorkbench.clear();
-    toolbarLayoutContextOverride = {};
+    toolbarLayoutContextOverride.clear();
 
     if (affectsCurrentLayout) {
         restoreState();
@@ -2691,7 +4338,10 @@ void Gui::ToolBarManager::setToolBarsLocked(bool locked) const
 void Gui::ToolBarManager::setMovable(bool movable) const
 {
     for (auto& tb : toolBars()) {
-        tb->setMovable(movable);
+        const bool overlayToolbar = toolBarHost(tb) == ToolBarItem::Host::ActiveView
+            && toolBarViewPresentation(tb) == ToolBarItem::ViewPresentation::CenteredOverlay;
+        const bool panelToolbar = toolBarHost(tb) == ToolBarItem::Host::Panel;
+        tb->setMovable((overlayToolbar || panelToolbar) ? false : movable);
         tb->updateCustomGripVisibility();
     }
 }
@@ -2726,15 +4376,231 @@ QList<ToolBar*> ToolBarManager::toolBars() const
     QList<ToolBar*> bars = getMainWindow()->findChildren<ToolBar*>();
 
     for (ToolBar* it : bars) {
-        auto parent = it->parentWidget();
-        if (parent == mw || parent == mw->statusBar() || parent == statusBarAreaWidget
-            || parent == menuBarLeftAreaWidget || parent == menuBarRightAreaWidget) {
-            tb.push_back(it);
-            it->installEventFilter(const_cast<ToolBarManager*>(this));
+        for (auto parent = it->parentWidget(); parent; parent = parent->parentWidget()) {
+            if (parent == mw || parent == mw->statusBar() || parent == statusBarAreaWidget
+                || parent == menuBarLeftAreaWidget || parent == menuBarRightAreaWidget
+                || qobject_cast<MDIView*>(parent)) {
+                tb.push_back(it);
+                it->installEventFilter(const_cast<ToolBarManager*>(this));
+                break;
+            }
         }
     }
 
     return tb;
+}
+
+QMainWindow* ToolBarManager::toolBarHostWindow(const QToolBar* toolbar) const
+{
+    if (!toolbar) {
+        return nullptr;
+    }
+
+    return ::toolBarHostWindow(toolbar);
+}
+
+void ToolBarManager::refreshPanelHostedToolBars()
+{
+    if (refreshingPanelHostedToolBars) {
+        return;
+    }
+
+    struct RefreshGuard
+    {
+        bool& refreshing;
+        ~RefreshGuard()
+        {
+            refreshing = false;
+        }
+    };
+
+    refreshingPanelHostedToolBars = true;
+    RefreshGuard refreshGuard {refreshingPanelHostedToolBars};
+
+    for (auto toolbar : toolBars()) {
+        if (!toolbar || toolBarHost(toolbar) != ToolBarItem::Host::Panel || toolbar->isFloating()) {
+            continue;
+        }
+
+        auto action = toolbar->toggleViewAction();
+        const auto role = toolBarPanelRole(toolbar);
+        auto panel = activePanelToolBarHostPanel(role);
+        const bool compatible = activePanelSupportsToolBarHost(toolbar, panel);
+        if (action) {
+            action->setVisible(compatible || toolbar->isVisible());
+            action->setEnabled(compatible);
+        }
+        if (!compatible) {
+            continue;
+        }
+
+        if (auto host = panelToolBarHost(panel, role)) {
+            host->attachToolBar(toolbar);
+            setToolBarIconSize(toolbar);
+        }
+    }
+}
+
+void ToolBarManager::restoreViewHostedToolBarLayout(
+    QMainWindow* hostWindow,
+    const QString& context,
+    const QString& fallbackContext
+) const
+{
+    auto group = workbenchLayoutGroup(context);
+    const bool hasSavedDockedLayout = group && group->GetBool("Saved", false);
+    const bool hasSavedOverlayEdges = viewOverlayEdgeGroup(context)
+        && !viewOverlayEdgeGroup(context)->GetASCIIMap().empty();
+    if (!hostWindow || !group || (!hasSavedDockedLayout && !hasSavedOverlayEdges)) {
+        return;
+    }
+
+    auto mdiView = qobject_cast<MDIView*>(hostWindow);
+    QMap<QString, ToolBar*> viewToolbars;
+    for (auto toolbar : toolBars()) {
+        auto key = toolBarPersistenceKey(toolbar);
+        if (key.isEmpty() || toolbar->isFloating()
+            || toolBarHost(toolbar) != ToolBarItem::Host::ActiveView
+            || !activeViewSupportsToolBarHost(toolbar, mdiView)
+            || toolBarHostWindow(toolbar) != hostWindow) {
+            continue;
+        }
+
+        if (toolBarViewPresentation(toolbar) == ToolBarItem::ViewPresentation::CenteredOverlay) {
+            setToolBarViewOverlayEdge(
+                toolbar,
+                resolvedViewOverlayEdge(toolbar, context, fallbackContext)
+            );
+            if (auto overlayHost = viewToolBarOverlayHost(mdiView)) {
+                overlayHost->attachToolBar(toolbar, toolBarViewOverlayEdge(toolbar));
+            }
+            continue;
+        }
+        if (toolBarViewPresentation(toolbar) != ToolBarItem::ViewPresentation::Docked) {
+            continue;
+        }
+
+        viewToolbars.insert(key, toolbar);
+    }
+
+    if (viewToolbars.isEmpty()) {
+        return;
+    }
+
+    QStringList top = splitLayoutState(group->GetASCII(ViewTopLayoutKey));
+    QStringList left = splitLayoutState(group->GetASCII(ViewLeftLayoutKey));
+    QStringList right = splitLayoutState(group->GetASCII(ViewRightLayoutKey));
+    QStringList bottom = splitLayoutState(group->GetASCII(ViewBottomLayoutKey));
+
+    QSet<QString> knownKeys;
+    auto rememberKeys = [&knownKeys](const QStringList& layout) {
+        for (const auto& key : layout) {
+            if (key != QStringLiteral("Break")) {
+                knownKeys.insert(key);
+            }
+        }
+    };
+    rememberKeys(top);
+    rememberKeys(left);
+    rememberKeys(right);
+    rememberKeys(bottom);
+
+    auto appendMissing =
+        [&viewToolbars, &knownKeys, hostWindow](QStringList& layout, Qt::ToolBarArea area) {
+            for (auto it = viewToolbars.cbegin(); it != viewToolbars.cend(); ++it) {
+                if (knownKeys.contains(it.key()) || hostWindow->toolBarArea(it.value()) != area) {
+                    continue;
+                }
+
+                layout << it.key();
+                knownKeys.insert(it.key());
+            }
+        };
+    appendMissing(top, Qt::TopToolBarArea);
+    appendMissing(left, Qt::LeftToolBarArea);
+    appendMissing(right, Qt::RightToolBarArea);
+    appendMissing(bottom, Qt::BottomToolBarArea);
+
+    auto restore = [&viewToolbars, hostWindow](const QStringList& layout, Qt::ToolBarArea area) {
+        for (const auto& key : layout) {
+            if (key == QStringLiteral("Break")) {
+                hostWindow->addToolBarBreak(area);
+                continue;
+            }
+
+            auto toolbar = viewToolbars.value(key);
+            if (!toolbar) {
+                continue;
+            }
+
+            moveToolBarPreservingVisibility(hostWindow, toolbar, area);
+        }
+    };
+
+    restore(top, Qt::TopToolBarArea);
+    restore(left, Qt::LeftToolBarArea);
+    restore(right, Qt::RightToolBarArea);
+    restore(bottom, Qt::BottomToolBarArea);
+}
+
+void ToolBarManager::refreshViewHostedToolBars()
+{
+    if (refreshingViewHostedToolBars) {
+        return;
+    }
+
+    struct RefreshGuard
+    {
+        bool& refreshing;
+        ~RefreshGuard()
+        {
+            refreshing = false;
+        }
+    };
+
+    refreshingViewHostedToolBars = true;
+    RefreshGuard refreshGuard {refreshingViewHostedToolBars};
+
+    auto hostWindow = activeViewToolBarHostWindow();
+    bool hasCompatibleDockedToolbar = false;
+
+    for (auto toolbar : toolBars()) {
+        if (!toolbar || toolBarHost(toolbar) != ToolBarItem::Host::ActiveView
+            || toolbar->isFloating()) {
+            continue;
+        }
+
+        auto action = toolbar->toggleViewAction();
+        const bool compatible = activeViewSupportsToolBarHost(toolbar, hostWindow);
+        if (action) {
+            action->setVisible(compatible);
+            action->setEnabled(compatible);
+        }
+        if (!compatible) {
+            continue;
+        }
+
+        if (toolBarViewPresentation(toolbar) == ToolBarItem::ViewPresentation::CenteredOverlay) {
+            if (auto overlayHost = viewToolBarOverlayHost(hostWindow)) {
+                overlayHost->attachToolBar(toolbar, toolBarViewOverlayEdge(toolbar));
+            }
+            setToolBarIconSize(toolbar);
+            continue;
+        }
+
+        hasCompatibleDockedToolbar = true;
+        if (toolBarHostWindow(toolbar) == hostWindow) {
+            continue;
+        }
+
+        toolbar->setOrientation(Qt::Horizontal);
+        moveToolBarPreservingVisibility(hostWindow, toolbar, Qt::TopToolBarArea);
+        setToolBarIconSize(toolbar);
+    }
+
+    if (hasCompatibleDockedToolbar) {
+        restoreViewHostedToolBarLayout(hostWindow, effectiveToolbarLayoutContext());
+    }
 }
 
 ToolBarItem::DefaultVisibility ToolBarManager::getToolbarPolicy(const QToolBar* toolbar) const
@@ -2831,18 +4697,6 @@ void ToolBarManager::setState(const QString& name, State state)
             saveVisibility(show, policy);
         }
     }
-}
-
-void ToolBarManager::setState(const QList<PersistenceId>& ids, State state)
-{
-    for (const auto& id : ids) {
-        setState(id, state);
-    }
-}
-
-void ToolBarManager::setState(const PersistenceId& id, State state)
-{
-    setState(makeToolBarPersistenceKey(id), state);
 }
 
 #include "moc_ToolBarManager.cpp"

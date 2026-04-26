@@ -3,8 +3,7 @@
 from __future__ import annotations
 
 from Base.Metadata import export
-from Workbench import Workbench, ToolbarOptions
-from typing import Sequence
+from Workbench import Workbench
 from warnings import deprecated
 
 @export(
@@ -47,8 +46,16 @@ class PythonWorkbench(Workbench):
     def appendToolbar(
         self,
         name: str,
-        cmds: Sequence[str] | str,
-        options: ToolbarOptions | None = None,
+        items: list[str],
+        key: str | None = None,
+        tier: int | None = None,
+        visibility: int | None = None,
+        host: int | None = None,
+        panel_role: int | None = None,
+        view_host_requirement: int | None = None,
+        view_presentation: int | None = None,
+        view_overlay_edge: int | None = None,
+        view_overlay_edge_persistence: int | None = None,
     ) -> None:
         """
         Append a new toolbar

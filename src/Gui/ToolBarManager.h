@@ -42,12 +42,15 @@ class QAction;
 class QLayout;
 class QMenu;
 class QMouseEvent;
+class QMainWindow;
 
 namespace Gui
 {
 
 class ToolBarAreaWidget;
 enum class ToolBarArea;
+class MDIView;
+class TreePanel;
 
 class GuiExport ToolBarItem
 {
@@ -73,6 +76,46 @@ public:
         Contextual,
     };
 
+    enum class Host
+    {
+        MainWindow,
+        ActiveView,
+        Panel,
+    };
+
+    enum class PanelRole
+    {
+        None,
+        ModelTree,
+    };
+
+    enum class ViewHostRequirement
+    {
+        AnyView,
+        View3D,
+    };
+
+    enum class ViewPresentation
+    {
+        Docked,
+        CenteredOverlay,
+    };
+
+    enum class ViewOverlayEdge
+    {
+        Top,
+        Bottom,
+        Left,
+        Right,
+    };
+
+    enum class ViewOverlayEdgePersistence
+    {
+        ByScope,
+        Shared,
+        Contextual,
+    };
+
     ToolBarItem();
     explicit ToolBarItem(
         ToolBarItem* item,
@@ -87,6 +130,18 @@ public:
     const std::string& persistenceKey() const;
     void setTier(Tier tier);
     Tier tier() const;
+    void setHost(Host host);
+    Host host() const;
+    void setPanelRole(PanelRole role);
+    PanelRole panelRole() const;
+    void setViewHostRequirement(ViewHostRequirement requirement);
+    ViewHostRequirement viewHostRequirement() const;
+    void setViewPresentation(ViewPresentation presentation);
+    ViewPresentation viewPresentation() const;
+    void setViewOverlayEdge(ViewOverlayEdge edge);
+    ViewOverlayEdge viewOverlayEdge() const;
+    void setViewOverlayEdgePersistence(ViewOverlayEdgePersistence persistence);
+    ViewOverlayEdgePersistence viewOverlayEdgePersistence() const;
 
     bool hasItems() const;
     ToolBarItem* findItem(const std::string&);
@@ -108,6 +163,12 @@ private:
     std::string _name;
     std::string _persistenceKey;
     Tier _tier = Tier::Recommended;
+    Host _host = Host::MainWindow;
+    PanelRole _panelRole = PanelRole::None;
+    ViewHostRequirement _viewHostRequirement = ViewHostRequirement::AnyView;
+    ViewPresentation _viewPresentation = ViewPresentation::Docked;
+    ViewOverlayEdge _viewOverlayEdge = ViewOverlayEdge::Top;
+    ViewOverlayEdgePersistence _viewOverlayEdgePersistence = ViewOverlayEdgePersistence::ByScope;
     QList<ToolBarItem*> _items;
 };
 
@@ -183,15 +244,6 @@ public:
         QString workbench;
         QString context;
 
-        bool operator==(const ToolbarScopeId& other) const
-        {
-            return scope == other.scope && workbench == other.workbench && context == other.context;
-        }
-        bool operator!=(const ToolbarScopeId& other) const
-        {
-            return !(*this == other);
-        }
-
         bool isEmpty() const;
     };
 
@@ -262,6 +314,11 @@ public:
     static QString toolBarScopeLabel(const QToolBar*);
     static ToolBarItem::Tier toolBarTier(const ToolBarItem*);
     static ToolBarItem::Tier toolBarTier(const QToolBar*);
+    static ToolBarItem::Host toolBarHost(const ToolBarItem*);
+    static ToolBarItem::Host toolBarHost(const QToolBar*);
+    static QString toolBarPanelRoleName(ToolBarItem::PanelRole);
+    static ToolBarItem::PanelRole toolBarPanelRole(const ToolBarItem*);
+    static ToolBarItem::PanelRole toolBarPanelRole(const QToolBar*);
     static ToolBarItem::Tier normalizeCustomToolBarTier(ToolBarItem::Tier);
     static ToolBarItem::Tier customToolBarTierFromName(const QString&);
     static ToolBarItem::Tier toolBarTierFromName(const QString&);
@@ -269,8 +326,28 @@ public:
     static QString toolBarTierLabel(ToolBarItem::Tier);
     static QString toolBarTierLabel(const ToolBarItem*);
     static QString toolBarTierLabel(const QToolBar*);
+    static QString toolBarHostName(ToolBarItem::Host);
+    static QString toolBarPanelRoleLabel(ToolBarItem::PanelRole);
+    static ToolBarItem::ViewHostRequirement toolBarViewHostRequirement(const ToolBarItem*);
+    static ToolBarItem::ViewHostRequirement toolBarViewHostRequirement(const QToolBar*);
+    static QString toolBarViewPresentationName(ToolBarItem::ViewPresentation);
+    static ToolBarItem::ViewPresentation toolBarViewPresentation(const ToolBarItem*);
+    static ToolBarItem::ViewPresentation toolBarViewPresentation(const QToolBar*);
+    static QString toolBarViewOverlayEdgeName(ToolBarItem::ViewOverlayEdge);
+    static ToolBarItem::ViewOverlayEdge toolBarViewOverlayEdge(const ToolBarItem*);
+    static ToolBarItem::ViewOverlayEdge toolBarViewOverlayEdge(const QToolBar*);
+    static QString toolBarViewOverlayEdgePersistenceName(ToolBarItem::ViewOverlayEdgePersistence);
+    static ToolBarItem::ViewOverlayEdgePersistence toolBarViewOverlayEdgePersistence(
+        const ToolBarItem*
+    );
+    static ToolBarItem::ViewOverlayEdgePersistence toolBarViewOverlayEdgePersistence(const QToolBar*);
     static void setToolBarPersistenceKey(QToolBar*, const QString&);
     static void setToolBarTier(QToolBar*, ToolBarItem::Tier);
+    static void setToolBarHost(QToolBar*, ToolBarItem::Host);
+    static void setToolBarPanelRole(QToolBar*, ToolBarItem::PanelRole);
+    static void setToolBarViewPresentation(QToolBar*, ToolBarItem::ViewPresentation);
+    static void setToolBarViewOverlayEdge(QToolBar*, ToolBarItem::ViewOverlayEdge);
+    static void setToolBarViewOverlayEdgePersistence(QToolBar*, ToolBarItem::ViewOverlayEdgePersistence);
 
     /** Sets up the toolbars of a given workbench. */
     void setup(ToolBarItem*);
@@ -278,24 +355,27 @@ public:
     void restoreState();
     void retranslate() const;
     void populateToolBarMenu(QMenu* menu);
+    bool populateViewToolBarMenu(QMenu* menu);
     void setToolbarLayoutContextOverride(const QString& workbench, const QString& context);
-    void setToolbarLayoutContextOverride(const QString& workbench, const ToolbarScopeId& context);
     void clearToolbarLayoutContextOverride(const QString& workbench);
     QString currentToolbarLayoutScopeLabel() const;
     QString currentToolbarLayoutResetLabel() const;
     QString currentRecommendedToolbarLayoutResetLabel() const;
+    QString currentViewToolbarLayoutResetLabel() const;
+    QString currentRecommendedViewToolbarLayoutResetLabel() const;
     QString currentShowRecommendedOnlyLabel() const;
     void resetCurrentToolbarLayout();
     void resetCurrentToolbarLayoutToRecommended();
+    void resetCurrentViewToolbarLayout();
+    void resetCurrentViewToolbarLayoutToRecommended();
     void showRecommendedToolBarsOnly();
+    void refreshHostedToolBars();
 
     bool areToolBarsLocked() const;
     void setToolBarsLocked(bool locked) const;
 
     void setState(const QList<QString>& names, State state);
     void setState(const QString& name, State state);
-    void setState(const QList<PersistenceId>& ids, State state);
-    void setState(const PersistenceId& id, State state);
 
     int toolBarIconSize(QWidget* widget = nullptr) const;
     void setupToolBarIconSize();
@@ -347,30 +427,90 @@ private:
     void setupMenuBarTimer();
     void setupWidgetProducers();
     void onToolbarParametersChanged(const ParamKey*);
+    QList<QAction*> panelToolBarMenuActions(QMenu* menu, const QList<QToolBar*>& toolbars) const;
+    QList<QAction*> viewToolBarMenuActions(QMenu* menu, const QList<QToolBar*>& toolbars) const;
+    void populateSingleToolBarMenu(QMenu* menu, QToolBar* toolbar) const;
+    QAction* toolBarMenuAction(QMenu* menu, QToolBar* toolbar) const;
     void addToolBarActionsByScope(QMenu* menu, const QList<QToolBar*>& toolbars) const;
     void addCurrentToolbarLayoutActions(QMenu* menu);
-    ToolbarScopeId activeToolbarLayoutContext() const;
-    ToolbarScopeId effectiveToolbarLayoutContext() const;
+    void addCurrentViewToolbarLayoutActions(QMenu* menu);
+    QString activeToolbarLayoutContext() const;
+    QString effectiveToolbarLayoutContext() const;
     CurrentLayoutScope currentToolbarLayoutScope(
-        ToolbarScopeId* layoutContext = nullptr,
-        ToolbarScopeId* activeContext = nullptr
+        QString* layoutContext = nullptr,
+        QString* activeContext = nullptr
     ) const;
+    bool hasViewHostedToolBars() const;
     bool rememberToolbarLayoutByWorkbench() const;
-    bool hasSavedWorkbenchToolBarLayout(const ToolbarScopeId& context) const;
-    bool toolbarBelongsToLayoutContext(const QToolBar* toolbar, const ToolbarScopeId& context) const;
-    void initializeUnsavedToolbarLayoutContext(const ToolbarScopeId& context);
-    void updateLayoutParameters(const ToolbarScopeId& context);
-    ParameterGrp::handle workbenchLayoutGroup(const ToolbarScopeId& context) const;
+    bool hasSavedWorkbenchToolBarLayout(const QString& context) const;
+    bool hasSavedViewToolBarLayout(const QString& context) const;
+    bool toolbarBelongsToLayoutContext(const QToolBar* toolbar, const QString& context) const;
+    void initializeUnsavedToolbarLayoutContext(const QString& context);
+    void updateLayoutParameters(const QString& context);
+    ParameterGrp::handle workbenchLayoutGroup(const QString& context) const;
+    ParameterGrp::handle globalHostedToolBarHostGroup() const;
+    ParameterGrp::handle hostedToolBarHostGroup(const QString& context) const;
+    ParameterGrp::handle globalViewToolBarPresentationGroup() const;
+    ParameterGrp::handle viewToolBarPresentationGroup(const QString& context) const;
+    ParameterGrp::handle sharedViewOverlayEdgeGroup() const;
+    ParameterGrp::handle viewOverlayEdgeGroup(const QString& context) const;
     ParameterGrp::handle toolbarAreaRestoreParameters(
         const ParameterGrp::handle& current,
         const ParameterGrp::handle& fallback
     ) const;
-    void saveWorkbenchToolBarLayout(const ToolbarScopeId& context) const;
-    void restoreWorkbenchToolBarLayout(const ToolbarScopeId& context) const;
+    ToolBarItem::Host resolvedHostedToolBarHost(
+        const QToolBar* toolbar,
+        const QString& context,
+        const QString& fallbackContext = {}
+    ) const;
+    ToolBarItem::ViewPresentation resolvedViewToolBarPresentation(
+        const QToolBar* toolbar,
+        const QString& context,
+        const QString& fallbackContext = {}
+    ) const;
+    ToolBarItem::ViewOverlayEdge resolvedViewOverlayEdge(
+        const QToolBar* toolbar,
+        const QString& context,
+        const QString& fallbackContext = {}
+    ) const;
+    void persistHostedToolBarHost(
+        const QToolBar* toolbar,
+        const QString& context,
+        ToolBarItem::Host host
+    ) const;
+    void persistViewToolBarPresentation(
+        const QToolBar* toolbar,
+        const QString& context,
+        ToolBarItem::ViewPresentation presentation
+    ) const;
+    void persistViewOverlayEdge(
+        const QToolBar* toolbar,
+        const QString& context,
+        ToolBarItem::ViewOverlayEdge edge
+    ) const;
+    void saveWorkbenchToolBarLayout(const QString& context) const;
+    void restoreWorkbenchToolBarLayout(const QString& context) const;
     void resetMainWindowToolBarLayout() const;
+    void clearViewToolBarLayout(const QString& context) const;
+    void resetViewHostedToolBarLayout(QMainWindow* hostWindow) const;
+    void restoreViewHostedToolBarLayout(
+        QMainWindow* hostWindow,
+        const QString& context,
+        const QString& fallbackContext = {}
+    ) const;
     bool recommendedToolBarVisibility(const QToolBar* toolbar) const;
     void applyRecommendedToolBarPreferences();
     void applyRecommendedToolBarVisibility();
+    void applyRecommendedViewToolBarPreferences();
+    void applyRecommendedViewToolBarVisibility();
+    void refreshPanelHostedToolBars();
+    void refreshViewHostedToolBars();
+    void setHostedToolBarHost(QToolBar* toolbar, ToolBarItem::Host host);
+    void setViewToolBarPresentation(QToolBar* toolbar, ToolBarItem::ViewPresentation presentation);
+    void setViewOverlayEdge(QToolBar* toolbar, ToolBarItem::ViewOverlayEdge edge) const;
+    QMainWindow* toolBarHostWindow(const QToolBar* toolbar) const;
+    bool activeViewSupportsToolBarHost(const QToolBar* toolbar, const MDIView* view) const;
+    bool activePanelSupportsToolBarHost(const QToolBar* toolbar, const TreePanel* panel) const;
 
     void addToMenu(QLayout* layout, QWidget* area, QMenu* menu);
     QLayout* findLayoutOfObject(QObject* source, QWidget* area) const;
@@ -378,15 +518,16 @@ private:
 
 private:
     QStringList toolbarKeys;
-    ToolbarScopeId toolbarLayoutContext;
+    QString toolbarLayoutContext;
     QString toolbarLayoutContextOverrideWorkbench;
-    ToolbarScopeId toolbarLayoutContextOverride;
+    QString toolbarLayoutContextOverride;
     static ToolBarManager* _instance;
 
     QTimer timer;
     QTimer menuBarTimer;
     QTimer sizeTimer;
     QTimer resizeTimer;
+    fastsignals::connection connectActivateView;
     ParamHandlers paramHandlers;
     ToolBarAreaWidget* statusBarAreaWidget = nullptr;
     ToolBarAreaWidget* menuBarLeftAreaWidget = nullptr;
@@ -406,6 +547,8 @@ private:
     int _statusBarIconSize = 0;
     int _menuBarIconSize = 0;
     bool blockRestore = false;
+    bool refreshingPanelHostedToolBars = false;
+    bool refreshingViewHostedToolBars = false;
 };
 
 }  // namespace Gui

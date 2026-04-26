@@ -58,6 +58,7 @@
 #include "Navigation/NavigationAnimation.h"
 #include "Selection.h"
 #include "SoFullPathHelper.h"
+#include "ToolBarManager.h"
 #include "View3DInventorViewer.h"
 
 using namespace Gui;
@@ -2176,6 +2177,20 @@ void NavigationStyle::openPopupMenu(const SbVec2s& position)
     auto contextMenu = new QMenu(viewer->getGLWidget());
     MenuManager::getInstance()->setupContextMenu(&view, *contextMenu);
     contextMenu->setAttribute(Qt::WA_DeleteOnClose);
+
+    if (auto* toolBarManager = ToolBarManager::getInstance()) {
+        auto* viewToolBarsMenu
+            = new QMenu(QApplication::translate("MainWindow", "View Toolbars"), contextMenu);
+        if (toolBarManager->populateViewToolBarMenu(viewToolBarsMenu)) {
+            if (!contextMenu->isEmpty()) {
+                contextMenu->addSeparator();
+            }
+            contextMenu->addMenu(viewToolBarsMenu);
+        }
+        else {
+            delete viewToolBarsMenu;
+        }
+    }
 
     // Add Clarify Selection option if there are objects under cursor
     bool separator = false;

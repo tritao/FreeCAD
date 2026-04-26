@@ -48,6 +48,7 @@ class DocumentObjectItem;
 class DocumentObjectData;
 using DocumentObjectDataPtr = std::shared_ptr<DocumentObjectData>;
 class TreeWidgetItemDelegate;
+class PanelToolBarHost;
 
 class DocumentItem;
 class Command;
@@ -580,8 +581,14 @@ class TreePanel: public QWidget
 public:
     explicit TreePanel(const char* name, QWidget* parent = nullptr);
     ~TreePanel() override;
+    static TreePanel* instance();
+    PanelToolBarHost* toolBarHostWidget() const;
 
     bool eventFilter(QObject* obj, QEvent* ev) override;
+
+protected:
+    void showEvent(QShowEvent* event) override;
+    void hideEvent(QHideEvent* event) override;
 
 private Q_SLOTS:
     void accept();
@@ -592,6 +599,7 @@ private Q_SLOTS:
 private:
     QLineEdit* searchBox;
     TreeWidget* treeWidget;
+    PanelToolBarHost* toolBarHost = nullptr;
 };
 
 /**

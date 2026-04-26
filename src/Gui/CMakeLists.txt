@@ -1257,11 +1257,13 @@ SET(Workbench_CPP_SRCS
     DockWindowManager.cpp
     OverlayManager.cpp
     OverlayWidgets.cpp
+    PanelToolBarHost.cpp
     MenuManager.cpp
     PythonWorkbenchPyImp.cpp
     ToolBarAreaWidget.cpp
     ToolBarManager.cpp
     ToolBoxManager.cpp
+    ViewToolBarOverlay.cpp
     Workbench.cpp
     WorkbenchFactory.cpp
     WorkbenchManager.cpp
@@ -1274,10 +1276,12 @@ SET(Workbench_SRCS
     DockWindowManager.h
     OverlayManager.h
     OverlayWidgets.h
+    PanelToolBarHost.h
     MenuManager.h
     ToolBarAreaWidget.h
     ToolBarManager.h
     ToolBoxManager.h
+    ViewToolBarOverlay.h
     Workbench.h
     WorkbenchFactory.h
     WorkbenchManager.h
@@ -1500,6 +1504,8 @@ endif ()
 
 target_sources(FreeCADGui PRIVATE ${FreeCADGui_SRCS})
 target_link_libraries(FreeCADGui PUBLIC ${FreeCADGui_LIBS})
+add_dependencies(FreeCADGui Stylesheets_data)
+add_dependencies(FreeCADGui PreferencePacks_data)
 
 if (MSVC)
     target_compile_definitions(FreeCADGui PRIVATE WIN32_LEAN_AND_MEAN)

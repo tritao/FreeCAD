@@ -94,75 +94,102 @@ class WorkbenchTestCase(unittest.TestCase):
     def testToolbarOptions(self):
         import __main__
 
-        class UnitWorkbench(__main__.Workbench):
-            MenuText = "Unittest"
-            ToolTip = "Unittest"
+        toolbar_key = "wb:UnitToolbarOptionsWorkbench:PythonToolbar"
+        view_toolbar_key = "wb:UnitToolbarOptionsWorkbench:PythonViewToolbar"
+        panel_toolbar_key = "wb:UnitToolbarOptionsWorkbench:PythonPanelToolbar"
+        doc = FreeCAD.newDocument("ToolbarOptions")
+        visibility_group = FreeCAD.ParamGet("User parameter:BaseApp/MainWindow/Toolbars")
+        bool_map = {key: visibility_group.GetBool(key) for key in visibility_group.GetBools()}
+
+        class UnitToolbarOptionsWorkbench(__main__.Workbench):
+            MenuText = "Toolbar Options"
+            ToolTip = "Toolbar Options"
 
             def Initialize(self):
                 cmds = ["Test_Test"]
                 self.appendToolbar(
-                    "My Unittest",
+                    "Python Toolbar",
                     cmds,
-                    FreeCADGui.ToolbarOptions(
-                        id="MyUnittestToolbar",
-                        scope=FreeCADGui.ToolbarScopeId.contextual("UnitWorkbench", "edit"),
-                        tier=self.ToolbarTier.Contextual,
-                        visibility=self.ToolbarVisibility.Unavailable,
-                    ),
+                    key="PythonToolbar",
+                    tier=self.ToolbarTier.Advanced,
+                    visibility=self.ToolbarVisibility.Hidden,
+                    host=self.ToolbarHost.MainWindow,
+                )
+                self.appendToolbar(
+                    "Python View Toolbar",
+                    cmds,
+                    key="PythonViewToolbar",
+                    tier=self.ToolbarTier.Secondary,
+                    visibility=self.ToolbarVisibility.Hidden,
+                    host=self.ToolbarHost.ActiveView,
+                    view_host_requirement=self.ToolbarViewHostRequirement.View3D,
+                    view_presentation=self.ToolbarViewPresentation.CenteredOverlay,
+                    view_overlay_edge=self.ToolbarViewOverlayEdge.Top,
+                    view_overlay_edge_persistence=(self.ToolbarViewOverlayEdgePersistence.Shared),
+                )
+                self.appendToolbar(
+                    "Python Panel Toolbar",
+                    cmds,
+                    key="PythonPanelToolbar",
+                    tier=self.ToolbarTier.Secondary,
+                    visibility=self.ToolbarVisibility.Hidden,
+                    host=self.ToolbarHost.Panel,
+                    panel_role=self.ToolbarPanelRole.ModelTree,
                 )
 
             def GetClassName(self):
                 return "Gui::PythonWorkbench"
 
-        FreeCADGui.addWorkbench(UnitWorkbench())
+        def find_toolbar(key):
+            for toolbar in FreeCADGui.getMainWindow().findChildren(QtWidgets.QToolBar):
+                if toolbar.property("PersistenceKey") == key:
+                    return toolbar
+            return None
+
         try:
-            FreeCADGui.activateWorkbench("UnitWorkbench")
+            for key in (toolbar_key, view_toolbar_key, panel_toolbar_key):
+                visibility_group.RemBool(key)
+            FreeCADGui.addWorkbench(UnitToolbarOptionsWorkbench())
+            self.assertTrue(FreeCADGui.activateWorkbench("UnitToolbarOptionsWorkbench"))
             FreeCADGui.updateGui()
+            QApplication.processEvents()
 
-            identities = FreeCADGui.activeWorkbench().getToolbarIdentities()
-            self.assertEqual(identities["My Unittest"], "ctx:UnitWorkbench:edit:MyUnittestToolbar")
+            toolbar = find_toolbar(toolbar_key)
+            self.assertIsNotNone(toolbar)
+            self.assertEqual(toolbar.property("Tier"), "advanced")
+            self.assertEqual(toolbar.property("Host"), "main-window")
+            self.assertFalse(toolbar.isVisible())
+            self.assertFalse(toolbar.toggleViewAction().isChecked())
+            self.assertTrue(toolbar.toggleViewAction().isVisible())
 
-            main_window = FreeCADGui.getMainWindow()
-            toolbars = main_window.findChildren(QtWidgets.QToolBar)
-            toolbar = next(
-                tb
-                for tb in toolbars
-                if tb.property("PersistenceKey") == "ctx:UnitWorkbench:edit:MyUnittestToolbar"
-            )
+            view_toolbar = find_toolbar(view_toolbar_key)
+            self.assertIsNotNone(view_toolbar)
+            self.assertEqual(view_toolbar.property("Tier"), "secondary")
+            self.assertEqual(view_toolbar.property("Host"), "view")
+            self.assertEqual(view_toolbar.property("ViewPresentation"), "centered-overlay")
+            self.assertEqual(view_toolbar.property("ViewOverlayEdge"), "top")
+            self.assertEqual(view_toolbar.property("ViewOverlayEdgePersistence"), "shared")
+            self.assertFalse(view_toolbar.isVisible())
+            self.assertFalse(view_toolbar.toggleViewAction().isChecked())
+            self.assertTrue(view_toolbar.toggleViewAction().isVisible())
+            self.assertTrue(view_toolbar.toggleViewAction().isEnabled())
 
-            self.assertEqual(toolbar.property("Tier"), "contextual")
-            self.assertEqual(
-                toolbar.toggleViewAction().property("DefaultVisibility"),
-                int(FreeCADGui.ToolbarVisibility.Unavailable),
-            )
-            self.assertFalse(toolbar.toggleViewAction().isVisible())
+            panel_toolbar = find_toolbar(panel_toolbar_key)
+            self.assertIsNotNone(panel_toolbar)
+            self.assertEqual(panel_toolbar.property("Tier"), "secondary")
+            self.assertEqual(panel_toolbar.property("Host"), "panel")
+            self.assertEqual(panel_toolbar.property("PanelRole"), "model-tree")
+            self.assertFalse(panel_toolbar.isVisible())
+            self.assertFalse(panel_toolbar.toggleViewAction().isChecked())
+            self.assertTrue(panel_toolbar.toggleViewAction().isVisible())
+            self.assertTrue(panel_toolbar.toggleViewAction().isEnabled())
         finally:
-            FreeCADGui.removeWorkbench("UnitWorkbench")
-
-    def testToolbarOptionsPreservePythonAttributeErrors(self):
-        import __main__
-
-        class ExplodingOptions:
-            @property
-            def scope(self):
-                raise RuntimeError("toolbar options boom")
-
-        class UnitWorkbench(__main__.Workbench):
-            MenuText = "Unittest"
-            ToolTip = "Unittest"
-
-            def Initialize(self):
-                self.appendToolbar("My Unittest", ["Test_Test"], ExplodingOptions())
-
-            def GetClassName(self):
-                return "Gui::PythonWorkbench"
-
-        FreeCADGui.addWorkbench(UnitWorkbench())
-        try:
-            with self.assertRaisesRegex(RuntimeError, "toolbar options boom"):
-                FreeCADGui.activateWorkbench("UnitWorkbench")
-        finally:
-            FreeCADGui.removeWorkbench("UnitWorkbench")
+            for key in (toolbar_key, view_toolbar_key, panel_toolbar_key):
+                visibility_group.RemBool(key)
+                if key in bool_map:
+                    visibility_group.SetBool(key, bool_map[key])
+            FreeCADGui.removeWorkbench("UnitToolbarOptionsWorkbench")
+            FreeCAD.closeDocument(doc.Name)
 
     def testInvalidType(self):
         class MyExtWorkbench(FreeCADGui.Workbench):

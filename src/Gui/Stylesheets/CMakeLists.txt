@@ -5,6 +5,8 @@ SET(Stylesheets_Files
 )
 
 SET(Parameters_Files
+    "parameters/Classic.yaml"
+    "parameters/FreeCAD Classic.yaml"
     "parameters/FreeCAD Dark.yaml"
     "parameters/FreeCAD Light.yaml"
 )

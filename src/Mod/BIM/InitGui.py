@@ -514,6 +514,7 @@ class BIMWorkbench(Workbench):
         t7 = QT_TRANSLATE_NOOP("Workbench", "General Tools")
         t8 = QT_TRANSLATE_NOOP("Workbench", "Object Tools")
         t9 = QT_TRANSLATE_NOOP("Workbench", "3D Tools")
+        t10 = QT_TRANSLATE_NOOP("Workbench", "Working Plane Tools")
         self.appendToolbar(t1, self.draftingtools)
         self.appendToolbar(t2, self.snapbar)
         self.appendToolbar(t3, self.bimtools)
@@ -523,6 +524,18 @@ class BIMWorkbench(Workbench):
         self.appendToolbar(t8, self.modify_obj)
         self.appendToolbar(t9, self.modify_3d)
         self.appendToolbar(t6, self.manage)
+        self.appendToolbar(
+            t10,
+            ["BIM_WPView", "Draft_SelectPlane", "Draft_WorkingPlaneProxy", "Draft_ToggleGrid"],
+            key="BIMWorkingPlaneTools",
+            tier=self.ToolbarTier.Secondary,
+            visibility=self.ToolbarVisibility.Hidden,
+            host=self.ToolbarHost.ActiveView,
+            view_host_requirement=self.ToolbarViewHostRequirement.View3D,
+            view_presentation=self.ToolbarViewPresentation.CenteredOverlay,
+            view_overlay_edge=self.ToolbarViewOverlayEdge.Top,
+            view_overlay_edge_persistence=self.ToolbarViewOverlayEdgePersistence.Shared,
+        )
 
         # create menus
 

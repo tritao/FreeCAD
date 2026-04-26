@@ -41,6 +41,7 @@ namespace Gui
 {
 
 class MenuItem;
+class ToolBarItem;
 class DockWindowItems;
 class WorkbenchManager;
 
@@ -263,13 +264,6 @@ class GuiExport PythonBaseWorkbench: public Workbench
     TYPESYSTEM_HEADER_WITH_OVERRIDE();
 
 public:
-    struct ToolBarOptions
-    {
-        std::optional<ToolBarManager::PersistenceId> persistenceId;
-        std::optional<ToolBarItem::Tier> tier;
-        std::optional<ToolBarItem::DefaultVisibility> visibility;
-    };
-
     PythonBaseWorkbench();
     ~PythonBaseWorkbench() override;
     /**
@@ -291,8 +285,22 @@ public:
     void setupContextMenu(const char* recipient, MenuItem*) const override;
     void clearContextMenu();
 
+    struct ToolBarOptions
+    {
+        std::optional<std::string> key;
+        std::optional<ToolBarItem::Tier> tier;
+        std::optional<ToolBarItem::DefaultVisibility> visibility;
+        std::optional<ToolBarItem::Host> host;
+        std::optional<ToolBarItem::PanelRole> panelRole;
+        std::optional<ToolBarItem::ViewHostRequirement> viewHostRequirement;
+        std::optional<ToolBarItem::ViewPresentation> viewPresentation;
+        std::optional<ToolBarItem::ViewOverlayEdge> viewOverlayEdge;
+        std::optional<ToolBarItem::ViewOverlayEdgePersistence> viewOverlayEdgePersistence;
+    };
+
     /// Appends a new toolbar
     void appendToolbar(const std::string& bar, const std::list<std::string>& items) const;
+    /// Appends a new toolbar with metadata
     void appendToolbar(
         const std::string& bar,
         const std::list<std::string>& items,

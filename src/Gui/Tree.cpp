@@ -63,7 +63,9 @@
 #include "Macro.h"
 #include "MainWindow.h"
 #include "MenuManager.h"
+#include "PanelToolBarHost.h"
 #include "TreeParams.h"
+#include "ToolBarManager.h"
 #include "View3DInventor.h"
 #include "ViewProviderDocumentObject.h"
 #include "Widgets.h"
@@ -1982,6 +1984,11 @@ void TreeWidget::keyPressEvent(QKeyEvent* event)
 
 void TreeWidget::mousePressEvent(QMouseEvent* event)
 {
+    if (_LastSelectedTreeWidget != this) {
+        _LastSelectedTreeWidget = this;
+        ToolBarManager::getInstance()->refreshHostedToolBars();
+    }
+
     if (isVisibilityIconEnabled()) {
         QTreeWidgetItem* item = itemAt(event->pos());
         if (item && item->type() == TreeWidget::ObjectType && event->button() == Qt::LeftButton) {
@@ -4155,6 +4162,7 @@ void TreeWidget::onSelectionChanged(const SelectionChanges& msg)
 TreePanel::TreePanel(const char* name, QWidget* parent)
     : QWidget(parent)
 {
+    this->toolBarHost = new PanelToolBarHost(ToolBarItem::PanelRole::ModelTree, this);
     this->treeWidget = new TreeWidget(name, this);
     int indent = TreeParams::getIndentation();
     if (indent) {
@@ -4164,8 +4172,12 @@ TreePanel::TreePanel(const char* name, QWidget* parent)
     auto pLayout = new QVBoxLayout(this);
     pLayout->setSpacing(0);
     pLayout->setContentsMargins(0, 0, 0, 0);
+    pLayout->addWidget(this->toolBarHost);
     pLayout->addWidget(this->treeWidget);
     connect(this->treeWidget, &TreeWidget::emitSearchObjects, this, &TreePanel::showEditor);
+    connect(this->treeWidget, &QTreeWidget::itemSelectionChanged, this, [] {
+        ToolBarManager::getInstance()->refreshHostedToolBars();
+    });
 
     this->searchBox = new Gui::ExpressionLineEdit(this, true);
     static_cast<ExpressionLineEdit*>(this->searchBox)
@@ -4179,6 +4191,17 @@ TreePanel::TreePanel(const char* name, QWidget* parent)
 }
 
 TreePanel::~TreePanel() = default;
+
+TreePanel* TreePanel::instance()
+{
+    auto tree = TreeWidget::instance();
+    return tree ? qobject_cast<TreePanel*>(tree->parentWidget()) : nullptr;
+}
+
+PanelToolBarHost* TreePanel::toolBarHostWidget() const
+{
+    return toolBarHost;
+}
 
 void TreePanel::accept()
 {
@@ -4212,6 +4235,18 @@ bool TreePanel::eventFilter(QObject* obj, QEvent* ev)
     }
 
     return false;
+}
+
+void TreePanel::showEvent(QShowEvent* event)
+{
+    QWidget::showEvent(event);
+    ToolBarManager::getInstance()->refreshHostedToolBars();
+}
+
+void TreePanel::hideEvent(QHideEvent* event)
+{
+    QWidget::hideEvent(event);
+    ToolBarManager::getInstance()->refreshHostedToolBars();
 }
 
 void TreePanel::showEditor()

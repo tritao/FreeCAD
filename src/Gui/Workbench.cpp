@@ -52,6 +52,36 @@ using namespace Gui;
 
 namespace
 {
+ToolBarItem* findOrCreateToolBarItem(
+    ToolBarItem* root,
+    const std::string& toolbar,
+    ToolBarItem::DefaultVisibility visibility = ToolBarItem::DefaultVisibility::Visible
+)
+{
+    if (!root) {
+        return nullptr;
+    }
+
+    ToolBarItem* item = root->findItem(toolbar);
+    if (!item) {
+        item = new ToolBarItem(root, visibility);
+        item->setCommand(toolbar);
+    }
+
+    return item;
+}
+
+QString pythonWorkbenchToolbarPersistenceKey(const std::string& workbenchName, const QString& key)
+{
+    if (key.contains(QLatin1Char(':')) || workbenchName.empty()) {
+        return key;
+    }
+
+    return ToolBarManager::makeToolBarPersistenceKey(
+        {ToolBarManager::Scope::Workbench, key, QString::fromStdString(workbenchName)}
+    );
+}
+
 void setSharedToolbarMetadata(
     ToolBarItem* item,
     const std::string& toolbar,
@@ -972,6 +1002,8 @@ ToolBarItem* StdWorkbench::setupToolBars() const
     auto individualViews = new ToolBarItem(root, ToolBarItem::DefaultVisibility::Hidden);
     individualViews->setCommand("Individual Views");
     setSharedToolbarMetadata(individualViews, "Individual Views", ToolBarItem::Tier::Advanced);
+    individualViews->setHost(ToolBarItem::Host::ActiveView);
+    individualViews->setViewHostRequirement(ToolBarItem::ViewHostRequirement::View3D);
     *individualViews << "Std_ViewIsometric"
                      << "Std_ViewFront"
                      << "Std_ViewTop"
@@ -980,10 +1012,40 @@ ToolBarItem* StdWorkbench::setupToolBars() const
                      << "Std_ViewBottom"
                      << "Std_ViewLeft";
 
+    // View navigation
+    auto viewNavigation = new ToolBarItem(root, ToolBarItem::DefaultVisibility::Hidden);
+    viewNavigation->setCommand("View Navigation");
+    setSharedToolbarMetadata(viewNavigation, "View Navigation", ToolBarItem::Tier::Secondary);
+    viewNavigation->setHost(ToolBarItem::Host::ActiveView);
+    viewNavigation->setViewHostRequirement(ToolBarItem::ViewHostRequirement::View3D);
+    viewNavigation->setViewPresentation(ToolBarItem::ViewPresentation::CenteredOverlay);
+    viewNavigation->setViewOverlayEdge(ToolBarItem::ViewOverlayEdge::Top);
+    *viewNavigation << "Std_ViewFitAll"
+                    << "Std_ViewFitSelection"
+                    << "Std_AlignToSelection"
+                    << "Separator"
+                    << "Std_ViewGroup"
+                    << "Separator"
+                    << "Std_OrthographicCamera"
+                    << "Std_PerspectiveCamera";
+
+    // Tree controls
+    auto treeControls = new ToolBarItem(root, ToolBarItem::DefaultVisibility::Hidden);
+    treeControls->setCommand("Tree Controls");
+    setSharedToolbarMetadata(treeControls, "Tree Controls", ToolBarItem::Tier::Secondary);
+    treeControls->setHost(ToolBarItem::Host::Panel);
+    treeControls->setPanelRole(ToolBarItem::PanelRole::ModelTree);
+    *treeControls << "Std_TreeSelection"
+                  << "Std_TreeExpand"
+                  << "Std_TreeCollapse"
+                  << "Separator"
+                  << "Std_TreeViewActions";
+
     // Structure
     auto structure = new ToolBarItem(root);
     structure->setCommand("Structure");
     setSharedToolbarMetadata(structure, "Structure");
+    structure->setPanelRole(ToolBarItem::PanelRole::ModelTree);
     *structure << "Std_Part" << "Std_Group" << "Std_LinkActions" << "Std_VarSet";
 
     // Help
@@ -1355,30 +1417,44 @@ void PythonBaseWorkbench::appendToolbar(
     const ToolBarOptions& options
 ) const
 {
-    ToolBarItem* item = _toolBar->findItem(bar);
+    ToolBarItem* item = findOrCreateToolBarItem(_toolBar, bar);
     if (!item) {
-        item = new ToolBarItem(
-            _toolBar,
-            options.visibility.value_or(ToolBarItem::DefaultVisibility::Visible)
-        );
-        item->setCommand(bar);
-    }
-    else if (options.visibility) {
-        item->visibilityPolicy = *options.visibility;
-    }
-
-    if (options.persistenceId) {
-        item->setPersistenceKey(
-            ToolBarManager::makeToolBarPersistenceKey(*options.persistenceId).toStdString()
-        );
-    }
-
-    if (options.tier) {
-        item->setTier(*options.tier);
+        return;
     }
 
     for (const auto& it : items) {
         *item << it;
+    }
+
+    if (options.key) {
+        item->setPersistenceKey(
+            pythonWorkbenchToolbarPersistenceKey(name(), QString::fromUtf8(options.key->c_str()))
+                .toStdString()
+        );
+    }
+    if (options.tier) {
+        item->setTier(*options.tier);
+    }
+    if (options.visibility) {
+        item->visibilityPolicy = *options.visibility;
+    }
+    if (options.host) {
+        item->setHost(*options.host);
+    }
+    if (options.panelRole) {
+        item->setPanelRole(*options.panelRole);
+    }
+    if (options.viewHostRequirement) {
+        item->setViewHostRequirement(*options.viewHostRequirement);
+    }
+    if (options.viewPresentation) {
+        item->setViewPresentation(*options.viewPresentation);
+    }
+    if (options.viewOverlayEdge) {
+        item->setViewOverlayEdge(*options.viewOverlayEdge);
+    }
+    if (options.viewOverlayEdgePersistence) {
+        item->setViewOverlayEdgePersistence(*options.viewOverlayEdgePersistence);
     }
 }
 
@@ -1393,11 +1469,7 @@ void PythonBaseWorkbench::removeToolbar(const std::string& bar) const
 
 void PythonBaseWorkbench::appendCommandbar(const std::string& bar, const std::list<std::string>& items) const
 {
-    ToolBarItem* item = _commandBar->findItem(bar);
-    if (!item) {
-        item = new ToolBarItem(_commandBar);
-        item->setCommand(bar);
-    }
+    ToolBarItem* item = findOrCreateToolBarItem(_commandBar, bar);
 
     for (const auto& it : items) {
         *item << it;

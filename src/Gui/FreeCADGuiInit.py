@@ -40,7 +40,6 @@ from dataclasses import dataclass
 import traceback
 import typing
 import re
-from collections.abc import Sequence
 from pathlib import Path
 import importlib
 import FreeCAD
@@ -99,81 +98,49 @@ Gui.isCommandActive = _isCommandActive
 Gui.Selection.SelectionStyle = SelectionStyle
 
 
-#
-# These values must match the corresponding C++ enums in Gui::ToolBarManager
-# and Gui::ToolBarItem.
-#
-class ToolbarScope(IntEnum):
-    Legacy = 0
-    Shared = 1
-    Workbench = 2
-    Contextual = 3
-
-
-class ToolbarTier(IntEnum):
-    Recommended = 0
-    Secondary = 1
-    Advanced = 2
-    Contextual = 3
-
-
-class ToolbarVisibility(IntEnum):
-    Visible = 0
-    Hidden = 1
-    Unavailable = 2
-
-
-# Keep these API helpers as normal Python objects so field names can coexist
-# with convenience constructors such as ToolbarScopeId.workbench(...).
-class ToolbarScopeId:
-    scope: ToolbarScope
-    workbench: str
-    context: str
-
-    def __init__(self, scope: ToolbarScope, workbench: str = "", context: str = "") -> None:
-        self.scope = ToolbarScope(scope)
-        self.workbench = workbench
-        self.context = context
-
-    @classmethod
-    def legacy(cls) -> "ToolbarScopeId":
-        return cls(ToolbarScope.Legacy)
-
-    @classmethod
-    def shared(cls) -> "ToolbarScopeId":
-        return cls(ToolbarScope.Shared)
-
-    @classmethod
-    def workbench(cls, workbench: str) -> "ToolbarScopeId":
-        return cls(ToolbarScope.Workbench, workbench=workbench)
-
-    @classmethod
-    def contextual(cls, workbench: str, context: str) -> "ToolbarScopeId":
-        return cls(ToolbarScope.Contextual, workbench=workbench, context=context)
-
-
-class ToolbarOptions:
-    id: str | None
-    scope: ToolbarScopeId | None
-    tier: ToolbarTier | None
-    visibility: ToolbarVisibility | None
-
-    def __init__(
-        self,
-        id: str | None = None,
-        scope: ToolbarScopeId | None = None,
-        tier: ToolbarTier | None = None,
-        visibility: ToolbarVisibility | None = None,
-    ) -> None:
-        self.id = id
-        self.scope = scope
-        self.tier = tier
-        self.visibility = visibility
-
-
 # Important definitions
 class Workbench:
     """The workbench base class."""
+
+    # The values must match the C++ enum ordinals in Gui::ToolBarItem.
+    class ToolbarTier(IntEnum):
+        Recommended = 0
+        Secondary = 1
+        Advanced = 2
+        Contextual = 3
+
+    class ToolbarVisibility(IntEnum):
+        Visible = 0
+        Hidden = 1
+        Unavailable = 2
+
+    class ToolbarHost(IntEnum):
+        MainWindow = 0
+        ActiveView = 1
+        Panel = 2
+
+    class ToolbarPanelRole(IntEnum):
+        None_ = 0
+        ModelTree = 1
+
+    class ToolbarViewHostRequirement(IntEnum):
+        AnyView = 0
+        View3D = 1
+
+    class ToolbarViewPresentation(IntEnum):
+        Docked = 0
+        CenteredOverlay = 1
+
+    class ToolbarViewOverlayEdge(IntEnum):
+        Top = 0
+        Bottom = 1
+        Left = 2
+        Right = 3
+
+    class ToolbarViewOverlayEdgePersistence(IntEnum):
+        ByScope = 0
+        Shared = 1
+        Contextual = 2
 
     MenuText = ""
     ToolTip = ""
@@ -181,83 +148,88 @@ class Workbench:
 
     __Workbench__: "Workbench"  # Injected by FreeCAD, see: Application::activateWorkbench
 
-    def Initialize(self) -> None:
+    def Initialize(self):
         """Initializes this workbench."""
         App.Console.PrintWarning(f"{self!s}: Workbench.Initialize() not implemented in subclass!")
 
-    def ContextMenu(self, recipient) -> None:
+    def ContextMenu(self, recipient):
         pass
 
-    ToolbarScope = ToolbarScope
-    ToolbarScopeId = ToolbarScopeId
-    ToolbarTier = ToolbarTier
-    ToolbarVisibility = ToolbarVisibility
-    ToolbarOptions = ToolbarOptions
+    @staticmethod
+    def _toolbarOptionValue(value):
+        return int(value) if isinstance(value, IntEnum) else value
 
     def appendToolbar(
         self,
-        name: str,
-        cmds: Sequence[str] | str,
-        options: ToolbarOptions | None = None,
-    ) -> None:
-        if options is None:
-            self.__Workbench__.appendToolbar(name, cmds)
-        else:
-            self.__Workbench__.appendToolbar(name, cmds, options)
+        name,
+        cmds,
+        key=None,
+        tier=None,
+        visibility=None,
+        host=None,
+        panel_role=None,
+        view_host_requirement=None,
+        view_presentation=None,
+        view_overlay_edge=None,
+        view_overlay_edge_persistence=None,
+    ):
+        self.__Workbench__.appendToolbar(
+            name,
+            cmds,
+            key,
+            self._toolbarOptionValue(tier),
+            self._toolbarOptionValue(visibility),
+            self._toolbarOptionValue(host),
+            self._toolbarOptionValue(panel_role),
+            self._toolbarOptionValue(view_host_requirement),
+            self._toolbarOptionValue(view_presentation),
+            self._toolbarOptionValue(view_overlay_edge),
+            self._toolbarOptionValue(view_overlay_edge_persistence),
+        )
 
-    def removeToolbar(self, name: str) -> None:
+    def removeToolbar(self, name):
         self.__Workbench__.removeToolbar(name)
 
-    def listToolbars(self) -> list[str]:
+    def listToolbars(self):
         return self.__Workbench__.listToolbars()
 
-    def getToolbarItems(self) -> dict[str, list[str]]:
+    def getToolbarItems(self):
         return self.__Workbench__.getToolbarItems()
 
-    def getToolbarIdentities(self) -> dict[str, str]:
-        return self.__Workbench__.getToolbarIdentities()
-
-    def appendCommandbar(self, name: str, cmds: Sequence[str] | str) -> None:
+    def appendCommandbar(self, name, cmds):
         self.__Workbench__.appendCommandbar(name, cmds)
 
-    def removeCommandbar(self, name: str) -> None:
+    def removeCommandbar(self, name):
         self.__Workbench__.removeCommandbar(name)
 
-    def listCommandbars(self) -> list[str]:
+    def listCommandbars(self):
         return self.__Workbench__.listCommandbars()
 
-    def appendMenu(self, name, cmds) -> None:
+    def appendMenu(self, name, cmds):
         self.__Workbench__.appendMenu(name, cmds)
 
-    def removeMenu(self, name) -> None:
+    def removeMenu(self, name):
         self.__Workbench__.removeMenu(name)
 
-    def listMenus(self) -> list[str]:
+    def listMenus(self):
         return self.__Workbench__.listMenus()
 
-    def appendContextMenu(self, name, cmds) -> None:
+    def appendContextMenu(self, name, cmds):
         self.__Workbench__.appendContextMenu(name, cmds)
 
-    def removeContextMenu(self, name) -> None:
+    def removeContextMenu(self, name):
         self.__Workbench__.removeContextMenu(name)
 
-    def reloadActive(self) -> None:
+    def reloadActive(self):
         self.__Workbench__.reloadActive()
 
-    def name(self) -> str:
+    def name(self):
         return self.__Workbench__.name()
 
-    def GetClassName(self) -> str:
+    def GetClassName(self):
         """Return the name of the associated C++ class."""
         # as default use this to simplify writing workbenches in Python
         return "Gui::PythonWorkbench"
-
-
-FreeCADGui.ToolbarScope = ToolbarScope
-FreeCADGui.ToolbarScopeId = ToolbarScopeId
-FreeCADGui.ToolbarTier = ToolbarTier
-FreeCADGui.ToolbarVisibility = ToolbarVisibility
-FreeCADGui.ToolbarOptions = ToolbarOptions
 
 
 class StandardWorkbench(Workbench):

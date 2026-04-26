@@ -161,6 +161,30 @@ class TestToolbarPersistenceGui(unittest.TestCase):
 
         self.fail(f"Menu action '{action_text}' was not found")
 
+    def find_menu_action(self, menu, action_text):
+        for action in menu.actions():
+            if self.normalized_action_text(action) == action_text:
+                return action
+        return None
+
+    def find_menu_submenu(self, menu, action_text):
+        action = self.find_menu_action(menu, action_text)
+        if action is None:
+            return None
+        return action.menu()
+
+    def trigger_menu_path(self, popup, *action_texts):
+        menu = self.prepare_popup_menu(popup)
+        for action_text in action_texts[:-1]:
+            submenu = self.find_menu_submenu(menu, action_text)
+            self.assertIsNotNone(submenu, f"Menu '{action_text}' was not found")
+            menu = self.prepare_popup_menu(submenu)
+
+        action = self.find_menu_action(menu, action_texts[-1])
+        self.assertIsNotNone(action, f"Menu action '{action_texts[-1]}' was not found")
+        action.trigger()
+        self.pump(250)
+
     def capture_status_bar_context_menu(self):
         status_bar = self.main_window().statusBar()
         self.assertIsNotNone(status_bar, "Main window should provide a status bar")
@@ -193,6 +217,91 @@ class TestToolbarPersistenceGui(unittest.TestCase):
         self.pump(120)
         return result["sections"], result["texts"]
 
+    def active_view_graphics_view(self):
+        active_view = getattr(FreeCADGui.ActiveDocument, "ActiveView", None)
+        self.assertIsNotNone(active_view, "Expected an active FreeCAD GUI view")
+        graphics_view = active_view.graphicsView()
+        self.assertIsNotNone(
+            graphics_view, "Expected the active GUI view to expose a graphics view"
+        )
+        return graphics_view
+
+    def open_active_view_context_menu(self):
+        popup = QtGui.QApplication.activePopupWidget()
+        if popup is not None:
+            popup.hide()
+            self.pump(120)
+
+        graphics_view = self.active_view_graphics_view()
+        target = graphics_view.viewport() if hasattr(graphics_view, "viewport") else graphics_view
+        local_pos = target.rect().center()
+        global_pos = target.mapToGlobal(local_pos)
+        QtGui.QCursor.setPos(global_pos)
+
+        press_event = QtGui.QMouseEvent(
+            QtCore.QEvent.MouseButtonPress,
+            local_pos,
+            global_pos,
+            QtCore.Qt.RightButton,
+            QtCore.Qt.RightButton,
+            QtCore.Qt.NoModifier,
+        )
+        release_event = QtGui.QMouseEvent(
+            QtCore.QEvent.MouseButtonRelease,
+            local_pos,
+            global_pos,
+            QtCore.Qt.RightButton,
+            QtCore.Qt.RightButton,
+            QtCore.Qt.NoModifier,
+        )
+        QtGui.QApplication.sendEvent(target, press_event)
+        self.pump(120)
+        QtGui.QApplication.sendEvent(target, release_event)
+        self.wait_until(
+            lambda: QtGui.QApplication.activePopupWidget() is not None,
+            "3D view context menu to open",
+        )
+        popup = QtGui.QApplication.activePopupWidget()
+        self.assertIsNotNone(popup, "Expected the active view context menu popup")
+        return popup
+
+    def open_toolbar_context_menu(self, toolbar):
+        popup = QtGui.QApplication.activePopupWidget()
+        if popup is not None:
+            popup.hide()
+            self.pump(120)
+
+        local_pos = toolbar.rect().center()
+        global_pos = toolbar.mapToGlobal(local_pos)
+        QtGui.QCursor.setPos(global_pos)
+
+        press_event = QtGui.QMouseEvent(
+            QtCore.QEvent.MouseButtonPress,
+            local_pos,
+            global_pos,
+            QtCore.Qt.RightButton,
+            QtCore.Qt.RightButton,
+            QtCore.Qt.NoModifier,
+        )
+        release_event = QtGui.QMouseEvent(
+            QtCore.QEvent.MouseButtonRelease,
+            local_pos,
+            global_pos,
+            QtCore.Qt.RightButton,
+            QtCore.Qt.RightButton,
+            QtCore.Qt.NoModifier,
+        )
+        QtGui.QApplication.sendEvent(toolbar, press_event)
+        self.pump(120)
+        QtGui.QApplication.sendEvent(toolbar, release_event)
+        self.wait_until(
+            lambda: QtGui.QApplication.activePopupWidget() is not None,
+            "toolbar context menu to open",
+        )
+        popup = QtGui.QApplication.activePopupWidget()
+        self.assertIsNotNone(popup, "Expected the toolbar context menu popup")
+        return popup
+
     def toolbar_key(self, toolbar):
         key = toolbar.property("PersistenceKey")
         if key:
@@ -204,6 +313,53 @@ class TestToolbarPersistenceGui(unittest.TestCase):
         if tier:
             return str(tier)
         return ""
+
+    def toolbar_host(self, toolbar):
+        host = toolbar.property("Host")
+        if host:
+            return str(host)
+        return "main-window"
+
+    def toolbar_panel_role(self, toolbar):
+        role = toolbar.property("PanelRole")
+        if role:
+            return str(role)
+        return "none"
+
+    def toolbar_view_presentation(self, toolbar):
+        presentation = toolbar.property("ViewPresentation")
+        if presentation:
+            return str(presentation)
+        return "docked"
+
+    def toolbar_view_overlay_edge(self, toolbar):
+        edge = toolbar.property("ViewOverlayEdge")
+        if edge:
+            return str(edge)
+        return "top"
+
+    def toolbar_overlay_lane(self, toolbar):
+        if self.toolbar_view_presentation(toolbar) != "centered-overlay":
+            return None
+        return toolbar.parentWidget()
+
+    def toolbar_overlay_anchor(self, toolbar):
+        lane = self.toolbar_overlay_lane(toolbar)
+        if lane is None:
+            return None
+        return lane.parentWidget()
+
+    def model_tree_toolbar_host(self):
+        hosts = [
+            host
+            for host in self.main_window().findChildren(QtGui.QWidget)
+            if host.objectName() == "_fc_panel_toolbar_host_model_tree"
+        ]
+        self.assertTrue(hosts, "Expected a model-tree toolbar host widget")
+        for host in hosts:
+            if host.isVisible():
+                return host
+        return hosts[0]
 
     def toolbar_tier_label(self, toolbar):
         labels = {
@@ -238,7 +394,9 @@ class TestToolbarPersistenceGui(unittest.TestCase):
         return mapping[value]
 
     def alternative_toolbar_area(self, toolbar):
-        current_area = self.toolbar_area_value(self.main_window().toolBarArea(toolbar))
+        current_area = self.toolbar_area_value(
+            self.toolbar_host_window(toolbar).toolBarArea(toolbar)
+        )
         for area in (
             QtCore.Qt.RightToolBarArea,
             QtCore.Qt.LeftToolBarArea,
@@ -287,6 +445,85 @@ class TestToolbarPersistenceGui(unittest.TestCase):
 
     def all_toolbars(self):
         return list(self.main_window().findChildren(QtGui.QToolBar))
+
+    def active_mdi_view(self):
+        mdi_area = self.mdi_area()
+        sub_window = mdi_area.activeSubWindow()
+        self.assertIsNotNone(sub_window, "Expected an active MDI subwindow")
+        widget = sub_window.widget()
+        self.assertIsNotNone(widget, "Expected the active MDI subwindow to own a widget")
+        return widget
+
+    def mdi_area(self):
+        mdi_area = self.main_window().findChild(QtGui.QMdiArea)
+        self.assertIsNotNone(mdi_area, "Main window should provide an MDI area")
+        return mdi_area
+
+    def mdi_sub_window(self, view):
+        for sub_window in self.mdi_area().subWindowList():
+            if sub_window.widget() is view:
+                return sub_window
+
+        self.fail("Expected MDI subwindow for the given view")
+
+    def activate_mdi_view(self, view):
+        sub_window = self.mdi_sub_window(view)
+        mdi_area = self.mdi_area()
+        mdi_area.setActiveSubWindow(sub_window)
+        self.pump(250)
+        self.wait_until(lambda: self.active_mdi_view() is view, "active MDI view to switch")
+        return view
+
+    def close_mdi_view(self, view):
+        for sub_window in self.mdi_area().subWindowList():
+            if sub_window.widget() is view:
+                sub_window.close()
+                self.pump(250)
+                break
+
+    def create_additional_view(self, title):
+        mdi_area = self.mdi_area()
+        existing = list(mdi_area.subWindowList())
+        FreeCADGui.createViewer(1, title)
+        self.pump(250)
+
+        for sub_window in mdi_area.subWindowList():
+            if sub_window not in existing:
+                view = sub_window.widget()
+                self.assertIsNotNone(view, "Expected a widget for the new MDI subwindow")
+                self.addCleanup(self.close_mdi_view, view)
+                return view
+
+        self.fail("Expected createViewer() to add a new MDI subwindow")
+
+    def create_text_document_view(self):
+        mdi_area = self.mdi_area()
+        existing = list(mdi_area.subWindowList())
+        FreeCADGui.runCommand("Std_TextDocument")
+        self.pump(250)
+
+        for sub_window in mdi_area.subWindowList():
+            if sub_window not in existing:
+                view = sub_window.widget()
+                self.assertIsNotNone(view, "Expected a widget for the new text document view")
+                self.addCleanup(self.close_mdi_view, view)
+                return view
+
+        self.fail("Expected Std_TextDocument to add a new MDI subwindow")
+
+    def toolbar_host_window(self, toolbar):
+        if self.toolbar_host(toolbar) == "view":
+            return self.active_mdi_view()
+        return self.main_window()
+
+    def assert_toolbar_panel_host(self, key):
+        toolbar = self.wait_for_toolbar(key)
+        self.assertIsNotNone(toolbar, f"Expected toolbar {key} to exist")
+        host = self.model_tree_toolbar_host()
+        self.wait_until(
+            lambda: toolbar.parentWidget() is host and toolbar.isVisible(),
+            f"toolbar {key} to attach to the model-tree host",
+        )
 
     def toolbars_for_prefix(self, prefix, active_only=False):
         items = []
@@ -339,7 +576,12 @@ class TestToolbarPersistenceGui(unittest.TestCase):
         self._modified_toolbars[key] = {
             "workbench": workbench,
             "context": context,
-            "area": self.toolbar_area_value(self.main_window().toolBarArea(toolbar)),
+            "presentation": self.toolbar_view_presentation(toolbar),
+            "area": (
+                self.toolbar_area_value(self.toolbar_host_window(toolbar).toolBarArea(toolbar))
+                if self.toolbar_view_presentation(toolbar) == "docked"
+                else None
+            ),
             "visible": toolbar.isVisible(),
         }
         return key
@@ -347,9 +589,12 @@ class TestToolbarPersistenceGui(unittest.TestCase):
     def restore_toolbar_state(self, key, state):
         toolbar = self.wait_for_toolbar(key)
         self.assertIsNotNone(toolbar, f"Expected toolbar {key} to exist during restore")
-        toolbar.show()
-        self.main_window().addToolBar(self.toolbar_area_enum(state["area"]), toolbar)
-        self.pump(200)
+        if state.get("presentation") == "docked" and state.get("area") is not None:
+            toolbar.show()
+            self.toolbar_host_window(toolbar).addToolBar(
+                self.toolbar_area_enum(state["area"]), toolbar
+            )
+            self.pump(200)
         if state["visible"]:
             toolbar.show()
         else:
@@ -360,9 +605,10 @@ class TestToolbarPersistenceGui(unittest.TestCase):
         toolbar = self.wait_for_toolbar(key)
         self.assertIsNotNone(toolbar, f"Expected toolbar {key} to exist")
         toolbar.show()
-        self.main_window().addToolBar(area, toolbar)
+        host_window = self.toolbar_host_window(toolbar)
+        host_window.addToolBar(area, toolbar)
         self.pump(250)
-        actual_area = self.main_window().toolBarArea(toolbar)
+        actual_area = host_window.toolBarArea(toolbar)
         self.assertEqual(
             self.toolbar_area_value(actual_area),
             self.toolbar_area_value(area),
@@ -385,7 +631,7 @@ class TestToolbarPersistenceGui(unittest.TestCase):
     def assert_toolbar_area(self, key, expected_area):
         toolbar = self.wait_for_toolbar(key)
         self.assertIsNotNone(toolbar, f"Expected toolbar {key} to exist")
-        actual_area = self.main_window().toolBarArea(toolbar)
+        actual_area = self.toolbar_host_window(toolbar).toolBarArea(toolbar)
         self.assertEqual(
             self.toolbar_area_value(actual_area),
             self.toolbar_area_value(expected_area),
@@ -585,7 +831,655 @@ class TestToolbarPersistenceGui(unittest.TestCase):
         toolbar = self.wait_for_toolbar("wb:SketcherWorkbench:Custom Tier Test")
         self.assertEqual(self.toolbar_tier(toolbar), "advanced")
 
+    def test_view_hosted_toolbar_uses_active_view_host(self):
+        view_toolbar_label = QtGui.QApplication.translate("MainWindow", "View Toolbars")
+
+        toolbar = self.wait_for_toolbar("shared:Individual Views")
+        self.assertEqual(self.toolbar_host(toolbar), "view")
+
+        self.show_toolbar("shared:Individual Views")
+        active_view = self.active_mdi_view()
+        self.assertIs(
+            toolbar.parentWidget(),
+            active_view,
+            "Individual Views toolbar should be hosted inside the active view",
+        )
+        self.assertEqual(
+            self.toolbar_area_value(active_view.toolBarArea(toolbar)),
+            self.toolbar_area_value(QtCore.Qt.TopToolBarArea),
+            "View-hosted toolbars should default to the top area of the active view",
+        )
+
+        sections, texts = self.capture_popup_menu(self.toolbar_menu())
+        self.assertIn(view_toolbar_label, sections, "Toolbar menu should expose view toolbar group")
+        self.assertIn(
+            self.toolbar_menu_label(toolbar),
+            texts,
+            "Toolbar menu should expose the view-hosted toolbar entry",
+        )
+
+    def test_view_navigation_toolbar_uses_centered_overlay_host(self):
+        key = "shared:View Navigation"
+        toolbar = self.wait_for_toolbar(key)
+        self.record_toolbar_state(toolbar, "SketcherWorkbench")
+
+        self.assertEqual(self.toolbar_host(toolbar), "view")
+        self.assertEqual(self.toolbar_view_presentation(toolbar), "centered-overlay")
+        self.assertEqual(self.toolbar_view_overlay_edge(toolbar), "top")
+
+        self.show_toolbar(key)
+        active_view = self.active_mdi_view()
+        overlay_anchor = self.toolbar_overlay_anchor(toolbar)
+        overlay_lane = self.toolbar_overlay_lane(toolbar)
+        self.assertIsNotNone(overlay_anchor, "View Navigation should use an overlay anchor")
+        self.assertIsNotNone(overlay_lane, "View Navigation should use an overlay lane")
+        self.assertIs(
+            overlay_anchor,
+            active_view.centralWidget(),
+            "View Navigation should overlay the active view content",
+        )
+        self.assertEqual(
+            str(overlay_lane.property("overlayRole")),
+            "view-toolbar-lane",
+            "View Navigation overlay lane should expose a stable theming role",
+        )
+        self.assertTrue(
+            overlay_lane.property("panelColor").isValid(),
+            "View Navigation overlay lane should expose themed panel color properties",
+        )
+        self.assertNotEqual(
+            overlay_lane.property("panelColor"),
+            QtGui.QColor.fromRgb(25, 25, 25, 220),
+            "View Navigation overlay lane should not fall back to the hardcoded default panel color",
+        )
+        self.assertEqual(
+            self.toolbar_area_value(active_view.toolBarArea(toolbar)),
+            self.toolbar_area_value(QtCore.Qt.NoToolBarArea),
+            "View Navigation should not be registered as a docked view toolbar",
+        )
+
+        lane_center = overlay_lane.geometry().center().x()
+        anchor_center = overlay_anchor.rect().center().x()
+        self.assertLessEqual(
+            abs(lane_center - anchor_center),
+            4,
+            "View Navigation overlay should be centered on the active view",
+        )
+        self.assertGreaterEqual(
+            overlay_lane.geometry().y(),
+            0,
+            "View Navigation overlay should remain inside the active view bounds",
+        )
+
+    def test_view_toolbar_menu_exposes_hidden_compatible_toolbar(self):
+        individual_views_key = "shared:Individual Views"
+        view_navigation_key = "shared:View Navigation"
+        view_toolbar_label = QtGui.QApplication.translate("MainWindow", "View Toolbars")
+        show_label = QtGui.QApplication.translate("MainWindow", "Show")
+        visibility_group = FreeCAD.ParamGet("User parameter:BaseApp/MainWindow/Toolbars")
+        self.backup_bool_param(visibility_group, individual_views_key)
+        self.backup_bool_param(visibility_group, view_navigation_key)
+        visibility_group.SetBool(individual_views_key, False)
+        visibility_group.SetBool(view_navigation_key, False)
+
+        self.activate_workbench("SketcherWorkbench", "wb:SketcherWorkbench:")
+        individual_views_toolbar = self.wait_for_toolbar(individual_views_key)
+        view_navigation_toolbar = self.wait_for_toolbar(view_navigation_key)
+        individual_views_toolbar.hide()
+        view_navigation_toolbar.hide()
+        self.pump(200)
+        self.assertFalse(
+            individual_views_toolbar.isVisible(),
+            "Individual Views toolbar should remain hidden in this test",
+        )
+        self.assertFalse(
+            view_navigation_toolbar.isVisible(),
+            "View Navigation toolbar should remain hidden in this test",
+        )
+
+        sections, texts = self.capture_popup_menu(self.toolbar_menu())
+        self.assertIn(
+            view_toolbar_label,
+            sections,
+            "Toolbar menu should expose the view toolbar group for compatible 3D views",
+        )
+        self.assertIn(
+            self.toolbar_menu_label(individual_views_toolbar),
+            texts,
+            "Toolbar menu should expose hidden compatible Individual Views toolbar",
+        )
+        self.assertIn(
+            self.toolbar_menu_label(view_navigation_toolbar),
+            texts,
+            "Toolbar menu should expose the View Navigation submenu",
+        )
+        menu = self.prepare_popup_menu(self.toolbar_menu())
+        view_navigation_menu = self.find_menu_submenu(
+            menu, self.toolbar_menu_label(view_navigation_toolbar)
+        )
+        self.assertIsNotNone(view_navigation_menu, "Expected View Navigation submenu to exist")
+        show_action = self.find_menu_action(view_navigation_menu, show_label)
+        self.assertIsNotNone(show_action, "Expected View Navigation show action to exist")
+        self.assertTrue(
+            show_action.isEnabled(),
+            "Toolbar menu should enable compatible View Navigation toolbar",
+        )
+
+        self.trigger_menu_path(
+            self.toolbar_menu(), self.toolbar_menu_label(view_navigation_toolbar), show_label
+        )
+        self.wait_until(
+            lambda: view_navigation_toolbar.isVisible(),
+            "view-hosted View Navigation menu action to show the toolbar",
+        )
+        self.pump(250)
+        self.assertTrue(
+            view_navigation_toolbar.isVisible(),
+            "View Navigation toolbar should remain visible after the delayed refresh path runs",
+        )
+        self.assertTrue(
+            visibility_group.GetBool(view_navigation_key),
+            "View Navigation toolbar menu action should persist the shown state",
+        )
+
+    def test_regular_toolbar_can_move_into_view_host(self):
+        key = "shared:Clipboard"
+        move_to_label = QtGui.QApplication.translate("MainWindow", "Move To")
+        main_window_label = QtGui.QApplication.translate("MainWindow", "Main Window")
+        view_label = QtGui.QApplication.translate("MainWindow", "View")
+        presentation_label = QtGui.QApplication.translate("MainWindow", "Presentation")
+        centered_overlay_label = QtGui.QApplication.translate("MainWindow", "Centered Overlay")
+
+        params = FreeCAD.ParamGet("User parameter:BaseApp/MainWindow")
+        host_group_name = "HostedToolbarHosts"
+        host_backup_name = "TestToolbarPersistenceGuiBackupHostedToolbarHosts"
+        presentation_group_name = "ViewToolbarPresentations"
+        presentation_backup_name = "TestToolbarPersistenceGuiBackupViewToolbarPresentations"
+        had_host_group = params.HasGroup(host_group_name)
+        had_presentation_group = params.HasGroup(presentation_group_name)
+        params.RemGroup(host_backup_name)
+        params.RemGroup(presentation_backup_name)
+        if had_host_group:
+            params.GetGroup(host_group_name).CopyTo(params.GetGroup(host_backup_name))
+        if had_presentation_group:
+            params.GetGroup(presentation_group_name).CopyTo(
+                params.GetGroup(presentation_backup_name)
+            )
+
+        toolbar = None
+        try:
+            self.activate_workbench("SketcherWorkbench", "wb:SketcherWorkbench:")
+            toolbar = self.wait_for_toolbar(key)
+            self.assertEqual(self.toolbar_host(toolbar), "main-window")
+
+            self.trigger_menu_path(
+                self.toolbar_menu(), self.toolbar_menu_label(toolbar), move_to_label, view_label
+            )
+            self.wait_until(
+                lambda: self.toolbar_host(self.wait_for_toolbar(key)) == "view",
+                "shared toolbar host to change to the active view",
+            )
+            toolbar = self.wait_for_toolbar(key)
+            self.assertIs(
+                toolbar.parentWidget(),
+                self.active_mdi_view(),
+                "Regular toolbar should dock into the active view after moving it there",
+            )
+
+            self.activate_workbench("PartWorkbench", "wb:PartWorkbench:")
+            self.wait_until(
+                lambda: self.toolbar_host(self.wait_for_toolbar(key)) == "view",
+                "shared toolbar host to stay view in Part",
+            )
+
+            self.activate_workbench("SketcherWorkbench", "wb:SketcherWorkbench:")
+            toolbar = self.wait_for_toolbar(key)
+            self.wait_until(
+                lambda: self.toolbar_host(self.wait_for_toolbar(key)) == "view",
+                "shared toolbar host to persist across workbench switches",
+            )
+
+            self.trigger_menu_path(
+                self.toolbar_menu(),
+                self.toolbar_menu_label(toolbar),
+                presentation_label,
+                centered_overlay_label,
+            )
+            self.wait_until(
+                lambda: self.toolbar_view_presentation(self.wait_for_toolbar(key))
+                == "centered-overlay",
+                "regular toolbar presentation to change to centered overlay",
+            )
+            self.show_toolbar(key)
+            toolbar = self.wait_for_toolbar(key)
+            self.assertIsNotNone(
+                self.toolbar_overlay_anchor(toolbar),
+                "Regular toolbar should use the overlay host after choosing centered overlay",
+            )
+
+            self.trigger_menu_path(
+                self.toolbar_menu(),
+                self.toolbar_menu_label(toolbar),
+                move_to_label,
+                main_window_label,
+            )
+            self.wait_until(
+                lambda: self.toolbar_host(self.wait_for_toolbar(key)) == "main-window",
+                "regular toolbar host to move back to the main window",
+            )
+            toolbar = self.wait_for_toolbar(key)
+            self.assertIs(
+                toolbar.parentWidget(),
+                self.main_window(),
+                "Regular toolbar should return to the main window host",
+            )
+        finally:
+            params.RemGroup(host_group_name)
+            params.RemGroup(presentation_group_name)
+            if had_host_group:
+                params.GetGroup(host_backup_name).CopyTo(params.GetGroup(host_group_name))
+            if had_presentation_group:
+                params.GetGroup(presentation_backup_name).CopyTo(
+                    params.GetGroup(presentation_group_name)
+                )
+            params.RemGroup(host_backup_name)
+            params.RemGroup(presentation_backup_name)
+
+    def test_panel_toolbar_menu_exposes_hidden_model_tree_toolbar(self):
+        key = "shared:Tree Controls"
+        panel_label = QtGui.QApplication.translate("MainWindow", "Panel Toolbars")
+
+        self.activate_workbench("SketcherWorkbench", "wb:SketcherWorkbench:")
+        tree_controls = self.wait_for_toolbar(key)
+
+        sections, texts = self.capture_popup_menu(self.toolbar_menu())
+        self.assertIn(panel_label, sections, "Toolbar menu should expose panel toolbar group")
+        self.assertIn(
+            self.toolbar_menu_label(tree_controls),
+            texts,
+            "Toolbar menu should expose hidden model-tree toolbar entries",
+        )
+
+        self.show_toolbar(key)
+        self.assertEqual(self.toolbar_host(tree_controls), "panel")
+        self.assertEqual(self.toolbar_panel_role(tree_controls), "model-tree")
+        self.assert_toolbar_panel_host(key)
+
+    def test_regular_toolbar_can_move_into_model_tree_host(self):
+        key = "shared:Structure"
+        move_to_label = QtGui.QApplication.translate("MainWindow", "Move To")
+        main_window_label = QtGui.QApplication.translate("MainWindow", "Main Window")
+        model_tree_label = QtGui.QApplication.translate("MainWindow", "Model Tree")
+
+        params = FreeCAD.ParamGet("User parameter:BaseApp/MainWindow")
+        host_group_name = "HostedToolbarHosts"
+        host_backup_name = "TestToolbarPersistenceGuiBackupHostedToolbarHosts"
+        had_host_group = params.HasGroup(host_group_name)
+        params.RemGroup(host_backup_name)
+        if had_host_group:
+            params.GetGroup(host_group_name).CopyTo(params.GetGroup(host_backup_name))
+
+        try:
+            self.activate_workbench("SketcherWorkbench", "wb:SketcherWorkbench:")
+            toolbar = self.wait_for_toolbar(key)
+            self.assertEqual(self.toolbar_host(toolbar), "main-window")
+            self.assertEqual(self.toolbar_panel_role(toolbar), "model-tree")
+
+            self.trigger_menu_path(
+                self.toolbar_menu(),
+                self.toolbar_menu_label(toolbar),
+                move_to_label,
+                model_tree_label,
+            )
+            self.wait_until(
+                lambda: self.toolbar_host(self.wait_for_toolbar(key)) == "panel",
+                "shared toolbar host to change to the model tree",
+            )
+            self.assert_toolbar_panel_host(key)
+
+            self.activate_workbench("PartWorkbench", "wb:PartWorkbench:")
+            self.wait_until(
+                lambda: self.toolbar_host(self.wait_for_toolbar(key)) == "panel",
+                "shared toolbar host to stay panel in Part",
+            )
+            self.assert_toolbar_panel_host(key)
+
+            self.activate_workbench("SketcherWorkbench", "wb:SketcherWorkbench:")
+            self.wait_until(
+                lambda: self.toolbar_host(self.wait_for_toolbar(key)) == "panel",
+                "shared toolbar host to persist across workbench switches",
+            )
+            self.assert_toolbar_panel_host(key)
+
+            self.trigger_menu_path(
+                self.toolbar_menu(),
+                self.toolbar_menu_label(self.wait_for_toolbar(key)),
+                move_to_label,
+                main_window_label,
+            )
+            self.wait_until(
+                lambda: self.toolbar_host(self.wait_for_toolbar(key)) == "main-window",
+                "shared toolbar host to move back to the main window",
+            )
+            toolbar = self.wait_for_toolbar(key)
+            self.assertIs(
+                toolbar.parentWidget(),
+                self.main_window(),
+                "Regular toolbar should return to the main window host",
+            )
+        finally:
+            params.RemGroup(host_group_name)
+            if had_host_group:
+                params.GetGroup(host_backup_name).CopyTo(params.GetGroup(host_group_name))
+            params.RemGroup(host_backup_name)
+            self.activate_workbench("SketcherWorkbench", "wb:SketcherWorkbench:")
+
+    def test_view_context_menu_exposes_view_toolbar_submenu(self):
+        individual_views_key = "shared:Individual Views"
+        view_navigation_key = "shared:View Navigation"
+        view_toolbar_label = QtGui.QApplication.translate("MainWindow", "View Toolbars")
+        show_label = QtGui.QApplication.translate("MainWindow", "Show")
+        position_label = QtGui.QApplication.translate("MainWindow", "Position")
+        reset_view_label = QtGui.QApplication.translate(
+            "MainWindow", "Reset Current View Toolbar Layout"
+        )
+        recommended_reset_view_label = QtGui.QApplication.translate(
+            "MainWindow", "Reset To Recommended View Toolbar Layout"
+        )
+
+        self.activate_workbench("SketcherWorkbench", "wb:SketcherWorkbench:")
+        individual_views_toolbar = self.wait_for_toolbar(individual_views_key)
+        view_navigation_toolbar = self.wait_for_toolbar(view_navigation_key)
+        self.record_toolbar_state(individual_views_toolbar, "SketcherWorkbench")
+        self.record_toolbar_state(view_navigation_toolbar, "SketcherWorkbench")
+        individual_views_toolbar.hide()
+        view_navigation_toolbar.hide()
+        self.pump(200)
+
+        popup = self.open_active_view_context_menu()
+        self.assertIn(
+            view_toolbar_label,
+            self.menu_action_texts(popup),
+            "3D view context menu should expose the view toolbar submenu",
+        )
+
+        submenu = None
+        for action in popup.actions():
+            if self.normalized_action_text(action) == view_toolbar_label:
+                submenu = action.menu()
+                break
+
+        self.assertIsNotNone(submenu, "Expected the view toolbar submenu to exist")
+        submenu_texts = self.menu_action_texts(submenu)
+        self.assertIn(
+            self.toolbar_menu_label(individual_views_toolbar),
+            submenu_texts,
+            "3D view context submenu should expose the Individual Views toolbar",
+        )
+        self.assertIn(
+            self.toolbar_menu_label(view_navigation_toolbar),
+            submenu_texts,
+            "3D view context submenu should expose the View Navigation submenu",
+        )
+        view_navigation_menu = self.find_menu_submenu(
+            submenu, self.toolbar_menu_label(view_navigation_toolbar)
+        )
+        self.assertIsNotNone(view_navigation_menu, "Expected the View Navigation submenu")
+        self.assertIn(
+            show_label,
+            self.menu_action_texts(view_navigation_menu),
+            "View Navigation submenu should expose a show action",
+        )
+        self.assertIn(
+            position_label,
+            self.menu_action_texts(view_navigation_menu),
+            "View Navigation submenu should expose a position submenu",
+        )
+        self.assertIn(
+            reset_view_label,
+            submenu_texts,
+            "3D view context submenu should expose the current view layout reset action",
+        )
+        self.assertIn(
+            recommended_reset_view_label,
+            submenu_texts,
+            "3D view context submenu should expose the recommended view layout reset action",
+        )
+        popup.hide()
+
+    def test_overlay_toolbar_context_menu_exposes_overlay_options(self):
+        key = "shared:View Navigation"
+        show_label = QtGui.QApplication.translate("MainWindow", "Show")
+        move_to_label = QtGui.QApplication.translate("MainWindow", "Move To")
+        presentation_label = QtGui.QApplication.translate("MainWindow", "Presentation")
+        position_label = QtGui.QApplication.translate("MainWindow", "Position")
+        reset_view_label = QtGui.QApplication.translate(
+            "MainWindow", "Reset Current View Toolbar Layout"
+        )
+        bottom_label = QtGui.QApplication.translate("MainWindow", "Bottom")
+
+        self.activate_workbench("SketcherWorkbench", "wb:SketcherWorkbench:")
+        toolbar = self.wait_for_toolbar(key)
+        self.record_toolbar_state(toolbar, "SketcherWorkbench")
+        self.show_toolbar(key)
+
+        popup = self.open_toolbar_context_menu(toolbar)
+        texts = self.menu_action_texts(popup)
+        self.assertIn(show_label, texts, "Overlay toolbar context menu should expose show toggle")
+        self.assertIn(
+            move_to_label, texts, "Overlay toolbar context menu should expose host options"
+        )
+        self.assertIn(
+            presentation_label,
+            texts,
+            "Overlay toolbar context menu should expose presentation options",
+        )
+        self.assertIn(
+            position_label, texts, "Overlay toolbar context menu should expose position options"
+        )
+        self.assertIn(
+            reset_view_label,
+            texts,
+            "Overlay toolbar context menu should expose the current view reset action",
+        )
+
+        self.trigger_menu_path(popup, position_label, bottom_label)
+        self.wait_until(
+            lambda: self.toolbar_view_overlay_edge(self.wait_for_toolbar(key)) == "bottom",
+            "overlay toolbar context menu to move the overlay to bottom",
+        )
+
+    def test_view_hosted_toolbar_layout_restores_in_active_view(self):
+        key = "shared:Individual Views"
+        toolbar = self.wait_for_toolbar(key)
+        self.record_toolbar_state(toolbar, "SketcherWorkbench")
+
+        self.show_toolbar(key)
+        target_area = self.alternative_toolbar_area(toolbar)
+        self.move_toolbar(key, target_area)
+
+        self.activate_workbench("PartWorkbench", "wb:PartWorkbench:")
+        self.activate_workbench("SketcherWorkbench", "wb:SketcherWorkbench:")
+
+        restored_toolbar = self.wait_for_toolbar(key)
+        self.assertIs(
+            restored_toolbar.parentWidget(),
+            self.active_mdi_view(),
+            "View-hosted toolbar should restore into the active view",
+        )
+        self.assert_toolbar_visibility(key, True)
+        self.assert_toolbar_area(key, target_area)
+
+    def test_view_hosted_toolbar_follows_active_view_switches(self):
+        key = "shared:Individual Views"
+
+        self.activate_workbench("SketcherWorkbench", "wb:SketcherWorkbench:")
+        original_view = self.active_mdi_view()
+        toolbar = self.wait_for_toolbar(key)
+        self.record_toolbar_state(toolbar, "SketcherWorkbench")
+        self.show_toolbar(key)
+
+        target_area = self.alternative_toolbar_area(toolbar)
+        self.move_toolbar(key, target_area)
+
+        self.activate_workbench("PartWorkbench", "wb:PartWorkbench:")
+        self.activate_workbench("SketcherWorkbench", "wb:SketcherWorkbench:")
+        self.activate_mdi_view(original_view)
+
+        extra_view = self.create_additional_view("Toolbar Host Test")
+        self.activate_mdi_view(extra_view)
+        self.wait_until(
+            lambda: self.wait_for_toolbar(key).parentWidget() is extra_view,
+            "view-hosted toolbar to move to the secondary view",
+        )
+        self.assert_toolbar_area(key, target_area)
+
+    def test_view_navigation_overlay_follows_active_view_switches(self):
+        key = "shared:View Navigation"
+
+        self.activate_workbench("SketcherWorkbench", "wb:SketcherWorkbench:")
+        original_view = self.active_mdi_view()
+        toolbar = self.wait_for_toolbar(key)
+        self.record_toolbar_state(toolbar, "SketcherWorkbench")
+        self.show_toolbar(key)
+
+        original_anchor = self.toolbar_overlay_anchor(toolbar)
+        self.assertIs(
+            original_anchor,
+            original_view.centralWidget(),
+            "View Navigation should start on the original active view",
+        )
+
+        extra_view = self.create_additional_view("Overlay Toolbar Host Test")
+        self.activate_mdi_view(extra_view)
+        self.wait_until(
+            lambda: self.toolbar_overlay_anchor(self.wait_for_toolbar(key))
+            is extra_view.centralWidget(),
+            "View Navigation overlay to move to the secondary view",
+        )
+
+        self.activate_mdi_view(original_view)
+        self.wait_until(
+            lambda: self.toolbar_overlay_anchor(self.wait_for_toolbar(key))
+            is original_view.centralWidget(),
+            "View Navigation overlay to return to the original view",
+        )
+
+        self.activate_mdi_view(original_view)
+        self.wait_until(
+            lambda: self.wait_for_toolbar(key).parentWidget() is original_view,
+            "view-hosted toolbar to return to the original view",
+        )
+        self.assert_toolbar_area(key, target_area)
+
+    def test_view_navigation_overlay_position_persists(self):
+        key = "shared:View Navigation"
+        position_label = QtGui.QApplication.translate("MainWindow", "Position")
+        top_label = QtGui.QApplication.translate("MainWindow", "Top")
+        bottom_label = QtGui.QApplication.translate("MainWindow", "Bottom")
+        overlay_params = FreeCAD.ParamGet("User parameter:BaseApp/MainWindow")
+        self.backup_group(
+            overlay_params,
+            "ViewOverlayEdges",
+            "TestToolbarPersistenceGuiBackupViewOverlayEdges",
+        )
+
+        self.activate_workbench("SketcherWorkbench", "wb:SketcherWorkbench:")
+        toolbar = self.wait_for_toolbar(key)
+        self.record_toolbar_state(toolbar, "SketcherWorkbench")
+        self.show_toolbar(key)
+
+        original_y = self.toolbar_overlay_lane(toolbar).geometry().y()
+        self.assertEqual(self.toolbar_view_overlay_edge(toolbar), "top")
+
+        self.trigger_menu_path(
+            self.toolbar_menu(),
+            self.toolbar_menu_label(toolbar),
+            position_label,
+            bottom_label,
+        )
+        self.wait_until(
+            lambda: self.toolbar_view_overlay_edge(self.wait_for_toolbar(key)) == "bottom",
+            "View Navigation overlay edge to change to bottom",
+        )
+        self.wait_until(
+            lambda: self.toolbar_overlay_lane(self.wait_for_toolbar(key)).geometry().y()
+            > original_y,
+            "View Navigation overlay to move to the bottom edge",
+        )
+
+        self.activate_workbench("PartDesignWorkbench", "wb:PartDesignWorkbench:")
+        self.wait_until(
+            lambda: self.toolbar_view_overlay_edge(self.wait_for_toolbar(key)) == "bottom",
+            "View Navigation overlay edge to stay bottom in PartDesign",
+        )
+        self.activate_workbench("PartWorkbench", "wb:PartWorkbench:")
+        self.wait_until(
+            lambda: self.toolbar_view_overlay_edge(self.wait_for_toolbar(key)) == "bottom",
+            "View Navigation overlay edge to stay bottom in Part",
+        )
+        self.activate_workbench("SketcherWorkbench", "wb:SketcherWorkbench:")
+        self.wait_until(
+            lambda: self.toolbar_view_overlay_edge(self.wait_for_toolbar(key)) == "bottom",
+            "View Navigation overlay edge to persist across workbench switches",
+        )
+
+        self.trigger_menu_path(
+            self.toolbar_menu(),
+            self.toolbar_menu_label(self.wait_for_toolbar(key)),
+            position_label,
+            top_label,
+        )
+        self.wait_until(
+            lambda: self.toolbar_view_overlay_edge(self.wait_for_toolbar(key)) == "top",
+            "View Navigation overlay edge to change back to top",
+        )
+
+    def test_view_hosted_toolbar_is_unavailable_outside_3d_views(self):
+        key = "shared:Individual Views"
+        view_toolbar_label = QtGui.QApplication.translate("MainWindow", "View Toolbars")
+
+        self.activate_workbench("SketcherWorkbench", "wb:SketcherWorkbench:")
+        original_view = self.active_mdi_view()
+        toolbar = self.wait_for_toolbar(key)
+        self.record_toolbar_state(toolbar, "SketcherWorkbench")
+        self.show_toolbar(key)
+
+        text_view = self.create_text_document_view()
+        self.activate_mdi_view(text_view)
+
+        self.wait_until(
+            lambda: not toolbar.toggleViewAction().isVisible(),
+            "view-hosted toolbar action to hide in text document view",
+        )
+        self.assertIsNot(
+            toolbar.parentWidget(),
+            text_view,
+            "View-hosted toolbar should not reparent into unsupported text views",
+        )
+
+        sections, texts = self.capture_popup_menu(self.toolbar_menu())
+        self.assertNotIn(
+            view_toolbar_label,
+            sections,
+            "Toolbar menu should hide the view section when the active view cannot host it",
+        )
+        self.assertNotIn(
+            self.toolbar_menu_label(toolbar),
+            texts,
+            "Toolbar menu should not expose view-hosted toolbar entries in unsupported views",
+        )
+
+        self.activate_mdi_view(original_view)
+        self.wait_until(
+            lambda: toolbar.toggleViewAction().isVisible()
+            and toolbar.parentWidget() is original_view,
+            "view-hosted toolbar to return when switching back to a 3D view",
+        )
+
     def test_toolbar_menu_groups_and_reset_actions(self):
+        view_label = QtGui.QApplication.translate("MainWindow", "View Toolbars")
+        panel_label = QtGui.QApplication.translate("MainWindow", "Panel Toolbars")
         shared_label = QtGui.QApplication.translate("MainWindow", "Shared Toolbars")
         workbench_label = QtGui.QApplication.translate("MainWindow", "Workbench Toolbars")
         contextual_label = QtGui.QApplication.translate("MainWindow", "Contextual Toolbars")
@@ -604,6 +1498,12 @@ class TestToolbarPersistenceGui(unittest.TestCase):
         recommended_reset_contextual_label = QtGui.QApplication.translate(
             "MainWindow", "Reset To Recommended Contextual Layout"
         )
+        reset_view_label = QtGui.QApplication.translate(
+            "MainWindow", "Reset Current View Toolbar Layout"
+        )
+        recommended_reset_view_label = QtGui.QApplication.translate(
+            "MainWindow", "Reset To Recommended View Toolbar Layout"
+        )
 
         self.activate_workbench("SketcherWorkbench", "wb:SketcherWorkbench:")
         sketcher_toolbar_label = self.toolbar_menu_label(
@@ -611,8 +1511,16 @@ class TestToolbarPersistenceGui(unittest.TestCase):
         )
         clipboard_toolbar_label = self.toolbar_menu_label(self.wait_for_toolbar("shared:Clipboard"))
         macro_toolbar_label = self.toolbar_menu_label(self.wait_for_toolbar("shared:Macro"))
+        view_navigation_toolbar_label = self.toolbar_menu_label(
+            self.wait_for_toolbar("shared:View Navigation")
+        )
+        tree_controls_toolbar_label = self.toolbar_menu_label(
+            self.wait_for_toolbar("shared:Tree Controls")
+        )
 
         sections, texts = self.capture_popup_menu(self.toolbar_menu())
+        self.assertIn(view_label, sections, "Main toolbar menu should expose view toolbar group")
+        self.assertIn(panel_label, sections, "Main toolbar menu should expose panel toolbar group")
         self.assertIn(
             shared_label, sections, "Main toolbar menu should expose shared toolbar group"
         )
@@ -637,6 +1545,16 @@ class TestToolbarPersistenceGui(unittest.TestCase):
             "Main toolbar menu should expose advanced tier label for shared toolbars",
         )
         self.assertIn(
+            view_navigation_toolbar_label,
+            texts,
+            "Main toolbar menu should expose the View Navigation view toolbar entry",
+        )
+        self.assertIn(
+            tree_controls_toolbar_label,
+            texts,
+            "Main toolbar menu should expose the Tree Controls panel toolbar entry",
+        )
+        self.assertIn(
             show_recommended_only_label,
             texts,
             "Main toolbar menu should expose show recommended only action in workbench mode",
@@ -650,6 +1568,16 @@ class TestToolbarPersistenceGui(unittest.TestCase):
             recommended_reset_workbench_label,
             texts,
             "Main toolbar menu should expose recommended workbench reset in workbench mode",
+        )
+        self.assertIn(
+            reset_view_label,
+            texts,
+            "Main toolbar menu should expose view layout reset in workbench mode",
+        )
+        self.assertIn(
+            recommended_reset_view_label,
+            texts,
+            "Main toolbar menu should expose recommended view reset in workbench mode",
         )
 
         self.enter_sketch_edit()
@@ -683,6 +1611,16 @@ class TestToolbarPersistenceGui(unittest.TestCase):
             texts,
             "Main toolbar menu should expose recommended contextual reset during edit mode",
         )
+        self.assertIn(
+            reset_view_label,
+            texts,
+            "Main toolbar menu should expose view layout reset during edit mode",
+        )
+        self.assertIn(
+            recommended_reset_view_label,
+            texts,
+            "Main toolbar menu should expose recommended view reset during edit mode",
+        )
 
         self.leave_sketch_edit()
         _, texts = self.capture_status_bar_context_menu()
@@ -705,6 +1643,16 @@ class TestToolbarPersistenceGui(unittest.TestCase):
             show_recommended_only_label,
             texts,
             "Workbench runtime context menu should expose show recommended only action",
+        )
+        self.assertIn(
+            reset_view_label,
+            texts,
+            "Workbench runtime context menu should expose view layout reset",
+        )
+        self.assertIn(
+            recommended_reset_view_label,
+            texts,
+            "Workbench runtime context menu should expose recommended view reset",
         )
         self.assertNotIn(
             recommended_reset_contextual_label,
@@ -733,6 +1681,16 @@ class TestToolbarPersistenceGui(unittest.TestCase):
             show_recommended_only_label,
             texts,
             "Contextual runtime context menu should expose show recommended only action",
+        )
+        self.assertIn(
+            reset_view_label,
+            texts,
+            "Contextual runtime context menu should expose view layout reset",
+        )
+        self.assertIn(
+            recommended_reset_view_label,
+            texts,
+            "Contextual runtime context menu should expose recommended view reset",
         )
         self.assertNotIn(
             recommended_reset_workbench_label,
@@ -865,6 +1823,41 @@ class TestToolbarPersistenceGui(unittest.TestCase):
         self.assert_toolbar_visibility(contextual_key, True)
         self.assert_toolbar_area(contextual_key, QtCore.Qt.LeftToolBarArea)
         self.leave_sketch_edit()
+
+    def test_view_toolbar_reset_actions_restore_default_layout(self):
+        reset_view_label = QtGui.QApplication.translate(
+            "MainWindow", "Reset Current View Toolbar Layout"
+        )
+        recommended_reset_view_label = QtGui.QApplication.translate(
+            "MainWindow", "Reset To Recommended View Toolbar Layout"
+        )
+
+        visibility_group = FreeCAD.ParamGet("User parameter:BaseApp/MainWindow/Toolbars")
+        self.backup_bool_param(visibility_group, "shared:Individual Views")
+
+        layout_params = FreeCAD.ParamGet("User parameter:BaseApp/MainWindow/WorkbenchLayouts")
+        self.backup_group(
+            layout_params,
+            "SketcherWorkbench",
+            "__ToolbarViewResetBackup__SketcherWorkbench",
+        )
+
+        self.activate_workbench("SketcherWorkbench", "wb:SketcherWorkbench:")
+        toolbar = self.wait_for_toolbar("shared:Individual Views")
+        self.record_toolbar_state(toolbar, "SketcherWorkbench")
+        self.show_toolbar("shared:Individual Views")
+        self.move_toolbar("shared:Individual Views", self.alternative_toolbar_area(toolbar))
+        self.hide_toolbar("shared:Individual Views")
+
+        self.trigger_menu_action(self.toolbar_menu(), reset_view_label)
+        self.assert_toolbar_area("shared:Individual Views", QtCore.Qt.TopToolBarArea)
+        self.assert_toolbar_visibility("shared:Individual Views", False)
+
+        self.move_toolbar("shared:Individual Views", QtCore.Qt.LeftToolBarArea)
+        self.hide_toolbar("shared:Individual Views")
+        self.trigger_menu_action(self.toolbar_menu(), recommended_reset_view_label)
+        self.assert_toolbar_area("shared:Individual Views", QtCore.Qt.TopToolBarArea)
+        self.assert_toolbar_visibility("shared:Individual Views", True)
 
     def test_legacy_toolbar_names_restore_with_scoped_keys(self):
         self.activate_workbench("SketcherWorkbench", "wb:SketcherWorkbench:")
