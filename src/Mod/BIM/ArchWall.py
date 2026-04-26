@@ -676,7 +676,10 @@ class _Wall(ArchComponent.Component):
             # walls can be made of only a series of additions and have no base shape
             base = Part.Shape()
         base = self.processSubShapes(obj, base, pl)
-        base = self.process_endings(obj, base, pl)
+        trimmed_base = self.process_endings(obj, base, pl)
+        if self._should_preserve_existing_relation_shape(obj, trimmed_base):
+            return
+        base = trimmed_base
         self.applyShape(obj, base, pl)
 
         # Check if there is base, and if width and height is provided or not
@@ -2157,6 +2160,29 @@ class _Wall(ArchComponent.Component):
         cutting_tool = bounded_face.makeHalfSpace(ref_point)
 
         return cutting_tool
+
+    @staticmethod
+    def _shape_has_solid(shape):
+        if shape is None:
+            return False
+        try:
+            if shape.isNull():
+                return False
+        except Exception:
+            return False
+        return bool(list(getattr(shape, "Solids", []) or []))
+
+    def _should_preserve_existing_relation_shape(self, obj, shape):
+        if self._shape_has_solid(shape):
+            return False
+        if not self._shape_has_solid(getattr(obj, "Shape", None)):
+            return False
+
+        try:
+            has_relations = any(True for _relation in ArchWallJoinUtils.iter_wall_relations(obj))
+        except Exception:
+            return False
+        return has_relations
 
 
 if FreeCAD.GuiUp:
