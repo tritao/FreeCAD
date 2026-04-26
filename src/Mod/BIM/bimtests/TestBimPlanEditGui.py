@@ -6765,6 +6765,49 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         session.shutdown(close_dialog=False)
         self.pump_gui_events()
 
+    def test_plan_edit_wall_backed_space_survives_hosted_opening_face_split(self):
+        """A space created from selected walls should stay valid after a hosted door changes one wall."""
+
+        level, walls = self._make_plan_room_walls()
+
+        FreeCADGui.Selection.clearSelection()
+        FreeCADGui.Selection.addSelection(level)
+
+        session = BimPlanSession.start_session()
+        self.assertIsNotNone(session)
+        self.pump_gui_events()
+
+        FreeCADGui.Selection.clearSelection()
+        for wall in walls:
+            FreeCADGui.Selection.addSelection(self.document.Name, wall.Name)
+        self.pump_gui_events()
+        session.selection.refresh_primary_selected_plan_target()
+
+        self.assertTrue(session.lifecycle.activate_space_tool())
+        self.pump_gui_events()
+
+        created_spaces = [obj for obj in self.document.Objects if Draft.getType(obj) == "Space"]
+        self.assertEqual(len(created_spaces), 1)
+        space = created_spaces[0]
+
+        initial_area = float(space.Proxy.getArea(space))
+        self.assertGreater(initial_area, 1_000_000.0)
+        self.assertEqual(space.Proxy.getLastBoundaryError(space), "")
+        self.assertTrue(getattr(space, "BoundarySideHints", []))
+        self.assertEqual(len(session.spaces.get_space_boundary_entries(space)), 4)
+
+        self._make_hosted_door(walls[1], name="RoomBoundaryDoor")
+        self.document.recompute()
+        self.pump_gui_events()
+
+        self.assertAlmostEqual(float(space.Proxy.getArea(space)), initial_area)
+        self.assertEqual(space.Proxy.getLastBoundaryError(space), "")
+        self.assertTrue(getattr(space, "BoundarySideHints", []))
+        self.assertEqual(len(session.spaces.get_space_boundary_entries(space)), 4)
+
+        session.shutdown(close_dialog=False)
+        self.pump_gui_events()
+
     def test_plan_edit_region_button_creates_plan_region_with_parent_space(self):
         """The Region action should create and select a polygonal plan region."""
 
