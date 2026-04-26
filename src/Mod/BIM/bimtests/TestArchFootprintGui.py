@@ -35,6 +35,19 @@ from unittest.mock import patch
 
 class TestArchFootprintGui(TestArchBaseGui.TestArchBaseGui):
 
+    def _assert_vector_almost_equal(self, left, right, delta=1e-4):
+        self.assertAlmostEqual(left.x, right.x, delta=delta)
+        self.assertAlmostEqual(left.y, right.y, delta=delta)
+        self.assertAlmostEqual(left.z, right.z, delta=delta)
+
+    def _get_space_label_translation(self, space):
+        value = space.ViewObject.Proxy.coords.translation.getValue()
+        return FreeCAD.Vector(value[0], value[1], value[2])
+
+    def _get_expected_space_label_translation(self, space):
+        pos = space.ViewObject.Proxy.getTextPosition(space.ViewObject)
+        return FreeCAD.Vector(pos.x, pos.y, pos.z + 0.01)
+
     def _get_line_polylines(self, proxy):
         polylines = []
         points = proxy.lcoords.point
@@ -588,6 +601,111 @@ class TestArchFootprintGui(TestArchBaseGui.TestArchBaseGui):
         self.assertFalse(ArchSpace._bounds_intersect_xy(text_bounds, obstacle_bounds[0]))
         self.assertAlmostEqual(text_point.x, default_point.x, delta=1e-6)
         self.assertGreater(text_point.y, default_point.y)
+
+    def test_space_auto_text_refreshes_after_equipment_footprint_update_without_recompute(self):
+        """Updating an equipment plan footprint should refresh auto-positioned space labels in the live view."""
+
+        base = self.document.addObject("Part::Feature", "RefreshEquipmentLabelBase")
+        base.Shape = Part.makeBox(6000, 4000, 2500)
+        space = Arch.makeSpace(base, name="Bedroom")
+
+        equipment_base = self.document.addObject("Part::Box", "RefreshBedBase")
+        equipment_base.Length = 1400
+        equipment_base.Width = 1950
+        equipment_base.Height = 600
+        equipment = Arch.makeEquipment(equipment_base)
+        self.document.recompute()
+        self.pump_gui_events()
+
+        default_translation = self._get_space_label_translation(space)
+        self._assert_vector_almost_equal(
+            default_translation, self._get_expected_space_label_translation(space)
+        )
+
+        obstacle_polyline = [
+            [
+                [1900.0, 900.0, 0.0],
+                [3200.0, 900.0, 0.0],
+                [3200.0, 2800.0, 0.0],
+                [1900.0, 2800.0, 0.0],
+                [1900.0, 900.0, 0.0],
+            ]
+        ]
+
+        with patch.object(
+            equipment.ViewObject.Proxy,
+            "_collect_local_footprint_polylines",
+            return_value=obstacle_polyline,
+        ):
+            expected_translation = self._get_expected_space_label_translation(space)
+            self.assertGreater(default_translation.distanceToPoint(expected_translation), 1.0)
+
+            equipment.ViewObject.Proxy.updateFootprint()
+            self.pump_gui_events()
+
+            refreshed_translation = self._get_space_label_translation(space)
+
+        self._assert_vector_almost_equal(refreshed_translation, expected_translation)
+
+    def test_space_auto_text_refreshes_after_hosted_door_footprint_update_without_recompute(self):
+        """Updating a hosted door plan footprint should refresh auto-positioned space labels in the live view."""
+
+        base = self.document.addObject("Part::Feature", "RefreshDoorLabelBase")
+        base.Shape = Part.makeBox(6000, 4000, 2500)
+        space = Arch.makeSpace(base, name="Living Room")
+
+        wall = Arch.makeWall(length=2500, width=200, height=2500)
+        wall.Placement.Base = FreeCAD.Vector(1750, 2000, 0)
+        door = self._make_hosted_door(
+            wall,
+            "RefreshCenteredDoor",
+            x_start=800,
+            z_start=0,
+            width=900.0,
+            height=2100.0,
+        )
+        self.document.recompute()
+        self.pump_gui_events()
+
+        default_translation = self._get_space_label_translation(space)
+        self._assert_vector_almost_equal(
+            default_translation, self._get_expected_space_label_translation(space)
+        )
+
+        placement = ArchSpace._get_object_global_placement(door)
+        inverse_placement = placement.inverse()
+        default_point = ArchSpace._get_default_space_text_position(space)
+
+        def to_local(offset_x, offset_y):
+            point = inverse_placement.multVec(
+                default_point.add(FreeCAD.Vector(offset_x, offset_y, 0))
+            )
+            return [point.x, point.y, 0.0]
+
+        centered_symbol = [
+            [
+                to_local(-700, -500),
+                to_local(700, -500),
+                to_local(700, 500),
+                to_local(-700, 500),
+                to_local(-700, -500),
+            ]
+        ]
+
+        with patch.object(
+            door.ViewObject.Proxy,
+            "_collect_local_footprint_polylines",
+            return_value=centered_symbol,
+        ):
+            expected_translation = self._get_expected_space_label_translation(space)
+            self.assertGreater(default_translation.distanceToPoint(expected_translation), 1.0)
+
+            door.ViewObject.Proxy.updateFootprint()
+            self.pump_gui_events()
+
+            refreshed_translation = self._get_space_label_translation(space)
+
+        self._assert_vector_almost_equal(refreshed_translation, expected_translation)
 
     def test_rotated_wall_door_footprint_stays_in_host_frame(self):
         """Hosted door symbols should use the real host frame on rotated walls."""

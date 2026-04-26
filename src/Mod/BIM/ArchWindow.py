@@ -3243,6 +3243,11 @@ class _ViewProviderWindow(ArchComponent.ViewProviderComponent):
             context="ArchWindow.updateFootprint",
         )
 
+        if FreeCAD.GuiUp and hasattr(self, "Object"):
+            import ArchSpace
+
+            ArchSpace.refresh_auto_space_text_positions(getattr(self.Object, "Document", None))
+
     def updateData(self, obj, prop):
 
         if prop == "Shape":
