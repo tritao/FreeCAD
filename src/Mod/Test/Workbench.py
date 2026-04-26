@@ -114,6 +114,7 @@ class WorkbenchTestCase(unittest.TestCase):
                     tier=self.ToolbarTier.Advanced,
                     visibility=self.ToolbarVisibility.Hidden,
                     host=self.ToolbarHost.MainWindow,
+                    size=self.ToolbarSize.Slim,
                 )
                 self.appendToolbar(
                     "Python View Toolbar",
@@ -126,6 +127,7 @@ class WorkbenchTestCase(unittest.TestCase):
                     view_presentation=self.ToolbarViewPresentation.CenteredOverlay,
                     view_overlay_edge=self.ToolbarViewOverlayEdge.Top,
                     view_overlay_edge_persistence=(self.ToolbarViewOverlayEdgePersistence.Shared),
+                    size=self.ToolbarSize.Slim,
                 )
                 self.appendToolbar(
                     "Python Panel Toolbar",
@@ -135,6 +137,7 @@ class WorkbenchTestCase(unittest.TestCase):
                     visibility=self.ToolbarVisibility.Hidden,
                     host=self.ToolbarHost.Panel,
                     panel_role=self.ToolbarPanelRole.ModelTree,
+                    size=self.ToolbarSize.Slim,
                 )
 
             def GetClassName(self):
@@ -158,6 +161,7 @@ class WorkbenchTestCase(unittest.TestCase):
             self.assertIsNotNone(toolbar)
             self.assertEqual(toolbar.property("Tier"), "advanced")
             self.assertEqual(toolbar.property("Host"), "main-window")
+            self.assertEqual(toolbar.property("ToolbarSize"), "slim")
             self.assertFalse(toolbar.isVisible())
             self.assertFalse(toolbar.toggleViewAction().isChecked())
             self.assertTrue(toolbar.toggleViewAction().isVisible())
@@ -169,6 +173,7 @@ class WorkbenchTestCase(unittest.TestCase):
             self.assertEqual(view_toolbar.property("ViewPresentation"), "centered-overlay")
             self.assertEqual(view_toolbar.property("ViewOverlayEdge"), "top")
             self.assertEqual(view_toolbar.property("ViewOverlayEdgePersistence"), "shared")
+            self.assertEqual(view_toolbar.property("ToolbarSize"), "slim")
             self.assertFalse(view_toolbar.isVisible())
             self.assertFalse(view_toolbar.toggleViewAction().isChecked())
             self.assertTrue(view_toolbar.toggleViewAction().isVisible())
@@ -179,6 +184,7 @@ class WorkbenchTestCase(unittest.TestCase):
             self.assertEqual(panel_toolbar.property("Tier"), "secondary")
             self.assertEqual(panel_toolbar.property("Host"), "panel")
             self.assertEqual(panel_toolbar.property("PanelRole"), "model-tree")
+            self.assertEqual(panel_toolbar.property("ToolbarSize"), "slim")
             self.assertFalse(panel_toolbar.isVisible())
             self.assertFalse(panel_toolbar.toggleViewAction().isChecked())
             self.assertTrue(panel_toolbar.toggleViewAction().isVisible())
@@ -211,6 +217,7 @@ class WorkbenchTestCase(unittest.TestCase):
                 view_overlay_edge_persistence=(
                     FreeCADGui.Workbench.ToolbarViewOverlayEdgePersistence.Shared
                 ),
+                size=FreeCADGui.Workbench.ToolbarSize.Slim,
                 menu_visible=False,
             )
 
@@ -220,6 +227,7 @@ class WorkbenchTestCase(unittest.TestCase):
             self.assertEqual(toolbar.property("ViewPresentation"), "centered-overlay")
             self.assertEqual(toolbar.property("ViewOverlayEdge"), "bottom")
             self.assertEqual(toolbar.property("ViewOverlayEdgePersistence"), "shared")
+            self.assertEqual(toolbar.property("ToolbarSize"), "slim")
             self.assertEqual(
                 toolbar.toggleViewAction().property("DefaultVisibility"),
                 int(FreeCADGui.Workbench.ToolbarVisibility.Unavailable),
@@ -250,6 +258,7 @@ class WorkbenchTestCase(unittest.TestCase):
             self.assertEqual(draft_snap.property("ViewPresentation"), "centered-overlay")
             self.assertEqual(draft_snap.property("ViewOverlayEdge"), "bottom")
             self.assertEqual(draft_snap.property("ViewOverlayEdgePersistence"), "shared")
+            self.assertEqual(draft_snap.property("ToolbarSize"), "slim")
             self.assertEqual(
                 getattr(draft_snap.parentWidget(), "property", lambda *_: None)("overlayEdge"),
                 "bottom",
@@ -262,6 +271,7 @@ class WorkbenchTestCase(unittest.TestCase):
             self.assertEqual(draft_tray.property("ViewPresentation"), "centered-overlay")
             self.assertEqual(draft_tray.property("ViewOverlayEdge"), "bottom")
             self.assertEqual(draft_tray.property("ViewOverlayEdgePersistence"), "shared")
+            self.assertEqual(draft_tray.property("ToolbarSize"), "slim")
             self.assertFalse(draft_tray.toggleViewAction().isVisible())
             self.assertEqual(draft_tray.toggleViewAction().text(), "")
             draft_tray.show()
@@ -281,6 +291,7 @@ class WorkbenchTestCase(unittest.TestCase):
             self.assertEqual(bim_snap.property("ViewPresentation"), "centered-overlay")
             self.assertEqual(bim_snap.property("ViewOverlayEdge"), "bottom")
             self.assertEqual(bim_snap.property("ViewOverlayEdgePersistence"), "shared")
+            self.assertEqual(bim_snap.property("ToolbarSize"), "slim")
             self.assertEqual(
                 getattr(bim_snap.parentWidget(), "property", lambda *_: None)("overlayEdge"),
                 "bottom",

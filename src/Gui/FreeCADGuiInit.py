@@ -142,6 +142,10 @@ class Workbench:
         Shared = 1
         Contextual = 2
 
+    class ToolbarSize(IntEnum):
+        Default = 0
+        Slim = 1
+
     MenuText = ""
     ToolTip = ""
     Icon = None
@@ -172,6 +176,7 @@ class Workbench:
         view_presentation=None,
         view_overlay_edge=None,
         view_overlay_edge_persistence=None,
+        size=None,
     ):
         self.__Workbench__.appendToolbar(
             name,
@@ -185,6 +190,7 @@ class Workbench:
             self._toolbarOptionValue(view_presentation),
             self._toolbarOptionValue(view_overlay_edge),
             self._toolbarOptionValue(view_overlay_edge_persistence),
+            self._toolbarOptionValue(size),
         )
 
     def removeToolbar(self, name):
@@ -268,6 +274,11 @@ _TOOLBAR_VIEW_OVERLAY_EDGE_PERSISTENCE_NAMES = {
     int(Workbench.ToolbarViewOverlayEdgePersistence.Contextual): "contextual",
 }
 
+_TOOLBAR_SIZE_NAMES = {
+    int(Workbench.ToolbarSize.Default): "default",
+    int(Workbench.ToolbarSize.Slim): "slim",
+}
+
 
 def _toolbar_option_int(value):
     return Workbench._toolbarOptionValue(value)
@@ -296,6 +307,7 @@ def configureToolbar(
     view_presentation=None,
     view_overlay_edge=None,
     view_overlay_edge_persistence=None,
+    size=None,
     menu_visible=True,
 ):
     """Apply hosted-toolbar metadata to an existing QToolBar instance."""
@@ -369,6 +381,13 @@ def configureToolbar(
         )
         toolbar.setProperty("ViewOverlayEdgePersistence", overlay_edge_persistence_name)
         action.setProperty("ViewOverlayEdgePersistence", overlay_edge_persistence_name)
+
+    size_value, size_name = _toolbar_option_pair(size, _TOOLBAR_SIZE_NAMES, "size")
+    if size_value is not None:
+        toolbar.setProperty("_fc_toolbar_default_size", size_value)
+        toolbar.setProperty("_fc_toolbar_size", size_value)
+        toolbar.setProperty("ToolbarSize", size_name)
+        action.setProperty("ToolbarSize", size_name)
 
     if visibility is not None:
         action.setProperty("DefaultVisibility", _toolbar_option_int(visibility))

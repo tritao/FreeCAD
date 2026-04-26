@@ -1020,6 +1020,7 @@ ToolBarItem* StdWorkbench::setupToolBars() const
     viewNavigation->setViewHostRequirement(ToolBarItem::ViewHostRequirement::View3D);
     viewNavigation->setViewPresentation(ToolBarItem::ViewPresentation::CenteredOverlay);
     viewNavigation->setViewOverlayEdge(ToolBarItem::ViewOverlayEdge::Top);
+    viewNavigation->setSize(ToolBarItem::Size::Slim);
     *viewNavigation << "Std_ViewFitAll"
                     << "Std_ViewFitSelection"
                     << "Std_AlignToSelection"
@@ -1035,6 +1036,7 @@ ToolBarItem* StdWorkbench::setupToolBars() const
     setSharedToolbarMetadata(treeControls, "Tree Controls", ToolBarItem::Tier::Secondary);
     treeControls->setHost(ToolBarItem::Host::Panel);
     treeControls->setPanelRole(ToolBarItem::PanelRole::ModelTree);
+    treeControls->setSize(ToolBarItem::Size::Slim);
     *treeControls << "Std_TreeSelection"
                   << "Std_TreeExpand"
                   << "Std_TreeCollapse"
@@ -1455,6 +1457,9 @@ void PythonBaseWorkbench::appendToolbar(
     }
     if (options.viewOverlayEdgePersistence) {
         item->setViewOverlayEdgePersistence(*options.viewOverlayEdgePersistence);
+    }
+    if (options.size) {
+        item->setSize(*options.size);
     }
 }
 

@@ -201,6 +201,23 @@ std::optional<ToolBarItem::ViewOverlayEdgePersistence> parseToolbarViewOverlayEd
 
     throw Py::ValueError("view_overlay_edge_persistence has an invalid enum value");
 }
+
+std::optional<ToolBarItem::Size> parseToolbarSizeOption(PyObject* value)
+{
+    const auto rawValue = parseToolbarOptionValue(value, "size");
+    if (!rawValue) {
+        return std::nullopt;
+    }
+
+    switch (*rawValue) {
+        case static_cast<long>(ToolBarItem::Size::Default):
+            return ToolBarItem::Size::Default;
+        case static_cast<long>(ToolBarItem::Size::Slim):
+            return ToolBarItem::Size::Slim;
+    }
+
+    throw Py::ValueError("size has an invalid enum value");
+}
 }  // namespace
 
 /** @class PythonWorkbenchPy
@@ -400,7 +417,7 @@ PyObject* PythonWorkbenchPy::appendToolbar(PyObject* args, PyObject* kwd)
 {
     PY_TRY
     {
-        static constexpr std::array<const char*, 12> keywords = {
+        static constexpr std::array<const char*, 13> keywords = {
             "name",
             "items",
             "key",
@@ -412,6 +429,7 @@ PyObject* PythonWorkbenchPy::appendToolbar(PyObject* args, PyObject* kwd)
             "view_presentation",
             "view_overlay_edge",
             "view_overlay_edge_persistence",
+            "size",
             nullptr,
         };
 
@@ -426,10 +444,11 @@ PyObject* PythonWorkbenchPy::appendToolbar(PyObject* args, PyObject* kwd)
         PyObject* viewPresentation = nullptr;
         PyObject* viewOverlayEdge = nullptr;
         PyObject* viewOverlayEdgePersistence = nullptr;
+        PyObject* size = nullptr;
         if (!Base::Wrapped_ParseTupleAndKeywords(
                 args,
                 kwd,
-                "sO|zOOOOOOOO:appendToolbar",
+                "sO|zOOOOOOOOO:appendToolbar",
                 keywords,
                 &psToolBar,
                 &pObject,
@@ -441,7 +460,8 @@ PyObject* PythonWorkbenchPy::appendToolbar(PyObject* args, PyObject* kwd)
                 &viewHostRequirement,
                 &viewPresentation,
                 &viewOverlayEdge,
-                &viewOverlayEdgePersistence
+                &viewOverlayEdgePersistence,
+                &size
             )) {
             return nullptr;
         }
@@ -482,6 +502,7 @@ PyObject* PythonWorkbenchPy::appendToolbar(PyObject* args, PyObject* kwd)
         options.viewOverlayEdgePersistence = parseToolbarViewOverlayEdgePersistenceOption(
             viewOverlayEdgePersistence
         );
+        options.size = parseToolbarSizeOption(size);
         getPythonBaseWorkbenchPtr()->appendToolbar(psToolBar, items, options);
 
         Py_Return;

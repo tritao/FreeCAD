@@ -116,6 +116,12 @@ public:
         Contextual,
     };
 
+    enum class Size
+    {
+        Default,
+        Slim,
+    };
+
     ToolBarItem();
     explicit ToolBarItem(
         ToolBarItem* item,
@@ -142,6 +148,8 @@ public:
     ViewOverlayEdge viewOverlayEdge() const;
     void setViewOverlayEdgePersistence(ViewOverlayEdgePersistence persistence);
     ViewOverlayEdgePersistence viewOverlayEdgePersistence() const;
+    void setSize(Size size);
+    Size size() const;
 
     bool hasItems() const;
     ToolBarItem* findItem(const std::string&);
@@ -169,6 +177,7 @@ private:
     ViewPresentation _viewPresentation = ViewPresentation::Docked;
     ViewOverlayEdge _viewOverlayEdge = ViewOverlayEdge::Top;
     ViewOverlayEdgePersistence _viewOverlayEdgePersistence = ViewOverlayEdgePersistence::ByScope;
+    Size _size = Size::Default;
     QList<ToolBarItem*> _items;
 };
 
@@ -326,6 +335,9 @@ public:
     static QString toolBarTierLabel(ToolBarItem::Tier);
     static QString toolBarTierLabel(const ToolBarItem*);
     static QString toolBarTierLabel(const QToolBar*);
+    static QString toolBarSizeName(ToolBarItem::Size);
+    static ToolBarItem::Size toolBarSize(const ToolBarItem*);
+    static ToolBarItem::Size toolBarSize(const QToolBar*);
     static QString toolBarHostName(ToolBarItem::Host);
     static QString toolBarPanelRoleLabel(ToolBarItem::PanelRole);
     static ToolBarItem::ViewHostRequirement toolBarViewHostRequirement(const ToolBarItem*);
@@ -348,6 +360,7 @@ public:
     static void setToolBarViewPresentation(QToolBar*, ToolBarItem::ViewPresentation);
     static void setToolBarViewOverlayEdge(QToolBar*, ToolBarItem::ViewOverlayEdge);
     static void setToolBarViewOverlayEdgePersistence(QToolBar*, ToolBarItem::ViewOverlayEdgePersistence);
+    static void setToolBarSize(QToolBar*, ToolBarItem::Size);
 
     /** Sets up the toolbars of a given workbench. */
     void setup(ToolBarItem*);
@@ -454,6 +467,8 @@ private:
     ParameterGrp::handle viewToolBarPresentationGroup(const QString& context) const;
     ParameterGrp::handle sharedViewOverlayEdgeGroup() const;
     ParameterGrp::handle viewOverlayEdgeGroup(const QString& context) const;
+    ParameterGrp::handle globalToolBarSizeGroup() const;
+    ParameterGrp::handle toolBarSizeGroup(const QString& context) const;
     ParameterGrp::handle toolbarAreaRestoreParameters(
         const ParameterGrp::handle& current,
         const ParameterGrp::handle& fallback
@@ -473,6 +488,11 @@ private:
         const QString& context,
         const QString& fallbackContext = {}
     ) const;
+    ToolBarItem::Size resolvedToolBarSize(
+        const QToolBar* toolbar,
+        const QString& context,
+        const QString& fallbackContext = {}
+    ) const;
     void persistHostedToolBarHost(
         const QToolBar* toolbar,
         const QString& context,
@@ -488,6 +508,7 @@ private:
         const QString& context,
         ToolBarItem::ViewOverlayEdge edge
     ) const;
+    void persistToolBarSize(const QToolBar* toolbar, const QString& context, ToolBarItem::Size size) const;
     void saveWorkbenchToolBarLayout(const QString& context) const;
     void restoreWorkbenchToolBarLayout(const QString& context) const;
     void resetMainWindowToolBarLayout() const;
@@ -508,6 +529,7 @@ private:
     void setHostedToolBarHost(QToolBar* toolbar, ToolBarItem::Host host);
     void setViewToolBarPresentation(QToolBar* toolbar, ToolBarItem::ViewPresentation presentation);
     void setViewOverlayEdge(QToolBar* toolbar, ToolBarItem::ViewOverlayEdge edge) const;
+    void setToolBarSizeVariant(QToolBar* toolbar, ToolBarItem::Size size);
     QMainWindow* toolBarHostWindow(const QToolBar* toolbar) const;
     bool activeViewSupportsToolBarHost(const QToolBar* toolbar, const MDIView* view) const;
     bool activePanelSupportsToolBarHost(const QToolBar* toolbar, const TreePanel* panel) const;

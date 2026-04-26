@@ -85,6 +85,9 @@ constexpr auto ToolBarPublicViewOverlayEdgeProperty = "ViewOverlayEdge";
 constexpr auto ToolBarViewOverlayEdgePersistenceProperty
     = "_fc_toolbar_view_overlay_edge_persistence";
 constexpr auto ToolBarPublicViewOverlayEdgePersistenceProperty = "ViewOverlayEdgePersistence";
+constexpr auto ToolBarSizeProperty = "_fc_toolbar_size";
+constexpr auto ToolBarDefaultSizeProperty = "_fc_toolbar_default_size";
+constexpr auto ToolBarPublicSizeProperty = "ToolbarSize";
 constexpr auto ViewTopLayoutKey = "ViewTop";
 constexpr auto ViewLeftLayoutKey = "ViewLeft";
 constexpr auto ViewRightLayoutKey = "ViewRight";
@@ -92,6 +95,7 @@ constexpr auto ViewBottomLayoutKey = "ViewBottom";
 constexpr auto HostedToolbarHostsGroupKey = "HostedToolbarHosts";
 constexpr auto ViewToolbarPresentationsGroupKey = "ViewToolbarPresentations";
 constexpr auto ViewOverlayEdgesGroupKey = "ViewOverlayEdges";
+constexpr auto ToolBarSizesGroupKey = "ToolBarSizes";
 }  // namespace
 
 namespace
@@ -409,6 +413,27 @@ ToolBarItem::ViewOverlayEdgePersistence parseToolBarViewOverlayEdgePersistence(
     return ToolBarItem::ViewOverlayEdgePersistence::ByScope;
 }
 
+QString toolBarSizeName(ToolBarItem::Size size)
+{
+    switch (size) {
+        case ToolBarItem::Size::Default:
+            return QStringLiteral("default");
+        case ToolBarItem::Size::Slim:
+            return QStringLiteral("slim");
+    }
+
+    return QStringLiteral("default");
+}
+
+ToolBarItem::Size parseToolBarSize(const QString& sizeName)
+{
+    if (sizeName == QLatin1String("slim")) {
+        return ToolBarItem::Size::Slim;
+    }
+
+    return ToolBarItem::Size::Default;
+}
+
 ToolBarItem::ViewOverlayEdge defaultToolBarViewOverlayEdge(const QToolBar* toolbar)
 {
     if (!toolbar) {
@@ -477,6 +502,28 @@ void setDefaultToolBarViewPresentation(QToolBar* toolbar, ToolBarItem::ViewPrese
     toolbar->setProperty(ToolBarDefaultViewPresentationProperty, static_cast<int>(presentation));
 }
 
+ToolBarItem::Size defaultToolBarSize(const QToolBar* toolbar)
+{
+    if (!toolbar) {
+        return ToolBarItem::Size::Default;
+    }
+
+    if (const auto property = toolbar->property(ToolBarDefaultSizeProperty); property.isValid()) {
+        return static_cast<ToolBarItem::Size>(property.toInt());
+    }
+
+    return ToolBarManager::toolBarSize(toolbar);
+}
+
+void setDefaultToolBarSize(QToolBar* toolbar, ToolBarItem::Size size)
+{
+    if (!toolbar) {
+        return;
+    }
+
+    toolbar->setProperty(ToolBarDefaultSizeProperty, static_cast<int>(size));
+}
+
 QString toolBarVisibilityMenuLabel()
 {
     return QApplication::translate("MainWindow", "Show");
@@ -485,6 +532,23 @@ QString toolBarVisibilityMenuLabel()
 QString toolBarMoveToMenuLabel()
 {
     return QApplication::translate("MainWindow", "Move To");
+}
+
+QString toolBarSizeMenuLabel()
+{
+    return QApplication::translate("MainWindow", "Size");
+}
+
+QString toolBarSizeLabel(ToolBarItem::Size size)
+{
+    switch (size) {
+        case ToolBarItem::Size::Default:
+            return QApplication::translate("MainWindow", "Regular");
+        case ToolBarItem::Size::Slim:
+            return QApplication::translate("MainWindow", "Slim");
+    }
+
+    return QApplication::translate("MainWindow", "Regular");
 }
 
 QString toolBarPresentationMenuLabel()
@@ -913,6 +977,16 @@ ToolBarItem::ViewOverlayEdgePersistence ToolBarItem::viewOverlayEdgePersistence(
     return _viewOverlayEdgePersistence;
 }
 
+void ToolBarItem::setSize(Size size)
+{
+    _size = size;
+}
+
+ToolBarItem::Size ToolBarItem::size() const
+{
+    return _size;
+}
+
 bool ToolBarItem::hasItems() const
 {
     return !_items.isEmpty();
@@ -947,6 +1021,7 @@ ToolBarItem* ToolBarItem::copy() const
     root->setViewPresentation(_viewPresentation);
     root->setViewOverlayEdge(_viewOverlayEdge);
     root->setViewOverlayEdgePersistence(_viewOverlayEdgePersistence);
+    root->setSize(_size);
 
     QList<ToolBarItem*> items = getItems();
     for (auto it : items) {
@@ -1608,6 +1683,38 @@ QString ToolBarManager::toolBarTierLabel(const QToolBar* toolbar)
     return toolBarTierLabel(toolBarTier(toolbar));
 }
 
+QString ToolBarManager::toolBarSizeName(ToolBarItem::Size size)
+{
+    return ::toolBarSizeName(size);
+}
+
+ToolBarItem::Size ToolBarManager::toolBarSize(const ToolBarItem* item)
+{
+    if (!item) {
+        return ToolBarItem::Size::Default;
+    }
+
+    return item->size();
+}
+
+ToolBarItem::Size ToolBarManager::toolBarSize(const QToolBar* toolbar)
+{
+    if (!toolbar) {
+        return ToolBarItem::Size::Default;
+    }
+
+    if (const auto sizeName = stringPropertyValue(toolbar, ToolBarPublicSizeProperty);
+        !sizeName.isEmpty()) {
+        return parseToolBarSize(sizeName);
+    }
+
+    if (const auto property = toolbar->property(ToolBarSizeProperty); property.isValid()) {
+        return static_cast<ToolBarItem::Size>(property.toInt());
+    }
+
+    return ToolBarItem::Size::Default;
+}
+
 QString ToolBarManager::toolBarHostName(ToolBarItem::Host host)
 {
     return ::toolBarHostName(host);
@@ -1638,6 +1745,18 @@ void ToolBarManager::setToolBarTier(QToolBar* toolbar, ToolBarItem::Tier tier)
     toolbar->setProperty(ToolBarTierProperty, static_cast<int>(tier));
     toolbar->setProperty(ToolBarPublicTierProperty, toolBarTierName(tier));
     toolbar->toggleViewAction()->setProperty(ToolBarPublicTierProperty, toolBarTierName(tier));
+}
+
+void ToolBarManager::setToolBarSize(QToolBar* toolbar, ToolBarItem::Size size)
+{
+    if (!toolbar) {
+        return;
+    }
+
+    const auto sizeName = toolBarSizeName(size);
+    toolbar->setProperty(ToolBarSizeProperty, static_cast<int>(size));
+    toolbar->setProperty(ToolBarPublicSizeProperty, sizeName);
+    toolbar->toggleViewAction()->setProperty(ToolBarPublicSizeProperty, sizeName);
 }
 
 void ToolBarManager::setToolBarHost(QToolBar* toolbar, ToolBarItem::Host host)
@@ -2037,6 +2156,9 @@ bool ToolBarManager::hasSavedViewToolBarLayout(const QString& context) const
     if (hasSavedEntriesForViewToolBars(sharedViewOverlayEdgeGroup())) {
         return true;
     }
+    if (hasSavedEntriesForViewToolBars(globalToolBarSizeGroup())) {
+        return true;
+    }
 
     auto group = workbenchLayoutGroup(context);
     if (!group || !group->GetBool("Saved", false)) {
@@ -2049,6 +2171,9 @@ bool ToolBarManager::hasSavedViewToolBarLayout(const QString& context) const
         if (hasSavedEntriesForViewToolBars(viewOverlayEdgeGroup(context))) {
             return true;
         }
+        if (hasSavedEntriesForViewToolBars(toolBarSizeGroup(context))) {
+            return true;
+        }
         return false;
     }
 
@@ -2058,7 +2183,8 @@ bool ToolBarManager::hasSavedViewToolBarLayout(const QString& context) const
         || !splitLayoutState(group->GetASCII(ViewBottomLayoutKey)).isEmpty()
         || hasSavedEntriesForViewToolBars(hostedToolBarHostGroup(context))
         || hasSavedEntriesForViewToolBars(viewToolBarPresentationGroup(context))
-        || hasSavedEntriesForViewToolBars(viewOverlayEdgeGroup(context));
+        || hasSavedEntriesForViewToolBars(viewOverlayEdgeGroup(context))
+        || hasSavedEntriesForViewToolBars(toolBarSizeGroup(context));
 }
 
 bool ToolBarManager::toolbarBelongsToLayoutContext(const QToolBar* toolbar, const QString& context) const
@@ -2152,6 +2278,22 @@ ParameterGrp::handle ToolBarManager::viewOverlayEdgeGroup(const QString& context
     }
 
     return group->GetGroup(ViewOverlayEdgesGroupKey);
+}
+
+ParameterGrp::handle ToolBarManager::globalToolBarSizeGroup() const
+{
+    auto& mgr = App::GetApplication().GetUserParameter();
+    return mgr.GetGroup("BaseApp/MainWindow/ToolBarSizes");
+}
+
+ParameterGrp::handle ToolBarManager::toolBarSizeGroup(const QString& context) const
+{
+    auto group = workbenchLayoutGroup(context);
+    if (!group) {
+        return {};
+    }
+
+    return group->GetGroup(ToolBarSizesGroupKey);
 }
 
 void ToolBarManager::updateLayoutParameters(const QString& context)
@@ -2449,6 +2591,7 @@ void ToolBarManager::clearViewToolBarLayout(const QString& context) const
     clearEntriesForViewToolBars(hostedToolBarHostGroup(context));
     clearEntriesForViewToolBars(viewToolBarPresentationGroup(context));
     clearEntriesForViewToolBars(viewOverlayEdgeGroup(context));
+    clearEntriesForViewToolBars(toolBarSizeGroup(context));
 }
 
 void ToolBarManager::resetViewHostedToolBarLayout(QMainWindow* hostWindow) const
@@ -2731,6 +2874,77 @@ void ToolBarManager::persistViewOverlayEdge(
     group->SetASCII(key.toUtf8().constData(), toolBarViewOverlayEdgeName(edge).toUtf8().constData());
 }
 
+ToolBarItem::Size ToolBarManager::resolvedToolBarSize(
+    const QToolBar* toolbar,
+    const QString& context,
+    const QString& fallbackContext
+) const
+{
+    if (!toolbar) {
+        return ToolBarItem::Size::Default;
+    }
+
+    const auto key = toolBarPersistenceKey(toolbar);
+    const auto lookup = [&key](const ParameterGrp::handle& group, ToolBarItem::Size* size) {
+        if (!group || key.isEmpty()) {
+            return false;
+        }
+
+        const auto value = QString::fromUtf8(group->GetASCII(key.toUtf8().constData()).c_str());
+        if (value.isEmpty()) {
+            return false;
+        }
+
+        *size = parseToolBarSize(value);
+        return true;
+    };
+
+    ToolBarItem::Size size;
+    if (toolBarScopeId(toolbar).scope == Scope::Shared || context.isEmpty()) {
+        if (lookup(globalToolBarSizeGroup(), &size)) {
+            return size;
+        }
+        return defaultToolBarSize(toolbar);
+    }
+
+    if (lookup(toolBarSizeGroup(context), &size)) {
+        return size;
+    }
+    if (!fallbackContext.isEmpty() && lookup(toolBarSizeGroup(fallbackContext), &size)) {
+        return size;
+    }
+    if (lookup(globalToolBarSizeGroup(), &size)) {
+        return size;
+    }
+
+    return defaultToolBarSize(toolbar);
+}
+
+void ToolBarManager::persistToolBarSize(
+    const QToolBar* toolbar,
+    const QString& context,
+    ToolBarItem::Size size
+) const
+{
+    const auto key = toolBarPersistenceKey(toolbar);
+    if (key.isEmpty()) {
+        return;
+    }
+
+    ParameterGrp::handle group;
+    if (toolBarScopeId(toolbar).scope == Scope::Shared || context.isEmpty()) {
+        group = globalToolBarSizeGroup();
+    }
+    else {
+        group = toolBarSizeGroup(context);
+    }
+    if (!group) {
+        return;
+    }
+
+    group->SetASCII(key.toUtf8().constData(), toolBarSizeName(size).toUtf8().constData());
+}
+
 bool ToolBarManager::recommendedToolBarVisibility(const QToolBar* toolbar) const
 {
     switch (toolBarTier(toolbar)) {
@@ -2902,6 +3116,28 @@ void ToolBarManager::setViewToolBarPresentation(
     }
 }
 
+void ToolBarManager::setToolBarSizeVariant(QToolBar* toolbar, ToolBarItem::Size size)
+{
+    if (!toolbar) {
+        return;
+    }
+
+    setToolBarSize(toolbar, size);
+    persistToolBarSize(toolbar, effectiveToolbarLayoutContext(), size);
+    setToolBarIconSize(toolbar);
+    toolbar->style()->unpolish(toolbar);
+    toolbar->style()->polish(toolbar);
+    toolbar->updateGeometry();
+    toolbar->update();
+
+    if (toolBarHost(toolbar) == ToolBarItem::Host::ActiveView) {
+        refreshViewHostedToolBars();
+    }
+    else if (toolBarHost(toolbar) == ToolBarItem::Host::Panel) {
+        refreshPanelHostedToolBars();
+    }
+}
+
 ToolBarArea ToolBarManager::toolBarArea(QWidget* widget) const
 {
     if (auto toolBar = qobject_cast<QToolBar*>(widget)) {
@@ -2994,6 +3230,11 @@ int ToolBarManager::toolBarIconSize(QWidget* widget) const
                 s *= 0.6;
             }
         }
+
+        if (auto toolbar = qobject_cast<QToolBar*>(widget);
+            toolbar && toolBarSize(toolbar) == ToolBarItem::Size::Slim) {
+            s = (s * 7 + 4) / 8;
+        }
     }
     return std::max(s, 5);
 }
@@ -3069,6 +3310,8 @@ void ToolBarManager::setup(ToolBarItem* toolBarItems)
             setDefaultToolBarViewOverlayEdge(toolbar, toolBarViewOverlayEdge(it));
             setToolBarViewOverlayEdge(toolbar, toolBarViewOverlayEdge(it));
             setToolBarViewOverlayEdgePersistence(toolbar, toolBarViewOverlayEdgePersistence(it));
+            setDefaultToolBarSize(toolbar, toolBarSize(it));
+            setToolBarSize(toolbar, toolBarSize(it));
             toolbar->setProperty(
                 ToolBarViewHostRequirementProperty,
                 static_cast<int>(toolBarViewHostRequirement(it))
@@ -3096,6 +3339,8 @@ void ToolBarManager::setup(ToolBarItem* toolBarItems)
             setDefaultToolBarViewOverlayEdge(toolbar, toolBarViewOverlayEdge(it));
             setToolBarViewOverlayEdge(toolbar, toolBarViewOverlayEdge(it));
             setToolBarViewOverlayEdgePersistence(toolbar, toolBarViewOverlayEdgePersistence(it));
+            setDefaultToolBarSize(toolbar, toolBarSize(it));
+            setToolBarSize(toolbar, toolBarSize(it));
             toolbar->setProperty(
                 ToolBarViewHostRequirementProperty,
                 static_cast<int>(toolBarViewHostRequirement(it))
@@ -3315,6 +3560,8 @@ void ToolBarManager::restoreState()
                 toolbar,
                 resolvedViewToolBarPresentation(toolbar, layoutContext, fallbackContext)
             );
+            setToolBarSize(toolbar, resolvedToolBarSize(toolbar, layoutContext, fallbackContext));
+            setToolBarIconSize(toolbar);
             if (getToolbarPolicy(toolbar) != ToolBarItem::DefaultVisibility::Unavailable) {
                 bool visible = toolbar->isVisible();
                 if (lookupToolBarValue(visibilityValues, {}, toolbar, &visible)) {
@@ -3928,6 +4175,19 @@ void ToolBarManager::populateSingleToolBarMenu(QMenu* menu, QToolBar* toolbar) c
         moveGroup->addAction(hostAction);
         QObject::connect(hostAction, &QAction::triggered, this, [manager, toolbar, host] {
             manager->setHostedToolBarHost(toolbar, host);
+        });
+    }
+
+    auto* sizeMenu = menu->addMenu(toolBarSizeMenuLabel());
+    auto* sizeGroup = new QActionGroup(sizeMenu);
+    sizeGroup->setExclusive(true);
+    for (auto size : {ToolBarItem::Size::Default, ToolBarItem::Size::Slim}) {
+        auto* sizeAction = sizeMenu->addAction(toolBarSizeLabel(size));
+        sizeAction->setCheckable(true);
+        sizeAction->setChecked(toolBarSize(toolbar) == size);
+        sizeGroup->addAction(sizeAction);
+        QObject::connect(sizeAction, &QAction::triggered, this, [manager, toolbar, size] {
+            manager->setToolBarSizeVariant(toolbar, size);
         });
     }
 

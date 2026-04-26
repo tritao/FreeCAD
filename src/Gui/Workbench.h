@@ -296,6 +296,7 @@ public:
         std::optional<ToolBarItem::ViewPresentation> viewPresentation;
         std::optional<ToolBarItem::ViewOverlayEdge> viewOverlayEdge;
         std::optional<ToolBarItem::ViewOverlayEdgePersistence> viewOverlayEdgePersistence;
+        std::optional<ToolBarItem::Size> size;
     };
 
     /// Appends a new toolbar

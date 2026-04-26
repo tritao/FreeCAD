@@ -527,6 +527,7 @@ class BIMWorkbench(Workbench):
             view_presentation=self.ToolbarViewPresentation.CenteredOverlay,
             view_overlay_edge=self.ToolbarViewOverlayEdge.Bottom,
             view_overlay_edge_persistence=self.ToolbarViewOverlayEdgePersistence.Shared,
+            size=self.ToolbarSize.Slim,
         )
         self.appendToolbar(t3, self.bimtools)
         self.appendToolbar(t4, self.annotationtools)
@@ -546,6 +547,7 @@ class BIMWorkbench(Workbench):
             view_presentation=self.ToolbarViewPresentation.CenteredOverlay,
             view_overlay_edge=self.ToolbarViewOverlayEdge.Top,
             view_overlay_edge_persistence=self.ToolbarViewOverlayEdgePersistence.Shared,
+            size=self.ToolbarSize.Slim,
         )
 
         # create menus

@@ -238,6 +238,7 @@ class DraftToolBar:
             view_overlay_edge_persistence=(
                 FreeCADGui.Workbench.ToolbarViewOverlayEdgePersistence.Shared
             ),
+            size=FreeCADGui.Workbench.ToolbarSize.Slim,
             menu_visible=False,
         )
         self.tray.hide()

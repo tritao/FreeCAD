@@ -56,6 +56,7 @@ class PythonWorkbench(Workbench):
         view_presentation: int | None = None,
         view_overlay_edge: int | None = None,
         view_overlay_edge_persistence: int | None = None,
+        size: int | None = None,
     ) -> None:
         """
         Append a new toolbar
