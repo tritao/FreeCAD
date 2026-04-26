@@ -743,7 +743,7 @@ def slot_undo_document(session, doc):
     del doc
     invalidate_document_dependent_plan_visuals(session, recompute_opening_hosts=True)
     session.selection.sanitize_plan_target_references()
-    session.selection.refresh_primary_selected_plan_target()
+    session.selection.refresh_primary_selected_plan_target(force_wall_visual_resync=True)
     session.task_panels.refresh_task_panel_status(selection_only=True)
 
 
@@ -751,7 +751,7 @@ def slot_redo_document(session, doc):
     del doc
     invalidate_document_dependent_plan_visuals(session, recompute_opening_hosts=True)
     session.selection.sanitize_plan_target_references()
-    session.selection.refresh_primary_selected_plan_target()
+    session.selection.refresh_primary_selected_plan_target(force_wall_visual_resync=True)
     session.task_panels.refresh_task_panel_status(selection_only=True)
 
 

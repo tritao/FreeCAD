@@ -188,6 +188,7 @@ ConditioningTypes = [
 AreaCalculationType = ["XY-plane projection", "At Center of Mass"]
 
 _BOUNDARY_SIDE_HINT_VERSION = 1
+_BOUNDARY_REGION_HINT_VERSION = 1
 
 
 class _Space(ArchComponent.Component):
@@ -228,6 +229,19 @@ class _Space(ArchComponent.Component):
             )
         if "BoundarySideHints" in obj.PropertiesList:
             obj.setEditorMode("BoundarySideHints", 2)
+        if not "BoundaryRegionHint" in pl:
+            obj.addProperty(
+                "App::PropertyString",
+                "BoundaryRegionHint",
+                "Space",
+                QT_TRANSLATE_NOOP(
+                    "App::Property",
+                    "Hidden region reference used to keep multi-room space boundaries stable after geometry changes",
+                ),
+                locked=True,
+            )
+        if "BoundaryRegionHint" in obj.PropertiesList:
+            obj.setEditorMode("BoundaryRegionHint", 2)
         if not "Area" in pl:
             obj.addProperty(
                 "App::PropertyArea",
@@ -687,6 +701,9 @@ class _Space(ArchComponent.Component):
             return None
 
     def _get_space_reference_point(self, obj):
+        point = self._get_boundary_region_reference_point(obj)
+        if point is not None:
+            return point
         point = self._get_shape_reference_point(getattr(obj, "Shape", None))
         if point is not None:
             return point
@@ -759,6 +776,67 @@ class _Space(ArchComponent.Component):
             if object_name:
                 hints[str(object_name)] = hint
         return hints
+
+    def _load_boundary_region_hint(self, obj):
+        try:
+            raw_hint = str(getattr(obj, "BoundaryRegionHint", "") or "").strip()
+        except Exception:
+            raw_hint = ""
+        if not raw_hint:
+            return {}
+        try:
+            hint = json.loads(raw_hint)
+        except Exception:
+            return {}
+        return hint if isinstance(hint, dict) else {}
+
+    def _get_boundary_region_reference_point(self, obj):
+        hint = self._load_boundary_region_hint(obj)
+        if not hint:
+            return None
+        local_reference = self._vector_from_boundary_hint(hint.get("local_reference"))
+        if local_reference is not None:
+            reference_point = self._object_global_point_from_local(obj, local_reference)
+            if reference_point is not None:
+                return reference_point
+        return self._vector_from_boundary_hint(hint.get("reference"))
+
+    def _set_boundary_region_hint(self, obj, point):
+        reference_hint = self._vector_to_boundary_hint(point)
+        if reference_hint is None:
+            return
+        hint = {
+            "version": _BOUNDARY_REGION_HINT_VERSION,
+            "kind": "region-reference",
+            "reference": reference_hint,
+        }
+        local_reference = self._vector_to_boundary_hint(
+            self._object_local_point_from_global(obj, point)
+        )
+        if local_reference is not None:
+            hint["local_reference"] = local_reference
+        payload = json.dumps(
+            hint,
+            sort_keys=True,
+            separators=(",", ":"),
+        )
+        try:
+            if str(getattr(obj, "BoundaryRegionHint", "") or "") != payload:
+                obj.BoundaryRegionHint = payload
+        except Exception:
+            pass
+
+    def _sync_boundary_region_hint(self, obj, shape=None):
+        point = self._get_shape_reference_point(shape)
+        if point is None:
+            try:
+                base_shape = obj.Base.Shape
+            except Exception:
+                base_shape = None
+            point = self._get_shape_reference_point(base_shape)
+        if point is None:
+            return
+        self._set_boundary_region_hint(obj, point)
 
     def _get_boundary_face(self, obj, face_name):
         try:
@@ -2177,6 +2255,56 @@ class _Space(ArchComponent.Component):
             pass
         return shape.Solids[0] if len(shape.Solids) == 1 else shape
 
+    def _select_boundary_region_record(self, records, top_level, reference_point):
+        if not top_level or reference_point is None:
+            return None
+
+        reference_point = FreeCAD.Vector(reference_point)
+        best_record = None
+        best_sort_key = None
+        for record in top_level:
+            sample_point = record.get("sample")
+            if sample_point is None:
+                continue
+            sample_point = FreeCAD.Vector(sample_point)
+            plan_reference = FreeCAD.Vector(reference_point.x, reference_point.y, sample_point.z)
+            region_face = self._build_face_from_region_record(records, record)
+            contains_reference = False
+            if region_face is not None:
+                try:
+                    contains_reference = bool(region_face.isInside(plan_reference, 0.001, True))
+                except Exception:
+                    contains_reference = False
+            distance = float(sample_point.sub(plan_reference).Length)
+            sort_key = (
+                0 if contains_reference else 1,
+                distance,
+                -float(record.get("area", 0.0) or 0.0),
+            )
+            if best_sort_key is None or sort_key < best_sort_key:
+                best_sort_key = sort_key
+                best_record = record
+        return best_record
+
+    def _build_shape_from_boundary_region_reference(
+        self, boundary_faces, reference_point, loop_analysis=None
+    ):
+        if not boundary_faces or reference_point is None:
+            return None
+        analysis = loop_analysis or self._analyze_boundary_loops(boundary_faces)
+        outer_record = self._select_boundary_region_record(
+            analysis.get("records", []),
+            analysis.get("top_level", []),
+            reference_point,
+        )
+        if outer_record is None:
+            return None
+        return self._build_shape_from_boundary_region(
+            boundary_faces,
+            outer_record,
+            loop_analysis=analysis,
+        )
+
     def getBoundaryRegionCandidates(self, boundaries, label=None, seed_space=None):
         label = str(label or translate("Arch", "Space"))
         boundary_links = list(boundaries or [])
@@ -2321,6 +2449,7 @@ class _Space(ArchComponent.Component):
         shape = None
         boundary_faces = self._get_boundary_faces(obj)
         loop_analysis = self._analyze_boundary_loops(boundary_faces) if boundary_faces else None
+        boundary_reference = self._get_space_reference_point(obj)
         pl = obj.Placement
 
         # print("starting compute")
@@ -2333,6 +2462,26 @@ class _Space(ArchComponent.Component):
                 shape = self.processSubShapes(obj, loop_shape.Solids[0], pl)
                 self.applyShape(obj, shape, pl)
                 self._sync_area_properties(obj)
+                self._sync_boundary_region_hint(obj, shape)
+                self._sync_boundary_side_hints(obj, shape)
+                return
+
+        if (
+            boundary_faces
+            and loop_analysis
+            and len(loop_analysis.get("top_level", [])) > 1
+            and boundary_reference is not None
+        ):
+            region_shape = self._build_shape_from_boundary_region_reference(
+                boundary_faces,
+                boundary_reference,
+                loop_analysis=loop_analysis,
+            )
+            if region_shape is not None:
+                shape = self.processSubShapes(obj, region_shape.Solids[0], pl)
+                self.applyShape(obj, shape, pl)
+                self._sync_area_properties(obj)
+                self._sync_boundary_region_hint(obj, shape)
                 self._sync_boundary_side_hints(obj, shape)
                 return
 
@@ -2352,6 +2501,7 @@ class _Space(ArchComponent.Component):
                 shape = self.processSubShapes(obj, shape.Solids[0], pl)
                 self.applyShape(obj, shape, pl)
                 self._sync_area_properties(obj)
+                self._sync_boundary_region_hint(obj, shape)
                 self._sync_boundary_side_hints(obj, shape)
                 return
         else:
@@ -2413,6 +2563,7 @@ class _Space(ArchComponent.Component):
                 shape = self.processSubShapes(obj, shape.Solids[0], pl)
                 self.applyShape(obj, shape, pl)
                 self._sync_area_properties(obj)
+                self._sync_boundary_region_hint(obj, shape)
                 self._sync_boundary_side_hints(obj, shape)
 
                 return

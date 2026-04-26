@@ -3828,6 +3828,42 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         self.assertGreater(len(session._wall_overlay_trackers), 0)
         self.assertEqual(len(session._grip_trackers), 3)
 
+    def test_plan_edit_selected_wall_refresh_can_force_grip_resync_for_same_wall(self):
+        """Forced selection refresh should repair wall grips even when the selected wall is unchanged."""
+
+        wall = Arch.makeWall(length=3000, width=200, height=2500)
+        self.document.recompute()
+
+        session = BimPlanSession.start_session()
+        self.assertIsNotNone(session)
+        self.pump_gui_events()
+
+        with patch.object(
+            session.selection,
+            "get_plan_target_at_position",
+            return_value=("wall", wall),
+        ):
+            activated = session.selection.activate_wall_target((100, 100))
+
+        self.assertTrue(activated)
+        self._assert_selected_wall_visuals(session, wall)
+
+        bogus_points = (
+            FreeCAD.Vector(999.0, 0.0, 0.0),
+            FreeCAD.Vector(1111.0, 0.0, 0.0),
+            FreeCAD.Vector(1234.0, 0.0, 0.0),
+        )
+        for tracker, bogus in zip(session._grip_trackers, bogus_points):
+            tracker.set(bogus)
+
+        session.selection.refresh_primary_selected_plan_target(force_wall_visual_resync=True)
+        self.pump_gui_events(timeout_ms=250)
+
+        self._assert_selected_wall_visuals(session, wall)
+
+        session.shutdown(close_dialog=False)
+        self.pump_gui_events()
+
     def test_plan_edit_selected_wall_shows_hosted_opening_context(self):
         """Selecting a wall should highlight hosted openings without selecting them."""
 

@@ -843,6 +843,115 @@ class TestArchSpace(TestArchBase.TestArchBase):
         self.assertEqual(len(space.Boundaries), 5)
         self.assertEqual(space.Proxy.getLastBoundaryError(space), "")
 
+    def test_space_region_hint_keeps_distinct_sibling_candidates_without_base(self):
+        """Sibling spaces should keep their chosen region even after dropping their base shape."""
+        operation = "Arch Space keeps sibling region candidates distinct without base solids"
+        self.printTestMessage(operation)
+
+        height = 2500.0
+        expected_area = 3000.0 * 4000.0
+
+        def make_boundary_face(name, points):
+            face_object = App.ActiveDocument.addObject("Part::Feature", name)
+            face_object.Shape = Part.Face(Part.makePolygon(points + [points[0]]))
+            return face_object
+
+        boundaries = [
+            (
+                make_boundary_face(
+                    "OuterSouth",
+                    [
+                        App.Vector(0.0, 0.0, 0.0),
+                        App.Vector(6000.0, 0.0, 0.0),
+                        App.Vector(6000.0, 0.0, height),
+                        App.Vector(0.0, 0.0, height),
+                    ],
+                ),
+                ["Face1"],
+            ),
+            (
+                make_boundary_face(
+                    "OuterEast",
+                    [
+                        App.Vector(6000.0, 0.0, 0.0),
+                        App.Vector(6000.0, 4000.0, 0.0),
+                        App.Vector(6000.0, 4000.0, height),
+                        App.Vector(6000.0, 0.0, height),
+                    ],
+                ),
+                ["Face1"],
+            ),
+            (
+                make_boundary_face(
+                    "OuterNorth",
+                    [
+                        App.Vector(6000.0, 4000.0, 0.0),
+                        App.Vector(0.0, 4000.0, 0.0),
+                        App.Vector(0.0, 4000.0, height),
+                        App.Vector(6000.0, 4000.0, height),
+                    ],
+                ),
+                ["Face1"],
+            ),
+            (
+                make_boundary_face(
+                    "OuterWest",
+                    [
+                        App.Vector(0.0, 4000.0, 0.0),
+                        App.Vector(0.0, 0.0, 0.0),
+                        App.Vector(0.0, 0.0, height),
+                        App.Vector(0.0, 4000.0, height),
+                    ],
+                ),
+                ["Face1"],
+            ),
+            (
+                make_boundary_face(
+                    "Divider",
+                    [
+                        App.Vector(3000.0, 0.0, 0.0),
+                        App.Vector(3000.0, 4000.0, 0.0),
+                        App.Vector(3000.0, 4000.0, height),
+                        App.Vector(3000.0, 0.0, height),
+                    ],
+                ),
+                ["Face1"],
+            ),
+        ]
+
+        report = ArchSpace.getBoundaryRegionCandidates(boundaries, label="Two Rooms Preview")
+        self.assertEqual(report["candidate_count"], 2)
+
+        spaces = []
+        for index, candidate in enumerate(report["candidates"]):
+            base = App.ActiveDocument.addObject("Part::Feature", f"ChosenRegionBase{index}")
+            base.Shape = candidate["shape"].copy()
+            space = Arch.makeSpace(base, name=f"SplitRoom{index}")
+            space.Boundaries = boundaries
+            spaces.append(space)
+
+        App.ActiveDocument.recompute()
+
+        initial_centers = sorted(float(space.Shape.CenterOfMass.x) for space in spaces)
+        self.assertLess(initial_centers[0], 3000.0)
+        self.assertGreater(initial_centers[1], 3000.0)
+        for space in spaces:
+            self.assertAlmostEqual(space.Proxy.getArea(space), expected_area)
+            self.assertTrue(str(getattr(space, "BoundaryRegionHint", "") or "").strip())
+            self.assertEqual(space.Proxy.getLastBoundaryError(space), "")
+
+        for space in spaces:
+            space.Base = None
+
+        App.ActiveDocument.recompute()
+
+        recomputed_centers = sorted(float(space.Shape.CenterOfMass.x) for space in spaces)
+        self.assertLess(recomputed_centers[0], 3000.0)
+        self.assertGreater(recomputed_centers[1], 3000.0)
+        for space in spaces:
+            self.assertAlmostEqual(space.Proxy.getArea(space), expected_area)
+            self.assertEqual(space.Proxy.getLastBoundaryError(space), "")
+
     def test_space_boundary_failure_describes_open_loop(self):
         """Open boundary selections should keep a useful failure reason."""
         operation = "Arch Space reports open boundary loops"
