@@ -273,9 +273,11 @@
         <file>Tree_Annotation.svg</file>
         <file>Tree_Dimension.svg</file>
         <file>Tree_Python.svg</file>
+        <file>tree-collapse.svg</file>
         <file>tree-doc-collapse.svg</file>
         <file>tree-doc-multi.svg</file>
         <file>tree-doc-single.svg</file>
+        <file>tree-expand.svg</file>
         <file>tree-goto-sel.svg</file>
         <file>tree-item-drag.svg</file>
         <file>tree-pre-sel.svg</file>

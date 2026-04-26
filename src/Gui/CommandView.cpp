@@ -3161,6 +3161,7 @@ StdCmdTreeCollapse::StdCmdTreeCollapse()
     sToolTipText = QT_TR_NOOP("Collapses the currently selected tree items");
     sWhatsThis = "Std_TreeCollapse";
     sStatusTip = sToolTipText;
+    sPixmap = "tree-collapse";
     eType = Alter3DView;
 }
 
@@ -3187,6 +3188,7 @@ StdCmdTreeExpand::StdCmdTreeExpand()
     sToolTipText = QT_TR_NOOP("Expands the currently selected tree items");
     sWhatsThis = "Std_TreeExpand";
     sStatusTip = sToolTipText;
+    sPixmap = "tree-expand";
     eType = Alter3DView;
 }
 
