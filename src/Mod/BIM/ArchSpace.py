@@ -2941,74 +2941,14 @@ class _Space(ArchComponent.Component):
             return []
 
 
-class _SpaceBoundaryAnalyzer:
+class _SpaceBoundaryAnalyzer(_Space):
     """Reusable boundary analysis helper for Plan Edit and tests."""
 
-    _get_shape_horizontal_slice_edges = _Space._get_shape_horizontal_slice_edges
-    _get_horizontal_slice_edges = _Space._get_horizontal_slice_edges
-    _get_slice_edge_curve_type = _Space._get_slice_edge_curve_type
-    _get_slice_edge_direction = _Space._get_slice_edge_direction
-    _get_linear_slice_edge_merge_data = _Space._get_linear_slice_edge_merge_data
-    _get_circular_slice_edge_merge_data = _Space._get_circular_slice_edge_merge_data
-    _can_merge_slice_edges = _Space._can_merge_slice_edges
-    _merge_linear_slice_edges = _Space._merge_linear_slice_edges
-    _merge_circular_slice_edges = _Space._merge_circular_slice_edges
-    _merge_slice_edge_group = _Space._merge_slice_edge_group
-    _merge_shape_slice_edges = _Space._merge_shape_slice_edges
-    _get_boundary_faces_from_links = _Space._get_boundary_faces_from_links
-    _copy_without_element_map = _Space._copy_without_element_map
-    _copy_clean_slice_edge = _Space._copy_clean_slice_edge
-    _get_slice_edge_endpoint_records = _Space._get_slice_edge_endpoint_records
-    _get_slice_edge_gap_distance = _Space._get_slice_edge_gap_distance
-    _is_slice_edge_point_on_edge = _Space._is_slice_edge_point_on_edge
-    _can_build_faces_from_slice_edges = _Space._can_build_faces_from_slice_edges
-    _get_gap_bridged_slice_edges = _Space._get_gap_bridged_slice_edges
-    _make_transient_face_from_wires = _Space._make_transient_face_from_wires
-    _get_horizontal_slice_faces_from_edges = _Space._get_horizontal_slice_faces_from_edges
-    _get_wire_identity = _Space._get_wire_identity
-    _get_horizontal_slice_wires = _Space._get_horizontal_slice_wires
-    _get_wire_face_sample_point = _Space._get_wire_face_sample_point
-    _classify_wire_records = _Space._classify_wire_records
-    _build_faces_from_wires = _Space._build_faces_from_wires
-    _build_faces_from_records = _Space._build_faces_from_records
-    _get_boundary_vertical_overlap = _Space._get_boundary_vertical_overlap
-    _get_seed_boundary_overlap_cut_z = _Space._get_seed_boundary_overlap_cut_z
-    _get_seed_space_splitter_points = _Space._get_seed_space_splitter_points
-    _split_seed_space_footprint_edge = _Space._split_seed_space_footprint_edge
-    _make_seed_space_boundary_face = _Space._make_seed_space_boundary_face
-    _get_seed_space_boundary_faces = _Space._get_seed_space_boundary_faces
-    _is_space_object = _Space._is_space_object
-    _is_wall_object = _Space._is_wall_object
-    _get_stable_boundary_links = _Space._get_stable_boundary_links
-    _get_boundary_storage_links = _Space._get_boundary_storage_links
-    _split_boundary_storage_links = _Space._split_boundary_storage_links
-    _write_boundary_storage = _Space._write_boundary_storage
-    normalizeBoundarySubnames = staticmethod(_Space.normalizeBoundarySubnames)
-    _get_boundary_entry_object_and_subnames = staticmethod(
-        _Space._get_boundary_entry_object_and_subnames
-    )
-    _get_excluded_boundary_object_names = staticmethod(_Space._get_excluded_boundary_object_names)
-    _get_boundary_face = _Space._get_boundary_face
-    _get_boundary_face_normal_and_center = _Space._get_boundary_face_normal_and_center
-    _get_wall_boundary_face_name = _Space._get_wall_boundary_face_name
-    _get_wall_boundary_face_name_for_normal = _Space._get_wall_boundary_face_name_for_normal
-    _get_wall_boundary_face_names = _Space._get_wall_boundary_face_names
-    _is_single_wall_side_face_set = _Space._is_single_wall_side_face_set
-    getBoundaryFaceNamesForObject = _Space.getBoundaryFaceNamesForObject
-    getStableBoundaryLinks = _Space.getStableBoundaryLinks
-    normalizeBoundaryLinks = _Space.normalizeBoundaryLinks
-    resolveBoundaryLinks = _Space.resolveBoundaryLinks
-    getBoundaryFacesFromLinks = _Space.getBoundaryFacesFromLinks
-    _analyze_boundary_loops = _Space._analyze_boundary_loops
-    _describe_boundary_failure = _Space._describe_boundary_failure
-    _get_boundary_analysis_code = _Space._get_boundary_analysis_code
-    _get_boundary_bounding_box = _Space._get_boundary_bounding_box
-    analyzeBoundaryLinks = _Space.analyzeBoundaryLinks
-    analyzeBoundaryFaces = _Space.analyzeBoundaryFaces
-    _build_face_from_region_record = _Space._build_face_from_region_record
-    _build_shape_from_boundary_region = _Space._build_shape_from_boundary_region
-    getBoundaryRegionCandidates = _Space.getBoundaryRegionCandidates
-    getBoundaryFaceRegionCandidates = _Space.getBoundaryFaceRegionCandidates
+    def __init__(self):
+        # This adapter intentionally exposes the pure boundary-analysis surface of
+        # ``_Space`` without binding to a real document object or registering
+        # Arch component properties.
+        pass
 
 
 _space_boundary_analyzer = _SpaceBoundaryAnalyzer()
