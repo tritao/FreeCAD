@@ -2366,9 +2366,13 @@ ParameterGrp::handle ToolBarManager::globalHostedToolBarHostGroup() const
 
 ParameterGrp::handle ToolBarManager::hostedToolBarHostGroup(const QString& context) const
 {
+    if (!rememberToolbarLayoutByWorkbench() || context.isEmpty()) {
+        return globalHostedToolBarHostGroup();
+    }
+
     auto group = workbenchLayoutGroup(context);
     if (!group) {
-        return {};
+        return globalHostedToolBarHostGroup();
     }
 
     return group->GetGroup(HostedToolbarHostsGroupKey);
@@ -2382,9 +2386,13 @@ ParameterGrp::handle ToolBarManager::globalPanelToolBarPlacementGroup() const
 
 ParameterGrp::handle ToolBarManager::panelToolBarPlacementGroup(const QString& context) const
 {
+    if (!rememberToolbarLayoutByWorkbench() || context.isEmpty()) {
+        return globalPanelToolBarPlacementGroup();
+    }
+
     auto group = workbenchLayoutGroup(context);
     if (!group) {
-        return {};
+        return globalPanelToolBarPlacementGroup();
     }
 
     return group->GetGroup(PanelPlacementsGroupKey);
@@ -2398,9 +2406,13 @@ ParameterGrp::handle ToolBarManager::globalViewToolBarPresentationGroup() const
 
 ParameterGrp::handle ToolBarManager::viewToolBarPresentationGroup(const QString& context) const
 {
+    if (!rememberToolbarLayoutByWorkbench() || context.isEmpty()) {
+        return globalViewToolBarPresentationGroup();
+    }
+
     auto group = workbenchLayoutGroup(context);
     if (!group) {
-        return {};
+        return globalViewToolBarPresentationGroup();
     }
 
     return group->GetGroup(ViewToolbarPresentationsGroupKey);
@@ -2414,9 +2426,13 @@ ParameterGrp::handle ToolBarManager::sharedViewOverlayEdgeGroup() const
 
 ParameterGrp::handle ToolBarManager::viewOverlayEdgeGroup(const QString& context) const
 {
+    if (!rememberToolbarLayoutByWorkbench() || context.isEmpty()) {
+        return sharedViewOverlayEdgeGroup();
+    }
+
     auto group = workbenchLayoutGroup(context);
     if (!group) {
-        return {};
+        return sharedViewOverlayEdgeGroup();
     }
 
     return group->GetGroup(ViewOverlayEdgesGroupKey);
@@ -2430,9 +2446,13 @@ ParameterGrp::handle ToolBarManager::globalToolBarSizeGroup() const
 
 ParameterGrp::handle ToolBarManager::toolBarSizeGroup(const QString& context) const
 {
+    if (!rememberToolbarLayoutByWorkbench() || context.isEmpty()) {
+        return globalToolBarSizeGroup();
+    }
+
     auto group = workbenchLayoutGroup(context);
     if (!group) {
-        return {};
+        return globalToolBarSizeGroup();
     }
 
     return group->GetGroup(ToolBarSizesGroupKey);

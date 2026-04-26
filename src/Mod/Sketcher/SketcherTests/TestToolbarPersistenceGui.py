@@ -1092,6 +1092,67 @@ class TestToolbarPersistenceGui(unittest.TestCase):
             params.RemGroup(host_backup_name)
             params.RemGroup(presentation_backup_name)
 
+    def test_workbench_toolbar_host_survives_visibility_restore_without_layout_memory(self):
+        key = "wb:SketcherWorkbench:Sketcher"
+        other_key = "shared:Clipboard"
+        show_label = QtGui.QApplication.translate("MainWindow", "Show")
+        move_to_label = QtGui.QApplication.translate("MainWindow", "Move To")
+        view_label = QtGui.QApplication.translate("MainWindow", "View")
+
+        self._set_per_workbench_layout_preference(False)
+
+        params = FreeCAD.ParamGet("User parameter:BaseApp/MainWindow")
+        host_group_name = "HostedToolbarHosts"
+        host_backup_name = "TestToolbarPersistenceGuiBackupHostedToolbarHostsNoLayoutMemory"
+        self.backup_group(params, host_group_name, host_backup_name)
+        params.RemGroup(host_group_name)
+
+        visibility_params = FreeCAD.ParamGet("User parameter:BaseApp/MainWindow/Toolbars")
+        self.backup_bool_param(visibility_params, key)
+        self.backup_bool_param(visibility_params, other_key)
+        visibility_params.RemBool(key)
+        visibility_params.RemBool(other_key)
+
+        self.activate_workbench("SketcherWorkbench", "wb:SketcherWorkbench:")
+        toolbar = self.wait_for_toolbar(key)
+        self.show_toolbar(key)
+        self.show_toolbar(other_key)
+        self.assertEqual(self.toolbar_host(toolbar), "main-window")
+
+        self.trigger_menu_path(
+            self.toolbar_menu(), self.toolbar_menu_label(toolbar), move_to_label, view_label
+        )
+        self.wait_until(
+            lambda: self.toolbar_host(self.wait_for_toolbar(key)) == "view",
+            "workbench toolbar host to change to the active view",
+        )
+        toolbar = self.wait_for_toolbar(key)
+        self.assertIs(
+            toolbar.parentWidget(),
+            self.active_mdi_view(),
+            "Workbench toolbar should dock into the active view after moving it there",
+        )
+
+        self.trigger_menu_path(
+            self.toolbar_menu(),
+            self.toolbar_menu_label(self.wait_for_toolbar(other_key)),
+            show_label,
+        )
+        self.wait_until(
+            lambda: not self.wait_for_toolbar(other_key).isVisible(),
+            "clipboard toolbar to hide through the toolbar menu",
+        )
+        self.wait_until(
+            lambda: self.toolbar_host(self.wait_for_toolbar(key)) == "view",
+            "workbench toolbar host to survive an unrelated visibility restore",
+        )
+        toolbar = self.wait_for_toolbar(key)
+        self.assertIs(
+            toolbar.parentWidget(),
+            self.active_mdi_view(),
+            "Workbench toolbar should stay in the active view after another toolbar is hidden",
+        )
+
     def test_panel_toolbar_menu_exposes_hidden_model_tree_toolbar(self):
         key = "shared:Tree Controls"
         panel_label = QtGui.QApplication.translate("MainWindow", "Panel Toolbars")
