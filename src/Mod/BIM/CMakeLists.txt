@@ -326,6 +326,12 @@ SET(bimtests_SRCS
     bimtests/TestBimLibraryGui.py
     bimtests/TestBimPlanCore.py
     bimtests/TestBimPlanEditGui.py
+    bimtests/TestBimPlanEditGuiBase.py
+    bimtests/TestBimPlanEditGuiOpenings.py
+    bimtests/TestBimPlanEditGuiProvider.py
+    bimtests/TestBimPlanEditGuiSpaces.py
+    bimtests/TestBimPlanEditGuiSymbols.py
+    bimtests/TestBimPlanEditGuiWalls.py
     bimtests/TestBimPlanProviderSelectionGui.py
     bimtests/TestBimProjectManagerGui.py
     bimtests/TestArchWallJoinWorkflowGui.py
