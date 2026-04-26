@@ -576,8 +576,7 @@ class _MaterialEditor(CommandManager):
         self.is_active = "always"
 
     def Activated(self):
-        FreeCADGui.addModule("MaterialEditor")
-        FreeCADGui.doCommand("MaterialEditor.openEditor()")
+        FreeCADGui.runCommand("Material_Edit", 0)
 
 
 class _MaterialFluid(CommandManager):

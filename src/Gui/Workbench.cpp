@@ -781,6 +781,7 @@ MenuItem* StdWorkbench::setupMenuBar() const
 #endif
     *tool << "Std_Measure"
           << "Std_MassProperties"
+          << "Material_Edit"
           << "Std_AnnotationLabel"
           << "Std_UnitsCalculator"
           << "Std_ClarifySelection"
