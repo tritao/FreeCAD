@@ -400,6 +400,95 @@ class BimPlanEditGuiOpeningsMixin:
         )
         self.assertFalse(panel.window_size_apply_button.isEnabled())
 
+    def test_plan_edit_selected_window_width_undo_redo_roundtrip(self):
+        """Width edits should roundtrip cleanly through undo/redo."""
+
+        def get_shape_center(obj):
+            bound_box = obj.Shape.BoundBox
+            return FreeCAD.Vector(
+                (float(bound_box.XMin) + float(bound_box.XMax)) * 0.5,
+                (float(bound_box.YMin) + float(bound_box.YMax)) * 0.5,
+                (float(bound_box.ZMin) + float(bound_box.ZMax)) * 0.5,
+            )
+
+        level, wall, window = self._make_windowed_plan_wall()
+        original_center = get_shape_center(window.Base)
+        original_width = ArchWindow.getWindowWidthMm(window)
+        original_height = ArchWindow.getWindowHeightMm(window)
+
+        FreeCADGui.Selection.clearSelection()
+        FreeCADGui.Selection.addSelection(level)
+
+        session = BimPlanSession.start_session()
+        self.assertIsNotNone(session)
+        self.pump_gui_events()
+
+        self.assertTrue(
+            session.selection.select_opening_for_plan_edit(window, sync_gui_selection=True)
+        )
+        session.task_panel.refresh_from_session()
+        self.pump_gui_events(timeout_ms=500)
+
+        panel = session.task_panel
+        panel.window_width_edit.setText("950 mm")
+        self.pump_gui_events()
+        self.assertTrue(panel.window_size_apply_button.isEnabled())
+
+        panel.window_size_apply_button.click()
+        self.pump_gui_events(timeout_ms=500)
+        panel.refresh_from_session()
+        self.pump_gui_events(timeout_ms=500)
+
+        updated_center = get_shape_center(window.Base)
+        updated_width = ArchWindow.getWindowWidthMm(window)
+        updated_height = ArchWindow.getWindowHeightMm(window)
+        self.assertIn(wall, window.Hosts)
+        self.assertAlmostEqual(updated_width, 950.0, delta=1e-6)
+        self.assertAlmostEqual(updated_height, original_height, delta=1e-6)
+        self.assertAlmostEqual(original_center.x, updated_center.x, delta=1e-6)
+        self.assertAlmostEqual(original_center.y, updated_center.y, delta=1e-6)
+        self.assertAlmostEqual(original_center.z, updated_center.z, delta=1e-6)
+        self.assertIs(session.selection.get_selected_target_for_kind("opening"), window)
+        self.assertGreater(len(session._opening_overlay_trackers), 0)
+        self.assertGreaterEqual(len(session._opening_handle_trackers), 1)
+        self._assert_no_opening_move_preview_visuals(session)
+
+        self._undo_document()
+        panel.refresh_from_session()
+        self.pump_gui_events(timeout_ms=500)
+
+        undo_center = get_shape_center(window.Base)
+        undo_width = ArchWindow.getWindowWidthMm(window)
+        undo_height = ArchWindow.getWindowHeightMm(window)
+        self.assertIn(wall, window.Hosts)
+        self.assertAlmostEqual(undo_width, original_width, delta=1e-6)
+        self.assertAlmostEqual(undo_height, original_height, delta=1e-6)
+        self.assertAlmostEqual(original_center.x, undo_center.x, delta=1e-6)
+        self.assertAlmostEqual(original_center.y, undo_center.y, delta=1e-6)
+        self.assertAlmostEqual(original_center.z, undo_center.z, delta=1e-6)
+        self.assertIs(session.selection.get_selected_target_for_kind("opening"), window)
+        self.assertGreater(len(session._opening_overlay_trackers), 0)
+        self.assertGreaterEqual(len(session._opening_handle_trackers), 1)
+        self._assert_no_opening_move_preview_visuals(session)
+
+        self._redo_document()
+        panel.refresh_from_session()
+        self.pump_gui_events(timeout_ms=500)
+
+        redo_center = get_shape_center(window.Base)
+        redo_width = ArchWindow.getWindowWidthMm(window)
+        redo_height = ArchWindow.getWindowHeightMm(window)
+        self.assertIn(wall, window.Hosts)
+        self.assertAlmostEqual(redo_width, updated_width, delta=1e-6)
+        self.assertAlmostEqual(redo_height, updated_height, delta=1e-6)
+        self.assertAlmostEqual(updated_center.x, redo_center.x, delta=1e-6)
+        self.assertAlmostEqual(updated_center.y, redo_center.y, delta=1e-6)
+        self.assertAlmostEqual(updated_center.z, redo_center.z, delta=1e-6)
+        self.assertIs(session.selection.get_selected_target_for_kind("opening"), window)
+        self.assertGreater(len(session._opening_overlay_trackers), 0)
+        self.assertGreaterEqual(len(session._opening_handle_trackers), 1)
+        self._assert_no_opening_move_preview_visuals(session)
+
     def test_plan_edit_selected_window_can_change_height(self):
         """Selected windows should accept height edits without drifting their center."""
 
@@ -457,6 +546,95 @@ class BimPlanEditGuiOpeningsMixin:
             session.windows.get_selected_window_height_text(), str(panel.window_height_edit.text())
         )
         self.assertFalse(panel.window_size_apply_button.isEnabled())
+
+    def test_plan_edit_selected_window_height_undo_redo_roundtrip(self):
+        """Height edits should roundtrip cleanly through undo/redo."""
+
+        def get_shape_center(obj):
+            bound_box = obj.Shape.BoundBox
+            return FreeCAD.Vector(
+                (float(bound_box.XMin) + float(bound_box.XMax)) * 0.5,
+                (float(bound_box.YMin) + float(bound_box.YMax)) * 0.5,
+                (float(bound_box.ZMin) + float(bound_box.ZMax)) * 0.5,
+            )
+
+        level, wall, window = self._make_windowed_plan_wall()
+        original_center = get_shape_center(window.Base)
+        original_width = ArchWindow.getWindowWidthMm(window)
+        original_height = ArchWindow.getWindowHeightMm(window)
+
+        FreeCADGui.Selection.clearSelection()
+        FreeCADGui.Selection.addSelection(level)
+
+        session = BimPlanSession.start_session()
+        self.assertIsNotNone(session)
+        self.pump_gui_events()
+
+        self.assertTrue(
+            session.selection.select_opening_for_plan_edit(window, sync_gui_selection=True)
+        )
+        session.task_panel.refresh_from_session()
+        self.pump_gui_events(timeout_ms=500)
+
+        panel = session.task_panel
+        panel.window_height_edit.setText("1400 mm")
+        self.pump_gui_events()
+        self.assertTrue(panel.window_size_apply_button.isEnabled())
+
+        panel.window_size_apply_button.click()
+        self.pump_gui_events(timeout_ms=500)
+        panel.refresh_from_session()
+        self.pump_gui_events(timeout_ms=500)
+
+        updated_center = get_shape_center(window.Base)
+        updated_width = ArchWindow.getWindowWidthMm(window)
+        updated_height = ArchWindow.getWindowHeightMm(window)
+        self.assertIn(wall, window.Hosts)
+        self.assertAlmostEqual(updated_width, original_width, delta=1e-6)
+        self.assertAlmostEqual(updated_height, 1400.0, delta=1e-6)
+        self.assertAlmostEqual(original_center.x, updated_center.x, delta=1e-6)
+        self.assertAlmostEqual(original_center.y, updated_center.y, delta=1e-6)
+        self.assertAlmostEqual(original_center.z, updated_center.z, delta=1e-6)
+        self.assertIs(session.selection.get_selected_target_for_kind("opening"), window)
+        self.assertGreater(len(session._opening_overlay_trackers), 0)
+        self.assertGreaterEqual(len(session._opening_handle_trackers), 1)
+        self._assert_no_opening_move_preview_visuals(session)
+
+        self._undo_document()
+        panel.refresh_from_session()
+        self.pump_gui_events(timeout_ms=500)
+
+        undo_center = get_shape_center(window.Base)
+        undo_width = ArchWindow.getWindowWidthMm(window)
+        undo_height = ArchWindow.getWindowHeightMm(window)
+        self.assertIn(wall, window.Hosts)
+        self.assertAlmostEqual(undo_width, original_width, delta=1e-6)
+        self.assertAlmostEqual(undo_height, original_height, delta=1e-6)
+        self.assertAlmostEqual(original_center.x, undo_center.x, delta=1e-6)
+        self.assertAlmostEqual(original_center.y, undo_center.y, delta=1e-6)
+        self.assertAlmostEqual(original_center.z, undo_center.z, delta=1e-6)
+        self.assertIs(session.selection.get_selected_target_for_kind("opening"), window)
+        self.assertGreater(len(session._opening_overlay_trackers), 0)
+        self.assertGreaterEqual(len(session._opening_handle_trackers), 1)
+        self._assert_no_opening_move_preview_visuals(session)
+
+        self._redo_document()
+        panel.refresh_from_session()
+        self.pump_gui_events(timeout_ms=500)
+
+        redo_center = get_shape_center(window.Base)
+        redo_width = ArchWindow.getWindowWidthMm(window)
+        redo_height = ArchWindow.getWindowHeightMm(window)
+        self.assertIn(wall, window.Hosts)
+        self.assertAlmostEqual(redo_width, updated_width, delta=1e-6)
+        self.assertAlmostEqual(redo_height, updated_height, delta=1e-6)
+        self.assertAlmostEqual(updated_center.x, redo_center.x, delta=1e-6)
+        self.assertAlmostEqual(updated_center.y, redo_center.y, delta=1e-6)
+        self.assertAlmostEqual(updated_center.z, redo_center.z, delta=1e-6)
+        self.assertIs(session.selection.get_selected_target_for_kind("opening"), window)
+        self.assertGreater(len(session._opening_overlay_trackers), 0)
+        self.assertGreaterEqual(len(session._opening_handle_trackers), 1)
+        self._assert_no_opening_move_preview_visuals(session)
 
     def test_plan_edit_selected_window_can_change_size_together(self):
         """Selected windows should apply width and height changes in one step."""
