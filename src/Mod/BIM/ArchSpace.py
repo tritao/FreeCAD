@@ -3482,7 +3482,7 @@ def _collect_space_label_obstacle_bounds(space, faces):
     return tuple(obstacles)
 
 
-def refresh_auto_space_text_positions(doc):
+def refresh_auto_space_text_positions(doc, changed_bounds=None):
     """Refresh auto-positioned space labels in a GUI document without recomputing geometry."""
 
     if (not FreeCAD.GuiUp) or (doc is None):
@@ -3494,6 +3494,32 @@ def refresh_auto_space_text_positions(doc):
     for obj in getattr(doc, "Objects", []) or []:
         if type(getattr(obj, "Proxy", None)).__name__ != "_Space":
             continue
+
+        if changed_bounds is not None:
+            try:
+                space_bb = obj.Shape.BoundBox
+                space_bounds = (
+                    float(space_bb.XMin),
+                    float(space_bb.YMin),
+                    float(space_bb.XMax),
+                    float(space_bb.YMax),
+                    float(space_bb.ZMin),
+                    float(space_bb.ZMax),
+                )
+            except Exception:
+                space_bounds = None
+
+            if space_bounds is not None and not _bounds_intersect_xy(space_bounds, changed_bounds):
+                continue
+            if space_bounds is not None and (
+                changed_bounds[5] < space_bounds[4] - 1.0
+                or changed_bounds[4] > space_bounds[5] + 1.0
+            ):
+                continue
+            if space_bounds is not None:
+                faces = _get_space_footprint_faces(obj)
+                if faces and not _bounds_touches_space_footprint(faces, changed_bounds):
+                    continue
 
         vobj = getattr(obj, "ViewObject", None)
         if not vobj or not hasattr(vobj, "TextPosition"):

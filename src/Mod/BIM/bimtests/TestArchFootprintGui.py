@@ -647,6 +647,23 @@ class TestArchFootprintGui(TestArchBaseGui.TestArchBaseGui):
 
         self._assert_vector_almost_equal(refreshed_translation, expected_translation)
 
+        with patch.object(
+            equipment.ViewObject.Proxy,
+            "_collect_local_footprint_polylines",
+            return_value=[],
+        ):
+            expected_reset_translation = self._get_expected_space_label_translation(space)
+            self.assertGreater(
+                refreshed_translation.distanceToPoint(expected_reset_translation), 1.0
+            )
+
+            equipment.ViewObject.Proxy.updateFootprint()
+            self.pump_gui_events()
+
+            reset_translation = self._get_space_label_translation(space)
+
+        self._assert_vector_almost_equal(reset_translation, expected_reset_translation)
+
     def test_space_auto_text_refreshes_after_hosted_door_footprint_update_without_recompute(self):
         """Updating a hosted door plan footprint should refresh auto-positioned space labels in the live view."""
 
