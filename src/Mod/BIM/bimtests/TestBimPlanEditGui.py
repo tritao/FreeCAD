@@ -4452,6 +4452,150 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         session.shutdown(close_dialog=False)
         self.pump_gui_events()
 
+    def test_plan_edit_join_update_undo_keeps_adjacent_wall_linked_spaces_distinct(self):
+        """Updating an existing wall joint should keep adjacent spaces distinct through undo."""
+
+        from bimcommands.BimJoin import BIM_Join_Miter
+
+        FreeCADGui.Selection.clearSelection()
+        session = BimPlanSession.start_session()
+        self.assertIsNotNone(session)
+        self.pump_gui_events()
+
+        (
+            _level,
+            walls,
+            divider_wall,
+            _boundaries,
+            created_spaces,
+        ) = self._create_adjacent_wall_linked_spaces(session)
+        source_wall = next(wall for wall in walls if wall.Label == "South Wall")
+        target_wall = divider_wall
+
+        joint = Arch.makeWallJoint(source_wall, target_wall, "Miter")
+        self.assertIsNotNone(joint)
+        self.assertTrue(BIM_Join_Miter()._configure_joint(joint, source_wall, target_wall))
+        self.document.recompute()
+        self.pump_gui_events()
+
+        sorted_spaces = self._assert_spaces_stay_distinct(created_spaces)
+        initial_centers = [float(space.Shape.CenterOfMass.x) for space in sorted_spaces]
+        initial_areas = [float(space.Proxy.getArea(space)) for space in sorted_spaces]
+
+        session.selection.select_wall_for_plan_edit(source_wall)
+        session.wall_relations.set_plan_join_type("Butt")
+        session.lifecycle.activate_join_tool()
+        session.selection.set_hovered_wall(target_wall)
+
+        with (
+            patch.object(session.selection, "get_edit_node", return_value=None),
+            patch.object(
+                session.selection,
+                "get_plan_target_at_position",
+                return_value=("wall", target_wall),
+            ),
+        ):
+            session.input.on_mouse_pressed(self._make_fake_left_mouse_press())
+
+        joints = [
+            obj
+            for obj in self.document.Objects
+            if getattr(getattr(obj, "Proxy", None), "Type", None) == "WallJoint"
+        ]
+        self.assertEqual(len(joints), 1)
+        joint = joints[0]
+        self.assertEqual(joint.JointType, "Butt")
+        self._assert_spaces_stay_distinct(created_spaces)
+
+        self._undo_document()
+
+        joints = [
+            obj
+            for obj in self.document.Objects
+            if getattr(getattr(obj, "Proxy", None), "Type", None) == "WallJoint"
+        ]
+        self.assertEqual(len(joints), 1)
+        joint = joints[0]
+        self.assertEqual(joint.JointType, "Miter")
+
+        restored_spaces = self._assert_spaces_stay_distinct(created_spaces)
+        restored_centers = [float(space.Shape.CenterOfMass.x) for space in restored_spaces]
+        restored_areas = [float(space.Proxy.getArea(space)) for space in restored_spaces]
+        for initial_center, restored_center in zip(initial_centers, restored_centers):
+            self.assertAlmostEqual(restored_center, initial_center, delta=1e-6)
+        for initial_area, restored_area in zip(initial_areas, restored_areas):
+            self.assertAlmostEqual(restored_area, initial_area, delta=1e-6)
+
+        session.shutdown(close_dialog=False)
+        self.pump_gui_events()
+
+    def test_plan_edit_unjoin_undo_keeps_adjacent_wall_linked_spaces_distinct(self):
+        """Unjoining a wall pair should keep adjacent spaces distinct through undo."""
+
+        from bimcommands.BimJoin import BIM_Join_Miter
+
+        FreeCADGui.Selection.clearSelection()
+        session = BimPlanSession.start_session()
+        self.assertIsNotNone(session)
+        self.pump_gui_events()
+
+        (
+            _level,
+            walls,
+            divider_wall,
+            _boundaries,
+            created_spaces,
+        ) = self._create_adjacent_wall_linked_spaces(session)
+        source_wall = next(wall for wall in walls if wall.Label == "South Wall")
+        target_wall = divider_wall
+
+        joint = Arch.makeWallJoint(source_wall, target_wall, "Miter")
+        self.assertIsNotNone(joint)
+        self.assertTrue(BIM_Join_Miter()._configure_joint(joint, source_wall, target_wall))
+        self.document.recompute()
+        self.pump_gui_events()
+
+        sorted_spaces = self._assert_spaces_stay_distinct(created_spaces)
+        initial_centers = [float(space.Shape.CenterOfMass.x) for space in sorted_spaces]
+        initial_areas = [float(space.Proxy.getArea(space)) for space in sorted_spaces]
+
+        session.selection.select_wall_for_plan_edit(source_wall)
+        session.lifecycle.activate_join_tool()
+        session.selection.set_hovered_wall(target_wall)
+
+        self.assertTrue(session.wall_relations.unjoin_current_plan_wall_pair())
+        self.pump_gui_events()
+
+        joints = [
+            obj
+            for obj in self.document.Objects
+            if getattr(getattr(obj, "Proxy", None), "Type", None) == "WallJoint"
+        ]
+        self.assertEqual(joints, [])
+        self._assert_spaces_stay_distinct(created_spaces)
+
+        self._undo_document()
+
+        joints = [
+            obj
+            for obj in self.document.Objects
+            if getattr(getattr(obj, "Proxy", None), "Type", None) == "WallJoint"
+        ]
+        self.assertEqual(len(joints), 1)
+        joint = joints[0]
+        self.assertEqual(joint.JointType, "Miter")
+
+        restored_spaces = self._assert_spaces_stay_distinct(created_spaces)
+        restored_centers = [float(space.Shape.CenterOfMass.x) for space in restored_spaces]
+        restored_areas = [float(space.Proxy.getArea(space)) for space in restored_spaces]
+        for initial_center, restored_center in zip(initial_centers, restored_centers):
+            self.assertAlmostEqual(restored_center, initial_center, delta=1e-6)
+        for initial_area, restored_area in zip(initial_areas, restored_areas):
+            self.assertAlmostEqual(restored_area, initial_area, delta=1e-6)
+
+        session.shutdown(close_dialog=False)
+        self.pump_gui_events()
+
     def test_plan_edit_selected_wall_shows_junction_node_overlay(self):
         """Selecting a wall in a wall junction should show the junction node overlay."""
 
