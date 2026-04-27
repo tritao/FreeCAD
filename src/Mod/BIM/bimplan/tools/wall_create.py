@@ -12,6 +12,10 @@ translate = FreeCAD.Qt.translate
 _MIN_WALL_LENGTH = 10.0
 
 
+def _creation_preview_state(session):
+    return session.creation_preview_state
+
+
 class PlanWallCreateAPI:
     """Owned session surface for Plan Edit wall creation behavior."""
 
@@ -79,6 +83,7 @@ def activate_wall_tool(session):
 
 
 def activate_rect_wall_tool(session):
+    preview_state = _creation_preview_state(session)
     session.spaces.cancel_space_region_pick(refresh=False)
     session.spaces.cancel_plan_region_tool(refresh=False)
     session.windows.cancel_window_tool(refresh=False)
@@ -95,8 +100,8 @@ def activate_rect_wall_tool(session):
     session.overlays.clear_selected_space_overlay()
     session.overlays.clear_secondary_selected_overlays()
     session.wall_create.clear_rect_wall_preview()
-    session._rect_wall_start = None
-    session._rect_wall_params = get_wall_defaults(session)
+    preview_state.rect_wall_start = None
+    preview_state.rect_wall_params = get_wall_defaults(session)
     session.current_tool = "Rect Wall"
     FreeCAD.activeDraftCommand = session
     FreeCADGui.Snapper.getPoint(
@@ -120,21 +125,26 @@ def get_wall_defaults(session):
 
 
 def has_active_rect_wall_tool(session):
-    return session._rect_wall_start is not None or session.current_tool == "Rect Wall"
+    return (
+        _creation_preview_state(session).rect_wall_start is not None
+        or session.current_tool == "Rect Wall"
+    )
 
 
 def clear_rect_wall_preview(session):
-    session.overlays.finalize_trackers(session._rect_wall_preview_trackers)
-    session._rect_wall_preview_trackers = []
+    preview_state = _creation_preview_state(session)
+    session.overlays.finalize_trackers(preview_state.rect_wall_preview_trackers)
+    preview_state.rect_wall_preview_trackers = []
 
 
 def cancel_rect_wall_tool(session, refresh=True):
+    preview_state = _creation_preview_state(session)
     if not session.wall_create.has_active_rect_wall_tool():
         return False
     session.lifecycle.stop_snapper()
     session.wall_create.clear_rect_wall_preview()
-    session._rect_wall_start = None
-    session._rect_wall_params = None
+    preview_state.rect_wall_start = None
+    preview_state.rect_wall_params = None
     FreeCAD.activeDraftCommand = None
     session.current_tool = "Select"
     if refresh:
@@ -148,7 +158,7 @@ def cancel_rect_wall_tool(session, refresh=True):
 
 
 def get_rect_wall_corners(session, point):
-    start = session._rect_wall_start
+    start = _creation_preview_state(session).rect_wall_start
     if start is None or point is None:
         return None
     end = session.viewport.project_plan_point(point)
@@ -168,6 +178,7 @@ def get_rect_wall_corners(session, point):
 
 
 def update_rect_wall_preview(session, point, info):
+    preview_state = _creation_preview_state(session)
     del info
     corners = session.wall_create.get_rect_wall_corners(point)
     if not corners:
@@ -178,15 +189,15 @@ def update_rect_wall_preview(session, point, info):
         return
 
     segments = list(zip(corners, corners[1:] + corners[:1]))
-    if not session._rect_wall_preview_trackers:
+    if not preview_state.rect_wall_preview_trackers:
         for start, end in segments:
             tracker = DraftTrackers.rectangleTracker(face=True)
-            session._rect_wall_preview_trackers.append(tracker)
-    for tracker, (start, end) in zip(session._rect_wall_preview_trackers, segments):
+            preview_state.rect_wall_preview_trackers.append(tracker)
+    for tracker, (start, end) in zip(preview_state.rect_wall_preview_trackers, segments):
         footprint = session.wall_edit.get_preview_footprint(
             [start, end],
-            width=session._rect_wall_params["width"],
-            align=session._rect_wall_params["align"],
+            width=preview_state.rect_wall_params["width"],
+            align=preview_state.rect_wall_params["align"],
         )
         if not footprint:
             continue
@@ -205,15 +216,17 @@ def update_rect_wall_preview(session, point, info):
 def create_rect_wall_run(session, corners):
     from bimcommands import BimWall
 
+    preview_state = _creation_preview_state(session)
+
     walls = []
     session.doc.openTransaction(translate("BIM_PlanEdit", "Create Rectangular Wall Run"))
     try:
         walls = BimWall.create_wall_run_from_points(
             corners,
-            width=session._rect_wall_params["width"],
-            height=session._rect_wall_params["height"],
-            align=session._rect_wall_params["align"],
-            offset=session._rect_wall_params["offset"],
+            width=preview_state.rect_wall_params["width"],
+            height=preview_state.rect_wall_params["height"],
+            align=preview_state.rect_wall_params["align"],
+            offset=preview_state.rect_wall_params["offset"],
             closed=True,
             on_created=session.visibility.register_plan_object,
         )
@@ -230,14 +243,15 @@ def create_rect_wall_run(session, corners):
 
 
 def handle_rect_wall_point(session, point=None, obj=None):
+    preview_state = _creation_preview_state(session)
     del obj
     if point is None:
         session.wall_create.cancel_rect_wall_tool()
         return
 
     point = session.viewport.project_plan_point(point)
-    if session._rect_wall_start is None:
-        session._rect_wall_start = point
+    if preview_state.rect_wall_start is None:
+        preview_state.rect_wall_start = point
         FreeCADGui.Snapper.getPoint(
             callback=session.wall_create.handle_rect_wall_point,
             movecallback=session.wall_create.update_rect_wall_preview,
