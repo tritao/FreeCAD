@@ -51,6 +51,28 @@ def add_gui_selection_object(obj):
                 pass
 
 
+def _get_gui_preselection_object_impl(session):
+    try:
+        preselection = FreeCADGui.Selection.getPreselection()
+    except Exception:
+        return None
+    try:
+        obj = getattr(preselection, "Object", None)
+    except Exception:
+        obj = None
+    if obj is not None:
+        return obj
+    return resolve_document_object(
+        session,
+        getattr(preselection, "DocumentName", ""),
+        getattr(preselection, "ObjectName", ""),
+    )
+
+
+def get_gui_preselection_object(session):
+    return _get_gui_preselection_object_impl(session)
+
+
 def _reset_gui_selection_sync_state(session):
     session._gui_selection_sync_queued = False
     session._gui_selection_sync_generation += 1
