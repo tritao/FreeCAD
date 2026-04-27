@@ -819,7 +819,7 @@ class TestBimPlanCore(unittest.TestCase):
         session = SimpleNamespace()
 
         with patch(
-            "bimplan.selection.selection.activate_plan_target",
+            "bimplan.selection.selection.plan_selection_activation.activate_plan_target",
             side_effect=lambda *args, **kwargs: calls.append((args, kwargs)) or True,
         ):
             self.assertTrue(
@@ -854,7 +854,7 @@ class TestBimPlanCore(unittest.TestCase):
         )
 
         with patch(
-            "bimplan.selection.selection.activate_plan_target",
+            "bimplan.selection.selection.plan_selection_activation.activate_plan_target",
             side_effect=lambda *args, **kwargs: calls.append((args, kwargs)) or True,
         ):
             self.assertTrue(activate_semantic_plan_target(session, (50, 60)))
@@ -891,7 +891,7 @@ class TestBimPlanCore(unittest.TestCase):
         )
 
         with patch(
-            "bimplan.selection.selection.activate_plan_target",
+            "bimplan.selection.selection.plan_selection_activation.activate_plan_target",
             side_effect=lambda *args, **kwargs: calls.append((args, kwargs)) or True,
         ):
             self.assertTrue(activate_semantic_plan_target(session, (50, 60)))
@@ -1767,7 +1767,7 @@ class TestBimPlanCore(unittest.TestCase):
         )
 
         with patch(
-            "bimplan.selection.plan_provider_runtime.is_plan_provider_target_visible_for_mode",
+            "bimplan.selection.selection.plan_selection_gui_sync.is_visible_provider_target_object",
             return_value=True,
         ):
             self.assertEqual(

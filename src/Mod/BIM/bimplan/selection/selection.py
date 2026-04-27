@@ -6,9 +6,8 @@ from contextlib import contextmanager
 from dataclasses import dataclass, field
 
 import FreeCADGui
-from bimplan.providers import runtime as plan_provider_runtime
 from bimplan.runtime import tools as plan_runtime_tools
-from . import edit_nodes as plan_edit_nodes
+from . import activation as plan_selection_activation
 from . import gui_sync as plan_selection_gui_sync
 from . import picking as plan_selection_picking
 from . import target_dispatch as plan_target_dispatch
@@ -47,40 +46,9 @@ class SelectionRefreshResult:
 
 
 @dataclass(frozen=True)
-class TargetActivationBehavior:
-    select_target: object
-    clear_hovered_kinds: tuple[str, ...]
-    sync_gui_selection: bool = True
-    defer_gui_selection: bool = False
-    defer_wall_grips: bool = False
-
-
-@dataclass(frozen=True)
 class GuiSelectionResolutionState:
     pending_target_ref: object = None
     preserved_target_ref: object = None
-
-
-def _make_select_plan_target_function(kind):
-    def _select_plan_target(
-        session,
-        obj,
-        queue_restore=False,
-        sync_gui_selection=False,
-        defer_gui_selection=False,
-        defer_wall_grips=False,
-    ):
-        return select_plan_target_for_plan_edit(
-            session,
-            kind,
-            obj,
-            queue_restore=queue_restore,
-            sync_gui_selection=sync_gui_selection,
-            defer_gui_selection=defer_gui_selection,
-            defer_wall_grips=defer_wall_grips,
-        )
-
-    return _select_plan_target
 
 
 def _make_set_hovered_target_function(kind):
@@ -96,7 +64,9 @@ def clear_hidden_provider_preselection(session):
     preselected_obj = _call_exported_gui_preselection_object(session)
     if preselected_obj is None:
         return False
-    if not _should_filter_hidden_provider_preselection_for_object(session, preselected_obj):
+    if not plan_selection_gui_sync.should_filter_hidden_provider_preselection_for_object(
+        session, preselected_obj
+    ):
         return False
     session.performance.plan_perf_count("provider_preselection_cleared_for_mode")
     return _call_exported_clear_gui_preselection()
@@ -215,7 +185,7 @@ def _get_gui_preselection_object_impl(session):
         obj = None
     if obj is not None:
         return obj
-    return _resolve_document_object(
+    return plan_selection_gui_sync.resolve_document_object(
         session,
         getattr(preselection, "DocumentName", ""),
         getattr(preselection, "ObjectName", ""),
@@ -999,93 +969,35 @@ def select_plan_target_for_plan_edit(
     defer_gui_selection=False,
     defer_wall_grips=False,
 ):
-    if not plan_target_dispatch.validate_plan_target(session, kind, obj):
-        return False
-    previous_kind, previous_obj = get_selected_plan_target(session)
-    session.current_tool = plan_runtime_tools.PlanTool.SELECT
-    session._provider_selected_objects = []
-    preserve_hovered_symbol_overlay = (
-        kind == plan_target_kinds.PLAN_TARGET_SYMBOL
-        and session.hovered_symbol == obj
-        and bool(session._symbol_hover_trackers)
-    )
-    set_selected_plan_target(
+    return plan_selection_activation.select_plan_target_for_plan_edit(
         session,
         kind,
         obj,
-        pending_restore=queue_restore,
-        preserve_hovered_symbol_overlay=preserve_hovered_symbol_overlay,
+        queue_restore=queue_restore,
+        sync_gui_selection=sync_gui_selection,
+        defer_gui_selection=defer_gui_selection,
+        defer_wall_grips=defer_wall_grips,
     )
-    if sync_gui_selection:
-        if defer_gui_selection:
-            plan_selection_gui_sync.schedule_gui_selection_object(session, obj)
-        else:
-            plan_selection_gui_sync.set_gui_selection_object(session, obj)
-    session.overlays.apply_selected_wall_selection_feedback(
-        defer_grips=kind == plan_target_kinds.PLAN_TARGET_WALL and defer_wall_grips
-    )
-    plan_target_dispatch.sync_selected_target_visuals(
-        session,
-        kinds=plan_target_kinds.CLEAR_PLAN_SELECTION_VISUAL_KINDS,
-        previous_kind=previous_kind,
-        previous_obj=previous_obj,
-    )
-    session.overlays.sync_secondary_selected_overlays()
-    session.task_panels.refresh_task_panel_status(
-        selection_only=session.current_tool == plan_runtime_tools.PlanTool.SELECT
-    )
-    if queue_restore:
-        queue_restore_selected_plan_target(session, kind, obj)
-    return True
 
 
-select_opening_for_plan_edit = _make_select_plan_target_function(
-    plan_target_kinds.PLAN_TARGET_OPENING
-)
+def select_opening_for_plan_edit(session, *args, **kwargs):
+    return plan_selection_activation.select_opening_for_plan_edit(session, *args, **kwargs)
 
 
-select_symbol_for_plan_edit = _make_select_plan_target_function(
-    plan_target_kinds.PLAN_TARGET_SYMBOL
-)
+def select_symbol_for_plan_edit(session, *args, **kwargs):
+    return plan_selection_activation.select_symbol_for_plan_edit(session, *args, **kwargs)
 
 
-select_region_for_plan_edit = _make_select_plan_target_function(
-    plan_target_kinds.PLAN_TARGET_REGION
-)
+def select_region_for_plan_edit(session, *args, **kwargs):
+    return plan_selection_activation.select_region_for_plan_edit(session, *args, **kwargs)
 
 
-select_space_for_plan_edit = _make_select_plan_target_function(plan_target_kinds.PLAN_TARGET_SPACE)
+def select_space_for_plan_edit(session, *args, **kwargs):
+    return plan_selection_activation.select_space_for_plan_edit(session, *args, **kwargs)
 
 
-select_wall_for_plan_edit = _make_select_plan_target_function(plan_target_kinds.PLAN_TARGET_WALL)
-
-
-_TARGET_ACTIVATION_BEHAVIORS = {
-    plan_target_kinds.PLAN_TARGET_OPENING: TargetActivationBehavior(
-        select_target=select_opening_for_plan_edit,
-        clear_hovered_kinds=plan_target_kinds.SEMANTIC_TARGET_CLEAR_HOVERED_KINDS,
-    ),
-    plan_target_kinds.PLAN_TARGET_SYMBOL: TargetActivationBehavior(
-        select_target=select_symbol_for_plan_edit,
-        clear_hovered_kinds=plan_target_kinds.SEMANTIC_TARGET_CLEAR_HOVERED_KINDS,
-    ),
-    plan_target_kinds.PLAN_TARGET_REGION: TargetActivationBehavior(
-        select_target=select_region_for_plan_edit,
-        clear_hovered_kinds=plan_target_kinds.SEMANTIC_TARGET_CLEAR_HOVERED_KINDS,
-    ),
-    plan_target_kinds.PLAN_TARGET_SPACE: TargetActivationBehavior(
-        select_target=select_space_for_plan_edit,
-        clear_hovered_kinds=plan_target_kinds.SPACE_TARGET_CLEAR_HOVERED_KINDS,
-    ),
-    plan_target_kinds.PLAN_TARGET_WALL: TargetActivationBehavior(
-        select_target=select_wall_for_plan_edit,
-        clear_hovered_kinds=plan_target_kinds.WALL_TARGET_CLEAR_HOVERED_KINDS,
-    ),
-}
-
-
-def _get_target_activation_behavior(kind):
-    return _TARGET_ACTIVATION_BEHAVIORS.get(kind)
+def select_wall_for_plan_edit(session, *args, **kwargs):
+    return plan_selection_activation.select_wall_for_plan_edit(session, *args, **kwargs)
 
 
 def _activate_configured_plan_target(
@@ -1098,20 +1010,11 @@ def _activate_configured_plan_target(
     defer_gui_selection=None,
     defer_wall_grips=None,
 ):
-    behavior = _get_target_activation_behavior(kind)
-    if behavior is None:
-        return False
-    if defer_gui_selection is None:
-        defer_gui_selection = behavior.defer_gui_selection
-    if defer_wall_grips is None:
-        defer_wall_grips = behavior.defer_wall_grips
-    return activate_plan_target(
+    return plan_selection_activation._activate_configured_plan_target(
         session,
         kind,
         mouse_pos,
         event_callback=event_callback,
-        sync_gui_selection=behavior.sync_gui_selection,
-        clear_hovered_kinds=behavior.clear_hovered_kinds,
         resolved_target=resolved_target,
         defer_gui_selection=defer_gui_selection,
         defer_wall_grips=defer_wall_grips,
@@ -1128,7 +1031,7 @@ def activate_plan_target_for_kind(
     defer_gui_selection=None,
     defer_wall_grips=None,
 ):
-    return _activate_configured_plan_target(
+    return plan_selection_activation.activate_plan_target_for_kind(
         session,
         kind,
         mouse_pos,
@@ -1150,112 +1053,30 @@ def activate_plan_target(
     defer_gui_selection=False,
     defer_wall_grips=False,
 ):
-    if resolved_target is None:
-        target_ref = plan_target_kinds.coerce_plan_target_ref(
-            session.selection.get_plan_target_at_position(mouse_pos)
-        )
-    else:
-        target_ref = plan_target_kinds.coerce_plan_target_ref(resolved_target)
-    with session.performance.plan_perf_trace_span(
-        f"activate_plan_target_{kind}", requested_kind=kind, mouse_pos=mouse_pos
-    ):
-        session.performance.plan_perf_count(f"activate_plan_target_attempts_{kind}")
-        session.performance.plan_perf_set_fields(
-            resolved_target=session.performance.plan_perf_describe_target(
-                target_ref.kind, target_ref.obj
-            )
-        )
-        target_obj = target_ref.obj if target_ref.kind == kind else None
-        behavior = _get_target_activation_behavior(kind)
-        if behavior is None or not behavior.select_target(
-            session,
-            target_obj,
-            queue_restore=True,
-            sync_gui_selection=sync_gui_selection,
-            defer_gui_selection=defer_gui_selection,
-            defer_wall_grips=defer_wall_grips,
-        ):
-            session.performance.plan_perf_set_fields(activate_plan_target_result=False)
-            return False
-        plan_selection_picking.clear_hovered_plan_targets(session, clear_hovered_kinds)
-        session.input.claim_left_button_click(event_callback)
-        session.performance.plan_perf_set_fields(
-            activate_plan_target_result=True,
-            activated_target=session.performance.plan_perf_describe_target(kind, target_obj),
-        )
-        return True
+    return plan_selection_activation.activate_plan_target(
+        session,
+        kind,
+        mouse_pos,
+        event_callback=event_callback,
+        sync_gui_selection=sync_gui_selection,
+        clear_hovered_kinds=clear_hovered_kinds,
+        resolved_target=resolved_target,
+        defer_gui_selection=defer_gui_selection,
+        defer_wall_grips=defer_wall_grips,
+    )
 
 
 def activate_semantic_plan_target(session, mouse_pos, event_callback=None):
-    def _hover_pick_matches_mouse():
-        last_mouse_pos = getattr(session, "_hover_pick_last_mouse_pos", None)
-        if mouse_pos is None or last_mouse_pos is None:
-            return False
-        try:
-            return (
-                abs(float(last_mouse_pos[0]) - float(mouse_pos[0])) <= 1.0
-                and abs(float(last_mouse_pos[1]) - float(mouse_pos[1])) <= 1.0
-            )
-        except Exception:
-            return False
-
-    hovered_target = getattr(getattr(session, "selection", None), "get_hovered_plan_target", None)
-    if callable(hovered_target):
-        target_ref = plan_target_kinds.coerce_plan_target_ref(hovered_target())
-    else:
-        target_ref = plan_selection_picking.get_hovered_plan_target(session)
-    hover_pick_dirty = bool(getattr(session, "_hover_pick_dirty", False))
-    reuse_hovered_target = (
-        target_ref.kind == plan_target_kinds.PLAN_TARGET_WALL
-        and target_ref.obj is not None
-        and not hover_pick_dirty
-        and _hover_pick_matches_mouse()
-    )
-    perf = getattr(session, "performance", None)
-    if not reuse_hovered_target:
-        target_ref = plan_target_kinds.coerce_plan_target_ref(
-            session.selection.get_plan_target_at_position(mouse_pos)
-        )
-        if hover_pick_dirty:
-            source = "picked_after_throttled_hover"
-        else:
-            source = "picked"
-        session._hover_pick_dirty = False
-        if perf is not None:
-            perf.plan_perf_count(f"semantic_target_source_{source}")
-            perf.plan_perf_set_fields(semantic_target_source=source)
-    else:
-        if perf is not None:
-            perf.plan_perf_count("semantic_target_source_hovered")
-            perf.plan_perf_set_fields(
-                semantic_target_source="hovered",
-                hovered_target=perf.plan_perf_describe_target(target_ref.kind, target_ref.obj),
-            )
-    if _get_target_activation_behavior(target_ref.kind) is None:
-        return False
-    if target_ref.kind == plan_target_kinds.PLAN_TARGET_WALL:
-        return _activate_configured_plan_target(
-            session,
-            target_ref.kind,
-            mouse_pos,
-            event_callback=event_callback,
-            resolved_target=target_ref,
-            defer_gui_selection=True,
-            defer_wall_grips=True,
-        )
-    return _activate_configured_plan_target(
+    return plan_selection_activation.activate_semantic_plan_target(
         session,
-        target_ref.kind,
         mouse_pos,
         event_callback=event_callback,
-        resolved_target=target_ref,
     )
 
 
 def activate_opening_target(session, mouse_pos, event_callback=None, resolved_target=None):
-    return activate_plan_target_for_kind(
+    return plan_selection_activation.activate_opening_target(
         session,
-        plan_target_kinds.PLAN_TARGET_OPENING,
         mouse_pos,
         event_callback=event_callback,
         resolved_target=resolved_target,
@@ -1263,9 +1084,8 @@ def activate_opening_target(session, mouse_pos, event_callback=None, resolved_ta
 
 
 def activate_symbol_target(session, mouse_pos, event_callback=None, resolved_target=None):
-    return activate_plan_target_for_kind(
+    return plan_selection_activation.activate_symbol_target(
         session,
-        plan_target_kinds.PLAN_TARGET_SYMBOL,
         mouse_pos,
         event_callback=event_callback,
         resolved_target=resolved_target,
@@ -1273,9 +1093,8 @@ def activate_symbol_target(session, mouse_pos, event_callback=None, resolved_tar
 
 
 def activate_region_target(session, mouse_pos, event_callback=None, resolved_target=None):
-    return activate_plan_target_for_kind(
+    return plan_selection_activation.activate_region_target(
         session,
-        plan_target_kinds.PLAN_TARGET_REGION,
         mouse_pos,
         event_callback=event_callback,
         resolved_target=resolved_target,
@@ -1283,9 +1102,8 @@ def activate_region_target(session, mouse_pos, event_callback=None, resolved_tar
 
 
 def activate_space_target(session, mouse_pos, event_callback=None, resolved_target=None):
-    return activate_plan_target_for_kind(
+    return plan_selection_activation.activate_space_target(
         session,
-        plan_target_kinds.PLAN_TARGET_SPACE,
         mouse_pos,
         event_callback=event_callback,
         resolved_target=resolved_target,
@@ -1300,9 +1118,8 @@ def activate_wall_target(
     defer_gui_selection=False,
     defer_wall_grips=False,
 ):
-    return activate_plan_target_for_kind(
+    return plan_selection_activation.activate_wall_target(
         session,
-        plan_target_kinds.PLAN_TARGET_WALL,
         mouse_pos,
         event_callback=event_callback,
         resolved_target=resolved_target,
@@ -1312,226 +1129,35 @@ def activate_wall_target(
 
 
 def clear_plan_selection_state(session):
-    previous_kind, previous_obj = get_selected_plan_target(session)
-    with session.performance.plan_perf_trace_event(
-        "clear_plan_selection_state",
-        clear_selection_started_kind=previous_kind or "none",
-        clear_selection_started_target=session.performance.plan_perf_describe_target(
-            previous_kind, previous_obj
-        ),
-    ):
-        with session.performance.plan_perf_trace_span("clear_plan_selection_gui_selection"):
-            plan_selection_gui_sync.set_gui_selection(session, [])
-        with session.performance.plan_perf_trace_span("clear_plan_selection_target_state"):
-            set_selected_plan_target(session)
-            session._provider_selected_objects = []
-        with session.performance.plan_perf_trace_span("clear_plan_selection_hover_state"):
-            plan_target_dispatch.clear_hovered_targets(session)
-        with session.performance.plan_perf_trace_span("clear_plan_selection_wall_grips"):
-            session.overlays.clear_wall_grips()
-            session.overlays.clear_selected_wall_overlay()
-        with session.performance.plan_perf_trace_span("clear_plan_selection_secondary_overlays"):
-            session.overlays.sync_secondary_selected_overlays()
-        plan_target_dispatch.sync_selected_target_visuals(
-            session,
-            kinds=plan_target_kinds.CLEAR_PLAN_SELECTION_VISUAL_KINDS,
-            force=True,
-            trace_style="by_kind",
-            trace_prefix="clear_plan_selection",
-        )
-        with session.performance.plan_perf_trace_span("clear_plan_selection_task_status"):
-            session.task_panels.refresh_task_panel_status(
-                selection_only=session.current_tool == plan_runtime_tools.PlanTool.SELECT
-            )
-        selected_kind, selected_obj = get_selected_plan_target(session)
-        session.performance.plan_perf_set_fields(
-            clear_selection_ended_kind=selected_kind or "none",
-            clear_selection_ended_target=session.performance.plan_perf_describe_target(
-                selected_kind, selected_obj
-            ),
-            clear_selection_cleared_wall=bool(previous_kind == "wall" and not selected_kind),
-        )
+    return plan_selection_activation.clear_plan_selection_state(session)
 
 
 def is_plan_additive_selection_active(session):
-    if session.current_tool != plan_runtime_tools.PlanTool.SELECT:
-        return False
-    try:
-        from PySide import QtCore, QtGui
-
-        modifiers = QtGui.QApplication.keyboardModifiers()
-        return bool(modifiers & QtCore.Qt.ControlModifier)
-    except Exception:
-        return False
+    return plan_selection_activation.is_plan_additive_selection_active(session)
 
 
 def activate_provider_overlay_target_node(session, node, event_callback=None):
-    target_ref = plan_target_kinds.coerce_plan_target_ref(
-        session.selection.get_provider_overlay_target_from_edit_node(node)
+    return plan_selection_activation.activate_provider_overlay_target_node(
+        session,
+        node,
+        event_callback=event_callback,
     )
-    if target_ref.obj is None:
-        return False
-    if is_valid_plan_target(session, target_ref.kind, target_ref.obj):
-        session._provider_selected_objects = []
-        set_pending_selected_plan_target(session, target_ref)
-    else:
-        session._provider_selected_objects = [target_ref.obj]
-        set_pending_selected_plan_target(session)
-    plan_target_dispatch.clear_hovered_targets(session)
-    plan_selection_gui_sync.set_gui_selection_object(session, target_ref.obj)
-    refresh_primary_selected_plan_target(session)
-    session.input.claim_left_button_click(event_callback)
-    return True
-
-
-def _get_current_additive_gui_selection(session):
-    primary_target_ref = get_selected_plan_target(session)
-    selection = plan_selection_gui_sync.get_gui_selection()
-    if primary_target_ref.obj is not None and primary_target_ref.obj not in selection:
-        selection = [primary_target_ref.obj] + selection
-    return (
-        primary_target_ref.kind,
-        primary_target_ref.obj,
-        normalize_gui_object_selection(session, selection),
-    )
-
-
-def _resolve_next_selected_target(
-    session, selection, primary_kind, primary_obj, fallback_target=None
-):
-    if primary_obj is not None and primary_obj in selection:
-        return (primary_kind, primary_obj)
-    if fallback_target is not None:
-        fallback_target_ref = plan_target_kinds.coerce_plan_target_ref(fallback_target)
-        if (
-            fallback_target_ref.kind
-            and fallback_target_ref.obj
-            and fallback_target_ref.obj in selection
-        ):
-            return (fallback_target_ref.kind, fallback_target_ref.obj)
-    return get_first_plan_target_from_selection(session, selection)
-
-
-def _apply_additive_selection_update(session, selection, next_kind, next_obj, event_callback=None):
-    set_pending_selected_plan_target(session, next_kind, next_obj)
-    plan_target_dispatch.clear_hovered_targets(session)
-    plan_selection_gui_sync.set_gui_selection(session, selection)
-    refresh_primary_selected_plan_target(session)
-    session.input.claim_left_button_click(event_callback)
-    return True
 
 
 def toggle_raw_plan_object_selection(session, obj, event_callback=None):
-    if obj is None:
-        return False
-
-    primary_kind, primary_obj, selection = _get_current_additive_gui_selection(session)
-    provider_selection = normalize_gui_object_selection(session, session._provider_selected_objects)
-    if obj in provider_selection:
-        provider_selection = [selected for selected in provider_selection if selected != obj]
-    else:
-        provider_selection.append(obj)
-    session._provider_selected_objects = normalize_gui_object_selection(session, provider_selection)
-    new_selection = normalize_gui_object_selection(
+    return plan_selection_activation.toggle_raw_plan_object_selection(
         session,
-        [
-            selected
-            for selected in selection
-            if plan_targets.get_plan_target_for_object(session, selected).kind
-        ],
-    )
-    next_kind, next_obj = _resolve_next_selected_target(
-        session,
-        new_selection,
-        primary_kind,
-        primary_obj,
-    )
-    return _apply_additive_selection_update(
-        session,
-        new_selection,
-        next_kind,
-        next_obj,
-        event_callback,
+        obj,
+        event_callback=event_callback,
     )
 
 
 def toggle_plan_target_selection_at_position(session, mouse_pos, event_callback=None):
-    node = session.selection.get_edit_node(mouse_pos)
-    if plan_edit_nodes.get_edit_node_kind(node) in (
-        "provider_overlay_point",
-        "provider_overlay_target",
-    ):
-        target_ref = plan_target_kinds.coerce_plan_target_ref(
-            session.selection.get_provider_overlay_target_from_edit_node(node)
-        )
-        if target_ref.obj is not None and not is_valid_plan_target(
-            session,
-            target_ref.kind,
-            target_ref.obj,
-        ):
-            return toggle_raw_plan_object_selection(session, target_ref.obj, event_callback)
-    else:
-        target_ref = plan_target_kinds.coerce_plan_target_ref(
-            session.selection.get_plan_target_from_edit_node(node)
-        )
-    if target_ref.kind is None:
-        target_ref = plan_target_kinds.coerce_plan_target_ref(
-            session.selection.get_plan_target_at_position(mouse_pos)
-        )
-    if not target_ref.kind or not target_ref.obj:
-        return False
-
-    primary_kind, primary_obj, selection = _get_current_additive_gui_selection(session)
-
-    was_selected = target_ref.obj in selection
-    if was_selected:
-        new_selection = [selected for selected in selection if selected != target_ref.obj]
-        fallback_target = None if primary_obj == target_ref.obj else target_ref
-        next_kind, next_obj = _resolve_next_selected_target(
-            session,
-            new_selection,
-            primary_kind,
-            primary_obj,
-            fallback_target=fallback_target,
-        )
-    else:
-        new_selection = list(selection)
-        new_selection.append(target_ref.obj)
-        next_kind, next_obj = _resolve_next_selected_target(
-            session,
-            new_selection,
-            primary_kind,
-            primary_obj,
-            fallback_target=target_ref,
-        )
-
-    return _apply_additive_selection_update(
+    return plan_selection_activation.toggle_plan_target_selection_at_position(
         session,
-        new_selection,
-        next_kind,
-        next_obj,
-        event_callback,
+        mouse_pos,
+        event_callback=event_callback,
     )
-
-
-def _should_filter_hidden_provider_preselection(session, doc_name, obj_name):
-    preselected_obj = _resolve_document_object(session, doc_name, obj_name)
-    if preselected_obj is None:
-        return False
-    return _should_filter_hidden_provider_preselection_for_object(session, preselected_obj)
-
-
-def _is_visible_provider_target_object(session, obj):
-    validate = getattr(session, "_is_valid_plan_target", None)
-    if callable(validate) and validate(plan_target_kinds.PLAN_TARGET_PROVIDER, obj):
-        return bool(plan_provider_runtime.is_plan_provider_target_visible_for_mode(session, obj))
-    if not plan_provider_runtime.is_plan_provider_target_object(session, obj):
-        return False
-    return bool(plan_provider_runtime.is_plan_provider_target_visible_for_mode(session, obj))
-
-
-def _should_filter_hidden_provider_preselection_for_object(session, obj):
-    return not _is_visible_provider_target_object(session, obj)
 
 
 def _should_preserve_provider_selected_target(session, kind, obj, selected):
@@ -1539,28 +1165,7 @@ def _should_preserve_provider_selected_target(session, kind, obj, selected):
         return False
     if not is_valid_plan_target(session, kind, obj):
         return False
-    return _is_visible_provider_target_object(session, obj)
-
-
-def _resolve_document_object(session, document_name, object_name):
-    object_name = str(object_name or "").strip()
-    if not object_name:
-        return None
-    document_name = str(document_name or "").strip()
-    doc = None
-    if document_name:
-        try:
-            doc = FreeCAD.getDocument(document_name)
-        except Exception:
-            doc = None
-    if doc is None:
-        doc = getattr(session, "doc", None)
-    if doc is None:
-        return None
-    try:
-        return doc.getObject(object_name)
-    except Exception:
-        return None
+    return plan_selection_gui_sync.is_visible_provider_target_object(session, obj)
 
 
 class _SessionAPI:
