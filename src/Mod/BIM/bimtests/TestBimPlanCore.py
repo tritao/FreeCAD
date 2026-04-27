@@ -1799,6 +1799,39 @@ class TestBimPlanCore(unittest.TestCase):
 
         self.assertEqual(2, collect.call_count)
 
+    def test_provider_target_contributions_cache_key_ignores_selected_targets(self):
+        wall1 = SimpleNamespace(Name="Wall001", Document=SimpleNamespace(Name="TestDoc"))
+        wall2 = SimpleNamespace(Name="Wall002", Document=SimpleNamespace(Name="TestDoc"))
+        selected_targets = [SimpleNamespace(kind="wall", obj=wall1)]
+        session = SimpleNamespace(
+            document_visuals=SimpleNamespace(document_is_alive=lambda: True),
+            _plan_provider_document_cache={},
+            _plan_provider_refresh_cache=None,
+            _provider_selected_objects=[],
+            _provider_overlay_mode="architecture",
+            selection=SimpleNamespace(get_selected_plan_targets=lambda: tuple(selected_targets)),
+        )
+        context = SimpleNamespace(
+            document_name="TestDoc",
+            active_storey_name="Level001",
+            current_tool="Select",
+        )
+
+        with patch.object(
+            plan_provider_runtime_module,
+            "_get_plan_edit_context_or_none",
+            return_value=context,
+        ), patch.object(
+            plan_provider_runtime_module,
+            "_collect_plan_provider_contributions_for_method",
+            return_value=("target",),
+        ) as collect:
+            collect_plan_provider_contributions(session, "get_targets", object())
+            selected_targets[:] = [SimpleNamespace(kind="wall", obj=wall2)]
+            collect_plan_provider_contributions(session, "get_targets", object())
+
+        self.assertEqual(1, collect.call_count)
+
     def test_provider_snapshot_reuses_document_cache_for_same_context(self):
         session = SimpleNamespace(
             document_visuals=SimpleNamespace(document_is_alive=lambda: True),
@@ -1836,6 +1869,46 @@ class TestBimPlanCore(unittest.TestCase):
         self.assertEqual(1, collect.call_count)
         self.assertEqual(snapshot1, snapshot2)
         self.assertEqual(("tool",), tuple(tool.key for tool in snapshot1.tools))
+
+    def test_provider_target_lookup_reuses_document_cache_for_same_storey_context(self):
+        target_obj = SimpleNamespace(Name="Fixture001", Document=SimpleNamespace(Name="TestDoc"))
+        target = PlanProviderTargetSpec(
+            key="fixture-1",
+            object_name="Fixture001",
+            document_name="TestDoc",
+            label="Fixture 1",
+            provider_id="provider-a",
+        )
+        session = SimpleNamespace(
+            doc=SimpleNamespace(Name="TestDoc"),
+            document_visuals=SimpleNamespace(document_is_alive=lambda: True),
+            _plan_provider_document_cache={},
+            _plan_provider_refresh_cache=None,
+            _provider_selected_objects=[],
+            _provider_overlay_mode="architecture",
+            selection=SimpleNamespace(get_selected_plan_targets=lambda: ()),
+        )
+        context = SimpleNamespace(
+            document_name="TestDoc",
+            active_storey_name="Level001",
+            current_tool="Select",
+        )
+
+        with patch.object(
+            plan_provider_runtime_module,
+            "_get_plan_edit_context_or_none",
+            return_value=context,
+        ), patch.object(
+            plan_provider_runtime_module,
+            "get_plan_provider_targets",
+            return_value=(target,),
+        ) as get_targets:
+            lookup1 = plan_provider_runtime_module._get_plan_provider_target_lookup(session)
+            lookup2 = plan_provider_runtime_module._get_plan_provider_target_lookup(session)
+
+        self.assertEqual(1, get_targets.call_count)
+        self.assertIs(lookup1, lookup2)
+        self.assertIs(target, lookup1[("TestDoc", "Fixture001")])
 
     def test_plan_controls_dispose_detaches_and_defers_delete(self):
         class _Signal:
