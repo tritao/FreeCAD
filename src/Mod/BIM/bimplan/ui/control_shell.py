@@ -11,6 +11,14 @@ translate = FreeCAD.Qt.translate
 
 
 class PlanEditControlsShellMixin:
+    def refresh_for_session(self, reason="full"):
+        normalized_reason = str(reason or "full").strip().lower()
+        if normalized_reason == "selection":
+            return self.refresh_selection_from_session()
+        if normalized_reason == "provider_overlay_mode":
+            return self.refresh_provider_overlay_mode_from_session()
+        return self.refresh_from_session()
+
     def _session_is_inactive(self):
         session = getattr(self, "session", None)
         if session is None:
