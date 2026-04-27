@@ -93,7 +93,7 @@ def has_direct_true_property(obj, prop_name):
         if prop_name not in (getattr(obj, "PropertiesList", []) or []):
             return False
         return bool(getattr(obj, prop_name))
-    except Exception:
+    except (AttributeError, ReferenceError, RuntimeError, TypeError):
         return False
 
 
@@ -136,7 +136,7 @@ def queue_created_plan_object(session, obj):
         from PySide import QtCore
 
         QtCore.QTimer.singleShot(0, lambda: flush_created_plan_objects(session))
-    except Exception:
+    except ImportError:
         flush_created_plan_objects(session)
 
 
@@ -172,7 +172,7 @@ def document_is_alive(session):
     try:
         _ = doc.Name
         return True
-    except Exception:
+    except (AttributeError, ReferenceError, RuntimeError):
         session.doc = None
         return False
 
@@ -186,7 +186,7 @@ def attach_document_observer(session):
 
         FreeCAD.addDocumentObserver(session)
         visual_state.document_observer_added = True
-    except Exception:
+    except (ImportError, AttributeError, RuntimeError):
         pass
 
 
@@ -198,7 +198,7 @@ def detach_document_observer(session):
         import FreeCAD
 
         FreeCAD.removeDocumentObserver(session)
-    except Exception:
+    except (ImportError, AttributeError, RuntimeError):
         pass
     visual_state.document_observer_added = False
 
@@ -296,9 +296,9 @@ def refresh_plan_object_footprint_display(session, obj, *, request_redraw=True):
                 _refresh_footprint_proxy(refresh_proxy, view_object, pass_view_object=True)
                 _update_view_object(view_object)
                 refreshed = True
-            except Exception:
+            except (AttributeError, ReferenceError, RuntimeError, TypeError):
                 continue
-        except Exception:
+        except (AttributeError, ReferenceError, RuntimeError):
             continue
 
     view_object = getattr(obj, "ViewObject", None)
@@ -359,7 +359,7 @@ def _update_view_object(view_object):
         return
     try:
         update()
-    except Exception:
+    except (AttributeError, ReferenceError, RuntimeError, TypeError):
         pass
 
 
@@ -404,7 +404,7 @@ def flush_recompute_opening_hosts(session, hosts):
         for host in hosts:
             try:
                 host.touch()
-            except Exception:
+            except (AttributeError, ReferenceError, RuntimeError):
                 continue
         session.doc.recompute()
     finally:
@@ -426,7 +426,7 @@ def queue_hard_refresh_selected_opening_visuals(session):
             0,
             lambda: flush_hard_refresh_selected_opening_visuals(session),
         )
-    except Exception:
+    except ImportError:
         flush_hard_refresh_selected_opening_visuals(session)
 
 
