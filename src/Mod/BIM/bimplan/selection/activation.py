@@ -56,11 +56,11 @@ def select_plan_target_for_plan_edit(
         return False
     previous_kind, previous_obj = session.selection.get_selected_plan_target()
     session.current_tool = plan_runtime_tools.PlanTool.SELECT
-    session._provider_selected_objects = []
+    session.provider_transient_state.provider_selected_objects = []
     preserve_hovered_symbol_overlay = (
         kind == plan_target_kinds.PLAN_TARGET_SYMBOL
         and session.hovered_symbol == obj
-        and bool(session._symbol_hover_trackers)
+        and bool(session.overlay_tracker_state.symbol_hover_trackers)
     )
     session.selection.set_selected_plan_target(
         kind,
@@ -234,7 +234,7 @@ def activate_plan_target(
 
 def activate_semantic_plan_target(session, mouse_pos, event_callback=None):
     def _hover_pick_matches_mouse():
-        last_mouse_pos = getattr(session, "_hover_pick_last_mouse_pos", None)
+        last_mouse_pos = session.hover_pick_state.last_mouse_pos
         if mouse_pos is None or last_mouse_pos is None:
             return False
         try:
@@ -250,7 +250,7 @@ def activate_semantic_plan_target(session, mouse_pos, event_callback=None):
         target_ref = plan_target_kinds.coerce_plan_target_ref(hovered_target())
     else:
         target_ref = session.selection.get_hovered_plan_target()
-    hover_pick_dirty = bool(getattr(session, "_hover_pick_dirty", False))
+    hover_pick_dirty = bool(session.hover_pick_state.dirty)
     reuse_hovered_target = (
         target_ref.kind == plan_target_kinds.PLAN_TARGET_WALL
         and target_ref.obj is not None
@@ -263,7 +263,7 @@ def activate_semantic_plan_target(session, mouse_pos, event_callback=None):
             session.selection.get_plan_target_at_position(mouse_pos)
         )
         source = "picked_after_throttled_hover" if hover_pick_dirty else "picked"
-        session._hover_pick_dirty = False
+        session.hover_pick_state.dirty = False
         if perf is not None:
             perf.plan_perf_count(f"semantic_target_source_{source}")
             perf.plan_perf_set_fields(semantic_target_source=source)
@@ -367,7 +367,7 @@ def clear_plan_selection_state(session):
             plan_selection_gui_sync.set_gui_selection(session, [])
         with session.performance.plan_perf_trace_span("clear_plan_selection_target_state"):
             session.selection.set_selected_plan_target()
-            session._provider_selected_objects = []
+            session.provider_transient_state.provider_selected_objects = []
         with session.performance.plan_perf_trace_span("clear_plan_selection_hover_state"):
             plan_target_dispatch.clear_hovered_targets(session)
         with session.performance.plan_perf_trace_span("clear_plan_selection_wall_grips"):
@@ -419,10 +419,10 @@ def activate_provider_overlay_target_node(session, node, event_callback=None):
     if target_ref.obj is None:
         return False
     if session.selection.is_valid_plan_target(target_ref.kind, target_ref.obj):
-        session._provider_selected_objects = []
+        session.provider_transient_state.provider_selected_objects = []
         session.selection.set_pending_selected_plan_target(target_ref)
     else:
-        session._provider_selected_objects = [target_ref.obj]
+        session.provider_transient_state.provider_selected_objects = [target_ref.obj]
         session.selection.set_pending_selected_plan_target()
     plan_target_dispatch.clear_hovered_targets(session)
     plan_selection_gui_sync.set_gui_selection_object(session, target_ref.obj)
@@ -474,14 +474,14 @@ def toggle_raw_plan_object_selection(session, obj, event_callback=None):
 
     primary_kind, primary_obj, selection = _get_current_additive_gui_selection(session)
     provider_selection = session.selection.normalize_gui_object_selection(
-        session._provider_selected_objects
+        session.provider_transient_state.provider_selected_objects
     )
     if obj in provider_selection:
         provider_selection = [selected for selected in provider_selection if selected != obj]
     else:
         provider_selection.append(obj)
-    session._provider_selected_objects = session.selection.normalize_gui_object_selection(
-        provider_selection
+    session.provider_transient_state.provider_selected_objects = (
+        session.selection.normalize_gui_object_selection(provider_selection)
     )
     new_selection = session.selection.normalize_gui_object_selection(
         [

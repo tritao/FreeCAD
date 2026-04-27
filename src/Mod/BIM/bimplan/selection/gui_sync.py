@@ -74,16 +74,18 @@ def get_gui_preselection_object(session):
 
 
 def _reset_gui_selection_sync_state(session):
-    session._gui_selection_sync_queued = False
-    session._gui_selection_sync_generation += 1
-    session._queued_gui_selection_object = None
+    state = session.selection_sync_state
+    state.gui_selection_sync_queued = False
+    state.gui_selection_sync_generation += 1
+    state.queued_gui_selection_object = None
 
 
 def _finish_gui_selection_sync(session, generation=None):
-    current_generation = getattr(session, "_gui_selection_sync_generation", 0)
+    state = session.selection_sync_state
+    current_generation = getattr(state, "gui_selection_sync_generation", 0)
     if generation is not None and generation != current_generation:
         return
-    session._gui_selection_sync_in_progress = False
+    state.gui_selection_sync_in_progress = False
 
 
 def _schedule_finish_gui_selection_sync(session, generation):
@@ -140,10 +142,11 @@ def set_gui_selection_object(session, obj):
 def schedule_gui_selection_object(session, obj, delay_ms=80):
     if session.lifecycle_state.tearing_down or not obj:
         return
-    session._gui_selection_sync_queued = True
-    session._gui_selection_sync_generation += 1
-    session._queued_gui_selection_object = obj
-    generation = session._gui_selection_sync_generation
+    state = session.selection_sync_state
+    state.gui_selection_sync_queued = True
+    state.gui_selection_sync_generation += 1
+    state.queued_gui_selection_object = obj
+    generation = state.gui_selection_sync_generation
     try:
         from PySide import QtCore
 
@@ -156,21 +159,22 @@ def schedule_gui_selection_object(session, obj, delay_ms=80):
 
 
 def run_scheduled_gui_selection_sync(session, generation=None):
-    if not session._gui_selection_sync_queued:
+    state = session.selection_sync_state
+    if not state.gui_selection_sync_queued:
         return
-    if generation is not None and generation != session._gui_selection_sync_generation:
+    if generation is not None and generation != state.gui_selection_sync_generation:
         return
-    obj = session._queued_gui_selection_object
+    obj = state.queued_gui_selection_object
     if obj is None:
-        session._gui_selection_sync_queued = False
+        state.gui_selection_sync_queued = False
         return
     with session.performance.plan_perf_trace_event("scheduled_gui_selection_sync"):
         if session.lifecycle_state.tearing_down:
-            session._gui_selection_sync_queued = False
-            session._queued_gui_selection_object = None
+            state.gui_selection_sync_queued = False
+            state.queued_gui_selection_object = None
             return
-        session._gui_selection_sync_in_progress = True
-        current_generation = session._gui_selection_sync_generation
+        state.gui_selection_sync_in_progress = True
+        current_generation = state.gui_selection_sync_generation
         try:
             set_gui_selection_object(session, obj)
         finally:
@@ -192,9 +196,10 @@ def detach_selection_observer(session):
 def schedule_selection_refresh(session):
     if session.lifecycle_state.tearing_down or session.lifecycle_state.ignore_selection_changes:
         return
-    if session._selection_refresh_queued:
+    state = session.selection_sync_state
+    if state.selection_refresh_queued:
         return
-    session._selection_refresh_queued = True
+    state.selection_refresh_queued = True
     try:
         from PySide import QtCore
 
@@ -206,9 +211,10 @@ def schedule_selection_refresh(session):
 def schedule_clear_plan_selection_state(session):
     if session.lifecycle_state.tearing_down or session.lifecycle_state.ignore_selection_changes:
         return
-    if getattr(session, "_clear_plan_selection_state_queued", False):
+    state = session.selection_sync_state
+    if state.clear_plan_selection_state_queued:
         return
-    session._clear_plan_selection_state_queued = True
+    state.clear_plan_selection_state_queued = True
     try:
         from PySide import QtCore
 
@@ -218,9 +224,10 @@ def schedule_clear_plan_selection_state(session):
 
 
 def run_scheduled_clear_plan_selection_state(session):
-    if not getattr(session, "_clear_plan_selection_state_queued", False):
+    state = session.selection_sync_state
+    if not state.clear_plan_selection_state_queued:
         return
-    session._clear_plan_selection_state_queued = False
+    state.clear_plan_selection_state_queued = False
     with session.performance.plan_perf_trace_event("scheduled_clear_plan_selection_state"):
         if session.lifecycle_state.tearing_down or session.lifecycle_state.ignore_selection_changes:
             return
@@ -228,9 +235,10 @@ def run_scheduled_clear_plan_selection_state(session):
 
 
 def run_scheduled_selection_refresh(session):
-    if not session._selection_refresh_queued:
+    state = session.selection_sync_state
+    if not state.selection_refresh_queued:
         return
-    session._selection_refresh_queued = False
+    state.selection_refresh_queued = False
     with session.performance.plan_perf_trace_event("selection_observer_refresh"):
         if session.lifecycle_state.tearing_down or session.lifecycle_state.ignore_selection_changes:
             return
@@ -287,7 +295,7 @@ def _should_skip_selection_observer_callback(session):
     return (
         session.lifecycle_state.tearing_down
         or session.lifecycle_state.ignore_selection_changes
-        or getattr(session, "_gui_selection_sync_in_progress", False)
+        or session.selection_sync_state.gui_selection_sync_in_progress
     )
 
 

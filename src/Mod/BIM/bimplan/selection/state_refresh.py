@@ -74,11 +74,12 @@ def sanitize_plan_target_references(session):
             continue
         setattr(session, attr, None)
         changed = True
+    selection_state = session.selection_state
     normalized_secondary = session.selection.normalize_plan_target_list(
-        getattr(session, "_secondary_selected_plan_targets_state", [])
+        selection_state.secondary_selected_plan_targets_state
     )
-    if normalized_secondary != getattr(session, "_secondary_selected_plan_targets_state", []):
-        session._secondary_selected_plan_targets_state = normalized_secondary
+    if normalized_secondary != selection_state.secondary_selected_plan_targets_state:
+        selection_state.secondary_selected_plan_targets_state = normalized_secondary
         changed = True
     return changed
 
@@ -150,7 +151,7 @@ def resolve_selected_target_for_gui_object(
 
 def _get_gui_selection_resolution_state(session, previous_kind, previous_obj):
     pending_target_ref = plan_target_kinds.coerce_plan_target_ref(
-        session._pending_selected_plan_target
+        session.selection_state.pending_selected_plan_target
     )
     preserved_target_ref = plan_target_kinds.make_plan_target_ref()
     if previous_kind == plan_target_kinds.PLAN_TARGET_PROVIDER:
@@ -230,20 +231,22 @@ def _get_selection_refresh_baseline(session):
 
 def _resolve_direct_selection_refresh_result(session, previous_wall):
     if session.wall_edit.is_wall_edit_modal_active():
+        interaction_state = session.interaction_state
         return SelectionRefreshResult(
             primary_target_ref=plan_target_kinds.make_plan_target_ref(
                 plan_target_kinds.PLAN_TARGET_WALL,
-                session._edit_wall,
+                interaction_state.edit_wall,
             ),
             wall_grip_action=_WALL_GRIP_SYNC,
         )
     if session.current_tool == plan_runtime_tools.PlanTool.SET_SPACE_TEXT:
+        interaction_state = session.interaction_state
         return SelectionRefreshResult(
             primary_target_ref=plan_target_kinds.make_plan_target_ref(
                 plan_target_kinds.PLAN_TARGET_SPACE,
                 (
-                    session._edit_space
-                    if plan_targets.is_plan_space_object(session, session._edit_space)
+                    interaction_state.edit_space
+                    if plan_targets.is_plan_space_object(session, interaction_state.edit_space)
                     else None
                 ),
             ),

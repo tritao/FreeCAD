@@ -586,7 +586,7 @@ def _run_interactions(session, scene, spec, operations_handle, settle_ms, timer_
         if screen is None:
             return
         session._hover_pick_last_time = time.monotonic()
-        session._hover_pick_last_mouse_pos = (float(screen[0]), float(screen[1]))
+        session.hover_pick_state.last_mouse_pos = (float(screen[0]), float(screen[1]))
         _trace_direct_operation(
             session,
             "mouse_moved_fast_path",
@@ -602,7 +602,10 @@ def _run_interactions(session, scene, spec, operations_handle, settle_ms, timer_
         def resolve():
             if not session.selection.update_hovered_plan_target(screen, force=True):
                 return
-            if session._grip_trackers or session.selection.is_selected_plan_target("wall"):
+            if (
+                session.overlay_tracker_state.grip_trackers
+                or session.selection.is_selected_plan_target("wall")
+            ):
                 session.overlays.sync_wall_grips()
             session.viewport.request_view_redraw()
 

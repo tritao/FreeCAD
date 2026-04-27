@@ -21,7 +21,7 @@ def get_selected_provider_edit_handles(session, provider_obj):
     if provider_obj is None:
         return []
     selected_provider = plan_selection.get_selected_plan_target_object(session, "provider")
-    editing_provider = getattr(session, "_edit_provider", None)
+    editing_provider = session.interaction_state.edit_provider
     if provider_obj != selected_provider and provider_obj != editing_provider:
         return []
     provider_target = plan_provider_runtime.get_plan_provider_target_for_object(
@@ -148,9 +148,10 @@ def start_provider_handle_point_pick(session, provider_obj, handle_index, handle
     session.selection.set_hovered_space(None)
     session.selection.set_hovered_region(None)
     session.overlays.sync_secondary_selected_overlays()
-    session._edit_provider = provider_obj
-    session._edit_provider_handle_index = handle_index
-    session._edit_provider_handle = handle
+    interaction_state = session.interaction_state
+    interaction_state.edit_provider = provider_obj
+    interaction_state.edit_provider_handle_index = handle_index
+    interaction_state.edit_provider_handle = handle
     session.overlays.clear_selected_provider_overlay()
     session.overlays.clear_selected_provider_handles()
     session.task_panels.refresh_task_panel_status()
@@ -171,11 +172,12 @@ def update_provider_handle_point_pick(session, point=None, snap_info=None):
 
 
 def finish_provider_handle_point_pick(session, point=None, obj=None):
-    provider_obj = session._edit_provider
-    handle = session._edit_provider_handle
-    session._edit_provider = None
-    session._edit_provider_handle_index = None
-    session._edit_provider_handle = None
+    interaction_state = session.interaction_state
+    provider_obj = interaction_state.edit_provider
+    handle = interaction_state.edit_provider_handle
+    interaction_state.edit_provider = None
+    interaction_state.edit_provider_handle_index = None
+    interaction_state.edit_provider_handle = None
     FreeCAD.activeDraftCommand = None
 
     if point is None or provider_obj is None:
@@ -255,10 +257,11 @@ def finish_provider_handle_point_pick(session, point=None, obj=None):
 
 
 def cancel_provider_handle_point_pick(session):
-    provider_obj = session._edit_provider
-    session._edit_provider = None
-    session._edit_provider_handle_index = None
-    session._edit_provider_handle = None
+    interaction_state = session.interaction_state
+    provider_obj = interaction_state.edit_provider
+    interaction_state.edit_provider = None
+    interaction_state.edit_provider_handle_index = None
+    interaction_state.edit_provider_handle = None
     session.lifecycle.stop_snapper()
     FreeCAD.activeDraftCommand = None
     session.current_tool = "Select"

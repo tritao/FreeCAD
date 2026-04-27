@@ -179,6 +179,8 @@ class PlanSelectionSyncState:
     gui_selection_sync_queued: bool = False
     gui_selection_sync_generation: int = 0
     queued_gui_selection_object: object = None
+    gui_selection_sync_in_progress: bool = False
+    clear_plan_selection_state_queued: bool = False
 
 
 @dataclass
@@ -632,6 +634,16 @@ _PLAN_EDIT_SESSION_STATE_PROPERTIES = (
             ("_gui_selection_sync_queued", "gui_selection_sync_queued", _coerce_bool),
             ("_gui_selection_sync_generation", "gui_selection_sync_generation", _coerce_int),
             ("_queued_gui_selection_object", "queued_gui_selection_object", _coerce_identity),
+            (
+                "_gui_selection_sync_in_progress",
+                "gui_selection_sync_in_progress",
+                _coerce_bool,
+            ),
+            (
+                "_clear_plan_selection_state_queued",
+                "clear_plan_selection_state_queued",
+                _coerce_bool,
+            ),
         ),
     ),
     (

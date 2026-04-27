@@ -355,10 +355,11 @@ def refresh_opening_host_footprint_displays(session, opening):
 
 
 def queue_recompute_opening_hosts(session, *openings):
+    opening_state = session.opening_transient_state
     if (
         session.lifecycle_state.tearing_down
-        or session._opening_host_recompute_queued
-        or session._opening_host_recompute_running
+        or opening_state.opening_host_recompute_queued
+        or opening_state.opening_host_recompute_running
     ):
         return
     hosts = []
@@ -369,19 +370,20 @@ def queue_recompute_opening_hosts(session, *openings):
     hosts = [host for host in dict.fromkeys(hosts) if host]
     if not hosts:
         return
-    session._opening_host_recompute_queued = True
+    opening_state.opening_host_recompute_queued = True
     flush_recompute_opening_hosts(session, hosts)
 
 
 def flush_recompute_opening_hosts(session, hosts):
-    session._opening_host_recompute_queued = False
+    opening_state = session.opening_transient_state
+    opening_state.opening_host_recompute_queued = False
     if (
         session.lifecycle_state.tearing_down
-        or session._opening_host_recompute_running
+        or opening_state.opening_host_recompute_running
         or not session.doc
     ):
         return
-    session._opening_host_recompute_running = True
+    opening_state.opening_host_recompute_running = True
     try:
         for host in hosts:
             try:
@@ -390,13 +392,14 @@ def flush_recompute_opening_hosts(session, hosts):
                 continue
         session.doc.recompute()
     finally:
-        session._opening_host_recompute_running = False
+        opening_state.opening_host_recompute_running = False
 
 
 def queue_hard_refresh_selected_opening_visuals(session):
-    if session.lifecycle_state.tearing_down or session._selected_opening_hard_refresh_queued:
+    opening_state = session.opening_transient_state
+    if session.lifecycle_state.tearing_down or opening_state.selected_opening_hard_refresh_queued:
         return
-    session._selected_opening_hard_refresh_queued = True
+    opening_state.selected_opening_hard_refresh_queued = True
     session.overlays.clear_selected_opening_overlay()
     session.overlays.clear_selected_opening_handles()
     session.viewport.request_view_redraw()
@@ -412,7 +415,7 @@ def queue_hard_refresh_selected_opening_visuals(session):
 
 
 def flush_hard_refresh_selected_opening_visuals(session):
-    session._selected_opening_hard_refresh_queued = False
+    session.opening_transient_state.selected_opening_hard_refresh_queued = False
     if session.lifecycle_state.tearing_down or session.current_tool != "Select":
         return
     opening = session.selection.get_selected_plan_target_object("opening")

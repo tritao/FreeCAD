@@ -23,6 +23,14 @@ def _perf_trace_span(session, name, **fields):
     return session.performance.plan_perf_trace_span(name, **fields)
 
 
+def _wall_tracker_state(session):
+    return session.overlay_tracker_state
+
+
+def _wall_grip_runtime_state(session):
+    return session.wall_grip_state
+
+
 def _get_proxy_method(proxy, method_name):
     method = getattr(proxy, method_name, None)
     return method if callable(method) else None
@@ -56,8 +64,10 @@ def retarget_edit_tracker(tracker, obj, index):
 
 def sync_wall_grips(session):
     with _perf_trace_span(session, "sync_wall_grips"):
-        session._wall_grip_sync_queued = False
-        session._wall_grip_sync_generation += 1
+        tracker_state = _wall_tracker_state(session)
+        grip_state = _wall_grip_runtime_state(session)
+        grip_state.sync_queued = False
+        grip_state.sync_generation += 1
         if not session.wall_edit.is_selected_wall_endpoint_editable():
             clear_wall_grips(session)
             return
@@ -106,36 +116,36 @@ def sync_wall_grips(session):
                 for position in grip_positions
             ),
         )
-        previous_state = session._wall_grip_state
+        previous_state = grip_state.state
         reuse_allowed = (
-            len(session._grip_trackers) == 3
+            len(tracker_state.grip_trackers) == 3
             and previous_state is not None
             and previous_state[:2] == wall_state[:2]
         )
         if reuse_allowed:
             try:
                 with _perf_trace_span(session, "wall_grips_retarget_trackers"):
-                    for index, tracker in enumerate(session._grip_trackers):
+                    for index, tracker in enumerate(tracker_state.grip_trackers):
                         retarget_edit_tracker(tracker, wall, index)
                 with _perf_trace_span(session, "wall_grips_position_trackers"):
-                    for tracker, position in zip(session._grip_trackers, grip_positions):
+                    for tracker, position in zip(tracker_state.grip_trackers, grip_positions):
                         tracker.set(position)
                 with _perf_trace_span(session, "wall_grips_show_trackers"):
-                    for tracker in session._grip_trackers:
+                    for tracker in tracker_state.grip_trackers:
                         if not getattr(tracker, "Visible", False):
                             tracker.on()
                 if previous_state == wall_state:
                     _perf_count(session, "wall_grip_cache_hits")
                 else:
                     _perf_count(session, "wall_grip_tracker_reuses")
-                session._wall_grip_state = wall_state
+                grip_state.state = wall_state
                 return
             except Exception:
                 clear_wall_grips(session)
 
         grip_start, grip_end, midpoint = grip_positions
         with _perf_trace_span(session, "wall_grips_create_trackers"):
-            session._grip_trackers = [
+            tracker_state.grip_trackers = [
                 DraftTrackers.editTracker(pos=grip_start, name=wall.Name, idx=0),
                 DraftTrackers.editTracker(pos=grip_end, name=wall.Name, idx=1),
                 DraftTrackers.editTracker(
@@ -145,11 +155,11 @@ def sync_wall_grips(session):
                     marker=midpoint_marker,
                 ),
             ]
-        session._wall_grip_state = wall_state
+        grip_state.state = wall_state
 
 
 def hide_wall_grips(session):
-    for tracker in session._grip_trackers:
+    for tracker in _wall_tracker_state(session).grip_trackers:
         try:
             tracker.off()
         except Exception:
@@ -160,9 +170,10 @@ def schedule_wall_grip_sync(session, delay_ms=120):
     if session.lifecycle_state.tearing_down:
         return
     hide_wall_grips(session)
-    session._wall_grip_sync_queued = True
-    session._wall_grip_sync_generation += 1
-    generation = session._wall_grip_sync_generation
+    grip_state = _wall_grip_runtime_state(session)
+    grip_state.sync_queued = True
+    grip_state.sync_generation += 1
+    generation = grip_state.sync_generation
     try:
         from PySide import QtCore
 
@@ -175,11 +186,12 @@ def schedule_wall_grip_sync(session, delay_ms=120):
 
 
 def run_scheduled_wall_grip_sync(session, generation=None):
-    if not session._wall_grip_sync_queued:
+    grip_state = _wall_grip_runtime_state(session)
+    if not grip_state.sync_queued:
         return
-    if generation is not None and generation != session._wall_grip_sync_generation:
+    if generation is not None and generation != grip_state.sync_generation:
         return
-    session._wall_grip_sync_queued = False
+    grip_state.sync_queued = False
     with _perf_trace_event(session, "scheduled_wall_grip_sync"):
         if session.lifecycle_state.tearing_down:
             return
@@ -188,11 +200,13 @@ def run_scheduled_wall_grip_sync(session, generation=None):
 
 
 def clear_wall_grips(session):
-    session._wall_grip_sync_queued = False
-    session._wall_grip_sync_generation += 1
-    overlay_manager.finalize_trackers(session._grip_trackers)
-    session._grip_trackers = []
-    session._wall_grip_state = None
+    tracker_state = _wall_tracker_state(session)
+    grip_state = _wall_grip_runtime_state(session)
+    grip_state.sync_queued = False
+    grip_state.sync_generation += 1
+    overlay_manager.finalize_trackers(tracker_state.grip_trackers)
+    tracker_state.grip_trackers = []
+    grip_state.state = None
 
 
 def sync_hovered_wall_overlay(session):
@@ -208,13 +222,14 @@ def sync_hovered_wall_overlay(session):
         session.hovered_wall,
         color=(0.42, 0.62, 0.9),
         width=session.viewport.scaled_line_width(2),
-        tracker_store=session._wall_hover_trackers,
+        tracker_store=_wall_tracker_state(session).wall_hover_trackers,
     )
 
 
 def clear_hovered_wall_overlay(session):
-    overlay_manager.finalize_trackers(session._wall_hover_trackers)
-    session._wall_hover_trackers = []
+    tracker_state = _wall_tracker_state(session)
+    overlay_manager.finalize_trackers(tracker_state.wall_hover_trackers)
+    tracker_state.wall_hover_trackers = []
 
 
 def sync_selected_wall_overlay(session):
@@ -235,14 +250,14 @@ def sync_selected_wall_overlay(session):
             clear_selected_wall_overlay(session)
             return
         (
-            session._wall_overlay_trackers,
-            session._wall_hover_trackers,
+            _wall_tracker_state(session).wall_overlay_trackers,
+            _wall_tracker_state(session).wall_hover_trackers,
             _,
         ) = overlay_manager.sync_segment_overlay_trackers(
             session,
             DraftTrackers,
-            trackers=session._wall_overlay_trackers,
-            hover_trackers=session._wall_hover_trackers,
+            trackers=_wall_tracker_state(session).wall_overlay_trackers,
+            hover_trackers=_wall_tracker_state(session).wall_hover_trackers,
             segments=segments,
             label="selected-wall-overlay:{}".format(getattr(wall, "Name", "unknown")),
             color=color,
@@ -253,12 +268,14 @@ def sync_selected_wall_overlay(session):
 
 
 def clear_selected_wall_overlay(session):
-    overlay_manager.finalize_trackers(session._wall_overlay_trackers)
-    session._wall_overlay_trackers = []
+    tracker_state = _wall_tracker_state(session)
+    overlay_manager.finalize_trackers(tracker_state.wall_overlay_trackers)
+    tracker_state.wall_overlay_trackers = []
 
 
 def apply_selected_wall_selection_feedback(session, *, defer_grips=False):
-    had_wall_visuals = bool(session._grip_trackers or session._wall_overlay_trackers)
+    tracker_state = _wall_tracker_state(session)
+    had_wall_visuals = bool(tracker_state.grip_trackers or tracker_state.wall_overlay_trackers)
     wall = plan_selection.get_selected_plan_target_object(session, "wall")
     if session.current_tool == "Select" and session.selection.is_plan_selectable_wall(wall):
         sync_selected_wall_overlay(session)
@@ -350,13 +367,14 @@ def sync_junction_node_overlays(session):
             junction,
             color=color,
             width=width,
-            tracker_store=session._junction_node_trackers,
+            tracker_store=_wall_tracker_state(session).junction_node_trackers,
         )
 
 
 def clear_junction_node_overlays(session):
-    overlay_manager.finalize_trackers(session._junction_node_trackers)
-    session._junction_node_trackers = []
+    tracker_state = _wall_tracker_state(session)
+    overlay_manager.finalize_trackers(tracker_state.junction_node_trackers)
+    tracker_state.junction_node_trackers = []
 
 
 def sync_hovered_wall_opening_context_overlay(session):
@@ -378,13 +396,14 @@ def sync_hovered_wall_opening_context_overlay(session):
             opening,
             color=color,
             width=width,
-            tracker_store=session._hovered_wall_opening_context_trackers,
+            tracker_store=_wall_tracker_state(session).hovered_wall_opening_context_trackers,
         )
 
 
 def clear_hovered_wall_opening_context_overlay(session):
-    overlay_manager.finalize_trackers(session._hovered_wall_opening_context_trackers)
-    session._hovered_wall_opening_context_trackers = []
+    tracker_state = _wall_tracker_state(session)
+    overlay_manager.finalize_trackers(tracker_state.hovered_wall_opening_context_trackers)
+    tracker_state.hovered_wall_opening_context_trackers = []
 
 
 def create_wall_overlay_trackers(session, wall, color, width, tracker_store):
