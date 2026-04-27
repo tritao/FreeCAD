@@ -84,7 +84,9 @@ def select_plan_target_for_plan_edit(
     )
     session.overlays.sync_secondary_selected_overlays()
     session.task_panels.refresh_task_panel_status(
-        selection_only=session.current_tool == plan_runtime_tools.PlanTool.SELECT
+        reason=(
+            "selection" if session.current_tool == plan_runtime_tools.PlanTool.SELECT else "full"
+        )
     )
     if queue_restore:
         session.selection.queue_restore_selected_plan_target(kind, obj)
@@ -382,7 +384,11 @@ def clear_plan_selection_state(session):
         )
         with session.performance.plan_perf_trace_span("clear_plan_selection_task_status"):
             session.task_panels.refresh_task_panel_status(
-                selection_only=session.current_tool == plan_runtime_tools.PlanTool.SELECT
+                reason=(
+                    "selection"
+                    if session.current_tool == plan_runtime_tools.PlanTool.SELECT
+                    else "full"
+                )
             )
         selected_kind, selected_obj = session.selection.get_selected_plan_target()
         session.performance.plan_perf_set_fields(

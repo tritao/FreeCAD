@@ -255,7 +255,7 @@ def start_opening_handle_point_pick(session, opening, handle_index, handle):
             session.overlays.clear_selected_opening_handles()
         with session.performance.plan_perf_trace_span("start_opening_handle_preview"):
             queue_opening_move_initial_preview(session, opening, handle.point)
-        session.task_panels.refresh_task_panel_status(selection_only=True)
+        session.task_panels.refresh_task_panel_status(reason="selection")
         FreeCAD.activeDraftCommand = session
         with session.performance.plan_perf_trace_span("opening_handle_push_snap_profile"):
             session.snap.push_opening_move_snap_profile()

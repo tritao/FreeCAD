@@ -143,12 +143,7 @@ _TARGET_KIND_POLICIES = {
             (
                 "refresh_task_panel_status",
                 lambda session: (
-                    session.task_panels.refresh_task_panel_status(
-                        selection_only=(
-                            session.current_tool == "Select"
-                            and session.selection.is_selected_plan_target("wall")
-                        )
-                    )
+                    session.task_panels.refresh_task_panel_status(reason="full")
                     if session.current_tool == "Join"
                     else None
                 ),

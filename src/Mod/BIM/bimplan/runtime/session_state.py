@@ -66,6 +66,7 @@ class PlanInteractionAPI:
 @dataclass
 class PlanTaskPanelState:
     relation_status_message: str | None = None
+    aux_task_panels: list = field(default_factory=list)
 
 
 @dataclass
@@ -458,7 +459,10 @@ _PLAN_EDIT_SESSION_STATE_ENSURERS = (
 _PLAN_EDIT_SESSION_STATE_PROPERTIES = (
     (
         "_ensure_task_panel_state",
-        (("_plan_relation_status_message", "relation_status_message", _coerce_identity),),
+        (
+            ("_plan_relation_status_message", "relation_status_message", _coerce_identity),
+            ("_aux_task_panels", "aux_task_panels", _coerce_list),
+        ),
     ),
     (
         "_ensure_provider_overlay_read_state",
@@ -875,7 +879,6 @@ def initialize_session_state(session):
     session.view = None
     session.viewer = None
     session.task_panel = None
-    session._aux_task_panels = []
     initialize_session_read_state(session)
     session.current_tool = plan_runtime_tools.PlanTool.SELECT
     session._plan_join_type = "Miter"

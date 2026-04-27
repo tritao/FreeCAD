@@ -343,7 +343,7 @@ class PlanEditSession:
             self.lifecycle.disconnect_teardown_signals()
             lifecycle_state.tearing_down = True
             self.lifecycle.discard_runtime_references()
-            self._aux_task_panels = []
+            self.task_panel_state.aux_task_panels = []
             _active_session = None
             lifecycle_state.finishing = False
             _refresh_contextual_task_watchers()

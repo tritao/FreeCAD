@@ -471,10 +471,7 @@ def set_hovered_wall(session, wall):
     session.overlays.sync_hovered_wall_overlay()
     session.overlays.sync_hovered_wall_opening_context_overlay()
     if session.current_tool == plan_runtime_tools.PlanTool.JOIN:
-        session.task_panels.refresh_task_panel_status(
-            selection_only=session.current_tool == plan_runtime_tools.PlanTool.SELECT
-            and is_selected_plan_target(session, "wall")
-        )
+        session.task_panels.refresh_task_panel_status(reason="full")
 
 
 set_hovered_opening = _make_set_hovered_target_function(plan_target_kinds.PLAN_TARGET_OPENING)

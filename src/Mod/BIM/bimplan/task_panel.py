@@ -148,10 +148,15 @@ def attach_task_panel(session, panel):
     session.task_panel = panel
 
 
+def _get_aux_task_panels(session):
+    return session.task_panel_state.aux_task_panels
+
+
 def attach_aux_task_panel(session, panel):
-    if panel is None or panel in session._aux_task_panels:
+    aux_panels = _get_aux_task_panels(session)
+    if panel is None or panel in aux_panels:
         return
-    session._aux_task_panels.append(panel)
+    aux_panels.append(panel)
     try:
         panel.refresh()
     except (AttributeError, RuntimeError):
@@ -161,7 +166,9 @@ def attach_aux_task_panel(session, panel):
 def detach_aux_task_panel(session, panel):
     if panel is None:
         return
-    session._aux_task_panels = [item for item in session._aux_task_panels if item is not panel]
+    session.task_panel_state.aux_task_panels = [
+        item for item in _get_aux_task_panels(session) if item is not panel
+    ]
 
 
 def detach_task_panel(session):
@@ -257,7 +264,7 @@ def _refresh_task_panels(session, reason):
         except (AttributeError, RuntimeError):
             session.task_panels.on_panel_closed(panel)
     stale_panels = []
-    for extra_panel in list(session._aux_task_panels):
+    for extra_panel in list(_get_aux_task_panels(session)):
         if extra_panel is panel:
             continue
         try:
