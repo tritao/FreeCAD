@@ -4,7 +4,9 @@
 
 from contextlib import contextmanager
 
+import FreeCAD
 import FreeCADGui
+from bimplan.providers import runtime as plan_provider_runtime
 
 
 @contextmanager
@@ -217,6 +219,47 @@ def _trace_selection_observer_event(session, event_name, **fields):
     return session.performance.plan_perf_trace_event(event_name, **fields)
 
 
+def resolve_document_object(session, document_name, object_name):
+    object_name = str(object_name or "").strip()
+    if not object_name:
+        return None
+    document_name = str(document_name or "").strip()
+    doc = None
+    if document_name:
+        try:
+            doc = FreeCAD.getDocument(document_name)
+        except Exception:
+            doc = None
+    if doc is None:
+        doc = getattr(session, "doc", None)
+    if doc is None:
+        return None
+    try:
+        return doc.getObject(object_name)
+    except Exception:
+        return None
+
+
+def is_visible_provider_target_object(session, obj):
+    validate = getattr(session, "_is_valid_plan_target", None)
+    if callable(validate) and validate("provider", obj):
+        return bool(plan_provider_runtime.is_plan_provider_target_visible_for_mode(session, obj))
+    if not plan_provider_runtime.is_plan_provider_target_object(session, obj):
+        return False
+    return bool(plan_provider_runtime.is_plan_provider_target_visible_for_mode(session, obj))
+
+
+def should_filter_hidden_provider_preselection_for_object(session, obj):
+    return not is_visible_provider_target_object(session, obj)
+
+
+def should_filter_hidden_provider_preselection(session, doc_name, obj_name):
+    preselected_obj = resolve_document_object(session, doc_name, obj_name)
+    if preselected_obj is None:
+        return False
+    return should_filter_hidden_provider_preselection_for_object(session, preselected_obj)
+
+
 def _should_skip_selection_observer_callback(session):
     session.performance.plan_perf_count("selection_observer_callbacks")
     return (
@@ -295,12 +338,10 @@ def selection_observer_set_preselection(session, doc, obj, sub):
     ):
         if _should_skip_selection_observer_callback(session):
             return
-        from . import selection as plan_selection_core
-
-        if not plan_selection_core._should_filter_hidden_provider_preselection(session, doc, obj):
+        if not should_filter_hidden_provider_preselection(session, doc, obj):
             return
         session.performance.plan_perf_count("provider_preselection_filtered")
-        plan_selection_core._clear_gui_preselection()
+        clear_gui_preselection()
 
 
 def selection_observer_remove_preselection(session, doc, obj, sub):
@@ -312,3 +353,26 @@ def selection_observer_remove_preselection(session, doc, obj, sub):
         selection_subelement=sub,
     ):
         session.performance.plan_perf_count("selection_observer_callbacks")
+
+
+def _clear_gui_preselection_impl():
+    try:
+        FreeCADGui.Selection.clearPreselection()
+        return True
+    except Exception:
+        return False
+
+
+def clear_gui_preselection():
+    try:
+        import bimplan.selection as plan_selection_pkg
+    except Exception:
+        plan_selection_pkg = None
+    exported = (
+        getattr(plan_selection_pkg, "_clear_gui_preselection", None)
+        if plan_selection_pkg is not None
+        else None
+    )
+    if callable(exported) and exported is not clear_gui_preselection:
+        return exported()
+    return _clear_gui_preselection_impl()
