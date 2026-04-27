@@ -19,21 +19,15 @@ translate = FreeCAD.Qt.translate
 
 
 def _get_lifecycle_state(session):
-    return getattr(session, "lifecycle_state", None)
+    return session.lifecycle_state
 
 
 def _is_tearing_down(session):
-    lifecycle_state = _get_lifecycle_state(session)
-    if lifecycle_state is not None:
-        return bool(getattr(lifecycle_state, "tearing_down", False))
-    return bool(getattr(session, "_tearing_down", False))
+    return bool(_get_lifecycle_state(session).tearing_down)
 
 
 def _set_tearing_down(session, value):
-    lifecycle_state = _get_lifecycle_state(session)
-    if lifecycle_state is not None:
-        lifecycle_state.tearing_down = bool(value)
-    session._tearing_down = bool(value)
+    _get_lifecycle_state(session).tearing_down = bool(value)
 
 
 class PlanLifecycleAPI:
@@ -121,7 +115,7 @@ class PlanLifecycleAPI:
 def connect_teardown_signal(session, signal):
     try:
         signal.connect(session.begin_teardown)
-    except Exception:
+    except (AttributeError, RuntimeError, TypeError):
         return
     session.lifecycle_state.teardown_signal_sources.append(signal)
 
@@ -145,7 +139,7 @@ def disconnect_teardown_signals(session):
     for signal in lifecycle_state.teardown_signal_sources:
         try:
             signal.disconnect(session.begin_teardown)
-        except Exception:
+        except (TypeError, RuntimeError):
             pass
     lifecycle_state.teardown_signal_sources = []
 

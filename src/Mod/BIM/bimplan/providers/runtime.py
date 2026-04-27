@@ -488,8 +488,8 @@ def _is_active_provider_session(session):
     document_visuals = getattr(session, "document_visuals", None)
     document_is_alive = getattr(document_visuals, "document_is_alive", None)
     return not (
-        getattr(session, "_tearing_down", False)
-        or getattr(session, "_finishing", False)
+        session.lifecycle_state.tearing_down
+        or session.lifecycle_state.finishing
         or (callable(document_is_alive) and not document_is_alive())
     )
 
@@ -501,8 +501,10 @@ def plan_provider_integrations_disabled(session):
     if env_value:
         return env_value not in {"0", "false", "False", "no", "off"}
     try:
-        return bool(session._plan_edit_params.GetBool("DisableIntegrations", False))
-    except Exception:
+        return bool(
+            session.performance_state.plan_edit_params.GetBool("DisableIntegrations", False)
+        )
+    except (AttributeError, ReferenceError, RuntimeError, TypeError):
         return False
 
 
