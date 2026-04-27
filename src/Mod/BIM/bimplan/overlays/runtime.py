@@ -124,6 +124,9 @@ class PlanOverlaysAPI:
     def get_opening_overlay_screen_bounds(self, *args, **kwargs):
         return overlay_geometry.get_opening_overlay_screen_bounds(self.session, *args, **kwargs)
 
+    def get_opening_pick_bounds(self, *args, **kwargs):
+        return overlay_geometry.get_opening_pick_bounds(self.session, *args, **kwargs)
+
     def get_opening_overlay_segments(self, *args, **kwargs):
         return overlay_geometry.get_opening_overlay_segments(self.session, *args, **kwargs)
 

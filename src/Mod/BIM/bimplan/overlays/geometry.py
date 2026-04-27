@@ -131,6 +131,27 @@ def _get_projected_polyline_bounds(projected_polylines):
     return (min_x, min_y, max_x, max_y)
 
 
+def _get_plan_polyline_bounds(polylines):
+    min_x = None
+    min_y = None
+    max_x = None
+    max_y = None
+    for polyline in polylines or ():
+        for point in polyline or ():
+            try:
+                point_x = float(point.x)
+                point_y = float(point.y)
+            except Exception:
+                continue
+            min_x = point_x if min_x is None else min(min_x, point_x)
+            min_y = point_y if min_y is None else min(min_y, point_y)
+            max_x = point_x if max_x is None else max(max_x, point_x)
+            max_y = point_y if max_y is None else max(max_y, point_y)
+    if min_x is None:
+        return None
+    return (min_x, min_y, max_x, max_y)
+
+
 def _get_proxy_method(proxy, method_name):
     method = getattr(proxy, method_name, None)
     return method if callable(method) else None
@@ -424,4 +445,18 @@ def get_opening_pick_polylines(session, opening):
         opening,
         "pick_overlay_polylines",
         lambda opening_obj: get_opening_combined_overlay_polylines(session, opening_obj),
+    )
+
+
+def get_opening_pick_bounds(session, opening):
+    if not session.openings.is_hosted_opening_object(opening):
+        return None
+    return get_cached_plan_overlay_geometry(
+        session,
+        "opening",
+        opening,
+        "pick_overlay_bounds",
+        lambda opening_obj: _get_plan_polyline_bounds(
+            get_opening_pick_polylines(session, opening_obj)
+        ),
     )
