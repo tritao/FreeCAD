@@ -250,6 +250,13 @@ class PlanPerformanceState:
 
 
 @dataclass
+class PlanProviderRuntimeState:
+    refresh_cache: object = None
+    document_cache: dict = field(default_factory=dict)
+    target_collection_depth: int = 0
+
+
+@dataclass
 class PlanProviderTransientState:
     selected_provider_overlay_render_state: object = None
     provider_handle_trackers: list = field(default_factory=list)
@@ -454,6 +461,7 @@ _PLAN_EDIT_SESSION_STATE_ENSURERS = (
     ("_ensure_viewport_state", "viewport_state", PlanViewportState),
     ("_ensure_document_visual_state", "document_visual_state", PlanDocumentVisualState),
     ("_ensure_performance_state", "performance_state", PlanPerformanceState),
+    ("_ensure_provider_runtime_state", "provider_runtime_state", PlanProviderRuntimeState),
     ("_ensure_provider_transient_state", "provider_transient_state", PlanProviderTransientState),
     ("_ensure_opening_transient_state", "opening_transient_state", PlanOpeningTransientState),
     ("_ensure_overlay_tracker_state", "overlay_tracker_state", PlanOverlayTrackerState),
@@ -738,6 +746,18 @@ _PLAN_EDIT_SESSION_STATE_PROPERTIES = (
         ),
     ),
     (
+        "_ensure_provider_runtime_state",
+        (
+            ("_plan_provider_refresh_cache", "refresh_cache", _coerce_identity),
+            ("_plan_provider_document_cache", "document_cache", _coerce_dict),
+            (
+                "_plan_provider_target_collection_depth",
+                "target_collection_depth",
+                _coerce_int,
+            ),
+        ),
+    ),
+    (
         "_ensure_provider_transient_state",
         (
             (
@@ -917,7 +937,7 @@ def initialize_session_state(session):
     session._plan_pick_debug_sequence = 0
     session._plan_pick_debug_scope_depth = 0
     session._plan_pick_debug_scope_name = ""
-    session._plan_provider_refresh_cache = None
-    session._plan_provider_document_cache = {}
-    session._plan_provider_target_collection_depth = 0
+    session.provider_runtime_state.refresh_cache = None
+    session.provider_runtime_state.document_cache = {}
+    session.provider_runtime_state.target_collection_depth = 0
     session.lifecycle.connect_teardown_signals(QtGui)

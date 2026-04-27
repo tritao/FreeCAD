@@ -193,7 +193,7 @@ def discard_runtime_references(session):
     space_region_pick_state.hovered_candidate = None
     space_region_pick_state.seed_space = None
     selection_state.pending_selected_plan_target = None
-    session._plan_provider_target_collection_depth = 0
+    session.provider_runtime_state.target_collection_depth = 0
     wall_edit_state.edit_wall = None
     interaction_state.edit_opening = None
     interaction_state.edit_opening_handle_index = None
@@ -897,21 +897,21 @@ def shutdown(session, close_dialog=True, teardown=False):
             mark_closed = getattr(panel, "mark_closed", None)
             if callable(mark_closed):
                 mark_closed()
-        except Exception:
+        except (AttributeError, RuntimeError, TypeError):
             pass
         if close_dialog and not teardown:
             try:
                 close = getattr(panel, "close", None)
                 if callable(close):
                     close()
-            except Exception:
+            except (AttributeError, RuntimeError, TypeError):
                 pass
         else:
             try:
                 detach = getattr(panel, "detach", None)
                 if callable(detach):
                     detach()
-            except Exception:
+            except (AttributeError, RuntimeError, TypeError):
                 pass
     if teardown:
         session.lifecycle.discard_runtime_references()
@@ -1070,13 +1070,13 @@ def cancel_embedded_tool(session, tool_name=None):
         try:
             cancel_interactive()
             return
-        except Exception:
+        except (AttributeError, ReferenceError, RuntimeError, TypeError):
             pass
     finish = getattr(tool, "finish", None)
     if callable(finish):
         try:
             finish(cont=False)
-        except Exception:
+        except (AttributeError, ReferenceError, RuntimeError, TypeError):
             pass
 
 
@@ -1090,7 +1090,7 @@ def stop_snapper(session):
     try:
         snapper.getPoint()
         snapper.off()
-    except Exception:
+    except (AttributeError, ReferenceError, RuntimeError, TypeError):
         pass
 
 
@@ -1109,13 +1109,13 @@ def _set_toolbar_point_focus_suppressed(toolbar, suppressed):
     if callable(set_focus_suppressed):
         try:
             set_focus_suppressed(bool(suppressed))
-        except Exception:
+        except (AttributeError, RuntimeError, TypeError):
             pass
         return
     if getattr(toolbar, "suppress_point_focus", None) is not None:
         try:
             toolbar.suppress_point_focus = bool(suppressed)
-        except Exception:
+        except (AttributeError, RuntimeError, TypeError):
             pass
 
 

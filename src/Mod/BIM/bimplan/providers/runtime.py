@@ -121,126 +121,6 @@ class PlanProvidersAPI:
     def session(self):
         return self._session
 
-    def plan_provider_integrations_disabled(self, *args, **kwargs):
-        return plan_provider_integrations_disabled(self.session, *args, **kwargs)
-
-    def get_plan_provider_id(self, *args, **kwargs):
-        return get_plan_provider_id(self.session, *args, **kwargs)
-
-    def coerce_plan_provider_results(self, *args, **kwargs):
-        return coerce_plan_provider_results(self.session, *args, **kwargs)
-
-    def normalize_plan_provider_action(self, *args, **kwargs):
-        return normalize_plan_provider_action(self.session, *args, **kwargs)
-
-    def normalize_plan_provider_tool(self, *args, **kwargs):
-        return normalize_plan_provider_tool(self.session, *args, **kwargs)
-
-    def normalize_plan_provider_edit_handle(self, *args, **kwargs):
-        return normalize_plan_provider_edit_handle(self.session, *args, **kwargs)
-
-    def normalize_plan_provider_issue(self, *args, **kwargs):
-        return normalize_plan_provider_issue(self.session, *args, **kwargs)
-
-    def normalize_plan_provider_suggestion(self, *args, **kwargs):
-        return normalize_plan_provider_suggestion(self.session, *args, **kwargs)
-
-    def normalize_plan_provider_section(self, *args, **kwargs):
-        return normalize_plan_provider_section(self.session, *args, **kwargs)
-
-    def normalize_plan_provider_context_panel(self, *args, **kwargs):
-        return normalize_plan_provider_context_panel(self.session, *args, **kwargs)
-
-    def normalize_plan_provider_overlay(self, *args, **kwargs):
-        return normalize_plan_provider_overlay(self.session, *args, **kwargs)
-
-    def normalize_plan_provider_target(self, *args, **kwargs):
-        return normalize_plan_provider_target(self.session, *args, **kwargs)
-
-    def collect_plan_provider_contributions(self, *args, **kwargs):
-        return collect_plan_provider_contributions(self.session, *args, **kwargs)
-
-    def get_plan_provider_display_name(self, *args, **kwargs):
-        return get_plan_provider_display_name(self.session, *args, **kwargs)
-
-    def get_plan_provider_issues(self, *args, **kwargs):
-        return get_plan_provider_issues(self.session, *args, **kwargs)
-
-    def get_plan_provider_suggestions(self, *args, **kwargs):
-        return get_plan_provider_suggestions(self.session, *args, **kwargs)
-
-    def get_plan_provider_tools(self, *args, **kwargs):
-        return get_plan_provider_tools(self.session, *args, **kwargs)
-
-    def get_plan_provider_snapshot(self, *args, **kwargs):
-        return get_plan_provider_snapshot(self.session, *args, **kwargs)
-
-    def get_plan_provider_edit_handles(self, *args, **kwargs):
-        return get_plan_provider_edit_handles(self.session, *args, **kwargs)
-
-    def get_plan_provider_inspector_sections(self, *args, **kwargs):
-        return get_plan_provider_inspector_sections(self.session, *args, **kwargs)
-
-    def get_plan_provider_context_panels(self, *args, **kwargs):
-        return get_plan_provider_context_panels(self.session, *args, **kwargs)
-
-    def get_plan_provider_overlays(self, *args, **kwargs):
-        return get_plan_provider_overlays(self.session, *args, **kwargs)
-
-    def get_plan_provider_overlay_mode(self, *args, **kwargs):
-        return get_plan_provider_overlay_mode(self.session, *args, **kwargs)
-
-    def set_plan_provider_overlay_mode(self, *args, **kwargs):
-        return set_plan_provider_overlay_mode(self.session, *args, **kwargs)
-
-    def get_plan_provider_overlay_visibility_key(self, *args, **kwargs):
-        return get_plan_provider_overlay_visibility_key(*args, **kwargs)
-
-    def get_plan_provider_targets(self, *args, **kwargs):
-        return get_plan_provider_targets(self.session, *args, **kwargs)
-
-    def get_plan_provider_target_for_object(self, *args, **kwargs):
-        return get_plan_provider_target_for_object(self.session, *args, **kwargs)
-
-    def is_plan_provider_target_object(self, *args, **kwargs):
-        return is_plan_provider_target_object(self.session, *args, **kwargs)
-
-    def is_plan_provider_overlay_enabled(self, *args, **kwargs):
-        return is_plan_provider_overlay_enabled(self.session, *args, **kwargs)
-
-    def is_plan_provider_overlay_visible_for_mode(self, *args, **kwargs):
-        return is_plan_provider_overlay_visible_for_mode(self.session, *args, **kwargs)
-
-    def is_plan_provider_overlay_visible(self, *args, **kwargs):
-        return is_plan_provider_overlay_visible(self.session, *args, **kwargs)
-
-    def set_plan_provider_overlay_visible(self, *args, **kwargs):
-        return set_plan_provider_overlay_visible(self.session, *args, **kwargs)
-
-    def queue_plan_provider_overlay_refresh(self, *args, **kwargs):
-        return queue_plan_provider_overlay_refresh(self.session, *args, **kwargs)
-
-    def queue_plan_provider_overlay_sync(self, *args, **kwargs):
-        return queue_plan_provider_overlay_sync(self.session, *args, **kwargs)
-
-    def build_plan_semantic_record(self, *args, **kwargs):
-        return build_plan_semantic_record(self.session, *args, **kwargs)
-
-    def get_plan_semantic_records(self, *args, **kwargs):
-        return get_plan_semantic_records(self.session, *args, **kwargs)
-
-    def get_plan_edit_context(self):
-        return get_plan_edit_context(self.session)
-
-    def get_plan_provider_action_context(self, payload=None):
-        return get_plan_provider_action_context(self.session, payload=payload)
-
-    def plan_provider_refresh_cache_scope(self):
-        return plan_provider_refresh_cache_scope(self.session)
-
-    def invalidate_plan_provider_document_cache(self):
-        return invalidate_plan_provider_document_cache(self.session)
-
     def get_provider_point_tool_label(self):
         from bimplan.providers import point as plan_provider_point
 
@@ -508,7 +388,15 @@ def plan_provider_integrations_disabled(session):
         return False
 
 
+def _get_provider_runtime_state(session):
+    return getattr(session, "provider_runtime_state", None)
+
+
 def invalidate_plan_provider_document_cache(session):
+    provider_runtime_state = _get_provider_runtime_state(session)
+    if provider_runtime_state is not None:
+        provider_runtime_state.document_cache = {}
+        return
     session._plan_provider_document_cache = {}
 
 
@@ -529,23 +417,43 @@ def plan_provider_refresh_cache_scope(session):
         with external_scope:
             yield external_scope
         return
-    previous_cache = session._plan_provider_refresh_cache
-    session._plan_provider_refresh_cache = {}
+    provider_runtime_state = _get_provider_runtime_state(session)
+    if provider_runtime_state is not None:
+        previous_cache = provider_runtime_state.refresh_cache
+        provider_runtime_state.refresh_cache = {}
+        current_cache = provider_runtime_state.refresh_cache
+    else:
+        previous_cache = session._plan_provider_refresh_cache
+        session._plan_provider_refresh_cache = {}
+        current_cache = session._plan_provider_refresh_cache
     try:
-        yield session._plan_provider_refresh_cache
+        yield current_cache
     finally:
-        session._plan_provider_refresh_cache = previous_cache
+        if provider_runtime_state is not None:
+            provider_runtime_state.refresh_cache = previous_cache
+        else:
+            session._plan_provider_refresh_cache = previous_cache
 
 
 def _get_provider_refresh_cache(session):
-    refresh_cache = getattr(session, "_plan_provider_refresh_cache", None)
+    provider_runtime_state = _get_provider_runtime_state(session)
+    refresh_cache = (
+        provider_runtime_state.refresh_cache
+        if provider_runtime_state is not None
+        else getattr(session, "_plan_provider_refresh_cache", None)
+    )
     if isinstance(refresh_cache, dict):
         return refresh_cache
     return None
 
 
 def _get_provider_document_cache(session):
-    document_cache = getattr(session, "_plan_provider_document_cache", None)
+    provider_runtime_state = _get_provider_runtime_state(session)
+    document_cache = (
+        provider_runtime_state.document_cache
+        if provider_runtime_state is not None
+        else getattr(session, "_plan_provider_document_cache", None)
+    )
     if isinstance(document_cache, dict):
         return document_cache
     return None
@@ -1022,10 +930,21 @@ def get_plan_provider_targets(session) -> tuple[PlanProviderTargetSpec, ...]:
     external_targets = _call_provider_method(session, "get_plan_provider_targets", default=None)
     if external_targets is not None:
         return tuple(external_targets or ())
-    depth = int(getattr(session, "_plan_provider_target_collection_depth", 0) or 0)
+    provider_runtime_state = _get_provider_runtime_state(session)
+    depth = int(
+        (
+            provider_runtime_state.target_collection_depth
+            if provider_runtime_state is not None
+            else getattr(session, "_plan_provider_target_collection_depth", 0)
+        )
+        or 0
+    )
     if depth > 0:
         return ()
-    session._plan_provider_target_collection_depth = depth + 1
+    if provider_runtime_state is not None:
+        provider_runtime_state.target_collection_depth = depth + 1
+    else:
+        session._plan_provider_target_collection_depth = depth + 1
     try:
         return collect_plan_provider_contributions(
             session,
@@ -1033,7 +952,10 @@ def get_plan_provider_targets(session) -> tuple[PlanProviderTargetSpec, ...]:
             normalize_plan_provider_target,
         )
     finally:
-        session._plan_provider_target_collection_depth = depth
+        if provider_runtime_state is not None:
+            provider_runtime_state.target_collection_depth = depth
+        else:
+            session._plan_provider_target_collection_depth = depth
 
 
 def get_plan_provider_target_for_object(session, obj) -> PlanProviderTargetSpec | None:
@@ -1998,7 +1920,7 @@ def _make_plan_provider_target_object_key(
 
 
 def _get_plan_provider_target_lookup(session) -> dict[tuple[str, str], PlanProviderTargetSpec]:
-    refresh_cache = getattr(session, "_plan_provider_refresh_cache", None)
+    refresh_cache = _get_provider_refresh_cache(session)
     cache_key = ("provider_targets", "by_object")
     if isinstance(refresh_cache, dict) and cache_key in refresh_cache:
         return refresh_cache[cache_key]
@@ -2033,3 +1955,63 @@ def _get_plan_provider_target_lookup(session) -> dict[tuple[str, str], PlanProvi
     if document_cache_key is not None and document_cache is not None:
         document_cache[document_cache_key] = targets_by_object
     return targets_by_object
+
+
+def _make_provider_session_forwarder(func):
+    def _forward(self, *args, **kwargs):
+        return func(self.session, *args, **kwargs)
+
+    _forward.__name__ = func.__name__
+    _forward.__qualname__ = "PlanProvidersAPI.{}".format(func.__name__)
+    _forward.__doc__ = func.__doc__
+    return _forward
+
+
+_PLAN_PROVIDER_SESSION_FORWARDERS = (
+    plan_provider_integrations_disabled,
+    get_plan_provider_id,
+    coerce_plan_provider_results,
+    normalize_plan_provider_action,
+    normalize_plan_provider_tool,
+    normalize_plan_provider_edit_handle,
+    normalize_plan_provider_issue,
+    normalize_plan_provider_suggestion,
+    normalize_plan_provider_section,
+    normalize_plan_provider_context_panel,
+    normalize_plan_provider_overlay,
+    normalize_plan_provider_target,
+    collect_plan_provider_contributions,
+    get_plan_provider_display_name,
+    get_plan_provider_issues,
+    get_plan_provider_suggestions,
+    get_plan_provider_tools,
+    get_plan_provider_snapshot,
+    get_plan_provider_edit_handles,
+    get_plan_provider_inspector_sections,
+    get_plan_provider_context_panels,
+    get_plan_provider_overlays,
+    get_plan_provider_overlay_mode,
+    set_plan_provider_overlay_mode,
+    get_plan_provider_targets,
+    get_plan_provider_target_for_object,
+    is_plan_provider_target_object,
+    is_plan_provider_overlay_enabled,
+    is_plan_provider_overlay_visible_for_mode,
+    is_plan_provider_overlay_visible,
+    set_plan_provider_overlay_visible,
+    queue_plan_provider_overlay_refresh,
+    queue_plan_provider_overlay_sync,
+    build_plan_semantic_record,
+    get_plan_semantic_records,
+    get_plan_edit_context,
+    get_plan_provider_action_context,
+    plan_provider_refresh_cache_scope,
+    invalidate_plan_provider_document_cache,
+)
+
+PlanProvidersAPI.get_plan_provider_overlay_visibility_key = staticmethod(
+    get_plan_provider_overlay_visibility_key
+)
+
+for _func in _PLAN_PROVIDER_SESSION_FORWARDERS:
+    setattr(PlanProvidersAPI, _func.__name__, _make_provider_session_forwarder(_func))
