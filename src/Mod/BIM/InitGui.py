@@ -1047,15 +1047,15 @@ class BIMWorkbench(Workbench):
                 controls = getattr(session, "task_panel", None)
                 widget = getattr(controls, "form", None) if controls else None
                 if widget is None:
-                    return False
+                    return None
                 if self._session is session and self._widget is widget:
-                    return True
+                    return "reused"
 
                 self._detach_controls()
                 self.layout.addWidget(widget)
                 self._session = session
                 self._widget = widget
-                return True
+                return "attached"
 
             def shouldShow(self):
                 if not scene_ready():
@@ -1066,11 +1066,15 @@ class BIMWorkbench(Workbench):
                 if session is None:
                     self._detach_controls()
                     return False
-                if not self._ensure_controls(session):
+                controls_state = self._ensure_controls(session)
+                if not controls_state:
                     return False
                 self._set_taskwatcher_context_visible(False)
                 try:
-                    session.task_panel.refresh_from_session()
+                    if controls_state == "reused":
+                        session.task_panel.refresh_selection_from_session()
+                    else:
+                        session.task_panel.refresh_from_session()
                 except Exception:
                     self._detach_controls()
                     return False
