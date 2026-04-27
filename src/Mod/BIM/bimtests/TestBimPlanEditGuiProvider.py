@@ -492,8 +492,8 @@ class BimPlanEditGuiProviderMixin:
         session.shutdown(close_dialog=False)
         self.pump_gui_events()
 
-    def test_plan_edit_wall_selection_defers_provider_refresh(self):
-        """Wall selection should not synchronously run provider integrations."""
+    def test_plan_edit_wall_selection_skips_provider_refresh(self):
+        """Wall selection should not trigger provider integration refreshes."""
 
         registry = get_plan_edit_registry()
         registry.clear()
@@ -531,10 +531,10 @@ class BimPlanEditGuiProviderMixin:
         self.assertEqual(0, provider.overlay_calls)
 
         self.pump_gui_events(timeout_ms=500)
-        self.assertGreater(provider.issue_calls, 0)
-        self.assertGreater(provider.section_calls, 0)
-        self.assertGreater(provider.tool_calls, 0)
-        self.assertGreater(provider.overlay_calls, 0)
+        self.assertEqual(0, provider.issue_calls)
+        self.assertEqual(0, provider.section_calls)
+        self.assertEqual(0, provider.tool_calls)
+        self.assertEqual(0, provider.overlay_calls)
 
         session.shutdown(close_dialog=False)
         self.pump_gui_events()
