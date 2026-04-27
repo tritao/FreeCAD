@@ -79,13 +79,6 @@ def get_plan_target_kind_for_object(session, obj):
 
 
 def get_plan_target_for_object(session, obj, parent_obj=None):
-    selection_api = getattr(session, "selection", None)
-    compat_get_plan_target_for_object = getattr(selection_api, "get_plan_target_for_object", None)
-    if (
-        callable(compat_get_plan_target_for_object)
-        and type(selection_api).__name__ != "PlanSelectionAPI"
-    ):
-        return plan_target_kinds.coerce_plan_target_ref(compat_get_plan_target_for_object(obj))
     seen = set()
     for candidate in (obj, parent_obj):
         if not candidate:
@@ -110,19 +103,6 @@ def get_plan_target_for_object(session, obj, parent_obj=None):
 
 
 def get_plan_pick_target_for_object(session, obj, parent_obj=None):
-    selection_api = getattr(session, "selection", None)
-    compat_get_plan_pick_target_for_object = getattr(
-        selection_api,
-        "get_plan_pick_target_for_object",
-        None,
-    )
-    if (
-        callable(compat_get_plan_pick_target_for_object)
-        and type(selection_api).__name__ != "PlanSelectionAPI"
-    ):
-        return plan_target_kinds.coerce_plan_target_ref(
-            compat_get_plan_pick_target_for_object(obj, parent_obj=parent_obj)
-        )
     seen = set()
     for candidate in (obj, parent_obj):
         if not candidate:

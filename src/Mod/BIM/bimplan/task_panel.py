@@ -221,9 +221,9 @@ def on_panel_closed(session, panel):
         pass
 
 
-def _normalize_task_panel_refresh_reason(reason=None, selection_only=False):
+def _normalize_task_panel_refresh_reason(reason=None):
     if reason is None:
-        return TASK_PANEL_REFRESH_SELECTION if selection_only else TASK_PANEL_REFRESH_FULL
+        return TASK_PANEL_REFRESH_FULL
     normalized_reason = str(reason or "").strip().lower()
     if normalized_reason in _TASK_PANEL_REFRESH_REASONS:
         return normalized_reason
@@ -275,11 +275,8 @@ def _refresh_task_panels(session, reason):
         session.task_panels.detach_aux_task_panel(extra_panel)
 
 
-def refresh_task_panels(session, reason=None, selection_only=False):
-    normalized_reason = _normalize_task_panel_refresh_reason(
-        reason=reason,
-        selection_only=selection_only,
-    )
+def refresh_task_panels(session, reason=None):
+    normalized_reason = _normalize_task_panel_refresh_reason(reason=reason)
     with session.performance.plan_perf_trace_span(
         "refresh_task_panels",
         reason=normalized_reason,
@@ -287,14 +284,10 @@ def refresh_task_panels(session, reason=None, selection_only=False):
         _refresh_task_panels(session, normalized_reason)
 
 
-def refresh_task_panel_status(session, selection_only=False, reason=None):
-    normalized_reason = _normalize_task_panel_refresh_reason(
-        reason=reason,
-        selection_only=selection_only,
-    )
+def refresh_task_panel_status(session, reason=None):
+    normalized_reason = _normalize_task_panel_refresh_reason(reason=reason)
     with session.performance.plan_perf_trace_span(
         "refresh_task_panel_status",
-        selection_only=bool(selection_only),
         reason=normalized_reason,
     ):
         _refresh_task_panels(session, normalized_reason)

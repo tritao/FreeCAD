@@ -156,6 +156,46 @@ def _make_perf_stub(
     )
 
 
+def _make_lifecycle_state_stub(**kwargs):
+    return SimpleNamespace(
+        **{
+            "tearing_down": False,
+            "finishing": False,
+            "ignore_selection_changes": False,
+            **kwargs,
+        }
+    )
+
+
+def _make_hover_pick_state_stub(**kwargs):
+    return SimpleNamespace(**{"last_mouse_pos": None, "dirty": False, **kwargs})
+
+
+def _make_selection_sync_state_stub(**kwargs):
+    return SimpleNamespace(
+        **{
+            "gui_selection_sync_in_progress": False,
+            "selection_observer_added": False,
+            **kwargs,
+        }
+    )
+
+
+def _make_provider_runtime_state_stub(**kwargs):
+    return SimpleNamespace(
+        **{
+            "refresh_cache": {},
+            "document_cache": {},
+            "target_collection_depth": 0,
+            **kwargs,
+        }
+    )
+
+
+def _make_provider_transient_state_stub(**kwargs):
+    return SimpleNamespace(**{"provider_selected_objects": [], **kwargs})
+
+
 class _DummyDoc:
     def __init__(self):
         self.events = []
@@ -250,7 +290,9 @@ class TestBimPlanCore(unittest.TestCase):
             return context
 
         session = SimpleNamespace(
-            _plan_provider_refresh_cache={},
+            lifecycle_state=_make_lifecycle_state_stub(),
+            provider_runtime_state=_make_provider_runtime_state_stub(refresh_cache={}),
+            provider_transient_state=_make_provider_transient_state_stub(),
             performance=_make_perf_stub(
                 trace_span=lambda _name: nullcontext(),
                 count=lambda name, value=1: perf_counts.append((name, value)),
@@ -565,9 +607,7 @@ class TestBimPlanCore(unittest.TestCase):
             _clear_plan_relation_status=lambda: None,
             _set_selected_plan_target=lambda *args, **kwargs: None,
             _clear_hovered_plan_targets=lambda *args, **kwargs: None,
-            task_panels=SimpleNamespace(
-                refresh_task_panel_status=lambda selection_only=False: None
-            ),
+            task_panels=SimpleNamespace(refresh_task_panel_status=lambda *args, **kwargs: None),
             lifecycle=SimpleNamespace(
                 has_active_embedded_tool=lambda: False,
                 cancel_embedded_tool=lambda: None,
@@ -605,9 +645,7 @@ class TestBimPlanCore(unittest.TestCase):
             _clear_plan_relation_status=lambda: None,
             _set_selected_plan_target=lambda *args, **kwargs: None,
             _get_wall_defaults=lambda: {"height": 2500},
-            task_panels=SimpleNamespace(
-                refresh_task_panel_status=lambda selection_only=False: None
-            ),
+            task_panels=SimpleNamespace(refresh_task_panel_status=lambda *args, **kwargs: None),
             lifecycle=SimpleNamespace(
                 has_active_embedded_tool=lambda: False,
                 cancel_embedded_tool=lambda: None,
@@ -849,8 +887,7 @@ class TestBimPlanCore(unittest.TestCase):
         target = SimpleNamespace(Name="Wall001")
         session = SimpleNamespace(
             selection=SimpleNamespace(get_hovered_plan_target=lambda: ("wall", target)),
-            _hover_pick_last_mouse_pos=(50.0, 60.0),
-            _hover_pick_dirty=False,
+            hover_pick_state=_make_hover_pick_state_stub(last_mouse_pos=(50.0, 60.0)),
             performance=_make_perf_stub(),
         )
 
@@ -886,8 +923,7 @@ class TestBimPlanCore(unittest.TestCase):
                 get_hovered_plan_target=lambda: ("wall", hovered),
                 get_plan_target_at_position=lambda _mouse_pos: ("wall", picked),
             ),
-            _hover_pick_last_mouse_pos=(10.0, 10.0),
-            _hover_pick_dirty=False,
+            hover_pick_state=_make_hover_pick_state_stub(last_mouse_pos=(10.0, 10.0)),
             performance=_make_perf_stub(),
         )
 
@@ -995,9 +1031,7 @@ class TestBimPlanCore(unittest.TestCase):
                 document_is_alive=lambda: True,
                 invalidate_document_dependent_plan_visuals=lambda: None,
             ),
-            task_panels=SimpleNamespace(
-                refresh_task_panel_status=lambda selection_only=False: None
-            ),
+            task_panels=SimpleNamespace(refresh_task_panel_status=lambda *args, **kwargs: None),
             providers=SimpleNamespace(
                 get_plan_edit_context=lambda: plan_context,
                 get_plan_provider_action_context=lambda payload=None: action_context,
@@ -1119,7 +1153,6 @@ class TestBimPlanCore(unittest.TestCase):
         session = SimpleNamespace(
             doc=doc,
             _is_valid_plan_target=lambda _kind, _obj: False,
-            selection=SimpleNamespace(get_plan_target_for_object=lambda _obj: (None, None)),
         )
         point = SimpleNamespace(
             documentName=_Field(""),
@@ -1127,13 +1160,17 @@ class TestBimPlanCore(unittest.TestCase):
             subElementName=_Field("ProviderOverlayPoint:object:0"),
         )
 
-        self.assertEqual(
-            (None, marker),
-            get_provider_overlay_target_from_edit_node(
-                session,
-                ("provider_overlay_point", point),
-            ),
-        )
+        with patch(
+            "bimplan.selection.picking.plan_targets.get_plan_target_for_object",
+            return_value=(None, None),
+        ):
+            self.assertEqual(
+                (None, marker),
+                get_provider_overlay_target_from_edit_node(
+                    session,
+                    ("provider_overlay_point", point),
+                ),
+            )
 
     def test_pick_provider_overlay_target_from_overlays_resolves_marker(self):
         marker = SimpleNamespace(Name="Socket001", Label="Socket 001")
@@ -1966,7 +2003,10 @@ class TestBimPlanCore(unittest.TestCase):
             ),
         )
 
-        plan_task_panel_module.refresh_task_panel_status(session, selection_only=True)
+        plan_task_panel_module.refresh_task_panel_status(
+            session,
+            reason=plan_task_panel_module.TASK_PANEL_REFRESH_SELECTION,
+        )
 
         self.assertEqual(["sanitize", "status", "viewport"], lifecycle_calls)
         self.assertEqual([plan_task_panel_module.TASK_PANEL_REFRESH_SELECTION], panel_calls)
@@ -2012,8 +2052,10 @@ class TestBimPlanCore(unittest.TestCase):
                 tearing_down=False,
                 ignore_selection_changes=False,
             ),
+            selection_sync_state=_make_selection_sync_state_stub(
+                gui_selection_sync_in_progress=True
+            ),
             performance=_make_perf_stub(),
-            _gui_selection_sync_in_progress=True,
         )
 
         with patch.object(
@@ -2033,9 +2075,12 @@ class TestBimPlanCore(unittest.TestCase):
         selected_targets = []
         session = SimpleNamespace(
             document_visuals=SimpleNamespace(document_is_alive=lambda: True),
-            _plan_provider_document_cache={},
-            _plan_provider_refresh_cache=None,
-            _provider_selected_objects=[],
+            lifecycle_state=_make_lifecycle_state_stub(),
+            provider_runtime_state=_make_provider_runtime_state_stub(
+                document_cache={},
+                refresh_cache=None,
+            ),
+            provider_transient_state=_make_provider_transient_state_stub(),
             _provider_overlay_mode="architecture",
             selection=SimpleNamespace(get_selected_plan_targets=lambda: tuple(selected_targets)),
         )
@@ -2071,9 +2116,12 @@ class TestBimPlanCore(unittest.TestCase):
         selected_targets = [SimpleNamespace(kind="wall", obj=wall1)]
         session = SimpleNamespace(
             document_visuals=SimpleNamespace(document_is_alive=lambda: True),
-            _plan_provider_document_cache={},
-            _plan_provider_refresh_cache=None,
-            _provider_selected_objects=[],
+            lifecycle_state=_make_lifecycle_state_stub(),
+            provider_runtime_state=_make_provider_runtime_state_stub(
+                document_cache={},
+                refresh_cache=None,
+            ),
+            provider_transient_state=_make_provider_transient_state_stub(),
             _provider_overlay_mode="architecture",
             selection=SimpleNamespace(get_selected_plan_targets=lambda: tuple(selected_targets)),
         )
@@ -2104,9 +2152,12 @@ class TestBimPlanCore(unittest.TestCase):
         selected_targets = [SimpleNamespace(kind="wall", obj=wall1)]
         session = SimpleNamespace(
             document_visuals=SimpleNamespace(document_is_alive=lambda: True),
-            _plan_provider_document_cache={},
-            _plan_provider_refresh_cache=None,
-            _provider_selected_objects=[],
+            lifecycle_state=_make_lifecycle_state_stub(),
+            provider_runtime_state=_make_provider_runtime_state_stub(
+                document_cache={},
+                refresh_cache=None,
+            ),
+            provider_transient_state=_make_provider_transient_state_stub(),
             _provider_overlay_mode="architecture",
             selection=SimpleNamespace(get_selected_plan_targets=lambda: tuple(selected_targets)),
         )
@@ -2134,9 +2185,12 @@ class TestBimPlanCore(unittest.TestCase):
     def test_provider_snapshot_reuses_document_cache_for_same_context(self):
         session = SimpleNamespace(
             document_visuals=SimpleNamespace(document_is_alive=lambda: True),
-            _plan_provider_document_cache={},
-            _plan_provider_refresh_cache=None,
-            _provider_selected_objects=[],
+            lifecycle_state=_make_lifecycle_state_stub(),
+            provider_runtime_state=_make_provider_runtime_state_stub(
+                document_cache={},
+                refresh_cache=None,
+            ),
+            provider_transient_state=_make_provider_transient_state_stub(),
             _provider_overlay_mode="architecture",
             selection=SimpleNamespace(get_selected_plan_targets=lambda: ()),
         )
@@ -2181,9 +2235,12 @@ class TestBimPlanCore(unittest.TestCase):
         session = SimpleNamespace(
             doc=SimpleNamespace(Name="TestDoc"),
             document_visuals=SimpleNamespace(document_is_alive=lambda: True),
-            _plan_provider_document_cache={},
-            _plan_provider_refresh_cache=None,
-            _provider_selected_objects=[],
+            lifecycle_state=_make_lifecycle_state_stub(),
+            provider_runtime_state=_make_provider_runtime_state_stub(
+                document_cache={},
+                refresh_cache=None,
+            ),
+            provider_transient_state=_make_provider_transient_state_stub(),
             _provider_overlay_mode="architecture",
             selection=SimpleNamespace(get_selected_plan_targets=lambda: ()),
         )
