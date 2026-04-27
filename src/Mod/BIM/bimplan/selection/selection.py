@@ -61,7 +61,7 @@ def _make_set_hovered_target_function(kind):
 def clear_hidden_provider_preselection(session):
     if session.lifecycle_state.tearing_down:
         return False
-    preselected_obj = _call_exported_gui_preselection_object(session)
+    preselected_obj = _get_gui_preselection_object(session)
     if preselected_obj is None:
         return False
     if not plan_selection_gui_sync.should_filter_hidden_provider_preselection_for_object(
@@ -69,7 +69,7 @@ def clear_hidden_provider_preselection(session):
     ):
         return False
     session.performance.plan_perf_count("provider_preselection_cleared_for_mode")
-    return _call_exported_clear_gui_preselection()
+    return _clear_gui_preselection()
 
 
 def sanitize_plan_target_references(session):
@@ -174,25 +174,7 @@ def _resolve_gui_selection_target(session, selected, resolution_state):
     )
 
 
-def _get_gui_preselection_object_impl(session):
-    try:
-        preselection = FreeCADGui.Selection.getPreselection()
-    except Exception:
-        return None
-    try:
-        obj = getattr(preselection, "Object", None)
-    except Exception:
-        obj = None
-    if obj is not None:
-        return obj
-    return plan_selection_gui_sync.resolve_document_object(
-        session,
-        getattr(preselection, "DocumentName", ""),
-        getattr(preselection, "ObjectName", ""),
-    )
-
-
-def _call_exported_gui_preselection_object(session):
+def _get_gui_preselection_object(session):
     try:
         import bimplan.selection as plan_selection_pkg
     except Exception:
@@ -204,38 +186,11 @@ def _call_exported_gui_preselection_object(session):
     )
     if callable(exported) and exported is not _get_gui_preselection_object:
         return exported(session)
-    return _get_gui_preselection_object_impl(session)
-
-
-def _get_gui_preselection_object(session):
-    return _call_exported_gui_preselection_object(session)
-
-
-def _clear_gui_preselection_impl():
-    try:
-        FreeCADGui.Selection.clearPreselection()
-        return True
-    except Exception:
-        return False
-
-
-def _call_exported_clear_gui_preselection():
-    try:
-        import bimplan.selection as plan_selection_pkg
-    except Exception:
-        plan_selection_pkg = None
-    exported = (
-        getattr(plan_selection_pkg, "_clear_gui_preselection", None)
-        if plan_selection_pkg is not None
-        else None
-    )
-    if callable(exported) and exported is not _clear_gui_preselection:
-        return exported()
-    return _clear_gui_preselection_impl()
+    return plan_selection_gui_sync.get_gui_preselection_object(session)
 
 
 def _clear_gui_preselection():
-    return _call_exported_clear_gui_preselection()
+    return plan_selection_gui_sync.clear_gui_preselection()
 
 
 def _choose_primary_selected_target(selected_targets, pending_target_ref=None):
