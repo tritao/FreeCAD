@@ -18,6 +18,14 @@ def _perf_trace_span(session, name, **fields):
     return session.performance.plan_perf_trace_span(name, **fields)
 
 
+def _symbol_tracker_state(session):
+    return session.overlay_tracker_state
+
+
+def _symbol_preview_state(session):
+    return session.opening_transient_state
+
+
 def get_symbol_global_placement(session, symbol, placement=None):
     current_global = session.visibility.get_plan_object_global_placement(symbol)
     if placement is None:
@@ -262,6 +270,7 @@ def create_symbol_overlay_trackers(session, symbol, color, width, tracker_store,
 
 def sync_hovered_symbol_overlay(session):
     with _perf_trace_span(session, "sync_hovered_symbol_overlay"):
+        tracker_state = _symbol_tracker_state(session)
         clear_hovered_symbol_overlay(session)
         if session.current_tool != "Select":
             return
@@ -274,17 +283,19 @@ def sync_hovered_symbol_overlay(session):
             session.hovered_symbol,
             color=(0.38, 0.62, 0.96),
             width=session.viewport.scaled_line_width(2),
-            tracker_store=session._symbol_hover_trackers,
+            tracker_store=tracker_state.symbol_hover_trackers,
         )
 
 
 def clear_hovered_symbol_overlay(session):
-    overlay_manager.finalize_trackers(session._symbol_hover_trackers)
-    session._symbol_hover_trackers = []
+    tracker_state = _symbol_tracker_state(session)
+    overlay_manager.finalize_trackers(tracker_state.symbol_hover_trackers)
+    tracker_state.symbol_hover_trackers = []
 
 
 def sync_selected_symbol_overlay(session):
     with _perf_trace_span(session, "sync_selected_symbol_overlay"):
+        tracker_state = _symbol_tracker_state(session)
         symbol = plan_selection.get_selected_plan_target_object(session, "symbol")
         if session.current_tool != "Select" or not session.visibility.is_plan_symbol_instance(
             symbol
@@ -301,14 +312,14 @@ def sync_selected_symbol_overlay(session):
         _perf_count(session, "selected_symbol_overlay_segments", len(segments))
         color = (0.12, 0.38, 0.95)
         transferred_trackers = False
-        if len(session._symbol_overlay_trackers) != len(segments):
+        if len(tracker_state.symbol_overlay_trackers) != len(segments):
             if (
-                not session._symbol_overlay_trackers
+                not tracker_state.symbol_overlay_trackers
                 and session.hovered_symbol == symbol
-                and len(session._symbol_hover_trackers) == len(segments)
+                and len(tracker_state.symbol_hover_trackers) == len(segments)
             ):
-                session._symbol_overlay_trackers = session._symbol_hover_trackers
-                session._symbol_hover_trackers = []
+                tracker_state.symbol_overlay_trackers = tracker_state.symbol_hover_trackers
+                tracker_state.symbol_hover_trackers = []
                 transferred_trackers = True
                 _perf_count(session, "selected_symbol_overlay_tracker_transfers")
             else:
@@ -321,8 +332,8 @@ def sync_selected_symbol_overlay(session):
                         swidth=width,
                         ontop=True,
                     )
-                    session._symbol_overlay_trackers.append(tracker)
-        for tracker, (start, end) in zip(session._symbol_overlay_trackers, segments):
+                    tracker_state.symbol_overlay_trackers.append(tracker)
+        for tracker, (start, end) in zip(tracker_state.symbol_overlay_trackers, segments):
             overlay_manager.set_plan_line_tracker_width(tracker, width)
             tracker.setColor(color)
             if not transferred_trackers:
@@ -332,8 +343,9 @@ def sync_selected_symbol_overlay(session):
 
 
 def clear_selected_symbol_overlay(session):
-    overlay_manager.finalize_trackers(session._symbol_overlay_trackers)
-    session._symbol_overlay_trackers = []
+    tracker_state = _symbol_tracker_state(session)
+    overlay_manager.finalize_trackers(tracker_state.symbol_overlay_trackers)
+    tracker_state.symbol_overlay_trackers = []
 
 
 def get_symbol_local_anchor(session, symbol):
@@ -527,6 +539,7 @@ def get_selected_symbol_handle_specs(session, symbol):
 
 def sync_selected_symbol_handles(session):
     with _perf_trace_span(session, "sync_selected_symbol_handles"):
+        tracker_state = _symbol_tracker_state(session)
         symbol = plan_selection.get_selected_plan_target_object(session, "symbol")
         if session.current_tool != "Select":
             clear_selected_symbol_handles(session)
@@ -549,12 +562,13 @@ def sync_selected_symbol_handles(session):
                 inactive=True,
             )
             tracker.on()
-            session._symbol_handle_trackers.append(tracker)
+            tracker_state.symbol_handle_trackers.append(tracker)
 
 
 def clear_selected_symbol_handles(session):
-    overlay_manager.finalize_trackers(session._symbol_handle_trackers)
-    session._symbol_handle_trackers = []
+    tracker_state = _symbol_tracker_state(session)
+    overlay_manager.finalize_trackers(tracker_state.symbol_handle_trackers)
+    tracker_state.symbol_handle_trackers = []
 
 
 def pick_selected_symbol_handle(session, mouse_pos, radius_px=10):
@@ -585,6 +599,7 @@ def pick_selected_symbol_handle(session, mouse_pos, radius_px=10):
 
 
 def sync_symbol_edit_preview(session, symbol, placement, guide_start=None, guide_end=None):
+    preview_state = _symbol_preview_state(session)
     session.symbols.clear_symbol_edit_preview()
     if session.current_tool not in ("Move Symbol", "Rotate Symbol"):
         return
@@ -601,7 +616,7 @@ def sync_symbol_edit_preview(session, symbol, placement, guide_start=None, guide
         symbol,
         color=preview_color,
         width=session.viewport.scaled_line_width(3),
-        tracker_store=session._symbol_edit_preview_trackers,
+        tracker_store=preview_state.symbol_edit_preview_trackers,
         placement=placement,
     )
     if guide_start is None or guide_end is None:
@@ -617,9 +632,10 @@ def sync_symbol_edit_preview(session, symbol, placement, guide_start=None, guide
     guide.p1(guide_start)
     guide.p2(guide_end)
     guide.on()
-    session._symbol_edit_preview_trackers.append(guide)
+    preview_state.symbol_edit_preview_trackers.append(guide)
 
 
 def clear_symbol_edit_preview(session):
-    overlay_manager.finalize_trackers(session._symbol_edit_preview_trackers)
-    session._symbol_edit_preview_trackers = []
+    preview_state = _symbol_preview_state(session)
+    overlay_manager.finalize_trackers(preview_state.symbol_edit_preview_trackers)
+    preview_state.symbol_edit_preview_trackers = []
