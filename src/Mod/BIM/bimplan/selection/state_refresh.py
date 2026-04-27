@@ -404,9 +404,10 @@ def refresh_selected_plan_target(session, *, force_wall_visual_resync=False):
 
 def schedule_selected_wall_reset(session, reason, obj):
     del reason, obj
-    if session._pending_selected_wall_reset or session.lifecycle_state.tearing_down:
+    selection_sync_state = session.selection_sync_state
+    if selection_sync_state.pending_selected_wall_reset or session.lifecycle_state.tearing_down:
         return
-    session._pending_selected_wall_reset = True
+    selection_sync_state.pending_selected_wall_reset = True
     try:
         from PySide import QtCore
 
@@ -416,7 +417,7 @@ def schedule_selected_wall_reset(session, reason, obj):
 
 
 def reset_selected_wall_after_change(session):
-    session._pending_selected_wall_reset = False
+    session.selection_sync_state.pending_selected_wall_reset = False
     if (
         session.lifecycle_state.tearing_down
         or session.current_tool != plan_runtime_tools.PlanTool.SELECT
@@ -441,7 +442,7 @@ def suspend_selected_wall_state(session, wall=None, clear_gui_selection=True):
         return
     if not session.selection.is_selected_plan_target("wall", wall):
         return
-    session._pending_selected_wall_reset = False
+    session.selection_sync_state.pending_selected_wall_reset = False
     session.overlays.clear_wall_grips()
     session.overlays.clear_selected_wall_overlay()
     session.selection.clear_selected_plan_target_if_matches("wall", wall)

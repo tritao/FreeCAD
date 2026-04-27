@@ -210,6 +210,8 @@ class PlanEditSession:
         self.status_text = PlanStatusTextAPI(self)
         self.task_panels = plan_task_panel.PlanTaskPanelsAPI(self)
         plan_session_state.initialize_session_state(self)
+        self.viewport_state.plan_paper_rgb = _PLAN_PAPER_RGB
+        self.viewport_state.plan_view_locked_actions = _PLAN_VIEW_LOCKED_ACTIONS
 
     @property
     def current_tool(self):
@@ -316,11 +318,11 @@ class PlanEditSession:
 
     @property
     def _plan_paper_rgb(self):
-        return _PLAN_PAPER_RGB
+        return self.viewport_state.plan_paper_rgb or _PLAN_PAPER_RGB
 
     @property
     def _plan_view_locked_actions(self):
-        return _PLAN_VIEW_LOCKED_ACTIONS
+        return self.viewport_state.plan_view_locked_actions or _PLAN_VIEW_LOCKED_ACTIONS
 
     def finish(self, cont=False, close_dialog=True, closed=False):
         del cont, closed
