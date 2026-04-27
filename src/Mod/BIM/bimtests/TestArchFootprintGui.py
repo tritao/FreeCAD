@@ -506,8 +506,8 @@ class TestArchFootprintGui(TestArchBaseGui.TestArchBaseGui):
         self.assertGreater(text_point.distanceToPoint(default_point), 1.0)
         self.assertEqual(door.IfcType, "Door")
 
-    def test_space_auto_text_position_prefers_clearance_over_minimal_shift(self):
-        """Automatic space text should keep a real gap from a nearby symbol, not just barely avoid it."""
+    def test_space_auto_text_position_keeps_a_real_gap_from_symbols(self):
+        """Automatic space text should keep a visible gap from nearby symbols."""
 
         base = self.document.addObject("Part::Feature", "BedroomLabelClearanceBase")
         base.Shape = Part.makeBox(6000, 4000, 2500)
@@ -525,7 +525,7 @@ class TestArchFootprintGui(TestArchBaseGui.TestArchBaseGui):
         text_box = ArchSpace._estimate_space_text_box(space.ViewObject)
         default_point = ArchSpace._get_default_space_text_position(space)
         faces = ArchSpace._get_space_footprint_faces(space)
-        preferred_clearance = ArchSpace._get_space_text_preferred_clearance(text_box)
+        minimum_clearance = ArchSpace._get_space_text_minimum_clearance(text_box)
         obstacle_polyline = [
             [
                 [1900.0, 900.0, 0.0],
@@ -554,10 +554,10 @@ class TestArchFootprintGui(TestArchBaseGui.TestArchBaseGui):
         self.assertEqual(len(obstacle_bounds), 1)
         self.assertTrue(ArchSpace._point_in_space_footprint(faces, text_point))
         self.assertFalse(ArchSpace._bounds_intersect_xy(text_bounds, obstacle_bounds[0]))
-        self.assertGreaterEqual(clearance, preferred_clearance - 1e-6)
+        self.assertGreaterEqual(clearance, minimum_clearance - 1e-6)
 
-    def test_space_auto_text_position_prefers_open_side_over_obstacle_column(self):
-        """Automatic space text should prefer a clearer open side over staying directly above furniture."""
+    def test_space_auto_text_position_prefers_nearby_feasible_position_over_corner_clearance(self):
+        """Automatic space text should stay near the room center once it finds a real clear gap."""
 
         base = self.document.addObject("Part::Feature", "AlignedLabelBase")
         base.Shape = Part.makeBox(5200, 4600, 2500)
@@ -586,13 +586,32 @@ class TestArchFootprintGui(TestArchBaseGui.TestArchBaseGui):
                 [250.0, 900.0, 0.0],
             ]
         ]
-
         with patch.object(
             equipment.ViewObject.Proxy,
             "_collect_local_footprint_polylines",
             return_value=obstacle_polyline,
         ):
             obstacle_bounds = ArchSpace._collect_space_label_obstacle_bounds(space, faces)
+            space_shape_bounds = space.Shape.BoundBox
+            space_bounds = (
+                float(space_shape_bounds.XMin),
+                float(space_shape_bounds.YMin),
+                float(space_shape_bounds.XMax),
+                float(space_shape_bounds.YMax),
+                float(space_shape_bounds.ZMin),
+                float(space_shape_bounds.ZMax),
+            )
+            boundary_polylines = ArchSpace._get_space_boundary_polylines(faces)
+            best_clearance_point = ArchSpace._search_best_space_text_anchor(
+                default_point,
+                faces,
+                boundary_polylines,
+                space_bounds,
+                text_box,
+                "Center",
+                obstacle_bounds,
+                0.0,
+            )
             text_point = ArchSpace._get_automatic_space_text_position(
                 space,
                 text_box=text_box,
@@ -605,7 +624,10 @@ class TestArchFootprintGui(TestArchBaseGui.TestArchBaseGui):
         self.assertTrue(ArchSpace._bounds_intersect_xy(default_bounds, obstacle_bounds[0]))
         self.assertTrue(ArchSpace._point_in_space_footprint(faces, text_point))
         self.assertFalse(ArchSpace._bounds_intersect_xy(text_bounds, obstacle_bounds[0]))
-        self.assertGreater(text_point.x, default_point.x)
+        self.assertLess(
+            ArchSpace._space_text_distance_to_default(text_point, default_point),
+            ArchSpace._space_text_distance_to_default(best_clearance_point, default_point),
+        )
 
     def test_space_auto_text_refreshes_after_equipment_footprint_update_without_recompute(self):
         """Updating an equipment plan footprint should refresh auto-positioned space labels in the live view."""
