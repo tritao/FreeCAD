@@ -257,6 +257,23 @@ def clear_selected_wall_overlay(session):
     session._wall_overlay_trackers = []
 
 
+def apply_selected_wall_selection_feedback(session, *, defer_grips=False):
+    had_wall_visuals = bool(session._grip_trackers or session._wall_overlay_trackers)
+    wall = plan_selection.get_selected_plan_target_object(session, "wall")
+    if session.current_tool == "Select" and session.selection.is_plan_selectable_wall(wall):
+        sync_selected_wall_overlay(session)
+        if defer_grips:
+            schedule_wall_grip_sync(session)
+        else:
+            sync_wall_grips(session)
+        session.viewport.request_view_redraw()
+        return
+    clear_wall_grips(session)
+    clear_selected_wall_overlay(session)
+    if had_wall_visuals:
+        session.viewport.request_view_redraw()
+
+
 def get_plan_context_junctions(session):
     if session.current_tool not in ("Select", "Join"):
         return []

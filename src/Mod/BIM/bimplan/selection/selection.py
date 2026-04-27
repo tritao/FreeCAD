@@ -1020,15 +1020,9 @@ def select_plan_target_for_plan_edit(
             schedule_gui_selection_object(session, obj)
         else:
             set_gui_selection_object(session, obj)
-    if kind == plan_target_kinds.PLAN_TARGET_WALL:
-        if defer_wall_grips:
-            session.overlays.schedule_wall_grip_sync()
-        else:
-            session.overlays.sync_selected_wall_overlay()
-            session.overlays.sync_wall_grips()
-    else:
-        session.overlays.clear_wall_grips()
-        session.overlays.clear_selected_wall_overlay()
+    session.overlays.apply_selected_wall_selection_feedback(
+        defer_grips=kind == plan_target_kinds.PLAN_TARGET_WALL and defer_wall_grips
+    )
     plan_target_dispatch.sync_selected_target_visuals(
         session,
         kinds=plan_target_kinds.CLEAR_PLAN_SELECTION_VISUAL_KINDS,
