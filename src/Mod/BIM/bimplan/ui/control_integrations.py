@@ -22,15 +22,6 @@ class PlanEditIntegrationPanelMixin:
         self._integration_refresh_queued = False
         self._integration_refresh_generation += 1
 
-    def _integration_snapshot_has_dynamic_selection_content(self, snapshot):
-        if snapshot is None:
-            return False
-        return bool(
-            getattr(snapshot, "issues", ())
-            or getattr(snapshot, "context_panels", ())
-            or getattr(snapshot, "inspector_sections", ())
-        )
-
     def _should_refresh_integration_panel_for_selection(self, selected_kind):
         if str(selected_kind or "") == "provider":
             return True
@@ -43,9 +34,7 @@ class PlanEditIntegrationPanelMixin:
         get_provider_selected_objects = getattr(status_text, "get_provider_selected_objects", None)
         if callable(get_provider_selected_objects) and get_provider_selected_objects():
             return True
-        return self._integration_snapshot_has_dynamic_selection_content(
-            getattr(self, "_integration_panel_state", None)
-        )
+        return False
 
     def _build_integration_panel(self, QtGui):
         panel, layout = self._build_section(QtGui, "Plan Guidance")

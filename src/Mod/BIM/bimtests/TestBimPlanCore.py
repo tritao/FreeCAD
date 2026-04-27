@@ -1667,7 +1667,7 @@ class TestBimPlanCore(unittest.TestCase):
         self.assertEqual([], refresh_calls)
         self.assertEqual([True], cancel_calls)
 
-    def test_selection_refresh_keeps_dynamic_integration_panel_for_wall_selection(self):
+    def test_selection_refresh_skips_dynamic_integration_panel_for_wall_selection(self):
         widget = object.__new__(PlanEditControlsWidget)
         widget.form = object()
         widget.status = object()
@@ -1706,8 +1706,8 @@ class TestBimPlanCore(unittest.TestCase):
         ):
             widget.refresh_selection_from_session()
 
-        self.assertEqual([True], refresh_calls)
-        self.assertEqual([], cancel_calls)
+        self.assertEqual([], refresh_calls)
+        self.assertEqual([True], cancel_calls)
 
     def test_plan_controls_dispose_detaches_and_defers_delete(self):
         class _Signal:
