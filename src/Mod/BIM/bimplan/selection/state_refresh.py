@@ -444,7 +444,7 @@ def suspend_selected_wall_state(session, wall=None, clear_gui_selection=True):
     session.selection.clear_selected_plan_target_if_matches("wall", wall)
     if clear_gui_selection:
         plan_selection_gui_sync.set_gui_selection(session, [])
-    session.task_panels.refresh_task_panel_status(selection_only=True)
+    session.task_panels.refresh_task_panel_status(reason="selection")
 
 
 def sync_primary_selected_plan_target_visuals(
@@ -507,7 +507,11 @@ def sync_primary_selected_plan_target_visuals(
         with session.performance.plan_perf_trace_span("sync_active_plan_target_object"):
             session.viewport.sync_active_plan_target_object()
         session.task_panels.refresh_task_panel_status(
-            selection_only=session.current_tool == plan_runtime_tools.PlanTool.SELECT
+            reason=(
+                "selection"
+                if session.current_tool == plan_runtime_tools.PlanTool.SELECT
+                else "full"
+            )
         )
 
 

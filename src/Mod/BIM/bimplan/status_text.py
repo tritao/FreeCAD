@@ -460,8 +460,9 @@ def _get_default_status_chip_action(
             action = format_provider_target_help(session, selected_obj)
         else:
             action = provider_action
-    if session._plan_relation_status_message:
-        action = session._plan_relation_status_message
+    relation_status_message = session.task_panel_state.relation_status_message
+    if relation_status_message:
+        action = relation_status_message
     if not action:
         action = translate("BIM_PlanEdit", "Work directly in the viewport")
     return action

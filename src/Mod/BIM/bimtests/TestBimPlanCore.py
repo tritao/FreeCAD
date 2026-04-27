@@ -1958,7 +1958,7 @@ class TestBimPlanCore(unittest.TestCase):
             task_panel=SimpleNamespace(
                 refresh_for_session=lambda reason: panel_calls.append(reason)
             ),
-            _aux_task_panels=[],
+            task_panel_state=SimpleNamespace(aux_task_panels=[]),
             performance=_make_perf_stub(),
             task_panels=SimpleNamespace(
                 on_panel_closed=lambda _panel: None,
@@ -1990,7 +1990,7 @@ class TestBimPlanCore(unittest.TestCase):
             task_panel=SimpleNamespace(
                 refresh_for_session=lambda reason: panel_calls.append(reason)
             ),
-            _aux_task_panels=[],
+            task_panel_state=SimpleNamespace(aux_task_panels=[]),
             performance=_make_perf_stub(),
             task_panels=SimpleNamespace(
                 on_panel_closed=lambda _panel: None,

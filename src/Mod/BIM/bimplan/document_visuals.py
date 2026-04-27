@@ -218,7 +218,7 @@ def defer_document_visual_updates(session):
                 return
             invalidate_document_dependent_plan_visuals(session)
             session.selection.refresh_primary_selected_plan_target()
-            session.task_panels.refresh_task_panel_status(selection_only=True)
+            session.task_panels.refresh_task_panel_status(reason="selection")
 
 
 def is_opening_visual_dependency(opening, obj):
@@ -744,7 +744,7 @@ def slot_undo_document(session, doc):
     invalidate_document_dependent_plan_visuals(session, recompute_opening_hosts=True)
     session.selection.sanitize_plan_target_references()
     session.selection.refresh_primary_selected_plan_target(force_wall_visual_resync=True)
-    session.task_panels.refresh_task_panel_status(selection_only=True)
+    session.task_panels.refresh_task_panel_status(reason="selection")
 
 
 def slot_redo_document(session, doc):
@@ -752,7 +752,7 @@ def slot_redo_document(session, doc):
     invalidate_document_dependent_plan_visuals(session, recompute_opening_hosts=True)
     session.selection.sanitize_plan_target_references()
     session.selection.refresh_primary_selected_plan_target(force_wall_visual_resync=True)
-    session.task_panels.refresh_task_panel_status(selection_only=True)
+    session.task_panels.refresh_task_panel_status(reason="selection")
 
 
 def slot_recomputed_document(session, doc):

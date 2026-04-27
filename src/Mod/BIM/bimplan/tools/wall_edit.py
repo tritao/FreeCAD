@@ -333,7 +333,7 @@ def queue_wall_edit_task_panel_refresh(session):
     try:
         from PySide import QtCore
     except ImportError:
-        session.task_panels.refresh_task_panel_status(selection_only=True)
+        session.task_panels.refresh_task_panel_status(reason="selection")
         return
     session._wall_edit_task_panel_refresh_queued = True
     QtCore.QTimer.singleShot(0, lambda: flush_wall_edit_task_panel_refresh(session))
@@ -344,7 +344,7 @@ def flush_wall_edit_task_panel_refresh(session):
     if session.lifecycle_state.tearing_down or not is_wall_edit_modal_active(session):
         return
     with session.performance.plan_perf_trace_event("queued_wall_edit_task_panel_refresh"):
-        session.task_panels.refresh_task_panel_status(selection_only=True)
+        session.task_panels.refresh_task_panel_status(reason="selection")
 
 
 def finish_wall_edit(session, point=None, obj=None):
@@ -814,10 +814,11 @@ def _ensure_wall_edit_preview_axis_tracker(session, DraftTrackers):
 
 
 def _update_wall_edit_preview_relation_status(session, relation_warnings):
-    previous_relation_status = session._plan_relation_status_message
+    task_panel_state = session.task_panel_state
+    previous_relation_status = task_panel_state.relation_status_message
     if relation_warnings:
         label, status, _detail = relation_warnings[0]
-        session._plan_relation_status_message = translate(
+        task_panel_state.relation_status_message = translate(
             "BIM_PlanEdit", "Preview warning: {label} ({status})"
         ).format(label=label, status=status)
     elif is_wall_edit_modal_active(session):
@@ -916,7 +917,7 @@ def update_wall_edit_preview_geometry(session, points):
     segments = _get_wall_edit_preview_segments(polylines)
     _sync_wall_edit_preview_footprint_trackers(session, segments, DraftTrackers)
 
-    if previous_relation_status != session._plan_relation_status_message:
+    if previous_relation_status != session.task_panel_state.relation_status_message:
         session.task_panels.refresh_task_panel_status()
 
     marker_size = session.viewport.scaled_marker_size(params.get_param_view("MarkerSize"))
