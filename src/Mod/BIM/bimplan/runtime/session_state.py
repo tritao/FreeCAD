@@ -309,6 +309,7 @@ class PlanOverlayCacheState:
     opening_overlay_screen_cache: dict = field(default_factory=dict)
     opening_overlay_screen_cache_projection_key: object = None
     symbol_overlay_screen_cache: dict = field(default_factory=dict)
+    symbol_overlay_screen_cache_projection_key: object = None
 
 
 @dataclass

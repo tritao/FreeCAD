@@ -1229,6 +1229,7 @@ class BimPlanEditGuiOpeningsMixin:
         ):
             session.input.on_mouse_pressed(self._FakeEventCallback(_FakeMouseEvent(250, 250)))
 
+        self.pump_gui_events()
         self._assert_no_selected_plan_target(session)
         self.assertIsNone(session._pending_selected_plan_target)
         self.assertEqual(len(session._opening_overlay_trackers), 0)

@@ -1204,18 +1204,39 @@ def activate_plan_target(
 
 
 def activate_semantic_plan_target(session, mouse_pos, event_callback=None):
+    def _hover_pick_matches_mouse():
+        last_mouse_pos = getattr(session, "_hover_pick_last_mouse_pos", None)
+        if mouse_pos is None or last_mouse_pos is None:
+            return False
+        try:
+            return (
+                abs(float(last_mouse_pos[0]) - float(mouse_pos[0])) <= 1.0
+                and abs(float(last_mouse_pos[1]) - float(mouse_pos[1])) <= 1.0
+            )
+        except Exception:
+            return False
+
     hovered_target = getattr(getattr(session, "selection", None), "get_hovered_plan_target", None)
     if callable(hovered_target):
         target_ref = plan_target_kinds.coerce_plan_target_ref(hovered_target())
     else:
         target_ref = plan_selection_picking.get_hovered_plan_target(session)
     hover_pick_dirty = bool(getattr(session, "_hover_pick_dirty", False))
+    reuse_hovered_target = (
+        target_ref.kind == plan_target_kinds.PLAN_TARGET_WALL
+        and target_ref.obj is not None
+        and not hover_pick_dirty
+        and _hover_pick_matches_mouse()
+    )
     perf = getattr(session, "performance", None)
-    if target_ref.obj is None or hover_pick_dirty:
+    if not reuse_hovered_target:
         target_ref = plan_target_kinds.coerce_plan_target_ref(
             session.selection.get_plan_target_at_position(mouse_pos)
         )
-        source = "picked_after_throttled_hover" if hover_pick_dirty else "picked"
+        if hover_pick_dirty:
+            source = "picked_after_throttled_hover"
+        else:
+            source = "picked"
         session._hover_pick_dirty = False
         if perf is not None:
             perf.plan_perf_count(f"semantic_target_source_{source}")

@@ -121,6 +121,9 @@ class PlanOverlaysAPI:
     def get_opening_overlay_screen_polylines(self, *args, **kwargs):
         return overlay_geometry.get_opening_overlay_screen_polylines(self.session, *args, **kwargs)
 
+    def get_opening_overlay_screen_bounds(self, *args, **kwargs):
+        return overlay_geometry.get_opening_overlay_screen_bounds(self.session, *args, **kwargs)
+
     def get_opening_overlay_segments(self, *args, **kwargs):
         return overlay_geometry.get_opening_overlay_segments(self.session, *args, **kwargs)
 
@@ -344,6 +347,9 @@ class PlanOverlaysAPI:
 
     def get_symbol_overlay_screen_polylines(self, *args, **kwargs):
         return symbol_overlays.get_symbol_overlay_screen_polylines(self.session, *args, **kwargs)
+
+    def get_symbol_overlay_screen_bounds(self, *args, **kwargs):
+        return symbol_overlays.get_symbol_overlay_screen_bounds(self.session, *args, **kwargs)
 
     def refresh_selected_symbol_visuals(self, *args, **kwargs):
         return symbol_overlays.refresh_selected_symbol_visuals(self.session, *args, **kwargs)

@@ -69,6 +69,8 @@ from bimplan.overlays import providers as provider_overlays
 from bimplan.selection.picking import (
     get_hovered_plan_target,
     get_plan_target_at_position,
+    pick_plan_opening_target_from_overlays,
+    pick_plan_symbol_target_from_overlays,
     get_provider_overlay_target_from_edit_node,
     pick_provider_overlay_target_from_objects_info,
     pick_provider_overlay_target_from_overlays,
@@ -839,6 +841,7 @@ class TestBimPlanCore(unittest.TestCase):
         target = SimpleNamespace(Name="Wall001")
         session = SimpleNamespace(
             selection=SimpleNamespace(get_hovered_plan_target=lambda: ("wall", target)),
+            _hover_pick_last_mouse_pos=(50.0, 60.0),
             _hover_pick_dirty=False,
             performance=_make_perf_stub(),
             _activate_plan_target=lambda *args, **kwargs: calls.append((args, kwargs)) or True,
@@ -855,6 +858,40 @@ class TestBimPlanCore(unittest.TestCase):
                         "sync_gui_selection": True,
                         "clear_hovered_kinds": ("wall", "symbol", "space", "region"),
                         "resolved_target": ("wall", target),
+                        "defer_gui_selection": True,
+                        "defer_wall_grips": True,
+                    },
+                )
+            ],
+            calls,
+        )
+
+    def test_activate_semantic_plan_target_repicks_when_hover_position_mismatches(self):
+        calls = []
+        hovered = SimpleNamespace(Name="Wall001")
+        picked = SimpleNamespace(Name="Wall002")
+        session = SimpleNamespace(
+            selection=SimpleNamespace(
+                get_hovered_plan_target=lambda: ("wall", hovered),
+                get_plan_target_at_position=lambda _mouse_pos: ("wall", picked),
+            ),
+            _hover_pick_last_mouse_pos=(10.0, 10.0),
+            _hover_pick_dirty=False,
+            performance=_make_perf_stub(),
+            _activate_plan_target=lambda *args, **kwargs: calls.append((args, kwargs)) or True,
+        )
+
+        self.assertTrue(activate_semantic_plan_target(session, (50, 60)))
+
+        self.assertEqual(
+            [
+                (
+                    ("wall", (50, 60)),
+                    {
+                        "event_callback": None,
+                        "sync_gui_selection": True,
+                        "clear_hovered_kinds": ("wall", "symbol", "space", "region"),
+                        "resolved_target": ("wall", picked),
                         "defer_gui_selection": True,
                         "defer_wall_grips": True,
                     },
@@ -1195,6 +1232,56 @@ class TestBimPlanCore(unittest.TestCase):
             ("object", marker),
             pick_provider_overlay_target_from_objects_info(session, (100, 200)),
         )
+
+    def test_pick_plan_symbol_target_from_overlays_skips_symbols_outside_screen_bounds(self):
+        symbol = SimpleNamespace(Name="Symbol001", Document=SimpleNamespace(Name="TestDoc"))
+        session = SimpleNamespace(
+            doc=SimpleNamespace(Name="TestDoc"),
+            view=SimpleNamespace(),
+            overlays=SimpleNamespace(
+                get_plan_symbol_instances=lambda: (symbol,),
+                get_symbol_overlay_screen_bounds=lambda _symbol: (300.0, 300.0, 360.0, 360.0),
+                get_symbol_overlay_screen_polylines=lambda _symbol: (_ for _ in ()).throw(
+                    AssertionError("screen polylines should not be requested")
+                ),
+                get_symbol_overlay_segments=lambda _symbol: (_ for _ in ()).throw(
+                    AssertionError("segments should not be requested")
+                ),
+            ),
+            visibility=SimpleNamespace(is_plan_symbol_instance=lambda obj: obj is symbol),
+            performance=_make_perf_stub(),
+        )
+
+        self.assertIsNone(pick_plan_symbol_target_from_overlays(session, (100, 100), radius_px=10))
+
+    def test_pick_plan_opening_target_from_overlays_skips_openings_outside_screen_bounds(self):
+        opening = SimpleNamespace(Name="Window001", Document=SimpleNamespace(Name="TestDoc"))
+        session = SimpleNamespace(
+            doc=SimpleNamespace(Name="TestDoc"),
+            view=SimpleNamespace(),
+            viewport=SimpleNamespace(
+                get_plan_point_from_mouse_pos=lambda _mouse_pos: FreeCAD.Vector()
+            ),
+            overlays=SimpleNamespace(
+                get_opening_overlay_screen_bounds=lambda _opening: (300.0, 300.0, 360.0, 360.0),
+                get_opening_overlay_screen_polylines=lambda _opening: (_ for _ in ()).throw(
+                    AssertionError("screen polylines should not be requested")
+                ),
+            ),
+            openings=SimpleNamespace(
+                is_hosted_opening_object=lambda obj: obj is opening,
+                get_plan_opening_instances=lambda: (opening,),
+            ),
+            performance=_make_perf_stub(),
+        )
+
+        with patch(
+            "bimplan.selection.picking.should_skip_opening_by_plan_bounds",
+            return_value=False,
+        ):
+            self.assertIsNone(
+                pick_plan_opening_target_from_overlays(session, (100, 100), radius_px=10)
+            )
 
     def test_get_plan_target_at_position_prefers_provider_overlay_over_space_fallback(self):
         space = SimpleNamespace(

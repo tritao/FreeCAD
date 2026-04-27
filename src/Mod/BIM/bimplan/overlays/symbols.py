@@ -150,12 +150,16 @@ def get_symbol_overlay_screen_polylines(session, symbol):
     projection_key = session.viewport.get_plan_projection_cache_key()
     if projection_key is None:
         return ()
+    cache_state = session.overlay_cache_state
+    if projection_key != cache_state.symbol_overlay_screen_cache_projection_key:
+        cache_state.symbol_overlay_screen_cache = {}
+        cache_state.symbol_overlay_screen_cache_projection_key = projection_key
     symbol_key = session.visibility.get_document_object_key(symbol)
     if symbol_key is None:
         return ()
     geometry_key = _get_symbol_screen_geometry_key(session, symbol)
     cache_key = (projection_key, geometry_key)
-    cached = session.overlay_cache_state.symbol_overlay_screen_cache.get(symbol_key)
+    cached = cache_state.symbol_overlay_screen_cache.get(symbol_key)
     if cached is not None and cached[0] == cache_key:
         _perf_count(session, "symbol_overlay_screen_polylines_cache_hits")
         return cached[1]
@@ -174,8 +178,57 @@ def get_symbol_overlay_screen_polylines(session, symbol):
         if len(projected) >= 2:
             projected_polylines.append(tuple(projected))
     result = tuple(projected_polylines)
-    session.overlay_cache_state.symbol_overlay_screen_cache[symbol_key] = (cache_key, result)
+    cache_state.symbol_overlay_screen_cache[symbol_key] = (
+        cache_key,
+        result,
+        _get_screen_polyline_bounds(result),
+    )
     return result
+
+
+def _get_screen_polyline_bounds(projected_polylines):
+    min_x = None
+    min_y = None
+    max_x = None
+    max_y = None
+    for polyline in projected_polylines or ():
+        for point in polyline or ():
+            try:
+                point_x = float(point[0])
+                point_y = float(point[1])
+            except Exception:
+                continue
+            min_x = point_x if min_x is None else min(min_x, point_x)
+            min_y = point_y if min_y is None else min(min_y, point_y)
+            max_x = point_x if max_x is None else max(max_x, point_x)
+            max_y = point_y if max_y is None else max(max_y, point_y)
+    if min_x is None:
+        return None
+    return (min_x, min_y, max_x, max_y)
+
+
+def get_symbol_overlay_screen_bounds(session, symbol):
+    if not session.visibility.is_plan_symbol_instance(symbol) or not session.view:
+        return None
+    projection_key = session.viewport.get_plan_projection_cache_key()
+    if projection_key is None:
+        return None
+    cache_state = session.overlay_cache_state
+    if projection_key != cache_state.symbol_overlay_screen_cache_projection_key:
+        cache_state.symbol_overlay_screen_cache = {}
+        cache_state.symbol_overlay_screen_cache_projection_key = projection_key
+    symbol_key = session.visibility.get_document_object_key(symbol)
+    if symbol_key is None:
+        return None
+    geometry_key = _get_symbol_screen_geometry_key(session, symbol)
+    cache_key = (projection_key, geometry_key)
+    cached = cache_state.symbol_overlay_screen_cache.get(symbol_key)
+    if cached is None or cached[0] != cache_key:
+        get_symbol_overlay_screen_polylines(session, symbol)
+        cached = cache_state.symbol_overlay_screen_cache.get(symbol_key)
+    if cached is None or cached[0] != cache_key:
+        return None
+    return cached[2]
 
 
 def refresh_selected_symbol_visuals(session):

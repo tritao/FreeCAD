@@ -2641,6 +2641,7 @@ class BimPlanEditGuiWallsMixin:
         self.pump_gui_events()
 
         session.selection.set_hovered_wall(wall)
+        session._hover_pick_last_mouse_pos = (250.0, 250.0)
         self.assertIs(session.hovered_wall, wall)
 
         with (

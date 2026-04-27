@@ -476,6 +476,24 @@ def _pick_best_target_from_projected_polylines(
     return best_target
 
 
+def _screen_bounds_intersects_pick_radius(bounds, mouse_pos, radius_px):
+    if bounds is None or mouse_pos is None:
+        return True
+    try:
+        cursor_x = float(mouse_pos[0])
+        cursor_y = float(mouse_pos[1])
+        min_x, min_y, max_x, max_y = (float(value) for value in bounds)
+        radius_px = float(radius_px)
+    except Exception:
+        return True
+    return not (
+        cursor_x < (min_x - radius_px)
+        or cursor_x > (max_x + radius_px)
+        or cursor_y < (min_y - radius_px)
+        or cursor_y > (max_y + radius_px)
+    )
+
+
 def _pick_best_target_from_overlay_segments(session, objects, get_segments, mouse_pos, radius_px):
     radius_sq = float(radius_px) * float(radius_px)
     best_target = None
@@ -501,9 +519,17 @@ def pick_plan_symbol_target_from_overlays(session, mouse_pos, radius_px=10):
         if not session.doc or not session.view or not mouse_pos:
             return None
         symbol_instances = tuple(session.overlays.get_plan_symbol_instances() or ())
+        filtered_symbols = []
+        for symbol in symbol_instances:
+            _perf_count(session, "symbol_overlay_pick_objects_scanned")
+            bounds = session.overlays.get_symbol_overlay_screen_bounds(symbol)
+            if not _screen_bounds_intersects_pick_radius(bounds, mouse_pos, radius_px):
+                _perf_count(session, "symbol_overlay_pick_bounds_skipped")
+                continue
+            filtered_symbols.append(symbol)
         best_symbol = _pick_best_target_from_projected_polylines(
             session,
-            symbol_instances,
+            filtered_symbols,
             session.overlays.get_symbol_overlay_screen_polylines,
             mouse_pos,
             radius_px,
@@ -513,7 +539,7 @@ def pick_plan_symbol_target_from_overlays(session, mouse_pos, radius_px=10):
         if best_symbol is None:
             best_symbol = _pick_best_target_from_overlay_segments(
                 session,
-                symbol_instances,
+                filtered_symbols,
                 session.overlays.get_symbol_overlay_segments,
                 mouse_pos,
                 radius_px,
@@ -551,6 +577,10 @@ def pick_plan_opening_target_from_overlays(session, mouse_pos, radius_px=10, can
             seen_names.add(name)
             if should_skip_opening_by_plan_bounds(session, obj, plan_point, radius_px):
                 _perf_count(session, "opening_overlay_pick_bounds_skipped")
+                continue
+            screen_bounds = session.overlays.get_opening_overlay_screen_bounds(obj)
+            if not _screen_bounds_intersects_pick_radius(screen_bounds, mouse_pos, radius_px):
+                _perf_count(session, "opening_overlay_pick_screen_bounds_skipped")
                 continue
             filtered_objects.append(obj)
         best_opening = _pick_best_target_from_projected_polylines(
