@@ -689,8 +689,6 @@ _PLAN_EDIT_SESSION_STATE_PROPERTIES = (
         (
             ("_viewport_status_chip", "status_chip", _coerce_identity),
             ("_render_manager", "render_manager", _coerce_identity),
-            ("_plan_paper_rgb", "plan_paper_rgb", _coerce_identity),
-            ("_plan_view_locked_actions", "plan_view_locked_actions", _coerce_tuple),
             ("_saved_camera", "saved_camera", _coerce_identity),
             ("_saved_camera_type", "saved_camera_type", _coerce_identity),
             ("_saved_navigation_style", "saved_navigation_style", _coerce_identity),
