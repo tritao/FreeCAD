@@ -22,6 +22,10 @@ def _perf_describe_object(session, obj):
     return session.performance.plan_perf_describe_object(obj)
 
 
+def _viewport_state(session):
+    return session.viewport_state
+
+
 def _get_callable(obj, method_name):
     return runtime_capabilities.get_callable(obj, method_name)
 
@@ -413,7 +417,8 @@ def get_object_storeys(session, obj):
 
 
 def capture_object_view_state(session):
-    session._saved_object_view_state = {}
+    viewport_state = _viewport_state(session)
+    viewport_state.saved_object_view_state = {}
     if not session.doc:
         return
     with _perf_trace_span(session, "capture_object_view_state_objects"):
@@ -423,6 +428,7 @@ def capture_object_view_state(session):
 
 
 def register_object_view_state(session, obj):
+    viewport_state = _viewport_state(session)
     if not obj:
         return
     view_object = getattr(obj, "ViewObject", None)
@@ -430,7 +436,7 @@ def register_object_view_state(session, obj):
         return
     state = _capture_view_object_state(view_object, ("Visibility", "Transparency", "Selectable"))
     if state:
-        session._saved_object_view_state[obj.Name] = state
+        viewport_state.saved_object_view_state[obj.Name] = state
 
 
 def add_object_to_active_storey(session, obj):
@@ -479,7 +485,8 @@ def register_plan_objects(session, objects):
 
 
 def restore_object_view_state(session):
-    if not session.doc or not session._saved_object_view_state:
+    viewport_state = _viewport_state(session)
+    if not session.doc or not viewport_state.saved_object_view_state:
         return
     try:
         doc = session.doc
@@ -487,7 +494,7 @@ def restore_object_view_state(session):
     except Exception:
         session.doc = None
         return
-    for obj_name, state in session._saved_object_view_state.items():
+    for obj_name, state in viewport_state.saved_object_view_state.items():
         try:
             obj = doc.getObject(obj_name)
         except Exception:
@@ -560,12 +567,13 @@ def _apply_supported_object_view_state(session, obj, view_object, state):
 
 
 def _apply_global_plan_visibility(session):
+    viewport_state = _viewport_state(session)
     with _perf_trace_span(session, "restore_object_view_state_for_global_plan"):
         restore_object_view_state(session)
     for obj in session.doc.Objects:
         _perf_count(session, "storey_visibility_objects_scanned")
         view_object = getattr(obj, "ViewObject", None)
-        state = session._saved_object_view_state.get(obj.Name, {})
+        state = viewport_state.saved_object_view_state.get(obj.Name, {})
         if not is_supported_plan_object(session, obj):
             _perf_count(session, "storey_visibility_hidden_unsupported")
             apply_hidden_object_state(view_object)
@@ -612,12 +620,13 @@ def _apply_storey_visibility_for_other_storey_object(session, obj, view_object, 
 
 
 def apply_storey_visibility(session):
+    viewport_state = _viewport_state(session)
     with _perf_trace_span(
         session,
         "apply_storey_visibility",
         active_storey=_perf_describe_object(session, session.active_storey),
     ):
-        if not session.doc or not session._saved_object_view_state:
+        if not session.doc or not viewport_state.saved_object_view_state:
             return
 
         active_storey_name = getattr(session.active_storey, "Name", None)
@@ -629,7 +638,7 @@ def apply_storey_visibility(session):
         for obj in session.doc.Objects:
             _perf_count(session, "storey_visibility_objects_scanned")
             view_object = getattr(obj, "ViewObject", None)
-            state = session._saved_object_view_state.get(obj.Name)
+            state = viewport_state.saved_object_view_state.get(obj.Name)
             if not view_object or not state:
                 _perf_count(session, "storey_visibility_objects_skipped_no_view_state")
                 continue
