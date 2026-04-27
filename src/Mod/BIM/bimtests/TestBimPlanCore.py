@@ -102,6 +102,7 @@ from bimplan.selection import (
     activate_semantic_plan_target,
     resolve_selected_target_for_gui_object,
 )
+from bimplan.selection import selection as plan_selection_module
 from bimplan.tools.spaces import (
     start_space_region_pick,
     create_space_from_current_selection,
@@ -1708,6 +1709,25 @@ class TestBimPlanCore(unittest.TestCase):
 
         self.assertEqual([], refresh_calls)
         self.assertEqual([True], cancel_calls)
+
+    def test_selection_observer_clear_skips_synthetic_gui_selection_sync(self):
+        session = SimpleNamespace(
+            lifecycle_state=SimpleNamespace(
+                tearing_down=False,
+                ignore_selection_changes=False,
+            ),
+            performance=_make_perf_stub(),
+            _gui_selection_sync_in_progress=True,
+        )
+
+        with patch.object(
+            plan_selection_module,
+            "get_selected_plan_target",
+            return_value=("wall", object()),
+        ), patch.object(plan_selection_module, "schedule_selection_refresh") as schedule_refresh:
+            plan_selection_module.selection_observer_clear(session, "TestDoc")
+
+        schedule_refresh.assert_not_called()
 
     def test_plan_controls_dispose_detaches_and_defers_delete(self):
         class _Signal:

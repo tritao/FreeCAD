@@ -1558,6 +1558,25 @@ def _reset_gui_selection_sync_state(session):
     session._queued_gui_selection_object = None
 
 
+def _finish_gui_selection_sync(session, generation=None):
+    current_generation = getattr(session, "_gui_selection_sync_generation", 0)
+    if generation is not None and generation != current_generation:
+        return
+    session._gui_selection_sync_in_progress = False
+
+
+def _schedule_finish_gui_selection_sync(session, generation):
+    try:
+        from PySide import QtCore
+
+        QtCore.QTimer.singleShot(
+            0,
+            lambda generation=generation: _finish_gui_selection_sync(session, generation),
+        )
+    except Exception:
+        _finish_gui_selection_sync(session, generation)
+
+
 def _apply_gui_selection(session, selection):
     normalized_selection = normalize_gui_object_selection(session, selection)
     with session.performance.plan_perf_trace_span("set_gui_selection"):
@@ -1627,7 +1646,12 @@ def run_scheduled_gui_selection_sync(session, generation=None):
             session._gui_selection_sync_queued = False
             session._queued_gui_selection_object = None
             return
-        set_gui_selection_object(session, obj)
+        session._gui_selection_sync_in_progress = True
+        current_generation = session._gui_selection_sync_generation
+        try:
+            set_gui_selection_object(session, obj)
+        finally:
+            _schedule_finish_gui_selection_sync(session, current_generation)
 
 
 def attach_selection_observer(session):
@@ -1696,7 +1720,11 @@ def _trace_selection_observer_event(session, event_name, **fields):
 
 def _should_skip_selection_observer_callback(session):
     session.performance.plan_perf_count("selection_observer_callbacks")
-    return session.lifecycle_state.tearing_down or session.lifecycle_state.ignore_selection_changes
+    return (
+        session.lifecycle_state.tearing_down
+        or session.lifecycle_state.ignore_selection_changes
+        or getattr(session, "_gui_selection_sync_in_progress", False)
+    )
 
 
 def _schedule_selection_refresh_from_observer(session):
