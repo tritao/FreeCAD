@@ -165,13 +165,13 @@ class BimPlanEditGuiOpeningsMixin:
             before = {obj.Name for obj in self.document.Objects}
             self.assertTrue(session.lifecycle.activate_window_tool())
             self.assertEqual(session.current_tool, "Window")
-            self.assertIs(session._window_host_wall, wall)
+            self.assertIs(session.creation_preview_state.window_host_wall, wall)
             self.assertIn("callback", captured)
             self.assertIn("movecallback", captured)
 
             point = FreeCAD.Vector(1200, 100, 0)
             captured["movecallback"](point, None)
-            self.assertEqual(4, len(session._window_preview_trackers))
+            self.assertEqual(4, len(session.creation_preview_state.window_preview_trackers))
 
             captured["callback"](point, None)
 
@@ -237,12 +237,12 @@ class BimPlanEditGuiOpeningsMixin:
                 session.selection.select_wall_for_plan_edit(wall_a, sync_gui_selection=True)
             )
             self.assertTrue(session.lifecycle.activate_window_tool())
-            self.assertIs(session._window_host_wall, wall_a)
+            self.assertIs(session.creation_preview_state.window_host_wall, wall_a)
 
             before = {obj.Name for obj in self.document.Objects}
             point = FreeCAD.Vector(2100, 1200, 0)
             captured["movecallback"](point, None)
-            self.assertIs(session._window_host_wall, wall_b)
+            self.assertIs(session.creation_preview_state.window_host_wall, wall_b)
 
             captured["callback"](point, None)
 

@@ -24,25 +24,25 @@ class PlanViewportAPI:
     def capture_view_action_state(self):
         return capture_view_action_state(
             self.session,
-            self.session._plan_view_locked_actions,
+            self.session.viewport_state.plan_view_locked_actions,
         )
 
     def apply_locked_view_actions(self):
         return apply_locked_view_actions(
             self.session,
-            self.session._plan_view_locked_actions,
+            self.session.viewport_state.plan_view_locked_actions,
         )
 
     def apply_plan_background_override(self):
         return apply_plan_background_override(
             self.session,
-            self.session._plan_paper_rgb,
+            self.session.viewport_state.plan_paper_rgb,
         )
 
     def apply_plan_navigation_profile(self):
         return apply_plan_navigation_profile(
             self.session,
-            self.session._plan_view_locked_actions,
+            self.session.viewport_state.plan_view_locked_actions,
         )
 
     def ensure_viewport_status_chip(self):
@@ -481,7 +481,7 @@ def apply_plan_view(session, fit=True):
         with session.performance.plan_perf_trace_span("apply_plan_view_footprint_override"):
             try:
                 session.viewer.setOverrideMode("Footprint")
-                apply_plan_background_override(session, session._plan_paper_rgb)
+                apply_plan_background_override(session, session.viewport_state.plan_paper_rgb)
             except RuntimeError:
                 session.viewer = None
 
@@ -503,7 +503,7 @@ def apply_plan_view(session, fit=True):
             session.viewport.set_active_object(session.active_storey)
 
     with session.performance.plan_perf_trace_span("apply_plan_view_navigation_profile"):
-        apply_plan_navigation_profile(session, session._plan_view_locked_actions)
+        apply_plan_navigation_profile(session, session.viewport_state.plan_view_locked_actions)
 
     if fit and session.view:
         with session.performance.plan_perf_trace_span("apply_plan_view_fit_all"):

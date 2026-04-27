@@ -182,15 +182,17 @@ def run_scheduled_gui_selection_sync(session, generation=None):
 
 
 def attach_selection_observer(session):
-    if not session._selection_observer_added:
+    selection_sync_state = session.selection_sync_state
+    if not selection_sync_state.selection_observer_added:
         FreeCADGui.Selection.addObserver(session)
-        session._selection_observer_added = True
+        selection_sync_state.selection_observer_added = True
 
 
 def detach_selection_observer(session):
-    if session._selection_observer_added:
+    selection_sync_state = session.selection_sync_state
+    if selection_sync_state.selection_observer_added:
         FreeCADGui.Selection.removeObserver(session)
-        session._selection_observer_added = False
+        selection_sync_state.selection_observer_added = False
 
 
 def schedule_selection_refresh(session):

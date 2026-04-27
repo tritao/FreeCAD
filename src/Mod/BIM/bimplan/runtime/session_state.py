@@ -181,6 +181,8 @@ class PlanSelectionSyncState:
     queued_gui_selection_object: object = None
     gui_selection_sync_in_progress: bool = False
     clear_plan_selection_state_queued: bool = False
+    selection_observer_added: bool = False
+    pending_selected_wall_reset: bool = False
 
 
 @dataclass
@@ -211,6 +213,8 @@ class PlanWallGripState:
 class PlanViewportState:
     status_chip: object = None
     render_manager: object = None
+    plan_paper_rgb: object = None
+    plan_view_locked_actions: object = None
     saved_camera: object = None
     saved_camera_type: object = None
     saved_navigation_style: object = None
@@ -645,6 +649,8 @@ _PLAN_EDIT_SESSION_STATE_PROPERTIES = (
                 "clear_plan_selection_state_queued",
                 _coerce_bool,
             ),
+            ("_selection_observer_added", "selection_observer_added", _coerce_bool),
+            ("_pending_selected_wall_reset", "pending_selected_wall_reset", _coerce_bool),
         ),
     ),
     (
@@ -683,6 +689,8 @@ _PLAN_EDIT_SESSION_STATE_PROPERTIES = (
         (
             ("_viewport_status_chip", "status_chip", _coerce_identity),
             ("_render_manager", "render_manager", _coerce_identity),
+            ("_plan_paper_rgb", "plan_paper_rgb", _coerce_identity),
+            ("_plan_view_locked_actions", "plan_view_locked_actions", _coerce_tuple),
             ("_saved_camera", "saved_camera", _coerce_identity),
             ("_saved_camera_type", "saved_camera_type", _coerce_identity),
             ("_saved_navigation_style", "saved_navigation_style", _coerce_identity),
@@ -898,9 +906,9 @@ def initialize_session_state(session):
     session._plan_join_type = "Miter"
     session.storeys = []
     session.active_storey = None
-    session._selection_observer_added = False
+    session.selection_sync_state.selection_observer_added = False
+    session.selection_sync_state.pending_selected_wall_reset = False
     session.document_visual_state.document_observer_added = False
-    session._pending_selected_wall_reset = False
     session._plan_edit_params = FreeCAD.ParamGet(
         "User parameter:BaseApp/Preferences/Mod/BIM/PlanEdit"
     )

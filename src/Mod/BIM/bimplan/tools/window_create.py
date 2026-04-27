@@ -284,6 +284,7 @@ def get_window_host_wall(session):
 
 
 def activate_window_tool(session):
+    creation_preview_state = session.creation_preview_state
     wall = get_window_host_wall(session)
     if not wall:
         FreeCAD.Console.PrintWarning(
@@ -293,7 +294,7 @@ def activate_window_tool(session):
 
     session.selection.set_selected_plan_target("wall", wall)
     session.selection.set_gui_selection_object(wall)
-    session._window_host_wall = wall
+    creation_preview_state.window_host_wall = wall
     session.current_tool = "Window"
     FreeCAD.activeDraftCommand = session
     try:
@@ -321,12 +322,16 @@ def activate_window_tool(session):
 
 
 def has_active_window_tool(session):
-    return session.current_tool == "Window" or session._window_host_wall is not None
+    return (
+        session.current_tool == "Window"
+        or session.creation_preview_state.window_host_wall is not None
+    )
 
 
 def clear_window_preview(session):
-    session.overlays.finalize_trackers(session._window_preview_trackers)
-    session._window_preview_trackers = []
+    creation_preview_state = session.creation_preview_state
+    session.overlays.finalize_trackers(creation_preview_state.window_preview_trackers)
+    creation_preview_state.window_preview_trackers = []
 
 
 def cancel_window_tool(session, refresh=True):
@@ -334,7 +339,7 @@ def cancel_window_tool(session, refresh=True):
         return False
     session.lifecycle.stop_snapper()
     clear_window_preview(session)
-    session._window_host_wall = None
+    session.creation_preview_state.window_host_wall = None
     FreeCAD.activeDraftCommand = None
     session.current_tool = "Select"
     if refresh:
@@ -479,7 +484,7 @@ def resolve_window_host_wall(session, snap_object=None, snap_info=None):
     wall = _get_wall_from_snap_object(session, resolved_snap_object)
     if wall is not None:
         return wall
-    wall = getattr(session, "_window_host_wall", None)
+    wall = session.creation_preview_state.window_host_wall
     if session.selection.is_plan_selectable_wall(wall):
         return wall
     return get_window_host_wall(session)
@@ -536,9 +541,10 @@ def _get_window_preview_points(session, point, wall=None):
 
 
 def update_window_tool_preview(session, point=None, info=None):
+    creation_preview_state = session.creation_preview_state
     wall = resolve_window_host_wall(session, snap_object=info, snap_info=info)
     if wall is not None:
-        session._window_host_wall = wall
+        creation_preview_state.window_host_wall = wall
     points = _get_window_preview_points(session, point, wall=wall)
     clear_window_preview(session)
     if len(points) != 4:
@@ -560,7 +566,7 @@ def update_window_tool_preview(session, point=None, info=None):
         tracker.p1(start)
         tracker.p2(end)
         tracker.on()
-        session._window_preview_trackers.append(tracker)
+        creation_preview_state.window_preview_trackers.append(tracker)
 
 
 def _add_rectangle(sketch, x_min, y_min, x_max, y_max):
