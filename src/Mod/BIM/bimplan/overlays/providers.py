@@ -34,11 +34,25 @@ def _perf_trace_span(session, name, **fields):
     return session.performance.plan_perf_trace_span(name, **fields)
 
 
+def _provider_tracker_state(session):
+    return session.overlay_tracker_state
+
+
+def _provider_overlay_state(session):
+    return session.provider_overlay_read_state
+
+
+def _provider_transient_state(session):
+    return session.provider_transient_state
+
+
 def sync_provider_overlays(session):
     with _perf_trace_span(session, "sync_provider_overlays"):
+        tracker_state = _provider_tracker_state(session)
+        overlay_state = _provider_overlay_state(session)
         if (
             session.lifecycle_state.tearing_down
-            or getattr(session, "_finishing", False)
+            or session.lifecycle_state.finishing
             or not session.document_visuals.document_is_alive()
             or session.current_tool not in ("Select", "Provider Point")
             or plan_provider_runtime.plan_provider_integrations_disabled(session)
@@ -57,12 +71,12 @@ def sync_provider_overlays(session):
             overlays,
             round(float(session.viewport.get_plan_overlay_scale()), 4),
         )
-        if render_state == session._provider_overlay_state:
+        if render_state == overlay_state.render_state:
             _perf_count(session, "provider_overlay_cache_hits")
             return
 
         clear_provider_overlays(session)
-        session._provider_overlay_state = render_state
+        overlay_state.render_state = render_state
 
         try:
             import draftguitools.gui_trackers as DraftTrackers
@@ -71,17 +85,22 @@ def sync_provider_overlays(session):
 
         for overlay in overlays:
             _create_provider_overlay_trackers(session, DraftTrackers, overlay)
-        _perf_count(session, "provider_overlay_trackers", len(session._provider_overlay_trackers))
+        _perf_count(
+            session, "provider_overlay_trackers", len(tracker_state.provider_overlay_trackers)
+        )
 
 
 def clear_provider_overlays(session):
-    overlay_manager.finalize_trackers(session._provider_overlay_trackers)
-    session._provider_overlay_trackers = []
-    session._provider_overlay_state = None
+    tracker_state = _provider_tracker_state(session)
+    overlay_state = _provider_overlay_state(session)
+    overlay_manager.finalize_trackers(tracker_state.provider_overlay_trackers)
+    tracker_state.provider_overlay_trackers = []
+    overlay_state.render_state = None
 
 
 def sync_hovered_provider_overlay(session):
     with _perf_trace_span(session, "sync_hovered_provider_overlay"):
+        tracker_state = _provider_tracker_state(session)
         clear_hovered_provider_overlay(session)
         if session.current_tool != "Select":
             return
@@ -111,25 +130,32 @@ def sync_hovered_provider_overlay(session):
             tracker.p1(spec["start"])
             tracker.p2(spec["end"])
             tracker.on()
-            session._provider_hover_trackers.append(tracker)
-        _perf_count(session, "hovered_provider_trackers", len(session._provider_hover_trackers))
+            tracker_state.provider_hover_trackers.append(tracker)
+        _perf_count(
+            session, "hovered_provider_trackers", len(tracker_state.provider_hover_trackers)
+        )
 
 
 def clear_hovered_provider_overlay(session):
-    overlay_manager.finalize_trackers(session._provider_hover_trackers)
-    session._provider_hover_trackers = []
+    tracker_state = _provider_tracker_state(session)
+    overlay_manager.finalize_trackers(tracker_state.provider_hover_trackers)
+    tracker_state.provider_hover_trackers = []
 
 
 def _get_selected_provider_overlay_pool(session):
+    tracker_state = _provider_tracker_state(session)
+    provider_state = _provider_transient_state(session)
     return overlay_tracker_pool.TrackerPool(
-        trackers=list(session._provider_selected_trackers),
-        render_state=session._selected_provider_overlay_render_state,
+        trackers=list(tracker_state.provider_selected_trackers),
+        render_state=provider_state.selected_provider_overlay_render_state,
     )
 
 
 def _store_selected_provider_overlay_pool(session, pool):
-    session._provider_selected_trackers = list(pool.trackers)
-    session._selected_provider_overlay_render_state = pool.render_state
+    tracker_state = _provider_tracker_state(session)
+    provider_state = _provider_transient_state(session)
+    tracker_state.provider_selected_trackers = list(pool.trackers)
+    provider_state.selected_provider_overlay_render_state = pool.render_state
 
 
 def _get_provider_point_preview_pool(session):
@@ -240,6 +266,7 @@ def get_selected_provider_handle_specs(session, provider_obj):
 
 def sync_selected_provider_handles(session):
     with _perf_trace_span(session, "sync_selected_provider_handles"):
+        provider_state = _provider_transient_state(session)
         provider_obj = plan_selection.get_selected_plan_target_object(session, "provider")
         if session.current_tool != "Select":
             clear_selected_provider_handles(session)
@@ -262,8 +289,8 @@ def sync_selected_provider_handles(session):
                 for idx, handle, point, marker in specs
             ),
         )
-        if session._selected_provider_handle_render_state == render_state and len(
-            session._provider_handle_trackers
+        if provider_state.selected_provider_handle_render_state == render_state and len(
+            provider_state.provider_handle_trackers
         ) == len(specs):
             _perf_count(session, "selected_provider_handle_cache_hits")
             return
@@ -283,14 +310,15 @@ def sync_selected_provider_handles(session):
                 kwargs["marker"] = marker
             tracker = DraftTrackers.editTracker(**kwargs)
             tracker.on()
-            session._provider_handle_trackers.append(tracker)
-        session._selected_provider_handle_render_state = render_state
+            provider_state.provider_handle_trackers.append(tracker)
+        provider_state.selected_provider_handle_render_state = render_state
 
 
 def clear_selected_provider_handles(session):
-    overlay_manager.finalize_trackers(session._provider_handle_trackers)
-    session._provider_handle_trackers = []
-    session._selected_provider_handle_render_state = None
+    provider_state = _provider_transient_state(session)
+    overlay_manager.finalize_trackers(provider_state.provider_handle_trackers)
+    provider_state.provider_handle_trackers = []
+    provider_state.selected_provider_handle_render_state = None
 
 
 def pick_selected_provider_handle(session, mouse_pos, radius_px=10):
@@ -654,11 +682,12 @@ def _get_provider_segment_render_state(session, specs):
 
 
 def _get_selected_provider_objects(session):
+    provider_state = _provider_transient_state(session)
     selected_objects = []
     seen = set()
     for provider_obj in (
         plan_selection.get_selected_plan_target_object(session, "provider"),
-        *tuple(getattr(session, "_get_provider_selected_objects", lambda: ())() or ()),
+        *tuple(provider_state.provider_selected_objects or ()),
     ):
         if provider_obj is None:
             continue
@@ -797,6 +826,7 @@ def _create_provider_overlay_trackers(session, DraftTrackers, overlay):
 
 
 def _create_polyline_trackers(session, DraftTrackers, label, polyline, *, color, width, dotted):
+    tracker_state = _provider_tracker_state(session)
     points = tuple(_to_vector(point) for point in tuple(polyline or ()))
     points = tuple(point for point in points if point is not None)
     if len(points) < 2:
@@ -813,7 +843,7 @@ def _create_polyline_trackers(session, DraftTrackers, label, polyline, *, color,
         tracker.p1(start)
         tracker.p2(end)
         tracker.on()
-        session._provider_overlay_trackers.append(tracker)
+        tracker_state.provider_overlay_trackers.append(tracker)
 
 
 def _create_point_marker_trackers(
@@ -830,6 +860,7 @@ def _create_point_marker_trackers(
     target=None,
     target_index=0,
 ):
+    tracker_state = _provider_tracker_state(session)
     if point is None:
         return
     for spec in _get_point_marker_segment_specs(
@@ -852,7 +883,7 @@ def _create_point_marker_trackers(
         tracker.p1(spec["start"])
         tracker.p2(spec["end"])
         tracker.on()
-        session._provider_overlay_trackers.append(tracker)
+        tracker_state.provider_overlay_trackers.append(tracker)
     _create_target_pick_tracker(
         session,
         DraftTrackers,
@@ -903,7 +934,7 @@ def _create_target_pick_tracker(
         tracker.on()
     except Exception:
         pass
-    session._provider_overlay_trackers.append(tracker)
+    _provider_tracker_state(session).provider_overlay_trackers.append(tracker)
 
 
 def _has_target_identity(target):
