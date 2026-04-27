@@ -121,186 +121,6 @@ class PlanProvidersAPI:
     def session(self):
         return self._session
 
-    def get_provider_point_tool_label(self):
-        from bimplan.providers import point as plan_provider_point
-
-        return plan_provider_point.get_provider_point_tool_label(self.session)
-
-    def get_provider_point_tool_prompt(self):
-        from bimplan.providers import point as plan_provider_point
-
-        return plan_provider_point.get_provider_point_tool_prompt(self.session)
-
-    def has_active_provider_point_tool(self):
-        from bimplan.providers import point as plan_provider_point
-
-        return plan_provider_point.has_active_provider_point_tool(self.session)
-
-    def arm_provider_point_tool(self):
-        from bimplan.providers import point as plan_provider_point
-
-        return plan_provider_point.arm_provider_point_tool(self.session)
-
-    def cancel_provider_point_tool(self, refresh=True):
-        from bimplan.providers import point as plan_provider_point
-
-        return plan_provider_point.cancel_provider_point_tool(self.session, refresh=refresh)
-
-    def start_plan_provider_point_tool(self, tool):
-        from bimplan.providers import point as plan_provider_point
-
-        return plan_provider_point.start_plan_provider_point_tool(self.session, tool)
-
-    def handle_provider_point_tool_point(self, point=None, obj=None):
-        from bimplan.providers import point as plan_provider_point
-
-        return plan_provider_point.handle_provider_point_tool_point(
-            self.session,
-            point=point,
-            obj=obj,
-        )
-
-    def update_provider_point_tool_preview(self, point=None, obj=None):
-        from bimplan.providers import point as plan_provider_point
-
-        return plan_provider_point.update_provider_point_tool_preview(
-            self.session,
-            point=point,
-            obj=obj,
-        )
-
-    def get_provider_point_snap_info(self):
-        from bimplan.providers import point as plan_provider_point
-
-        return plan_provider_point.get_provider_point_snap_info()
-
-    def resolve_provider_point_snap_object(self, snap_object, snap_info):
-        from bimplan.providers import point as plan_provider_point
-
-        return plan_provider_point.resolve_provider_point_snap_object(
-            self.session,
-            snap_object,
-            snap_info,
-        )
-
-    def normalize_provider_point_host_target(self, target):
-        from bimplan.providers import point as plan_provider_point
-
-        return plan_provider_point.normalize_provider_point_host_target(self.session, target)
-
-    def get_provider_point_context_host_state(self):
-        from bimplan.providers import point as plan_provider_point
-
-        return plan_provider_point.get_provider_point_context_host_state(self.session)
-
-    def get_provider_point_payload_host_target(
-        self,
-        *,
-        snap_target,
-        selected_target,
-        selected_targets,
-        hovered_target,
-    ):
-        from bimplan.providers import point as plan_provider_point
-
-        return plan_provider_point.get_provider_point_payload_host_target(
-            self.session,
-            snap_target=snap_target,
-            selected_target=selected_target,
-            selected_targets=selected_targets,
-            hovered_target=hovered_target,
-        )
-
-    def project_provider_point_to_host(self, point, host_wall):
-        from bimplan.providers import point as plan_provider_point
-
-        return plan_provider_point.project_provider_point_to_host(point, host_wall)
-
-    def build_provider_point_tool_payload(
-        self,
-        tool,
-        *,
-        raw_point,
-        plan_point,
-        snap_object,
-        snap_info,
-    ):
-        from bimplan.providers import point as plan_provider_point
-
-        return plan_provider_point.build_provider_point_tool_payload(
-            self.session,
-            tool,
-            raw_point=raw_point,
-            plan_point=plan_point,
-            snap_object=snap_object,
-            snap_info=snap_info,
-        )
-
-    def get_selected_provider_edit_handles(self, provider_obj):
-        from bimplan.providers import edit as plan_provider_edit
-
-        return plan_provider_edit.get_selected_provider_edit_handles(self.session, provider_obj)
-
-    def can_move_provider_target_by_placement(self, provider_obj):
-        from bimplan.providers import edit as plan_provider_edit
-
-        return plan_provider_edit.can_move_provider_target_by_placement(self.session, provider_obj)
-
-    def activate_provider_handle(self, provider_obj, handle_index):
-        from bimplan.providers import edit as plan_provider_edit
-
-        return plan_provider_edit.activate_provider_handle(self.session, provider_obj, handle_index)
-
-    def activate_provider_handle_now(self, provider_obj, handle_index):
-        from bimplan.providers import edit as plan_provider_edit
-
-        return plan_provider_edit.activate_provider_handle_now(
-            self.session, provider_obj, handle_index
-        )
-
-    def start_provider_handle_point_pick(self, provider_obj, handle_index, handle):
-        from bimplan.providers import edit as plan_provider_edit
-
-        return plan_provider_edit.start_provider_handle_point_pick(
-            self.session,
-            provider_obj,
-            handle_index,
-            handle,
-        )
-
-    def update_provider_handle_point_pick(self, point=None, snap_info=None):
-        from bimplan.providers import edit as plan_provider_edit
-
-        return plan_provider_edit.update_provider_handle_point_pick(
-            self.session,
-            point=point,
-            snap_info=snap_info,
-        )
-
-    def finish_provider_handle_point_pick(self, point=None, obj=None):
-        from bimplan.providers import edit as plan_provider_edit
-
-        return plan_provider_edit.finish_provider_handle_point_pick(
-            self.session,
-            point=point,
-            obj=obj,
-        )
-
-    def cancel_provider_handle_point_pick(self):
-        from bimplan.providers import edit as plan_provider_edit
-
-        return plan_provider_edit.cancel_provider_handle_point_pick(self.session)
-
-    def restore_selected_provider(self, provider_obj):
-        from bimplan.providers import edit as plan_provider_edit
-
-        return plan_provider_edit.restore_selected_provider(self.session, provider_obj)
-
-    def queue_restore_selected_provider(self, provider_obj):
-        from bimplan.providers import edit as plan_provider_edit
-
-        return plan_provider_edit.queue_restore_selected_provider(self.session, provider_obj)
-
     def get_plan_provider_overlay_category(self, provider_id):
         del self
         return get_plan_provider_overlay_category(provider_id)
@@ -328,6 +148,62 @@ class PlanProvidersAPI:
             transaction_label=transaction_label,
             payload=payload,
         )
+
+
+def _make_provider_module_forwarder(module_name, func_name, *, pass_session=True):
+    def _forward(self, *args, **kwargs):
+        if module_name == "point":
+            from bimplan.providers import point as provider_module
+        else:
+            from bimplan.providers import edit as provider_module
+        func = getattr(provider_module, func_name)
+        if pass_session:
+            return func(self.session, *args, **kwargs)
+        return func(*args, **kwargs)
+
+    _forward.__name__ = func_name
+    _forward.__qualname__ = "PlanProvidersAPI.{}".format(func_name)
+    return _forward
+
+
+_PLAN_PROVIDER_MODULE_FORWARDERS = (
+    ("point", "get_provider_point_tool_label", True),
+    ("point", "get_provider_point_tool_prompt", True),
+    ("point", "has_active_provider_point_tool", True),
+    ("point", "arm_provider_point_tool", True),
+    ("point", "cancel_provider_point_tool", True),
+    ("point", "start_plan_provider_point_tool", True),
+    ("point", "handle_provider_point_tool_point", True),
+    ("point", "update_provider_point_tool_preview", True),
+    ("point", "get_provider_point_snap_info", False),
+    ("point", "resolve_provider_point_snap_object", True),
+    ("point", "normalize_provider_point_host_target", True),
+    ("point", "get_provider_point_context_host_state", True),
+    ("point", "get_provider_point_payload_host_target", True),
+    ("point", "project_provider_point_to_host", False),
+    ("point", "build_provider_point_tool_payload", True),
+    ("edit", "get_selected_provider_edit_handles", True),
+    ("edit", "can_move_provider_target_by_placement", True),
+    ("edit", "activate_provider_handle", True),
+    ("edit", "activate_provider_handle_now", True),
+    ("edit", "start_provider_handle_point_pick", True),
+    ("edit", "update_provider_handle_point_pick", True),
+    ("edit", "finish_provider_handle_point_pick", True),
+    ("edit", "cancel_provider_handle_point_pick", True),
+    ("edit", "restore_selected_provider", True),
+    ("edit", "queue_restore_selected_provider", True),
+)
+
+for _module_name, _func_name, _pass_session in _PLAN_PROVIDER_MODULE_FORWARDERS:
+    setattr(
+        PlanProvidersAPI,
+        _func_name,
+        _make_provider_module_forwarder(
+            _module_name,
+            _func_name,
+            pass_session=_pass_session,
+        ),
+    )
 
 
 @dataclass(frozen=True)
@@ -390,6 +266,21 @@ def plan_provider_integrations_disabled(session):
 
 def _get_provider_runtime_state(session):
     return getattr(session, "provider_runtime_state", None)
+
+
+def _get_provider_target_collection_depth(session):
+    provider_runtime_state = _get_provider_runtime_state(session)
+    if provider_runtime_state is not None:
+        return int(provider_runtime_state.target_collection_depth or 0)
+    return int(getattr(session, "_plan_provider_target_collection_depth", 0) or 0)
+
+
+def _set_provider_target_collection_depth(session, depth):
+    provider_runtime_state = _get_provider_runtime_state(session)
+    if provider_runtime_state is not None:
+        provider_runtime_state.target_collection_depth = int(depth or 0)
+        return
+    session._plan_provider_target_collection_depth = int(depth or 0)
 
 
 def invalidate_plan_provider_document_cache(session):
@@ -930,21 +821,10 @@ def get_plan_provider_targets(session) -> tuple[PlanProviderTargetSpec, ...]:
     external_targets = _call_provider_method(session, "get_plan_provider_targets", default=None)
     if external_targets is not None:
         return tuple(external_targets or ())
-    provider_runtime_state = _get_provider_runtime_state(session)
-    depth = int(
-        (
-            provider_runtime_state.target_collection_depth
-            if provider_runtime_state is not None
-            else getattr(session, "_plan_provider_target_collection_depth", 0)
-        )
-        or 0
-    )
+    depth = _get_provider_target_collection_depth(session)
     if depth > 0:
         return ()
-    if provider_runtime_state is not None:
-        provider_runtime_state.target_collection_depth = depth + 1
-    else:
-        session._plan_provider_target_collection_depth = depth + 1
+    _set_provider_target_collection_depth(session, depth + 1)
     try:
         return collect_plan_provider_contributions(
             session,
@@ -952,10 +832,7 @@ def get_plan_provider_targets(session) -> tuple[PlanProviderTargetSpec, ...]:
             normalize_plan_provider_target,
         )
     finally:
-        if provider_runtime_state is not None:
-            provider_runtime_state.target_collection_depth = depth
-        else:
-            session._plan_provider_target_collection_depth = depth
+        _set_provider_target_collection_depth(session, depth)
 
 
 def get_plan_provider_target_for_object(session, obj) -> PlanProviderTargetSpec | None:

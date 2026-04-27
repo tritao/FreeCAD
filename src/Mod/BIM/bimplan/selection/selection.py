@@ -21,6 +21,8 @@ def _make_set_hovered_target_function(kind):
     def _set_hovered_target(session, obj):
         return plan_target_dispatch.set_hovered_target(session, kind, obj)
 
+    _set_hovered_target.__name__ = "set_hovered_{}".format(kind)
+    _set_hovered_target.__qualname__ = _set_hovered_target.__name__
     return _set_hovered_target
 
 
@@ -745,252 +747,6 @@ class PlanSelectionAPI(_SessionAPI):
             obj=obj,
         )
 
-    def sanitize_plan_target_references(self, *args, **kwargs):
-        return sanitize_plan_target_references(self.session, *args, **kwargs)
-
-    def get_selected_target_for_kind(self, *args, **kwargs):
-        return get_selected_target_for_kind(self.session, *args, **kwargs)
-
-    def set_selected_target_for_kind(self, *args, **kwargs):
-        return set_selected_target_for_kind(self.session, *args, **kwargs)
-
-    def get_selected_plan_target_object(self, *args, **kwargs):
-        return get_selected_plan_target_object(self.session, *args, **kwargs)
-
-    def is_selected_plan_target(self, *args, **kwargs):
-        return is_selected_plan_target(self.session, *args, **kwargs)
-
-    def clear_selected_plan_target_if_matches(self, *args, **kwargs):
-        return clear_selected_plan_target_if_matches(self.session, *args, **kwargs)
-
-    def clear_hidden_provider_preselection(self, *args, **kwargs):
-        return clear_hidden_provider_preselection(self.session, *args, **kwargs)
-
-    def selected_plan_target_changed(self, *args, **kwargs):
-        return selected_plan_target_changed(self.session, *args, **kwargs)
-
-    def set_pending_selected_plan_target(self, *args, **kwargs):
-        return set_pending_selected_plan_target(self.session, *args, **kwargs)
-
-    def consume_pending_selected_plan_target(self, *args, **kwargs):
-        return consume_pending_selected_plan_target(self.session, *args, **kwargs)
-
-    def get_selected_plan_target(self, *args, **kwargs):
-        return get_selected_plan_target(self.session, *args, **kwargs)
-
-    def get_first_plan_target_from_selection(self, *args, **kwargs):
-        return get_first_plan_target_from_selection(self.session, *args, **kwargs)
-
-    def is_valid_plan_target(self, *args, **kwargs):
-        return is_valid_plan_target(self.session, *args, **kwargs)
-
-    def normalize_plan_target_list(self, *args, **kwargs):
-        return normalize_plan_target_list(self.session, *args, **kwargs)
-
-    def normalize_plan_targets_from_selection(self, *args, **kwargs):
-        return normalize_plan_targets_from_selection(self.session, *args, **kwargs)
-
-    def set_secondary_selected_plan_targets(self, *args, **kwargs):
-        return set_secondary_selected_plan_targets(self.session, *args, **kwargs)
-
-    def sync_secondary_selected_plan_targets_from_selection(self, *args, **kwargs):
-        return sync_secondary_selected_plan_targets_from_selection(self.session, *args, **kwargs)
-
-    def sync_secondary_selected_plan_targets_from_gui_selection(self, *args, **kwargs):
-        return sync_secondary_selected_plan_targets_from_gui_selection(
-            self.session, *args, **kwargs
-        )
-
-    def get_secondary_selected_plan_targets(self, *args, **kwargs):
-        return get_secondary_selected_plan_targets(self.session, *args, **kwargs)
-
-    def get_selected_plan_targets(self, *args, **kwargs):
-        return get_selected_plan_targets(self.session, *args, **kwargs)
-
-    def set_selected_plan_target(self, *args, **kwargs):
-        return set_selected_plan_target(self.session, *args, **kwargs)
-
-    def schedule_selected_wall_reset(self, *args, **kwargs):
-        return schedule_selected_wall_reset(self.session, *args, **kwargs)
-
-    def reset_selected_wall_after_change(self, *args, **kwargs):
-        return reset_selected_wall_after_change(self.session, *args, **kwargs)
-
-    def suspend_selected_wall_state(self, *args, **kwargs):
-        return suspend_selected_wall_state(self.session, *args, **kwargs)
-
-    def sync_primary_selected_plan_target_visuals(self, *args, **kwargs):
-        return sync_primary_selected_plan_target_visuals(self.session, *args, **kwargs)
-
-    def refresh_selected_plan_target(self, *args, **kwargs):
-        return refresh_selected_plan_target(self.session, *args, **kwargs)
-
-    def refresh_primary_selected_plan_target(self, *args, **kwargs):
-        return refresh_primary_selected_plan_target(self.session, *args, **kwargs)
-
-    def set_hovered_wall(self, *args, **kwargs):
-        return set_hovered_wall(self.session, *args, **kwargs)
-
-    def set_hovered_opening(self, *args, **kwargs):
-        return set_hovered_opening(self.session, *args, **kwargs)
-
-    def set_hovered_symbol(self, *args, **kwargs):
-        return set_hovered_symbol(self.session, *args, **kwargs)
-
-    def set_hovered_provider(self, *args, **kwargs):
-        return set_hovered_provider(self.session, *args, **kwargs)
-
-    def set_hovered_space(self, *args, **kwargs):
-        return set_hovered_space(self.session, *args, **kwargs)
-
-    def set_hovered_region(self, *args, **kwargs):
-        return set_hovered_region(self.session, *args, **kwargs)
-
-    def queue_restore_selected_plan_target(self, *args, **kwargs):
-        return queue_restore_selected_plan_target(self.session, *args, **kwargs)
-
-    def select_plan_target_for_plan_edit(self, *args, **kwargs):
-        return select_plan_target_for_plan_edit(self.session, *args, **kwargs)
-
-    def select_opening_for_plan_edit(self, *args, **kwargs):
-        return select_opening_for_plan_edit(self.session, *args, **kwargs)
-
-    def select_symbol_for_plan_edit(self, *args, **kwargs):
-        return select_symbol_for_plan_edit(self.session, *args, **kwargs)
-
-    def select_region_for_plan_edit(self, *args, **kwargs):
-        return select_region_for_plan_edit(self.session, *args, **kwargs)
-
-    def select_space_for_plan_edit(self, *args, **kwargs):
-        return select_space_for_plan_edit(self.session, *args, **kwargs)
-
-    def select_wall_for_plan_edit(self, *args, **kwargs):
-        return select_wall_for_plan_edit(self.session, *args, **kwargs)
-
-    def activate_plan_target_for_kind(self, *args, **kwargs):
-        return activate_plan_target_for_kind(self.session, *args, **kwargs)
-
-    def activate_plan_target(self, *args, **kwargs):
-        return activate_plan_target(self.session, *args, **kwargs)
-
-    def activate_semantic_plan_target(self, *args, **kwargs):
-        return activate_semantic_plan_target(self.session, *args, **kwargs)
-
-    def activate_opening_target(self, *args, **kwargs):
-        return activate_opening_target(self.session, *args, **kwargs)
-
-    def activate_symbol_target(self, *args, **kwargs):
-        return activate_symbol_target(self.session, *args, **kwargs)
-
-    def activate_region_target(self, *args, **kwargs):
-        return activate_region_target(self.session, *args, **kwargs)
-
-    def activate_space_target(self, *args, **kwargs):
-        return activate_space_target(self.session, *args, **kwargs)
-
-    def activate_wall_target(self, *args, **kwargs):
-        return activate_wall_target(self.session, *args, **kwargs)
-
-    def clear_plan_selection_state(self, *args, **kwargs):
-        return clear_plan_selection_state(self.session, *args, **kwargs)
-
-    def normalize_gui_object_selection(self, *args, **kwargs):
-        return normalize_gui_object_selection(self.session, *args, **kwargs)
-
-    def activate_provider_overlay_target_node(self, *args, **kwargs):
-        return activate_provider_overlay_target_node(self.session, *args, **kwargs)
-
-    def toggle_raw_plan_object_selection(self, *args, **kwargs):
-        return toggle_raw_plan_object_selection(self.session, *args, **kwargs)
-
-    def toggle_plan_target_selection_at_position(self, *args, **kwargs):
-        return toggle_plan_target_selection_at_position(self.session, *args, **kwargs)
-
-    def attach_selection_observer(self, *args, **kwargs):
-        return plan_selection_gui_sync.attach_selection_observer(self.session, *args, **kwargs)
-
-    def detach_selection_observer(self, *args, **kwargs):
-        return plan_selection_gui_sync.detach_selection_observer(self.session, *args, **kwargs)
-
-    def schedule_selection_refresh(self, *args, **kwargs):
-        return plan_selection_gui_sync.schedule_selection_refresh(self.session, *args, **kwargs)
-
-    def run_scheduled_selection_refresh(self, *args, **kwargs):
-        return plan_selection_gui_sync.run_scheduled_selection_refresh(
-            self.session, *args, **kwargs
-        )
-
-    def schedule_clear_plan_selection_state(self, *args, **kwargs):
-        return plan_selection_gui_sync.schedule_clear_plan_selection_state(
-            self.session, *args, **kwargs
-        )
-
-    def run_scheduled_clear_plan_selection_state(self, *args, **kwargs):
-        return plan_selection_gui_sync.run_scheduled_clear_plan_selection_state(
-            self.session, *args, **kwargs
-        )
-
-    def set_gui_selection(self, *args, **kwargs):
-        return plan_selection_gui_sync.set_gui_selection(self.session, *args, **kwargs)
-
-    def set_gui_selection_object(self, *args, **kwargs):
-        return plan_selection_gui_sync.set_gui_selection_object(self.session, *args, **kwargs)
-
-    def schedule_gui_selection_object(self, *args, **kwargs):
-        return plan_selection_gui_sync.schedule_gui_selection_object(self.session, *args, **kwargs)
-
-    def run_scheduled_gui_selection_sync(self, *args, **kwargs):
-        return plan_selection_gui_sync.run_scheduled_gui_selection_sync(
-            self.session, *args, **kwargs
-        )
-
-    def get_plan_target_kind_for_object(self, *args, **kwargs):
-        return plan_targets.get_plan_target_kind_for_object(self.session, *args, **kwargs)
-
-    def get_plan_target_for_object(self, *args, **kwargs):
-        return plan_targets.get_plan_target_for_object(self.session, *args, **kwargs)
-
-    def get_plan_target_at_position(self, *args, **kwargs):
-        return plan_selection_picking.get_plan_target_at_position(self.session, *args, **kwargs)
-
-    def get_plan_space_instances(self, *args, **kwargs):
-        return plan_selection_picking.get_plan_space_instances(self.session, *args, **kwargs)
-
-    def get_plan_region_instances(self, *args, **kwargs):
-        return plan_selection_picking.get_plan_region_instances(self.session, *args, **kwargs)
-
-    def get_plan_target_from_edit_node(self, *args, **kwargs):
-        return plan_selection_picking.get_plan_target_from_edit_node(
-            self.session,
-            *args,
-            **kwargs,
-        )
-
-    def get_provider_overlay_target_from_edit_node(self, *args, **kwargs):
-        return plan_selection_picking.get_provider_overlay_target_from_edit_node(
-            self.session,
-            *args,
-            **kwargs,
-        )
-
-    def get_hovered_plan_target(self, *args, **kwargs):
-        return plan_selection_picking.get_hovered_plan_target(self.session, *args, **kwargs)
-
-    def clear_hovered_plan_targets(self, *args, **kwargs):
-        return plan_selection_picking.clear_hovered_plan_targets(self.session, *args, **kwargs)
-
-    def queue_prime_hover_pick_caches(self, *args, **kwargs):
-        return plan_selection_picking.queue_prime_hover_pick_caches(self.session, *args, **kwargs)
-
-    def prime_hover_pick_caches(self, *args, **kwargs):
-        return plan_selection_picking.prime_hover_pick_caches(self.session, *args, **kwargs)
-
-    def should_skip_hover_pick(self, *args, **kwargs):
-        return plan_selection_picking.should_skip_hover_pick(self.session, *args, **kwargs)
-
-    def update_hovered_plan_target(self, *args, **kwargs):
-        return plan_selection_picking.update_hovered_plan_target(self.session, *args, **kwargs)
-
     def addSelection(self, doc, obj, sub, point):
         return plan_selection_gui_sync.selection_observer_add(self.session, doc, obj, sub, point)
 
@@ -1018,204 +774,6 @@ class PlanSelectionAPI(_SessionAPI):
         with plan_selection_gui_sync.selection_changes_suppressed(self.session):
             yield
 
-    def xy_polygon_area(self, polyline):
-        from . import picking as plan_picking
-
-        del self
-        return plan_picking.xy_polygon_area(polyline)
-
-    def xy_point_in_polygon(self, point, polyline, tolerance=1e-9):
-        from . import picking as plan_picking
-
-        del self
-        return plan_picking.xy_point_in_polygon(point, polyline, tolerance=tolerance)
-
-    def get_screen_distance_sq_to_segment(self, mouse_pos, start, end):
-        from . import picking as plan_picking
-
-        return plan_picking.get_screen_distance_sq_to_segment(
-            self.session,
-            mouse_pos,
-            start,
-            end,
-        )
-
-    def get_screen_distance_sq_to_projected_segment(self, cursor_xy, start_xy, end_xy):
-        from . import picking as plan_picking
-
-        del self
-        return plan_picking.get_screen_distance_sq_to_projected_segment(
-            cursor_xy,
-            start_xy,
-            end_xy,
-        )
-
-    def pick_plan_symbol_target_from_overlays(self, mouse_pos, radius_px=10):
-        from . import picking as plan_picking
-
-        return plan_picking.pick_plan_symbol_target_from_overlays(
-            self.session,
-            mouse_pos,
-            radius_px=radius_px,
-        )
-
-    def pick_plan_opening_target_from_overlays(self, mouse_pos, radius_px=10, candidates=None):
-        from . import picking as plan_picking
-
-        return plan_picking.pick_plan_opening_target_from_overlays(
-            self.session,
-            mouse_pos,
-            radius_px=radius_px,
-            candidates=candidates,
-        )
-
-    def pick_provider_overlay_target_from_overlays(self, mouse_pos, radius_px=12):
-        from . import picking as plan_picking
-
-        return plan_picking.pick_provider_overlay_target_from_overlays(
-            self.session,
-            mouse_pos,
-            radius_px=radius_px,
-        )
-
-    def pick_provider_overlay_target_from_objects_info(self, mouse_pos):
-        from . import picking as plan_picking
-
-        return plan_picking.pick_provider_overlay_target_from_objects_info(self.session, mouse_pos)
-
-    def pick_plan_space_target_from_overlays(self, mouse_pos, radius_px=10):
-        from . import picking as plan_picking
-
-        return plan_picking.pick_plan_space_target_from_overlays(
-            self.session,
-            mouse_pos,
-            radius_px=radius_px,
-        )
-
-    def pick_plan_region_target_from_overlays(self, mouse_pos, radius_px=10):
-        from . import picking as plan_picking
-
-        return plan_picking.pick_plan_region_target_from_overlays(
-            self.session,
-            mouse_pos,
-            radius_px=radius_px,
-        )
-
-    def get_region_pick_polylines(self, region):
-        from . import picking as plan_picking
-
-        return plan_picking.get_region_pick_polylines(self.session, region)
-
-    def pick_plan_region_target_from_polylines(self, mouse_pos):
-        from . import picking as plan_picking
-
-        return plan_picking.pick_plan_region_target_from_polylines(self.session, mouse_pos)
-
-    def pick_plan_target_from_footprint_faces(
-        self,
-        mouse_pos,
-        is_target,
-        get_faces,
-        target_label="target",
-    ):
-        from . import picking as plan_picking
-
-        return plan_picking.pick_plan_target_from_footprint_faces(
-            self.session,
-            mouse_pos,
-            is_target,
-            get_faces,
-            target_label=target_label,
-        )
-
-    def pick_plan_space_target_from_footprints(self, mouse_pos):
-        from . import picking as plan_picking
-
-        return plan_picking.pick_plan_space_target_from_footprints(self.session, mouse_pos)
-
-    def pick_plan_region_target_from_footprints(self, mouse_pos):
-        from . import picking as plan_picking
-
-        return plan_picking.pick_plan_region_target_from_footprints(self.session, mouse_pos)
-
-    def get_edit_node(self, mouse_pos):
-        from . import picking as plan_picking
-
-        return plan_picking.get_edit_node(self.session, mouse_pos)
-
-    def pick_selected_opening_handle(self, mouse_pos, radius_px=10):
-        from . import picking as plan_picking
-
-        return plan_picking.pick_selected_opening_handle(
-            self.session,
-            mouse_pos,
-            radius_px=radius_px,
-        )
-
-    def is_plan_selectable_wall(self, obj):
-        from . import targets as plan_targets
-
-        return plan_targets.is_plan_selectable_wall(self.session, obj)
-
-    def is_plan_space_object(self, obj):
-        from . import targets as plan_targets
-
-        return plan_targets.is_plan_space_object(self.session, obj)
-
-    def is_plan_custom_pick_only_object(self, obj):
-        from . import targets as plan_targets
-
-        return plan_targets.is_plan_custom_pick_only_object(self.session, obj)
-
-    def is_plan_space_separator_object(self, obj):
-        from . import targets as plan_targets
-
-        return plan_targets.is_plan_space_separator_object(self.session, obj)
-
-    def is_plan_region_object(self, obj):
-        from . import targets as plan_targets
-
-        return plan_targets.is_plan_region_object(self.session, obj)
-
-    def get_gui_selection_ex(self):
-        return plan_selection_gui_sync.get_gui_selection_ex()
-
-    def get_gui_selection(self):
-        return plan_selection_gui_sync.get_gui_selection()
-
-    def add_gui_selection_object(self, obj):
-        return plan_selection_gui_sync.add_gui_selection_object(obj)
-
-    def is_plan_additive_selection_active(self):
-        return is_plan_additive_selection_active(self.session)
-
-    def normalize_plan_requirement_tags(self, value):
-        from . import targets as plan_targets
-
-        del self
-        return plan_targets.normalize_plan_requirement_tags(value)
-
-    def get_plan_host_ref(self, obj):
-        from . import targets as plan_targets
-
-        return plan_targets.get_plan_host_ref(self.session, obj)
-
-    def make_plan_target_record(self, kind, obj, selected_keys=None, primary_key=None):
-        from . import targets as plan_targets
-
-        return plan_targets.make_plan_target_record(
-            self.session,
-            kind,
-            obj,
-            selected_keys=selected_keys,
-            primary_key=primary_key,
-        )
-
-    def get_plan_targets(self, selected_only=False):
-        from . import targets as plan_targets
-
-        return plan_targets.get_plan_targets(self.session, selected_only=selected_only)
-
     def get_selected_objects(self):
         return tuple(
             self.normalize_gui_object_selection(
@@ -1224,12 +782,134 @@ class PlanSelectionAPI(_SessionAPI):
             )
         )
 
-    def resolve_plan_target_object(self, target):
-        from . import targets as plan_targets
 
-        return plan_targets.resolve_plan_target_object(self.session, target)
+def _make_selection_session_forwarder(func):
+    def _forward(self, *args, **kwargs):
+        return func(self.session, *args, **kwargs)
 
-    def resolve_plan_semantic_object(self, target):
-        from . import targets as plan_targets
+    _forward.__name__ = func.__name__
+    _forward.__qualname__ = "PlanSelectionAPI.{}".format(func.__name__)
+    _forward.__doc__ = func.__doc__
+    return _forward
 
-        return plan_targets.resolve_plan_semantic_object(self.session, target)
+
+_PLAN_SELECTION_SESSION_FORWARDERS = (
+    sanitize_plan_target_references,
+    get_selected_target_for_kind,
+    set_selected_target_for_kind,
+    get_selected_plan_target_object,
+    is_selected_plan_target,
+    clear_selected_plan_target_if_matches,
+    clear_hidden_provider_preselection,
+    selected_plan_target_changed,
+    set_pending_selected_plan_target,
+    consume_pending_selected_plan_target,
+    get_selected_plan_target,
+    get_first_plan_target_from_selection,
+    is_valid_plan_target,
+    normalize_plan_target_list,
+    normalize_plan_targets_from_selection,
+    set_secondary_selected_plan_targets,
+    sync_secondary_selected_plan_targets_from_selection,
+    sync_secondary_selected_plan_targets_from_gui_selection,
+    get_secondary_selected_plan_targets,
+    get_selected_plan_targets,
+    set_selected_plan_target,
+    schedule_selected_wall_reset,
+    reset_selected_wall_after_change,
+    suspend_selected_wall_state,
+    sync_primary_selected_plan_target_visuals,
+    refresh_selected_plan_target,
+    refresh_primary_selected_plan_target,
+    set_hovered_wall,
+    set_hovered_opening,
+    set_hovered_symbol,
+    set_hovered_provider,
+    set_hovered_space,
+    set_hovered_region,
+    queue_restore_selected_plan_target,
+    select_plan_target_for_plan_edit,
+    select_opening_for_plan_edit,
+    select_symbol_for_plan_edit,
+    select_region_for_plan_edit,
+    select_space_for_plan_edit,
+    select_wall_for_plan_edit,
+    activate_plan_target_for_kind,
+    activate_plan_target,
+    activate_semantic_plan_target,
+    activate_opening_target,
+    activate_symbol_target,
+    activate_region_target,
+    activate_space_target,
+    activate_wall_target,
+    clear_plan_selection_state,
+    normalize_gui_object_selection,
+    activate_provider_overlay_target_node,
+    toggle_raw_plan_object_selection,
+    toggle_plan_target_selection_at_position,
+    is_plan_additive_selection_active,
+    plan_selection_gui_sync.attach_selection_observer,
+    plan_selection_gui_sync.detach_selection_observer,
+    plan_selection_gui_sync.schedule_selection_refresh,
+    plan_selection_gui_sync.run_scheduled_selection_refresh,
+    plan_selection_gui_sync.schedule_clear_plan_selection_state,
+    plan_selection_gui_sync.run_scheduled_clear_plan_selection_state,
+    plan_selection_gui_sync.set_gui_selection,
+    plan_selection_gui_sync.set_gui_selection_object,
+    plan_selection_gui_sync.schedule_gui_selection_object,
+    plan_selection_gui_sync.run_scheduled_gui_selection_sync,
+    plan_targets.get_plan_target_kind_for_object,
+    plan_targets.get_plan_target_for_object,
+    plan_targets.is_plan_selectable_wall,
+    plan_targets.is_plan_space_object,
+    plan_targets.is_plan_custom_pick_only_object,
+    plan_targets.is_plan_space_separator_object,
+    plan_targets.is_plan_region_object,
+    plan_targets.get_plan_host_ref,
+    plan_targets.make_plan_target_record,
+    plan_targets.get_plan_targets,
+    plan_targets.resolve_plan_target_object,
+    plan_targets.resolve_plan_semantic_object,
+    plan_selection_picking.get_plan_target_at_position,
+    plan_selection_picking.get_plan_space_instances,
+    plan_selection_picking.get_plan_region_instances,
+    plan_selection_picking.get_plan_target_from_edit_node,
+    plan_selection_picking.get_provider_overlay_target_from_edit_node,
+    plan_selection_picking.get_hovered_plan_target,
+    plan_selection_picking.clear_hovered_plan_targets,
+    plan_selection_picking.queue_prime_hover_pick_caches,
+    plan_selection_picking.prime_hover_pick_caches,
+    plan_selection_picking.should_skip_hover_pick,
+    plan_selection_picking.update_hovered_plan_target,
+    plan_selection_picking.get_screen_distance_sq_to_segment,
+    plan_selection_picking.pick_plan_symbol_target_from_overlays,
+    plan_selection_picking.pick_plan_opening_target_from_overlays,
+    plan_selection_picking.pick_provider_overlay_target_from_overlays,
+    plan_selection_picking.pick_provider_overlay_target_from_objects_info,
+    plan_selection_picking.pick_plan_space_target_from_overlays,
+    plan_selection_picking.pick_plan_region_target_from_overlays,
+    plan_selection_picking.get_region_pick_polylines,
+    plan_selection_picking.pick_plan_region_target_from_polylines,
+    plan_selection_picking.pick_plan_target_from_footprint_faces,
+    plan_selection_picking.pick_plan_space_target_from_footprints,
+    plan_selection_picking.pick_plan_region_target_from_footprints,
+    plan_selection_picking.get_edit_node,
+    plan_selection_picking.pick_selected_opening_handle,
+)
+
+for _func in _PLAN_SELECTION_SESSION_FORWARDERS:
+    setattr(PlanSelectionAPI, _func.__name__, _make_selection_session_forwarder(_func))
+
+PlanSelectionAPI.xy_polygon_area = staticmethod(plan_selection_picking.xy_polygon_area)
+PlanSelectionAPI.xy_point_in_polygon = staticmethod(plan_selection_picking.xy_point_in_polygon)
+PlanSelectionAPI.get_screen_distance_sq_to_projected_segment = staticmethod(
+    plan_selection_picking.get_screen_distance_sq_to_projected_segment
+)
+PlanSelectionAPI.get_gui_selection_ex = staticmethod(plan_selection_gui_sync.get_gui_selection_ex)
+PlanSelectionAPI.get_gui_selection = staticmethod(plan_selection_gui_sync.get_gui_selection)
+PlanSelectionAPI.add_gui_selection_object = staticmethod(
+    plan_selection_gui_sync.add_gui_selection_object
+)
+PlanSelectionAPI.normalize_plan_requirement_tags = staticmethod(
+    plan_targets.normalize_plan_requirement_tags
+)
