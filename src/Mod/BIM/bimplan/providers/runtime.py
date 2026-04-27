@@ -93,6 +93,46 @@ def _call_provider_method(session, method_name, *args, default=None, **kwargs):
     return default
 
 
+def _get_external_provider_refresh_cache_scope(session):
+    external_scope = _call_provider_method(
+        session,
+        "plan_provider_refresh_cache_scope",
+        default=None,
+    )
+    if external_scope is not None:
+        return external_scope
+    return _call_provider_method(
+        session,
+        "_plan_provider_refresh_cache_scope",
+        default=None,
+    )
+
+
+def _get_external_provider_targets(session):
+    direct_get_plan_provider_targets = _get_instance_override(session, "get_plan_provider_targets")
+    if callable(direct_get_plan_provider_targets):
+        return tuple(direct_get_plan_provider_targets() or ())
+    direct_targets = _call_provider_method(session, "get_plan_provider_targets", default=_MISSING)
+    if direct_targets is _MISSING:
+        return _MISSING
+    return tuple(direct_targets or ())
+
+
+def _find_external_provider_target_for_object(session, object_key):
+    external_targets = _get_external_provider_targets(session)
+    if external_targets is _MISSING:
+        return _MISSING
+    default_document_name = _get_default_plan_provider_target_document_name(session)
+    for target in external_targets:
+        target_key = _make_plan_provider_target_object_key(
+            getattr(target, "document_name", "") or default_document_name,
+            getattr(target, "object_name", ""),
+        )
+        if target_key == object_key:
+            return target
+    return None
+
+
 @dataclass
 class _PlanProviderTargetDisplayFields:
     label: str = ""
@@ -293,17 +333,7 @@ def invalidate_plan_provider_document_cache(session):
 
 @contextmanager
 def plan_provider_refresh_cache_scope(session):
-    external_scope = _call_provider_method(
-        session,
-        "plan_provider_refresh_cache_scope",
-        default=None,
-    )
-    if external_scope is None:
-        external_scope = _call_provider_method(
-            session,
-            "_plan_provider_refresh_cache_scope",
-            default=None,
-        )
+    external_scope = _get_external_provider_refresh_cache_scope(session)
     if external_scope is not None:
         with external_scope:
             yield external_scope
@@ -818,9 +848,9 @@ def normalize_plan_provider_target(
 
 
 def get_plan_provider_targets(session) -> tuple[PlanProviderTargetSpec, ...]:
-    external_targets = _call_provider_method(session, "get_plan_provider_targets", default=None)
-    if external_targets is not None:
-        return tuple(external_targets or ())
+    external_targets = _get_external_provider_targets(session)
+    if external_targets is not _MISSING:
+        return external_targets
     depth = _get_provider_target_collection_depth(session)
     if depth > 0:
         return ()
@@ -845,28 +875,9 @@ def get_plan_provider_target_for_object(session, obj) -> PlanProviderTargetSpec 
     )
     if object_key is None:
         return None
-    direct_get_plan_provider_targets = _get_instance_override(session, "get_plan_provider_targets")
-    if callable(direct_get_plan_provider_targets):
-        for target in tuple(direct_get_plan_provider_targets() or ()):
-            target_key = _make_plan_provider_target_object_key(
-                getattr(target, "document_name", "")
-                or _get_default_plan_provider_target_document_name(session),
-                getattr(target, "object_name", ""),
-            )
-            if target_key == object_key:
-                return target
-        return None
-    direct_targets = _call_provider_method(session, "get_plan_provider_targets", default=_MISSING)
-    if direct_targets is not _MISSING:
-        for target in tuple(direct_targets or ()):
-            target_key = _make_plan_provider_target_object_key(
-                getattr(target, "document_name", "")
-                or _get_default_plan_provider_target_document_name(session),
-                getattr(target, "object_name", ""),
-            )
-            if target_key == object_key:
-                return target
-        return None
+    external_target = _find_external_provider_target_for_object(session, object_key)
+    if external_target is not _MISSING:
+        return external_target
     return _get_plan_provider_target_lookup(session).get(object_key)
 
 
