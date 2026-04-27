@@ -592,6 +592,24 @@ def _make_provider_context_cache_key(session, context, method_name):
     )
 
 
+def _make_provider_target_context_cache_key(context):
+    return (
+        "get_targets",
+        str(getattr(context, "document_name", "") or "").strip(),
+        str(getattr(context, "active_storey_name", "") or "").strip(),
+    )
+
+
+def _make_provider_document_cache_key(session, context, method_name):
+    if str(method_name or "").strip() == "get_targets":
+        return ("provider_contributions",) + _make_provider_target_context_cache_key(context)
+    return ("provider_contributions",) + _make_provider_context_cache_key(
+        session,
+        context,
+        method_name,
+    )
+
+
 def _get_cached_provider_contributions(session, method_name):
     refresh_cache = _get_provider_refresh_cache(session)
     if refresh_cache is None:
@@ -610,20 +628,14 @@ def _get_document_cached_provider_contributions(session, context, method_name):
     document_cache = _get_provider_document_cache(session)
     if document_cache is None:
         return None
-    return document_cache.get(
-        ("provider_contributions",)
-        + _make_provider_context_cache_key(session, context, method_name)
-    )
+    return document_cache.get(_make_provider_document_cache_key(session, context, method_name))
 
 
 def _set_document_cached_provider_contributions(session, context, method_name, contributions):
     document_cache = _get_provider_document_cache(session)
     if document_cache is None:
         return
-    document_cache[
-        ("provider_contributions",)
-        + _make_provider_context_cache_key(session, context, method_name)
-    ] = contributions
+    document_cache[_make_provider_document_cache_key(session, context, method_name)] = contributions
 
 
 def _get_cached_provider_snapshot(session):
@@ -2012,6 +2024,20 @@ def _get_plan_provider_target_lookup(session) -> dict[tuple[str, str], PlanProvi
     if isinstance(refresh_cache, dict) and cache_key in refresh_cache:
         return refresh_cache[cache_key]
 
+    context = _get_plan_edit_context_or_none(session)
+    document_cache = _get_provider_document_cache(session)
+    document_cache_key = None
+    if context is not None and document_cache is not None:
+        document_cache_key = (
+            "provider_targets",
+            "by_object",
+        ) + _make_provider_target_context_cache_key(context)
+        cached_lookup = document_cache.get(document_cache_key)
+        if isinstance(cached_lookup, dict):
+            if isinstance(refresh_cache, dict):
+                refresh_cache[cache_key] = cached_lookup
+            return cached_lookup
+
     default_document_name = _get_default_plan_provider_target_document_name(session)
     targets_by_object = {}
     for target in tuple(get_plan_provider_targets(session) or ()):
@@ -2025,4 +2051,6 @@ def _get_plan_provider_target_lookup(session) -> dict[tuple[str, str], PlanProvi
 
     if isinstance(refresh_cache, dict):
         refresh_cache[cache_key] = targets_by_object
+    if document_cache_key is not None and document_cache is not None:
+        document_cache[document_cache_key] = targets_by_object
     return targets_by_object
