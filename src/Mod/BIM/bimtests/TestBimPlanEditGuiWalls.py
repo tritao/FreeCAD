@@ -518,6 +518,44 @@ class BimPlanEditGuiWallsMixin:
         self.assertGreater(len(session._wall_overlay_trackers), 0)
         self.assertEqual(len(session._grip_trackers), 3)
 
+    def test_plan_edit_real_click_selection_draws_wall_outline_before_deferred_grips(self):
+        """Real wall clicks should paint the selected outline immediately, before grip sync lands."""
+
+        wall = Arch.makeWall(length=3000, width=200, height=2500)
+        self.document.recompute()
+
+        session = BimPlanSession.start_session()
+        self.assertIsNotNone(session)
+        self.pump_gui_events()
+
+        with (
+            patch.object(session.selection, "get_edit_node", return_value=None),
+            patch.object(
+                session.selection,
+                "get_plan_target_at_position",
+                return_value=("wall", wall),
+            ),
+            patch.object(session.viewport, "request_view_redraw") as request_view_redraw,
+        ):
+            callback = self._make_fake_left_mouse_press()
+            session.input.on_mouse_pressed(callback)
+
+            self.assertTrue(callback._handled)
+            self._assert_selected_plan_target(session, "wall", wall)
+            self.assertEqual(len(session._wall_hover_trackers), 0)
+            self.assertGreater(len(session._wall_overlay_trackers), 0)
+            self.assertEqual(len(session._grip_trackers), 0)
+            request_view_redraw.assert_called()
+
+        self.pump_gui_events(timeout_ms=250)
+
+        self._assert_selected_plan_target(session, "wall", wall)
+        self.assertGreater(len(session._wall_overlay_trackers), 0)
+        self.assertEqual(len(session._grip_trackers), 3)
+
+        session.shutdown(close_dialog=False)
+        self.pump_gui_events()
+
     def test_plan_edit_selected_wall_refresh_can_force_grip_resync_for_same_wall(self):
         """Forced selection refresh should repair wall grips even when the selected wall is unchanged."""
 

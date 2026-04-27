@@ -199,6 +199,9 @@ class PlanOverlaysAPI:
     def clear_selected_wall_overlay(self, *args, **kwargs):
         return wall_overlays.clear_selected_wall_overlay(self.session, *args, **kwargs)
 
+    def apply_selected_wall_selection_feedback(self, *args, **kwargs):
+        return wall_overlays.apply_selected_wall_selection_feedback(self.session, *args, **kwargs)
+
     def get_plan_context_junctions(self, *args, **kwargs):
         return wall_overlays.get_plan_context_junctions(self.session, *args, **kwargs)
 
