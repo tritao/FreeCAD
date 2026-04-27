@@ -230,6 +230,7 @@ class PlanDocumentVisualState:
     created_plan_objects_flush_deferred: bool = False
     document_visual_update_defer_depth: int = 0
     document_visual_refresh_deferred: bool = False
+    document_observer_added: bool = False
 
 
 @dataclass
@@ -714,6 +715,7 @@ _PLAN_EDIT_SESSION_STATE_PROPERTIES = (
                 _coerce_int,
             ),
             ("_document_visual_refresh_deferred", "document_visual_refresh_deferred", _coerce_bool),
+            ("_document_observer_added", "document_observer_added", _coerce_bool),
         ),
     ),
     (
@@ -897,7 +899,7 @@ def initialize_session_state(session):
     session.storeys = []
     session.active_storey = None
     session._selection_observer_added = False
-    session._document_observer_added = False
+    session.document_visual_state.document_observer_added = False
     session._pending_selected_wall_reset = False
     session._plan_edit_params = FreeCAD.ParamGet(
         "User parameter:BaseApp/Preferences/Mod/BIM/PlanEdit"

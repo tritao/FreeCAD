@@ -78,6 +78,14 @@ _FOOTPRINT_TARGET_KINDS = ("symbol", "region", "space")
 _OPENING_TARGET_KIND = "opening"
 
 
+def _document_visual_state(session):
+    return session.document_visual_state
+
+
+def _provider_overlay_state(session):
+    return session.provider_overlay_read_state
+
+
 def has_direct_true_property(obj, prop_name):
     if not obj:
         return False
@@ -114,15 +122,16 @@ def should_register_created_plan_object(session, obj):
 
 
 def queue_created_plan_object(session, obj):
+    visual_state = _document_visual_state(session)
     if not obj or not getattr(obj, "Name", None):
         return
-    session._pending_created_plan_objects[obj.Name] = obj
+    visual_state.pending_created_plan_objects[obj.Name] = obj
     if are_document_visual_updates_deferred(session):
-        session._created_plan_objects_flush_deferred = True
+        visual_state.created_plan_objects_flush_deferred = True
         return
-    if session._created_plan_objects_flush_queued:
+    if visual_state.created_plan_objects_flush_queued:
         return
-    session._created_plan_objects_flush_queued = True
+    visual_state.created_plan_objects_flush_queued = True
     try:
         from PySide import QtCore
 
@@ -132,13 +141,14 @@ def queue_created_plan_object(session, obj):
 
 
 def flush_created_plan_objects(session, force=False):
-    session._created_plan_objects_flush_queued = False
+    visual_state = _document_visual_state(session)
+    visual_state.created_plan_objects_flush_queued = False
     if are_document_visual_updates_deferred(session) and not force:
-        session._created_plan_objects_flush_deferred = True
+        visual_state.created_plan_objects_flush_deferred = True
         return
-    session._created_plan_objects_flush_deferred = False
-    pending = list(session._pending_created_plan_objects.values())
-    session._pending_created_plan_objects.clear()
+    visual_state.created_plan_objects_flush_deferred = False
+    pending = list(visual_state.pending_created_plan_objects.values())
+    visual_state.pending_created_plan_objects.clear()
     eligible = []
     for obj in pending:
         if not should_register_created_plan_object(session, obj):
@@ -148,11 +158,11 @@ def flush_created_plan_objects(session, force=False):
 
 
 def are_document_visual_updates_deferred(session):
-    return session._document_visual_update_defer_depth > 0
+    return _document_visual_state(session).document_visual_update_defer_depth > 0
 
 
 def defer_document_visual_refresh(session):
-    session._document_visual_refresh_deferred = True
+    _document_visual_state(session).document_visual_refresh_deferred = True
 
 
 def document_is_alive(session):
@@ -168,19 +178,21 @@ def document_is_alive(session):
 
 
 def attach_document_observer(session):
-    if session._document_observer_added:
+    visual_state = _document_visual_state(session)
+    if visual_state.document_observer_added:
         return
     try:
         import FreeCAD
 
         FreeCAD.addDocumentObserver(session)
-        session._document_observer_added = True
+        visual_state.document_observer_added = True
     except Exception:
         pass
 
 
 def detach_document_observer(session):
-    if not session._document_observer_added:
+    visual_state = _document_visual_state(session)
+    if not visual_state.document_observer_added:
         return
     try:
         import FreeCAD
@@ -188,32 +200,36 @@ def detach_document_observer(session):
         FreeCAD.removeDocumentObserver(session)
     except Exception:
         pass
-    session._document_observer_added = False
+    visual_state.document_observer_added = False
 
 
 @contextmanager
 def defer_document_visual_updates(session):
     """Batch document observer visual work while an external command mutates the model."""
 
-    session._document_visual_update_defer_depth += 1
+    visual_state = _document_visual_state(session)
+    visual_state.document_visual_update_defer_depth += 1
     try:
         yield
     finally:
-        session._document_visual_update_defer_depth = max(
+        visual_state.document_visual_update_defer_depth = max(
             0,
-            session._document_visual_update_defer_depth - 1,
+            visual_state.document_visual_update_defer_depth - 1,
         )
-        if session._document_visual_update_defer_depth or session.lifecycle_state.tearing_down:
+        if visual_state.document_visual_update_defer_depth or session.lifecycle_state.tearing_down:
             return
-        if session._created_plan_objects_flush_deferred or session._pending_created_plan_objects:
-            session._created_plan_objects_flush_deferred = False
-            session._document_visual_update_defer_depth = 1
+        if (
+            visual_state.created_plan_objects_flush_deferred
+            or visual_state.pending_created_plan_objects
+        ):
+            visual_state.created_plan_objects_flush_deferred = False
+            visual_state.document_visual_update_defer_depth = 1
             try:
                 flush_created_plan_objects(session, force=True)
             finally:
-                session._document_visual_update_defer_depth = 0
-        if session._document_visual_refresh_deferred:
-            session._document_visual_refresh_deferred = False
+                visual_state.document_visual_update_defer_depth = 0
+        if visual_state.document_visual_refresh_deferred:
+            visual_state.document_visual_refresh_deferred = False
             if not document_is_alive(session):
                 return
             invalidate_document_dependent_plan_visuals(session)
@@ -430,7 +446,7 @@ def slot_created_object(session, obj):
     if session.lifecycle_state.tearing_down:
         return
     session.providers.invalidate_plan_provider_document_cache()
-    session._provider_overlay_state = None
+    _provider_overlay_state(session).render_state = None
     session.visibility.invalidate_plan_classification_cache()
     session.openings.invalidate_wall_hosted_openings_cache()
     queue_created_plan_object(session, obj)
@@ -579,7 +595,7 @@ def slot_changed_object(session, obj, prop):
     if session.lifecycle_state.tearing_down:
         return
     session.providers.invalidate_plan_provider_document_cache()
-    session._provider_overlay_state = None
+    _provider_overlay_state(session).render_state = None
     session.visibility.invalidate_plan_classification_cache()
     session.openings.invalidate_wall_hosted_openings_cache()
     if are_document_visual_updates_deferred(session):
@@ -609,7 +625,7 @@ def slot_deleted_object(session, obj):
     if session.lifecycle_state.tearing_down:
         return
     session.providers.invalidate_plan_provider_document_cache()
-    session._provider_overlay_state = None
+    _provider_overlay_state(session).render_state = None
     session.visibility.invalidate_plan_classification_cache()
     session.openings.invalidate_wall_hosted_openings_cache()
     session.overlays.invalidate_plan_overlay_geometry_cache(obj)
