@@ -401,26 +401,23 @@ def get_screen_distance_sq_to_projected_segment(cursor_xy, start_xy, end_xy):
 def should_skip_opening_by_plan_bounds(session, opening, plan_point, radius_px):
     if plan_point is None:
         return False
-    try:
-        shape = getattr(opening, "Shape", None)
-        bound_box = getattr(shape, "BoundBox", None)
-    except Exception:
-        return False
+    bound_box = session.overlays.get_opening_pick_bounds(opening)
     if bound_box is None:
         return False
 
     try:
-        max_span = max(float(bound_box.XLength), float(bound_box.YLength))
+        min_x, min_y, max_x, max_y = bound_box
+        max_span = max(float(max_x) - float(min_x), float(max_y) - float(min_y))
         units_per_px = session.viewport.get_plan_view_units_per_pixel()
         pick_margin = float(radius_px) * float(units_per_px or 0.0) * 4.0
         margin = max(max_span * 2.0, pick_margin, 1500.0)
         point_x = float(plan_point.x)
         point_y = float(plan_point.y)
         return (
-            point_x < float(bound_box.XMin) - margin
-            or point_x > float(bound_box.XMax) + margin
-            or point_y < float(bound_box.YMin) - margin
-            or point_y > float(bound_box.YMax) + margin
+            point_x < float(min_x) - margin
+            or point_x > float(max_x) + margin
+            or point_y < float(min_y) - margin
+            or point_y > float(max_y) + margin
         )
     except Exception:
         return False
@@ -1269,6 +1266,16 @@ def _resolve_opening_overlay_priority_target(session, mouse_pos, candidates):
             mouse_pos,
             candidates=opening_candidates,
         )
+    if opening_candidate is None and opening_candidates is not None:
+        opening_candidate = _call_external_selection_pick(
+            session,
+            "pick_plan_opening_target_from_overlays",
+            mouse_pos,
+            candidates=None,
+            default=_EXTERNAL_PICK_MISSING,
+        )
+        if opening_candidate is _EXTERNAL_PICK_MISSING:
+            opening_candidate = pick_plan_opening_target_from_overlays(session, mouse_pos)
     if opening_candidate is not None:
         return _PickResolutionResult(
             target_ref=plan_target_kinds.make_plan_target_ref("opening", opening_candidate),

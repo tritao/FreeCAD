@@ -1283,6 +1283,133 @@ class TestBimPlanCore(unittest.TestCase):
                 pick_plan_opening_target_from_overlays(session, (100, 100), radius_px=10)
             )
 
+    def test_pick_plan_opening_target_from_overlays_uses_overlay_pick_bounds_not_shape_bounds(self):
+        invalid_bound_box = SimpleNamespace(
+            XMin=1.7976931348623157e308,
+            YMin=1.7976931348623157e308,
+            XMax=-1.7976931348623157e308,
+            YMax=-1.7976931348623157e308,
+        )
+        opening = SimpleNamespace(
+            Name="Window001",
+            Document=SimpleNamespace(Name="TestDoc"),
+            Shape=SimpleNamespace(BoundBox=invalid_bound_box),
+        )
+        session = SimpleNamespace(
+            doc=SimpleNamespace(Name="TestDoc"),
+            view=SimpleNamespace(),
+            viewport=SimpleNamespace(
+                get_plan_point_from_mouse_pos=lambda _mouse_pos: FreeCAD.Vector(100.0, 100.0, 0.0),
+                get_plan_view_units_per_pixel=lambda: 1.0,
+            ),
+            overlays=SimpleNamespace(
+                get_opening_pick_bounds=lambda _opening: (50.0, 50.0, 150.0, 150.0),
+                get_opening_overlay_screen_bounds=lambda _opening: (90.0, 90.0, 110.0, 110.0),
+                get_opening_overlay_screen_polylines=lambda _opening: (
+                    ((95.0, 100.0), (105.0, 100.0)),
+                ),
+            ),
+            openings=SimpleNamespace(
+                is_hosted_opening_object=lambda obj: obj is opening,
+                get_plan_opening_instances=lambda: (opening,),
+            ),
+            performance=_make_perf_stub(),
+        )
+
+        self.assertIs(
+            pick_plan_opening_target_from_overlays(session, (100, 100), radius_px=10),
+            opening,
+        )
+
+    def test_get_plan_target_at_position_falls_back_to_global_opening_pick_when_first_wall_misses(
+        self,
+    ):
+        wall_a = SimpleNamespace(
+            Name="WallA",
+            Label="Wall A",
+            Document=SimpleNamespace(Name="TestDoc"),
+        )
+        wall_b = SimpleNamespace(
+            Name="WallB",
+            Label="Wall B",
+            Document=SimpleNamespace(Name="TestDoc"),
+        )
+        opening = SimpleNamespace(
+            Name="Window001",
+            Label="Opening 001",
+            Document=SimpleNamespace(Name="TestDoc"),
+        )
+
+        doc = SimpleNamespace(
+            Name="TestDoc",
+            getObject=lambda name: {
+                wall_a.Name: wall_a,
+                wall_b.Name: wall_b,
+                opening.Name: opening,
+            }.get(name),
+        )
+        sys.modules["FreeCAD"].getDocument = lambda name: doc if name == doc.Name else None
+
+        class _View:
+            def getObjectsInfo(self, _mouse_pos):
+                return (
+                    {"Document": doc.Name, "Object": wall_a.Name},
+                    {"Document": doc.Name, "Object": wall_b.Name},
+                )
+
+        opening_pick_calls = []
+
+        def _pick_opening(_session, _mouse_pos, candidates=None, **_kwargs):
+            opening_pick_calls.append(candidates)
+            if candidates is not None:
+                return None
+            return opening
+
+        def _get_plan_pick_target_for_object(_session, obj, parent_obj=None):
+            del parent_obj
+            if obj is wall_a:
+                return ("wall", wall_a)
+            if obj is wall_b:
+                return ("wall", wall_b)
+            return (None, None)
+
+        session = SimpleNamespace(
+            doc=doc,
+            view=_View(),
+            get_plan_provider_overlay_mode=lambda: "all",
+            selection=SimpleNamespace(
+                pick_provider_overlay_target_from_overlays=lambda *_args, **_kwargs: (None, None),
+                pick_plan_symbol_target_from_overlays=lambda *args, **kwargs: None,
+                pick_plan_region_target_from_polylines=lambda *args, **kwargs: None,
+                pick_plan_region_target_from_footprints=lambda *args, **kwargs: None,
+                pick_plan_region_target_from_overlays=lambda *args, **kwargs: None,
+                pick_plan_space_target_from_footprints=lambda *args, **kwargs: None,
+                pick_plan_space_target_from_overlays=lambda *args, **kwargs: None,
+            ),
+            openings=SimpleNamespace(
+                get_wall_hosted_openings=lambda wall: () if wall is wall_a else (opening,)
+            ),
+            performance=_make_perf_stub(
+                describe_target=lambda kind, obj: (kind, getattr(obj, "Name", "")),
+            ),
+        )
+
+        with (
+            patch(
+                "bimplan.selection.picking.plan_targets.get_plan_pick_target_for_object",
+                side_effect=_get_plan_pick_target_for_object,
+            ),
+            patch(
+                "bimplan.selection.picking.pick_plan_opening_target_from_overlays",
+                side_effect=_pick_opening,
+            ),
+        ):
+            target_ref = get_plan_target_at_position(session, (100, 200))
+
+        self.assertEqual("opening", target_ref.kind)
+        self.assertIs(opening, target_ref.obj)
+        self.assertEqual([(), None], opening_pick_calls)
+
     def test_get_plan_target_at_position_prefers_provider_overlay_over_space_fallback(self):
         space = SimpleNamespace(
             Name="Space001",
