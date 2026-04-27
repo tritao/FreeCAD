@@ -42,74 +42,28 @@ class PlanLifecycleAPI:
     def session(self):
         return self._session
 
-    def activate_select_tool(self, *args, **kwargs):
-        return activate_select_tool(self.session, *args, **kwargs)
 
-    def activate_window_tool(self, *args, **kwargs):
-        return activate_window_tool(self.session, *args, **kwargs)
+def _make_lifecycle_session_forwarder(func):
+    def _forward(self, *args, **kwargs):
+        return func(self.session, *args, **kwargs)
 
-    def activate_plan_region_tool(self, *args, **kwargs):
-        return activate_plan_region_tool(self.session, *args, **kwargs)
+    _forward.__name__ = func.__name__
+    _forward.__qualname__ = "PlanLifecycleAPI.{}".format(func.__name__)
+    _forward.__doc__ = func.__doc__
+    return _forward
 
-    def activate_space_separator_tool(self, *args, **kwargs):
-        return activate_space_separator_tool(self.session, *args, **kwargs)
 
-    def activate_space_tool(self, *args, **kwargs):
-        return activate_space_tool(self.session, *args, **kwargs)
+def _make_lifecycle_module_forwarder(module_name, func_name):
+    def _forward(self, *args, **kwargs):
+        if module_name == "wall_create":
+            from bimplan.tools import wall_create as lifecycle_module
+        else:
+            from bimplan.tools import wall_relations as lifecycle_module
+        return getattr(lifecycle_module, func_name)(self.session, *args, **kwargs)
 
-    def activate_move_tool(self, *args, **kwargs):
-        return activate_move_tool(self.session, *args, **kwargs)
-
-    def on_embedded_command_started(self, *args, **kwargs):
-        return on_embedded_command_started(self.session, *args, **kwargs)
-
-    def on_embedded_command_finished(self, *args, **kwargs):
-        return on_embedded_command_finished(self.session, *args, **kwargs)
-
-    def start_embedded_tool(self, *args, **kwargs):
-        return start_embedded_tool(self.session, *args, **kwargs)
-
-    def cancel_pending_edit(self, *args, **kwargs):
-        return cancel_pending_edit(self.session, *args, **kwargs)
-
-    def stop_snapper(self, *args, **kwargs):
-        return stop_snapper(self.session, *args, **kwargs)
-
-    def set_draft_point_focus_suppressed(self, *args, **kwargs):
-        return set_draft_point_focus_suppressed(self.session, *args, **kwargs)
-
-    def has_active_embedded_tool(self, *args, **kwargs):
-        return has_active_embedded_tool(self.session, *args, **kwargs)
-
-    def cancel_embedded_tool(self, *args, **kwargs):
-        return cancel_embedded_tool(self.session, *args, **kwargs)
-
-    def activate_wall_tool(self):
-        from bimplan.tools import wall_create as plan_wall_create
-
-        return plan_wall_create.activate_wall_tool(self.session)
-
-    def activate_rect_wall_tool(self):
-        from bimplan.tools import wall_create as plan_wall_create
-
-        return plan_wall_create.activate_rect_wall_tool(self.session)
-
-    def activate_join_tool(self):
-        from bimplan.tools import wall_relations as plan_wall_relations
-
-        return plan_wall_relations.activate_join_tool(self.session)
-
-    def connect_teardown_signal(self, signal):
-        return connect_teardown_signal(self.session, signal)
-
-    def connect_teardown_signals(self, QtGui):
-        return connect_teardown_signals(self.session, QtGui)
-
-    def disconnect_teardown_signals(self):
-        return disconnect_teardown_signals(self.session)
-
-    def discard_runtime_references(self):
-        return discard_runtime_references(self.session)
+    _forward.__name__ = func_name
+    _forward.__qualname__ = "PlanLifecycleAPI.{}".format(func_name)
+    return _forward
 
 
 def connect_teardown_signal(session, signal):
@@ -1121,3 +1075,41 @@ def _set_toolbar_point_focus_suppressed(toolbar, suppressed):
 
 def has_active_embedded_tool(session):
     return session.interaction_state.embedded_tool is not None
+
+
+_PLAN_LIFECYCLE_SESSION_FORWARDERS = (
+    activate_select_tool,
+    activate_window_tool,
+    activate_plan_region_tool,
+    activate_space_separator_tool,
+    activate_space_tool,
+    activate_move_tool,
+    on_embedded_command_started,
+    on_embedded_command_finished,
+    start_embedded_tool,
+    cancel_pending_edit,
+    stop_snapper,
+    set_draft_point_focus_suppressed,
+    has_active_embedded_tool,
+    cancel_embedded_tool,
+    connect_teardown_signal,
+    connect_teardown_signals,
+    disconnect_teardown_signals,
+    discard_runtime_references,
+)
+
+for _func in _PLAN_LIFECYCLE_SESSION_FORWARDERS:
+    setattr(PlanLifecycleAPI, _func.__name__, _make_lifecycle_session_forwarder(_func))
+
+PlanLifecycleAPI.activate_wall_tool = _make_lifecycle_module_forwarder(
+    "wall_create",
+    "activate_wall_tool",
+)
+PlanLifecycleAPI.activate_rect_wall_tool = _make_lifecycle_module_forwarder(
+    "wall_create",
+    "activate_rect_wall_tool",
+)
+PlanLifecycleAPI.activate_join_tool = _make_lifecycle_module_forwarder(
+    "wall_relations",
+    "activate_join_tool",
+)
