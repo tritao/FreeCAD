@@ -176,6 +176,12 @@ class PlanSpacesAPI(_SessionAPI):
     def create_space_from_region_candidate(self, *args, **kwargs):
         return plan_space_regions.create_space_from_region_candidate(self.session, *args, **kwargs)
 
+    def space_has_valid_geometry(self, *args, **kwargs):
+        return plan_space_regions.space_has_valid_geometry(self.session, *args, **kwargs)
+
+    def report_space_creation_failure(self, *args, **kwargs):
+        return plan_space_regions.report_space_creation_failure(*args, **kwargs)
+
     def activate_space_region_candidate(self, *args, **kwargs):
         return plan_space_regions.activate_space_region_candidate(self.session, *args, **kwargs)
 

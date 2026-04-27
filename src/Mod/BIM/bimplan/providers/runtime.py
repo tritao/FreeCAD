@@ -1894,18 +1894,7 @@ def _run_plan_provider_action(
 
 
 def _finalize_plan_provider_action(session):
-    selection_api = getattr(session, "selection", None)
-    refresh_primary_selected_plan_target = getattr(
-        selection_api,
-        "refresh_primary_selected_plan_target",
-        None,
-    )
-    if callable(refresh_primary_selected_plan_target):
-        refresh_primary_selected_plan_target()
-    else:
-        compat_refresh = getattr(session, "_refresh_primary_selected_plan_target", None)
-        if callable(compat_refresh):
-            compat_refresh()
+    session.selection.refresh_primary_selected_plan_target()
     session.document_visuals.invalidate_document_dependent_plan_visuals()
     session.task_panels.refresh_task_panel_status()
     session.viewport.focus_plan_view()
@@ -1949,32 +1938,20 @@ def execute_plan_provider_action(
 
 
 def get_plan_edit_context(session):
-    document_visuals = getattr(session, "document_visuals", None)
-    document_is_alive = getattr(document_visuals, "document_is_alive", None)
     doc = getattr(session, "doc", None)
-    if callable(document_is_alive) and not document_is_alive():
+    if not session.document_visuals.document_is_alive():
         doc = None
     active_storey = getattr(session, "active_storey", None)
-    visibility = getattr(session, "visibility", None)
-    safe_plan_object_name = getattr(visibility, "safe_plan_object_name", None)
-    if callable(safe_plan_object_name):
-        active_storey_name = safe_plan_object_name(active_storey)
-        document_name = safe_plan_object_name(doc)
-    else:
-        active_storey_name = str(getattr(active_storey, "Name", "") or "")
-        document_name = str(getattr(doc, "Name", "") or "")
+    active_storey_name = session.visibility.safe_plan_object_name(active_storey)
+    document_name = session.visibility.safe_plan_object_name(doc)
     if active_storey is not None and not active_storey_name:
         active_storey = None
         session.active_storey = None
-    storey = getattr(session, "storey", None)
-    get_storey_label = getattr(storey, "get_storey_label", None)
     return PlanEditContext(
         session=session,
         document_name=document_name,
         active_storey_name=active_storey_name,
-        active_storey_label=(
-            str(get_storey_label(active_storey) or "") if callable(get_storey_label) else ""
-        ),
+        active_storey_label=str(session.storey.get_storey_label(active_storey) or ""),
         current_tool=str(getattr(session, "current_tool", "") or ""),
     )
 

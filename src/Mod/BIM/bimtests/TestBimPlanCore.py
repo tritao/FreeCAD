@@ -106,6 +106,7 @@ from bimplan.selection import (
     resolve_selected_target_for_gui_object,
 )
 from bimplan.selection import selection as plan_selection_module
+from bimplan.selection import gui_sync as plan_selection_gui_sync
 from bimplan.tools.spaces import (
     start_space_region_pick,
     create_space_from_current_selection,
@@ -696,9 +697,13 @@ class TestBimPlanCore(unittest.TestCase):
             _space_region_candidates=[],
             _hovered_space_region_candidate=None,
             _space_region_pick_seed_space=None,
-            _register_plan_object=lambda space: calls.append(("register", space)),
-            _clear_hovered_plan_targets=lambda **kwargs: calls.append(("clear-hovered", kwargs)),
-            _refresh_primary_selected_plan_target=lambda: calls.append("refresh-primary"),
+            visibility=SimpleNamespace(
+                register_plan_object=lambda space: calls.append(("register", space))
+            ),
+            selection=SimpleNamespace(
+                clear_hovered_plan_targets=lambda **kwargs: calls.append(("clear-hovered", kwargs)),
+                refresh_primary_selected_plan_target=lambda: calls.append("refresh-primary"),
+            ),
             spaces=SimpleNamespace(
                 restore_selected_space=lambda space: calls.append(("restore", space)),
                 create_space_from_region_candidate=lambda *args, **kwargs: (
@@ -811,18 +816,20 @@ class TestBimPlanCore(unittest.TestCase):
     def test_activate_opening_target_uses_behavior_policy(self):
         calls = []
         target = SimpleNamespace(Name="Opening001")
-        session = SimpleNamespace(
-            _activate_plan_target=lambda *args, **kwargs: calls.append((args, kwargs)) or True
-        )
+        session = SimpleNamespace()
 
-        self.assertTrue(
-            activate_opening_target(session, (100, 200), resolved_target=("opening", target))
-        )
+        with patch(
+            "bimplan.selection.selection.activate_plan_target",
+            side_effect=lambda *args, **kwargs: calls.append((args, kwargs)) or True,
+        ):
+            self.assertTrue(
+                activate_opening_target(session, (100, 200), resolved_target=("opening", target))
+            )
 
         self.assertEqual(
             [
                 (
-                    ("opening", (100, 200)),
+                    (session, "opening", (100, 200)),
                     {
                         "event_callback": None,
                         "sync_gui_selection": True,
@@ -844,15 +851,18 @@ class TestBimPlanCore(unittest.TestCase):
             _hover_pick_last_mouse_pos=(50.0, 60.0),
             _hover_pick_dirty=False,
             performance=_make_perf_stub(),
-            _activate_plan_target=lambda *args, **kwargs: calls.append((args, kwargs)) or True,
         )
 
-        self.assertTrue(activate_semantic_plan_target(session, (50, 60)))
+        with patch(
+            "bimplan.selection.selection.activate_plan_target",
+            side_effect=lambda *args, **kwargs: calls.append((args, kwargs)) or True,
+        ):
+            self.assertTrue(activate_semantic_plan_target(session, (50, 60)))
 
         self.assertEqual(
             [
                 (
-                    ("wall", (50, 60)),
+                    (session, "wall", (50, 60)),
                     {
                         "event_callback": None,
                         "sync_gui_selection": True,
@@ -878,15 +888,18 @@ class TestBimPlanCore(unittest.TestCase):
             _hover_pick_last_mouse_pos=(10.0, 10.0),
             _hover_pick_dirty=False,
             performance=_make_perf_stub(),
-            _activate_plan_target=lambda *args, **kwargs: calls.append((args, kwargs)) or True,
         )
 
-        self.assertTrue(activate_semantic_plan_target(session, (50, 60)))
+        with patch(
+            "bimplan.selection.selection.activate_plan_target",
+            side_effect=lambda *args, **kwargs: calls.append((args, kwargs)) or True,
+        ):
+            self.assertTrue(activate_semantic_plan_target(session, (50, 60)))
 
         self.assertEqual(
             [
                 (
-                    ("wall", (50, 60)),
+                    (session, "wall", (50, 60)),
                     {
                         "event_callback": None,
                         "sync_gui_selection": True,
@@ -976,7 +989,7 @@ class TestBimPlanCore(unittest.TestCase):
             viewport=SimpleNamespace(focus_plan_view=lambda: None),
             get_plan_provider_registry=lambda: registry,
             defer_document_visual_updates=lambda: nullcontext(),
-            _refresh_primary_selected_plan_target=lambda: None,
+            selection=SimpleNamespace(refresh_primary_selected_plan_target=lambda: None),
             document_visuals=SimpleNamespace(
                 document_is_alive=lambda: True,
                 invalidate_document_dependent_plan_visuals=lambda: None,
@@ -1936,11 +1949,15 @@ class TestBimPlanCore(unittest.TestCase):
         )
 
         with patch.object(
-            plan_selection_module,
-            "get_selected_plan_target",
-            return_value=("wall", object()),
-        ), patch.object(plan_selection_module, "schedule_selection_refresh") as schedule_refresh:
-            plan_selection_module.selection_observer_clear(session, "TestDoc")
+            session,
+            "selection",
+            SimpleNamespace(get_selected_plan_target=lambda: ("wall", object())),
+            create=True,
+        ), patch.object(
+            plan_selection_gui_sync,
+            "schedule_selection_refresh",
+        ) as schedule_refresh:
+            plan_selection_gui_sync.selection_observer_clear(session, "TestDoc")
 
         schedule_refresh.assert_not_called()
 
