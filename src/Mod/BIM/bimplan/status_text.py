@@ -291,7 +291,9 @@ def format_plan_target_selection_state(session, kind, obj):
 
 def get_provider_selected_objects(session):
     return tuple(
-        session.selection.normalize_gui_object_selection(session._provider_selected_objects)
+        session.selection.normalize_gui_object_selection(
+            session.provider_transient_state.provider_selected_objects
+        )
     )
 
 

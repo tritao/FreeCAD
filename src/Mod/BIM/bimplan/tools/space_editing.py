@@ -224,7 +224,7 @@ def restore_selected_semantic_target(session, kind, obj, *, clear_edit_space=Fal
         return
     session.current_tool = "Select"
     if clear_edit_space:
-        session._edit_space = None
+        session.interaction_state.edit_space = None
     if obj:
         session.selection.set_selected_plan_target(kind, obj, pending_restore=True)
         session.selection.set_gui_selection_object(obj)

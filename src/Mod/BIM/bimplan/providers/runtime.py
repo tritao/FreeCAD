@@ -576,7 +576,7 @@ def _get_selected_plan_target_cache_key(session):
 def _get_selected_provider_object_cache_key(session):
     return tuple(
         _get_provider_object_cache_key(obj)
-        for obj in tuple(getattr(session, "_provider_selected_objects", ()) or ())
+        for obj in tuple(session.provider_transient_state.provider_selected_objects or ())
     )
 
 

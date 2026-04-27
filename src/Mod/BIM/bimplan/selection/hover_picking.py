@@ -19,22 +19,19 @@ def get_hovered_plan_target(session):
 
 
 def queue_prime_hover_pick_caches(session):
-    if (
-        session.lifecycle_state.tearing_down
-        or session._plan_hover_pick_cache_queued
-        or not session.doc
-    ):
+    hover_pick_state = session.hover_pick_state
+    if session.lifecycle_state.tearing_down or hover_pick_state.cache_queued or not session.doc:
         return
     try:
         from PySide import QtCore
     except ImportError:
         return
-    session._plan_hover_pick_cache_queued = True
+    hover_pick_state.cache_queued = True
     QtCore.QTimer.singleShot(0, lambda: prime_hover_pick_caches(session))
 
 
 def prime_hover_pick_caches(session):
-    session._plan_hover_pick_cache_queued = False
+    session.hover_pick_state.cache_queued = False
     if session.lifecycle_state.tearing_down or not session.doc:
         return
     with session.performance.plan_perf_trace_event("prime_hover_pick_caches"):
@@ -73,19 +70,20 @@ def prime_hover_pick_caches(session):
 
 
 def should_skip_hover_pick(session, mouse_pos, force=False):
+    hover_pick_state = session.hover_pick_state
     if force or mouse_pos is None:
         return False
     try:
         now = time.monotonic()
     except Exception:
         return False
-    elapsed_ms = (now - float(session._hover_pick_last_time or 0.0)) * 1000.0
+    elapsed_ms = (now - float(hover_pick_state.last_time or 0.0)) * 1000.0
     if elapsed_ms >= _HOVER_PICK_INTERVAL_MS:
-        session._hover_pick_last_time = now
-        session._hover_pick_last_mouse_pos = (float(mouse_pos[0]), float(mouse_pos[1]))
+        hover_pick_state.last_time = now
+        hover_pick_state.last_mouse_pos = (float(mouse_pos[0]), float(mouse_pos[1]))
         return False
-    session._hover_pick_dirty = True
-    session._hover_pick_last_mouse_pos = (float(mouse_pos[0]), float(mouse_pos[1]))
+    hover_pick_state.dirty = True
+    hover_pick_state.last_mouse_pos = (float(mouse_pos[0]), float(mouse_pos[1]))
     session.performance.plan_perf_count("hover_pick_skipped")
     return True
 
@@ -103,7 +101,7 @@ def update_hovered_plan_target(session, mouse_pos, force=False):
             target_ref = plan_target_kinds.coerce_plan_target_ref(
                 session.selection.get_plan_target_at_position(mouse_pos)
             )
-        session._hover_pick_dirty = False
+        session.hover_pick_state.dirty = False
         target_kind = getattr(target_ref, "kind", None)
         target_obj = getattr(target_ref, "obj", None)
         if target_kind == "wall" and not plan_selection_runtime.is_selected_plan_target(
@@ -116,7 +114,7 @@ def update_hovered_plan_target(session, mouse_pos, force=False):
             plan_target_dispatch.set_only_hovered_target(session, None, None)
         return True
     if session.current_tool != "Select":
-        session._hover_pick_dirty = False
+        session.hover_pick_state.dirty = False
         clear_hovered_plan_targets(session)
         return True
     if should_skip_hover_pick(session, mouse_pos, force=force):
@@ -133,7 +131,7 @@ def update_hovered_plan_target(session, mouse_pos, force=False):
                 include_space_fallback=include_space_fallback,
             )
         )
-    session._hover_pick_dirty = False
+    session.hover_pick_state.dirty = False
     target_kind = getattr(target_ref, "kind", None)
     target_obj = getattr(target_ref, "obj", None)
     plan_target_dispatch.set_only_hovered_target(session, target_kind, target_obj)

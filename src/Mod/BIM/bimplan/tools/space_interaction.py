@@ -21,7 +21,9 @@ def _plan_region_tool_state(session):
 
 
 def has_active_space_separator_tool(session):
-    return session._space_separator_start is not None or session.current_tool == "Separator"
+    return session.creation_preview_state.space_separator_start is not None or (
+        session.current_tool == "Separator"
+    )
 
 
 def has_active_plan_region_tool(session):
@@ -255,13 +257,15 @@ def handle_plan_region_point(session, point=None, obj=None):
 
 
 def clear_space_separator_preview(session):
-    session.overlays.finalize_trackers(session._space_separator_preview_trackers)
-    session._space_separator_preview_trackers = []
+    preview_state = session.creation_preview_state
+    session.overlays.finalize_trackers(preview_state.space_separator_preview_trackers)
+    preview_state.space_separator_preview_trackers = []
 
 
 def set_space_separator_tool_state(session, start=None, height=None):
-    session._space_separator_start = start
-    session._space_separator_height = height
+    preview_state = session.creation_preview_state
+    preview_state.space_separator_start = start
+    preview_state.space_separator_height = height
 
 
 def reset_space_separator_tool_state(session, clear_preview=True):
@@ -272,7 +276,7 @@ def reset_space_separator_tool_state(session, clear_preview=True):
 
 def prepare_space_separator_tool_state(session, height=None):
     reset_space_separator_tool_state(session)
-    session._space_separator_height = height
+    session.creation_preview_state.space_separator_height = height
 
 
 def cancel_space_separator_tool(session, refresh=True):
@@ -304,7 +308,7 @@ def update_space_separator_preview(session, point, info):
 
 
 def _get_space_separator_start(session):
-    return getattr(session, "_space_separator_start", None)
+    return session.creation_preview_state.space_separator_start
 
 
 def _coerce_space_separator_point(session, point):
@@ -318,15 +322,16 @@ def _is_valid_space_separator_length(start, end):
 
 
 def _get_or_create_space_separator_preview_tracker(session, DraftTrackers):
-    if not session._space_separator_preview_trackers:
+    preview_state = session.creation_preview_state
+    if not preview_state.space_separator_preview_trackers:
         tracker = session.overlays.make_plan_line_tracker(
             DraftTrackers,
             "space_separator_preview",
             dotted=True,
             ontop=True,
         )
-        session._space_separator_preview_trackers.append(tracker)
-    return session._space_separator_preview_trackers[0]
+        preview_state.space_separator_preview_trackers.append(tracker)
+    return preview_state.space_separator_preview_trackers[0]
 
 
 def _request_space_separator_end_point(session, start):
@@ -358,7 +363,7 @@ def create_space_separator(session, start, end):
         separator = Arch.makeSpaceSeparator(
             start=start,
             end=end,
-            height=session._space_separator_height,
+            height=session.creation_preview_state.space_separator_height,
         )
         if not separator:
             raise RuntimeError("Unable to create space separator")
@@ -387,7 +392,7 @@ def handle_space_separator_point(session, point=None, obj=None):
 
     start = _get_space_separator_start(session)
     if start is None:
-        session._space_separator_start = point
+        session.creation_preview_state.space_separator_start = point
         _request_space_separator_end_point(session, point)
         return
 
@@ -408,7 +413,7 @@ def handle_space_separator_point(session, point=None, obj=None):
 
 
 def set_space_text_pick_state(session, space=None):
-    session._edit_space = space
+    session.interaction_state.edit_space = space
 
 
 def reset_space_text_pick_state(session):
@@ -471,7 +476,7 @@ def _apply_space_text_position(session, space, point):
 
 def finish_space_text_position_pick(session, point=None, obj=None):
     del obj
-    space = session._edit_space
+    space = session.interaction_state.edit_space
     _end_space_text_position_pick(session)
 
     if point is None or not session.selection.is_plan_space_object(space):
@@ -488,7 +493,7 @@ def finish_space_text_position_pick(session, point=None, obj=None):
 
 
 def cancel_space_text_position_pick(session):
-    space = session._edit_space or _get_selected_space_text_target(session)
+    space = session.interaction_state.edit_space or _get_selected_space_text_target(session)
     _end_space_text_position_pick(session)
     session.lifecycle.stop_snapper()
     session.current_tool = "Select"

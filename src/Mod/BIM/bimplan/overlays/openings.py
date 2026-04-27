@@ -18,6 +18,18 @@ def _perf_trace_span(session, name, **fields):
     return session.performance.plan_perf_trace_span(name, **fields)
 
 
+def _opening_tracker_state(session):
+    return session.overlay_tracker_state
+
+
+def _opening_transient_state(session):
+    return session.opening_transient_state
+
+
+def _opening_overlay_state(session):
+    return session.overlay_transient_state
+
+
 def get_opening_handle_markers(session, marker_size=None):
     from draftutils import params
 
@@ -43,19 +55,21 @@ def set_opening_handle_tracker_marker(tracker, marker):
 
 
 def discard_opening_handle_tracker_pool(session):
-    if session._opening_handle_tracker_pool:
-        overlay_manager.finalize_trackers(session._opening_handle_tracker_pool)
-    session._opening_handle_tracker_pool = []
-    session._opening_handle_tracker_pool_queued = False
+    transient_state = _opening_transient_state(session)
+    if transient_state.opening_handle_tracker_pool:
+        overlay_manager.finalize_trackers(transient_state.opening_handle_tracker_pool)
+    transient_state.opening_handle_tracker_pool = []
+    transient_state.opening_handle_tracker_pool_queued = False
 
 
 def queue_prime_opening_handle_tracker_pool(session):
+    transient_state = _opening_transient_state(session)
     if (
         session.lifecycle_state.tearing_down
         or session.current_tool != "Select"
-        or session._opening_handle_tracker_pool
-        or session._opening_handle_trackers
-        or session._opening_handle_tracker_pool_queued
+        or transient_state.opening_handle_tracker_pool
+        or transient_state.opening_handle_trackers
+        or transient_state.opening_handle_tracker_pool_queued
         or not session.doc
     ):
         return
@@ -63,17 +77,18 @@ def queue_prime_opening_handle_tracker_pool(session):
         from PySide import QtCore
     except ImportError:
         return
-    session._opening_handle_tracker_pool_queued = True
+    transient_state.opening_handle_tracker_pool_queued = True
     QtCore.QTimer.singleShot(0, lambda: prime_opening_handle_tracker_pool(session))
 
 
 def prime_opening_handle_tracker_pool(session):
-    session._opening_handle_tracker_pool_queued = False
+    transient_state = _opening_transient_state(session)
+    transient_state.opening_handle_tracker_pool_queued = False
     if (
         session.lifecycle_state.tearing_down
         or session.current_tool != "Select"
-        or session._opening_handle_tracker_pool
-        or session._opening_handle_trackers
+        or transient_state.opening_handle_tracker_pool
+        or transient_state.opening_handle_trackers
         or not session.doc
     ):
         return
@@ -105,12 +120,14 @@ def prime_opening_handle_tracker_pool(session):
     except Exception:
         overlay_manager.finalize_trackers(pooled_trackers)
         return
-    session._opening_handle_tracker_pool = pooled_trackers
+    transient_state.opening_handle_tracker_pool = pooled_trackers
     _perf_count(session, "opening_handle_pool_primes")
 
 
 def sync_hovered_opening_overlay(session):
     with _perf_trace_span(session, "sync_hovered_opening_overlay"):
+        tracker_state = _opening_tracker_state(session)
+        overlay_state = _opening_overlay_state(session)
         opening = session.hovered_opening
         if session.current_tool != "Select":
             clear_hovered_opening_overlay(session)
@@ -129,10 +146,10 @@ def sync_hovered_opening_overlay(session):
             color,
         )
         if (
-            not session._hovered_opening_overlay_dirty
-            and session._hovered_opening_overlay_render_state == render_state
+            not overlay_state.hovered_opening_overlay_dirty
+            and overlay_state.hovered_opening_overlay_render_state == render_state
         ):
-            for tracker in session._opening_hover_trackers:
+            for tracker in tracker_state.opening_hover_trackers:
                 try:
                     raise_tracker = getattr(tracker, "raiseTracker", None)
                     if callable(raise_tracker):
@@ -148,7 +165,7 @@ def sync_hovered_opening_overlay(session):
             return
         segments = overlay_geometry.get_opening_overlay_segments(session, opening)
         _perf_count(session, "hovered_opening_overlay_segments", len(segments))
-        if len(session._opening_hover_trackers) != len(segments):
+        if len(tracker_state.opening_hover_trackers) != len(segments):
             clear_hovered_opening_overlay(session)
             for _start, _end in segments:
                 tracker = overlay_manager.make_plan_line_tracker(
@@ -158,8 +175,8 @@ def sync_hovered_opening_overlay(session):
                     swidth=width,
                     ontop=True,
                 )
-                session._opening_hover_trackers.append(tracker)
-        for tracker, (start, end) in zip(session._opening_hover_trackers, segments):
+                tracker_state.opening_hover_trackers.append(tracker)
+        for tracker, (start, end) in zip(tracker_state.opening_hover_trackers, segments):
             overlay_manager.set_plan_line_tracker_width(tracker, width)
             tracker.setColor(color)
             tracker.p1(start)
@@ -171,19 +188,21 @@ def sync_hovered_opening_overlay(session):
                     raise_tracker()
             except Exception:
                 pass
-        session._hovered_opening_overlay_render_state = render_state
-        session._hovered_opening_overlay_dirty = False
+        overlay_state.hovered_opening_overlay_render_state = render_state
+        overlay_state.hovered_opening_overlay_dirty = False
 
 
 def clear_hovered_opening_overlay(session):
-    overlay_manager.finalize_trackers(session._opening_hover_trackers)
-    session._opening_hover_trackers = []
-    session._hovered_opening_overlay_dirty = False
-    session._hovered_opening_overlay_render_state = None
+    tracker_state = _opening_tracker_state(session)
+    overlay_state = _opening_overlay_state(session)
+    overlay_manager.finalize_trackers(tracker_state.opening_hover_trackers)
+    tracker_state.opening_hover_trackers = []
+    overlay_state.hovered_opening_overlay_dirty = False
+    overlay_state.hovered_opening_overlay_render_state = None
 
 
 def invalidate_hovered_opening_overlay_cache(session):
-    session._hovered_opening_overlay_dirty = True
+    _opening_overlay_state(session).hovered_opening_overlay_dirty = True
 
 
 def create_opening_overlay_trackers(
@@ -218,6 +237,8 @@ def create_opening_overlay_trackers(
 
 def sync_selected_opening_overlay(session):
     with _perf_trace_span(session, "sync_selected_opening_overlay"):
+        tracker_state = _opening_tracker_state(session)
+        overlay_state = _opening_overlay_state(session)
         opening = plan_selection.get_selected_plan_target_object(session, "opening")
         if session.current_tool != "Select" or not session.openings.is_hosted_opening_object(
             opening
@@ -232,8 +253,8 @@ def sync_selected_opening_overlay(session):
             color,
         )
         if (
-            not session._selected_opening_overlay_dirty
-            and session._selected_opening_overlay_render_state == render_state
+            not overlay_state.selected_opening_overlay_dirty
+            and overlay_state.selected_opening_overlay_render_state == render_state
         ):
             _perf_count(session, "selected_opening_overlay_cache_hits")
             return
@@ -245,14 +266,14 @@ def sync_selected_opening_overlay(session):
         segments = overlay_geometry.get_opening_combined_overlay_segments(session, opening)
         _perf_count(session, "selected_opening_overlay_segments", len(segments))
         (
-            session._opening_overlay_trackers,
-            session._opening_hover_trackers,
+            tracker_state.opening_overlay_trackers,
+            tracker_state.opening_hover_trackers,
             transferred_trackers,
         ) = overlay_manager.sync_segment_overlay_trackers(
             session,
             DraftTrackers,
-            trackers=session._opening_overlay_trackers,
-            hover_trackers=session._opening_hover_trackers,
+            trackers=tracker_state.opening_overlay_trackers,
+            hover_trackers=tracker_state.opening_hover_trackers,
             segments=segments,
             label="selected-opening-overlay:{}".format(getattr(opening, "Name", "unknown")),
             color=color,
@@ -261,20 +282,22 @@ def sync_selected_opening_overlay(session):
             transfer_perf_key="selected_opening_overlay_tracker_transfers",
         )
         if transferred_trackers:
-            session._hovered_opening_overlay_render_state = None
-        session._selected_opening_overlay_render_state = render_state
-        session._selected_opening_overlay_dirty = False
+            overlay_state.hovered_opening_overlay_render_state = None
+        overlay_state.selected_opening_overlay_render_state = render_state
+        overlay_state.selected_opening_overlay_dirty = False
 
 
 def clear_selected_opening_overlay(session):
-    overlay_manager.finalize_trackers(session._opening_overlay_trackers)
-    session._opening_overlay_trackers = []
-    session._selected_opening_overlay_dirty = False
-    session._selected_opening_overlay_render_state = None
+    tracker_state = _opening_tracker_state(session)
+    overlay_state = _opening_overlay_state(session)
+    overlay_manager.finalize_trackers(tracker_state.opening_overlay_trackers)
+    tracker_state.opening_overlay_trackers = []
+    overlay_state.selected_opening_overlay_dirty = False
+    overlay_state.selected_opening_overlay_render_state = None
 
 
 def invalidate_selected_opening_overlay_cache(session):
-    session._selected_opening_overlay_dirty = True
+    _opening_overlay_state(session).selected_opening_overlay_dirty = True
 
 
 def sync_selected_wall_opening_context_overlay(session):
@@ -296,13 +319,14 @@ def sync_selected_wall_opening_context_overlay(session):
             opening,
             color=color,
             width=width,
-            tracker_store=session._selected_wall_opening_context_trackers,
+            tracker_store=_opening_tracker_state(session).selected_wall_opening_context_trackers,
         )
 
 
 def clear_selected_wall_opening_context_overlay(session):
-    overlay_manager.finalize_trackers(session._selected_wall_opening_context_trackers)
-    session._selected_wall_opening_context_trackers = []
+    tracker_state = _opening_tracker_state(session)
+    overlay_manager.finalize_trackers(tracker_state.selected_wall_opening_context_trackers)
+    tracker_state.selected_wall_opening_context_trackers = []
 
 
 def get_selected_opening_handle_specs(session, opening):
@@ -322,6 +346,7 @@ def sync_selected_opening_handles(session):
     with _perf_trace_span(session, "sync_selected_opening_handles"):
         from draftutils import params
 
+        transient_state = _opening_transient_state(session)
         opening = plan_selection.get_selected_plan_target_object(session, "opening")
         if session.current_tool != "Select":
             clear_selected_opening_handles(session)
@@ -346,8 +371,8 @@ def sync_selected_opening_handles(session):
             session.visibility.get_document_object_key(opening),
             handle_entries,
         )
-        if session._selected_opening_handle_render_state == render_state and len(
-            session._opening_handle_trackers
+        if transient_state.selected_opening_handle_render_state == render_state and len(
+            transient_state.opening_handle_trackers
         ) == len(specs):
             _perf_count(session, "selected_opening_handle_cache_hits")
             return
@@ -356,22 +381,24 @@ def sync_selected_opening_handles(session):
         except ImportError:
             clear_selected_opening_handles(session)
             return
-        if len(session._opening_handle_trackers) == len(specs):
+        if len(transient_state.opening_handle_trackers) == len(specs):
             for tracker, (_idx, _role, point, marker) in zip(
-                session._opening_handle_trackers, specs
+                transient_state.opening_handle_trackers, specs
             ):
                 set_opening_handle_tracker_marker(tracker, marker)
                 tracker.set(point)
                 tracker.on()
             _perf_count(session, "selected_opening_handle_tracker_reuses")
         else:
-            if not session._opening_handle_trackers and len(
-                session._opening_handle_tracker_pool
+            if not transient_state.opening_handle_trackers and len(
+                transient_state.opening_handle_tracker_pool
             ) == len(specs):
-                session._opening_handle_trackers = session._opening_handle_tracker_pool
-                session._opening_handle_tracker_pool = []
+                transient_state.opening_handle_trackers = (
+                    transient_state.opening_handle_tracker_pool
+                )
+                transient_state.opening_handle_tracker_pool = []
                 for tracker, (_idx, _role, point, marker) in zip(
-                    session._opening_handle_trackers, specs
+                    transient_state.opening_handle_trackers, specs
                 ):
                     set_opening_handle_tracker_marker(tracker, marker)
                     tracker.set(point)
@@ -379,8 +406,8 @@ def sync_selected_opening_handles(session):
                 _perf_count(session, "selected_opening_handle_pool_reuses")
             else:
                 clear_selected_opening_handles(session)
-                if session._opening_handle_tracker_pool and len(
-                    session._opening_handle_tracker_pool
+                if transient_state.opening_handle_tracker_pool and len(
+                    transient_state.opening_handle_tracker_pool
                 ) != len(specs):
                     discard_opening_handle_tracker_pool(session)
                 for idx, _role, point, marker in specs:
@@ -391,18 +418,19 @@ def sync_selected_opening_handles(session):
                         inactive=True,
                     )
                     tracker.on()
-                    session._opening_handle_trackers.append(tracker)
-        session._selected_opening_handle_render_state = render_state
+                    transient_state.opening_handle_trackers.append(tracker)
+        transient_state.selected_opening_handle_render_state = render_state
 
 
 def clear_selected_opening_handles(session):
-    if session._opening_handle_trackers:
+    transient_state = _opening_transient_state(session)
+    if transient_state.opening_handle_trackers:
         discard_opening_handle_tracker_pool(session)
-        for tracker in session._opening_handle_trackers:
+        for tracker in transient_state.opening_handle_trackers:
             try:
                 tracker.off()
             except Exception:
                 pass
-        session._opening_handle_tracker_pool = session._opening_handle_trackers
-    session._opening_handle_trackers = []
-    session._selected_opening_handle_render_state = None
+        transient_state.opening_handle_tracker_pool = transient_state.opening_handle_trackers
+    transient_state.opening_handle_trackers = []
+    transient_state.selected_opening_handle_render_state = None
