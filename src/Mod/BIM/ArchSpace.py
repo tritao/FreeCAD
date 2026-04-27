@@ -35,6 +35,7 @@ __url__ = "https://www.freecad.org"
 #  building, ie. a room.
 
 import json
+import heapq
 import math
 import re
 
@@ -190,6 +191,7 @@ AreaCalculationType = ["XY-plane projection", "At Center of Mass"]
 _BOUNDARY_SIDE_HINT_VERSION = 1
 _BOUNDARY_REGION_HINT_VERSION = 1
 _SCHEDULED_AUTO_SPACE_TEXT_REFRESHES = {}
+_SPACE_TEXT_VERTICAL_DISTANCE_WEIGHT = 1.75
 
 
 class _Space(ArchComponent.Component):
@@ -3048,9 +3050,6 @@ def getBoundaryFaceRegionCandidates(boundary_faces, label=None, boundary_count=N
     )
 
 
-_SPACE_TEXT_CANDIDATE_RATIOS = (0.5, 0.38, 0.62, 0.25, 0.75, 0.12, 0.88)
-
-
 def _get_length_value(value, default=0.0):
     try:
         return float(value.Value)
@@ -3255,6 +3254,13 @@ def _bounds_distance_xy(first, second):
     return math.hypot(dx, dy)
 
 
+def _bounds_signed_distance_xy(first, second):
+    x_overlap, y_overlap = _bounds_projection_overlap_xy(first, second)
+    if x_overlap > 0.0 and y_overlap > 0.0:
+        return -min(x_overlap, y_overlap)
+    return _bounds_distance_xy(first, second)
+
+
 def _point_in_polyline_xy(point, polyline):
     points = list(polyline or ())
     if len(points) < 3:
@@ -3386,55 +3392,294 @@ def _get_label_candidate_bounds(point, text_box, text_align="Center"):
     return (xmin, point.y - below, xmax, point.y + above, point.z, point.z)
 
 
-def _iter_space_text_candidates(default_point, space_bounds):
-    seen = set()
-
-    def add(point):
-        key = (round(float(point.x), 6), round(float(point.y), 6), round(float(point.z), 6))
-        if key in seen:
-            return
-        seen.add(key)
-        yield point
-
-    for point in add(default_point):
-        yield point
-
-    x_min, y_min, x_max, y_max, z_min, _z_max = space_bounds
-    if abs(x_max - x_min) < 1e-6 or abs(y_max - y_min) < 1e-6:
-        return
-    for y_ratio in _SPACE_TEXT_CANDIDATE_RATIOS:
-        for x_ratio in _SPACE_TEXT_CANDIDATE_RATIOS:
-            point = FreeCAD.Vector(
-                x_min + (x_max - x_min) * x_ratio,
-                y_min + (y_max - y_min) * y_ratio,
-                z_min,
-            )
-            for candidate in add(point):
-                yield candidate
+def _get_space_boundary_polylines(faces):
+    polylines = []
+    for face in faces or ():
+        try:
+            polylines.extend(ArchPlanGeometry.get_face_wire_polylines([face]))
+        except Exception:
+            continue
+    return tuple(tuple(FreeCAD.Vector(point) for point in polyline) for polyline in polylines)
 
 
-def _iter_space_text_obstacle_candidates(
-    default_point, obstacle_bounds, text_box, preferred_clearance, z_value
+def _distance_point_to_segment_xy(point, start, end):
+    px = float(point.x)
+    py = float(point.y)
+    x1 = float(start.x)
+    y1 = float(start.y)
+    x2 = float(end.x)
+    y2 = float(end.y)
+    dx = x2 - x1
+    dy = y2 - y1
+    length_sq = dx * dx + dy * dy
+    if length_sq <= 1e-12:
+        return math.hypot(px - x1, py - y1)
+    t = ((px - x1) * dx + (py - y1) * dy) / length_sq
+    t = max(0.0, min(1.0, t))
+    proj_x = x1 + dx * t
+    proj_y = y1 + dy * t
+    return math.hypot(px - proj_x, py - proj_y)
+
+
+def _distance_point_to_boundary_polylines_xy(point, boundary_polylines):
+    best = None
+    for polyline in boundary_polylines or ():
+        points = list(polyline or ())
+        if len(points) < 2:
+            continue
+        for start, end in zip(points, points[1:]):
+            distance = _distance_point_to_segment_xy(point, start, end)
+            if best is None or distance < best:
+                best = distance
+    return 0.0 if best is None else best
+
+
+def _space_text_distance_to_default(point, default_point):
+    dx = float(point.x) - float(default_point.x)
+    dy = float(point.y) - float(default_point.y)
+    return math.hypot(dx, dy * _SPACE_TEXT_VERTICAL_DISTANCE_WEIGHT)
+
+
+def _distance_point_to_bounds_xy(point, bounds, vertical_weight=1.0):
+    dx = max(bounds[0] - float(point.x), float(point.x) - bounds[2], 0.0)
+    dy = max(bounds[1] - float(point.y), float(point.y) - bounds[3], 0.0)
+    return math.hypot(dx, dy * vertical_weight)
+
+
+def _iter_label_sample_points(candidate_bounds):
+    xmin, ymin, xmax, ymax, zmin, _zmax = candidate_bounds
+    center_x = (xmin + xmax) * 0.5
+    center_y = (ymin + ymax) * 0.5
+    points = (
+        FreeCAD.Vector(center_x, center_y, zmin),
+        FreeCAD.Vector(xmin, ymin, zmin),
+        FreeCAD.Vector(xmin, ymax, zmin),
+        FreeCAD.Vector(xmax, ymin, zmin),
+        FreeCAD.Vector(xmax, ymax, zmin),
+        FreeCAD.Vector(center_x, ymin, zmin),
+        FreeCAD.Vector(center_x, ymax, zmin),
+        FreeCAD.Vector(xmin, center_y, zmin),
+        FreeCAD.Vector(xmax, center_y, zmin),
+    )
+    return points
+
+
+def _get_candidate_room_signed_distance(faces, boundary_polylines, candidate_bounds):
+    signed_distances = []
+    for sample in _iter_label_sample_points(candidate_bounds):
+        boundary_distance = _distance_point_to_boundary_polylines_xy(sample, boundary_polylines)
+        if _point_in_space_footprint(faces, sample):
+            signed_distances.append(boundary_distance)
+        else:
+            signed_distances.append(-boundary_distance)
+    return min(signed_distances or [float("-inf")])
+
+
+def _get_candidate_feasible_signed_distance(
+    faces, boundary_polylines, candidate_bounds, obstacle_bounds, preferred_clearance
 ):
-    width = float(text_box.get("width", 0.0) or 0.0)
-    below = float(text_box.get("below", 0.0) or 0.0)
-    above = float(text_box.get("above", 0.0) or 0.0)
-    half_width = width * 0.5
+    room_margin = _get_candidate_room_signed_distance(faces, boundary_polylines, candidate_bounds)
+    obstacle_margin = min(
+        (
+            _bounds_signed_distance_xy(candidate_bounds, obstacle) - preferred_clearance
+            for obstacle in obstacle_bounds or ()
+        ),
+        default=float("inf"),
+    )
+    return min(room_margin, obstacle_margin)
 
-    for obstacle in obstacle_bounds or ():
-        xmin, ymin, xmax, ymax, _zmin, _zmax = obstacle
-        center_x = (xmin + xmax) * 0.5
-        center_y = (ymin + ymax) * 0.5
 
-        yield FreeCAD.Vector(default_point.x, ymax + preferred_clearance + below, z_value)
-        yield FreeCAD.Vector(default_point.x, ymin - preferred_clearance - above, z_value)
-        yield FreeCAD.Vector(xmin - preferred_clearance - half_width, default_point.y, z_value)
-        yield FreeCAD.Vector(xmax + preferred_clearance + half_width, default_point.y, z_value)
+def _get_space_text_search_precision(space_bounds, text_box):
+    width = max(float(space_bounds[2] - space_bounds[0]), 0.0)
+    height = max(float(space_bounds[3] - space_bounds[1]), 0.0)
+    label_scale = max(
+        float(text_box.get("width", 0.0) or 0.0),
+        float(text_box.get("above", 0.0) or 0.0) + float(text_box.get("below", 0.0) or 0.0),
+    )
+    return max(min(width, height, max(label_scale * 0.1, 25.0)), 10.0)
 
-        yield FreeCAD.Vector(center_x, ymax + preferred_clearance + below, z_value)
-        yield FreeCAD.Vector(center_x, ymin - preferred_clearance - above, z_value)
-        yield FreeCAD.Vector(xmin - preferred_clearance - half_width, center_y, z_value)
-        yield FreeCAD.Vector(xmax + preferred_clearance + half_width, center_y, z_value)
+
+def _search_best_space_text_anchor(
+    default_point,
+    faces,
+    boundary_polylines,
+    space_bounds,
+    text_box,
+    text_align,
+    obstacle_bounds,
+    preferred_clearance,
+):
+    xmin, ymin, xmax, ymax, zmin, _zmax = space_bounds
+    width = xmax - xmin
+    height = ymax - ymin
+    if width <= 1e-6 or height <= 1e-6:
+        return default_point
+
+    class _Cell:
+        __slots__ = ("x", "y", "half_size", "distance", "max_distance", "distance_to_default")
+
+        def __init__(self, x, y, half_size):
+            self.x = float(x)
+            self.y = float(y)
+            self.half_size = float(half_size)
+            point = FreeCAD.Vector(self.x, self.y, zmin)
+            candidate_bounds = _get_label_candidate_bounds(point, text_box, text_align)
+            self.distance = _get_candidate_feasible_signed_distance(
+                faces, boundary_polylines, candidate_bounds, obstacle_bounds, preferred_clearance
+            )
+            self.max_distance = self.distance + self.half_size * math.sqrt(2.0)
+            self.distance_to_default = _space_text_distance_to_default(point, default_point)
+
+    def _cell_key(cell):
+        return (-cell.max_distance, -cell.distance, cell.distance_to_default)
+
+    def _is_better(left, right):
+        if left.distance > right.distance + 1e-6:
+            return True
+        if abs(left.distance - right.distance) <= 1e-6:
+            return left.distance_to_default < right.distance_to_default - 1e-6
+        return False
+
+    cell_size = min(width, height)
+    half_size = cell_size * 0.5
+    cells = []
+    x = xmin
+    while x < xmax - 1e-6:
+        y = ymin
+        while y < ymax - 1e-6:
+            cells.append(_Cell(x + half_size, y + half_size, half_size))
+            y += cell_size
+        x += cell_size
+
+    best = _Cell(default_point.x, default_point.y, 0.0)
+    bbox_center = _Cell(xmin + width * 0.5, ymin + height * 0.5, 0.0)
+    if _is_better(bbox_center, best):
+        best = bbox_center
+
+    heap = [
+        (_cell_key(index_cell[1]), index_cell[0], index_cell[1]) for index_cell in enumerate(cells)
+    ]
+    heapq.heapify(heap)
+    precision = _get_space_text_search_precision(space_bounds, text_box)
+    next_index = len(cells)
+
+    while heap:
+        _key, _index, cell = heapq.heappop(heap)
+        if _is_better(cell, best):
+            best = cell
+        if cell.max_distance - best.distance <= precision or cell.half_size <= precision * 0.5:
+            continue
+
+        next_half = cell.half_size * 0.5
+        for dx in (-next_half, next_half):
+            for dy in (-next_half, next_half):
+                child = _Cell(cell.x + dx, cell.y + dy, next_half)
+                heapq.heappush(heap, (_cell_key(child), next_index, child))
+                next_index += 1
+
+    return FreeCAD.Vector(best.x, best.y, zmin)
+
+
+def _search_nearest_feasible_space_text_anchor(
+    default_point,
+    faces,
+    boundary_polylines,
+    space_bounds,
+    text_box,
+    text_align,
+    obstacle_bounds,
+    preferred_clearance,
+    target_distance,
+):
+    xmin, ymin, xmax, ymax, zmin, _zmax = space_bounds
+    width = xmax - xmin
+    height = ymax - ymin
+    if width <= 1e-6 or height <= 1e-6:
+        return None
+
+    class _Cell:
+        __slots__ = ("x", "y", "half_size", "distance", "max_distance", "min_distance_to_default")
+
+        def __init__(self, x, y, half_size):
+            self.x = float(x)
+            self.y = float(y)
+            self.half_size = float(half_size)
+            point = FreeCAD.Vector(self.x, self.y, zmin)
+            candidate_bounds = _get_label_candidate_bounds(point, text_box, text_align)
+            self.distance = _get_candidate_feasible_signed_distance(
+                faces, boundary_polylines, candidate_bounds, obstacle_bounds, preferred_clearance
+            )
+            self.max_distance = self.distance + self.half_size * math.sqrt(2.0)
+            self.min_distance_to_default = _distance_point_to_bounds_xy(
+                default_point,
+                (
+                    self.x - self.half_size,
+                    self.y - self.half_size,
+                    self.x + self.half_size,
+                    self.y + self.half_size,
+                    zmin,
+                    zmin,
+                ),
+                vertical_weight=_SPACE_TEXT_VERTICAL_DISTANCE_WEIGHT,
+            )
+
+    cell_size = min(width, height)
+    half_size = cell_size * 0.5
+    cells = []
+    x = xmin
+    while x < xmax - 1e-6:
+        y = ymin
+        while y < ymax - 1e-6:
+            cells.append(_Cell(x + half_size, y + half_size, half_size))
+            y += cell_size
+        x += cell_size
+
+    precision = _get_space_text_search_precision(space_bounds, text_box)
+    heap = [
+        ((cell.min_distance_to_default, -cell.max_distance), index, cell)
+        for index, cell in enumerate(cells)
+        if cell.max_distance >= target_distance - precision
+    ]
+    heapq.heapify(heap)
+    next_index = len(cells)
+    best = None
+
+    default_cell = _Cell(default_point.x, default_point.y, 0.0)
+    if default_cell.distance >= target_distance - 1e-6:
+        best = default_cell
+
+    while heap:
+        _key, _index, cell = heapq.heappop(heap)
+        if cell.max_distance < target_distance - precision:
+            continue
+        if (
+            best is not None
+            and cell.min_distance_to_default > best.min_distance_to_default + precision
+        ):
+            continue
+        if cell.distance >= target_distance - 1e-6:
+            if best is None or cell.min_distance_to_default < best.min_distance_to_default - 1e-6:
+                best = cell
+                if cell.half_size <= precision * 0.5:
+                    continue
+        if cell.half_size <= precision * 0.5:
+            continue
+
+        next_half = cell.half_size * 0.5
+        for dx in (-next_half, next_half):
+            for dy in (-next_half, next_half):
+                child = _Cell(cell.x + dx, cell.y + dy, next_half)
+                if child.max_distance < target_distance - precision:
+                    continue
+                heapq.heappush(
+                    heap,
+                    ((child.min_distance_to_default, -child.max_distance), next_index, child),
+                )
+                next_index += 1
+
+    if best is None:
+        return None
+    return FreeCAD.Vector(best.x, best.y, zmin)
 
 
 def _collect_space_label_obstacle_bounds(space, faces):
@@ -3583,50 +3828,16 @@ def schedule_auto_space_text_refresh(doc, changed_bounds=None):
     return 1
 
 
-def _get_space_text_preferred_clearance(text_box):
-    width = float(text_box.get("width", 0.0) or 0.0)
+def _get_space_text_minimum_clearance(text_box):
+    height = float(text_box.get("above", 0.0) or 0.0) + float(text_box.get("below", 0.0) or 0.0)
     padding = float(text_box.get("padding", 0.0) or 0.0)
-    return max(width * 0.6, padding * 4.0, 50.0)
+    return max(height * 0.5, padding * 2.0, 150.0)
 
 
 def _bounds_projection_overlap_xy(bounds_a, bounds_b):
     x_overlap = min(bounds_a[2], bounds_b[2]) - max(bounds_a[0], bounds_b[0])
     y_overlap = min(bounds_a[3], bounds_b[3]) - max(bounds_a[1], bounds_b[1])
     return max(0.0, x_overlap), max(0.0, y_overlap)
-
-
-def _score_space_text_candidate(
-    point, default_point, candidate_bounds, obstacle_bounds, space_bounds, preferred_clearance=0.0
-):
-    overlap_area = sum(
-        _bounds_intersection_area_xy(candidate_bounds, obstacle) for obstacle in obstacle_bounds
-    )
-    if obstacle_bounds:
-        clearance = min(
-            _bounds_distance_xy(candidate_bounds, obstacle) for obstacle in obstacle_bounds
-        )
-    else:
-        clearance = 0.0
-    center_distance = math.hypot(point.x - default_point.x, point.y - default_point.y)
-    boundary_margin = min(
-        point.x - space_bounds[0],
-        space_bounds[2] - point.x,
-        point.y - space_bounds[1],
-        space_bounds[3] - point.y,
-    )
-    achieved_clearance = min(clearance, preferred_clearance)
-    projection_overlap = sum(
-        sum(_bounds_projection_overlap_xy(candidate_bounds, obstacle))
-        for obstacle in obstacle_bounds
-    )
-    return (
-        1 if overlap_area <= 1e-6 else 0,
-        -overlap_area,
-        achieved_clearance,
-        -projection_overlap,
-        -center_distance,
-        boundary_margin,
-    )
 
 
 def _get_automatic_space_text_position(space, text_box=None, text_align="Center"):
@@ -3638,7 +3849,7 @@ def _get_automatic_space_text_position(space, text_box=None, text_align="Center"
     if not obstacles:
         return default_point
     text_box = text_box or {"width": 0.0, "below": 0.0, "above": 0.0, "padding": 0.0}
-    preferred_clearance = _get_space_text_preferred_clearance(text_box)
+    minimum_clearance = _get_space_text_minimum_clearance(text_box)
     default_bounds = _get_label_candidate_bounds(default_point, text_box, text_align)
     if all(not _bounds_intersect_xy(default_bounds, obstacle) for obstacle in obstacles):
         return default_point
@@ -3656,51 +3867,30 @@ def _get_automatic_space_text_position(space, text_box=None, text_align="Center"
     except Exception:
         return default_point
 
-    best_point = default_point
-    best_score = _score_space_text_candidate(
+    boundary_polylines = _get_space_boundary_polylines(faces)
+    best_point = _search_best_space_text_anchor(
         default_point,
-        default_point,
-        default_bounds,
-        obstacles,
+        faces,
+        boundary_polylines,
         space_bounds,
-        preferred_clearance,
-    )
-    for candidate in _iter_space_text_obstacle_candidates(
-        default_point,
-        obstacles,
         text_box,
-        preferred_clearance,
-        space_bounds[4],
-    ):
-        if not _point_in_space_footprint(faces, candidate):
-            continue
-        candidate_bounds = _get_label_candidate_bounds(candidate, text_box, text_align)
-        score = _score_space_text_candidate(
-            candidate,
-            default_point,
-            candidate_bounds,
-            obstacles,
-            space_bounds,
-            preferred_clearance,
-        )
-        if score > best_score:
-            best_point = candidate
-            best_score = score
-    for candidate in _iter_space_text_candidates(default_point, space_bounds):
-        if not _point_in_space_footprint(faces, candidate):
-            continue
-        candidate_bounds = _get_label_candidate_bounds(candidate, text_box, text_align)
-        score = _score_space_text_candidate(
-            candidate,
-            default_point,
-            candidate_bounds,
-            obstacles,
-            space_bounds,
-            preferred_clearance,
-        )
-        if score > best_score:
-            best_point = candidate
-            best_score = score
+        text_align,
+        obstacles,
+        0.0,
+    )
+    nearest_point = _search_nearest_feasible_space_text_anchor(
+        default_point,
+        faces,
+        boundary_polylines,
+        space_bounds,
+        text_box,
+        text_align,
+        obstacles,
+        0.0,
+        minimum_clearance,
+    )
+    if nearest_point is not None:
+        return nearest_point
     return best_point
 
 
