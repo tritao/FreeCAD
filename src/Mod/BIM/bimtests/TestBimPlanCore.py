@@ -79,6 +79,7 @@ from bimplan.providers.runtime import (
     normalize_plan_provider_overlay,
 )
 from bimplan.providers.runtime import PlanProviderSnapshot, collect_plan_provider_snapshot
+from bimplan.providers import runtime as plan_provider_runtime_module
 from bimplan.providers import (
     PlanActionSpec,
     PlanContextPanelSpec,
@@ -1728,6 +1729,113 @@ class TestBimPlanCore(unittest.TestCase):
             plan_selection_module.selection_observer_clear(session, "TestDoc")
 
         schedule_refresh.assert_not_called()
+
+    def test_provider_contributions_reuse_document_cache_for_same_context(self):
+        selected_targets = []
+        session = SimpleNamespace(
+            document_visuals=SimpleNamespace(document_is_alive=lambda: True),
+            _plan_provider_document_cache={},
+            _plan_provider_refresh_cache=None,
+            _provider_selected_objects=[],
+            _provider_overlay_mode="architecture",
+            selection=SimpleNamespace(get_selected_plan_targets=lambda: tuple(selected_targets)),
+        )
+        context = SimpleNamespace(
+            document_name="TestDoc",
+            active_storey_name="",
+            current_tool="Select",
+        )
+
+        with patch.object(
+            plan_provider_runtime_module,
+            "_get_plan_edit_context_or_none",
+            return_value=context,
+        ), patch.object(
+            plan_provider_runtime_module,
+            "_collect_plan_provider_contributions_for_method",
+            return_value=("overlay",),
+        ) as collect:
+            self.assertEqual(
+                ("overlay",),
+                collect_plan_provider_contributions(session, "get_overlays", object()),
+            )
+            self.assertEqual(
+                ("overlay",),
+                collect_plan_provider_contributions(session, "get_overlays", object()),
+            )
+
+        self.assertEqual(1, collect.call_count)
+
+    def test_provider_contributions_cache_key_tracks_selected_targets(self):
+        wall1 = SimpleNamespace(Name="Wall001", Document=SimpleNamespace(Name="TestDoc"))
+        wall2 = SimpleNamespace(Name="Wall002", Document=SimpleNamespace(Name="TestDoc"))
+        selected_targets = [SimpleNamespace(kind="wall", obj=wall1)]
+        session = SimpleNamespace(
+            document_visuals=SimpleNamespace(document_is_alive=lambda: True),
+            _plan_provider_document_cache={},
+            _plan_provider_refresh_cache=None,
+            _provider_selected_objects=[],
+            _provider_overlay_mode="architecture",
+            selection=SimpleNamespace(get_selected_plan_targets=lambda: tuple(selected_targets)),
+        )
+        context = SimpleNamespace(
+            document_name="TestDoc",
+            active_storey_name="",
+            current_tool="Select",
+        )
+
+        with patch.object(
+            plan_provider_runtime_module,
+            "_get_plan_edit_context_or_none",
+            return_value=context,
+        ), patch.object(
+            plan_provider_runtime_module,
+            "_collect_plan_provider_contributions_for_method",
+            return_value=("overlay",),
+        ) as collect:
+            collect_plan_provider_contributions(session, "get_overlays", object())
+            selected_targets[:] = [SimpleNamespace(kind="wall", obj=wall2)]
+            collect_plan_provider_contributions(session, "get_overlays", object())
+
+        self.assertEqual(2, collect.call_count)
+
+    def test_provider_snapshot_reuses_document_cache_for_same_context(self):
+        session = SimpleNamespace(
+            document_visuals=SimpleNamespace(document_is_alive=lambda: True),
+            _plan_provider_document_cache={},
+            _plan_provider_refresh_cache=None,
+            _provider_selected_objects=[],
+            _provider_overlay_mode="architecture",
+            selection=SimpleNamespace(get_selected_plan_targets=lambda: ()),
+        )
+        context = SimpleNamespace(
+            document_name="TestDoc",
+            active_storey_name="",
+            current_tool="Select",
+        )
+        collected = {
+            "tools": [SimpleNamespace(key="tool")],
+            "overlays": [SimpleNamespace(key="overlay")],
+            "issues": [],
+            "context_panels": [],
+            "inspector_sections": [],
+        }
+
+        with patch.object(
+            plan_provider_runtime_module,
+            "_get_plan_edit_context_or_none",
+            return_value=context,
+        ), patch.object(
+            plan_provider_runtime_module,
+            "_collect_plan_provider_snapshot_surfaces",
+            return_value=collected,
+        ) as collect:
+            snapshot1 = collect_plan_provider_snapshot(session)
+            snapshot2 = collect_plan_provider_snapshot(session)
+
+        self.assertEqual(1, collect.call_count)
+        self.assertEqual(snapshot1, snapshot2)
+        self.assertEqual(("tool",), tuple(tool.key for tool in snapshot1.tools))
 
     def test_plan_controls_dispose_detaches_and_defers_delete(self):
         class _Signal:

@@ -542,6 +542,56 @@ def _get_provider_refresh_cache(session):
     return None
 
 
+def _get_provider_document_cache(session):
+    document_cache = getattr(session, "_plan_provider_document_cache", None)
+    if isinstance(document_cache, dict):
+        return document_cache
+    return None
+
+
+def _get_provider_object_cache_key(obj):
+    if obj is None:
+        return ("", "")
+    return (
+        str(getattr(getattr(obj, "Document", None), "Name", "") or "").strip(),
+        str(getattr(obj, "Name", "") or "").strip(),
+    )
+
+
+def _get_provider_target_cache_key(target):
+    return (
+        str(getattr(target, "kind", "") or "").strip(),
+        *_get_provider_object_cache_key(getattr(target, "obj", None)),
+    )
+
+
+def _get_selected_plan_target_cache_key(session):
+    selection = getattr(session, "selection", None)
+    getter = getattr(selection, "get_selected_plan_targets", None)
+    if not callable(getter):
+        return ()
+    return tuple(_get_provider_target_cache_key(target) for target in tuple(getter() or ()))
+
+
+def _get_selected_provider_object_cache_key(session):
+    return tuple(
+        _get_provider_object_cache_key(obj)
+        for obj in tuple(getattr(session, "_provider_selected_objects", ()) or ())
+    )
+
+
+def _make_provider_context_cache_key(session, context, method_name):
+    return (
+        str(method_name or "").strip(),
+        str(getattr(context, "document_name", "") or "").strip(),
+        str(getattr(context, "active_storey_name", "") or "").strip(),
+        str(getattr(context, "current_tool", "") or "").strip(),
+        normalize_plan_provider_overlay_mode(get_plan_provider_overlay_mode(session)),
+        _get_selected_plan_target_cache_key(session),
+        _get_selected_provider_object_cache_key(session),
+    )
+
+
 def _get_cached_provider_contributions(session, method_name):
     refresh_cache = _get_provider_refresh_cache(session)
     if refresh_cache is None:
@@ -554,6 +604,26 @@ def _set_cached_provider_contributions(session, method_name, contributions):
     if refresh_cache is None:
         return
     refresh_cache[("provider_contributions", str(method_name or ""))] = contributions
+
+
+def _get_document_cached_provider_contributions(session, context, method_name):
+    document_cache = _get_provider_document_cache(session)
+    if document_cache is None:
+        return None
+    return document_cache.get(
+        ("provider_contributions",)
+        + _make_provider_context_cache_key(session, context, method_name)
+    )
+
+
+def _set_document_cached_provider_contributions(session, context, method_name, contributions):
+    document_cache = _get_provider_document_cache(session)
+    if document_cache is None:
+        return
+    document_cache[
+        ("provider_contributions",)
+        + _make_provider_context_cache_key(session, context, method_name)
+    ] = contributions
 
 
 def _get_cached_provider_snapshot(session):
@@ -571,6 +641,27 @@ def _set_cached_provider_snapshot(session, snapshot):
     if refresh_cache is None:
         return
     refresh_cache[_PLAN_PROVIDER_SNAPSHOT_CACHE_KEY] = snapshot
+
+
+def _get_document_cached_provider_snapshot(session, context):
+    document_cache = _get_provider_document_cache(session)
+    if document_cache is None:
+        return None
+    cached_snapshot = document_cache.get(
+        ("provider_snapshot",) + _make_provider_context_cache_key(session, context, "snapshot")
+    )
+    if isinstance(cached_snapshot, PlanProviderSnapshot):
+        return cached_snapshot
+    return None
+
+
+def _set_document_cached_provider_snapshot(session, context, snapshot):
+    document_cache = _get_provider_document_cache(session)
+    if document_cache is None:
+        return
+    document_cache[
+        ("provider_snapshot",) + _make_provider_context_cache_key(session, context, "snapshot")
+    ] = snapshot
 
 
 def _get_plan_edit_context_or_none(session):
@@ -688,6 +779,16 @@ def collect_plan_provider_snapshot(session) -> PlanProviderSnapshot:
         context = _get_plan_edit_context_or_none(session)
         if context is None:
             return PlanProviderSnapshot()
+        cached_snapshot = _get_document_cached_provider_snapshot(session, context)
+        if cached_snapshot is not None:
+            _set_cached_provider_snapshot(session, cached_snapshot)
+            for surface_spec in _PLAN_PROVIDER_SNAPSHOT_SURFACES:
+                _set_cached_provider_contributions(
+                    session,
+                    surface_spec.method_name,
+                    getattr(cached_snapshot, surface_spec.field_name),
+                )
+            return cached_snapshot
         normalized_surfaces = tuple(
             (surface_spec, surface_spec.normalizer)
             for surface_spec in _PLAN_PROVIDER_SNAPSHOT_SURFACES
@@ -706,9 +807,16 @@ def collect_plan_provider_snapshot(session) -> PlanProviderSnapshot:
             inspector_sections=tuple(collected["inspector_sections"]),
         )
         _set_cached_provider_snapshot(session, snapshot)
+        _set_document_cached_provider_snapshot(session, context, snapshot)
         for surface_spec in _PLAN_PROVIDER_SNAPSHOT_SURFACES:
             _set_cached_provider_contributions(
                 session,
+                surface_spec.method_name,
+                getattr(snapshot, surface_spec.field_name),
+            )
+            _set_document_cached_provider_contributions(
+                session,
+                context,
                 surface_spec.method_name,
                 getattr(snapshot, surface_spec.field_name),
             )
@@ -774,6 +882,7 @@ def set_plan_provider_overlay_mode(session, mode):
         return False
     session._provider_overlay_mode = normalized
     session._provider_overlay_state = None
+    invalidate_plan_provider_document_cache(session)
     session.selection.clear_hidden_provider_preselection()
     session.overlays.queue_plan_overlay_visual_refresh(
         plan_document_visuals.PLAN_VISUAL_PROVIDER_OVERLAYS
@@ -834,6 +943,7 @@ def set_plan_provider_overlay_visible(session, provider_id, overlay_key, visible
     else:
         session._provider_overlay_visibility[key] = False
     session._provider_overlay_state = None
+    invalidate_plan_provider_document_cache(session)
     session.overlays.queue_plan_overlay_visual_refresh(
         plan_document_visuals.PLAN_VISUAL_PROVIDER_OVERLAYS
     )
@@ -841,6 +951,7 @@ def set_plan_provider_overlay_visible(session, provider_id, overlay_key, visible
 
 def queue_plan_provider_overlay_refresh(session):
     session._provider_overlay_state = None
+    invalidate_plan_provider_document_cache(session)
     session.overlays.queue_plan_overlay_visual_refresh(
         plan_document_visuals.PLAN_VISUAL_PROVIDER_OVERLAYS
     )
@@ -1661,6 +1772,12 @@ def collect_plan_provider_contributions(session, method_name, normalizer):
         context = _get_plan_edit_context_or_none(session)
         if context is None:
             return ()
+        cached_contributions = _get_document_cached_provider_contributions(
+            session, context, method_name
+        )
+        if cached_contributions is not None:
+            _set_cached_provider_contributions(session, method_name, cached_contributions)
+            return cached_contributions
         contributions = _collect_plan_provider_contributions_for_method(
             session,
             context,
@@ -1668,6 +1785,7 @@ def collect_plan_provider_contributions(session, method_name, normalizer):
             normalizer,
         )
         _set_cached_provider_contributions(session, method_name, contributions)
+        _set_document_cached_provider_contributions(session, context, method_name, contributions)
         return contributions
 
 
