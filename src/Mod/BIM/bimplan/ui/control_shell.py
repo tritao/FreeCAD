@@ -23,7 +23,10 @@ class PlanEditControlsShellMixin:
         session = getattr(self, "session", None)
         if session is None:
             return True
-        if getattr(session, "_tearing_down", False) or getattr(session, "_finishing", False):
+        lifecycle_state = getattr(session, "lifecycle_state", None)
+        if lifecycle_state is not None and (
+            lifecycle_state.tearing_down or lifecycle_state.finishing
+        ):
             return True
         document_visuals = getattr(session, "document_visuals", None)
         document_is_alive = getattr(document_visuals, "document_is_alive", None)
