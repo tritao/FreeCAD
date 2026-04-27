@@ -316,14 +316,6 @@ class PlanEditSession:
             FreeCAD.Console.PrintMessage(translate("BIM_PlanEdit", "Entered BIM Plan Edit mode.\n"))
             return True
 
-    @property
-    def _plan_paper_rgb(self):
-        return self.viewport_state.plan_paper_rgb or _PLAN_PAPER_RGB
-
-    @property
-    def _plan_view_locked_actions(self):
-        return self.viewport_state.plan_view_locked_actions or _PLAN_VIEW_LOCKED_ACTIONS
-
     def finish(self, cont=False, close_dialog=True, closed=False):
         del cont, closed
         return plan_lifecycle.finish(self, close_dialog=close_dialog)
