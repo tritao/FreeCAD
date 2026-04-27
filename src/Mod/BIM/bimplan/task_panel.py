@@ -2,6 +2,15 @@
 
 """Task panel ownership, refresh helpers, and viewport chip for BIM Plan Edit."""
 
+TASK_PANEL_REFRESH_FULL = "full"
+TASK_PANEL_REFRESH_SELECTION = "selection"
+TASK_PANEL_REFRESH_PROVIDER_OVERLAY_MODE = "provider_overlay_mode"
+_TASK_PANEL_REFRESH_REASONS = (
+    TASK_PANEL_REFRESH_FULL,
+    TASK_PANEL_REFRESH_SELECTION,
+    TASK_PANEL_REFRESH_PROVIDER_OVERLAY_MODE,
+)
+
 
 class PlanTaskPanelsAPI:
     """Owned session surface for Plan Edit task-panel wiring and refresh."""
@@ -32,6 +41,9 @@ class PlanTaskPanelsAPI:
 
     def refresh_task_panel_status(self, *args, **kwargs):
         return refresh_task_panel_status(self.session, *args, **kwargs)
+
+    def refresh_task_panels(self, *args, **kwargs):
+        return refresh_task_panels(self.session, *args, **kwargs)
 
     def refresh_provider_overlay_mode_panels(self, *args, **kwargs):
         return refresh_provider_overlay_mode_panels(self.session, *args, **kwargs)
@@ -202,75 +214,85 @@ def on_panel_closed(session, panel):
         pass
 
 
-def refresh_task_panel_status(session, selection_only=False):
-    with session.performance.plan_perf_trace_span(
-        "refresh_task_panel_status",
-        selection_only=bool(selection_only),
-    ):
-        if session.lifecycle_state.tearing_down or not session.document_visuals.document_is_alive():
+def _normalize_task_panel_refresh_reason(reason=None, selection_only=False):
+    if reason is None:
+        return TASK_PANEL_REFRESH_SELECTION if selection_only else TASK_PANEL_REFRESH_FULL
+    normalized_reason = str(reason or "").strip().lower()
+    if normalized_reason in _TASK_PANEL_REFRESH_REASONS:
+        return normalized_reason
+    raise ValueError("Unknown Plan Edit task panel refresh reason: {}".format(reason))
+
+
+def _refresh_task_panel_instance(panel, reason):
+    refresh = getattr(panel, "refresh_for_session", None)
+    if callable(refresh):
+        refresh(reason)
+        return
+    if reason == TASK_PANEL_REFRESH_SELECTION:
+        refresh = getattr(panel, "refresh_selection_from_session", None)
+        if callable(refresh):
+            refresh()
             return
+    elif reason == TASK_PANEL_REFRESH_PROVIDER_OVERLAY_MODE:
+        refresh = getattr(panel, "refresh_provider_overlay_mode_from_session", None)
+        if callable(refresh):
+            refresh()
+            return
+    refresh = getattr(panel, "refresh_from_session", None)
+    if callable(refresh):
+        refresh()
+
+
+def _refresh_task_panels(session, reason):
+    if session.lifecycle_state.tearing_down or not session.document_visuals.document_is_alive():
+        return
+    if reason != TASK_PANEL_REFRESH_PROVIDER_OVERLAY_MODE:
         session.selection.sanitize_plan_target_references()
         session.status_text.update_input_hints()
         session.viewport.refresh_viewport_status_chip()
-        panel = session.task_panel
-        if panel:
-            try:
-                refresh = None
-                if selection_only:
-                    refresh = getattr(panel, "refresh_selection_from_session", None)
-                if not callable(refresh):
-                    refresh = getattr(panel, "refresh_from_session", None)
-                if callable(refresh):
-                    refresh()
-            except (AttributeError, RuntimeError):
-                session.task_panels.on_panel_closed(panel)
-        stale_panels = []
-        for extra_panel in list(session._aux_task_panels):
-            if extra_panel is panel:
-                continue
-            try:
-                refresh = None
-                if selection_only:
-                    refresh = getattr(extra_panel, "refresh_selection_from_session", None)
-                if not callable(refresh):
-                    refresh = getattr(extra_panel, "refresh_from_session", None)
-                if callable(refresh):
-                    refresh()
-            except (AttributeError, RuntimeError):
-                stale_panels.append(extra_panel)
-        for extra_panel in stale_panels:
-            session.task_panels.detach_aux_task_panel(extra_panel)
+    panel = session.task_panel
+    if panel:
+        try:
+            _refresh_task_panel_instance(panel, reason)
+        except (AttributeError, RuntimeError):
+            session.task_panels.on_panel_closed(panel)
+    stale_panels = []
+    for extra_panel in list(session._aux_task_panels):
+        if extra_panel is panel:
+            continue
+        try:
+            _refresh_task_panel_instance(extra_panel, reason)
+        except (AttributeError, RuntimeError):
+            stale_panels.append(extra_panel)
+    for extra_panel in stale_panels:
+        session.task_panels.detach_aux_task_panel(extra_panel)
+
+
+def refresh_task_panels(session, reason=None, selection_only=False):
+    normalized_reason = _normalize_task_panel_refresh_reason(
+        reason=reason,
+        selection_only=selection_only,
+    )
+    with session.performance.plan_perf_trace_span(
+        "refresh_task_panels",
+        reason=normalized_reason,
+    ):
+        _refresh_task_panels(session, normalized_reason)
+
+
+def refresh_task_panel_status(session, selection_only=False, reason=None):
+    normalized_reason = _normalize_task_panel_refresh_reason(
+        reason=reason,
+        selection_only=selection_only,
+    )
+    with session.performance.plan_perf_trace_span(
+        "refresh_task_panel_status",
+        selection_only=bool(selection_only),
+        reason=normalized_reason,
+    ):
+        _refresh_task_panels(session, normalized_reason)
 
 
 def refresh_provider_overlay_mode_panels(session):
     with session.performance.plan_perf_trace_span("refresh_provider_overlay_mode_panels"):
-        if session.lifecycle_state.tearing_down or not session.document_visuals.document_is_alive():
-            return
-        panel = session.task_panel
-        if panel:
-            try:
-                refresh = getattr(panel, "refresh_provider_overlay_mode_from_session", None)
-                if not callable(refresh):
-                    refresh = getattr(panel, "refresh_from_session", None)
-                if callable(refresh):
-                    refresh()
-            except (AttributeError, RuntimeError):
-                session.task_panels.on_panel_closed(panel)
-        stale_panels = []
-        for extra_panel in list(session._aux_task_panels):
-            if extra_panel is panel:
-                continue
-            try:
-                refresh = getattr(
-                    extra_panel,
-                    "refresh_provider_overlay_mode_from_session",
-                    None,
-                )
-                if not callable(refresh):
-                    refresh = getattr(extra_panel, "refresh_from_session", None)
-                if callable(refresh):
-                    refresh()
-            except (AttributeError, RuntimeError):
-                stale_panels.append(extra_panel)
-        for extra_panel in stale_panels:
-            session.task_panels.detach_aux_task_panel(extra_panel)
+        _refresh_task_panels(session, TASK_PANEL_REFRESH_PROVIDER_OVERLAY_MODE)

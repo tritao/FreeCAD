@@ -66,6 +66,7 @@ if "draftguitools.gui_base" not in sys.modules:
 from bimplan.providers import PlanProviderActionContext
 from bimplan.runtime.lifecycle import activate_plan_region_tool, activate_space_separator_tool
 from bimplan.overlays import providers as provider_overlays
+from bimplan import task_panel as plan_task_panel_module
 from bimplan.selection.picking import (
     get_hovered_plan_target,
     get_plan_target_at_position,
@@ -1937,6 +1938,73 @@ class TestBimPlanCore(unittest.TestCase):
 
         self.assertEqual([], refresh_calls)
         self.assertEqual([True], cancel_calls)
+
+    def test_task_panel_status_refresh_dispatches_explicit_selection_reason(self):
+        panel_calls = []
+        lifecycle_calls = []
+
+        session = SimpleNamespace(
+            lifecycle_state=SimpleNamespace(tearing_down=False),
+            document_visuals=SimpleNamespace(document_is_alive=lambda: True),
+            selection=SimpleNamespace(
+                sanitize_plan_target_references=lambda: lifecycle_calls.append("sanitize")
+            ),
+            status_text=SimpleNamespace(
+                update_input_hints=lambda: lifecycle_calls.append("status")
+            ),
+            viewport=SimpleNamespace(
+                refresh_viewport_status_chip=lambda: lifecycle_calls.append("viewport")
+            ),
+            task_panel=SimpleNamespace(
+                refresh_for_session=lambda reason: panel_calls.append(reason)
+            ),
+            _aux_task_panels=[],
+            performance=_make_perf_stub(),
+            task_panels=SimpleNamespace(
+                on_panel_closed=lambda _panel: None,
+                detach_aux_task_panel=lambda _panel: None,
+            ),
+        )
+
+        plan_task_panel_module.refresh_task_panel_status(session, selection_only=True)
+
+        self.assertEqual(["sanitize", "status", "viewport"], lifecycle_calls)
+        self.assertEqual([plan_task_panel_module.TASK_PANEL_REFRESH_SELECTION], panel_calls)
+
+    def test_provider_overlay_mode_refresh_uses_reasoned_panel_dispatch(self):
+        panel_calls = []
+        lifecycle_calls = []
+
+        session = SimpleNamespace(
+            lifecycle_state=SimpleNamespace(tearing_down=False),
+            document_visuals=SimpleNamespace(document_is_alive=lambda: True),
+            selection=SimpleNamespace(
+                sanitize_plan_target_references=lambda: lifecycle_calls.append("sanitize")
+            ),
+            status_text=SimpleNamespace(
+                update_input_hints=lambda: lifecycle_calls.append("status")
+            ),
+            viewport=SimpleNamespace(
+                refresh_viewport_status_chip=lambda: lifecycle_calls.append("viewport")
+            ),
+            task_panel=SimpleNamespace(
+                refresh_for_session=lambda reason: panel_calls.append(reason)
+            ),
+            _aux_task_panels=[],
+            performance=_make_perf_stub(),
+            task_panels=SimpleNamespace(
+                on_panel_closed=lambda _panel: None,
+                detach_aux_task_panel=lambda _panel: None,
+            ),
+        )
+
+        plan_task_panel_module.refresh_provider_overlay_mode_panels(session)
+
+        self.assertEqual([], lifecycle_calls)
+        self.assertEqual(
+            [plan_task_panel_module.TASK_PANEL_REFRESH_PROVIDER_OVERLAY_MODE],
+            panel_calls,
+        )
 
     def test_selection_observer_clear_skips_synthetic_gui_selection_sync(self):
         session = SimpleNamespace(

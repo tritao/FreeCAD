@@ -1072,9 +1072,9 @@ class BIMWorkbench(Workbench):
                 self._set_taskwatcher_context_visible(False)
                 try:
                     if controls_state == "reused":
-                        session.task_panel.refresh_selection_from_session()
+                        session.task_panels.refresh_task_panels(reason="selection")
                     else:
-                        session.task_panel.refresh_from_session()
+                        session.task_panels.refresh_task_panels(reason="full")
                 except Exception:
                     self._detach_controls()
                     return False
