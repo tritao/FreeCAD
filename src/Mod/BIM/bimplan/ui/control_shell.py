@@ -38,7 +38,7 @@ class PlanEditControlsShellMixin:
         outer = QtGui.QWidget()
         try:
             outer.setSizePolicy(QtGui.QSizePolicy.Expanding, QtGui.QSizePolicy.Maximum)
-        except Exception:
+        except (AttributeError, RuntimeError, TypeError):
             pass
         layout = QtGui.QVBoxLayout(outer)
         layout.setContentsMargins(8, 8, 8, 8)
@@ -169,7 +169,7 @@ class PlanEditControlsShellMixin:
     def _set_vertical_size_policy(self, QtGui, widget):
         try:
             widget.setSizePolicy(QtGui.QSizePolicy.Preferred, QtGui.QSizePolicy.Maximum)
-        except Exception:
+        except (AttributeError, RuntimeError, TypeError):
             pass
 
     def _build_section(self, QtGui, title):
@@ -257,12 +257,12 @@ class PlanEditControlsShellMixin:
             return
         try:
             from PySide import QtGui
-        except Exception:
+        except ImportError:
             return
 
         try:
             buttons = form.findChildren(QtGui.QAbstractButton)
-        except Exception:
+        except (AttributeError, RuntimeError, TypeError):
             buttons = []
         for button in buttons:
             self._disconnect_signal(getattr(button, "clicked", None))
@@ -270,14 +270,14 @@ class PlanEditControlsShellMixin:
 
         try:
             combos = form.findChildren(QtGui.QComboBox)
-        except Exception:
+        except (AttributeError, RuntimeError, TypeError):
             combos = []
         for combo in combos:
             self._disconnect_signal(getattr(combo, "currentIndexChanged", None))
 
         try:
             line_edits = form.findChildren(QtGui.QLineEdit)
-        except Exception:
+        except (AttributeError, RuntimeError, TypeError):
             line_edits = []
         for line_edit in line_edits:
             self._disconnect_signal(getattr(line_edit, "editingFinished", None))
@@ -288,7 +288,7 @@ class PlanEditControlsShellMixin:
         if completer is not None:
             try:
                 self._disconnect_signal(completer.activated[str])
-            except Exception:
+            except (AttributeError, KeyError, TypeError):
                 self._disconnect_signal(getattr(completer, "activated", None))
 
     def detach(self):
@@ -309,19 +309,19 @@ class PlanEditControlsShellMixin:
                     layout = layout_getter()
                     if layout is not None:
                         layout.removeWidget(form)
-            except Exception:
+            except (AttributeError, RuntimeError, TypeError):
                 pass
             try:
                 form.hide()
-            except Exception:
+            except (AttributeError, RuntimeError, TypeError):
                 pass
             try:
                 form.setParent(None)
-            except Exception:
+            except (AttributeError, RuntimeError, TypeError):
                 pass
             try:
                 form.deleteLater()
-            except Exception:
+            except (AttributeError, RuntimeError, TypeError):
                 pass
         self.form = None
         self.session = None
