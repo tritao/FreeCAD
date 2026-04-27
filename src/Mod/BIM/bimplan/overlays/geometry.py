@@ -110,6 +110,27 @@ def invalidate_opening_overlay_screen_cache(session):
     state.opening_overlay_screen_cache_projection_key = None
 
 
+def _get_projected_polyline_bounds(projected_polylines):
+    min_x = None
+    min_y = None
+    max_x = None
+    max_y = None
+    for polyline in projected_polylines or ():
+        for point in polyline or ():
+            try:
+                point_x = float(point[0])
+                point_y = float(point[1])
+            except Exception:
+                continue
+            min_x = point_x if min_x is None else min(min_x, point_x)
+            min_y = point_y if min_y is None else min(min_y, point_y)
+            max_x = point_x if max_x is None else max(max_x, point_x)
+            max_y = point_y if max_y is None else max(max_y, point_y)
+    if min_x is None:
+        return None
+    return (min_x, min_y, max_x, max_y)
+
+
 def _get_proxy_method(proxy, method_name):
     method = getattr(proxy, method_name, None)
     return method if callable(method) else None
@@ -280,7 +301,7 @@ def get_opening_overlay_screen_polylines(session, opening):
     cached = cache_state.opening_overlay_screen_cache.get(opening_key)
     if cached is not None:
         _perf_count(session, "opening_overlay_screen_polylines_cache_hits")
-        return cached
+        return cached[0]
 
     projected_polylines = []
     for polyline in get_opening_pick_polylines(session, opening):
@@ -296,8 +317,33 @@ def get_opening_overlay_screen_polylines(session, opening):
         if len(projected) >= 2:
             projected_polylines.append(tuple(projected))
     result = tuple(projected_polylines)
-    cache_state.opening_overlay_screen_cache[opening_key] = result
+    cache_state.opening_overlay_screen_cache[opening_key] = (
+        result,
+        _get_projected_polyline_bounds(result),
+    )
     return result
+
+
+def get_opening_overlay_screen_bounds(session, opening):
+    if not session.openings.is_hosted_opening_object(opening) or not session.view:
+        return None
+    projection_key = session.viewport.get_plan_projection_cache_key()
+    if projection_key is None:
+        return None
+    cache_state = session.overlay_cache_state
+    if projection_key != cache_state.opening_overlay_screen_cache_projection_key:
+        cache_state.opening_overlay_screen_cache = {}
+        cache_state.opening_overlay_screen_cache_projection_key = projection_key
+    opening_key = session.visibility.get_document_object_key(opening)
+    if opening_key is None:
+        return None
+    cached = cache_state.opening_overlay_screen_cache.get(opening_key)
+    if cached is None:
+        get_opening_overlay_screen_polylines(session, opening)
+        cached = cache_state.opening_overlay_screen_cache.get(opening_key)
+    if cached is None:
+        return None
+    return cached[1]
 
 
 def get_region_overlay_segments(session, region):
