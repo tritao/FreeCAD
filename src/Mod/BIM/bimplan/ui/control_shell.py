@@ -499,7 +499,10 @@ class PlanEditControlsShellMixin:
                 plan_task_panel_view_model.build_status_text_view_model(self.session).text
             )
             self._refresh_action_context()
-            self._refresh_integration_panel(defer=True)
+            if self._should_refresh_integration_panel_for_selection(selected_kind):
+                self._refresh_integration_panel(defer=True)
+            else:
+                self._cancel_queued_integration_panel_refresh()
             self._hide_space_editor()
             self._hide_region_editor()
             self._hide_window_editor()

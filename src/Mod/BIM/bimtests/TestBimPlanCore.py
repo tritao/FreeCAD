@@ -112,6 +112,7 @@ from bimplan.tools.spaces import (
 from bimplan.selection.targets import get_plan_target_for_object, make_plan_target_record
 from bimplan.transactions import PlanEditTransaction
 from bimplan.ui.controls import PlanEditControlsWidget
+from bimplan.ui import control_shell as plan_control_shell
 from bimplan.task_panel_view_model import (
     ProviderOverlayLegendItem,
     build_action_context_view_model,
@@ -1622,6 +1623,91 @@ class TestBimPlanCore(unittest.TestCase):
         self.assertTrue(
             any(isinstance(ref, weakref.ReferenceType) and ref() is widget for ref in callback_refs)
         )
+
+    def test_selection_refresh_skips_static_integration_panel_for_wall_selection(self):
+        widget = object.__new__(PlanEditControlsWidget)
+        widget.form = object()
+        widget.status = object()
+        widget.exit_button = object()
+        widget._integration_refresh_queued = True
+        widget._integration_refresh_generation = 0
+        widget._integration_panel_state = PlanProviderSnapshot(
+            tools=(SimpleNamespace(key="tool"),),
+            overlays=(SimpleNamespace(key="overlay"),),
+        )
+
+        refresh_calls = []
+        cancel_calls = []
+
+        widget.session = SimpleNamespace(
+            current_tool="Select",
+            performance=SimpleNamespace(
+                plan_perf_trace_span=lambda *_args, **_kwargs: nullcontext()
+            ),
+            selection=SimpleNamespace(get_selected_plan_target=lambda: ("wall", object())),
+            interaction=SimpleNamespace(is_modal_plan_interaction_active=lambda: False),
+            status_text=SimpleNamespace(get_provider_selected_objects=lambda: ()),
+        )
+        widget._set_status_text = lambda _text: None
+        widget._refresh_action_context = lambda: None
+        widget._refresh_integration_panel = lambda defer=False: refresh_calls.append(bool(defer))
+        widget._cancel_queued_integration_panel_refresh = lambda: cancel_calls.append(True)
+        widget._hide_space_editor = lambda: None
+        widget._hide_region_editor = lambda: None
+        widget._hide_window_editor = lambda: None
+        widget._apply_modal_interaction_state = lambda _active: None
+
+        with patch.object(
+            plan_control_shell.plan_task_panel_view_model,
+            "build_status_text_view_model",
+            return_value=SimpleNamespace(text="wall"),
+        ):
+            widget.refresh_selection_from_session()
+
+        self.assertEqual([], refresh_calls)
+        self.assertEqual([True], cancel_calls)
+
+    def test_selection_refresh_keeps_dynamic_integration_panel_for_wall_selection(self):
+        widget = object.__new__(PlanEditControlsWidget)
+        widget.form = object()
+        widget.status = object()
+        widget.exit_button = object()
+        widget._integration_refresh_queued = False
+        widget._integration_refresh_generation = 0
+        widget._integration_panel_state = PlanProviderSnapshot(
+            context_panels=(SimpleNamespace(state="single_object"),),
+        )
+
+        refresh_calls = []
+        cancel_calls = []
+
+        widget.session = SimpleNamespace(
+            current_tool="Select",
+            performance=SimpleNamespace(
+                plan_perf_trace_span=lambda *_args, **_kwargs: nullcontext()
+            ),
+            selection=SimpleNamespace(get_selected_plan_target=lambda: ("wall", object())),
+            interaction=SimpleNamespace(is_modal_plan_interaction_active=lambda: False),
+            status_text=SimpleNamespace(get_provider_selected_objects=lambda: ()),
+        )
+        widget._set_status_text = lambda _text: None
+        widget._refresh_action_context = lambda: None
+        widget._refresh_integration_panel = lambda defer=False: refresh_calls.append(bool(defer))
+        widget._cancel_queued_integration_panel_refresh = lambda: cancel_calls.append(True)
+        widget._hide_space_editor = lambda: None
+        widget._hide_region_editor = lambda: None
+        widget._hide_window_editor = lambda: None
+        widget._apply_modal_interaction_state = lambda _active: None
+
+        with patch.object(
+            plan_control_shell.plan_task_panel_view_model,
+            "build_status_text_view_model",
+            return_value=SimpleNamespace(text="wall"),
+        ):
+            widget.refresh_selection_from_session()
+
+        self.assertEqual([True], refresh_calls)
+        self.assertEqual([], cancel_calls)
 
     def test_plan_controls_dispose_detaches_and_defers_delete(self):
         class _Signal:
