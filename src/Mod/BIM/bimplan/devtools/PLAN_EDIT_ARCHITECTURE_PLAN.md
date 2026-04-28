@@ -434,9 +434,9 @@ Steps:
 1. List every branch in `document_visuals.py` by target kind. Done.
 2. Move opening-specific refresh to the opening owner. Done.
 3. Move symbol-specific refresh to symbol overlays. Done.
-4. Move space/region-specific refresh to the space/region owner.
+4. Move space/region-specific refresh to the space/region owner. Done.
 5. Move secondary selection refresh to selection refresh service. Done.
-6. Keep document observer attach/detach, deferral, and flush ordering in `document_visuals`.
+6. Keep document observer attach/detach, deferral, and flush ordering in `document_visuals`. Done.
 
 Validation:
 
