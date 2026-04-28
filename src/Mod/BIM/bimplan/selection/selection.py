@@ -23,7 +23,6 @@ from .service_common import (
 from .service_interaction import (
     PlanSelectionActivationService,
     PlanSelectionHoverService,
-    PlanSelectionPickingService,
     PlanSelectionTargetService,
 )
 from .service_primary import (
@@ -539,7 +538,6 @@ class PlanSelectionAPI(_SessionAPI):
         self.sync = PlanSelectionSyncService(session)
         self.targets = PlanSelectionTargetService(session)
         self.hover = PlanSelectionHoverService(session)
-        self.picking = PlanSelectionPickingService(session)
         self.activation = PlanSelectionActivationService(session)
 
     def addSelection(self, doc, obj, sub, point):

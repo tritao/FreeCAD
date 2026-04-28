@@ -5,11 +5,8 @@
 from bimplan.runtime import tools as plan_runtime_tools
 
 from . import activation as plan_selection_activation
-from . import area_picking as plan_area_picking
 from . import edit_nodes as plan_edit_nodes
 from . import hover_picking as plan_hover_picking
-from . import picking_geometry as plan_picking_geometry
-from . import provider_overlay_picking as plan_provider_overlay_picking
 from . import target_dispatch as plan_target_dispatch
 from . import target_kinds as plan_target_kinds
 from . import targets as plan_targets
@@ -378,117 +375,6 @@ class PlanSelectionHoverService(_SessionAPI):
 
     def update_hovered_plan_target(self, *args, **kwargs):
         return plan_hover_picking.update_hovered_plan_target(self.session, *args, **kwargs)
-
-
-class PlanSelectionPickingService(_SessionAPI):
-    xy_polygon_area = staticmethod(plan_area_picking.xy_polygon_area)
-    xy_point_in_polygon = staticmethod(plan_area_picking.xy_point_in_polygon)
-    get_screen_distance_sq_to_projected_segment = staticmethod(
-        plan_picking_geometry.get_screen_distance_sq_to_projected_segment
-    )
-
-    def get_plan_space_instances(self):
-        return self.session.picking.get_plan_space_instances()
-
-    def get_plan_region_instances(self):
-        return self.session.picking.get_plan_region_instances()
-
-    def get_plan_target_from_edit_node(self, node):
-        return self.session.picking.get_plan_target_from_edit_node(node)
-
-    def get_provider_overlay_target_from_edit_node(self, node):
-        return self.session.picking.get_provider_overlay_target_from_edit_node(node)
-
-    def get_screen_distance_sq_to_segment(self, mouse_pos, start, end):
-        return self.session.picking.get_screen_distance_sq_to_segment(
-            mouse_pos,
-            start,
-            end,
-        )
-
-    def pick_plan_symbol_target_from_overlays(self, mouse_pos, radius_px=10):
-        return self.session.picking.pick_plan_symbol_target_from_overlays(
-            mouse_pos,
-            radius_px=radius_px,
-        )
-
-    def pick_plan_opening_target_from_overlays(
-        self,
-        mouse_pos,
-        radius_px=10,
-        candidates=None,
-    ):
-        return self.session.picking.pick_plan_opening_target_from_overlays(
-            mouse_pos,
-            radius_px=radius_px,
-            candidates=candidates,
-        )
-
-    def pick_provider_overlay_target_from_overlays(
-        self,
-        mouse_pos,
-        radius_px=plan_provider_overlay_picking.PROVIDER_OVERLAY_PICK_RADIUS_PX,
-    ):
-        return self.session.picking.pick_provider_overlay_target_from_overlays(
-            mouse_pos,
-            radius_px=radius_px,
-        )
-
-    def pick_provider_overlay_target_from_objects_info(self, mouse_pos):
-        return self.session.picking.pick_provider_overlay_target_from_objects_info(mouse_pos)
-
-    def pick_plan_space_target_from_overlays(self, mouse_pos, radius_px=10):
-        return self.session.picking.pick_plan_space_target_from_overlays(
-            mouse_pos,
-            radius_px=radius_px,
-        )
-
-    def pick_plan_region_target_from_overlays(self, mouse_pos, radius_px=10):
-        return self.session.picking.pick_plan_region_target_from_overlays(
-            mouse_pos,
-            radius_px=radius_px,
-        )
-
-    def get_region_pick_polylines(self, region):
-        return self.session.picking.get_region_pick_polylines(region)
-
-    def pick_plan_region_target_from_polylines(self, mouse_pos):
-        return self.session.picking.pick_plan_region_target_from_polylines(mouse_pos)
-
-    def pick_plan_target_from_footprint_faces(
-        self,
-        mouse_pos,
-        is_target,
-        get_faces,
-        target_label="target",
-    ):
-        return self.session.picking.pick_plan_target_from_footprint_faces(
-            mouse_pos,
-            is_target,
-            get_faces,
-            target_label=target_label,
-        )
-
-    def pick_plan_space_target_from_footprints(self, mouse_pos):
-        return self.session.picking.pick_plan_space_target_from_footprints(mouse_pos)
-
-    def pick_plan_region_target_from_footprints(self, mouse_pos):
-        return self.session.picking.pick_plan_region_target_from_footprints(mouse_pos)
-
-    def get_plan_target_at_position(self, mouse_pos, *, include_space_fallback=True):
-        return self.session.picking.pick(
-            mouse_pos,
-            include_space_fallback=include_space_fallback,
-        )
-
-    def get_edit_node(self, mouse_pos):
-        return self.session.picking.pick_edit_node(mouse_pos)
-
-    def pick_selected_opening_handle(self, mouse_pos, radius_px=10):
-        return self.session.picking.pick_selected_opening_handle(
-            mouse_pos,
-            radius_px=radius_px,
-        )
 
 
 class PlanSelectionActivationService(_SessionAPI):
