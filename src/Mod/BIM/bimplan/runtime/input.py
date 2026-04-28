@@ -4,6 +4,8 @@
 
 from bimplan.runtime import tools as plan_runtime_tools
 from bimplan.selection import target_kinds as plan_target_kinds
+from bimplan.providers import edit as plan_provider_edit_tool
+from bimplan.providers import point as plan_provider_point_tool
 from bimplan.tools import join as plan_join_tool
 from bimplan.tools import opening_edit as plan_opening_tool
 from bimplan.tools import select as plan_select_tool
@@ -252,15 +254,13 @@ def _handle_direct_tool_key_press(session, key, event_callback, coin):
         return True
     if (
         session.current_tool == plan_runtime_tools.PlanTool.PROVIDER_POINT
-        and key == coin.SoKeyboardEvent.ESCAPE
+        and plan_provider_point_tool.ProviderPointTool(session).on_key(key, event_callback, coin)
     ):
-        session.providers.cancel_provider_point_tool()
         return True
     if (
         session.current_tool == plan_runtime_tools.PlanTool.MOVE_PROVIDER
-        and key == coin.SoKeyboardEvent.ESCAPE
+        and plan_provider_edit_tool.ProviderMoveTool(session).on_key(key, event_callback, coin)
     ):
-        session.providers.cancel_provider_handle_point_pick()
         return True
     if session.current_tool == plan_runtime_tools.PlanTool.WINDOW and plan_window_tool.WindowTool(
         session
@@ -271,7 +271,7 @@ def _handle_direct_tool_key_press(session, key, event_callback, coin):
 
 def _handle_escape_cancels(session):
     if session.current_tool == plan_runtime_tools.PlanTool.MOVE_PROVIDER:
-        session.providers.cancel_provider_handle_point_pick()
+        plan_provider_edit_tool.ProviderMoveTool(session).cancel()
         return True
     if session.current_tool in (
         plan_runtime_tools.PlanTool.MOVE_SYMBOL,
@@ -283,7 +283,7 @@ def _handle_escape_cancels(session):
         plan_spaces_tool.SpaceTextTool(session).cancel()
         return True
     if session.providers.has_active_provider_point_tool():
-        session.providers.cancel_provider_point_tool()
+        plan_provider_point_tool.ProviderPointTool(session).cancel()
         return True
     if session.windows.has_active_window_tool():
         plan_window_tool.WindowTool(session).cancel()
