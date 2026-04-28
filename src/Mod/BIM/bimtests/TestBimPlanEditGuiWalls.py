@@ -407,14 +407,14 @@ class BimPlanEditGuiWallsMixin:
 
         self.assertTrue(activated)
         self._assert_selected_plan_target(session, "wall", wall)
-        self.assertEqual(session._pending_selected_plan_target, ("wall", wall))
+        self.assertEqual(session.selection_state.pending_selected_plan_target, ("wall", wall))
 
         FreeCADGui.Selection.clearSelection()
         self.pump_gui_events()
 
         self.assertEqual(FreeCADGui.Selection.getSelection(), [])
         self._assert_selected_plan_target(session, "wall", wall)
-        self.assertIsNone(session._pending_selected_plan_target)
+        self.assertIsNone(session.selection_state.pending_selected_plan_target)
 
         from pivy import coin
 
@@ -450,7 +450,7 @@ class BimPlanEditGuiWallsMixin:
         self.pump_gui_events(timeout_ms=500)
 
         self._assert_no_selected_plan_target(session)
-        self.assertIsNone(session._pending_selected_plan_target)
+        self.assertIsNone(session.selection_state.pending_selected_plan_target)
         self.assertEqual(len(session._grip_trackers), 0)
         self.assertEqual(self._get_scenegraph_edit_nodes(session), [])
 
