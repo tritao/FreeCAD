@@ -1,336 +1,335 @@
 # BIM Plan Edit
 
-This document defines the intended direction of `Plan Edit` in the BIM workbench and records the first implemented iteration.
+This document describes the current design of `Plan Edit` in the BIM workbench.
 
-Implementation follow-up lives in `PlanEditTodo.md`.
+Related notes:
 
-`Plan Edit` is not meant to be a separate 2D drafting document. It is a storey-scoped BIM authoring mode that uses the normal 3D document and view, but constrains interaction to top-plan editing.
+- implementation follow-up and branch-local roadmap: [PlanEditTodo.md](PlanEditTodo.md)
+- current internal cleanup plan: [bimplan/devtools/PLAN_EDIT_ARCHITECTURE_PLAN.md](bimplan/devtools/PLAN_EDIT_ARCHITECTURE_PLAN.md)
+- maintained verification entrypoint: [bimtests/run_plan_edit_headless.py](bimtests/run_plan_edit_headless.py)
 
-## Goal
+`Plan Edit` is a persistent, storey-scoped BIM authoring mode. It uses the
+normal 3D document and 3D Inventor view, but constrains interaction to a
+plan-oriented editing workflow.
 
-The target workflow is:
+It is not:
 
-- pick a building storey
-- enter a dedicated plan-authoring mode
-- edit walls, openings, spaces, and related BIM components in top view
-- see 2D plan representations while still editing real BIM objects
+- a separate 2D drafting document
+- a TechDraw page workflow
+- a blocking task dialog that temporarily takes over the UI
 
 The source of truth remains the BIM model:
 
 - walls stay `Wall` objects
 - windows and doors stay hosted BIM elements
 - spaces stay BIM spaces
-- the plan view is a representation of BIM, not a separate drawing
+- provider-owned semantic objects stay provider-owned BIM objects
 
-This is closer to the Revit floor-plan interaction model than to a generic Draft page or TechDraw workflow.
+The plan view is a representation of the BIM model, not a duplicate drawing.
 
-## First Iteration
+## Product Contract
 
-The first implemented iteration lives in:
+Plan Edit should feel like a persistent editor:
 
-- `src/Mod/BIM/bimcommands/BimPlanEdit.py`
-- `src/Mod/BIM/bimcommands/BimPlanSession.py`
+- one session at a time
+- explicit mode entry and exit
+- top orthographic editing in the existing 3D view
+- canvas-first interaction
+- contextual task-panel controls as a secondary surface
+- direct updates to real BIM objects and provider-owned semantics
 
-The current mode provides:
+The primary user loop is:
 
-- command entry via `BIM_PlanEdit`
-- activation from the BIM workbench and level/storey context menus
-- contextual task-panel controls instead of a locked task dialog
-- top orthographic view while the mode is active
-- viewer override mode set to `Footprint`
-- theme-aware lighter plan background while the mode is active
-- storey selection in the contextual task panel
-- explicit `Exit Plan Edit`
-- direct grips for selected baseless walls:
-  - start endpoint
-  - end endpoint
-  - midpoint
-- preview-only wall dragging:
-  - the real wall is hidden during drag
-  - a temporary preview is shown
-  - the wall is updated only on mouse release
-- centralized cancellation for active wall editing
+- choose a storey
+- enter Plan Edit
+- see plan-oriented visuals and selection behavior
+- manipulate walls, openings, spaces, symbols, regions, and provider targets in the view
+- exit explicitly when finished
 
-The current wall grip rules are:
+## Public Entry Points
 
-- endpoint drag is axis-preserving by default
-- midpoint drag translates the full wall
-- a minimum wall length threshold is enforced
-- cancel drops the preview and restores the original wall
+The current public shell is split into three layers:
 
-## Current Limitations
+- [bimcommands/BimPlanEdit.py](bimcommands/BimPlanEdit.py)
+  - registers the `BIM_PlanEdit` command
+  - re-focuses the active Plan Edit session if one already exists
+  - starts a new session otherwise
+- [bimcommands/BimPlanSession.py](bimcommands/BimPlanSession.py)
+  - compatibility shim
+  - re-exports the current session implementation from `bimplan.runtime.session`
+- [bimplan/runtime/session.py](bimplan/runtime/session.py)
+  - real composition root
+  - owns `start_session()`, `get_active_session()`, and `PlanEditSession`
 
-The first iteration is intentionally narrow. It does not yet provide:
+This means the old `bimcommands.BimPlanSession` import path still works, but it
+is no longer the architectural home of the feature.
 
-- a native session-owned wall creation tool
-- wall joins
-- hosted door or window placement
-- space detection
-- storey-based hide/ghost/lock behavior
-- temporary dimensions
-- a generalized footprint API for all BIM components
+## Session Lifecycle
 
-The current `Wall` button still delegates creation to the existing `Arch_Wall` interactive command. That is acceptable for bootstrapping, but it is not the target architecture.
+`PlanEditSession` is the coordinator for the live mode.
 
-## Core UX Contract
+On entry it currently:
 
-`Plan Edit` should behave like a persistent editor, not like a one-off command dialog.
+- validates that an active document and 3D Inventor view exist
+- captures viewer state and object-visibility state
+- forces plan-friendly preselection and top orthographic view
+- collects storeys and resolves the initial active storey
+- applies the plan snap profile
+- applies storey-scoped visibility
+- attaches the GUI selection observer
+- attaches document-visual observers
+- registers viewport edit callbacks
+- refreshes the selected plan target state
+- builds and attaches the Plan Edit task-panel widget
+- primes caches for overlays, openings, and hover picking
+- installs the command gate used by embedded and session-owned tools
 
-The mode contract is:
+On shutdown it restores the captured view and interaction state, detaches
+observers, tears down temporary overlays and callbacks, and clears the global
+active-session slot.
 
-- the active storey defines the editing plane
-- the 3D view is forced to top orthographic while the mode is active
-- plan representations are shown instead of normal 3D presentation where possible
-- direct manipulation happens in the canvas
-- the contextual task panel is secondary and should only expose session-level controls
+There is intentionally only one active Plan Edit session.
 
-The contextual task panel should remain compact and secondary. It is not the main editing surface.
+## Composition Model
 
-The primary interactions should happen in the view:
+`PlanEditSession` is not meant to be a giant behavior bucket. It composes
+owned API surfaces, each responsible for one part of the mode.
 
-- select wall
-- see grips immediately
-- drag grips directly
-- place new objects directly in plan
-- cancel the current subtool with `Esc`
-- exit the whole mode explicitly with `Exit Plan Edit`
+The current session-owned surfaces instantiated in
+[bimplan/runtime/session.py](bimplan/runtime/session.py) are:
 
-## Why Plan Edit Needs Session-Owned Tools
+- `selection`
+- `spaces`
+- `openings`
+- `wall_relations`
+- `wall_create`
+- `interaction`
+- `input`
+- `lifecycle`
+- `symbols`
+- `windows`
+- `viewport`
+- `overlays`
+- `wall_edit`
+- `visibility`
+- `providers`
+- `storey`
+- `snap`
+- `performance`
+- `document_visuals`
+- `status_text`
+- `task_panels`
 
-The generic Draft and BIM interactive commands are useful infrastructure, but they are not the right lifecycle model for `Plan Edit`.
+The session should compose and route. Subsystems should own their behavior.
 
-The current mismatch is:
+## Module Ownership
 
-- `Plan Edit` is a persistent session
-- legacy commands such as `Arch_Wall` assume they temporarily own the interaction lifecycle
-- Draft toolbar state, `activeDraftCommand`, Snapper state, and task/dialog state are coupled
+### Runtime
 
-That mismatch caused much of the first implementation complexity.
+The `bimplan/runtime/` package owns session-level coordination:
 
-The long-term direction is:
-
-- reuse Draft infrastructure
-  - Snapper
-  - trackers
-  - event callback patterns
-  - geometry helpers where useful
-- stop reusing standalone command lifecycles unchanged inside `Plan Edit`
-
-In practice, `Plan Edit` should own the session, and individual plan tools should be subtools of that session.
-
-## Target Architecture
-
-The intended architecture is:
-
-### `PlanEditSession`
-
-Responsible for:
-
-- entering and leaving plan mode
-- capturing and restoring viewer state
-- storey scope
-- selection policy
-- grip and preview overlays
-- active subtool routing
-- shared cancel and finish behavior
-
-### Contextual `Plan Edit` Controls
-
-Responsible for:
-
-- storey selection
-- tool switching
-- plan-mode settings
-- explicit exit
-
-The contextual task panel should not own the editing lifecycle.
-It should expose the session controls inside the normal `Tasks` area instead of
-reopening Plan Edit in a separate dock window.
-
-### Session-Owned Subtools
-
-Planned subtools:
-
-- `Select`
-- `Wall`
-- `Move`
-- `Join`
-- `Door`
-- `Window`
-- `Space`
-
-These tools should use a shared interaction contract:
-
-- enter
-- mouse press
-- mouse move
-- key press
-- accept
-- cancel
-
-### BIM Object Adaptation
-
-The mode should update BIM objects directly:
-
-- baseless walls via endpoint logic
-- later, base-driven walls via base geometry updates
-- later, hosted openings and spaces
-
-The interaction layer should be new. The BIM semantics should be reused.
-
-## Toolbar Scope
-
-The recommended first real toolbar for `Plan Edit` is:
-
-- `Select`
-- `Wall`
-- `Move`
-- `Join`
-- `Door`
-- `Window`
-- `Space`
-- `Exit`
-
-This toolbar is intentionally narrow. `Plan Edit` should not become a general Draft sandbox in top view.
-
-Generic Draft creation tools such as arcs, circles, splines, arrays, or generic drafting helpers should stay out of the default plan-edit workflow unless a specific BIM-authoring need justifies them.
-
-## Wall Editing Rules
-
-For the next iterations, wall behavior should be explicit.
+- `session.py`
+  - session creation, active-session tracking, high-level composition
+- `lifecycle.py`
+  - enter/exit behavior, tool switching, cancel flows, embedded-tool cleanup
+- `input.py`
+  - viewport event routing and keyboard behavior
+- `view.py` and `view_properties.py`
+  - viewer capture/restore, callbacks, projection helpers, view policy
+- `session_state.py`
+  - mutable session state and interaction state wiring
+- `tools.py`
+  - stable runtime tool identifiers
+- `command_gate.py`
+  - command ownership boundaries while Plan Edit is active
 
 ### Selection
 
-- selecting one baseless wall shows direct grips
-- empty-canvas click clears selection
-- clicking a grip starts editing immediately
+The `bimplan/selection/` package owns plan target resolution and GUI selection
+synchronization:
 
-### Endpoint Drag
+- native GUI selection/preselection sync
+- hovered and selected plan-target state
+- typed target records and target-kind helpers
+- plan-specific picking and activation rules
+- edit-node resolution for overlays and handles
 
-- default behavior preserves the wall axis
-- dragging changes wall length, not wall angle
-- invalid too-short walls are rejected
-- a future modifier may allow free-angle endpoint editing if needed
+Selection is where raw GUI object hits become plan concepts such as wall,
+opening, symbol, space, region, or provider target.
 
-### Midpoint Drag
+### Overlays
 
-- midpoint drag is pure translation
-- wall vector and length are preserved
+The `bimplan/overlays/` package owns tracker-backed plan visuals:
 
-### Preview
+- selected and hovered wall visuals
+- wall grips and wall-opening context visuals
+- opening overlays and handle pools
+- symbol overlays
+- space and region overlays
+- provider overlay rendering
+- shared tracker lifecycle and refresh routing
 
-- the real wall should not be recomputed on every mouse move
-- a lightweight plan preview should be shown during drag
-- the real BIM object should be updated once on commit
+The overlay layer is render-side only. It should not own business rules for how
+objects are edited.
 
-### Cancel
+### Tools
 
-All cancel routes should converge on one semantic operation:
+The `bimplan/tools/` package owns concrete editing behaviors:
 
-- restore original wall state if necessary
-- clear preview and temporary callbacks
-- keep selection stable
-- return to `Select`
+- wall editing and previews
+- wall creation flows
+- opening movement and editing
+- window placement and size/style editing
+- symbol movement and rotation
+- wall-join workflows
+- space, separator, and region editing flows
+- hosted-opening command bridges
 
-That includes:
+Some tools are fully session-owned. Some still bridge into older Draft/BIM
+interactive infrastructure where that is not yet fully replaced.
 
-- `Esc`
-- clicking `Select`
-- `Exit Plan Edit`
-- closing the dock
+### Providers
 
-## Why a Native Plan Wall Tool Is Needed
+The `bimplan/providers/` package is the extension surface for semantic Plan Edit
+integrations.
 
-The current wall editing path is already session-owned. Wall creation is not.
+Providers contribute declarative models such as:
 
-The current creation path still delegates to `Arch_Wall`, which means:
+- `PlanProviderTargetSpec`
+- `PlanOverlaySpec`
+- `PlanToolSpec`
+- `PlanEditHandleSpec`
+- `PlanIssueSpec`
+- `PlanSuggestionSpec`
+- `PlanContextPanelSpec`
+- `PlanInspectorSection`
 
-- different lifecycle rules for create vs edit
-- handoff complexity between `Plan Edit` and Draft/BIM command state
-- extra cleanup logic for cursor, Snapper, and command state
+The registry lives in `providers/contracts.py`, the session-facing behavior in
+`providers/runtime.py`, and built-in BIM-owned providers in
+`providers/__init__.py`.
 
-The next major implementation step should therefore be a native `Plan Wall Tool`.
+The important contract is:
 
-That tool should:
+- providers describe targets, overlays, handles, tools, issues, and actions
+- the Plan Edit core owns selection, rendering, interaction routing, and action execution
 
-- be owned by `PlanEditSession`
-- create baseless walls directly in plan
-- use the same preview and cancel rules as grip editing
-- avoid taking over the UI with separate task panels
+This keeps provider integrations declarative and keeps session ownership inside
+the Plan Edit core.
 
-This does not require reimplementing wall semantics from scratch. It requires a new interaction layer that reuses wall creation logic underneath.
+### UI and Read Models
 
-## Recommended Roadmap
+The task-panel UI is split across:
 
-### Phase 1
+- `ui/controls.py`
+  - concrete `PlanEditControlsWidget`
+- `ui/control_shell.py`
+  - task-panel shell and main button wiring
+- `ui/control_editors.py`
+  - editor-facing controls for openings, spaces, regions, and similar panels
+- `ui/control_integrations.py`
+  - provider-facing integration panels
+- `task_panel.py`
+  - panel attach/detach and refresh helpers
+- `task_panel_view_model.py`
+  - read-side view models for UI state shaping
+- `status_text.py`
+  - user-facing status and help text
 
-Completed in the first iteration:
+The task panel is intentionally secondary. It exposes session state and
+integration surfaces, but it should not become the primary editing surface.
 
-- persistent plan mode entry
-- modeless dock
-- storey selection
-- plan-view state
-- direct wall grips
-- preview-only drag editing
+## Current Interaction Model
 
-### Phase 2
+The runtime tool identifiers currently live in
+[bimplan/runtime/tools.py](bimplan/runtime/tools.py). User-facing and transient
+tool states include:
 
-Next:
+- `Select`
+- `Wall`
+- `Rect Wall`
+- `Window`
+- `Region`
+- `Separator`
+- `Move`
+- `Join`
+- `Move Wall`
+- `Move Opening`
+- `Move Symbol`
+- `Rotate Symbol`
+- `Move Provider`
+- `Provider Point`
+- `Pick Space Region`
+- `Set Space Text`
 
-- native `Plan Wall Tool`
-- remove reliance on delegated `Arch_Wall` interaction inside plan mode
-- keep wall creation and wall editing under one session-owned model
+Two design choices matter here:
 
-### Phase 3
+- Plan Edit is still a session with a current tool, not a collection of unrelated commands.
+- Some tool names represent transient modal states inside the session rather than toolbar buttons.
 
-After wall creation is session-owned:
+The task panel switches tools, but the viewport remains the primary interaction
+surface.
 
-- storey-scoped visibility and locking
-- ghost or hide above/below levels
-- better plan-mode selection filtering
+## Tool Ownership Today
 
-### Phase 4
+The current architecture is already beyond the original "first iteration", but
+it is not at the final target state yet.
 
-Then:
+Current state:
 
-- wall joins
-- hosted door and window placement
-- direct opening repositioning on host walls
+- wall editing is session-owned
+- joins are session-owned
+- spaces, regions, separators, symbols, provider handles, and provider point tools are session-owned flows
+- hosted window placement is session-owned
+- task-panel editing of selected windows is session-owned
+- provider integrations are registry-driven and session-owned
 
-### Phase 5
+Important compatibility edges still remain:
 
-Later:
+- the plain `Wall` tool still delegates to `bimcommands.BimWall.Arch_Wall()` through a Plan Edit host bridge
+- some creation flows still rely on `FreeCAD.activeDraftCommand` and Draft Snapper ownership
+- broad defensive exception handling still exists at FreeCAD and Qt boundaries
+- some internal surfaces still use forwarding helpers that the cleanup plan intends to reduce
 
-- room and space detection
-- temporary dimensions
-- generalized component footprints
-- columns, grids, stairs, fixtures
+So the direction is clear: keep the session-owned interaction model, and shrink
+the remaining embedded-command compatibility shell over time.
 
-## Concrete Principles To Preserve
+## Design Principles
 
-The following decisions should remain stable unless there is a strong reason to change them:
+The following principles should remain stable:
 
-- `Plan Edit` is a BIM authoring mode, not a Draft page
-- the source of truth is the BIM model
-- the 3D view remains the editing canvas
-- the dock is secondary, not primary
-- direct manipulation should dominate over panel-driven editing
-- the session should own interaction state
-- standalone command lifecycles should not be embedded unchanged inside `Plan Edit`
+- Plan Edit is a BIM authoring mode, not a detached drafting page.
+- The BIM model remains the source of truth.
+- The existing 3D view remains the editing canvas.
+- The task panel is secondary, not primary.
+- Selection should resolve to typed plan targets rather than raw GUI hits.
+- Providers should contribute declarative data, not own the core interaction loop.
+- The session should coordinate; subsystem modules should own behavior.
 
-## File Ownership
+## Testing As Specification
 
-Current files:
+The most reliable description of current behavior is a combination of this
+document and the maintained tests:
 
-- `src/Mod/BIM/bimcommands/BimPlanEdit.py`
-  - command entry
-- `src/Mod/BIM/bimcommands/BimPlanSession.py`
-  - session, dock, grips, drag preview, selection observer
+- [bimtests/TestBimPlanCore.py](bimtests/TestBimPlanCore.py)
+  - core contracts and internal APIs
+- [bimtests/TestBimPlanProviderSelectionGui.py](bimtests/TestBimPlanProviderSelectionGui.py)
+  - provider-target and preselection behavior
+- [bimtests/TestBimPlanEditGui.py](bimtests/TestBimPlanEditGui.py)
+  - aggregate GUI workflow coverage
+- [bimtests/run_plan_edit_headless.py](bimtests/run_plan_edit_headless.py)
+  - maintained headless runner
 
-Likely next files once the feature grows:
+When this document and the tests disagree, the tests usually reflect the
+current shipped behavior more accurately.
 
-- `src/Mod/BIM/bimcommands/BimPlanWallTool.py`
-- `src/Mod/BIM/bimcommands/BimPlanJoinTool.py`
-- `src/Mod/BIM/bimcommands/BimPlanFootprints.py`
+## Roadmap Direction
 
-For now, the implementation remains intentionally compact while the interaction model is still being validated.
+Near-term work should continue in three directions:
+
+- remove internal compatibility indirection where owned APIs already exist
+- keep moving creation and editing flows under explicit session ownership
+- preserve the provider contract as the main extension mechanism for semantic Plan Edit behavior
+
+For detailed cleanup batches and branch-local follow-up notes, see
+[PlanEditTodo.md](PlanEditTodo.md) and
+[bimplan/devtools/PLAN_EDIT_ARCHITECTURE_PLAN.md](bimplan/devtools/PLAN_EDIT_ARCHITECTURE_PLAN.md).
