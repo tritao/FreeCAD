@@ -1055,6 +1055,9 @@ class TestBimPlanCore(unittest.TestCase):
                 hovered_target=("wall", hovered),
                 picked_target=("wall", picked),
             ),
+            picking=SimpleNamespace(
+                pick=lambda _mouse_pos: _make_plan_target_ref("wall", picked),
+            ),
             hover_pick_state=_make_hover_pick_state_stub(last_mouse_pos=(10.0, 10.0)),
             performance=_make_perf_stub(),
         )
@@ -1670,7 +1673,7 @@ class TestBimPlanCore(unittest.TestCase):
 
         with (
             patch(
-                "bimplan.picking.plan_targets.get_plan_pick_target_for_object",
+                "bimplan.selection.picking.plan_targets.get_plan_pick_target_for_object",
                 return_value=("space", space),
             ),
             _patched_plan_target_overlay_pickers(
@@ -1748,7 +1751,7 @@ class TestBimPlanCore(unittest.TestCase):
 
         with (
             patch(
-                "bimplan.picking.plan_targets.get_plan_pick_target_for_object",
+                "bimplan.selection.picking.plan_targets.get_plan_pick_target_for_object",
                 side_effect=_get_plan_pick_target_for_object,
             ),
             _patched_plan_target_overlay_pickers(),
@@ -1820,7 +1823,7 @@ class TestBimPlanCore(unittest.TestCase):
 
         with (
             patch(
-                "bimplan.picking.plan_targets.get_plan_pick_target_for_object",
+                "bimplan.selection.picking.plan_targets.get_plan_pick_target_for_object",
                 side_effect=_get_plan_pick_target_for_object,
             ),
             _patched_plan_target_overlay_pickers(),
@@ -1875,7 +1878,7 @@ class TestBimPlanCore(unittest.TestCase):
 
         with (
             patch(
-                "bimplan.picking.plan_targets.get_plan_pick_target_for_object",
+                "bimplan.selection.picking.plan_targets.get_plan_pick_target_for_object",
                 return_value=("space", space),
             ),
             _patched_plan_target_overlay_pickers(
@@ -1933,7 +1936,7 @@ class TestBimPlanCore(unittest.TestCase):
 
         with (
             patch(
-                "bimplan.picking.plan_targets.get_plan_pick_target_for_object",
+                "bimplan.selection.picking.plan_targets.get_plan_pick_target_for_object",
                 return_value=("space", space),
             ),
             _patched_plan_target_overlay_pickers(

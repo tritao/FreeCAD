@@ -190,7 +190,7 @@ class BimPlanEditGuiSymbolsMixin:
         self.pump_gui_events()
 
         original_view = session.view
-        original_pick_opening = session.selection.picking.pick_plan_opening_target_from_overlays
+        original_pick_opening = session.picking.pick_plan_opening_target_from_overlays
         opening_pick_calls = []
 
         class FakeView:
@@ -205,25 +205,25 @@ class BimPlanEditGuiSymbolsMixin:
             return None
 
         try:
-            session.selection.picking.pick_plan_opening_target_from_overlays = (
+            session.picking.pick_plan_opening_target_from_overlays = (
                 fail_if_opening_overlay_pick_runs
             )
             session.view = FakeView(
                 [{"Document": self.document.Name, "Object": plan_symbol.Name, "ParentObject": link}]
             )
             self.assertEqual(
-                ("symbol", link), session.selection.picking.get_plan_target_at_position((100, 100))
+                ("symbol", link), session.picking.get_plan_target_at_position((100, 100))
             )
 
             session.view = FakeView(
                 [{"Document": self.document.Name, "Object": base.Name, "ParentObject": link}]
             )
             self.assertEqual(
-                ("symbol", link), session.selection.picking.get_plan_target_at_position((100, 100))
+                ("symbol", link), session.picking.get_plan_target_at_position((100, 100))
             )
             self.assertEqual([], opening_pick_calls)
         finally:
-            session.selection.picking.pick_plan_opening_target_from_overlays = original_pick_opening
+            session.picking.pick_plan_opening_target_from_overlays = original_pick_opening
             session.view = original_view
 
         session.shutdown(close_dialog=False)
@@ -268,7 +268,7 @@ class BimPlanEditGuiSymbolsMixin:
             session.view = FakeView(real_view)
             mouse_pos = (int(screen_pos[0]), int(screen_pos[1]))
             self.assertEqual(
-                ("symbol", link), session.selection.picking.get_plan_target_at_position(mouse_pos)
+                ("symbol", link), session.picking.get_plan_target_at_position(mouse_pos)
             )
         finally:
             session.view = real_view
@@ -294,7 +294,9 @@ class BimPlanEditGuiSymbolsMixin:
         self.assertTrue(equipment.ViewObject.Visibility)
         self.assertTrue(equipment.ViewObject.Selectable)
         self.assertTrue(session.visibility.is_plan_symbol_instance(equipment))
-        self.assertEqual("symbol", session.selection.targets.get_plan_target_kind_for_object(equipment))
+        self.assertEqual(
+            "symbol", session.selection.targets.get_plan_target_kind_for_object(equipment)
+        )
 
         self.assertTrue(session.selection.activation.select_symbol_for_plan_edit(equipment))
         self.pump_gui_events()
@@ -356,14 +358,14 @@ class BimPlanEditGuiSymbolsMixin:
                 ]
             )
             self.assertEqual(
-                ("symbol", equipment), session.selection.picking.get_plan_target_at_position((100, 100))
+                ("symbol", equipment), session.picking.get_plan_target_at_position((100, 100))
             )
 
             session.view = FakeView(
                 [{"Document": self.document.Name, "Object": base.Name, "ParentObject": equipment}]
             )
             self.assertEqual(
-                ("symbol", equipment), session.selection.picking.get_plan_target_at_position((100, 100))
+                ("symbol", equipment), session.picking.get_plan_target_at_position((100, 100))
             )
         finally:
             session.view = original_view

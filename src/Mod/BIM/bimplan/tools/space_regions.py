@@ -447,9 +447,7 @@ def pick_space_region_candidate(session, mouse_pos, radius_px=10):
     best_distance_sq = None
     for candidate in candidates:
         for start, end in get_space_region_candidate_segments(session, candidate):
-            distance_sq = session.selection.picking.get_screen_distance_sq_to_segment(
-                mouse_pos, start, end
-            )
+            distance_sq = session.picking.get_screen_distance_sq_to_segment(mouse_pos, start, end)
             if distance_sq is None or distance_sq > radius_sq:
                 continue
             if best_distance_sq is None or distance_sq < best_distance_sq:

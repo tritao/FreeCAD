@@ -98,9 +98,7 @@ def update_hovered_plan_target(session, mouse_pos, force=False):
             return False
         session.performance.plan_perf_count("hover_pick_resolved")
         with session.performance.plan_perf_trace_span("hover_pick_resolve"):
-            target_ref = plan_target_kinds.coerce_plan_target_ref(
-                session.selection.picking.get_plan_target_at_position(mouse_pos)
-            )
+            target_ref = plan_target_kinds.coerce_plan_target_ref(session.picking.pick(mouse_pos))
         session.hover_pick_state.dirty = False
         target_kind = getattr(target_ref, "kind", None)
         target_obj = getattr(target_ref, "obj", None)
@@ -126,7 +124,7 @@ def update_hovered_plan_target(session, mouse_pos, force=False):
     )
     with session.performance.plan_perf_trace_span("hover_pick_resolve"):
         target_ref = plan_target_kinds.coerce_plan_target_ref(
-            session.selection.picking.get_plan_target_at_position(
+            session.picking.pick(
                 mouse_pos,
                 include_space_fallback=include_space_fallback,
             )

@@ -197,9 +197,7 @@ def activate_plan_target(
     defer_wall_grips=False,
 ):
     if resolved_target is None:
-        target_ref = plan_target_kinds.coerce_plan_target_ref(
-            session.selection.picking.get_plan_target_at_position(mouse_pos)
-        )
+        target_ref = plan_target_kinds.coerce_plan_target_ref(session.picking.pick(mouse_pos))
     else:
         target_ref = plan_target_kinds.coerce_plan_target_ref(resolved_target)
     with session.performance.plan_perf_trace_span(
@@ -255,9 +253,7 @@ def activate_semantic_plan_target(session, mouse_pos, event_callback=None):
     )
     perf = getattr(session, "performance", None)
     if not reuse_hovered_target:
-        target_ref = plan_target_kinds.coerce_plan_target_ref(
-            session.selection.picking.get_plan_target_at_position(mouse_pos)
-        )
+        target_ref = plan_target_kinds.coerce_plan_target_ref(session.picking.pick(mouse_pos))
         source = "picked_after_throttled_hover" if hover_pick_dirty else "picked"
         session.hover_pick_state.dirty = False
         if perf is not None:
@@ -410,7 +406,7 @@ def is_plan_additive_selection_active(session):
 
 def activate_provider_overlay_target_node(session, node, event_callback=None):
     target_ref = plan_target_kinds.coerce_plan_target_ref(
-        session.selection.picking.get_provider_overlay_target_from_edit_node(node)
+        session.picking.get_provider_overlay_target_from_edit_node(node)
     )
     if target_ref.obj is None:
         return False
@@ -502,13 +498,13 @@ def toggle_raw_plan_object_selection(session, obj, event_callback=None):
 
 
 def toggle_plan_target_selection_at_position(session, mouse_pos, event_callback=None):
-    node = session.selection.picking.get_edit_node(mouse_pos)
+    node = session.picking.pick_edit_node(mouse_pos)
     if plan_edit_nodes.get_edit_node_kind(node) in (
         "provider_overlay_point",
         "provider_overlay_target",
     ):
         target_ref = plan_target_kinds.coerce_plan_target_ref(
-            session.selection.picking.get_provider_overlay_target_from_edit_node(node)
+            session.picking.get_provider_overlay_target_from_edit_node(node)
         )
         if target_ref.obj is not None and not session.selection.state.is_valid_plan_target(
             target_ref.kind,
@@ -517,12 +513,10 @@ def toggle_plan_target_selection_at_position(session, mouse_pos, event_callback=
             return toggle_raw_plan_object_selection(session, target_ref.obj, event_callback)
     else:
         target_ref = plan_target_kinds.coerce_plan_target_ref(
-            session.selection.picking.get_plan_target_from_edit_node(node)
+            session.picking.get_plan_target_from_edit_node(node)
         )
     if target_ref.kind is None:
-        target_ref = plan_target_kinds.coerce_plan_target_ref(
-            session.selection.picking.get_plan_target_at_position(mouse_pos)
-        )
+        target_ref = plan_target_kinds.coerce_plan_target_ref(session.picking.pick(mouse_pos))
     if not target_ref.kind or not target_ref.obj:
         return False
 

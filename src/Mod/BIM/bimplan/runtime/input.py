@@ -75,7 +75,7 @@ def _get_mouse_event_position(event):
 
 
 def _handle_join_tool_mouse_down(session, mouse_pos, event_callback):
-    target_kind, target_wall = session.selection.picking.get_plan_target_at_position(mouse_pos)
+    target_kind, target_wall = session.picking.pick(mouse_pos)
     source_wall = session.selection.state.get_selected_plan_target_object("wall")
     if (
         target_kind == "wall"
@@ -142,7 +142,7 @@ def _handle_select_tool_mouse_down(session, mouse_pos, event_callback):
         ):
             session.input.claim_left_button_click(event_callback)
         return
-    node = session.selection.picking.get_edit_node(mouse_pos)
+    node = session.picking.pick_edit_node(mouse_pos)
     if not node:
         if session.selection.activation.activate_semantic_plan_target(mouse_pos, event_callback):
             return

@@ -225,6 +225,8 @@ SET(bimplan_SRCS
     bimplan/overlays/tracker_pool.py
     bimplan/overlays/walls.py
     bimplan/performance.py
+    bimplan/picking/__init__.py
+    bimplan/picking/service.py
     bimplan/providers/__init__.py
     bimplan/providers/edit.py
     bimplan/providers/host_targets.py
