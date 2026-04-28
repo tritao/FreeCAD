@@ -125,9 +125,10 @@ class DocumentObject(ExtensionContainer):
         """
         ...
 
-    def requestDeferredRecompute(self) -> None:
+    def requestDeferredRecompute(self, phase: Union[str, int, None] = None) -> None:
         """
         Request one deferred recompute later in the current document recompute cycle.
+        Optionally target a named later phase: "Normal", "PostUpstream", "PostGeometry", or "Finalize".
         Falls back to a normal recompute request when no document recompute is running.
         """
         ...

@@ -31,6 +31,7 @@
 #include <App/PropertyExpressionEngine.h>
 #include <App/PropertyGeo.h>
 #include <App/PropertyLinks.h>
+#include <App/RecomputePhase.h>
 #include <App/PropertyStandard.h>
 #include <Base/SmartPtrPy.h>
 #include <Base/Placement.h>
@@ -329,10 +330,29 @@ public:
      * @brief Request one deferred recompute in the current document recompute cycle.
      *
      * If the document is currently recomputing, the object will be queued for one
-     * additional recompute pass later in the same cycle. Outside a running document
-     * recompute this falls back to \ref enforceRecompute().
+     * additional recompute pass later in the same cycle, normally in the next
+     * semantic recompute phase. Outside a running document recompute this falls
+     * back to \ref enforceRecompute().
      */
     void requestDeferredRecompute();
+
+    /**
+     * @brief Request one deferred recompute in a specific later recompute phase.
+     *
+     * The requested phase is clamped so it never schedules the object earlier than
+     * the current phase or earlier than the object's preferred recompute phase.
+     */
+    void requestDeferredRecompute(RecomputePhase target);
+
+    /**
+     * @brief Preferred recompute phase for this object.
+     *
+     * Objects that consume settled upstream results can override this to opt into
+     * a later phase of the same document recompute cycle. The document will not
+     * execute the object before this preferred phase, even if the object was
+     * touched earlier in the cycle.
+     */
+    virtual RecomputePhase getRecomputePhase() const;
 
     /**
      * @brief Enforce this document object to be recomputed.
@@ -359,6 +379,29 @@ public:
     bool hasDeferredRecomputeRequest() const
     {
         return StatusBits.test(ObjectStatus::DeferredRecompute);
+    }
+
+    RecomputePhase getDeferredRecomputePhase() const
+    {
+        return deferredRecomputePhase;
+    }
+
+    RecomputePhase getPendingRecomputePhase() const
+    {
+        return hasDeferredRecomputeRequest()
+            ? maxRecomputePhase(getRecomputePhase(), deferredRecomputePhase)
+            : getRecomputePhase();
+    }
+
+    bool isReadyForRecomputePhase(RecomputePhase phase) const
+    {
+        return !recomputePhasePrecedes(phase, getPendingRecomputePhase());
+    }
+
+    void clearDeferredRecomputeRequest()
+    {
+        StatusBits.reset(ObjectStatus::DeferredRecompute);
+        deferredRecomputePhase = RecomputePhase::Idle;
     }
 
     /// Reset the touch flags of the document object.
@@ -1496,6 +1539,8 @@ protected:  // attributes
 
     /// A pointer to the document this object belongs to.
     App::Document* _pDoc {nullptr};
+
+    RecomputePhase deferredRecomputePhase {RecomputePhase::Idle};
 
     /// The old label that is used for renaming expressions.
     std::string oldLabel;

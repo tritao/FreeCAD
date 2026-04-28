@@ -34,6 +34,7 @@
 
 #include "PropertyContainer.h"
 #include "PropertyLinks.h"
+#include "RecomputePhase.h"
 #include "PropertyStandard.h"
 #include "ExportInfo.h"
 #include "TransactionDefs.h"
@@ -790,10 +791,18 @@ public:
 
     /// Check whether the document is autoCreated.
     bool isAutoCreated() const;
+
     /// check whether the document is read-only (loaded from a read-only file)
     bool isReadOnlyFile() const;
+
     /**
      * @brief Recompute touched features.
+     *
+     * Recompute runs in topo order within each semantic \ref RecomputePhase,
+     * progressing from `Normal` through later consumer phases in the same
+     * document cycle. Objects may request one deferred same-cycle recompute in
+     * their current phase or a later phase through
+     * \ref DocumentObject::requestDeferredRecompute().
      *
      * @param[in] objs The subset of objects to recompute. If empty, then all
      * object in this document are checked to be recomputed.
@@ -809,6 +818,13 @@ public:
                   bool force = false,
                   bool* hasError = nullptr,
                   int options = 0);
+
+    /**
+     * @brief Current semantic phase of an active document recompute.
+     *
+     * Returns `Idle` when no recompute is running.
+     */
+    RecomputePhase currentRecomputePhase() const;
 
     /**
      * @brief Recompute a single object.
@@ -1485,6 +1501,7 @@ private:
     std::string oldLabel;
     std::string myName;
     bool autoCreated;    // Flag to know if the document was automatically created at startup
+    RecomputePhase recomputePhase {RecomputePhase::Idle};
 };
 
 template<typename T>

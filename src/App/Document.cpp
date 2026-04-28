@@ -22,6 +22,7 @@
  *                                                                         *
  ***************************************************************************/
 
+#include <array>
 #include <bitset>
 #include <stack>
 #include <deque>
@@ -98,6 +99,16 @@ using Base::Console;
 using Base::streq;
 using Base::Writer;
 using namespace App;
+
+namespace
+{
+constexpr std::array<App::RecomputePhase, 4> recomputePhases {
+    App::RecomputePhase::Normal,
+    App::RecomputePhase::PostUpstream,
+    App::RecomputePhase::PostGeometry,
+    App::RecomputePhase::Finalize,
+};
+}
 using namespace boost;
 using namespace zipios;
 
@@ -2934,73 +2945,87 @@ int Document::recompute(const std::vector<DocumentObject*>& objs,
     tracker.checkpoint("pre-recompute & topo sort");
 
     try {
-        std::set<DocumentObject*> filter;
-        size_t idx = 0;
-        // maximum two passes to allow some form of dependency inversion
-        for (int passes = 0; passes < 2 && idx < topoSortedObjects.size(); ++passes) {
-            std::unique_ptr<Base::SequencerLauncher> seq;
-            if (canAbort) {
-                seq = std::make_unique<Base::SequencerLauncher>("Recompute...",
-                                                                topoSortedObjects.size());
-            }
-            FC_LOG("Recompute pass " << passes);
-            for (; idx < topoSortedObjects.size(); ++idx) {
-                auto obj = topoSortedObjects[idx];
-                if (!obj->isAttachedToDocument() || filter.find(obj) != filter.end()) {
-                    continue;
+        for (auto phase : recomputePhases) {
+            recomputePhase = phase;
+
+            std::set<DocumentObject*> filter;
+            size_t idx = 0;
+            // maximum two passes per phase to allow some form of dependency inversion
+            for (int passes = 0; passes < 2 && idx < topoSortedObjects.size(); ++passes) {
+                std::unique_ptr<Base::SequencerLauncher> seq;
+                if (canAbort) {
+                    seq = std::make_unique<Base::SequencerLauncher>("Recompute...",
+                                                                    topoSortedObjects.size());
                 }
-                // ask the object if it should be recomputed
-                bool doRecompute = false;
-                if (obj->mustRecompute()) {
-                    doRecompute = true;
-                    ++objectCount;
-                    int res = _recomputeFeature(obj);
-                    if (res != 0) {
-                        if (hasError) {
-                            *hasError = true;
-                        }
-                        if (res < 0) {
-                            passes = 2;
-                            break;
-                        }
-                        // if something happened filter all object in its
-                        // inListRecursive from the queue then proceed
-                        obj->getInListEx(filter, true);
-                        filter.insert(obj);
+                FC_LOG("Recompute phase " << recomputePhaseName(phase) << ", pass " << passes);
+                for (; idx < topoSortedObjects.size(); ++idx) {
+                    auto obj = topoSortedObjects[idx];
+                    if (!obj->isAttachedToDocument() || filter.find(obj) != filter.end()
+                        || !obj->isReadyForRecomputePhase(phase)) {
                         continue;
                     }
-                }
-                if (obj->isTouched() || doRecompute) {
-                    signalRecomputedObject(*obj);
-                    if (fineGrained) {
-                        // set all dependent objects touched based on properties
-                        std::vector<DepEdge> inList = obj->getInListProp();
-                        for (auto& [objFrom, propFrom, objTo, propTo] : inList) {
-                            if (obj->touchedProps.contains(propTo) || propTo.empty()) {
-                                objFrom->enforceRecompute(propFrom);
+                    // ask the object if it should be recomputed
+                    bool doRecompute = false;
+                    if (obj->mustRecompute()) {
+                        doRecompute = true;
+                        ++objectCount;
+                        int res = _recomputeFeature(obj);
+                        if (res != 0) {
+                            if (hasError) {
+                                *hasError = true;
+                            }
+                            if (res < 0) {
+                                passes = 2;
+                                break;
+                            }
+                            // if something happened filter all object in its
+                            // inListRecursive from the queue then proceed
+                            obj->getInListEx(filter, true);
+                            filter.insert(obj);
+                            continue;
+                        }
+                    }
+                    if (obj->isTouched() || doRecompute) {
+                        signalRecomputedObject(*obj);
+                        if (fineGrained) {
+                            // set all dependent objects touched based on properties
+                            std::vector<DepEdge> inList = obj->getInListProp();
+                            for (auto& [objFrom, propFrom, objTo, propTo] : inList) {
+                                if (obj->touchedProps.contains(propTo) || propTo.empty()) {
+                                    objFrom->enforceRecompute(propFrom);
+                                }
+                            }
+                            obj->purgeTouched();
+                        }
+                        else {
+                            obj->purgeTouched();
+                            // set all dependent objects touched to force recompute
+                            for (auto inObjIt : obj->getInList()) {
+                                inObjIt->enforceRecompute();
                             }
                         }
-                        obj->purgeTouched();
                     }
-                    else {
-                        obj->purgeTouched();
-                        // set all dependent objects touched to force recompute
-                        for (auto inObjIt : obj->getInList()) {
-                            inObjIt->enforceRecompute();
-                        }
+                    if (seq) {
+                        seq->next(true);
                     }
                 }
-                if (seq) {
-                    seq->next(true);
-                }
-            }
-            // check if all objects are recomputed but still thouched
-            for (size_t i = 0; i < topoSortedObjects.size(); ++i) {
-                auto obj = topoSortedObjects[i];
-                obj->setStatus(ObjectStatus::Recompute2, false);
-                const bool touched = obj->isTouched();
-                const bool deferred = obj->hasDeferredRecomputeRequest();
-                if (!filter.contains(obj) && (touched || deferred)) {
+
+                bool retryCurrentPhase = false;
+                // check if all eligible objects are recomputed but still touched
+                for (size_t i = 0; i < topoSortedObjects.size(); ++i) {
+                    auto obj = topoSortedObjects[i];
+                    obj->setStatus(ObjectStatus::Recompute2, false);
+                    const bool touched = obj->isTouched();
+                    const bool deferred = obj->hasDeferredRecomputeRequest();
+                    if (filter.contains(obj) || (!touched && !deferred)) {
+                        continue;
+                    }
+
+                    const auto pendingPhase = obj->getPendingRecomputePhase();
+                    if (recomputePhasePrecedes(phase, pendingPhase)) {
+                        continue;
+                    }
+
                     if (passes > 0) {
                         if (deferred && !touched) {
                             FC_ERR(obj->getFullName()
@@ -3023,7 +3048,12 @@ int Document::recompute(const std::vector<DocumentObject*>& objs,
                             idx = i;
                         }
                         obj->setStatus(ObjectStatus::Recompute2, true);
+                        retryCurrentPhase = true;
                     }
+                }
+
+                if (!retryCurrentPhase) {
+                    break;
                 }
             }
         }
@@ -3034,11 +3064,12 @@ int Document::recompute(const std::vector<DocumentObject*>& objs,
 
     tracker.checkpoint("Recompute");
 
+    recomputePhase = RecomputePhase::Idle;
     for (auto obj : topoSortedObjects) {
         if (!obj->isAttachedToDocument()) {
             continue;
         }
-        obj->setStatus(ObjectStatus::DeferredRecompute, false);
+        obj->clearDeferredRecomputeRequest();
         obj->setStatus(ObjectStatus::PendingRecompute, false);
         obj->setStatus(ObjectStatus::Recompute2, false);
     }
@@ -3277,7 +3308,7 @@ int Document::_recomputeFeature(DocumentObject* Feat) // NOLINT
 
     DocumentObjectExecReturn* returnCode = nullptr;
     try {
-        Feat->setStatus(ObjectStatus::DeferredRecompute, false);
+        Feat->clearDeferredRecomputeRequest();
         returnCode = Feat->ExpressionEngine.execute(PropertyExpressionEngine::ExecuteNonOutput);
         if (returnCode == DocumentObject::StdReturn) {
             returnCode = Feat->recompute();
@@ -3327,6 +3358,11 @@ int Document::_recomputeFeature(DocumentObject* Feat) // NOLINT
         return 1;
     }
     return 0;
+}
+
+RecomputePhase Document::currentRecomputePhase() const
+{
+    return recomputePhase;
 }
 
 bool Document::recomputeFeature(DocumentObject* feature, bool recursive)
