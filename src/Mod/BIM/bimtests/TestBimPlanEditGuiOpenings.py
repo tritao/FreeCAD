@@ -1018,7 +1018,7 @@ class BimPlanEditGuiOpeningsMixin:
         self.pump_gui_events()
 
         with patch.object(
-            session.selection.picking,
+            session.picking,
             "get_plan_target_at_position",
             return_value=("opening", door),
         ):
@@ -1046,7 +1046,7 @@ class BimPlanEditGuiOpeningsMixin:
         self.pump_gui_events()
 
         with patch.object(
-            session.selection.picking,
+            session.picking,
             "get_plan_target_at_position",
             return_value=("opening", door),
         ):
@@ -1194,7 +1194,7 @@ class BimPlanEditGuiOpeningsMixin:
         with (
             patch("PySide.QtCore.QTimer.singleShot", side_effect=fake_single_shot),
             patch.object(
-                session.selection.picking,
+                session.picking,
                 "get_plan_target_at_position",
                 return_value=("opening", door),
             ),
@@ -1244,9 +1244,9 @@ class BimPlanEditGuiOpeningsMixin:
                 return self._position
 
         with (
-            patch.object(session.selection.picking, "get_edit_node", return_value=None),
+            patch.object(session.picking, "get_edit_node", return_value=None),
             patch.object(
-                session.selection.picking,
+                session.picking,
                 "get_plan_target_at_position",
                 return_value=(None, None),
             ),
@@ -1746,7 +1746,7 @@ class BimPlanEditGuiOpeningsMixin:
         self.pump_gui_events()
 
         with patch.object(
-            session.selection.picking,
+            session.picking,
             "get_plan_target_at_position",
             return_value=("opening", door),
         ):
@@ -1780,7 +1780,7 @@ class BimPlanEditGuiOpeningsMixin:
 
         with (
             patch.object(
-                session.selection.picking,
+                session.picking,
                 "get_edit_node",
                 return_value=("opening_handle", door, 0),
             ),
@@ -1832,7 +1832,7 @@ class BimPlanEditGuiOpeningsMixin:
         picked_point = _FakePickedPoint(self.document.Name, door.Name, "EditNode0")
         with (
             patch.object(
-                session.selection.picking,
+                session.picking,
                 "get_edit_node",
                 return_value=("edit_node", picked_point),
             ),

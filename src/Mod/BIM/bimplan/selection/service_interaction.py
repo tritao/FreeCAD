@@ -386,31 +386,26 @@ class PlanSelectionPickingService(_SessionAPI):
     )
 
     def get_plan_space_instances(self):
-        return plan_selection_picking.get_plan_space_instances(self.session)
+        return self.session.picking.get_plan_space_instances()
 
     def get_plan_region_instances(self):
-        return plan_selection_picking.get_plan_region_instances(self.session)
+        return self.session.picking.get_plan_region_instances()
 
     def get_plan_target_from_edit_node(self, node):
-        return plan_selection_picking.get_plan_target_from_edit_node(self.session, node)
+        return self.session.picking.get_plan_target_from_edit_node(node)
 
     def get_provider_overlay_target_from_edit_node(self, node):
-        return plan_selection_picking.get_provider_overlay_target_from_edit_node(
-            self.session,
-            node,
-        )
+        return self.session.picking.get_provider_overlay_target_from_edit_node(node)
 
     def get_screen_distance_sq_to_segment(self, mouse_pos, start, end):
-        return plan_selection_picking.get_screen_distance_sq_to_segment(
-            self.session,
+        return self.session.picking.get_screen_distance_sq_to_segment(
             mouse_pos,
             start,
             end,
         )
 
     def pick_plan_symbol_target_from_overlays(self, mouse_pos, radius_px=10):
-        return plan_selection_picking.pick_plan_symbol_target_from_overlays(
-            self.session,
+        return self.session.picking.pick_plan_symbol_target_from_overlays(
             mouse_pos,
             radius_px=radius_px,
         )
@@ -421,8 +416,7 @@ class PlanSelectionPickingService(_SessionAPI):
         radius_px=10,
         candidates=None,
     ):
-        return plan_selection_picking.pick_plan_opening_target_from_overlays(
-            self.session,
+        return self.session.picking.pick_plan_opening_target_from_overlays(
             mouse_pos,
             radius_px=radius_px,
             candidates=candidates,
@@ -433,40 +427,31 @@ class PlanSelectionPickingService(_SessionAPI):
         mouse_pos,
         radius_px=plan_selection_picking._PROVIDER_OVERLAY_PICK_RADIUS_PX,
     ):
-        return plan_selection_picking.pick_provider_overlay_target_from_overlays(
-            self.session,
+        return self.session.picking.pick_provider_overlay_target_from_overlays(
             mouse_pos,
             radius_px=radius_px,
         )
 
     def pick_provider_overlay_target_from_objects_info(self, mouse_pos):
-        return plan_selection_picking.pick_provider_overlay_target_from_objects_info(
-            self.session,
-            mouse_pos,
-        )
+        return self.session.picking.pick_provider_overlay_target_from_objects_info(mouse_pos)
 
     def pick_plan_space_target_from_overlays(self, mouse_pos, radius_px=10):
-        return plan_selection_picking.pick_plan_space_target_from_overlays(
-            self.session,
+        return self.session.picking.pick_plan_space_target_from_overlays(
             mouse_pos,
             radius_px=radius_px,
         )
 
     def pick_plan_region_target_from_overlays(self, mouse_pos, radius_px=10):
-        return plan_selection_picking.pick_plan_region_target_from_overlays(
-            self.session,
+        return self.session.picking.pick_plan_region_target_from_overlays(
             mouse_pos,
             radius_px=radius_px,
         )
 
     def get_region_pick_polylines(self, region):
-        return plan_selection_picking.get_region_pick_polylines(self.session, region)
+        return self.session.picking.get_region_pick_polylines(region)
 
     def pick_plan_region_target_from_polylines(self, mouse_pos):
-        return plan_selection_picking.pick_plan_region_target_from_polylines(
-            self.session,
-            mouse_pos,
-        )
+        return self.session.picking.pick_plan_region_target_from_polylines(mouse_pos)
 
     def pick_plan_target_from_footprint_faces(
         self,
@@ -475,8 +460,7 @@ class PlanSelectionPickingService(_SessionAPI):
         get_faces,
         target_label="target",
     ):
-        return plan_selection_picking.pick_plan_target_from_footprint_faces(
-            self.session,
+        return self.session.picking.pick_plan_target_from_footprint_faces(
             mouse_pos,
             is_target,
             get_faces,
@@ -484,30 +468,22 @@ class PlanSelectionPickingService(_SessionAPI):
         )
 
     def pick_plan_space_target_from_footprints(self, mouse_pos):
-        return plan_selection_picking.pick_plan_space_target_from_footprints(
-            self.session,
-            mouse_pos,
-        )
+        return self.session.picking.pick_plan_space_target_from_footprints(mouse_pos)
 
     def pick_plan_region_target_from_footprints(self, mouse_pos):
-        return plan_selection_picking.pick_plan_region_target_from_footprints(
-            self.session,
-            mouse_pos,
-        )
+        return self.session.picking.pick_plan_region_target_from_footprints(mouse_pos)
 
     def get_plan_target_at_position(self, mouse_pos, *, include_space_fallback=True):
-        return plan_selection_picking.get_plan_target_at_position(
-            self.session,
+        return self.session.picking.pick(
             mouse_pos,
             include_space_fallback=include_space_fallback,
         )
 
     def get_edit_node(self, mouse_pos):
-        return plan_selection_picking.get_edit_node(self.session, mouse_pos)
+        return self.session.picking.pick_edit_node(mouse_pos)
 
     def pick_selected_opening_handle(self, mouse_pos, radius_px=10):
-        return plan_selection_picking.pick_selected_opening_handle(
-            self.session,
+        return self.session.picking.pick_selected_opening_handle(
             mouse_pos,
             radius_px=radius_px,
         )
@@ -626,7 +602,7 @@ class PlanSelectionActivationService(_SessionAPI):
     ):
         if resolved_target is None:
             target_ref = plan_target_kinds.coerce_plan_target_ref(
-                self.session.selection.picking.get_plan_target_at_position(mouse_pos)
+                self.session.picking.pick(mouse_pos)
             )
         else:
             target_ref = plan_target_kinds.coerce_plan_target_ref(resolved_target)
@@ -685,7 +661,7 @@ class PlanSelectionActivationService(_SessionAPI):
         perf = getattr(self.session, "performance", None)
         if not reuse_hovered_target:
             target_ref = plan_target_kinds.coerce_plan_target_ref(
-                self.session.selection.picking.get_plan_target_at_position(mouse_pos)
+                self.session.picking.pick(mouse_pos)
             )
             source = "picked_after_throttled_hover" if hover_pick_dirty else "picked"
             self.session.hover_pick_state.dirty = False
@@ -819,7 +795,7 @@ class PlanSelectionActivationService(_SessionAPI):
 
     def activate_provider_overlay_target_node(self, node, event_callback=None):
         target_ref = plan_target_kinds.coerce_plan_target_ref(
-            self.session.selection.picking.get_provider_overlay_target_from_edit_node(node)
+            self.session.picking.get_provider_overlay_target_from_edit_node(node)
         )
         if target_ref.obj is None:
             return False
@@ -874,13 +850,13 @@ class PlanSelectionActivationService(_SessionAPI):
         )
 
     def toggle_plan_target_selection_at_position(self, mouse_pos, event_callback=None):
-        node = self.session.selection.picking.get_edit_node(mouse_pos)
+        node = self.session.picking.pick_edit_node(mouse_pos)
         if plan_edit_nodes.get_edit_node_kind(node) in (
             "provider_overlay_point",
             "provider_overlay_target",
         ):
             target_ref = plan_target_kinds.coerce_plan_target_ref(
-                self.session.selection.picking.get_provider_overlay_target_from_edit_node(node)
+                self.session.picking.get_provider_overlay_target_from_edit_node(node)
             )
             if (
                 target_ref.obj is not None
@@ -892,11 +868,11 @@ class PlanSelectionActivationService(_SessionAPI):
                 return self.toggle_raw_plan_object_selection(target_ref.obj, event_callback)
         else:
             target_ref = plan_target_kinds.coerce_plan_target_ref(
-                self.session.selection.picking.get_plan_target_from_edit_node(node)
+                self.session.picking.get_plan_target_from_edit_node(node)
             )
         if target_ref.kind is None:
             target_ref = plan_target_kinds.coerce_plan_target_ref(
-                self.session.selection.picking.get_plan_target_at_position(mouse_pos)
+                self.session.picking.pick(mouse_pos)
             )
         if not target_ref.kind or not target_ref.obj:
             return False

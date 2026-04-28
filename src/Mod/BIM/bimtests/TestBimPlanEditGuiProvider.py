@@ -532,7 +532,7 @@ class BimPlanEditGuiProviderMixin:
         provider.overlay_calls = 0
 
         session.selection.hover.set_hovered_wall(wall)
-        with patch.object(session.selection.picking, "get_edit_node", return_value=None):
+        with patch.object(session.picking, "get_edit_node", return_value=None):
             press = self._make_fake_left_mouse_press(250, 250)
             session.input.on_mouse_pressed(press)
 
@@ -609,7 +609,7 @@ class BimPlanEditGuiProviderMixin:
         event = self._make_fake_left_mouse_press()
 
         with patch.object(
-            session.selection.picking,
+            session.picking,
             "get_edit_node",
             return_value=("provider_overlay_point", node),
         ):
@@ -676,7 +676,7 @@ class BimPlanEditGuiProviderMixin:
             ):
                 self.assertEqual(
                     plan_edit_nodes.ProviderOverlayTargetEditNode("object", marker),
-                    session.selection.picking.get_edit_node((100, 100)),
+                    session.picking.get_edit_node((100, 100)),
                 )
         finally:
             session.view = original_view

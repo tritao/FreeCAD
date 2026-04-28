@@ -160,7 +160,7 @@ class BimPlanEditGuiSpacesMixin:
         self.pump_gui_events()
 
         with patch.object(
-            session.selection.picking,
+            session.picking,
             "get_plan_target_at_position",
             return_value=("region", region),
         ):
@@ -196,9 +196,9 @@ class BimPlanEditGuiSpacesMixin:
         self.pump_gui_events()
 
         with (
-            patch.object(session.selection.picking, "get_edit_node", return_value=None),
+            patch.object(session.picking, "get_edit_node", return_value=None),
             patch.object(
-                session.selection.picking,
+                session.picking,
                 "get_plan_target_at_position",
                 return_value=("space", space),
             ) as get_target,
@@ -238,9 +238,9 @@ class BimPlanEditGuiSpacesMixin:
         self.assertFalse(region.ViewObject.Selectable)
 
         with (
-            patch.object(session.selection.picking, "get_edit_node", return_value=None),
+            patch.object(session.picking, "get_edit_node", return_value=None),
             patch.object(
-                session.selection.picking,
+                session.picking,
                 "get_plan_target_at_position",
                 return_value=("region", region),
             ),
@@ -295,7 +295,7 @@ class BimPlanEditGuiSpacesMixin:
             ):
                 self.assertEqual(
                     ("region", region),
-                    session.selection.picking.get_plan_target_at_position((100, 100)),
+                    session.picking.get_plan_target_at_position((100, 100)),
                 )
         finally:
             session.view = original_view
@@ -343,7 +343,7 @@ class BimPlanEditGuiSpacesMixin:
             session.view = FakeView(self.document.Name, region.Name, space)
             self.assertEqual(
                 ("region", region),
-                session.selection.picking.get_plan_target_at_position((100, 100)),
+                session.picking.get_plan_target_at_position((100, 100)),
             )
         finally:
             session.view = original_view
@@ -401,7 +401,7 @@ class BimPlanEditGuiSpacesMixin:
             ):
                 self.assertEqual(
                     ("region", region),
-                    session.selection.picking.get_plan_target_at_position((100, 100)),
+                    session.picking.get_plan_target_at_position((100, 100)),
                 )
         finally:
             session.view = original_view
@@ -1744,9 +1744,9 @@ class BimPlanEditGuiSpacesMixin:
         self.pump_gui_events()
 
         with (
-            patch.object(session.selection.picking, "get_edit_node", return_value=None),
+            patch.object(session.picking, "get_edit_node", return_value=None),
             patch.object(
-                session.selection.picking,
+                session.picking,
                 "get_plan_target_at_position",
                 return_value=("space", space),
             ),
@@ -1762,12 +1762,12 @@ class BimPlanEditGuiSpacesMixin:
                 return_value=QtCore.Qt.ControlModifier,
             ),
             patch.object(
-                session.selection.picking,
+                session.picking,
                 "get_edit_node",
                 return_value=None,
             ),
             patch.object(
-                session.selection.picking,
+                session.picking,
                 "get_plan_target_at_position",
                 return_value=("wall", wall),
             ),

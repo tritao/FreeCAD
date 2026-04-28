@@ -34,6 +34,7 @@ from bimplan.runtime import lifecycle as plan_lifecycle
 from bimplan.runtime import tools as plan_runtime_tools
 from bimplan.object_visibility import PlanVisibilityAPI
 from bimplan.performance import PlanPerformanceAPI
+from bimplan.picking import PlanPickingAPI
 from bimplan import snap as plan_snap
 from bimplan.runtime import session_state as plan_session_state
 from bimplan.runtime.session_state import PlanInteractionAPI
@@ -188,6 +189,7 @@ class PlanEditSession:
     # State-backed compatibility properties are bound after class definition.
 
     def __init__(self):
+        self.picking = PlanPickingAPI(self)
         self.selection = PlanSelectionAPI(self)
         self.spaces = PlanSpacesAPI(self)
         self.openings = PlanOpeningsAPI(self)
