@@ -262,7 +262,7 @@ def on_mouse_moved(session, event_callback):
             return
         if mouse_pos is None:
             return
-        if not session.selection.hover.update_hovered_plan_target(mouse_pos):
+        if not session.picking.hover(mouse_pos):
             return
         if (
             session.overlay_tracker_state.grip_trackers

@@ -373,9 +373,6 @@ class PlanSelectionHoverService(_SessionAPI):
     def should_skip_hover_pick(self, *args, **kwargs):
         return plan_hover_picking.should_skip_hover_pick(self.session, *args, **kwargs)
 
-    def update_hovered_plan_target(self, *args, **kwargs):
-        return plan_hover_picking.update_hovered_plan_target(self.session, *args, **kwargs)
-
 
 class PlanSelectionActivationService(_SessionAPI):
     def queue_restore_selected_plan_target(self, kind, obj):
