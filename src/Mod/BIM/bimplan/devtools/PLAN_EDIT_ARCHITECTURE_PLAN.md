@@ -452,6 +452,7 @@ Current progress:
 
 - A minimal `PlanToolHandler` contract exists beside the current tool-id enum.
 - `SelectTool` owns Select left-click, hover behavior, and edit-node activation.
+- `JoinTool` owns Join mouse, hover, and key behavior.
 - `runtime/input.py` still owns raw Coin event normalization and dispatch.
 
 Steps:
