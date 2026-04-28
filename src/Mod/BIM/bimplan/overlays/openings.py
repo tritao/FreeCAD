@@ -7,7 +7,6 @@ import FreeCADGui
 
 from . import geometry as overlay_geometry
 from . import manager as overlay_manager
-from .. import selection as plan_selection
 
 
 def _perf_count(session, name, delta=1):
@@ -239,7 +238,7 @@ def sync_selected_opening_overlay(session):
     with _perf_trace_span(session, "sync_selected_opening_overlay"):
         tracker_state = _opening_tracker_state(session)
         overlay_state = _opening_overlay_state(session)
-        opening = plan_selection.get_selected_plan_target_object(session, "opening")
+        opening = session.selection.state.get_selected_plan_target_object("opening")
         if session.current_tool != "Select" or not session.openings.is_hosted_opening_object(
             opening
         ):
@@ -302,7 +301,7 @@ def invalidate_selected_opening_overlay_cache(session):
 
 def sync_selected_wall_opening_context_overlay(session):
     clear_selected_wall_opening_context_overlay(session)
-    wall = plan_selection.get_selected_plan_target_object(session, "wall")
+    wall = session.selection.state.get_selected_plan_target_object("wall")
     if (
         session.current_tool != "Select"
         or not wall
@@ -347,7 +346,7 @@ def sync_selected_opening_handles(session):
         from draftutils import params
 
         transient_state = _opening_transient_state(session)
-        opening = plan_selection.get_selected_plan_target_object(session, "opening")
+        opening = session.selection.state.get_selected_plan_target_object("opening")
         if session.current_tool != "Select":
             clear_selected_opening_handles(session)
             return

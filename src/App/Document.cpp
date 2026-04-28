@@ -2998,12 +2998,26 @@ int Document::recompute(const std::vector<DocumentObject*>& objs,
             for (size_t i = 0; i < topoSortedObjects.size(); ++i) {
                 auto obj = topoSortedObjects[i];
                 obj->setStatus(ObjectStatus::Recompute2, false);
-                if (!filter.contains(obj) && obj->isTouched()) {
+                const bool touched = obj->isTouched();
+                const bool deferred = obj->hasDeferredRecomputeRequest();
+                if (!filter.contains(obj) && (touched || deferred)) {
                     if (passes > 0) {
-                        FC_ERR(obj->getFullName() << " still touched after recompute");
+                        if (deferred && !touched) {
+                            FC_ERR(obj->getFullName()
+                                   << " still requested deferred recompute after recompute");
+                        }
+                        else {
+                            FC_ERR(obj->getFullName() << " still touched after recompute");
+                        }
                     }
                     else {
-                        FC_LOG(obj->getFullName() << " still touched after recompute");
+                        if (deferred && !touched) {
+                            FC_LOG(obj->getFullName()
+                                   << " requested deferred recompute after recompute");
+                        }
+                        else {
+                            FC_LOG(obj->getFullName() << " still touched after recompute");
+                        }
                         if (idx >= topoSortedObjects.size()) {
                             // let's start the next pass on the first touched object
                             idx = i;
@@ -3024,6 +3038,7 @@ int Document::recompute(const std::vector<DocumentObject*>& objs,
         if (!obj->isAttachedToDocument()) {
             continue;
         }
+        obj->setStatus(ObjectStatus::DeferredRecompute, false);
         obj->setStatus(ObjectStatus::PendingRecompute, false);
         obj->setStatus(ObjectStatus::Recompute2, false);
     }
@@ -3262,6 +3277,7 @@ int Document::_recomputeFeature(DocumentObject* Feat) // NOLINT
 
     DocumentObjectExecReturn* returnCode = nullptr;
     try {
+        Feat->setStatus(ObjectStatus::DeferredRecompute, false);
         returnCode = Feat->ExpressionEngine.execute(PropertyExpressionEngine::ExecuteNonOutput);
         if (returnCode == DocumentObject::StdReturn) {
             returnCode = Feat->recompute();

@@ -6,7 +6,6 @@ from dataclasses import dataclass
 
 import FreeCAD
 
-from bimplan import selection as plan_selection
 from bimplan.selection import target_kinds as plan_target_kinds
 
 translate = FreeCAD.Qt.translate
@@ -231,7 +230,7 @@ def _get_space_selection_targets(session, targets=None):
     getter = getattr(selection_api, "get_selected_plan_targets", None)
     if callable(getter) and type(selection_api).__name__ != "PlanSelectionAPI":
         return tuple(getter() or ())
-    return tuple(plan_selection.get_selected_plan_targets(session))
+    return tuple(session.selection.state.get_selected_plan_targets())
 
 
 def _build_wall_boundary_space_creation_request(session, selection_shape):
@@ -316,7 +315,7 @@ def build_space_preflight_report(session, targets=None):
         return None
 
     targets = list(
-        targets if targets is not None else plan_selection.get_selected_plan_targets(session)
+        targets if targets is not None else session.selection.state.get_selected_plan_targets()
     )
     if not should_run_space_preflight_for_targets(targets):
         return None

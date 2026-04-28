@@ -279,10 +279,24 @@ void DocumentObject::enforceRecompute()
     touch(false);
 }
 
+void DocumentObject::requestDeferredRecompute()
+{
+    if (!_pDoc || !_pDoc->testStatus(Document::Recomputing)) {
+        enforceRecompute();
+        return;
+    }
+
+    StatusBits.set(ObjectStatus::DeferredRecompute);
+}
+
 bool DocumentObject::mustRecompute() const
 {
     if (StatusBits.test(ObjectStatus::Freeze)) {
         return false;
+    }
+
+    if (StatusBits.test(ObjectStatus::DeferredRecompute)) {
+        return true;
     }
 
     if (StatusBits.test(ObjectStatus::Enforce)) {

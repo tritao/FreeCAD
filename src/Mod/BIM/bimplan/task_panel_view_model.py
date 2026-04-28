@@ -7,8 +7,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 import FreeCAD
-
-from bimplan import selection as plan_selection
 from bimplan.providers import (
     PlanContextPanelState,
     PlanContextSubjectKind,
@@ -84,16 +82,18 @@ class _TaskPanelSelectionReads(_TaskPanelReadsBase):
         return str(getattr(self.session, "current_tool", "") or "")
 
     def get_selected_plan_target(self):
-        getter = getattr(self.selection, "get_selected_plan_target", None)
+        state = getattr(self.selection, "state", None)
+        getter = getattr(state, "get_selected_plan_target", None)
         if callable(getter):
             return getter()
-        return plan_selection.get_selected_plan_target(self.session)
+        return (None, None)
 
     def get_selected_plan_targets(self):
-        getter = getattr(self.selection, "get_selected_plan_targets", None)
+        state = getattr(self.selection, "state", None)
+        getter = getattr(state, "get_selected_plan_targets", None)
         if callable(getter):
             return tuple(getter() or ())
-        return plan_selection.get_selected_plan_targets(self.session)
+        return ()
 
 
 class _TaskPanelProviderReads(_TaskPanelReadsBase):

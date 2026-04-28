@@ -42,6 +42,8 @@ _RECOMPUTE_HOST_ACTION_KEY = "bim_window_recompute_host"
 _SELECT_HOST_ACTION_KEY = "bim_window_select_host"
 _CENTER_ON_HOST_ACTION_KEY = "bim_window_center_on_host"
 _WINDOW_OVERLAY_COLOR = (0.12, 0.38, 0.95)
+_SPACE_PROVIDER_ID = "bim-space"
+_REPICK_SPACE_REGION_ACTION_KEY = "bim_space_repick_region"
 
 
 class BIMWindowPlanEditProvider(PlanEditProvider):
@@ -205,13 +207,68 @@ class BIMWindowPlanEditProvider(PlanEditProvider):
         return False
 
 
+class BIMSpacePlanEditProvider(PlanEditProvider):
+    provider_id = _SPACE_PROVIDER_ID
+    display_name = "BIM Spaces"
+
+    def get_issues(self, context):
+        space = _resolve_selected_space(context)
+        if space is None:
+            return ()
+
+        status = _get_space_boundary_status(space)
+        if not status or status == "OK":
+            return ()
+
+        message = _get_space_boundary_status_message(space)
+        details = _get_space_boundary_status_details(space)
+        summary = details[0] if details else message
+        actions = ()
+        if status == "Conflict":
+            report = _get_space_region_reassignment_report(context, space)
+            if int(report.get("candidate_count", 0) or 0) > 0:
+                actions = (_repick_space_region_action(),)
+
+        title = (
+            "Space boundary conflict" if status == "Conflict" else "Space boundaries need attention"
+        )
+        severity = PlanIssueSeverity.WARNING if status == "Conflict" else PlanIssueSeverity.ERROR
+        return (
+            PlanIssueSpec(
+                key=_object_key(space, f"space-boundary-{status.lower()}"),
+                title=title,
+                message=message,
+                severity=severity,
+                actions=actions,
+                role="authoring",
+                category="spaces",
+                summary=summary,
+            ),
+        )
+
+    def execute_action(self, action_key, context, commands, payload=None):
+        del payload
+        if _normalize_text(action_key) != _REPICK_SPACE_REGION_ACTION_KEY:
+            return False
+        space = _resolve_selected_space(context)
+        if space is None:
+            return False
+        return _start_space_region_reassignment(commands, space)
+
+
 def register_plan_edit_providers(registry=None):
     resolved_registry = registry if registry is not None else get_plan_edit_registry()
-    existing = resolved_registry.get_provider(BIMWindowPlanEditProvider.provider_id)
-    if isinstance(existing, BIMWindowPlanEditProvider):
+    window_provider = _register_plan_edit_provider(resolved_registry, BIMWindowPlanEditProvider)
+    _register_plan_edit_provider(resolved_registry, BIMSpacePlanEditProvider)
+    return window_provider
+
+
+def _register_plan_edit_provider(registry, provider_type):
+    existing = registry.get_provider(provider_type.provider_id)
+    if isinstance(existing, provider_type):
         return existing
-    provider = BIMWindowPlanEditProvider()
-    resolved_registry.register_provider(provider)
+    provider = provider_type()
+    registry.register_provider(provider)
     return provider
 
 
@@ -319,6 +376,29 @@ def _resolve_selected_wall(context):
     return None
 
 
+def _resolve_selected_space(context):
+    targets = []
+    primary = getattr(context, "get_primary_target", lambda: None)()
+    if primary is not None:
+        targets.append(primary)
+    targets.extend(
+        target
+        for target in tuple(getattr(context, "get_selected_targets", lambda: ())() or ())
+        if target is not primary
+    )
+    for target in targets:
+        if str(getattr(target, "kind", "") or "").strip() != "space":
+            continue
+        obj = _resolve_target_object(context, target)
+        if _is_space_object(obj):
+            return _get_semantic_object(context, obj)
+
+    for obj in tuple(getattr(context, "get_selected_objects", lambda: ())() or ()):
+        if _is_space_object(obj):
+            return _get_semantic_object(context, obj)
+    return None
+
+
 def _is_wall_object(obj):
     if obj is None:
         return False
@@ -326,6 +406,19 @@ def _is_wall_object(obj):
         import Draft
 
         return Draft.getType(obj) == "Wall"
+    except Exception:
+        return False
+
+
+def _is_space_object(obj):
+    if obj is None:
+        return False
+    if str(getattr(obj, "IfcType", "") or "").strip() == "Space":
+        return True
+    try:
+        import Draft
+
+        return Draft.getType(obj) == "Space"
     except Exception:
         return False
 
@@ -664,3 +757,51 @@ def _refresh_window_visuals(commands, window):
 def _point_tuple(point):
     point = FreeCAD.Vector(point)
     return (float(point.x), float(point.y), float(point.z))
+
+
+def _repick_space_region_action():
+    return PlanActionSpec(
+        key=_REPICK_SPACE_REGION_ACTION_KEY,
+        label="Re-pick room region",
+        tooltip="Choose which enclosed room region this selected space should follow.",
+    )
+
+
+def _get_space_boundary_status(space):
+    return str(getattr(space, "BoundaryStatus", "") or "").strip()
+
+
+def _get_space_boundary_status_message(space):
+    return str(getattr(space, "BoundaryStatusMessage", "") or "").strip()
+
+
+def _get_space_boundary_status_details(space):
+    return [
+        str(detail).strip()
+        for detail in list(getattr(space, "BoundaryStatusDetails", []) or [])
+        if str(detail).strip()
+    ]
+
+
+def _get_space_region_reassignment_report(context, space):
+    session = getattr(context, "session", None)
+    if session is None or space is None:
+        return {}
+    boundaries = list(session.spaces.get_space_boundary_entries(space) or [])
+    if not boundaries:
+        return {}
+    return (
+        session.spaces.build_space_region_candidate_report(
+            boundaries,
+            label=getattr(space, "Label", None),
+            seed_space=space,
+        )
+        or {}
+    )
+
+
+def _start_space_region_reassignment(commands, space):
+    session = getattr(commands, "_session", None)
+    if session is None or space is None:
+        return False
+    return bool(session.spaces.start_space_region_reassignment(space))

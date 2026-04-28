@@ -579,7 +579,149 @@ class PlanOpeningsAPI(_SessionAPI):
     def resolve_wall_hosted_opening_layout(self, *args, **kwargs):
         return resolve_wall_hosted_opening_layout(self.session, *args, **kwargs)
 
+    def refresh_selected_opening_visuals(self):
+        return refresh_selected_opening_visuals(self.session)
+
+    def queue_hard_refresh_selected_opening_visuals(self):
+        return queue_hard_refresh_selected_opening_visuals(self.session)
+
+    def flush_hard_refresh_selected_opening_visuals(self):
+        return flush_hard_refresh_selected_opening_visuals(self.session)
+
+    def refresh_target_document_visual_dependency(self, opening, obj, prop):
+        from bimplan import document_visuals as plan_document_visuals
+
+        if not (
+            plan_document_visuals.is_opening_visual_dependency(opening, obj)
+            and prop in plan_document_visuals.OPENING_VISUAL_PROPERTIES
+        ):
+            return False
+        plan_document_visuals.refresh_opening_footprint_display(self.session, opening)
+        plan_document_visuals.refresh_opening_host_footprint_displays(self.session, opening)
+        return True
+
+    def refresh_opening_visual_footprints(self, opening):
+        from bimplan import document_visuals as plan_document_visuals
+
+        if opening is None:
+            return False
+        plan_document_visuals.refresh_opening_footprint_display(self.session, opening)
+        plan_document_visuals.refresh_opening_host_footprint_displays(self.session, opening)
+        return True
+
+    def handle_document_visual_dependency_change(self, obj, prop):
+        from bimplan import document_visuals as plan_document_visuals
+
+        selected_opening = self.session.selection.state.get_selected_plan_target_object("opening")
+        if self.refresh_target_document_visual_dependency(selected_opening, obj, prop):
+            self.session.overlays.queue_plan_overlay_visual_refresh(
+                plan_document_visuals.PLAN_VISUAL_SELECTED_OPENING,
+                plan_document_visuals.PLAN_VISUAL_HOVERED_OPENING,
+            )
+            return True
+        hovered_opening = self.session.hovered_opening
+        if (
+            hovered_opening
+            and not self.session.selection.state.is_selected_plan_target("opening", hovered_opening)
+            and self.refresh_target_document_visual_dependency(hovered_opening, obj, prop)
+        ):
+            self.session.overlays.queue_plan_overlay_visual_refresh(
+                plan_document_visuals.PLAN_VISUAL_HOVERED_OPENING
+            )
+            return True
+        return False
+
+    def handle_wall_related_document_visual_change(self, obj, prop, selected_wall):
+        from bimplan import document_visuals as plan_document_visuals
+
+        if prop not in plan_document_visuals.OPENING_VISUAL_PROPERTIES:
+            return False
+        hovered_wall = self.session.hovered_wall
+        if hovered_wall and obj in self.get_wall_hosted_openings(hovered_wall):
+            plan_document_visuals.refresh_opening_footprint_display(self.session, obj)
+            plan_document_visuals.refresh_opening_host_footprint_displays(self.session, obj)
+            self.session.overlays.queue_plan_overlay_visual_refresh(
+                plan_document_visuals.PLAN_VISUAL_HOVERED_WALL
+            )
+            return True
+        if selected_wall and obj in self.get_wall_hosted_openings(selected_wall):
+            plan_document_visuals.refresh_opening_footprint_display(self.session, obj)
+            plan_document_visuals.refresh_opening_host_footprint_displays(self.session, obj)
+            self.session.overlays.queue_plan_overlay_visual_refresh(
+                plan_document_visuals.PLAN_VISUAL_WALL_GRIPS
+            )
+            return True
+        return False
+
+    def handle_deleted_visual_target(self, obj):
+        if obj == self.session.hovered_opening:
+            self.session.hovered_opening = None
+            self.session.overlays.openings.clear_hovered_opening_overlay()
+        if self.session.selection.refresh.clear_selected_plan_target_if_matches("opening", obj):
+            self.refresh_selected_opening_visuals()
+            return True
+        return False
+
+    def refresh_document_dependent_visuals(self, *, recompute_hosts=False):
+        from bimplan import document_visuals as plan_document_visuals
+
+        visuals = []
+        selected_opening = self.session.selection.state.get_selected_plan_target_object("opening")
+        if self.refresh_opening_visual_footprints(selected_opening):
+            self.queue_hard_refresh_selected_opening_visuals()
+            visuals.append(plan_document_visuals.PLAN_VISUAL_SELECTED_OPENING)
+        hovered_opening = self.session.hovered_opening
+        if (
+            hovered_opening
+            and not self.session.selection.state.is_selected_plan_target("opening", hovered_opening)
+            and self.refresh_opening_visual_footprints(hovered_opening)
+        ):
+            visuals.append(plan_document_visuals.PLAN_VISUAL_HOVERED_OPENING)
+        if recompute_hosts:
+            plan_document_visuals.queue_recompute_opening_hosts(
+                self.session,
+                selected_opening,
+                hovered_opening,
+            )
+        return tuple(visuals)
+
     def is_hosted_opening_object(self, obj):
         from bimplan.tools import hosted_openings as plan_hosted_openings
 
         return plan_hosted_openings.is_hosted_opening_object(self.session, obj)
+
+
+def refresh_selected_opening_visuals(session):
+    session.overlays.openings.sync_selected_opening_overlay()
+    session.overlays.openings.sync_selected_opening_handles()
+    session.overlays.openings.sync_selected_wall_opening_context_overlay()
+    session.viewport.request_view_redraw()
+
+
+def queue_hard_refresh_selected_opening_visuals(session):
+    opening_state = session.opening_transient_state
+    if session.lifecycle_state.tearing_down or opening_state.selected_opening_hard_refresh_queued:
+        return
+    opening_state.selected_opening_hard_refresh_queued = True
+    session.overlays.openings.clear_selected_opening_overlay()
+    session.overlays.openings.clear_selected_opening_handles()
+    session.viewport.request_view_redraw()
+    try:
+        from PySide import QtCore
+
+        QtCore.QTimer.singleShot(
+            0,
+            lambda: flush_hard_refresh_selected_opening_visuals(session),
+        )
+    except ImportError:
+        flush_hard_refresh_selected_opening_visuals(session)
+
+
+def flush_hard_refresh_selected_opening_visuals(session):
+    session.opening_transient_state.selected_opening_hard_refresh_queued = False
+    if session.lifecycle_state.tearing_down or session.current_tool != "Select":
+        return
+    opening = session.selection.state.get_selected_plan_target_object("opening")
+    if not session.openings.is_hosted_opening_object(opening):
+        return
+    session.openings.refresh_selected_opening_visuals()

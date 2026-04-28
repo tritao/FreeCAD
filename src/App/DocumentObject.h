@@ -82,6 +82,7 @@ enum ObjectStatus
     RecomputeExtension = 19, ///< Whether the extensions of this object should be recomputed.
     TouchOnColorChange = 20, ///< Whether the object should be touched on color change.
     Freeze = 21, ///< Whether the object is frozen and is excluded from recomputation.
+    DeferredRecompute = 22, ///< Whether the object requested a same-cycle deferred recompute.
 };
 // clang-format on
 
@@ -325,6 +326,15 @@ public:
     void enforceRecompute();
 
     /**
+     * @brief Request one deferred recompute in the current document recompute cycle.
+     *
+     * If the document is currently recomputing, the object will be queued for one
+     * additional recompute pass later in the same cycle. Outside a running document
+     * recompute this falls back to \ref enforceRecompute().
+     */
+    void requestDeferredRecompute();
+
+    /**
      * @brief Enforce this document object to be recomputed.
      *
      * The given property is a property that is marked as a dependency by a
@@ -345,6 +355,11 @@ public:
      * @return true if document object must be recomputed, false if not.
      */
     bool mustRecompute() const;
+
+    bool hasDeferredRecomputeRequest() const
+    {
+        return StatusBits.test(ObjectStatus::DeferredRecompute);
+    }
 
     /// Reset the touch flags of the document object.
     void purgeTouched()

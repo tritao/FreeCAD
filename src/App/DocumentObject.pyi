@@ -125,6 +125,13 @@ class DocumentObject(ExtensionContainer):
         """
         ...
 
+    def requestDeferredRecompute(self) -> None:
+        """
+        Request one deferred recompute later in the current document recompute cycle.
+        Falls back to a normal recompute request when no document recompute is running.
+        """
+        ...
+
     def setExpression(self, name: str, expression: str, /) -> None:
         """
         Register an expression for a property

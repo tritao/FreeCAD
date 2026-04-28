@@ -15,9 +15,7 @@ from . import host_targets as plan_host_targets
 from bimplan.runtime import capabilities as runtime_capabilities
 
 
-def _call_component_method(
-    session, component_name, method_name, *args, default=None, **kwargs
-):
+def _call_component_method(session, component_name, method_name, *args, default=None, **kwargs):
     component = getattr(session, component_name, None)
     method = runtime_capabilities.get_callable(component, method_name)
     if method is None:
@@ -36,9 +34,7 @@ class PlanEditContext:
     current_tool: str = ""
 
     @classmethod
-    def make_action_context(
-        cls, session, payload=None, document_name="", current_tool=""
-    ):
+    def make_action_context(cls, session, payload=None, document_name="", current_tool=""):
         return PlanProviderActionContext(
             _session=session,
             payload=payload,
@@ -47,14 +43,10 @@ class PlanEditContext:
         )
 
     def get_selected_targets(self):
-        return tuple(
-            self.session.selection.targets.get_plan_targets(selected_only=True) or ()
-        )
+        return tuple(self.session.selection.targets.get_plan_targets(selected_only=True) or ())
 
     def get_all_targets(self):
-        return tuple(
-            self.session.selection.targets.get_plan_targets(selected_only=False) or ()
-        )
+        return tuple(self.session.selection.targets.get_plan_targets(selected_only=False) or ())
 
     def get_primary_target(self):
         targets = self.get_selected_targets()
@@ -72,9 +64,7 @@ class PlanEditContext:
         )
 
     def get_selected_semantic_records(self):
-        getter = runtime_capabilities.get_callable(
-            self.session, "get_plan_semantic_records"
-        )
+        getter = runtime_capabilities.get_callable(self.session, "get_plan_semantic_records")
         if getter is not None:
             return tuple(getter(targets=self.get_selected_targets()) or ())
         from . import runtime as plan_provider_runtime

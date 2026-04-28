@@ -11,7 +11,6 @@ from bimplan.providers import payloads as plan_provider_payloads
 from bimplan.providers import PlanEditHandleSpec, PlanOverlayMarkerKind, PlanToolInteraction
 from bimplan.providers import point as plan_provider_point
 from bimplan.providers import runtime as plan_provider_runtime
-from bimplan import selection as plan_selection
 from bimplan.selection import target_kinds as plan_target_kinds
 
 translate = FreeCAD.Qt.translate
@@ -20,7 +19,7 @@ translate = FreeCAD.Qt.translate
 def get_selected_provider_edit_handles(session, provider_obj):
     if provider_obj is None:
         return []
-    selected_provider = plan_selection.get_selected_plan_target_object(session, "provider")
+    selected_provider = session.selection.state.get_selected_plan_target_object("provider")
     editing_provider = session.interaction_state.edit_provider
     if provider_obj != selected_provider and provider_obj != editing_provider:
         return []

@@ -163,6 +163,40 @@ class DocumentBasicCases(unittest.TestCase):
         self.assertEqual(L1.ExecCount, countChild + 1)
         self.assertEqual(L2.ExecCount, countParent + 1)
 
+    def testDeferredRecomputeRunsAgainInSameDocumentCycle(self):
+        class DeferredFeature:
+            def __init__(self, obj):
+                obj.Proxy = self
+                obj.addProperty(
+                    "App::PropertyInteger",
+                    "ExecCount",
+                    "Test",
+                    "Execution count",
+                    FreeCAD.PropertyType.Prop_Output,
+                    False,
+                    False,
+                )
+                self.defer_once = True
+
+            def execute(self, obj):
+                obj.ExecCount = int(getattr(obj, "ExecCount", 0) or 0) + 1
+                if self.defer_once:
+                    self.defer_once = False
+                    obj.requestDeferredRecompute()
+
+        source = self.Doc.addObject("App::FeaturePython", "DeferredSource")
+        DeferredFeature(source)
+        sink = self.Doc.addObject("App::FeatureTest", "DeferredSink")
+        sink.Source1 = source
+
+        objectcount = self.Doc.recompute()
+
+        self.assertEqual(source.ExecCount, 2)
+        self.assertEqual(sink.ExecCount, 2)
+        self.assertEqual(objectcount, 4)
+        self.assertFalse(source.MustExecute)
+        self.assertNotIn("DeferredRecompute", list(source.State))
+
     def testAbortTransaction(self):
         self.Doc.openTransaction("Add")
         obj = self.Doc.addObject("App::FeatureTest", "Label")

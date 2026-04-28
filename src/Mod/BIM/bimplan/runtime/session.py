@@ -372,10 +372,6 @@ class PlanEditSession:
 
     _is_opening_visual_dependency = _make_document_visuals_delegate("is_opening_visual_dependency")
 
-    _refresh_selected_opening_visuals = _make_document_visuals_delegate(
-        "refresh_selected_opening_visuals"
-    )
-
     slotCreatedObject = _make_document_visuals_delegate("slot_created_object")
 
     slotChangedObject = _make_document_visuals_delegate("slot_changed_object")

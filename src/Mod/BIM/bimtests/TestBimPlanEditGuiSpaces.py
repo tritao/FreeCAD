@@ -121,47 +121,27 @@ class BimPlanEditGuiSpacesMixin:
         self.pump_gui_events()
 
         session.selection.state.set_selected_target_for_kind("region", region)
-        self.assertEqual(
-            session.selection.state.get_selected_plan_target(), ("region", region)
-        )
+        self.assertEqual(session.selection.state.get_selected_plan_target(), ("region", region))
         self.assertEqual(
             session.selection.state.get_selected_plan_target_state(), ("region", region)
         )
-        self.assertIs(
-            session.selection.state.get_selected_target_for_kind("region"), region
-        )
+        self.assertIs(session.selection.state.get_selected_target_for_kind("region"), region)
         self.assertIsNone(session.selection.state.get_selected_target_for_kind("space"))
         self.assertIsNone(session.selection.state.get_selected_target_for_kind("wall"))
 
         session.selection.state.set_selected_target_for_kind("space", space)
-        self.assertEqual(
-            session.selection.state.get_selected_plan_target(), ("space", space)
-        )
-        self.assertEqual(
-            session.selection.state.get_selected_plan_target_state(), ("space", space)
-        )
-        self.assertIs(
-            session.selection.state.get_selected_target_for_kind("space"), space
-        )
-        self.assertIsNone(
-            session.selection.state.get_selected_target_for_kind("region")
-        )
+        self.assertEqual(session.selection.state.get_selected_plan_target(), ("space", space))
+        self.assertEqual(session.selection.state.get_selected_plan_target_state(), ("space", space))
+        self.assertIs(session.selection.state.get_selected_target_for_kind("space"), space)
+        self.assertIsNone(session.selection.state.get_selected_target_for_kind("region"))
 
         session.selection.state.set_selected_target_for_kind("region", None)
-        self.assertEqual(
-            session.selection.state.get_selected_plan_target(), ("space", space)
-        )
-        self.assertIs(
-            session.selection.state.get_selected_target_for_kind("space"), space
-        )
+        self.assertEqual(session.selection.state.get_selected_plan_target(), ("space", space))
+        self.assertIs(session.selection.state.get_selected_target_for_kind("space"), space)
 
         session.selection.state.set_selected_target_for_kind("space", None)
-        self.assertEqual(
-            session.selection.state.get_selected_plan_target(), (None, None)
-        )
-        self.assertEqual(
-            session.selection.state.get_selected_plan_target_state(), (None, None)
-        )
+        self.assertEqual(session.selection.state.get_selected_plan_target(), (None, None))
+        self.assertEqual(session.selection.state.get_selected_plan_target_state(), (None, None))
 
         session.shutdown(close_dialog=False)
         self.pump_gui_events()
@@ -187,9 +167,7 @@ class BimPlanEditGuiSpacesMixin:
             activated = session.selection.activation.activate_region_target((100, 100))
 
         self.assertTrue(activated)
-        self.assertEqual(
-            [obj.Name for obj in FreeCADGui.Selection.getSelection()], [region.Name]
-        )
+        self.assertEqual([obj.Name for obj in FreeCADGui.Selection.getSelection()], [region.Name])
         selection_ex = FreeCADGui.Selection.getSelectionEx("*")
         self.assertEqual(len(selection_ex), 1)
         self.assertEqual(selection_ex[0].ObjectName, region.Name)
@@ -231,9 +209,7 @@ class BimPlanEditGuiSpacesMixin:
         self.assertEqual(get_target.call_count, 1)
         self.assertTrue(press._handled)
         self._assert_selected_plan_target(session, "space", space)
-        self.assertEqual(
-            [obj.Name for obj in FreeCADGui.Selection.getSelection()], [space.Name]
-        )
+        self.assertEqual([obj.Name for obj in FreeCADGui.Selection.getSelection()], [space.Name])
         self.assertIs(session.view.getActiveObject("Arch"), space)
 
         session.shutdown(close_dialog=False)
@@ -278,9 +254,7 @@ class BimPlanEditGuiSpacesMixin:
         self.assertTrue(release._handled)
         self.assertFalse(session._consume_left_button_release)
         self._assert_selected_plan_target(session, "region", region)
-        self.assertEqual(
-            [obj.Name for obj in FreeCADGui.Selection.getSelection()], [region.Name]
-        )
+        self.assertEqual([obj.Name for obj in FreeCADGui.Selection.getSelection()], [region.Name])
         selection_ex = FreeCADGui.Selection.getSelectionEx("*")
         self.assertEqual(len(selection_ex), 1)
         self.assertEqual(selection_ex[0].ObjectName, region.Name)
@@ -377,9 +351,7 @@ class BimPlanEditGuiSpacesMixin:
         session.shutdown(close_dialog=False)
         self.pump_gui_events()
 
-    def test_plan_edit_region_pick_uses_region_points_when_footprint_faces_are_unavailable(
-        self,
-    ):
+    def test_plan_edit_region_pick_uses_region_points_when_footprint_faces_are_unavailable(self):
         """Saved plan regions should remain pickable from their polygon points."""
 
         level = Arch.makeFloor(name="Level 0")
@@ -419,9 +391,7 @@ class BimPlanEditGuiSpacesMixin:
             session.view = FakeView(self.document.Name, space.Name, level)
             with (
                 patch.object(
-                    session.overlays.geometry,
-                    "get_region_footprint_faces",
-                    return_value=[],
+                    session.overlays.geometry, "get_region_footprint_faces", return_value=[]
                 ),
                 patch.object(
                     session.viewport,
@@ -473,9 +443,7 @@ class BimPlanEditGuiSpacesMixin:
         self.pump_gui_events()
         session.selection.refresh.refresh_primary_selected_plan_target()
 
-        self.assertIs(
-            session.selection.state.get_selected_target_for_kind("region"), region
-        )
+        self.assertIs(session.selection.state.get_selected_target_for_kind("region"), region)
         self.assertFalse(session.task_panel.region_editor.isHidden())
         self.assertTrue(session.task_panel.space_editor.isHidden())
 
@@ -531,9 +499,7 @@ class BimPlanEditGuiSpacesMixin:
         FreeCADGui.Selection.addSelection(self.document.Name, region.Name)
         self.pump_gui_events()
         session.selection.refresh.refresh_primary_selected_plan_target()
-        self.assertIs(
-            session.selection.state.get_selected_target_for_kind("region"), region
-        )
+        self.assertIs(session.selection.state.get_selected_target_for_kind("region"), region)
 
         stale_region = region
         self.document.removeObject(region.Name)
@@ -541,12 +507,8 @@ class BimPlanEditGuiSpacesMixin:
         self.pump_gui_events()
 
         session.selection.state.set_selected_target_for_kind("region", stale_region)
-        self.assertEqual(
-            session.selection.state.get_selected_plan_target(), (None, None)
-        )
-        self.assertIsNone(
-            session.selection.state.get_selected_target_for_kind("region")
-        )
+        self.assertEqual(session.selection.state.get_selected_plan_target(), (None, None))
+        self.assertIsNone(session.selection.state.get_selected_target_for_kind("region"))
 
         session.slotChangedObject(level, "Placement")
         self.pump_gui_events()
@@ -554,9 +516,7 @@ class BimPlanEditGuiSpacesMixin:
         session.shutdown(close_dialog=False)
         self.pump_gui_events()
 
-    def test_plan_edit_space_overlay_follows_wire_edges_when_vertex_order_is_scrambled(
-        self,
-    ):
+    def test_plan_edit_space_overlay_follows_wire_edges_when_vertex_order_is_scrambled(self):
         """Space overlays should follow wire edge order, not OCC vertex storage order."""
 
         class _FakeSpaceProxy:
@@ -587,18 +547,10 @@ class BimPlanEditGuiSpacesMixin:
 
         face_shape = Part.makeFace(
             [
-                Part.makeLine(
-                    FreeCAD.Vector(200, 200, 0), FreeCAD.Vector(6200, 200, 0)
-                ),
-                Part.makeLine(
-                    FreeCAD.Vector(200, 5630, 0), FreeCAD.Vector(200, 200, 0)
-                ),
-                Part.makeLine(
-                    FreeCAD.Vector(6200, 5630, 0), FreeCAD.Vector(200, 5630, 0)
-                ),
-                Part.makeLine(
-                    FreeCAD.Vector(6200, 200, 0), FreeCAD.Vector(6200, 5630, 0)
-                ),
+                Part.makeLine(FreeCAD.Vector(200, 200, 0), FreeCAD.Vector(6200, 200, 0)),
+                Part.makeLine(FreeCAD.Vector(200, 5630, 0), FreeCAD.Vector(200, 200, 0)),
+                Part.makeLine(FreeCAD.Vector(6200, 5630, 0), FreeCAD.Vector(200, 5630, 0)),
+                Part.makeLine(FreeCAD.Vector(6200, 200, 0), FreeCAD.Vector(6200, 5630, 0)),
             ],
             "Part::FaceMakerBuildFace",
         )
@@ -668,9 +620,7 @@ class BimPlanEditGuiSpacesMixin:
         self.assertEqual(Draft.getType(space), "Space")
         self.assertEqual(space.IfcType, "Space")
         self.assertIn(level, space.InListRecursive)
-        self.assertIs(
-            session.selection.state.get_selected_target_for_kind("space"), space
-        )
+        self.assertIs(session.selection.state.get_selected_target_for_kind("space"), space)
         self.assertEqual(len(session.spaces.get_space_boundary_entries(space)), 4)
         self.assertGreater(space.Area.getValueAs("m^2").Value, 0)
 
@@ -688,19 +638,19 @@ class BimPlanEditGuiSpacesMixin:
         session = BimPlanSession.start_session()
         self.assertIsNotNone(session)
         self.pump_gui_events()
+        selection = getattr(session, "selection", None)
+        selection_refresh = getattr(selection, "refresh", selection)
 
         FreeCADGui.Selection.clearSelection()
         for wall in walls:
             FreeCADGui.Selection.addSelection(self.document.Name, wall.Name)
         self.pump_gui_events()
-        session.selection.refresh.refresh_primary_selected_plan_target()
+        selection_refresh.refresh_primary_selected_plan_target()
 
         self.assertTrue(session.lifecycle.activate_space_tool())
         self.pump_gui_events()
 
-        created_spaces = [
-            obj for obj in self.document.Objects if Draft.getType(obj) == "Space"
-        ]
+        created_spaces = [obj for obj in self.document.Objects if Draft.getType(obj) == "Space"]
         self.assertEqual(len(created_spaces), 1)
         space = created_spaces[0]
 
@@ -745,9 +695,7 @@ class BimPlanEditGuiSpacesMixin:
         session.selection.state.set_pending_selected_plan_target("space", space)
         session.selection.sync.set_gui_selection([space])
         session.selection.refresh.refresh_primary_selected_plan_target()
-        self.assertIs(
-            session.selection.state.get_selected_target_for_kind("space"), space
-        )
+        self.assertIs(session.selection.state.get_selected_target_for_kind("space"), space)
 
         with patch.object(FreeCADGui.Snapper, "getPoint", return_value=None):
             session.lifecycle.activate_plan_region_tool()
@@ -773,9 +721,7 @@ class BimPlanEditGuiSpacesMixin:
         self.assertIs(region.ParentSpace, space)
         self.assertIn(level, region.InListRecursive)
         self.assertGreater(len(region.Shape.Faces), 0)
-        self.assertIs(
-            session.selection.state.get_selected_target_for_kind("region"), region
-        )
+        self.assertIs(session.selection.state.get_selected_target_for_kind("region"), region)
         self.assertEqual(session.current_tool, "Select")
 
         session.shutdown(close_dialog=False)
@@ -854,9 +800,7 @@ class BimPlanEditGuiSpacesMixin:
         session.shutdown(close_dialog=False)
         self.pump_gui_events()
 
-    def test_plan_edit_space_tool_can_pick_regions_from_selected_space_and_separator(
-        self,
-    ):
+    def test_plan_edit_space_tool_can_pick_regions_from_selected_space_and_separator(self):
         """A selected space plus separator should split the space into region candidates."""
 
         level = Arch.makeFloor(name="Level 0")
@@ -881,9 +825,7 @@ class BimPlanEditGuiSpacesMixin:
         session.selection.sync.set_gui_selection([space, separator])
         session.selection.refresh.refresh_primary_selected_plan_target()
 
-        self.assertIs(
-            session.selection.state.get_selected_target_for_kind("space"), space
-        )
+        self.assertIs(session.selection.state.get_selected_target_for_kind("space"), space)
         request = session.spaces.build_space_creation_request()
         self.assertIsNotNone(request)
         self.assertIs(request["region_seed_space"], space)
@@ -912,9 +854,7 @@ class BimPlanEditGuiSpacesMixin:
         session.shutdown(close_dialog=False)
         self.pump_gui_events()
 
-    def test_plan_edit_space_picker_prefers_primary_wall_face_over_opening_reveals(
-        self,
-    ):
+    def test_plan_edit_space_picker_prefers_primary_wall_face_over_opening_reveals(self):
         """Auto-picked wall boundaries should prefer the room-side wall face, not opening reveals."""
 
         level, wall, _window = self._make_windowed_plan_wall()
@@ -1134,9 +1074,7 @@ class BimPlanEditGuiSpacesMixin:
 
         before = {obj.Name for obj in self.document.Objects}
 
-        self.assertTrue(
-            session.spaces.start_space_region_pick(boundaries, label="Two Rooms")
-        )
+        self.assertTrue(session.spaces.start_space_region_pick(boundaries, label="Two Rooms"))
         self.pump_gui_events()
 
         self.assertEqual(session.current_tool, "Pick Space Region")
@@ -1159,12 +1097,8 @@ class BimPlanEditGuiSpacesMixin:
         space = created_spaces[0]
 
         self.assertEqual(session.current_tool, "Select")
-        self.assertIs(
-            session.selection.state.get_selected_target_for_kind("space"), space
-        )
-        self.assertEqual(
-            len(session.spaces.get_space_boundary_entries(space)), len(boundaries)
-        )
+        self.assertIs(session.selection.state.get_selected_target_for_kind("space"), space)
+        self.assertEqual(len(session.spaces.get_space_boundary_entries(space)), len(boundaries))
         self.assertAlmostEqual(space.Proxy.getArea(space), candidate["area"])
 
         session.shutdown(close_dialog=False)
@@ -1179,9 +1113,7 @@ class BimPlanEditGuiSpacesMixin:
         base.Width = 4000
         base.Height = 2500
         space = Arch.makeSpace(base, name="Seed Space")
-        wall_base = Draft.makeLine(
-            FreeCAD.Vector(2000, 0, 0), FreeCAD.Vector(2000, 4000, 0)
-        )
+        wall_base = Draft.makeLine(FreeCAD.Vector(2000, 0, 0), FreeCAD.Vector(2000, 4000, 0))
         wall = Arch.makeWall(wall_base, width=200, height=2500, name="RegionDivider")
         wall.Label = "Region Divider"
         level.addObject(space)
@@ -1195,17 +1127,19 @@ class BimPlanEditGuiSpacesMixin:
         session = BimPlanSession.start_session()
         self.assertIsNotNone(session)
         self.pump_gui_events()
+        selection = getattr(session, "selection", None)
+        selection_state = getattr(selection, "state", selection)
+        selection_sync = getattr(selection, "sync", selection)
+        selection_refresh = getattr(selection, "refresh", selection)
 
         before = {obj.Name for obj in self.document.Objects}
 
-        session.selection.state.set_pending_selected_plan_target("space", space)
-        session.selection.sync.set_gui_selection([space, wall])
-        session.selection.refresh.refresh_primary_selected_plan_target()
+        selection_state.set_pending_selected_plan_target("space", space)
+        selection_sync.set_gui_selection([space, wall])
+        selection_refresh.refresh_primary_selected_plan_target()
 
-        self.assertIs(
-            session.selection.state.get_selected_target_for_kind("space"), space
-        )
-        self.assertIsNone(session.selection.state.get_selected_target_for_kind("wall"))
+        self.assertIs(selection_state.get_selected_target_for_kind("space"), space)
+        self.assertIsNone(selection_state.get_selected_target_for_kind("wall"))
         self.assertIn("Boundary candidates: 1 wall", session.task_panel.status.text())
 
         self.assertTrue(session.lifecycle.activate_space_tool())
@@ -1227,20 +1161,168 @@ class BimPlanEditGuiSpacesMixin:
         created_space = created_spaces[0]
 
         self.assertEqual(session.current_tool, "Select")
-        self.assertIs(
-            session.selection.state.get_selected_target_for_kind("space"), created_space
-        )
+        self.assertIs(selection_state.get_selected_target_for_kind("space"), created_space)
         self.assertEqual(session.spaces.get_space_boundary_entries(created_space), [])
-        self.assertAlmostEqual(
-            created_space.Proxy.getArea(created_space), candidate["area"]
-        )
+        self.assertAlmostEqual(created_space.Proxy.getArea(created_space), candidate["area"])
 
         session.shutdown(close_dialog=False)
         self.pump_gui_events()
 
-    def test_plan_edit_wall_stretch_undo_keeps_adjacent_wall_linked_spaces_distinct(
-        self,
-    ):
+    def test_plan_edit_space_boundary_conflict_issue_can_reassign_selected_space(self):
+        """A conflicted selected space should expose a re-pick action that updates the same space."""
+
+        height = 2500.0
+
+        def make_boundary_face(name, points):
+            face_object = self.document.addObject("Part::Feature", name)
+            face_object.Shape = Part.Face(Part.makePolygon(points + [points[0]]))
+            return face_object
+
+        boundaries = [
+            (
+                make_boundary_face(
+                    "OuterSouth",
+                    [
+                        FreeCAD.Vector(0.0, 0.0, 0.0),
+                        FreeCAD.Vector(6000.0, 0.0, 0.0),
+                        FreeCAD.Vector(6000.0, 0.0, height),
+                        FreeCAD.Vector(0.0, 0.0, height),
+                    ],
+                ),
+                ["Face1"],
+            ),
+            (
+                make_boundary_face(
+                    "OuterEast",
+                    [
+                        FreeCAD.Vector(6000.0, 0.0, 0.0),
+                        FreeCAD.Vector(6000.0, 4000.0, 0.0),
+                        FreeCAD.Vector(6000.0, 4000.0, height),
+                        FreeCAD.Vector(6000.0, 0.0, height),
+                    ],
+                ),
+                ["Face1"],
+            ),
+            (
+                make_boundary_face(
+                    "OuterNorth",
+                    [
+                        FreeCAD.Vector(6000.0, 4000.0, 0.0),
+                        FreeCAD.Vector(0.0, 4000.0, 0.0),
+                        FreeCAD.Vector(0.0, 4000.0, height),
+                        FreeCAD.Vector(6000.0, 4000.0, height),
+                    ],
+                ),
+                ["Face1"],
+            ),
+            (
+                make_boundary_face(
+                    "OuterWest",
+                    [
+                        FreeCAD.Vector(0.0, 4000.0, 0.0),
+                        FreeCAD.Vector(0.0, 0.0, 0.0),
+                        FreeCAD.Vector(0.0, 0.0, height),
+                        FreeCAD.Vector(0.0, 4000.0, height),
+                    ],
+                ),
+                ["Face1"],
+            ),
+            (
+                make_boundary_face(
+                    "Divider",
+                    [
+                        FreeCAD.Vector(3000.0, 0.0, 0.0),
+                        FreeCAD.Vector(3000.0, 4000.0, 0.0),
+                        FreeCAD.Vector(3000.0, 4000.0, height),
+                        FreeCAD.Vector(3000.0, 0.0, height),
+                    ],
+                ),
+                ["Face1"],
+            ),
+        ]
+
+        report = ArchSpace.getBoundaryRegionCandidates(boundaries, label="Two Rooms Preview")
+        self.assertEqual(report["candidate_count"], 2)
+        left_candidate = min(report["candidates"], key=lambda item: float(item["sample_point"].x))
+
+        base = self.document.addObject("Part::Feature", "ConflictRegionBase")
+        base.Shape = left_candidate["shape"].copy()
+        space = Arch.makeSpace(base, name="Conflicted Room")
+        ArchSpace.setBoundaryRegionReferencePoint(space, left_candidate["sample_point"])
+        ArchSpace.setBoundaryLinks(space, boundaries)
+        self.document.recompute()
+        self.pump_gui_events()
+
+        FreeCADGui.Selection.clearSelection()
+        session = BimPlanSession.start_session()
+        self.assertIsNotNone(session)
+        self.pump_gui_events()
+
+        initial_space_names = sorted(
+            obj.Name for obj in self.document.Objects if Draft.getType(obj) == "Space"
+        )
+
+        ArchSpace.setBoundaryRegionReferencePoint(space, FreeCAD.Vector(7000.0, 2000.0, 1000.0))
+        space.touch()
+        self.document.recompute()
+        self.pump_gui_events()
+
+        self.assertEqual(getattr(space, "BoundaryStatus", ""), "Conflict")
+
+        selection = getattr(session, "selection", None)
+        selection_state = getattr(selection, "state", selection)
+        selection_sync = getattr(selection, "sync", selection)
+        selection_refresh = getattr(selection, "refresh", selection)
+        selection_state.set_pending_selected_plan_target("space", space)
+        selection_sync.set_gui_selection([space])
+        selection_refresh.refresh_primary_selected_plan_target()
+        self.assertIs(selection_state.get_selected_target_for_kind("space"), space)
+
+        snapshot = session.providers.get_plan_provider_snapshot()
+        conflict_issues = [
+            issue
+            for issue in tuple(getattr(snapshot, "issues", ()) or ())
+            if str(getattr(issue, "provider_id", "") or "") == "bim-space"
+        ]
+        self.assertEqual(len(conflict_issues), 1)
+        issue = conflict_issues[0]
+        self.assertEqual(issue.title, "Space boundary conflict")
+        self.assertEqual(len(issue.actions), 1)
+        self.assertEqual(issue.actions[0].label, "Re-pick room region")
+
+        self.assertTrue(
+            session.providers.execute_plan_provider_action(
+                issue.provider_id,
+                issue.actions[0].key,
+                transaction_label=getattr(issue.actions[0], "transaction_label", ""),
+            )
+        )
+        self.pump_gui_events()
+
+        self.assertEqual(session.current_tool, "Pick Space Region")
+        self.assertIs(session.space_region_pick_state.edit_space, space)
+        self.assertEqual(len(session._space_region_candidates), 2)
+
+        candidate = min(
+            session._space_region_candidates,
+            key=lambda item: float(item["sample_point"].x),
+        )
+        self.assertTrue(session.spaces.activate_space_region_candidate(candidate))
+        self.pump_gui_events()
+
+        current_space_names = sorted(
+            obj.Name for obj in self.document.Objects if Draft.getType(obj) == "Space"
+        )
+        self.assertEqual(current_space_names, initial_space_names)
+        self.assertEqual(session.current_tool, "Select")
+        self.assertIs(selection_state.get_selected_target_for_kind("space"), space)
+        self.assertEqual(getattr(space, "BoundaryStatus", ""), "OK")
+        self.assertAlmostEqual(space.Proxy.getArea(space), candidate["area"])
+
+        session.shutdown(close_dialog=False)
+        self.pump_gui_events()
+
+    def test_plan_edit_wall_stretch_undo_keeps_adjacent_wall_linked_spaces_distinct(self):
         """Stretch undo should not collapse sibling wall-linked spaces onto the same region."""
 
         FreeCADGui.Selection.clearSelection()
@@ -1282,12 +1364,8 @@ class BimPlanEditGuiSpacesMixin:
         self._assert_no_wall_edit_preview_visuals(session)
 
         restored_spaces = self._assert_spaces_stay_distinct(created_spaces)
-        restored_centers = [
-            float(space.Shape.CenterOfMass.x) for space in restored_spaces
-        ]
-        restored_areas = [
-            float(space.Proxy.getArea(space)) for space in restored_spaces
-        ]
+        restored_centers = [float(space.Shape.CenterOfMass.x) for space in restored_spaces]
+        restored_areas = [float(space.Proxy.getArea(space)) for space in restored_spaces]
         for initial_center, restored_center in zip(initial_centers, restored_centers):
             self.assertAlmostEqual(restored_center, initial_center, delta=1e-6)
         for initial_area, restored_area in zip(initial_areas, restored_areas):
@@ -1326,9 +1404,7 @@ class BimPlanEditGuiSpacesMixin:
             patch.object(FreeCADGui.Snapper, "setSelectMode", return_value=None),
         ):
             session.wall_edit.start_wall_grip_edit(2)
-            moved_midpoint = FreeCAD.Vector(captured["last"]).add(
-                FreeCAD.Vector(300.0, 0.0, 0.0)
-            )
+            moved_midpoint = FreeCAD.Vector(captured["last"]).add(FreeCAD.Vector(300.0, 0.0, 0.0))
             captured["callback"](moved_midpoint, None)
 
         self._assert_no_wall_edit_preview_visuals(session)
@@ -1338,12 +1414,8 @@ class BimPlanEditGuiSpacesMixin:
         self._assert_no_wall_edit_preview_visuals(session)
 
         restored_spaces = self._assert_spaces_stay_distinct(created_spaces)
-        restored_centers = [
-            float(space.Shape.CenterOfMass.x) for space in restored_spaces
-        ]
-        restored_areas = [
-            float(space.Proxy.getArea(space)) for space in restored_spaces
-        ]
+        restored_centers = [float(space.Shape.CenterOfMass.x) for space in restored_spaces]
+        restored_areas = [float(space.Proxy.getArea(space)) for space in restored_spaces]
         for initial_center, restored_center in zip(initial_centers, restored_centers):
             self.assertAlmostEqual(restored_center, initial_center, delta=1e-6)
         for initial_area, restored_area in zip(initial_areas, restored_areas):
@@ -1361,9 +1433,7 @@ class BimPlanEditGuiSpacesMixin:
         base.Width = 4000
         base.Height = 2500
         space = Arch.makeSpace(base, name="Seed Space")
-        wall_base = Draft.makeLine(
-            FreeCAD.Vector(2000, 0, 0), FreeCAD.Vector(2000, 4000, 0)
-        )
+        wall_base = Draft.makeLine(FreeCAD.Vector(2000, 0, 0), FreeCAD.Vector(2000, 4000, 0))
         wall = Arch.makeWall(wall_base, width=200, height=2500, name="RegionDivider")
         wall.Label = "Region Divider"
         level.addObject(space)
@@ -1486,9 +1556,7 @@ class BimPlanEditGuiSpacesMixin:
 
         before = {obj.Name for obj in self.document.Objects}
 
-        self.assertTrue(
-            session.spaces.start_space_region_pick(boundaries, label="Two Rooms")
-        )
+        self.assertTrue(session.spaces.start_space_region_pick(boundaries, label="Two Rooms"))
         self.pump_gui_events()
 
         created_spaces = [
@@ -1500,13 +1568,9 @@ class BimPlanEditGuiSpacesMixin:
         created_space = created_spaces[0]
 
         self.assertEqual(session.current_tool, "Select")
-        self.assertIs(
-            session.selection.state.get_selected_target_for_kind("space"), created_space
-        )
+        self.assertIs(session.selection.state.get_selected_target_for_kind("space"), created_space)
         self.assertEqual(len(session._space_region_candidates), 0)
-        self.assertAlmostEqual(
-            created_space.Area.getValueAs("m^2").Value, 12.0, places=3
-        )
+        self.assertAlmostEqual(created_space.Area.getValueAs("m^2").Value, 12.0, places=3)
 
         session.shutdown(close_dialog=False)
         self.pump_gui_events()
@@ -1577,16 +1641,12 @@ class BimPlanEditGuiSpacesMixin:
         FreeCADGui.Selection.addSelection(self.document.Name, space.Name)
         self.pump_gui_events()
         session.selection.refresh.refresh_primary_selected_plan_target()
-        self.assertIs(
-            session.selection.state.get_selected_target_for_kind("space"), space
-        )
+        self.assertIs(session.selection.state.get_selected_target_for_kind("space"), space)
 
         FreeCADGui.Selection.addSelection(self.document.Name, wall.Name)
         self.pump_gui_events()
         session.selection.refresh.refresh_primary_selected_plan_target()
-        self.assertIs(
-            session.selection.state.get_selected_target_for_kind("space"), space
-        )
+        self.assertIs(session.selection.state.get_selected_target_for_kind("space"), space)
 
         self.assertTrue(session.spaces.add_boundaries_to_selected_space())
         boundaries = session.spaces.get_space_boundary_entries(space)
@@ -1631,9 +1691,7 @@ class BimPlanEditGuiSpacesMixin:
         self.assertEqual(combo.insertPolicy(), QtGui.QComboBox.NoInsert)
         self.assertEqual(combo.maxVisibleItems(), 12)
         self.assertIsNotNone(combo.completer())
-        self.assertEqual(
-            combo.completer().completionMode(), QtGui.QCompleter.PopupCompletion
-        )
+        self.assertEqual(combo.completer().completionMode(), QtGui.QCompleter.PopupCompletion)
         self.assertEqual(combo.completer().caseSensitivity(), QtCore.Qt.CaseInsensitive)
         if hasattr(combo.completer(), "filterMode"):
             self.assertEqual(combo.completer().filterMode(), QtCore.Qt.MatchContains)
@@ -1661,9 +1719,7 @@ class BimPlanEditGuiSpacesMixin:
         session.shutdown(close_dialog=False)
         self.pump_gui_events()
 
-    def test_plan_edit_ctrl_click_wall_keeps_selected_space_primary_for_boundary_editing(
-        self,
-    ):
+    def test_plan_edit_ctrl_click_wall_keeps_selected_space_primary_for_boundary_editing(self):
         """Ctrl-click should add boundary walls without replacing the selected space editor target."""
 
         from PySide import QtCore
@@ -1697,12 +1753,8 @@ class BimPlanEditGuiSpacesMixin:
         ):
             session.input.on_mouse_pressed(self._make_fake_left_mouse_press())
 
-        self.assertIs(
-            session.selection.state.get_selected_target_for_kind("space"), space
-        )
-        self.assertEqual(
-            [obj.Name for obj in FreeCADGui.Selection.getSelection()], [space.Name]
-        )
+        self.assertIs(session.selection.state.get_selected_target_for_kind("space"), space)
+        self.assertEqual([obj.Name for obj in FreeCADGui.Selection.getSelection()], [space.Name])
 
         with (
             patch(
@@ -1724,20 +1776,15 @@ class BimPlanEditGuiSpacesMixin:
             session.input.on_mouse_pressed(callback)
 
         self.assertTrue(callback._handled)
-        self.assertIs(
-            session.selection.state.get_selected_target_for_kind("space"), space
-        )
+        self.assertIs(session.selection.state.get_selected_target_for_kind("space"), space)
         self.assertIsNone(session.selection.state.get_selected_target_for_kind("wall"))
         self.assertEqual(
             [obj.Name for obj in FreeCADGui.Selection.getSelection()],
             [space.Name, wall.Name],
         )
+        self.assertEqual(session.selection.state.get_selected_plan_target(), ("space", space))
         self.assertEqual(
-            session.selection.state.get_selected_plan_target(), ("space", space)
-        )
-        self.assertEqual(
-            session.selection.state.get_secondary_selected_plan_targets(),
-            [("wall", wall)],
+            session.selection.state.get_secondary_selected_plan_targets(), [("wall", wall)]
         )
         self.assertGreater(len(session._secondary_selection_trackers), 0)
         self.assertIn("Boundary candidates: 1 wall", session.task_panel.status.text())

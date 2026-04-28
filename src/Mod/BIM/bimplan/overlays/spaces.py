@@ -6,7 +6,6 @@ from bimplan.tools import space_regions as plan_space_regions
 
 from . import geometry as overlay_geometry
 from . import manager as overlay_manager
-from .. import selection as plan_selection
 
 
 def _perf_count(session, name, delta=1):
@@ -235,7 +234,7 @@ def sync_selected_space_overlay(session):
     with _perf_trace_span(session, "sync_selected_space_overlay"):
         overlay_state = _space_overlay_state(session)
         tracker_state = _space_tracker_state(session)
-        space = plan_selection.get_selected_plan_target_object(session, "space")
+        space = session.selection.state.get_selected_plan_target_object("space")
         if session.current_tool not in (
             "Select",
             "Set Space Text",
@@ -299,8 +298,10 @@ def clear_selected_space_overlay(session):
 def sync_selected_region_overlay(session):
     with _perf_trace_span(session, "sync_selected_region_overlay"):
         tracker_state = _space_tracker_state(session)
-        region = plan_selection.get_selected_plan_target_object(session, "region")
-        if session.current_tool != "Select" or not session.selection.targets.is_plan_region_object(region):
+        region = session.selection.state.get_selected_plan_target_object("region")
+        if session.current_tool != "Select" or not session.selection.targets.is_plan_region_object(
+            region
+        ):
             clear_selected_region_overlay(session)
             return
         width = session.viewport.scaled_line_width(3)

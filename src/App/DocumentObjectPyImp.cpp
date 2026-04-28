@@ -221,6 +221,15 @@ PyObject* DocumentObjectPy::enforceRecompute(PyObject* args)
     Py_Return;
 }
 
+PyObject* DocumentObjectPy::requestDeferredRecompute(PyObject* args)
+{
+    if (!PyArg_ParseTuple(args, "")) {
+        return nullptr;
+    }
+    getDocumentObjectPtr()->requestDeferredRecompute();
+    Py_Return;
+}
+
 Py::List DocumentObjectPy::getState() const
 {
     DocumentObject* object = this->getDocumentObjectPtr();
@@ -240,6 +249,9 @@ Py::List DocumentObjectPy::getState() const
     }
     if (object->testStatus(App::Recompute2)) {
         list.append(Py::String("Recompute2"));
+    }
+    if (object->hasDeferredRecomputeRequest()) {
+        list.append(Py::String("DeferredRecompute"));
     }
     if (object->isRestoring()) {
         uptodate = false;
