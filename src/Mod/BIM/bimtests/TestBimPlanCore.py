@@ -67,11 +67,13 @@ from bimplan.providers import PlanProviderActionContext
 from bimplan.runtime.lifecycle import activate_plan_region_tool, activate_space_separator_tool
 from bimplan.overlays import providers as provider_overlays
 from bimplan import task_panel as plan_task_panel_module
-from bimplan.selection.picking import (
-    get_hovered_plan_target,
-    get_plan_target_at_position,
+from bimplan.picking.coordinator import get_plan_target_at_position
+from bimplan.selection.hover_picking import get_hovered_plan_target
+from bimplan.selection.overlay_picking import (
     pick_plan_opening_target_from_overlays,
     pick_plan_symbol_target_from_overlays,
+)
+from bimplan.selection.provider_overlay_picking import (
     get_provider_overlay_target_from_edit_node,
     pick_provider_overlay_target_from_objects_info,
     pick_provider_overlay_target_from_overlays,
@@ -298,7 +300,7 @@ def _patched_plan_target_overlay_pickers(**overrides):
         for name, replacement in defaults.items():
             stack.enter_context(
                 patch(
-                    f"bimplan.selection.picking.{name}",
+                    f"bimplan.picking.coordinator.{name}",
                     side_effect=replacement,
                 )
             )
@@ -1299,7 +1301,7 @@ class TestBimPlanCore(unittest.TestCase):
         )
 
         with patch(
-            "bimplan.selection.picking.plan_targets.get_plan_target_for_object",
+            "bimplan.selection.provider_overlay_picking.plan_targets.get_plan_target_for_object",
             return_value=(None, None),
         ):
             self.assertEqual(
@@ -1606,7 +1608,7 @@ class TestBimPlanCore(unittest.TestCase):
 
         with (
             patch(
-                "bimplan.selection.picking.plan_targets.get_plan_pick_target_for_object",
+                "bimplan.picking.coordinator.plan_targets.get_plan_pick_target_for_object",
                 side_effect=_get_plan_pick_target_for_object,
             ),
             _patched_plan_target_overlay_pickers(
@@ -1673,7 +1675,7 @@ class TestBimPlanCore(unittest.TestCase):
 
         with (
             patch(
-                "bimplan.selection.picking.plan_targets.get_plan_pick_target_for_object",
+                "bimplan.picking.coordinator.plan_targets.get_plan_pick_target_for_object",
                 return_value=("space", space),
             ),
             _patched_plan_target_overlay_pickers(
@@ -1751,7 +1753,7 @@ class TestBimPlanCore(unittest.TestCase):
 
         with (
             patch(
-                "bimplan.selection.picking.plan_targets.get_plan_pick_target_for_object",
+                "bimplan.picking.coordinator.plan_targets.get_plan_pick_target_for_object",
                 side_effect=_get_plan_pick_target_for_object,
             ),
             _patched_plan_target_overlay_pickers(),
@@ -1823,7 +1825,7 @@ class TestBimPlanCore(unittest.TestCase):
 
         with (
             patch(
-                "bimplan.selection.picking.plan_targets.get_plan_pick_target_for_object",
+                "bimplan.picking.coordinator.plan_targets.get_plan_pick_target_for_object",
                 side_effect=_get_plan_pick_target_for_object,
             ),
             _patched_plan_target_overlay_pickers(),
@@ -1878,7 +1880,7 @@ class TestBimPlanCore(unittest.TestCase):
 
         with (
             patch(
-                "bimplan.selection.picking.plan_targets.get_plan_pick_target_for_object",
+                "bimplan.picking.coordinator.plan_targets.get_plan_pick_target_for_object",
                 return_value=("space", space),
             ),
             _patched_plan_target_overlay_pickers(
@@ -1936,7 +1938,7 @@ class TestBimPlanCore(unittest.TestCase):
 
         with (
             patch(
-                "bimplan.selection.picking.plan_targets.get_plan_pick_target_for_object",
+                "bimplan.picking.coordinator.plan_targets.get_plan_pick_target_for_object",
                 return_value=("space", space),
             ),
             _patched_plan_target_overlay_pickers(

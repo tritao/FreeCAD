@@ -226,6 +226,7 @@ SET(bimplan_SRCS
     bimplan/overlays/walls.py
     bimplan/performance.py
     bimplan/picking/__init__.py
+    bimplan/picking/coordinator.py
     bimplan/picking/service.py
     bimplan/providers/__init__.py
     bimplan/providers/edit.py
