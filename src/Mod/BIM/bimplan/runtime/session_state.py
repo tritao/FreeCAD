@@ -580,14 +580,6 @@ _PLAN_EDIT_SESSION_STATE_PROPERTIES = (
         ),
     ),
     (
-        "_ensure_wall_grip_runtime_state",
-        (
-            ("_wall_grip_state", "state", _coerce_identity),
-            ("_wall_grip_sync_queued", "sync_queued", _coerce_bool),
-            ("_wall_grip_sync_generation", "sync_generation", _coerce_int),
-        ),
-    ),
-    (
         "_ensure_viewport_state",
         (
             ("_viewport_status_chip", "status_chip", _coerce_identity),
