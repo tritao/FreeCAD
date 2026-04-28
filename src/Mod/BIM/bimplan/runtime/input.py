@@ -2,10 +2,9 @@
 
 """Input event routing for BIM Plan Edit."""
 
-from bimplan.runtime import tools as plan_runtime_tools
-from bimplan.selection import target_kinds as plan_target_kinds
 from bimplan.providers import edit as plan_provider_edit_tool
 from bimplan.providers import point as plan_provider_point_tool
+from bimplan.runtime import tools as plan_runtime_tools
 from bimplan.tools import join as plan_join_tool
 from bimplan.tools import opening_edit as plan_opening_tool
 from bimplan.tools import select as plan_select_tool
@@ -15,6 +14,90 @@ from bimplan.tools import symbol_edit as plan_symbol_tool
 from bimplan.tools import wall_create as plan_wall_create_tool
 from bimplan.tools import wall_edit as plan_wall_edit_tool
 from bimplan.tools import window_create as plan_window_tool
+
+_LEFT_MOUSE_DOWN_TOOL_HANDLERS = {
+    plan_runtime_tools.PlanTool.JOIN: plan_join_tool.JoinTool,
+    plan_runtime_tools.PlanTool.PICK_SPACE_REGION: (
+        plan_space_region_pick_tool.PickSpaceRegionTool
+    ),
+    plan_runtime_tools.PlanTool.SELECT: plan_select_tool.SelectTool,
+}
+
+_MOUSE_MOVE_TOOL_HANDLERS = {
+    plan_runtime_tools.PlanTool.JOIN: plan_join_tool.JoinTool,
+    plan_runtime_tools.PlanTool.PICK_SPACE_REGION: (
+        plan_space_region_pick_tool.PickSpaceRegionTool
+    ),
+    plan_runtime_tools.PlanTool.SELECT: plan_select_tool.SelectTool,
+}
+
+_MOUSE_MOVE_RECORD_HOVER_AFTER_TOOLS = frozenset(
+    (
+        plan_runtime_tools.PlanTool.JOIN,
+        plan_runtime_tools.PlanTool.SELECT,
+    )
+)
+
+_KEY_TOOL_HANDLERS = {
+    plan_runtime_tools.PlanTool.JOIN: plan_join_tool.JoinTool,
+    plan_runtime_tools.PlanTool.MOVE_OPENING: plan_opening_tool.OpeningMoveTool,
+    plan_runtime_tools.PlanTool.MOVE_PROVIDER: plan_provider_edit_tool.ProviderMoveTool,
+    plan_runtime_tools.PlanTool.MOVE_SYMBOL: plan_symbol_tool.SymbolEditTool,
+    plan_runtime_tools.PlanTool.PICK_SPACE_REGION: (
+        plan_space_region_pick_tool.PickSpaceRegionTool
+    ),
+    plan_runtime_tools.PlanTool.PROVIDER_POINT: plan_provider_point_tool.ProviderPointTool,
+    plan_runtime_tools.PlanTool.RECT_WALL: plan_wall_create_tool.RectWallTool,
+    plan_runtime_tools.PlanTool.REGION: plan_spaces_tool.RegionTool,
+    plan_runtime_tools.PlanTool.ROTATE_SYMBOL: plan_symbol_tool.SymbolEditTool,
+    plan_runtime_tools.PlanTool.SEPARATOR: plan_spaces_tool.SpaceSeparatorTool,
+    plan_runtime_tools.PlanTool.SET_SPACE_TEXT: plan_spaces_tool.SpaceTextTool,
+    plan_runtime_tools.PlanTool.WINDOW: plan_window_tool.WindowTool,
+}
+
+
+def _current_tool_is(*tools):
+    tool_set = frozenset(tools)
+    return lambda session: _coerce_current_tool(session) in tool_set
+
+
+_ESCAPE_CANCEL_HANDLERS = (
+    (
+        _current_tool_is(plan_runtime_tools.PlanTool.MOVE_PROVIDER),
+        plan_provider_edit_tool.ProviderMoveTool,
+    ),
+    (
+        _current_tool_is(
+            plan_runtime_tools.PlanTool.MOVE_SYMBOL,
+            plan_runtime_tools.PlanTool.ROTATE_SYMBOL,
+        ),
+        plan_symbol_tool.SymbolEditTool,
+    ),
+    (
+        _current_tool_is(plan_runtime_tools.PlanTool.SET_SPACE_TEXT),
+        plan_spaces_tool.SpaceTextTool,
+    ),
+    (
+        lambda session: session.providers.has_active_provider_point_tool(),
+        plan_provider_point_tool.ProviderPointTool,
+    ),
+    (
+        lambda session: session.windows.has_active_window_tool(),
+        plan_window_tool.WindowTool,
+    ),
+    (
+        lambda session: session.wall_create.has_active_rect_wall_tool(),
+        plan_wall_create_tool.RectWallTool,
+    ),
+    (
+        lambda session: session.spaces.has_active_plan_region_tool(),
+        plan_spaces_tool.RegionTool,
+    ),
+    (
+        lambda session: session.spaces.has_active_space_separator_tool(),
+        plan_spaces_tool.SpaceSeparatorTool,
+    ),
+)
 
 
 class PlanInputAPI:
@@ -51,6 +134,17 @@ class PlanInputAPI:
 def _get_event_handled_setter(event_callback):
     setter = getattr(event_callback, "setHandled", None)
     return setter if callable(setter) else None
+
+
+def _coerce_current_tool(session):
+    return plan_runtime_tools.coerce_plan_tool(session.current_tool)
+
+
+def _get_current_tool_handler(session, registry):
+    handler_class = registry.get(_coerce_current_tool(session))
+    if handler_class is None:
+        return None
+    return handler_class(session)
 
 
 def set_event_handled(session, event_callback):
@@ -90,17 +184,10 @@ def _handle_left_mouse_button_release(session, event_callback):
 
 def _handle_left_mouse_button_down(session, mouse_pos, event_callback):
     session.input_event_state.consume_left_button_release = False
-    if session.current_tool == plan_runtime_tools.PlanTool.JOIN:
-        plan_join_tool.JoinTool(session).on_left_mouse_down(mouse_pos, event_callback)
+    handler = _get_current_tool_handler(session, _LEFT_MOUSE_DOWN_TOOL_HANDLERS)
+    if handler is None:
         return
-    if session.current_tool == plan_runtime_tools.PlanTool.PICK_SPACE_REGION:
-        plan_space_region_pick_tool.PickSpaceRegionTool(session).on_left_mouse_down(
-            mouse_pos, event_callback
-        )
-        return
-    if session.current_tool != plan_runtime_tools.PlanTool.SELECT:
-        return
-    plan_select_tool.SelectTool(session).on_left_mouse_down(mouse_pos, event_callback)
+    handler.on_left_mouse_down(mouse_pos, event_callback)
 
 
 def _record_hovered_after(session):
@@ -179,17 +266,13 @@ def on_mouse_moved(session, event_callback):
             hovered_before.kind, hovered_before.obj
         ),
     ):
-        if session.current_tool == plan_runtime_tools.PlanTool.PICK_SPACE_REGION:
-            plan_space_region_pick_tool.PickSpaceRegionTool(session).on_mouse_move(
-                mouse_pos, event_callback
-            )
-            return
-        if session.current_tool == plan_runtime_tools.PlanTool.SELECT:
-            if plan_select_tool.SelectTool(session).on_mouse_move(mouse_pos, event_callback):
-                _record_hovered_after(session)
-            return
-        if session.current_tool == plan_runtime_tools.PlanTool.JOIN:
-            if plan_join_tool.JoinTool(session).on_mouse_move(mouse_pos, event_callback):
+        current_tool = _coerce_current_tool(session)
+        handler = _get_current_tool_handler(session, _MOUSE_MOVE_TOOL_HANDLERS)
+        if handler is not None:
+            if (
+                handler.on_mouse_move(mouse_pos, event_callback)
+                and current_tool in _MOUSE_MOVE_RECORD_HOVER_AFTER_TOOLS
+            ):
                 _record_hovered_after(session)
             return
         session.selection.hover.set_hovered_wall(None)
@@ -216,87 +299,15 @@ def on_mouse_wheel(session, event_callback):
 
 
 def _handle_direct_tool_key_press(session, key, event_callback, coin):
-    if (
-        session.current_tool == plan_runtime_tools.PlanTool.MOVE_OPENING
-        and plan_opening_tool.OpeningMoveTool(session).on_key(key, event_callback, coin)
-    ):
-        return True
-    if session.current_tool in (
-        plan_runtime_tools.PlanTool.MOVE_SYMBOL,
-        plan_runtime_tools.PlanTool.ROTATE_SYMBOL,
-    ) and plan_symbol_tool.SymbolEditTool(session).on_key(key, event_callback, coin):
-        return True
-    if (
-        session.current_tool == plan_runtime_tools.PlanTool.PICK_SPACE_REGION
-        and plan_space_region_pick_tool.PickSpaceRegionTool(session).on_key(
-            key, event_callback, coin
-        )
-    ):
-        return True
-    if session.current_tool == plan_runtime_tools.PlanTool.REGION and plan_spaces_tool.RegionTool(
-        session
-    ).on_key(key, event_callback, coin):
-        return True
-    if (
-        session.current_tool == plan_runtime_tools.PlanTool.SET_SPACE_TEXT
-        and plan_spaces_tool.SpaceTextTool(session).on_key(key, event_callback, coin)
-    ):
-        return True
-    if (
-        session.current_tool == plan_runtime_tools.PlanTool.SEPARATOR
-        and plan_spaces_tool.SpaceSeparatorTool(session).on_key(key, event_callback, coin)
-    ):
-        return True
-    if (
-        session.current_tool == plan_runtime_tools.PlanTool.RECT_WALL
-        and plan_wall_create_tool.RectWallTool(session).on_key(key, event_callback, coin)
-    ):
-        return True
-    if (
-        session.current_tool == plan_runtime_tools.PlanTool.PROVIDER_POINT
-        and plan_provider_point_tool.ProviderPointTool(session).on_key(key, event_callback, coin)
-    ):
-        return True
-    if (
-        session.current_tool == plan_runtime_tools.PlanTool.MOVE_PROVIDER
-        and plan_provider_edit_tool.ProviderMoveTool(session).on_key(key, event_callback, coin)
-    ):
-        return True
-    if session.current_tool == plan_runtime_tools.PlanTool.WINDOW and plan_window_tool.WindowTool(
-        session
-    ).on_key(key, event_callback, coin):
-        return True
-    return False
+    handler = _get_current_tool_handler(session, _KEY_TOOL_HANDLERS)
+    return bool(handler and handler.on_key(key, event_callback, coin))
 
 
 def _handle_escape_cancels(session):
-    if session.current_tool == plan_runtime_tools.PlanTool.MOVE_PROVIDER:
-        plan_provider_edit_tool.ProviderMoveTool(session).cancel()
-        return True
-    if session.current_tool in (
-        plan_runtime_tools.PlanTool.MOVE_SYMBOL,
-        plan_runtime_tools.PlanTool.ROTATE_SYMBOL,
-    ):
-        plan_symbol_tool.SymbolEditTool(session).cancel()
-        return True
-    if session.current_tool == plan_runtime_tools.PlanTool.SET_SPACE_TEXT:
-        plan_spaces_tool.SpaceTextTool(session).cancel()
-        return True
-    if session.providers.has_active_provider_point_tool():
-        plan_provider_point_tool.ProviderPointTool(session).cancel()
-        return True
-    if session.windows.has_active_window_tool():
-        plan_window_tool.WindowTool(session).cancel()
-        return True
-    if session.wall_create.has_active_rect_wall_tool():
-        plan_wall_create_tool.RectWallTool(session).cancel()
-        return True
-    if session.spaces.has_active_plan_region_tool():
-        plan_spaces_tool.RegionTool(session).cancel()
-        return True
-    if session.spaces.has_active_space_separator_tool():
-        plan_spaces_tool.SpaceSeparatorTool(session).cancel()
-        return True
+    for predicate, handler_class in _ESCAPE_CANCEL_HANDLERS:
+        if predicate(session):
+            handler_class(session).cancel()
+            return True
     return False
 
 
@@ -310,10 +321,6 @@ def on_key_pressed(session, event_callback):
     event = event_callback.getEvent()
     key = event.getKey()
     if _handle_direct_tool_key_press(session, key, event_callback, coin):
-        return
-    if session.current_tool == plan_runtime_tools.PlanTool.JOIN and plan_join_tool.JoinTool(
-        session
-    ).on_key(key, event_callback, coin):
         return
     if plan_wall_edit_tool.WallEditTool(session).on_key(key, event_callback, coin):
         return
