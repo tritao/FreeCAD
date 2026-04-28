@@ -572,23 +572,6 @@ _PLAN_EDIT_SESSION_STATE_PROPERTIES = (
         ),
     ),
     (
-        "_ensure_viewport_state",
-        (
-            ("_viewport_status_chip", "status_chip", _coerce_identity),
-            ("_render_manager", "render_manager", _coerce_identity),
-            ("_saved_camera", "saved_camera", _coerce_identity),
-            ("_saved_camera_type", "saved_camera_type", _coerce_identity),
-            ("_saved_navigation_style", "saved_navigation_style", _coerce_identity),
-            ("_saved_navigation_state", "saved_navigation_state", _coerce_dict),
-            ("_saved_view_action_state", "saved_view_action_state", _coerce_dict),
-            ("_saved_preselection_state", "saved_preselection_state", _coerce_identity),
-            ("_plan_preselection_forced", "plan_preselection_forced", _coerce_bool),
-            ("_saved_object_view_state", "saved_object_view_state", _coerce_dict),
-            ("_working_plane", "working_plane", _coerce_identity),
-            ("_interaction_plane", "interaction_plane", _coerce_identity),
-        ),
-    ),
-    (
         "_ensure_document_visual_state",
         (
             ("_pending_created_plan_objects", "pending_created_plan_objects", _coerce_dict),

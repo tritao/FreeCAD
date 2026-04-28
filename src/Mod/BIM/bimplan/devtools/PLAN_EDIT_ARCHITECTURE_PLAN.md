@@ -496,6 +496,7 @@ Current progress:
 - Private wall-grip runtime compatibility aliases are removed; wall grip sync uses `wall_grip_state`.
 - Private plan-region tool compatibility aliases are removed; region creation uses `plan_region_tool_state`.
 - Private performance trace compatibility aliases are removed; tracing uses `performance_state`.
+- Private viewport compatibility aliases are removed; view setup and status chips use `viewport_state`.
 
 Steps:
 
