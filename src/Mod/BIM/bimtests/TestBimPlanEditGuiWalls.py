@@ -1569,7 +1569,7 @@ class BimPlanEditGuiWallsMixin:
         self.pump_gui_events()
 
         self.assertEqual(joint.Status, "OK")
-        self.assertIsNone(session._plan_relation_status_message)
+        self.assertIsNone(session.task_panel_state.relation_status_message)
         _title, body = session._get_status_chip_text()
         self.assertNotIn("Relation warning", body)
         self.assertNotIn("Relation warning", session.task_panel.status.text())
@@ -1654,7 +1654,7 @@ class BimPlanEditGuiWallsMixin:
         session.wall_edit.sync_wall_edit_preview(invalid_points)
         self.pump_gui_events()
 
-        self.assertIsNone(session._plan_relation_status_message)
+        self.assertIsNone(session.task_panel_state.relation_status_message)
         plain = session.wall_edit.get_preview_footprint(invalid_points)
         polylines, warnings = session.wall_edit.get_preview_footprint_polylines(invalid_points)
         self.assertEqual(warnings, [])

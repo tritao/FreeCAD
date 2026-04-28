@@ -475,13 +475,6 @@ _PLAN_EDIT_SESSION_STATE_ENSURERS = (
 
 _PLAN_EDIT_SESSION_STATE_PROPERTIES = (
     (
-        "_ensure_task_panel_state",
-        (
-            ("_plan_relation_status_message", "relation_status_message", _coerce_identity),
-            ("_aux_task_panels", "aux_task_panels", _coerce_list),
-        ),
-    ),
-    (
         "_ensure_provider_overlay_read_state",
         (
             ("_provider_overlay_mode", "mode", _make_str_coercer("architecture")),
