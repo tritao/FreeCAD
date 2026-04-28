@@ -492,6 +492,7 @@ Current progress:
 - Private provider point compatibility aliases are removed; provider tests use `provider_point_state`.
 - Private input-event compatibility aliases are removed; input tests use `input_event_state`.
 - Private selection-sync compatibility aliases are removed; selection sync uses `selection_sync_state`.
+- Private hover-pick compatibility aliases are removed; hover picking uses `hover_pick_state`.
 
 Steps:
 
