@@ -2,6 +2,8 @@
 
 """Provider-overlay pick target helpers for BIM Plan Edit."""
 
+from dataclasses import dataclass
+
 import FreeCAD
 
 from bimplan.providers import runtime as plan_provider_runtime
@@ -10,6 +12,90 @@ from . import target_kinds as plan_target_kinds
 from . import targets as plan_targets
 
 _PROVIDER_OVERLAY_POINT_PREFIX = "ProviderOverlayPoint"
+
+
+@dataclass(frozen=True)
+class ProviderOverlayPointCandidate:
+    distance_sq: float
+    target_ref: object
+
+
+@dataclass(frozen=True)
+class ProviderOverlayDebugCandidate:
+    overlay: object
+    point_index: int
+    target: object
+    center_distance_px: float
+    pick_radius_px: float
+    marker_tolerance_px: float
+    marker_distance_px: float | None = None
+    decision: str = ""
+    resolved_object: object = None
+    distance_px: float | None = None
+
+    def as_debug_dict(self):
+        result = {
+            "overlay": self.overlay,
+            "point_index": self.point_index,
+            "target": self.target,
+            "center_distance_px": self.center_distance_px,
+            "pick_radius_px": self.pick_radius_px,
+            "marker_tolerance_px": self.marker_tolerance_px,
+        }
+        if self.marker_distance_px is not None:
+            result["marker_distance_px"] = self.marker_distance_px
+        if self.decision:
+            result["decision"] = self.decision
+        if self.resolved_object is not None:
+            result["resolved_object"] = self.resolved_object
+        if self.distance_px is not None:
+            result["distance_px"] = self.distance_px
+        return result
+
+
+@dataclass(frozen=True)
+class ProviderOverlayVisibleTargetDebugEntry:
+    identity: tuple
+    target: object
+
+    def as_debug_dict(self):
+        return {
+            "identity": list(self.identity),
+            "target": self.target,
+        }
+
+
+@dataclass(frozen=True)
+class ProviderOverlayInfoDebugEntry:
+    info: object
+    candidates: tuple = ()
+
+    def as_debug_dict(self):
+        return {
+            "info": self.info,
+            "candidates": list(self.candidates),
+        }
+
+
+@dataclass(frozen=True)
+class ProviderOverlayObjectsInfoPickResult:
+    target_ref: object
+    debug_infos: tuple
+
+
+def replace_provider_overlay_debug_candidate(debug_candidate, **changes):
+    return ProviderOverlayDebugCandidate(
+        overlay=changes.get("overlay", debug_candidate.overlay),
+        point_index=changes.get("point_index", debug_candidate.point_index),
+        target=changes.get("target", debug_candidate.target),
+        center_distance_px=changes.get("center_distance_px", debug_candidate.center_distance_px),
+        pick_radius_px=changes.get("pick_radius_px", debug_candidate.pick_radius_px),
+        marker_tolerance_px=changes.get("marker_tolerance_px", debug_candidate.marker_tolerance_px),
+        marker_distance_px=changes.get("marker_distance_px", debug_candidate.marker_distance_px),
+        decision=changes.get("decision", debug_candidate.decision),
+        resolved_object=changes.get("resolved_object", debug_candidate.resolved_object),
+        distance_px=changes.get("distance_px", debug_candidate.distance_px),
+    )
 
 
 def get_provider_overlay_target_from_edit_node(session, node):
