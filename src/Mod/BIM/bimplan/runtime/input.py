@@ -5,6 +5,7 @@
 from bimplan import document_visuals as plan_document_visuals
 from bimplan.runtime import tools as plan_runtime_tools
 from bimplan.selection import target_kinds as plan_target_kinds
+from bimplan.tools import join as plan_join_tool
 from bimplan.tools import space_regions as plan_space_regions
 from bimplan.tools import select as plan_select_tool
 
@@ -72,18 +73,6 @@ def _get_mouse_event_position(event):
         return None
 
 
-def _handle_join_tool_mouse_down(session, mouse_pos, event_callback):
-    target_kind, target_wall = session.picking.pick(mouse_pos)
-    source_wall = session.selection.state.get_selected_plan_target_object("wall")
-    if (
-        target_kind == "wall"
-        and session.selection.targets.is_plan_selectable_wall(target_wall)
-        and target_wall != source_wall
-        and session.wall_relations.apply_plan_wall_join(source_wall, target_wall)
-    ):
-        session.input.claim_left_button_click(event_callback)
-
-
 def _handle_pick_space_region_mouse_down(session, mouse_pos, event_callback):
     candidate = session.spaces.pick_space_region_candidate(mouse_pos)
     if candidate:
@@ -101,7 +90,7 @@ def _handle_left_mouse_button_release(session, event_callback):
 def _handle_left_mouse_button_down(session, mouse_pos, event_callback):
     session.input_event_state.consume_left_button_release = False
     if session.current_tool == plan_runtime_tools.PlanTool.JOIN:
-        _handle_join_tool_mouse_down(session, mouse_pos, event_callback)
+        plan_join_tool.JoinTool(session).on_left_mouse_down(mouse_pos, event_callback)
         return
     if session.current_tool == plan_runtime_tools.PlanTool.PICK_SPACE_REGION:
         _handle_pick_space_region_mouse_down(session, mouse_pos, event_callback)
@@ -201,7 +190,7 @@ def on_mouse_moved(session, event_callback):
                 _record_hovered_after(session)
             return
         if session.current_tool == plan_runtime_tools.PlanTool.JOIN:
-            if plan_select_tool.sync_selectable_hover(session, mouse_pos):
+            if plan_join_tool.JoinTool(session).on_mouse_move(mouse_pos, event_callback):
                 _record_hovered_after(session)
             return
         session.selection.hover.set_hovered_wall(None)
@@ -292,26 +281,6 @@ def _handle_direct_tool_key_press(session, key, event_callback, coin):
     return False
 
 
-def _handle_join_tool_key_press(session, key, event_callback, coin):
-    if session.current_tool != plan_runtime_tools.PlanTool.JOIN:
-        return False
-    if key == coin.SoKeyboardEvent.TAB:
-        if session.wall_relations.cycle_plan_join_type():
-            _set_key_event_handled(event_callback)
-        return True
-    if key in (
-        getattr(coin.SoKeyboardEvent, "DELETE", None),
-        getattr(coin.SoKeyboardEvent, "BACKSPACE", None),
-    ):
-        if session.wall_relations.unjoin_current_plan_wall_pair():
-            _set_key_event_handled(event_callback)
-        return True
-    if key == coin.SoKeyboardEvent.ESCAPE:
-        session.wall_relations.cancel_join_tool()
-        return True
-    return False
-
-
 def _handle_wall_edit_key_press(session, key, event_callback, coin):
     if session.wall_edit.is_wall_move_edit_active() and key == coin.SoKeyboardEvent.TAB:
         if session.wall_edit.start_wall_readout_edit(cycle=True):
@@ -382,7 +351,9 @@ def on_key_pressed(session, event_callback):
     key = event.getKey()
     if _handle_direct_tool_key_press(session, key, event_callback, coin):
         return
-    if _handle_join_tool_key_press(session, key, event_callback, coin):
+    if session.current_tool == plan_runtime_tools.PlanTool.JOIN and plan_join_tool.JoinTool(
+        session
+    ).on_key(key, event_callback, coin):
         return
     if _handle_wall_edit_key_press(session, key, event_callback, coin):
         return
