@@ -221,7 +221,7 @@ def activate_opening_handle_now(session, opening, handle_index):
         if session.lifecycle_state.tearing_down or not opening:
             return
         with session.performance.plan_perf_trace_span("activate_opening_handle_set_target"):
-            session.selection.set_selected_plan_target("opening", opening)
+            session.selection.state.set_selected_plan_target("opening", opening)
             session.overlays.walls.clear_wall_grips()
         with session.performance.plan_perf_trace_span("activate_opening_handle_get_handles"):
             handles = session.openings.get_selected_opening_edit_handles(opening)
@@ -244,8 +244,8 @@ def start_opening_handle_point_pick(session, opening, handle_index, handle):
             return
         with session.performance.plan_perf_trace_span("start_opening_handle_state"):
             session.current_tool = "Move Opening"
-            session.selection.set_hovered_wall(None)
-            session.selection.set_hovered_opening(None)
+            session.selection.hover.set_hovered_wall(None)
+            session.selection.hover.set_hovered_opening(None)
             session.overlays.spaces.sync_secondary_selected_overlays()
             interaction_state = session.interaction_state
             opening_transient_state = session.opening_transient_state
@@ -362,7 +362,7 @@ def cancel_opening_handle_point_pick(session):
     opening_transient_state.edit_opening_move_raw_point = None
     session.current_tool = "Select"
     if opening:
-        session.selection.set_selected_plan_target("opening", opening, pending_restore=True)
+        session.selection.state.set_selected_plan_target("opening", opening, pending_restore=True)
     session.overlays.openings.sync_selected_opening_overlay()
     session.overlays.openings.sync_selected_opening_handles()
     session.task_panels.refresh_task_panel_status()
@@ -371,15 +371,15 @@ def cancel_opening_handle_point_pick(session):
 def restore_selected_opening(session, opening):
     session.current_tool = "Select"
     if opening:
-        session.selection.set_selected_plan_target("opening", opening, pending_restore=True)
+        session.selection.state.set_selected_plan_target("opening", opening, pending_restore=True)
     else:
-        session.selection.set_selected_plan_target()
+        session.selection.state.set_selected_plan_target()
     if not opening:
         session.overlays.openings.sync_selected_opening_overlay()
         session.overlays.openings.sync_selected_opening_handles()
         session.task_panels.refresh_task_panel_status()
         return
-    session.selection.set_gui_selection_object(opening)
+    session.selection.sync.set_gui_selection_object(opening)
     session.overlays.openings.sync_selected_opening_overlay()
     session.overlays.openings.sync_selected_opening_handles()
     session.task_panels.refresh_task_panel_status()
@@ -408,7 +408,7 @@ def execute_selected_opening_handle(session, opening, handle_index, handle):
         except (ReferenceError, RuntimeError):
             pass
         return
-    session.selection.set_selected_plan_target("opening", opening, pending_restore=True)
+    session.selection.state.set_selected_plan_target("opening", opening, pending_restore=True)
     session.overlays.openings.sync_selected_opening_overlay()
     session.overlays.openings.sync_selected_opening_handles()
 

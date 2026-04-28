@@ -591,7 +591,7 @@ def _run_interactions(session, scene, spec, operations_handle, settle_ms, timer_
             session,
             "mouse_moved_fast_path",
             spec.name,
-            lambda: session.selection.update_hovered_plan_target(screen, force=False),
+            lambda: session.selection.hover.update_hovered_plan_target(screen, force=False),
         )
 
     def hover_pick_resolve_once(point):
@@ -600,11 +600,11 @@ def _run_interactions(session, scene, spec, operations_handle, settle_ms, timer_
             return
 
         def resolve():
-            if not session.selection.update_hovered_plan_target(screen, force=True):
+            if not session.selection.hover.update_hovered_plan_target(screen, force=True):
                 return
             if (
                 session.overlay_tracker_state.grip_trackers
-                or session.selection.is_selected_plan_target("wall")
+                or session.selection.state.is_selected_plan_target("wall")
             ):
                 session.overlays.walls.sync_wall_grips()
             session.viewport.request_view_redraw()
@@ -654,7 +654,7 @@ def _run_interactions(session, scene, spec, operations_handle, settle_ms, timer_
                 "benchmark_wall_handle_activation",
                 spec.name,
                 lambda: (
-                    session.selection.select_wall_for_plan_edit(wall),
+                    session.selection.activation.select_wall_for_plan_edit(wall),
                     session.overlays.walls.sync_wall_grips(),
                     session.wall_edit.activate_wall_grip_now(0, wall=wall),
                 ),
@@ -678,7 +678,7 @@ def _run_interactions(session, scene, spec, operations_handle, settle_ms, timer_
                 "benchmark_opening_handle_activation",
                 spec.name,
                 lambda: (
-                    session.selection.select_opening_for_plan_edit(opening),
+                    session.selection.activation.select_opening_for_plan_edit(opening),
                     session.overlays.openings.sync_selected_opening_handles(),
                     session.openings.activate_opening_handle_now(opening, 0),
                 ),
@@ -704,7 +704,7 @@ def _run_interactions(session, scene, spec, operations_handle, settle_ms, timer_
                 "benchmark_symbol_handle_activation",
                 spec.name,
                 lambda: (
-                    session.selection.select_symbol_for_plan_edit(symbol),
+                    session.selection.activation.select_symbol_for_plan_edit(symbol),
                     session.overlays.symbols.sync_selected_symbol_handles(),
                     session.symbols.activate_symbol_handle_now(symbol, role),
                 ),

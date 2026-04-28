@@ -378,7 +378,7 @@ class BimPlanEditGuiProviderMixin:
             ),
         ):
             self.assertTrue(
-                session.selection.select_wall_for_plan_edit(wall, sync_gui_selection=True)
+                session.selection.activation.select_wall_for_plan_edit(wall, sync_gui_selection=True)
             )
             self.assertTrue(session.providers.start_plan_provider_point_tool(tool))
             raw_point = FreeCAD.Vector(120.0, 340.0, 999.0)
@@ -425,7 +425,7 @@ class BimPlanEditGuiProviderMixin:
             patch.object(FreeCADGui.Snapper, "snapInfo", {}, create=True),
         ):
             self.assertTrue(
-                session.selection.select_wall_for_plan_edit(wall, sync_gui_selection=True)
+                session.selection.activation.select_wall_for_plan_edit(wall, sync_gui_selection=True)
             )
             self.assertTrue(session.providers.start_plan_provider_point_tool(tool))
             self.assertIn("movecallback", captured)
@@ -518,7 +518,7 @@ class BimPlanEditGuiProviderMixin:
         provider.tool_calls = 0
         provider.overlay_calls = 0
 
-        session.selection.set_hovered_wall(wall)
+        session.selection.hover.set_hovered_wall(wall)
         with patch.object(session.selection, "get_edit_node", return_value=None):
             press = self._make_fake_left_mouse_press(250, 250)
             session.input.on_mouse_pressed(press)
@@ -556,7 +556,7 @@ class BimPlanEditGuiProviderMixin:
         event = self._make_fake_left_mouse_press()
 
         self.assertTrue(
-            session.selection.activate_provider_overlay_target_node(
+            session.selection.activation.activate_provider_overlay_target_node(
                 ("provider_overlay_point", node),
                 event,
             )
@@ -581,7 +581,7 @@ class BimPlanEditGuiProviderMixin:
         self.assertIsNotNone(session)
         self.pump_gui_events()
 
-        self.assertTrue(session.selection.select_wall_for_plan_edit(wall, sync_gui_selection=True))
+        self.assertTrue(session.selection.activation.select_wall_for_plan_edit(wall, sync_gui_selection=True))
         self.pump_gui_events()
         self._assert_selected_plan_target(session, "wall", wall)
         self.assertEqual([wall], FreeCADGui.Selection.getSelection())
@@ -599,7 +599,7 @@ class BimPlanEditGuiProviderMixin:
             return_value=("provider_overlay_point", node),
         ):
             self.assertTrue(
-                session.selection.toggle_plan_target_selection_at_position((250, 250), event)
+                session.selection.activation.toggle_plan_target_selection_at_position((250, 250), event)
             )
 
         self.assertTrue(event._handled)
@@ -659,7 +659,7 @@ class BimPlanEditGuiProviderMixin:
             ):
                 self.assertEqual(
                     plan_edit_nodes.ProviderOverlayTargetEditNode("object", marker),
-                    session.selection.get_edit_node((100, 100)),
+                    session.selection.picking.get_edit_node((100, 100)),
                 )
         finally:
             session.view = original_view
@@ -701,13 +701,13 @@ class BimPlanEditGuiProviderMixin:
             ),
         ):
             self.assertTrue(
-                session.selection.activate_provider_overlay_target_node(
+                session.selection.activation.activate_provider_overlay_target_node(
                     ("provider_overlay_point", node),
                     event,
                 )
             )
             self.assertTrue(event._handled)
-            self.assertEqual(("provider", marker), session.selection.get_selected_plan_target())
+            self.assertEqual(("provider", marker), session.selection.state.get_selected_plan_target())
             self.assertEqual([], session._provider_selected_objects)
             self.assertIn(marker, FreeCADGui.Selection.getSelection())
 

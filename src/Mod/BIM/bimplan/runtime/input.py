@@ -76,11 +76,11 @@ def _get_mouse_event_position(event):
 
 
 def _handle_join_tool_mouse_down(session, mouse_pos, event_callback):
-    target_kind, target_wall = session.selection.get_plan_target_at_position(mouse_pos)
+    target_kind, target_wall = session.selection.picking.get_plan_target_at_position(mouse_pos)
     source_wall = plan_selection.get_selected_plan_target_object(session, "wall")
     if (
         target_kind == "wall"
-        and session.selection.is_plan_selectable_wall(target_wall)
+        and session.selection.targets.is_plan_selectable_wall(target_wall)
         and target_wall != source_wall
         and session.wall_relations.apply_plan_wall_join(source_wall, target_wall)
     ):
@@ -97,23 +97,23 @@ def _handle_edit_node_activation(session, node, event_callback):
     node_kind = plan_edit_nodes.get_edit_node_kind(node)
     if node_kind == "opening_handle":
         obj, index = plan_edit_nodes.get_edit_node_payload(node)
-        session.selection.select_opening_for_plan_edit(obj)
-        session.selection.set_gui_selection_object(obj)
+        session.selection.activation.select_opening_for_plan_edit(obj)
+        session.selection.sync.set_gui_selection_object(obj)
         session.openings.activate_opening_handle(obj, index)
     elif node_kind == "provider_handle":
         obj, index = plan_edit_nodes.get_edit_node_payload(node)
-        session.selection.set_selected_plan_target_state("provider", obj)
+        session.selection.state.set_selected_plan_target_state("provider", obj)
         session.overlays.walls.clear_wall_grips()
         session.overlays.walls.clear_selected_wall_overlay()
         session.providers.activate_provider_handle(obj, index)
     elif node_kind == "symbol_handle":
         obj, role = plan_edit_nodes.get_edit_node_payload(node)
-        session.selection.set_selected_plan_target_state("symbol", obj)
+        session.selection.state.set_selected_plan_target_state("symbol", obj)
         session.overlays.walls.clear_wall_grips()
         session.overlays.walls.clear_selected_wall_overlay()
         session.symbols.activate_symbol_handle(obj, role)
     elif node_kind in ("provider_overlay_point", "provider_overlay_target"):
-        if not session.selection.activate_provider_overlay_target_node(node, event_callback):
+        if not session.selection.activation.activate_provider_overlay_target_node(node, event_callback):
             return False
     else:
         (point,) = plan_edit_nodes.get_edit_node_payload(node)
@@ -124,28 +124,28 @@ def _handle_edit_node_activation(session, node, event_callback):
         except Exception:
             return False
         if session.openings.is_hosted_opening_object(obj):
-            session.selection.select_opening_for_plan_edit(obj)
-            session.selection.set_gui_selection_object(obj)
+            session.selection.activation.select_opening_for_plan_edit(obj)
+            session.selection.sync.set_gui_selection_object(obj)
             session.openings.activate_opening_handle(obj, index)
         else:
-            session.selection.set_selected_plan_target_state("wall", obj)
+            session.selection.state.set_selected_plan_target_state("wall", obj)
             session.wall_edit.activate_wall_grip(index, wall=obj)
     session.input.claim_left_button_click(event_callback)
     return True
 
 
 def _handle_select_tool_mouse_down(session, mouse_pos, event_callback):
-    if session.selection.is_plan_additive_selection_active():
-        if not session.selection.toggle_plan_target_selection_at_position(
+    if session.selection.activation.is_plan_additive_selection_active():
+        if not session.selection.activation.toggle_plan_target_selection_at_position(
             mouse_pos, event_callback
         ):
             session.input.claim_left_button_click(event_callback)
         return
-    node = session.selection.get_edit_node(mouse_pos)
+    node = session.selection.picking.get_edit_node(mouse_pos)
     if not node:
-        if session.selection.activate_semantic_plan_target(mouse_pos, event_callback):
+        if session.selection.activation.activate_semantic_plan_target(mouse_pos, event_callback):
             return
-        session.selection.schedule_clear_plan_selection_state()
+        session.selection.sync.schedule_clear_plan_selection_state()
         session.input.claim_left_button_click(event_callback)
         return
     _handle_edit_node_activation(session, node, event_callback)
@@ -182,7 +182,7 @@ def on_mouse_pressed(session, event_callback):
 
     event = event_callback.getEvent()
     mouse_pos = _get_mouse_event_position(event)
-    selected_before = session.selection.get_selected_plan_target()
+    selected_before = session.selection.state.get_selected_plan_target()
     with session.performance.plan_perf_trace_event(
         "mouse_pressed",
         button=str(event.getButton()),
@@ -213,7 +213,7 @@ def on_mouse_pressed(session, event_callback):
                         return
                     _handle_left_mouse_button_down(session, mouse_pos, event_callback)
             finally:
-                selected_after = session.selection.get_selected_plan_target()
+                selected_after = session.selection.state.get_selected_plan_target()
                 session.performance.plan_perf_set_fields(
                     handled=bool(getattr(event_callback, "_handled", False)),
                     selected_after=session.performance.plan_perf_describe_target(
@@ -231,7 +231,7 @@ def on_mouse_moved(session, event_callback):
         mouse_pos = (pos[0], pos[1])
     except Exception:
         mouse_pos = None
-    hovered_before = session.selection.get_hovered_plan_target()
+    hovered_before = session.selection.hover.get_hovered_plan_target()
     with session.performance.plan_perf_trace_event(
         "mouse_moved",
         mouse_pos=mouse_pos,
@@ -252,24 +252,24 @@ def on_mouse_moved(session, event_callback):
             plan_runtime_tools.PlanTool.SELECT,
             plan_runtime_tools.PlanTool.JOIN,
         ):
-            session.selection.set_hovered_wall(None)
-            session.selection.set_hovered_opening(None)
-            session.selection.set_hovered_symbol(None)
-            session.selection.set_hovered_provider(None)
-            session.selection.set_hovered_space(None)
-            session.selection.set_hovered_region(None)
+            session.selection.hover.set_hovered_wall(None)
+            session.selection.hover.set_hovered_opening(None)
+            session.selection.hover.set_hovered_symbol(None)
+            session.selection.hover.set_hovered_provider(None)
+            session.selection.hover.set_hovered_space(None)
+            session.selection.hover.set_hovered_region(None)
             return
         if mouse_pos is None:
             return
-        if not session.selection.update_hovered_plan_target(mouse_pos):
+        if not session.selection.hover.update_hovered_plan_target(mouse_pos):
             return
         if (
             session.overlay_tracker_state.grip_trackers
-            or session.selection.is_selected_plan_target("wall")
+            or session.selection.state.is_selected_plan_target("wall")
         ):
             session.overlays.walls.sync_wall_grips()
         session.viewport.request_view_redraw()
-        hovered_after = session.selection.get_hovered_plan_target()
+        hovered_after = session.selection.hover.get_hovered_plan_target()
         session.performance.plan_perf_set_fields(
             hovered_after=session.performance.plan_perf_describe_target(
                 hovered_after.kind, hovered_after.obj

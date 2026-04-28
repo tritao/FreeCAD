@@ -182,7 +182,7 @@ class PlanEditEditorPanelsMixin:
         active_storey = self.session.active_storey
         for obj in getattr(self.session.doc, "Objects", []) or []:
             semantic_obj = self.session.visibility.get_plan_semantic_object(obj)
-            if not self.session.selection.is_plan_space_object(semantic_obj):
+            if not self.session.selection.targets.is_plan_space_object(semantic_obj):
                 continue
             name = getattr(semantic_obj, "Name", None)
             if not name or name in seen:
@@ -190,7 +190,7 @@ class PlanEditEditorPanelsMixin:
             seen.add(name)
             candidates.append(semantic_obj)
         current_parent = self.session.visibility.get_plan_semantic_object(current_parent)
-        if self.session.selection.is_plan_space_object(current_parent):
+        if self.session.selection.targets.is_plan_space_object(current_parent):
             current_name = getattr(current_parent, "Name", None)
             if current_name and current_name not in seen:
                 candidates.append(current_parent)

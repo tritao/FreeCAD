@@ -174,7 +174,7 @@ class _DeletedDocument:
 
 class BimPlanEditGuiBase(ArchWallGuiTestCase):
     def _assert_selected_plan_target(self, session, kind, obj):
-        self.assertEqual(session.selection.get_selected_plan_target(), (kind, obj))
+        self.assertEqual(session.selection.state.get_selected_plan_target(), (kind, obj))
 
     def _assert_no_selected_plan_target(self, session):
         self._assert_selected_plan_target(session, None, None)
@@ -218,7 +218,7 @@ class BimPlanEditGuiBase(ArchWallGuiTestCase):
             self.assertLess(tracker.get().distanceToPoint(expected), 1e-6)
 
     def _assert_selected_wall_visuals(self, session, wall):
-        self.assertIs(session.selection.get_selected_target_for_kind("wall"), wall)
+        self.assertIs(session.selection.state.get_selected_target_for_kind("wall"), wall)
         self.assertGreater(len(session._wall_overlay_trackers), 0)
         self._assert_wall_grips_match_wall(session, wall)
 
@@ -228,7 +228,7 @@ class BimPlanEditGuiBase(ArchWallGuiTestCase):
         self.assertEqual(len(session._wall_edit_opening_preview_trackers), 0)
 
     def _assert_wall_selection_visual_consistency(self, session):
-        selected_wall = session.selection.get_selected_target_for_kind("wall")
+        selected_wall = session.selection.state.get_selected_target_for_kind("wall")
         if selected_wall is None:
             self.assertEqual(len(session._wall_overlay_trackers), 0)
             self.assertEqual(len(session._grip_trackers), 0)
@@ -240,7 +240,7 @@ class BimPlanEditGuiBase(ArchWallGuiTestCase):
             self.assertEqual(len(session._grip_trackers), 0)
 
     def _assert_selected_opening_visuals(self, session, opening):
-        self.assertIs(session.selection.get_selected_target_for_kind("opening"), opening)
+        self.assertIs(session.selection.state.get_selected_target_for_kind("opening"), opening)
         self.assertGreater(len(session._opening_overlay_trackers), 0)
         self.assertEqual(len(session._opening_handle_trackers), 3)
 
@@ -250,7 +250,7 @@ class BimPlanEditGuiBase(ArchWallGuiTestCase):
         self.assertIsNone(session._edit_opening_handle_index)
 
     def _assert_opening_selection_visual_consistency(self, session):
-        selected_opening = session.selection.get_selected_target_for_kind("opening")
+        selected_opening = session.selection.state.get_selected_target_for_kind("opening")
         if selected_opening is None:
             self.assertEqual(len(session._opening_overlay_trackers), 0)
             self.assertEqual(len(session._opening_handle_trackers), 0)

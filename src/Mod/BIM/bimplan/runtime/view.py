@@ -646,7 +646,7 @@ def set_active_object(session, obj):
 def sync_active_plan_target_object(session):
     if not session.view:
         return
-    target_kind, target_obj = session.selection.get_selected_plan_target()
+    target_kind, target_obj = session.selection.state.get_selected_plan_target()
     del target_kind
     if target_obj is not None:
         session.viewport.set_active_object(target_obj)

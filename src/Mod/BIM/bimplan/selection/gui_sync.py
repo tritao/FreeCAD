@@ -101,7 +101,7 @@ def _schedule_finish_gui_selection_sync(session, generation):
 
 
 def _apply_gui_selection(session, selection):
-    normalized_selection = session.selection.normalize_gui_object_selection(selection)
+    normalized_selection = session.selection.sync.normalize_gui_object_selection(selection)
     with session.performance.plan_perf_trace_span("set_gui_selection"):
         with selection_changes_suppressed(session):
             try:
@@ -123,7 +123,7 @@ def _apply_gui_selection(session, selection):
             except Exception:
                 pass
         with session.performance.plan_perf_trace_span("set_gui_selection_secondary_targets"):
-            session.selection.sync_secondary_selected_plan_targets_from_selection(
+            session.selection.state.sync_secondary_selected_plan_targets_from_selection(
                 normalized_selection
             )
 
@@ -233,7 +233,7 @@ def run_scheduled_clear_plan_selection_state(session):
     with session.performance.plan_perf_trace_event("scheduled_clear_plan_selection_state"):
         if session.lifecycle_state.tearing_down or session.lifecycle_state.ignore_selection_changes:
             return
-        session.selection.clear_plan_selection_state()
+        session.selection.activation.clear_plan_selection_state()
 
 
 def run_scheduled_selection_refresh(session):
@@ -244,7 +244,7 @@ def run_scheduled_selection_refresh(session):
     with session.performance.plan_perf_trace_event("selection_observer_refresh"):
         if session.lifecycle_state.tearing_down or session.lifecycle_state.ignore_selection_changes:
             return
-        session.selection.refresh_primary_selected_plan_target()
+        session.selection.refresh.refresh_primary_selected_plan_target()
 
 
 def _trace_selection_observer_event(session, event_name, **fields):
@@ -345,7 +345,7 @@ def selection_observer_set(session, doc):
 
 
 def selection_observer_clear(session, doc):
-    selected_kind, selected_obj = session.selection.get_selected_plan_target()
+    selected_kind, selected_obj = session.selection.state.get_selected_plan_target()
     with _trace_selection_observer_event(
         session,
         "selection_observer_clear",

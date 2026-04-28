@@ -122,13 +122,13 @@ def refresh_plan_overlay_view_scale(session):
                 overlay_walls.sync_hovered_wall_overlay(session)
             return
         if session.current_tool == plan_runtime_tools.PlanTool.SET_SPACE_TEXT:
-            if session.selection.is_selected_plan_target("space"):
+            if session.selection.state.is_selected_plan_target("space"):
                 overlay_spaces.sync_selected_space_overlay(session)
             return
         if session.current_tool == plan_runtime_tools.PlanTool.PICK_SPACE_REGION:
             if session.spaces.has_space_region_pick_candidates():
                 overlay_spaces.sync_space_region_pick_overlays(session)
-            if session.selection.get_selected_plan_targets():
+            if session.selection.state.get_selected_plan_targets():
                 overlay_spaces.sync_secondary_selected_overlays(session)
             return
         if session.current_tool == plan_runtime_tools.PlanTool.PROVIDER_POINT:
@@ -137,18 +137,18 @@ def refresh_plan_overlay_view_scale(session):
             return
         if session.current_tool != plan_runtime_tools.PlanTool.SELECT:
             return
-        if session.hovered_wall or session.selection.is_selected_plan_target("wall"):
+        if session.hovered_wall or session.selection.state.is_selected_plan_target("wall"):
             overlay_walls.sync_junction_node_overlays(session)
         if session.hovered_wall:
             overlay_walls.sync_hovered_wall_overlay(session)
             overlay_walls.sync_hovered_wall_opening_context_overlay(session)
-        if session.selection.is_selected_plan_target("wall"):
+        if session.selection.state.is_selected_plan_target("wall"):
             overlay_walls.sync_selected_wall_overlay(session)
             overlay_openings.sync_selected_wall_opening_context_overlay(session)
             overlay_walls.sync_wall_grips(session)
         if session.hovered_opening:
             overlay_openings.sync_hovered_opening_overlay(session)
-        if session.selection.is_selected_plan_target("opening"):
+        if session.selection.state.is_selected_plan_target("opening"):
             overlay_openings.sync_selected_opening_overlay(session)
             overlay_openings.sync_selected_opening_handles(session)
         if session.hovered_symbol:
@@ -157,22 +157,22 @@ def refresh_plan_overlay_view_scale(session):
         if session.hovered_provider:
             overlay_providers.sync_hovered_provider_overlay(session)
         if (
-            session.selection.is_selected_plan_target("provider")
+            session.selection.state.is_selected_plan_target("provider")
             or session.status_text.get_provider_selected_objects()
         ):
             overlay_providers.sync_selected_provider_overlay(session)
-        if session.selection.is_selected_plan_target("symbol"):
+        if session.selection.state.is_selected_plan_target("symbol"):
             overlay_symbols.sync_selected_symbol_overlay(session)
             overlay_symbols.sync_selected_symbol_handles(session)
         if session.hovered_space:
             overlay_spaces.sync_hovered_space_overlay(session)
-        if session.selection.is_selected_plan_target("space"):
+        if session.selection.state.is_selected_plan_target("space"):
             overlay_spaces.sync_selected_space_overlay(session)
         if session.hovered_region:
             overlay_spaces.sync_hovered_region_overlay(session)
-        if session.selection.is_selected_plan_target("region"):
+        if session.selection.state.is_selected_plan_target("region"):
             overlay_spaces.sync_selected_region_overlay(session)
-        if session.selection.get_secondary_selected_plan_targets():
+        if session.selection.state.get_secondary_selected_plan_targets():
             overlay_spaces.sync_secondary_selected_overlays(session)
 
 
@@ -269,7 +269,7 @@ def _refresh_set_space_text_overlays(session, dirty, refresh_all):
         clear_selected_region=True,
         clear_secondary_selection=True,
     )
-    if session.selection.is_selected_plan_target("space") and (
+    if session.selection.state.is_selected_plan_target("space") and (
         refresh_all or plan_document_visuals.PLAN_VISUAL_SELECTED_SPACE in dirty
     ):
         session.spaces.refresh_selected_space_visuals()

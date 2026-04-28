@@ -177,7 +177,7 @@ def activate_symbol_handle_now(session, symbol, handle_role):
         if handle_role not in {"move", "rotate"}:
             return
         with session.performance.plan_perf_trace_span("activate_symbol_handle_set_target"):
-            session.selection.set_selected_plan_target("symbol", symbol)
+            session.selection.state.set_selected_plan_target("symbol", symbol)
             session.overlays.walls.clear_wall_grips()
         with session.performance.plan_perf_trace_span("activate_symbol_handle_start_point_pick"):
             session.symbols.start_symbol_handle_point_pick(symbol, handle_role)
@@ -220,9 +220,9 @@ def start_symbol_handle_point_pick(session, symbol, handle_role):
             return
         with session.performance.plan_perf_trace_span("start_symbol_handle_state"):
             session.current_tool = "Move Symbol" if handle_role == "move" else "Rotate Symbol"
-            session.selection.set_hovered_wall(None)
-            session.selection.set_hovered_opening(None)
-            session.selection.set_hovered_symbol(None)
+            session.selection.hover.set_hovered_wall(None)
+            session.selection.hover.set_hovered_opening(None)
+            session.selection.hover.set_hovered_symbol(None)
             session.overlays.spaces.sync_secondary_selected_overlays()
             interaction_state = session.interaction_state
             interaction_state.edit_symbol = symbol
@@ -358,7 +358,7 @@ def cancel_symbol_handle_point_pick(session):
     session.symbols.clear_symbol_edit_preview()
     session.current_tool = "Select"
     if symbol:
-        session.selection.set_selected_plan_target("symbol", symbol, pending_restore=True)
+        session.selection.state.set_selected_plan_target("symbol", symbol, pending_restore=True)
     session.overlays.openings.sync_selected_opening_overlay()
     session.overlays.openings.sync_selected_opening_handles()
     session.overlays.symbols.sync_selected_symbol_overlay()
@@ -369,9 +369,9 @@ def cancel_symbol_handle_point_pick(session):
 def restore_selected_symbol(session, symbol):
     session.current_tool = "Select"
     if symbol:
-        session.selection.set_selected_plan_target("symbol", symbol, pending_restore=True)
+        session.selection.state.set_selected_plan_target("symbol", symbol, pending_restore=True)
     else:
-        session.selection.set_selected_plan_target()
+        session.selection.state.set_selected_plan_target()
     if not symbol:
         session.overlays.openings.sync_selected_opening_overlay()
         session.overlays.openings.sync_selected_opening_handles()
@@ -379,7 +379,7 @@ def restore_selected_symbol(session, symbol):
         session.overlays.symbols.sync_selected_symbol_handles()
         session.task_panels.refresh_task_panel_status()
         return
-    session.selection.set_gui_selection_object(symbol)
+    session.selection.sync.set_gui_selection_object(symbol)
     session.overlays.openings.sync_selected_opening_overlay()
     session.overlays.openings.sync_selected_opening_handles()
     session.overlays.symbols.sync_selected_symbol_overlay()

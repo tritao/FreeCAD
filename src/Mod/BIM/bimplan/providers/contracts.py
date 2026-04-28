@@ -248,7 +248,7 @@ class PlanProviderActionContext:
 
     def select_wall_for_plan_edit(self, wall, sync_gui_selection=True):
         return bool(
-            self._session.selection.select_wall_for_plan_edit(
+            self._session.selection.activation.select_wall_for_plan_edit(
                 wall,
                 sync_gui_selection=sync_gui_selection,
             )

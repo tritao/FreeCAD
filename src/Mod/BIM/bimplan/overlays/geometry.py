@@ -15,9 +15,9 @@ def get_plan_overlay_geometry_kinds_for_object(session, obj):
     semantic_obj = session.visibility.get_plan_semantic_object(obj)
     if session.openings.is_hosted_opening_object(semantic_obj):
         return ("opening",)
-    if session.selection.is_plan_space_object(semantic_obj):
+    if session.selection.targets.is_plan_space_object(semantic_obj):
         return ("space",)
-    if session.selection.is_plan_region_object(semantic_obj):
+    if session.selection.targets.is_plan_region_object(semantic_obj):
         return ("region",)
     return ()
 
@@ -69,9 +69,9 @@ def invalidate_plan_overlay_geometry_cache(session, obj=None, kinds=None):
         invalidate_opening_overlay_screen_cache(session)
     if session.hovered_opening == semantic_obj:
         opening_overlays.invalidate_hovered_opening_overlay_cache(session)
-    if session.selection.is_selected_plan_target("opening", semantic_obj):
+    if session.selection.state.is_selected_plan_target("opening", semantic_obj):
         opening_overlays.invalidate_selected_opening_overlay_cache(session)
-    if session.selection.is_selected_plan_target("space", semantic_obj):
+    if session.selection.state.is_selected_plan_target("space", semantic_obj):
         space_overlays.invalidate_selected_space_overlay_cache(session)
 
 
@@ -192,7 +192,7 @@ def get_wall_overlay_polylines(session, wall):
 
 
 def get_space_footprint_faces(session, space):
-    if not session.selection.is_plan_space_object(space):
+    if not session.selection.targets.is_plan_space_object(space):
         return ()
 
     def compute(space_obj):
@@ -209,7 +209,7 @@ def get_space_footprint_faces(session, space):
 
 
 def get_space_overlay_polylines(session, space):
-    if not session.selection.is_plan_space_object(space):
+    if not session.selection.targets.is_plan_space_object(space):
         return ()
     return get_cached_plan_overlay_geometry(
         session,
@@ -223,7 +223,7 @@ def get_space_overlay_polylines(session, space):
 
 
 def get_region_footprint_faces(session, region):
-    if not session.selection.is_plan_region_object(region):
+    if not session.selection.targets.is_plan_region_object(region):
         return ()
 
     def compute(region_obj):
@@ -240,7 +240,7 @@ def get_region_footprint_faces(session, region):
 
 
 def get_region_overlay_polylines(session, region):
-    if not session.selection.is_plan_region_object(region):
+    if not session.selection.targets.is_plan_region_object(region):
         return ()
     return get_cached_plan_overlay_geometry(
         session,
@@ -368,7 +368,7 @@ def get_opening_overlay_screen_bounds(session, opening):
 
 
 def get_region_overlay_segments(session, region):
-    if not session.selection.is_plan_region_object(region):
+    if not session.selection.targets.is_plan_region_object(region):
         return ()
     return get_cached_plan_overlay_geometry(
         session,
@@ -382,7 +382,7 @@ def get_region_overlay_segments(session, region):
 
 
 def get_space_overlay_segments(session, space):
-    if not session.selection.is_plan_space_object(space):
+    if not session.selection.targets.is_plan_space_object(space):
         return ()
     return get_cached_plan_overlay_geometry(
         session,

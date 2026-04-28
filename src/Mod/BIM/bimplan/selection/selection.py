@@ -725,11 +725,17 @@ class _SessionAPI:
         return self._session
 
 
-class PlanSelectionAPI(_SessionAPI):
-    """Owned session surface for Plan Edit selection behavior."""
+def _bind_selection_service_method(func):
+    def _forward(self, *args, **kwargs):
+        return func(self.session, *args, **kwargs)
 
-    __slots__ = ("__dict__",)
+    _forward.__name__ = func.__name__
+    _forward.__qualname__ = "{}.{}".format(func.__module__, func.__name__)
+    _forward.__doc__ = func.__doc__
+    return _forward
 
+
+class PlanSelectionStateService(_SessionAPI):
     get_plan_target_object_from_state = staticmethod(get_plan_target_object_from_state)
     get_plan_target_state_key = staticmethod(get_plan_target_state_key)
 
@@ -746,6 +752,269 @@ class PlanSelectionAPI(_SessionAPI):
             kind=kind,
             obj=obj,
         )
+
+    get_selected_target_for_kind = _bind_selection_service_method(get_selected_target_for_kind)
+    set_selected_target_for_kind = _bind_selection_service_method(set_selected_target_for_kind)
+    get_selected_plan_target_object = _bind_selection_service_method(get_selected_plan_target_object)
+    is_selected_plan_target = _bind_selection_service_method(is_selected_plan_target)
+    clear_selected_plan_target_if_matches = _bind_selection_service_method(
+        clear_selected_plan_target_if_matches
+    )
+    selected_plan_target_changed = _bind_selection_service_method(selected_plan_target_changed)
+    set_pending_selected_plan_target = _bind_selection_service_method(set_pending_selected_plan_target)
+    consume_pending_selected_plan_target = _bind_selection_service_method(
+        consume_pending_selected_plan_target
+    )
+    get_selected_plan_target = _bind_selection_service_method(get_selected_plan_target)
+    get_first_plan_target_from_selection = _bind_selection_service_method(
+        get_first_plan_target_from_selection
+    )
+    is_valid_plan_target = _bind_selection_service_method(is_valid_plan_target)
+    normalize_plan_target_list = _bind_selection_service_method(normalize_plan_target_list)
+    normalize_plan_targets_from_selection = _bind_selection_service_method(
+        normalize_plan_targets_from_selection
+    )
+    set_secondary_selected_plan_targets = _bind_selection_service_method(
+        set_secondary_selected_plan_targets
+    )
+    sync_secondary_selected_plan_targets_from_selection = _bind_selection_service_method(
+        sync_secondary_selected_plan_targets_from_selection
+    )
+    sync_secondary_selected_plan_targets_from_gui_selection = _bind_selection_service_method(
+        sync_secondary_selected_plan_targets_from_gui_selection
+    )
+    get_secondary_selected_plan_targets = _bind_selection_service_method(
+        get_secondary_selected_plan_targets
+    )
+    get_selected_plan_targets = _bind_selection_service_method(get_selected_plan_targets)
+    set_selected_plan_target = _bind_selection_service_method(set_selected_plan_target)
+
+
+class PlanSelectionRefreshService(_SessionAPI):
+    clear_hidden_provider_preselection = _bind_selection_service_method(
+        clear_hidden_provider_preselection
+    )
+    sanitize_plan_target_references = _bind_selection_service_method(
+        sanitize_plan_target_references
+    )
+    schedule_selected_wall_reset = _bind_selection_service_method(schedule_selected_wall_reset)
+    reset_selected_wall_after_change = _bind_selection_service_method(reset_selected_wall_after_change)
+    suspend_selected_wall_state = _bind_selection_service_method(suspend_selected_wall_state)
+    sync_primary_selected_plan_target_visuals = _bind_selection_service_method(
+        sync_primary_selected_plan_target_visuals
+    )
+    refresh_selected_plan_target = _bind_selection_service_method(refresh_selected_plan_target)
+    refresh_primary_selected_plan_target = _bind_selection_service_method(
+        refresh_primary_selected_plan_target
+    )
+
+
+class PlanSelectionSyncService(_SessionAPI):
+    get_gui_selection_ex = staticmethod(plan_selection_gui_sync.get_gui_selection_ex)
+    get_gui_selection = staticmethod(plan_selection_gui_sync.get_gui_selection)
+    add_gui_selection_object = staticmethod(plan_selection_gui_sync.add_gui_selection_object)
+
+    attach_selection_observer = _bind_selection_service_method(
+        plan_selection_gui_sync.attach_selection_observer
+    )
+    detach_selection_observer = _bind_selection_service_method(
+        plan_selection_gui_sync.detach_selection_observer
+    )
+    schedule_selection_refresh = _bind_selection_service_method(
+        plan_selection_gui_sync.schedule_selection_refresh
+    )
+    run_scheduled_selection_refresh = _bind_selection_service_method(
+        plan_selection_gui_sync.run_scheduled_selection_refresh
+    )
+    schedule_clear_plan_selection_state = _bind_selection_service_method(
+        plan_selection_gui_sync.schedule_clear_plan_selection_state
+    )
+    run_scheduled_clear_plan_selection_state = _bind_selection_service_method(
+        plan_selection_gui_sync.run_scheduled_clear_plan_selection_state
+    )
+    set_gui_selection = _bind_selection_service_method(plan_selection_gui_sync.set_gui_selection)
+    set_gui_selection_object = _bind_selection_service_method(
+        plan_selection_gui_sync.set_gui_selection_object
+    )
+    schedule_gui_selection_object = _bind_selection_service_method(
+        plan_selection_gui_sync.schedule_gui_selection_object
+    )
+    run_scheduled_gui_selection_sync = _bind_selection_service_method(
+        plan_selection_gui_sync.run_scheduled_gui_selection_sync
+    )
+    normalize_gui_object_selection = _bind_selection_service_method(normalize_gui_object_selection)
+
+    @contextmanager
+    def selection_changes_suppressed(self):
+        with plan_selection_gui_sync.selection_changes_suppressed(self.session):
+            yield
+
+
+class PlanSelectionTargetService(_SessionAPI):
+    normalize_plan_requirement_tags = staticmethod(plan_targets.normalize_plan_requirement_tags)
+
+    get_plan_target_kind_for_object = _bind_selection_service_method(
+        plan_targets.get_plan_target_kind_for_object
+    )
+    get_plan_target_for_object = _bind_selection_service_method(plan_targets.get_plan_target_for_object)
+    is_plan_selectable_wall = _bind_selection_service_method(plan_targets.is_plan_selectable_wall)
+    is_plan_space_object = _bind_selection_service_method(plan_targets.is_plan_space_object)
+    is_plan_custom_pick_only_object = _bind_selection_service_method(
+        plan_targets.is_plan_custom_pick_only_object
+    )
+    is_plan_space_separator_object = _bind_selection_service_method(
+        plan_targets.is_plan_space_separator_object
+    )
+    is_plan_region_object = _bind_selection_service_method(plan_targets.is_plan_region_object)
+    get_plan_host_ref = _bind_selection_service_method(plan_targets.get_plan_host_ref)
+    make_plan_target_record = _bind_selection_service_method(plan_targets.make_plan_target_record)
+    get_plan_targets = _bind_selection_service_method(plan_targets.get_plan_targets)
+    resolve_plan_target_object = _bind_selection_service_method(
+        plan_targets.resolve_plan_target_object
+    )
+    resolve_plan_semantic_object = _bind_selection_service_method(
+        plan_targets.resolve_plan_semantic_object
+    )
+
+
+class PlanSelectionHoverService(_SessionAPI):
+    set_hovered_wall = _bind_selection_service_method(set_hovered_wall)
+    set_hovered_opening = _bind_selection_service_method(set_hovered_opening)
+    set_hovered_symbol = _bind_selection_service_method(set_hovered_symbol)
+    set_hovered_provider = _bind_selection_service_method(set_hovered_provider)
+    set_hovered_space = _bind_selection_service_method(set_hovered_space)
+    set_hovered_region = _bind_selection_service_method(set_hovered_region)
+    get_hovered_plan_target = _bind_selection_service_method(
+        plan_selection_picking.get_hovered_plan_target
+    )
+    clear_hovered_plan_targets = _bind_selection_service_method(
+        plan_selection_picking.clear_hovered_plan_targets
+    )
+    queue_prime_hover_pick_caches = _bind_selection_service_method(
+        plan_selection_picking.queue_prime_hover_pick_caches
+    )
+    prime_hover_pick_caches = _bind_selection_service_method(
+        plan_selection_picking.prime_hover_pick_caches
+    )
+    should_skip_hover_pick = _bind_selection_service_method(
+        plan_selection_picking.should_skip_hover_pick
+    )
+    update_hovered_plan_target = _bind_selection_service_method(
+        plan_selection_picking.update_hovered_plan_target
+    )
+
+
+class PlanSelectionPickingService(_SessionAPI):
+    xy_polygon_area = staticmethod(plan_selection_picking.xy_polygon_area)
+    xy_point_in_polygon = staticmethod(plan_selection_picking.xy_point_in_polygon)
+    get_screen_distance_sq_to_projected_segment = staticmethod(
+        plan_selection_picking.get_screen_distance_sq_to_projected_segment
+    )
+
+    get_plan_target_at_position = _bind_selection_service_method(
+        plan_selection_picking.get_plan_target_at_position
+    )
+    get_plan_space_instances = _bind_selection_service_method(
+        plan_selection_picking.get_plan_space_instances
+    )
+    get_plan_region_instances = _bind_selection_service_method(
+        plan_selection_picking.get_plan_region_instances
+    )
+    get_plan_target_from_edit_node = _bind_selection_service_method(
+        plan_selection_picking.get_plan_target_from_edit_node
+    )
+    get_provider_overlay_target_from_edit_node = _bind_selection_service_method(
+        plan_selection_picking.get_provider_overlay_target_from_edit_node
+    )
+    get_screen_distance_sq_to_segment = _bind_selection_service_method(
+        plan_selection_picking.get_screen_distance_sq_to_segment
+    )
+    pick_plan_symbol_target_from_overlays = _bind_selection_service_method(
+        plan_selection_picking.pick_plan_symbol_target_from_overlays
+    )
+    pick_plan_opening_target_from_overlays = _bind_selection_service_method(
+        plan_selection_picking.pick_plan_opening_target_from_overlays
+    )
+    pick_provider_overlay_target_from_overlays = _bind_selection_service_method(
+        plan_selection_picking.pick_provider_overlay_target_from_overlays
+    )
+    pick_provider_overlay_target_from_objects_info = _bind_selection_service_method(
+        plan_selection_picking.pick_provider_overlay_target_from_objects_info
+    )
+    pick_plan_space_target_from_overlays = _bind_selection_service_method(
+        plan_selection_picking.pick_plan_space_target_from_overlays
+    )
+    pick_plan_region_target_from_overlays = _bind_selection_service_method(
+        plan_selection_picking.pick_plan_region_target_from_overlays
+    )
+    get_region_pick_polylines = _bind_selection_service_method(
+        plan_selection_picking.get_region_pick_polylines
+    )
+    pick_plan_region_target_from_polylines = _bind_selection_service_method(
+        plan_selection_picking.pick_plan_region_target_from_polylines
+    )
+    pick_plan_target_from_footprint_faces = _bind_selection_service_method(
+        plan_selection_picking.pick_plan_target_from_footprint_faces
+    )
+    pick_plan_space_target_from_footprints = _bind_selection_service_method(
+        plan_selection_picking.pick_plan_space_target_from_footprints
+    )
+    pick_plan_region_target_from_footprints = _bind_selection_service_method(
+        plan_selection_picking.pick_plan_region_target_from_footprints
+    )
+    get_edit_node = _bind_selection_service_method(plan_selection_picking.get_edit_node)
+    pick_selected_opening_handle = _bind_selection_service_method(
+        plan_selection_picking.pick_selected_opening_handle
+    )
+
+
+class PlanSelectionActivationService(_SessionAPI):
+    queue_restore_selected_plan_target = _bind_selection_service_method(
+        queue_restore_selected_plan_target
+    )
+    select_plan_target_for_plan_edit = _bind_selection_service_method(
+        select_plan_target_for_plan_edit
+    )
+    select_opening_for_plan_edit = _bind_selection_service_method(select_opening_for_plan_edit)
+    select_symbol_for_plan_edit = _bind_selection_service_method(select_symbol_for_plan_edit)
+    select_region_for_plan_edit = _bind_selection_service_method(select_region_for_plan_edit)
+    select_space_for_plan_edit = _bind_selection_service_method(select_space_for_plan_edit)
+    select_wall_for_plan_edit = _bind_selection_service_method(select_wall_for_plan_edit)
+    activate_plan_target_for_kind = _bind_selection_service_method(activate_plan_target_for_kind)
+    activate_plan_target = _bind_selection_service_method(activate_plan_target)
+    activate_semantic_plan_target = _bind_selection_service_method(activate_semantic_plan_target)
+    activate_opening_target = _bind_selection_service_method(activate_opening_target)
+    activate_symbol_target = _bind_selection_service_method(activate_symbol_target)
+    activate_region_target = _bind_selection_service_method(activate_region_target)
+    activate_space_target = _bind_selection_service_method(activate_space_target)
+    activate_wall_target = _bind_selection_service_method(activate_wall_target)
+    clear_plan_selection_state = _bind_selection_service_method(clear_plan_selection_state)
+    activate_provider_overlay_target_node = _bind_selection_service_method(
+        activate_provider_overlay_target_node
+    )
+    toggle_raw_plan_object_selection = _bind_selection_service_method(
+        toggle_raw_plan_object_selection
+    )
+    toggle_plan_target_selection_at_position = _bind_selection_service_method(
+        toggle_plan_target_selection_at_position
+    )
+    is_plan_additive_selection_active = _bind_selection_service_method(
+        is_plan_additive_selection_active
+    )
+
+
+class PlanSelectionAPI(_SessionAPI):
+    """Owned session surface for BIM Plan Edit selection behavior."""
+
+    def __init__(self, session):
+        super().__init__(session)
+        self.state = PlanSelectionStateService(session)
+        self.refresh = PlanSelectionRefreshService(session)
+        self.sync = PlanSelectionSyncService(session)
+        self.targets = PlanSelectionTargetService(session)
+        self.hover = PlanSelectionHoverService(session)
+        self.picking = PlanSelectionPickingService(session)
+        self.activation = PlanSelectionActivationService(session)
 
     def addSelection(self, doc, obj, sub, point):
         return plan_selection_gui_sync.selection_observer_add(self.session, doc, obj, sub, point)
@@ -771,145 +1040,13 @@ class PlanSelectionAPI(_SessionAPI):
 
     @contextmanager
     def selection_changes_suppressed(self):
-        with plan_selection_gui_sync.selection_changes_suppressed(self.session):
+        with self.sync.selection_changes_suppressed():
             yield
 
     def get_selected_objects(self):
         return tuple(
-            self.normalize_gui_object_selection(
-                tuple(self.get_gui_selection())
+            self.sync.normalize_gui_object_selection(
+                tuple(self.sync.get_gui_selection())
                 + tuple(self.session.provider_transient_state.provider_selected_objects)
             )
         )
-
-
-def _make_selection_session_forwarder(func):
-    def _forward(self, *args, **kwargs):
-        return func(self.session, *args, **kwargs)
-
-    _forward.__name__ = func.__name__
-    _forward.__qualname__ = "PlanSelectionAPI.{}".format(func.__name__)
-    _forward.__doc__ = func.__doc__
-    return _forward
-
-
-_PLAN_SELECTION_SESSION_FORWARDERS = (
-    sanitize_plan_target_references,
-    get_selected_target_for_kind,
-    set_selected_target_for_kind,
-    get_selected_plan_target_object,
-    is_selected_plan_target,
-    clear_selected_plan_target_if_matches,
-    clear_hidden_provider_preselection,
-    selected_plan_target_changed,
-    set_pending_selected_plan_target,
-    consume_pending_selected_plan_target,
-    get_selected_plan_target,
-    get_first_plan_target_from_selection,
-    is_valid_plan_target,
-    normalize_plan_target_list,
-    normalize_plan_targets_from_selection,
-    set_secondary_selected_plan_targets,
-    sync_secondary_selected_plan_targets_from_selection,
-    sync_secondary_selected_plan_targets_from_gui_selection,
-    get_secondary_selected_plan_targets,
-    get_selected_plan_targets,
-    set_selected_plan_target,
-    schedule_selected_wall_reset,
-    reset_selected_wall_after_change,
-    suspend_selected_wall_state,
-    sync_primary_selected_plan_target_visuals,
-    refresh_selected_plan_target,
-    refresh_primary_selected_plan_target,
-    set_hovered_wall,
-    set_hovered_opening,
-    set_hovered_symbol,
-    set_hovered_provider,
-    set_hovered_space,
-    set_hovered_region,
-    queue_restore_selected_plan_target,
-    select_plan_target_for_plan_edit,
-    select_opening_for_plan_edit,
-    select_symbol_for_plan_edit,
-    select_region_for_plan_edit,
-    select_space_for_plan_edit,
-    select_wall_for_plan_edit,
-    activate_plan_target_for_kind,
-    activate_plan_target,
-    activate_semantic_plan_target,
-    activate_opening_target,
-    activate_symbol_target,
-    activate_region_target,
-    activate_space_target,
-    activate_wall_target,
-    clear_plan_selection_state,
-    normalize_gui_object_selection,
-    activate_provider_overlay_target_node,
-    toggle_raw_plan_object_selection,
-    toggle_plan_target_selection_at_position,
-    is_plan_additive_selection_active,
-    plan_selection_gui_sync.attach_selection_observer,
-    plan_selection_gui_sync.detach_selection_observer,
-    plan_selection_gui_sync.schedule_selection_refresh,
-    plan_selection_gui_sync.run_scheduled_selection_refresh,
-    plan_selection_gui_sync.schedule_clear_plan_selection_state,
-    plan_selection_gui_sync.run_scheduled_clear_plan_selection_state,
-    plan_selection_gui_sync.set_gui_selection,
-    plan_selection_gui_sync.set_gui_selection_object,
-    plan_selection_gui_sync.schedule_gui_selection_object,
-    plan_selection_gui_sync.run_scheduled_gui_selection_sync,
-    plan_targets.get_plan_target_kind_for_object,
-    plan_targets.get_plan_target_for_object,
-    plan_targets.is_plan_selectable_wall,
-    plan_targets.is_plan_space_object,
-    plan_targets.is_plan_custom_pick_only_object,
-    plan_targets.is_plan_space_separator_object,
-    plan_targets.is_plan_region_object,
-    plan_targets.get_plan_host_ref,
-    plan_targets.make_plan_target_record,
-    plan_targets.get_plan_targets,
-    plan_targets.resolve_plan_target_object,
-    plan_targets.resolve_plan_semantic_object,
-    plan_selection_picking.get_plan_target_at_position,
-    plan_selection_picking.get_plan_space_instances,
-    plan_selection_picking.get_plan_region_instances,
-    plan_selection_picking.get_plan_target_from_edit_node,
-    plan_selection_picking.get_provider_overlay_target_from_edit_node,
-    plan_selection_picking.get_hovered_plan_target,
-    plan_selection_picking.clear_hovered_plan_targets,
-    plan_selection_picking.queue_prime_hover_pick_caches,
-    plan_selection_picking.prime_hover_pick_caches,
-    plan_selection_picking.should_skip_hover_pick,
-    plan_selection_picking.update_hovered_plan_target,
-    plan_selection_picking.get_screen_distance_sq_to_segment,
-    plan_selection_picking.pick_plan_symbol_target_from_overlays,
-    plan_selection_picking.pick_plan_opening_target_from_overlays,
-    plan_selection_picking.pick_provider_overlay_target_from_overlays,
-    plan_selection_picking.pick_provider_overlay_target_from_objects_info,
-    plan_selection_picking.pick_plan_space_target_from_overlays,
-    plan_selection_picking.pick_plan_region_target_from_overlays,
-    plan_selection_picking.get_region_pick_polylines,
-    plan_selection_picking.pick_plan_region_target_from_polylines,
-    plan_selection_picking.pick_plan_target_from_footprint_faces,
-    plan_selection_picking.pick_plan_space_target_from_footprints,
-    plan_selection_picking.pick_plan_region_target_from_footprints,
-    plan_selection_picking.get_edit_node,
-    plan_selection_picking.pick_selected_opening_handle,
-)
-
-for _func in _PLAN_SELECTION_SESSION_FORWARDERS:
-    setattr(PlanSelectionAPI, _func.__name__, _make_selection_session_forwarder(_func))
-
-PlanSelectionAPI.xy_polygon_area = staticmethod(plan_selection_picking.xy_polygon_area)
-PlanSelectionAPI.xy_point_in_polygon = staticmethod(plan_selection_picking.xy_point_in_polygon)
-PlanSelectionAPI.get_screen_distance_sq_to_projected_segment = staticmethod(
-    plan_selection_picking.get_screen_distance_sq_to_projected_segment
-)
-PlanSelectionAPI.get_gui_selection_ex = staticmethod(plan_selection_gui_sync.get_gui_selection_ex)
-PlanSelectionAPI.get_gui_selection = staticmethod(plan_selection_gui_sync.get_gui_selection)
-PlanSelectionAPI.add_gui_selection_object = staticmethod(
-    plan_selection_gui_sync.add_gui_selection_object
-)
-PlanSelectionAPI.normalize_plan_requirement_tags = staticmethod(
-    plan_targets.normalize_plan_requirement_tags
-)

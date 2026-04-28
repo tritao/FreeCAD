@@ -502,7 +502,7 @@ class PlanEditControlsShellMixin:
         with self.session.performance.plan_perf_trace_span("refresh_task_panel_selection_widget"):
             if self.form is None or self.status is None or self.exit_button is None:
                 return
-            selected_kind, _selected_obj = self.session.selection.get_selected_plan_target()
+            selected_kind, _selected_obj = self.session.selection.state.get_selected_plan_target()
             if self.session.current_tool != "Select" or selected_kind != "wall":
                 self.refresh_from_session(defer_integrations=True)
                 return
@@ -621,7 +621,7 @@ class PlanEditControlsShellMixin:
     def _apply_modal_interaction_state(self, modal_active):
         from PySide import QtCore
 
-        selected_kind, selected_obj = self.session.selection.get_selected_plan_target()
+        selected_kind, selected_obj = self.session.selection.state.get_selected_plan_target()
         join_candidate = (
             self.session.wall_relations.get_plan_candidate_joint() is not None
             if self.session.current_tool == "Join"

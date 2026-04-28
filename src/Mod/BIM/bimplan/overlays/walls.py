@@ -213,7 +213,7 @@ def sync_hovered_wall_overlay(session):
     clear_hovered_wall_overlay(session)
     if session.current_tool not in ("Select", "Join"):
         return
-    if not session.hovered_wall or session.selection.is_selected_plan_target(
+    if not session.hovered_wall or session.selection.state.is_selected_plan_target(
         "wall", session.hovered_wall
     ):
         return
@@ -235,7 +235,7 @@ def clear_hovered_wall_overlay(session):
 def sync_selected_wall_overlay(session):
     with _perf_trace_span(session, "sync_selected_wall_overlay"):
         wall = plan_selection.get_selected_plan_target_object(session, "wall")
-        if session.current_tool != "Select" or not session.selection.is_plan_selectable_wall(wall):
+        if session.current_tool != "Select" or not session.selection.targets.is_plan_selectable_wall(wall):
             clear_selected_wall_overlay(session)
             return
         width = session.viewport.scaled_line_width(4)
@@ -277,7 +277,7 @@ def apply_selected_wall_selection_feedback(session, *, defer_grips=False):
     tracker_state = _wall_tracker_state(session)
     had_wall_visuals = bool(tracker_state.grip_trackers or tracker_state.wall_overlay_trackers)
     wall = plan_selection.get_selected_plan_target_object(session, "wall")
-    if session.current_tool == "Select" and session.selection.is_plan_selectable_wall(wall):
+    if session.current_tool == "Select" and session.selection.targets.is_plan_selectable_wall(wall):
         sync_selected_wall_overlay(session)
         if defer_grips:
             schedule_wall_grip_sync(session)
@@ -301,7 +301,7 @@ def get_plan_context_junctions(session):
     seen = set()
     selected_wall = plan_selection.get_selected_plan_target_object(session, "wall")
     for wall in (selected_wall, session.hovered_wall):
-        if not session.selection.is_plan_selectable_wall(wall):
+        if not session.selection.targets.is_plan_selectable_wall(wall):
             continue
         for relation in ArchWallJoinUtils.iter_wall_relations(wall):
             if not ArchWallJoinUtils.is_wall_junction(relation):
@@ -381,11 +381,11 @@ def sync_hovered_wall_opening_context_overlay(session):
     clear_hovered_wall_opening_context_overlay(session)
     if session.current_tool != "Select":
         return
-    if not session.hovered_wall or session.selection.is_selected_plan_target(
+    if not session.hovered_wall or session.selection.state.is_selected_plan_target(
         "wall", session.hovered_wall
     ):
         return
-    selected_kind, _selected_obj = session.selection.get_selected_plan_target()
+    selected_kind, _selected_obj = session.selection.state.get_selected_plan_target()
     if selected_kind in ("wall", "opening", "region", "space"):
         return
     color = (0.64, 0.70, 0.84)
