@@ -53,7 +53,7 @@ class SpaceCreationRequest:
 
 
 def get_space_reference_point(session, space):
-    if not session.selection.is_plan_space_object(space):
+    if not session.selection.targets.is_plan_space_object(space):
         return None
     return _get_projected_space_shape_center(session, space) or _get_projected_space_base_point(
         session,
@@ -143,7 +143,7 @@ def _average_freecad_vectors(points):
 
 
 def get_space_boundary_entries(session, space):
-    if not session.selection.is_plan_space_object(space):
+    if not session.selection.targets.is_plan_space_object(space):
         return []
     import ArchSpace
 
@@ -186,7 +186,7 @@ def space_boundary_key(boundary):
 def get_selected_space_boundary_links(session, fallback_space=None):
     import ArchSpace
 
-    selection_ex = session.selection.get_gui_selection_ex()
+    selection_ex = session.selection.sync.get_gui_selection_ex()
     reference_point = _get_selected_space_boundary_reference_point(
         session,
         selection_ex,

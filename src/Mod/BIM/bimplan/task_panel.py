@@ -254,7 +254,7 @@ def _refresh_task_panels(session, reason):
     if session.lifecycle_state.tearing_down or not session.document_visuals.document_is_alive():
         return
     if reason != TASK_PANEL_REFRESH_PROVIDER_OVERLAY_MODE:
-        session.selection.sanitize_plan_target_references()
+        session.selection.refresh.sanitize_plan_target_references()
         session.status_text.update_input_hints()
         session.viewport.refresh_viewport_status_chip()
     panel = session.task_panel

@@ -37,9 +37,9 @@ def sync_secondary_selected_overlays(session):
     color = (0.12, 0.72, 0.68)
     width = session.viewport.scaled_line_width(2)
     selected_targets = (
-        session.selection.get_selected_plan_targets()
+        session.selection.state.get_selected_plan_targets()
         if session.current_tool == "Pick Space Region"
-        else session.selection.get_secondary_selected_plan_targets()
+        else session.selection.state.get_secondary_selected_plan_targets()
     )
     for target_ref in selected_targets:
         if target_ref.kind == "wall":
@@ -184,9 +184,9 @@ def sync_hovered_space_overlay(session):
     clear_hovered_space_overlay(session)
     if session.current_tool != "Select":
         return
-    if not session.selection.is_plan_space_object(session.hovered_space):
+    if not session.selection.targets.is_plan_space_object(session.hovered_space):
         return
-    if session.selection.is_selected_plan_target("space", session.hovered_space):
+    if session.selection.state.is_selected_plan_target("space", session.hovered_space):
         return
     create_space_overlay_trackers(
         session,
@@ -208,9 +208,9 @@ def sync_hovered_region_overlay(session):
     clear_hovered_region_overlay(session)
     if session.current_tool != "Select":
         return
-    if not session.selection.is_plan_region_object(session.hovered_region):
+    if not session.selection.targets.is_plan_region_object(session.hovered_region):
         return
-    if session.selection.is_selected_plan_target("region", session.hovered_region):
+    if session.selection.state.is_selected_plan_target("region", session.hovered_region):
         return
     create_region_overlay_trackers(
         session,
@@ -239,7 +239,7 @@ def sync_selected_space_overlay(session):
         if session.current_tool not in (
             "Select",
             "Set Space Text",
-        ) or not session.selection.is_plan_space_object(space):
+        ) or not session.selection.targets.is_plan_space_object(space):
             clear_selected_space_overlay(session)
             return
         width = session.viewport.scaled_line_width(3)
@@ -300,7 +300,7 @@ def sync_selected_region_overlay(session):
     with _perf_trace_span(session, "sync_selected_region_overlay"):
         tracker_state = _space_tracker_state(session)
         region = plan_selection.get_selected_plan_target_object(session, "region")
-        if session.current_tool != "Select" or not session.selection.is_plan_region_object(region):
+        if session.current_tool != "Select" or not session.selection.targets.is_plan_region_object(region):
             clear_selected_region_overlay(session)
             return
         width = session.viewport.scaled_line_width(3)

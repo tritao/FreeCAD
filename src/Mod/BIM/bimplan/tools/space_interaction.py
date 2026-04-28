@@ -350,7 +350,7 @@ def _finish_space_separator(session, separator):
     session.visibility.register_plan_object(separator)
     cancel_space_separator_tool(session, refresh=False)
     session.current_tool = "Select"
-    session.selection.refresh_primary_selected_plan_target()
+    session.selection.refresh.refresh_primary_selected_plan_target()
     session.task_panels.refresh_task_panel_status()
 
 
@@ -422,7 +422,7 @@ def reset_space_text_pick_state(session):
 
 def start_space_text_position_pick(session):
     space = _get_selected_space_text_target(session)
-    if not session.selection.is_plan_space_object(space):
+    if not session.selection.targets.is_plan_space_object(space):
         return False
 
     _begin_space_text_position_pick(session, space)
@@ -443,7 +443,7 @@ def _get_selected_space_text_target(session):
 def _begin_space_text_position_pick(session, space):
     session.current_tool = "Set Space Text"
     set_space_text_pick_state(session, space)
-    session.selection.clear_hovered_plan_targets(
+    session.selection.hover.clear_hovered_plan_targets(
         kinds=plan_target_kinds.SPACE_EDIT_CLEAR_HOVERED_KINDS
     )
     session.overlays.spaces.sync_secondary_selected_overlays()
@@ -479,7 +479,7 @@ def finish_space_text_position_pick(session, point=None, obj=None):
     space = session.interaction_state.edit_space
     _end_space_text_position_pick(session)
 
-    if point is None or not session.selection.is_plan_space_object(space):
+    if point is None or not session.selection.targets.is_plan_space_object(space):
         session.current_tool = "Select"
         session.task_panels.refresh_task_panel_status()
         return
@@ -498,6 +498,6 @@ def cancel_space_text_position_pick(session):
     session.lifecycle.stop_snapper()
     session.current_tool = "Select"
     if space:
-        session.selection.set_selected_plan_target("space", space, pending_restore=True)
+        session.selection.state.set_selected_plan_target("space", space, pending_restore=True)
     session.overlays.spaces.sync_selected_space_overlay()
     session.task_panels.refresh_task_panel_status()

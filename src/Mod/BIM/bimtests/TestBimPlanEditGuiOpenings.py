@@ -110,7 +110,7 @@ class BimPlanEditGuiOpeningsMixin:
         FreeCADGui.Selection.clearSelection()
         FreeCADGui.Selection.addSelection(self.document.Name, door.Name)
         self.pump_gui_events()
-        session.selection.refresh_primary_selected_plan_target()
+        session.selection.refresh.refresh_primary_selected_plan_target()
 
         self._assert_selected_plan_target(session, "opening", door)
         self.assertEqual(len(session._grip_trackers), 0)
@@ -158,7 +158,7 @@ class BimPlanEditGuiOpeningsMixin:
             patch.object(Arch, "addComponents", side_effect=record_add_components),
         ):
             self.assertTrue(
-                session.selection.select_wall_for_plan_edit(wall, sync_gui_selection=True)
+                session.selection.activation.select_wall_for_plan_edit(wall, sync_gui_selection=True)
             )
             self.assertTrue(session.windows.can_place_window())
 
@@ -234,7 +234,7 @@ class BimPlanEditGuiOpeningsMixin:
             patch.object(FreeCADGui.Snapper, "snapInfo", snap_info, create=True),
         ):
             self.assertTrue(
-                session.selection.select_wall_for_plan_edit(wall_a, sync_gui_selection=True)
+                session.selection.activation.select_wall_for_plan_edit(wall_a, sync_gui_selection=True)
             )
             self.assertTrue(session.lifecycle.activate_window_tool())
             self.assertIs(session.creation_preview_state.window_host_wall, wall_a)
@@ -284,7 +284,7 @@ class BimPlanEditGuiOpeningsMixin:
         FreeCADGui.Selection.clearSelection()
         FreeCADGui.Selection.addSelection(self.document.Name, window.Name)
         self.pump_gui_events()
-        session.selection.refresh_primary_selected_plan_target()
+        session.selection.refresh.refresh_primary_selected_plan_target()
 
         self._assert_selected_plan_target(session, "opening", window)
         self.assertTrue(
@@ -308,7 +308,7 @@ class BimPlanEditGuiOpeningsMixin:
         self.pump_gui_events()
 
         self.assertTrue(
-            session.selection.select_opening_for_plan_edit(window, sync_gui_selection=True)
+            session.selection.activation.select_opening_for_plan_edit(window, sync_gui_selection=True)
         )
         session.task_panel.refresh_from_session()
         self.pump_gui_events(timeout_ms=500)
@@ -368,7 +368,7 @@ class BimPlanEditGuiOpeningsMixin:
         self.pump_gui_events()
 
         self.assertTrue(
-            session.selection.select_opening_for_plan_edit(window, sync_gui_selection=True)
+            session.selection.activation.select_opening_for_plan_edit(window, sync_gui_selection=True)
         )
         session.task_panel.refresh_from_session()
         self.pump_gui_events(timeout_ms=500)
@@ -424,7 +424,7 @@ class BimPlanEditGuiOpeningsMixin:
         self.pump_gui_events()
 
         self.assertTrue(
-            session.selection.select_opening_for_plan_edit(window, sync_gui_selection=True)
+            session.selection.activation.select_opening_for_plan_edit(window, sync_gui_selection=True)
         )
         session.task_panel.refresh_from_session()
         self.pump_gui_events(timeout_ms=500)
@@ -448,7 +448,7 @@ class BimPlanEditGuiOpeningsMixin:
         self.assertAlmostEqual(original_center.x, updated_center.x, delta=1e-6)
         self.assertAlmostEqual(original_center.y, updated_center.y, delta=1e-6)
         self.assertAlmostEqual(original_center.z, updated_center.z, delta=1e-6)
-        self.assertIs(session.selection.get_selected_target_for_kind("opening"), window)
+        self.assertIs(session.selection.state.get_selected_target_for_kind("opening"), window)
         self.assertGreater(len(session._opening_overlay_trackers), 0)
         self.assertGreaterEqual(len(session._opening_handle_trackers), 1)
         self._assert_no_opening_move_preview_visuals(session)
@@ -466,7 +466,7 @@ class BimPlanEditGuiOpeningsMixin:
         self.assertAlmostEqual(original_center.x, undo_center.x, delta=1e-6)
         self.assertAlmostEqual(original_center.y, undo_center.y, delta=1e-6)
         self.assertAlmostEqual(original_center.z, undo_center.z, delta=1e-6)
-        self.assertIs(session.selection.get_selected_target_for_kind("opening"), window)
+        self.assertIs(session.selection.state.get_selected_target_for_kind("opening"), window)
         self.assertGreater(len(session._opening_overlay_trackers), 0)
         self.assertGreaterEqual(len(session._opening_handle_trackers), 1)
         self._assert_no_opening_move_preview_visuals(session)
@@ -484,7 +484,7 @@ class BimPlanEditGuiOpeningsMixin:
         self.assertAlmostEqual(updated_center.x, redo_center.x, delta=1e-6)
         self.assertAlmostEqual(updated_center.y, redo_center.y, delta=1e-6)
         self.assertAlmostEqual(updated_center.z, redo_center.z, delta=1e-6)
-        self.assertIs(session.selection.get_selected_target_for_kind("opening"), window)
+        self.assertIs(session.selection.state.get_selected_target_for_kind("opening"), window)
         self.assertGreater(len(session._opening_overlay_trackers), 0)
         self.assertGreaterEqual(len(session._opening_handle_trackers), 1)
         self._assert_no_opening_move_preview_visuals(session)
@@ -513,7 +513,7 @@ class BimPlanEditGuiOpeningsMixin:
         self.pump_gui_events()
 
         self.assertTrue(
-            session.selection.select_opening_for_plan_edit(window, sync_gui_selection=True)
+            session.selection.activation.select_opening_for_plan_edit(window, sync_gui_selection=True)
         )
         session.task_panel.refresh_from_session()
         self.pump_gui_events(timeout_ms=500)
@@ -571,7 +571,7 @@ class BimPlanEditGuiOpeningsMixin:
         self.pump_gui_events()
 
         self.assertTrue(
-            session.selection.select_opening_for_plan_edit(window, sync_gui_selection=True)
+            session.selection.activation.select_opening_for_plan_edit(window, sync_gui_selection=True)
         )
         session.task_panel.refresh_from_session()
         self.pump_gui_events(timeout_ms=500)
@@ -595,7 +595,7 @@ class BimPlanEditGuiOpeningsMixin:
         self.assertAlmostEqual(original_center.x, updated_center.x, delta=1e-6)
         self.assertAlmostEqual(original_center.y, updated_center.y, delta=1e-6)
         self.assertAlmostEqual(original_center.z, updated_center.z, delta=1e-6)
-        self.assertIs(session.selection.get_selected_target_for_kind("opening"), window)
+        self.assertIs(session.selection.state.get_selected_target_for_kind("opening"), window)
         self.assertGreater(len(session._opening_overlay_trackers), 0)
         self.assertGreaterEqual(len(session._opening_handle_trackers), 1)
         self._assert_no_opening_move_preview_visuals(session)
@@ -613,7 +613,7 @@ class BimPlanEditGuiOpeningsMixin:
         self.assertAlmostEqual(original_center.x, undo_center.x, delta=1e-6)
         self.assertAlmostEqual(original_center.y, undo_center.y, delta=1e-6)
         self.assertAlmostEqual(original_center.z, undo_center.z, delta=1e-6)
-        self.assertIs(session.selection.get_selected_target_for_kind("opening"), window)
+        self.assertIs(session.selection.state.get_selected_target_for_kind("opening"), window)
         self.assertGreater(len(session._opening_overlay_trackers), 0)
         self.assertGreaterEqual(len(session._opening_handle_trackers), 1)
         self._assert_no_opening_move_preview_visuals(session)
@@ -631,7 +631,7 @@ class BimPlanEditGuiOpeningsMixin:
         self.assertAlmostEqual(updated_center.x, redo_center.x, delta=1e-6)
         self.assertAlmostEqual(updated_center.y, redo_center.y, delta=1e-6)
         self.assertAlmostEqual(updated_center.z, redo_center.z, delta=1e-6)
-        self.assertIs(session.selection.get_selected_target_for_kind("opening"), window)
+        self.assertIs(session.selection.state.get_selected_target_for_kind("opening"), window)
         self.assertGreater(len(session._opening_overlay_trackers), 0)
         self.assertGreaterEqual(len(session._opening_handle_trackers), 1)
         self._assert_no_opening_move_preview_visuals(session)
@@ -660,7 +660,7 @@ class BimPlanEditGuiOpeningsMixin:
         self.pump_gui_events()
 
         self.assertTrue(
-            session.selection.select_opening_for_plan_edit(window, sync_gui_selection=True)
+            session.selection.activation.select_opening_for_plan_edit(window, sync_gui_selection=True)
         )
         session.task_panel.refresh_from_session()
         self.pump_gui_events(timeout_ms=500)
@@ -734,7 +734,7 @@ class BimPlanEditGuiOpeningsMixin:
         self.pump_gui_events()
 
         self.assertTrue(
-            session.selection.select_opening_for_plan_edit(window, sync_gui_selection=True)
+            session.selection.activation.select_opening_for_plan_edit(window, sync_gui_selection=True)
         )
         session.task_panel.refresh_from_session()
         self.pump_gui_events(timeout_ms=500)
@@ -821,7 +821,7 @@ class BimPlanEditGuiOpeningsMixin:
         self.pump_gui_events()
 
         self.assertTrue(
-            session.selection.select_opening_for_plan_edit(window, sync_gui_selection=True)
+            session.selection.activation.select_opening_for_plan_edit(window, sync_gui_selection=True)
         )
         session.task_panel.refresh_from_session()
         self.pump_gui_events(timeout_ms=500)
@@ -856,7 +856,7 @@ class BimPlanEditGuiOpeningsMixin:
         self.assertAlmostEqual(original_center.z, updated_center.z, delta=1e-6)
         self.assertAlmostEqual(original_width, updated_width, delta=1e-6)
         self.assertAlmostEqual(original_height, updated_height, delta=1e-6)
-        self.assertIs(session.selection.get_selected_target_for_kind("opening"), window)
+        self.assertIs(session.selection.state.get_selected_target_for_kind("opening"), window)
         self.assertGreater(len(session._opening_overlay_trackers), 0)
         self.assertGreaterEqual(len(session._opening_handle_trackers), 1)
         self._assert_no_opening_move_preview_visuals(session)
@@ -875,7 +875,7 @@ class BimPlanEditGuiOpeningsMixin:
         self.assertAlmostEqual(original_center.z, restored_center.z, delta=1e-6)
         self.assertAlmostEqual(original_width, restored_width, delta=1e-6)
         self.assertAlmostEqual(original_height, restored_height, delta=1e-6)
-        self.assertIs(session.selection.get_selected_target_for_kind("opening"), window)
+        self.assertIs(session.selection.state.get_selected_target_for_kind("opening"), window)
         self.assertGreater(len(session._opening_overlay_trackers), 0)
         self.assertGreaterEqual(len(session._opening_handle_trackers), 1)
         self._assert_no_opening_move_preview_visuals(session)
@@ -895,7 +895,7 @@ class BimPlanEditGuiOpeningsMixin:
         self.assertAlmostEqual(updated_width, redone_width, delta=1e-6)
         self.assertAlmostEqual(updated_height, redone_height, delta=1e-6)
         self.assertEqual(target_style, session.windows.get_selected_window_style_preset())
-        self.assertIs(session.selection.get_selected_target_for_kind("opening"), window)
+        self.assertIs(session.selection.state.get_selected_target_for_kind("opening"), window)
         self.assertGreater(len(session._opening_overlay_trackers), 0)
         self.assertGreaterEqual(len(session._opening_handle_trackers), 1)
         self._assert_no_opening_move_preview_visuals(session)
@@ -920,7 +920,7 @@ class BimPlanEditGuiOpeningsMixin:
         self.pump_gui_events()
 
         self.assertTrue(
-            session.selection.select_opening_for_plan_edit(window, sync_gui_selection=True)
+            session.selection.activation.select_opening_for_plan_edit(window, sync_gui_selection=True)
         )
         session.task_panel.refresh_from_session()
         self.pump_gui_events(timeout_ms=500)
@@ -957,7 +957,7 @@ class BimPlanEditGuiOpeningsMixin:
         self.assertIsNotNone(session)
         self.pump_gui_events()
 
-        self.assertTrue(session.selection.select_wall_for_plan_edit(wall, sync_gui_selection=True))
+        self.assertTrue(session.selection.activation.select_wall_for_plan_edit(wall, sync_gui_selection=True))
         session.task_panel.refresh_from_session()
         self.pump_gui_events(timeout_ms=500)
 
@@ -998,7 +998,7 @@ class BimPlanEditGuiOpeningsMixin:
             "get_plan_target_at_position",
             return_value=("opening", door),
         ):
-            session.selection.update_hovered_plan_target((100, 100))
+            session.selection.hover.update_hovered_plan_target((100, 100))
 
         self.assertIs(session.hovered_opening, door)
         self.assertGreater(len(session._opening_hover_trackers), 0)
@@ -1026,7 +1026,7 @@ class BimPlanEditGuiOpeningsMixin:
             "get_plan_target_at_position",
             return_value=("opening", door),
         ):
-            activated = session.selection.activate_opening_target((100, 100))
+            activated = session.selection.activation.activate_opening_target((100, 100))
 
         self.assertTrue(activated)
         self._assert_selected_plan_target(session, "opening", door)
@@ -1132,14 +1132,14 @@ class BimPlanEditGuiOpeningsMixin:
         )
         self.assertEqual(combined_segments, symbol_segments + 1)
 
-        session.selection.set_hovered_opening(door)
+        session.selection.hover.set_hovered_opening(door)
         self.pump_gui_events()
         self.assertEqual(len(session._opening_hover_trackers), symbol_segments)
 
         FreeCADGui.Selection.clearSelection()
         FreeCADGui.Selection.addSelection(self.document.Name, door.Name)
         self.pump_gui_events()
-        session.selection.refresh_primary_selected_plan_target()
+        session.selection.refresh.refresh_primary_selected_plan_target()
         self.assertEqual(len(session._opening_overlay_trackers), combined_segments)
 
         session.shutdown(close_dialog=False)
@@ -1175,7 +1175,7 @@ class BimPlanEditGuiOpeningsMixin:
                 return_value=("opening", door),
             ),
         ):
-            activated = session.selection.activate_opening_target((100, 100))
+            activated = session.selection.activation.activate_opening_target((100, 100))
 
         self.assertTrue(activated)
         self._assert_selected_plan_target(session, "opening", door)
@@ -1255,7 +1255,7 @@ class BimPlanEditGuiOpeningsMixin:
         FreeCADGui.Selection.clearSelection()
         FreeCADGui.Selection.addSelection(self.document.Name, door.Name)
         self.pump_gui_events()
-        session.selection.refresh_primary_selected_plan_target()
+        session.selection.refresh.refresh_primary_selected_plan_target()
 
         handle = session.openings.get_selected_opening_edit_handles(door)[0]
         captured = {}
@@ -1405,7 +1405,7 @@ class BimPlanEditGuiOpeningsMixin:
         FreeCADGui.Selection.clearSelection()
         FreeCADGui.Selection.addSelection(self.document.Name, door.Name)
         self.pump_gui_events()
-        session.selection.refresh_primary_selected_plan_target()
+        session.selection.refresh.refresh_primary_selected_plan_target()
 
         handle = session.openings.get_selected_opening_edit_handles(door)[0]
 
@@ -1462,7 +1462,7 @@ class BimPlanEditGuiOpeningsMixin:
         FreeCADGui.Selection.clearSelection()
         FreeCADGui.Selection.addSelection(self.document.Name, door.Name)
         self.pump_gui_events()
-        session.selection.refresh_primary_selected_plan_target()
+        session.selection.refresh.refresh_primary_selected_plan_target()
 
         initial_center_u, initial_half_width = self._get_hosted_opening_center_u(door)
         handle = session.openings.get_selected_opening_edit_handles(door)[0]
@@ -1529,7 +1529,7 @@ class BimPlanEditGuiOpeningsMixin:
         FreeCADGui.Selection.clearSelection()
         FreeCADGui.Selection.addSelection(self.document.Name, door.Name)
         self.pump_gui_events()
-        session.selection.refresh_primary_selected_plan_target()
+        session.selection.refresh.refresh_primary_selected_plan_target()
 
         handle = session.openings.get_selected_opening_edit_handles(door)[0]
 
@@ -1602,7 +1602,7 @@ class BimPlanEditGuiOpeningsMixin:
         FreeCADGui.Selection.clearSelection()
         FreeCADGui.Selection.addSelection(self.document.Name, door.Name)
         self.pump_gui_events()
-        session.selection.refresh_primary_selected_plan_target()
+        session.selection.refresh.refresh_primary_selected_plan_target()
 
         handle = session.openings.get_selected_opening_edit_handles(door)[0]
         calls = []
@@ -1615,7 +1615,7 @@ class BimPlanEditGuiOpeningsMixin:
 
         self.assertEqual(len(calls), 1)
         self.assertEqual(calls[0][0], 0)
-        session.selection.set_selected_plan_target()
+        session.selection.state.set_selected_plan_target()
 
         if handle.interaction == "point_pick":
             captured = {}
@@ -1650,11 +1650,11 @@ class BimPlanEditGuiOpeningsMixin:
         self.assertIsNotNone(session)
         self.pump_gui_events()
 
-        self.assertTrue(session.selection.select_wall_for_plan_edit(wall))
+        self.assertTrue(session.selection.activation.select_wall_for_plan_edit(wall))
         self.assertGreater(len(session._selected_wall_opening_context_trackers), 0)
         self.assertEqual(len(session._opening_hover_trackers), 0)
 
-        session.selection.set_hovered_opening(door)
+        session.selection.hover.set_hovered_opening(door)
 
         self.assertIs(session.hovered_opening, door)
         self.assertGreater(len(session._opening_hover_trackers), 0)
@@ -1665,13 +1665,13 @@ class BimPlanEditGuiOpeningsMixin:
             "sync_hovered_opening_overlay",
             wraps=session.overlays.openings.sync_hovered_opening_overlay,
         ) as sync_hover:
-            session.selection.set_selected_plan_target("wall", wall)
+            session.selection.state.set_selected_plan_target("wall", wall)
 
         self.assertGreater(sync_hover.call_count, 0)
         self.assertGreater(len(session._opening_hover_trackers), 0)
         self.assertEqual(len(session._selected_wall_opening_context_trackers), 0)
 
-        session.selection.set_hovered_opening(None)
+        session.selection.hover.set_hovered_opening(None)
 
         self.assertIsNone(session.hovered_opening)
         self.assertEqual(len(session._opening_hover_trackers), 0)
@@ -1698,7 +1698,7 @@ class BimPlanEditGuiOpeningsMixin:
         FreeCADGui.Selection.clearSelection()
         FreeCADGui.Selection.addSelection(self.document.Name, door.Name)
         self.pump_gui_events()
-        session.selection.refresh_primary_selected_plan_target()
+        session.selection.refresh.refresh_primary_selected_plan_target()
 
         session.openings.activate_opening_handle(door, 1)
         self.pump_gui_events()
@@ -1726,7 +1726,7 @@ class BimPlanEditGuiOpeningsMixin:
             "get_plan_target_at_position",
             return_value=("opening", door),
         ):
-            activated = session.selection.activate_opening_target((100, 100))
+            activated = session.selection.activation.activate_opening_target((100, 100))
 
         self.assertTrue(activated)
         self.assertEqual([obj.Name for obj in FreeCADGui.Selection.getSelection()], [door.Name])

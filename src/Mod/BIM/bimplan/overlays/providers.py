@@ -109,7 +109,7 @@ def sync_hovered_provider_overlay(session):
         provider_obj = getattr(session, "hovered_provider", None)
         if provider_obj is None:
             return
-        if session.selection.is_selected_plan_target("provider", provider_obj):
+        if session.selection.state.is_selected_plan_target("provider", provider_obj):
             return
         try:
             import draftguitools.gui_trackers as DraftTrackers
@@ -249,7 +249,7 @@ def get_selected_provider_handle_specs(session, provider_obj):
         from draftutils import params
     except ImportError:
         return []
-    if not session.selection.is_selected_plan_target("provider", provider_obj):
+    if not session.selection.state.is_selected_plan_target("provider", provider_obj):
         return []
     marker_size = session.viewport.scaled_marker_size(params.get_param_view("MarkerSize"))
     specs = []

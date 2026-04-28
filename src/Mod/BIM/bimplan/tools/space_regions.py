@@ -210,10 +210,10 @@ def _start_space_region_pick_mode(session, boundaries, candidates, seed_space=No
         seed_space=seed_space,
     )
     session.overlays.walls.clear_wall_grips()
-    session.selection.clear_hovered_plan_targets(
+    session.selection.hover.clear_hovered_plan_targets(
         kinds=plan_target_kinds.SPACE_EDIT_CLEAR_HOVERED_KINDS
     )
-    session.selection.refresh_primary_selected_plan_target()
+    session.selection.refresh.refresh_primary_selected_plan_target()
     FreeCAD.Console.PrintMessage(
         translate(
             "BIM_PlanEdit",
@@ -354,7 +354,7 @@ def pick_space_region_candidate(session, mouse_pos, radius_px=10):
     best_distance_sq = None
     for candidate in candidates:
         for start, end in get_space_region_candidate_segments(session, candidate):
-            distance_sq = session.selection.get_screen_distance_sq_to_segment(mouse_pos, start, end)
+            distance_sq = session.selection.picking.get_screen_distance_sq_to_segment(mouse_pos, start, end)
             if distance_sq is None or distance_sq > radius_sq:
                 continue
             if best_distance_sq is None or distance_sq < best_distance_sq:
@@ -445,7 +445,7 @@ def cancel_space_region_pick(session, refresh=True):
     if session.current_tool == "Pick Space Region":
         session.current_tool = "Select"
     if was_active:
-        session.selection.refresh_primary_selected_plan_target()
+        session.selection.refresh.refresh_primary_selected_plan_target()
     elif refresh:
         session.task_panels.refresh_task_panel_status()
     return was_active
@@ -557,7 +557,7 @@ def create_space_from_current_selection(session):
 
 
 def space_has_valid_geometry(session, space):
-    if not session.selection.is_plan_space_object(space):
+    if not session.selection.targets.is_plan_space_object(space):
         return False
     try:
         shape = getattr(space, "Shape", None)

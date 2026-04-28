@@ -167,12 +167,12 @@ def _set_wall_edit_start_state(session, wall, endpoints, mode):
     state = _wall_edit_state(session)
     session.wall_relations.clear_plan_relation_status()
     session.current_tool = "Move Wall" if mode == "Move" else f"Stretch {mode}"
-    session.selection.set_hovered_wall(None)
-    session.selection.set_hovered_opening(None)
-    session.selection.set_hovered_symbol(None)
-    session.selection.set_hovered_provider(None)
-    if not session.selection.is_selected_plan_target("wall", wall):
-        session.selection.set_selected_plan_target("wall", wall)
+    session.selection.hover.set_hovered_wall(None)
+    session.selection.hover.set_hovered_opening(None)
+    session.selection.hover.set_hovered_symbol(None)
+    session.selection.hover.set_hovered_provider(None)
+    if not session.selection.state.is_selected_plan_target("wall", wall):
+        session.selection.state.set_selected_plan_target("wall", wall)
     session.overlays.walls.clear_selected_wall_overlay()
     session.overlays.openings.clear_selected_wall_opening_context_overlay()
     state.wall_edit_modal_active = True
@@ -438,10 +438,10 @@ def _apply_wall_edit_transaction(session, wall, proxy, new_points, transaction_n
 
 def _finalize_wall_edit_commit(session, wall):
     session.openings.refresh_wall_hosted_opening_footprints(wall)
-    session.selection.set_gui_selection_object(wall)
+    session.selection.sync.set_gui_selection_object(wall)
     session.current_tool = "Select"
     session.lifecycle.cancel_pending_edit()
-    session.selection.set_selected_plan_target("wall", wall, pending_restore=True)
+    session.selection.state.set_selected_plan_target("wall", wall, pending_restore=True)
     session.wall_relations.update_wall_relation_status(wall)
     session.overlays.walls.sync_selected_wall_overlay()
     session.overlays.walls.sync_wall_grips()
@@ -489,8 +489,8 @@ def activate_wall_grip_now(session, grip_index, wall=None):
         if session.lifecycle_state.tearing_down or session.current_tool != "Select" or not wall:
             return
         with session.performance.plan_perf_trace_span("activate_wall_grip_set_target"):
-            if not session.selection.is_selected_plan_target("wall", wall):
-                session.selection.set_selected_plan_target("wall", wall)
+            if not session.selection.state.is_selected_plan_target("wall", wall):
+                session.selection.state.set_selected_plan_target("wall", wall)
         with session.performance.plan_perf_trace_span("activate_wall_grip_start_edit"):
             start_wall_grip_edit(session, grip_index)
 

@@ -93,7 +93,7 @@ class PlanStatusTextAPI:
 def get_plan_selection_summary_text(session):
     if session.current_tool != plan_runtime_tools.PlanTool.SELECT:
         return ""
-    targets = session.selection.get_selected_plan_targets()
+    targets = session.selection.state.get_selected_plan_targets()
     preflight_text = session.spaces.format_space_preflight_text(
         session.spaces.build_space_preflight_report(targets)
     )
@@ -291,7 +291,7 @@ def format_plan_target_selection_state(session, kind, obj):
 
 def get_provider_selected_objects(session):
     return tuple(
-        session.selection.normalize_gui_object_selection(
+        session.selection.sync.normalize_gui_object_selection(
             session.provider_transient_state.provider_selected_objects
         )
     )
@@ -414,7 +414,7 @@ def _get_direct_tool_status_chip_text(
         parent_space = session.spaces.get_plan_region_parent_space()
         context = (
             translate("BIM_PlanEdit", "Parent space: {label}").format(label=parent_space.Label)
-            if session.selection.is_plan_space_object(parent_space)
+            if session.selection.targets.is_plan_space_object(parent_space)
             else translate("BIM_PlanEdit", "Plan region")
         )
         action = translate(
@@ -472,7 +472,7 @@ def _get_default_status_chip_action(
 
 def get_status_chip_text(session):
     title = _format_status_chip_title(session.current_tool)
-    selected_kind, selected_obj = session.selection.get_selected_plan_target()
+    selected_kind, selected_obj = session.selection.state.get_selected_plan_target()
     selected_context = format_plan_target_selection_state(session, selected_kind, selected_obj)
     provider_context = format_provider_selected_object_state(session)
     provider_action = format_provider_selected_object_help(session)
@@ -535,7 +535,7 @@ def make_input_hint(message, *sequences):
 
 
 def _get_select_input_hint_specs(session, ui):
-    selected_kind, selected_obj = session.selection.get_selected_plan_target()
+    selected_kind, selected_obj = session.selection.state.get_selected_plan_target()
     additive_hint = (
         translate("BIM_PlanEdit", "%1 add or remove from selection"),
         (ui.KeyControl, ui.MouseLeft),

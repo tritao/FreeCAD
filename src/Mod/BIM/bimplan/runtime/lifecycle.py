@@ -124,7 +124,7 @@ def discard_runtime_references(session):
     viewport_state.saved_camera_type = None
     viewport_state.working_plane = None
     viewport_state.interaction_plane = None
-    session.selection.set_selected_plan_target_state()
+    session.selection.state.set_selected_plan_target_state()
     provider_transient_state.provider_selected_objects = []
     provider_point_state.provider_point_host_target = None
     provider_point_state.provider_point_host_source = ""
@@ -244,7 +244,7 @@ def clear_transient_visuals(
 
 
 def detach_runtime_observers(session):
-    session.selection.detach_selection_observer()
+    session.selection.sync.detach_selection_observer()
     session.document_visuals.detach_document_observer()
     session.viewport.unregister_edit_callbacks()
 
@@ -276,8 +276,6 @@ def _resolve_action_callable(session, method_name):
         "wall_relations.clear_plan_relation_status": "_clear_plan_relation_status",
         "wall_create.cancel_rect_wall_tool": "_cancel_rect_wall_tool",
         "wall_create.has_active_rect_wall_tool": "_has_active_rect_wall_tool",
-        "selection.set_selected_plan_target": "_set_selected_plan_target",
-        "selection.clear_hovered_plan_targets": "_clear_hovered_plan_targets",
         "wall_relations.cancel_join_tool": "_cancel_join_tool",
     }
     compat_name = compat_action_names.get(str(method_name or ""))
@@ -493,9 +491,9 @@ def _activate_tool_with_profile(session, profile):
     if profile.clear_plan_relation_status:
         _resolve_action_callable(session, "wall_relations.clear_plan_relation_status")()
     if profile.clear_selected_target:
-        _resolve_action_callable(session, "selection.set_selected_plan_target")()
+        _resolve_action_callable(session, "selection.state.set_selected_plan_target")()
     if profile.clear_hovered_targets:
-        _resolve_action_callable(session, "selection.clear_hovered_plan_targets")()
+        _resolve_action_callable(session, "selection.hover.clear_hovered_plan_targets")()
     if profile.clear_selection_kinds:
         clear_selection_visuals(
             session,

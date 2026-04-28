@@ -243,7 +243,7 @@ def plan_pick_debug_scope(session, name, **fields):
     try:
         yield None
     finally:
-        selected_after = session.selection.get_selected_plan_target()
+        selected_after = session.selection.state.get_selected_plan_target()
         plan_pick_debug_event(
             session,
             f"{name}_end",

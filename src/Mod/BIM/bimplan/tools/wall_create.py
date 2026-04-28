@@ -68,13 +68,13 @@ def activate_wall_tool(session):
     session.wall_edit.cancel_wall_edit()
     session.lifecycle.cancel_pending_edit()
     session.wall_relations.clear_plan_relation_status()
-    session.selection.set_selected_plan_target()
+    session.selection.state.set_selected_plan_target()
     session.overlays.walls.clear_wall_grips()
     session.overlays.walls.clear_selected_wall_overlay()
     session.overlays.openings.clear_selected_wall_opening_context_overlay()
     session.overlays.spaces.clear_selected_space_overlay()
     session.overlays.spaces.clear_secondary_selected_overlays()
-    session.selection.set_gui_selection([])
+    session.selection.sync.set_gui_selection([])
     session.lifecycle.start_embedded_tool(
         "Wall",
         BimWall.Arch_Wall(),
@@ -93,7 +93,7 @@ def activate_rect_wall_tool(session):
     session.wall_edit.cancel_wall_edit()
     session.lifecycle.cancel_pending_edit()
     session.wall_relations.clear_plan_relation_status()
-    session.selection.set_selected_plan_target()
+    session.selection.state.set_selected_plan_target()
     session.overlays.walls.clear_wall_grips()
     session.overlays.walls.clear_selected_wall_overlay()
     session.overlays.openings.clear_selected_wall_opening_context_overlay()
@@ -276,11 +276,11 @@ def handle_rect_wall_point(session, point=None, obj=None):
         return
 
     try:
-        session.selection.set_gui_selection(walls)
+        session.selection.sync.set_gui_selection(walls)
     except Exception:
         pass
 
     session.wall_create.cancel_rect_wall_tool(refresh=False)
     session.current_tool = "Select"
-    session.selection.refresh_primary_selected_plan_target()
+    session.selection.refresh.refresh_primary_selected_plan_target()
     session.task_panels.refresh_task_panel_status()

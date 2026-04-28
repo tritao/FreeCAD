@@ -71,17 +71,17 @@ class PlanWindowsAPI:
 
     def can_apply_window_style_preset(self, window=None):
         if window is None:
-            window = self.session.selection.get_selected_plan_target_object("opening")
+            window = self.session.selection.state.get_selected_plan_target_object("opening")
         return can_edit_window_style_preset(window)
 
     def can_edit_window_width(self, window=None):
         if window is None:
-            window = self.session.selection.get_selected_plan_target_object("opening")
+            window = self.session.selection.state.get_selected_plan_target_object("opening")
         return can_edit_window_width(window)
 
     def can_edit_window_height(self, window=None):
         if window is None:
-            window = self.session.selection.get_selected_plan_target_object("opening")
+            window = self.session.selection.state.get_selected_plan_target_object("opening")
         return can_edit_window_height(window)
 
     def can_apply_selected_window_style_preset(self):
@@ -275,10 +275,10 @@ def can_place_window(session):
 
 def get_window_host_wall(session):
     wall = plan_selection.get_selected_plan_target_object(session, "wall")
-    if session.selection.is_plan_selectable_wall(wall):
+    if session.selection.targets.is_plan_selectable_wall(wall):
         return wall
     wall = getattr(session, "hovered_wall", None)
-    if session.selection.is_plan_selectable_wall(wall):
+    if session.selection.targets.is_plan_selectable_wall(wall):
         return wall
     return None
 
@@ -292,8 +292,8 @@ def activate_window_tool(session):
         )
         return False
 
-    session.selection.set_selected_plan_target("wall", wall)
-    session.selection.set_gui_selection_object(wall)
+    session.selection.state.set_selected_plan_target("wall", wall)
+    session.selection.sync.set_gui_selection_object(wall)
     creation_preview_state.window_host_wall = wall
     session.current_tool = "Window"
     FreeCAD.activeDraftCommand = session
@@ -431,13 +431,13 @@ def _get_opening_host_wall(session, opening):
     if not session.openings.is_hosted_opening_object(opening):
         return None
     for host in getattr(opening, "Hosts", None) or ():
-        if session.selection.is_plan_selectable_wall(host):
+        if session.selection.targets.is_plan_selectable_wall(host):
             return host
     return None
 
 
 def _get_wall_from_target(session, target_kind, target_obj):
-    if target_kind == "wall" and session.selection.is_plan_selectable_wall(target_obj):
+    if target_kind == "wall" and session.selection.targets.is_plan_selectable_wall(target_obj):
         return target_obj
     if target_kind == "opening":
         return _get_opening_host_wall(session, target_obj)
@@ -447,11 +447,11 @@ def _get_wall_from_target(session, target_kind, target_obj):
 def _get_wall_from_snap_object(session, snap_object):
     if snap_object is None:
         return None
-    target_kind, target_obj = session.selection.get_plan_target_for_object(snap_object)
+    target_kind, target_obj = session.selection.targets.get_plan_target_for_object(snap_object)
     wall = _get_wall_from_target(session, target_kind, target_obj)
     if wall is not None:
         return wall
-    if session.selection.is_plan_selectable_wall(snap_object):
+    if session.selection.targets.is_plan_selectable_wall(snap_object):
         return snap_object
     wall = _get_opening_host_wall(session, snap_object)
     if wall is not None:
@@ -467,7 +467,7 @@ def _get_wall_from_snap_object(session, snap_object):
     except Exception:
         pass
     for candidate in linked_objects:
-        target_kind, target_obj = session.selection.get_plan_target_for_object(candidate)
+        target_kind, target_obj = session.selection.targets.get_plan_target_for_object(candidate)
         wall = _get_wall_from_target(session, target_kind, target_obj)
         if wall is not None:
             return wall
@@ -485,7 +485,7 @@ def resolve_window_host_wall(session, snap_object=None, snap_info=None):
     if wall is not None:
         return wall
     wall = session.creation_preview_state.window_host_wall
-    if session.selection.is_plan_selectable_wall(wall):
+    if session.selection.targets.is_plan_selectable_wall(wall):
         return wall
     return get_window_host_wall(session)
 
@@ -708,7 +708,7 @@ def handle_window_tool_point(session, point=None, obj=None):
         cancel_window_tool(session)
         return
     wall = resolve_window_host_wall(session, snap_object=obj)
-    if not session.selection.is_plan_selectable_wall(wall):
+    if not session.selection.targets.is_plan_selectable_wall(wall):
         cancel_window_tool(session)
         FreeCAD.Console.PrintWarning(
             translate("BIM_PlanEdit", "Select or hover a wall before placing a window.\n")

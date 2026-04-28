@@ -726,7 +726,7 @@ def set_plan_provider_overlay_mode(session, mode):
     session._provider_overlay_mode = normalized
     session._provider_overlay_state = None
     invalidate_plan_provider_document_cache(session)
-    session.selection.clear_hidden_provider_preselection()
+    session.selection.refresh.clear_hidden_provider_preselection()
     session.overlays.queue_plan_overlay_visual_refresh(
         plan_document_visuals.PLAN_VISUAL_PROVIDER_OVERLAYS
     )
@@ -914,7 +914,7 @@ def format_plan_provider_target_help(session, obj) -> str:
     role = get_plan_provider_target_role_key(session, obj).replace("_", " ").lower()
     has_handles = False
     try:
-        has_handles = bool(session.selection.is_selected_plan_target("provider", obj)) and bool(
+        has_handles = bool(session.selection.state.is_selected_plan_target("provider", obj)) and bool(
             tuple(plan_provider_edit.get_selected_provider_edit_handles(session, obj) or ())
         )
     except Exception:
@@ -1033,12 +1033,12 @@ def _get_plan_semantic_record_fields(session, semantic_obj, target_kind):
         "semantic_preset": session.visibility.get_plan_text_property(
             semantic_obj, ("SemanticPreset",)
         ),
-        "host_ref": session.selection.get_plan_host_ref(semantic_obj),
+        "host_ref": session.selection.targets.get_plan_host_ref(semantic_obj),
         "mount_height_mm": session.visibility.get_plan_float_property(
             semantic_obj,
             ("MountHeight", "MEPMountHeight", "PlumbingMountHeight"),
         ),
-        "requirement_tags": session.selection.normalize_plan_requirement_tags(
+        "requirement_tags": session.selection.targets.normalize_plan_requirement_tags(
             getattr(semantic_obj, "RequirementTags", None)
         ),
     }
@@ -1706,7 +1706,7 @@ def _run_plan_provider_action(
 
 
 def _finalize_plan_provider_action(session):
-    session.selection.refresh_primary_selected_plan_target()
+    session.selection.refresh.refresh_primary_selected_plan_target()
     session.document_visuals.invalidate_document_dependent_plan_visuals()
     session.task_panels.refresh_task_panel_status()
     session.viewport.focus_plan_view()

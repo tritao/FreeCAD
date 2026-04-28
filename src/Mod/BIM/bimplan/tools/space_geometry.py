@@ -43,7 +43,7 @@ def get_existing_space_region_filter_spaces(session, exclude=None):
         if not name or name in seen:
             continue
         seen.add(name)
-        if name == exclude_name or not session.selection.is_plan_space_object(semantic_obj):
+        if name == exclude_name or not session.selection.targets.is_plan_space_object(semantic_obj):
             continue
         if active_storey_name is not None:
             storeys = session.visibility.get_object_storeys(semantic_obj)

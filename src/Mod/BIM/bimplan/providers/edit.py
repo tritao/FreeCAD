@@ -106,8 +106,8 @@ def activate_provider_handle_now(session, provider_obj, handle_index):
     if handle_index < 0 or handle_index >= len(handles):
         return
     handle = handles[handle_index]
-    session.selection.set_selected_plan_target("provider", provider_obj)
-    session.selection.set_gui_selection_object(provider_obj)
+    session.selection.state.set_selected_plan_target("provider", provider_obj)
+    session.selection.sync.set_gui_selection_object(provider_obj)
     session.overlays.walls.clear_wall_grips()
     if handle.interaction == PlanToolInteraction.POINT:
         start_provider_handle_point_pick(session, provider_obj, handle_index, handle)
@@ -141,12 +141,12 @@ def start_provider_handle_point_pick(session, provider_obj, handle_index, handle
     if start_point is None:
         return
     session.current_tool = "Move Provider"
-    session.selection.set_hovered_wall(None)
-    session.selection.set_hovered_opening(None)
-    session.selection.set_hovered_symbol(None)
-    session.selection.set_hovered_provider(None)
-    session.selection.set_hovered_space(None)
-    session.selection.set_hovered_region(None)
+    session.selection.hover.set_hovered_wall(None)
+    session.selection.hover.set_hovered_opening(None)
+    session.selection.hover.set_hovered_symbol(None)
+    session.selection.hover.set_hovered_provider(None)
+    session.selection.hover.set_hovered_space(None)
+    session.selection.hover.set_hovered_region(None)
     session.overlays.spaces.sync_secondary_selected_overlays()
     interaction_state = session.interaction_state
     interaction_state.edit_provider = provider_obj
@@ -268,8 +268,8 @@ def cancel_provider_handle_point_pick(session):
     if provider_obj is not None:
         restore_selected_provider(session, provider_obj)
         return
-    session.selection.set_gui_selection([])
-    session.selection.refresh_primary_selected_plan_target()
+    session.selection.sync.set_gui_selection([])
+    session.selection.refresh.refresh_primary_selected_plan_target()
 
 
 def restore_selected_provider(session, provider_obj):
@@ -277,10 +277,10 @@ def restore_selected_provider(session, provider_obj):
     if provider_obj is not None and plan_provider_runtime.is_plan_provider_target_object(
         session, provider_obj
     ):
-        session.selection.set_gui_selection_object(provider_obj)
+        session.selection.sync.set_gui_selection_object(provider_obj)
     else:
-        session.selection.set_gui_selection([])
-    session.selection.refresh_primary_selected_plan_target()
+        session.selection.sync.set_gui_selection([])
+    session.selection.refresh.refresh_primary_selected_plan_target()
 
 
 def queue_restore_selected_provider(session, provider_obj):
@@ -439,7 +439,7 @@ def _build_provider_handle_payload(
     snap_target = plan_target_kinds.make_plan_target_ref()
     if snap_object is not None:
         try:
-            snap_target = session.selection.get_plan_target_for_object(snap_object)
+            snap_target = session.selection.targets.get_plan_target_for_object(snap_object)
         except Exception:
             snap_target = plan_target_kinds.make_plan_target_ref()
     snap_component = str(snap_info.get("Component", "") or "").strip()
@@ -450,9 +450,9 @@ def _build_provider_handle_payload(
     snap_object_name = str(snap_info.get("Object", "") or "").strip()
     if not snap_object_name and snap_object is not None:
         snap_object_name = str(getattr(snap_object, "Name", "") or "")
-    selected_target = session.selection.get_selected_plan_target()
-    selected_targets = session.selection.get_selected_plan_targets()
-    hovered_target = session.selection.get_hovered_plan_target()
+    selected_target = session.selection.state.get_selected_plan_target()
+    selected_targets = session.selection.state.get_selected_plan_targets()
+    hovered_target = session.selection.hover.get_hovered_plan_target()
     host_target, host_source = _get_provider_handle_payload_host_target(
         session,
         handle,

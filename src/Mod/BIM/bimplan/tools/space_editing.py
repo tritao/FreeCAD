@@ -29,7 +29,7 @@ def _apply_space_edit(session, title, apply_change):
 
 def set_selected_space_label(session, label):
     space = plan_selection.get_selected_plan_target_object(session, "space")
-    if not session.selection.is_plan_space_object(space):
+    if not session.selection.targets.is_plan_space_object(space):
         return False
     label = str(label or "").strip()
     if not label or label == space.Label:
@@ -43,7 +43,7 @@ def set_selected_space_label(session, label):
 
 def set_selected_space_type(session, space_type):
     space = plan_selection.get_selected_plan_target_object(session, "space")
-    if not session.selection.is_plan_space_object(space):
+    if not session.selection.targets.is_plan_space_object(space):
         return False
     space_type = str(space_type or "")
     if not space_type or space_type == getattr(space, "SpaceType", ""):
@@ -57,7 +57,7 @@ def set_selected_space_type(session, space_type):
 
 def set_selected_region_label(session, label):
     region = plan_selection.get_selected_plan_target_object(session, "region")
-    if not session.selection.is_plan_region_object(region):
+    if not session.selection.targets.is_plan_region_object(region):
         return False
     label = str(label or "").strip()
     if not label or label == getattr(region, "Label", ""):
@@ -71,7 +71,7 @@ def set_selected_region_label(session, label):
 
 def set_selected_region_scheme(session, scheme):
     region = plan_selection.get_selected_plan_target_object(session, "region")
-    if not session.selection.is_plan_region_object(region):
+    if not session.selection.targets.is_plan_region_object(region):
         return False
     scheme = str(scheme or "").strip()
     if scheme == str(getattr(region, "Scheme", "") or ""):
@@ -85,7 +85,7 @@ def set_selected_region_scheme(session, scheme):
 
 def set_selected_region_type(session, region_type):
     region = plan_selection.get_selected_plan_target_object(session, "region")
-    if not session.selection.is_plan_region_object(region):
+    if not session.selection.targets.is_plan_region_object(region):
         return False
     region_type = str(region_type or "").strip()
     if region_type == str(getattr(region, "RegionType", "") or ""):
@@ -99,10 +99,10 @@ def set_selected_region_type(session, region_type):
 
 def set_selected_region_parent_space(session, space):
     region = plan_selection.get_selected_plan_target_object(session, "region")
-    if not session.selection.is_plan_region_object(region):
+    if not session.selection.targets.is_plan_region_object(region):
         return False
     space = session.visibility.get_plan_semantic_object(space) if space else None
-    if space is not None and not session.selection.is_plan_space_object(space):
+    if space is not None and not session.selection.targets.is_plan_space_object(space):
         return False
 
     current_parent = getattr(region, "ParentSpace", None)
@@ -120,7 +120,7 @@ def set_selected_region_parent_space(session, space):
 
 
 def set_space_boundaries(session, space, boundaries):
-    if not session.selection.is_plan_space_object(space):
+    if not session.selection.targets.is_plan_space_object(space):
         return False
     import ArchSpace
 
@@ -145,7 +145,7 @@ def set_space_boundaries(session, space, boundaries):
 
 def add_boundaries_to_selected_space(session):
     space = plan_selection.get_selected_plan_target_object(session, "space")
-    if not session.selection.is_plan_space_object(space):
+    if not session.selection.targets.is_plan_space_object(space):
         return False
     existing = plan_space_boundaries.get_space_boundary_entries(session, space)
     additions = plan_space_boundaries.get_selected_space_boundary_links(
@@ -166,7 +166,7 @@ def add_boundaries_to_selected_space(session):
 
 def remove_selected_space_boundaries(session, row_indexes=None):
     space = plan_selection.get_selected_plan_target_object(session, "space")
-    if not session.selection.is_plan_space_object(space):
+    if not session.selection.targets.is_plan_space_object(space):
         return False
     existing = plan_space_boundaries.get_space_boundary_entries(session, space)
     if not existing:
@@ -226,10 +226,10 @@ def restore_selected_semantic_target(session, kind, obj, *, clear_edit_space=Fal
     if clear_edit_space:
         session.interaction_state.edit_space = None
     if obj:
-        session.selection.set_selected_plan_target(kind, obj, pending_restore=True)
-        session.selection.set_gui_selection_object(obj)
+        session.selection.state.set_selected_plan_target(kind, obj, pending_restore=True)
+        session.selection.sync.set_gui_selection_object(obj)
     else:
-        session.selection.set_selected_plan_target()
+        session.selection.state.set_selected_plan_target()
     sync_method()
     session.task_panels.refresh_task_panel_status()
 

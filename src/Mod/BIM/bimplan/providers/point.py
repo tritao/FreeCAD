@@ -120,12 +120,12 @@ def start_plan_provider_point_tool(session, tool):
     session.wall_edit.cancel_wall_edit(refresh=False)
     session.lifecycle.cancel_pending_edit()
     session.wall_relations.clear_plan_relation_status()
-    session.selection.set_hovered_wall(None)
-    session.selection.set_hovered_opening(None)
-    session.selection.set_hovered_symbol(None)
-    session.selection.set_hovered_provider(None)
-    session.selection.set_hovered_space(None)
-    session.selection.set_hovered_region(None)
+    session.selection.hover.set_hovered_wall(None)
+    session.selection.hover.set_hovered_opening(None)
+    session.selection.hover.set_hovered_symbol(None)
+    session.selection.hover.set_hovered_provider(None)
+    session.selection.hover.set_hovered_space(None)
+    session.selection.hover.set_hovered_region(None)
     session.overlays.walls.clear_wall_grips()
     session.overlays.walls.clear_selected_wall_overlay()
     session.overlays.openings.clear_selected_wall_opening_context_overlay()
@@ -206,13 +206,13 @@ def update_provider_point_tool_preview(session, point=None, obj=None):
     snap_object = resolve_provider_point_snap_object(session, obj, snap_info)
     snap_target = plan_target_kinds.make_plan_target_ref()
     if snap_object is not None:
-        snap_target = session.selection.get_plan_target_for_object(snap_object)
+        snap_target = session.selection.targets.get_plan_target_for_object(snap_object)
     host_target, host_source = get_provider_point_payload_host_target(
         session,
         snap_target=snap_target,
-        selected_target=session.selection.get_selected_plan_target(),
-        selected_targets=session.selection.get_selected_plan_targets(),
-        hovered_target=session.selection.get_hovered_plan_target(),
+        selected_target=session.selection.state.get_selected_plan_target(),
+        selected_targets=session.selection.state.get_selected_plan_targets(),
+        hovered_target=session.selection.hover.get_hovered_plan_target(),
     )
     host_kind, host_obj = plan_host_targets.unpack_provider_host_target_ref(host_target)
     placement_point = (
@@ -263,19 +263,19 @@ def normalize_provider_point_host_target(session, target):
     if not target:
         return plan_host_targets.make_provider_host_target_ref()
     target_ref = plan_target_kinds.coerce_plan_target_ref(target)
-    if target_ref.kind == "wall" and session.selection.is_plan_selectable_wall(target_ref.obj):
+    if target_ref.kind == "wall" and session.selection.targets.is_plan_selectable_wall(target_ref.obj):
         return plan_host_targets.make_provider_host_target_ref("wall", target_ref.obj)
     return plan_host_targets.make_provider_host_target_ref()
 
 
 def get_provider_point_context_host_state(session):
     selected_target = normalize_provider_point_host_target(
-        session, session.selection.get_selected_plan_target()
+        session, session.selection.state.get_selected_plan_target()
     )
     if selected_target.obj is not None:
         return selected_target, "selected"
     hovered_target = normalize_provider_point_host_target(
-        session, session.selection.get_hovered_plan_target()
+        session, session.selection.hover.get_hovered_plan_target()
     )
     if hovered_target.obj is not None:
         return hovered_target, "hovered"
@@ -359,7 +359,7 @@ def build_provider_point_tool_payload(
 ):
     snap_target = plan_target_kinds.make_plan_target_ref()
     if snap_object is not None:
-        snap_target = session.selection.get_plan_target_for_object(snap_object)
+        snap_target = session.selection.targets.get_plan_target_for_object(snap_object)
     snap_component = str(snap_info.get("Component", "") or "").strip()
     snap_subname = str(snap_info.get("SubName", "") or snap_component).strip()
     snap_document_name = str(snap_info.get("Document", "") or "").strip()
@@ -368,9 +368,9 @@ def build_provider_point_tool_payload(
     snap_object_name = str(snap_info.get("Object", "") or "").strip()
     if not snap_object_name and snap_object is not None:
         snap_object_name = str(getattr(snap_object, "Name", "") or "")
-    selected_target = session.selection.get_selected_plan_target()
-    selected_targets = session.selection.get_selected_plan_targets()
-    hovered_target = session.selection.get_hovered_plan_target()
+    selected_target = session.selection.state.get_selected_plan_target()
+    selected_targets = session.selection.state.get_selected_plan_targets()
+    hovered_target = session.selection.hover.get_hovered_plan_target()
     host_target, host_source = get_provider_point_payload_host_target(
         session,
         snap_target=snap_target,
