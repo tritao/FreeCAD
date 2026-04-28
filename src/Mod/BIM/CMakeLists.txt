@@ -249,6 +249,7 @@ SET(bimplan_SRCS
     bimplan/selection/hover_picking.py
     bimplan/selection/picking.py
     bimplan/selection/picking_debug.py
+    bimplan/selection/picking_geometry.py
     bimplan/selection/provider_overlay_picking.py
     bimplan/selection/selection.py
     bimplan/selection/service_common.py
