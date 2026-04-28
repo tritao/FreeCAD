@@ -594,29 +594,8 @@ _PLAN_EDIT_SESSION_STATE_PROPERTIES = (
         "_ensure_opening_transient_state",
         (
             ("_opening_handle_trackers", "opening_handle_trackers", _coerce_list),
-            ("_opening_handle_tracker_pool", "opening_handle_tracker_pool", _coerce_list),
-            (
-                "_opening_handle_tracker_pool_queued",
-                "opening_handle_tracker_pool_queued",
-                _coerce_bool,
-            ),
-            (
-                "_selected_opening_handle_render_state",
-                "selected_opening_handle_render_state",
-                _coerce_identity,
-            ),
-            (
-                "_selected_opening_hard_refresh_queued",
-                "selected_opening_hard_refresh_queued",
-                _coerce_bool,
-            ),
-            ("_opening_host_recompute_queued", "opening_host_recompute_queued", _coerce_bool),
-            ("_opening_host_recompute_running", "opening_host_recompute_running", _coerce_bool),
             ("_opening_move_preview_trackers", "opening_move_preview_trackers", _coerce_list),
-            ("_symbol_edit_preview_trackers", "symbol_edit_preview_trackers", _coerce_list),
-            ("_opening_move_snap_profile_pushed", "opening_move_snap_profile_pushed", _coerce_bool),
             ("_edit_opening_move_anchor", "edit_opening_move_anchor", _make_str_coercer("center")),
-            ("_edit_opening_move_raw_point", "edit_opening_move_raw_point", _coerce_identity),
         ),
     ),
     (
