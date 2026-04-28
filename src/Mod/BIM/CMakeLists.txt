@@ -244,6 +244,7 @@ SET(bimplan_SRCS
     bimplan/runtime/view_properties.py
     bimplan/selection/__init__.py
     bimplan/selection/activation.py
+    bimplan/selection/area_picking.py
     bimplan/selection/edit_nodes.py
     bimplan/selection/gui_sync.py
     bimplan/selection/hover_picking.py
