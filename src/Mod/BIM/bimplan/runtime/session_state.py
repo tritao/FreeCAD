@@ -568,15 +568,6 @@ _PLAN_EDIT_SESSION_STATE_PROPERTIES = (
         ),
     ),
     (
-        "_ensure_hover_pick_state",
-        (
-            ("_hover_pick_dirty", "dirty", _coerce_bool),
-            ("_hover_pick_last_time", "last_time", _coerce_float),
-            ("_hover_pick_last_mouse_pos", "last_mouse_pos", _coerce_identity),
-            ("_plan_hover_pick_cache_queued", "cache_queued", _coerce_bool),
-        ),
-    ),
-    (
         "_ensure_overlay_refresh_state",
         (
             ("_overlay_refresh_queued", "overlay_refresh_queued", _coerce_bool),

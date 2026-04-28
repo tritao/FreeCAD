@@ -2795,7 +2795,7 @@ class BimPlanEditGuiWallsMixin:
         self.pump_gui_events()
 
         session.selection.hover.set_hovered_wall(wall)
-        session._hover_pick_last_mouse_pos = (250.0, 250.0)
+        session.hover_pick_state.last_mouse_pos = (250.0, 250.0)
         self.assertIs(session.hovered_wall, wall)
 
         with (
@@ -2900,7 +2900,7 @@ class BimPlanEditGuiWallsMixin:
         self.pump_gui_events()
 
         session.selection.hover.set_hovered_wall(stale_wall)
-        session._hover_pick_dirty = True
+        session.hover_pick_state.dirty = True
 
         with (
             patch.object(session.picking, "pick_edit_node", return_value=None),
