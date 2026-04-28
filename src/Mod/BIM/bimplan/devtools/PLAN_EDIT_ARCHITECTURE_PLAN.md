@@ -500,6 +500,7 @@ Current progress:
 - Private document-visual compatibility aliases are removed; visual update deferral uses `document_visual_state`.
 - Unused private interaction compatibility aliases are removed; embedded host/name and space editing use `interaction_state`.
 - Unused private region-pick edit-space compatibility alias is removed; region picking uses `space_region_pick_state`.
+- Unused private provider render-state compatibility aliases are removed; provider overlays use `provider_transient_state`.
 
 Steps:
 
