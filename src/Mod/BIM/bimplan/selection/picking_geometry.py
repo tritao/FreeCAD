@@ -79,3 +79,21 @@ def get_screen_distance_sq_to_projected_segment(cursor_xy, start_xy, end_xy):
         return offset_x * offset_x + offset_y * offset_y
     except Exception:
         return None
+
+
+def screen_bounds_intersects_pick_radius(bounds, mouse_pos, radius_px):
+    if bounds is None or mouse_pos is None:
+        return True
+    try:
+        cursor_x = float(mouse_pos[0])
+        cursor_y = float(mouse_pos[1])
+        min_x, min_y, max_x, max_y = (float(value) for value in bounds)
+        radius_px = float(radius_px)
+    except Exception:
+        return True
+    return not (
+        cursor_x < (min_x - radius_px)
+        or cursor_x > (max_x + radius_px)
+        or cursor_y < (min_y - radius_px)
+        or cursor_y > (max_y + radius_px)
+    )
