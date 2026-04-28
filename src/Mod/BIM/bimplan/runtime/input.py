@@ -5,6 +5,7 @@
 from bimplan.runtime import tools as plan_runtime_tools
 from bimplan.selection import target_kinds as plan_target_kinds
 from bimplan.tools import join as plan_join_tool
+from bimplan.tools import opening_edit as plan_opening_tool
 from bimplan.tools import select as plan_select_tool
 from bimplan.tools import space_region_pick as plan_space_region_pick_tool
 from bimplan.tools import wall_edit as plan_wall_edit_tool
@@ -217,11 +218,8 @@ def _set_key_event_handled(event_callback):
 def _handle_direct_tool_key_press(session, key, event_callback, coin):
     if (
         session.current_tool == plan_runtime_tools.PlanTool.MOVE_OPENING
-        and key == coin.SoKeyboardEvent.A
+        and plan_opening_tool.OpeningMoveTool(session).on_key(key, event_callback, coin)
     ):
-        if session.openings.cycle_opening_move_anchor():
-            session.openings.refresh_opening_move_preview_from_raw_point()
-            session.task_panels.refresh_task_panel_status()
         return True
     if (
         session.current_tool
@@ -275,9 +273,6 @@ def _handle_direct_tool_key_press(session, key, event_callback, coin):
 
 
 def _handle_escape_cancels(session):
-    if session.current_tool == plan_runtime_tools.PlanTool.MOVE_OPENING:
-        session.openings.cancel_opening_handle_point_pick()
-        return True
     if session.current_tool == plan_runtime_tools.PlanTool.MOVE_PROVIDER:
         session.providers.cancel_provider_handle_point_pick()
         return True

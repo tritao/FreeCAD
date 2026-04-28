@@ -454,6 +454,7 @@ Current progress:
 - `SelectTool` owns Select left-click, hover behavior, and edit-node activation.
 - `JoinTool` owns Join mouse, hover, and key behavior.
 - `WallEditTool` owns active wall edit Tab/Enter/Escape keyboard behavior.
+- `OpeningMoveTool` owns opening move anchor/cancel keyboard behavior.
 - `PickSpaceRegionTool` owns region-candidate mouse and Escape-key behavior.
 - `runtime/input.py` still owns raw Coin event normalization and dispatch.
 

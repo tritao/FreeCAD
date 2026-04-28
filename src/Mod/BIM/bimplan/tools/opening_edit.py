@@ -5,6 +5,7 @@
 import FreeCAD
 import FreeCADGui
 from bimplan.runtime import capabilities as runtime_capabilities
+from bimplan.runtime import tools as plan_runtime_tools
 
 translate = FreeCAD.Qt.translate
 
@@ -547,6 +548,25 @@ class _SessionAPI:
     @property
     def session(self):
         return self._session
+
+
+class OpeningMoveTool(plan_runtime_tools.PlanToolHandler):
+    """Keyboard behavior for active opening move point-pick edits."""
+
+    tool_id = plan_runtime_tools.PlanTool.MOVE_OPENING
+
+    def on_key(self, key, event_callback, coin):
+        del event_callback
+        session = self.session
+        if key == coin.SoKeyboardEvent.A:
+            if session.openings.cycle_opening_move_anchor():
+                session.openings.refresh_opening_move_preview_from_raw_point()
+                session.task_panels.refresh_task_panel_status()
+            return True
+        if key == coin.SoKeyboardEvent.ESCAPE:
+            session.openings.cancel_opening_handle_point_pick()
+            return True
+        return False
 
 
 class PlanOpeningsAPI(_SessionAPI):
