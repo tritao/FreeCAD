@@ -453,6 +453,7 @@ Current progress:
 - A minimal `PlanToolHandler` contract exists beside the current tool-id enum.
 - `SelectTool` owns Select left-click, hover behavior, and edit-node activation.
 - `JoinTool` owns Join mouse, hover, and key behavior.
+- `PickSpaceRegionTool` owns region-candidate mouse and Escape-key behavior.
 - `runtime/input.py` still owns raw Coin event normalization and dispatch.
 
 Steps:
@@ -460,7 +461,7 @@ Steps:
 1. Define a minimal `PlanTool` base contract. Done.
 2. Convert select behavior first. Done.
 3. Convert wall create/edit next.
-4. Convert opening/symbol/space/region workflows.
+4. Convert opening/symbol/space/region workflows. In progress.
 5. Leave provider point tool last because it crosses provider runtime and UI.
 6. Shrink `runtime/input.py` to event dispatch.
 

@@ -2,12 +2,11 @@
 
 """Input event routing for BIM Plan Edit."""
 
-from bimplan import document_visuals as plan_document_visuals
 from bimplan.runtime import tools as plan_runtime_tools
 from bimplan.selection import target_kinds as plan_target_kinds
 from bimplan.tools import join as plan_join_tool
-from bimplan.tools import space_regions as plan_space_regions
 from bimplan.tools import select as plan_select_tool
+from bimplan.tools import space_region_pick as plan_space_region_pick_tool
 
 
 class PlanInputAPI:
@@ -73,12 +72,6 @@ def _get_mouse_event_position(event):
         return None
 
 
-def _handle_pick_space_region_mouse_down(session, mouse_pos, event_callback):
-    candidate = session.spaces.pick_space_region_candidate(mouse_pos)
-    if candidate:
-        session.spaces.activate_space_region_candidate(candidate, event_callback)
-
-
 def _handle_left_mouse_button_release(session, event_callback):
     if not session.input_event_state.consume_left_button_release:
         return False
@@ -93,7 +86,9 @@ def _handle_left_mouse_button_down(session, mouse_pos, event_callback):
         plan_join_tool.JoinTool(session).on_left_mouse_down(mouse_pos, event_callback)
         return
     if session.current_tool == plan_runtime_tools.PlanTool.PICK_SPACE_REGION:
-        _handle_pick_space_region_mouse_down(session, mouse_pos, event_callback)
+        plan_space_region_pick_tool.PickSpaceRegionTool(session).on_left_mouse_down(
+            mouse_pos, event_callback
+        )
         return
     if session.current_tool != plan_runtime_tools.PlanTool.SELECT:
         return
@@ -177,13 +172,9 @@ def on_mouse_moved(session, event_callback):
         ),
     ):
         if session.current_tool == plan_runtime_tools.PlanTool.PICK_SPACE_REGION:
-            if mouse_pos is not None:
-                plan_space_regions.set_hovered_space_region_candidate(
-                    session,
-                    session.spaces.pick_space_region_candidate(mouse_pos),
-                    plan_document_visuals.PLAN_VISUAL_SPACE_REGION_PICK,
-                )
-                session.overlays.manager.refresh_plan_overlay_visuals()
+            plan_space_region_pick_tool.PickSpaceRegionTool(session).on_mouse_move(
+                mouse_pos, event_callback
+            )
             return
         if session.current_tool == plan_runtime_tools.PlanTool.SELECT:
             if plan_select_tool.SelectTool(session).on_mouse_move(mouse_pos, event_callback):
@@ -243,9 +234,10 @@ def _handle_direct_tool_key_press(session, key, event_callback, coin):
         return True
     if (
         session.current_tool == plan_runtime_tools.PlanTool.PICK_SPACE_REGION
-        and key == coin.SoKeyboardEvent.ESCAPE
+        and plan_space_region_pick_tool.PickSpaceRegionTool(session).on_key(
+            key, event_callback, coin
+        )
     ):
-        session.spaces.cancel_space_region_pick()
         return True
     if session.current_tool == plan_runtime_tools.PlanTool.REGION and key in (
         coin.SoKeyboardEvent.RETURN,
