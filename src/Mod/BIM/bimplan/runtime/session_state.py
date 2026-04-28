@@ -492,24 +492,12 @@ _PLAN_EDIT_SESSION_STATE_PROPERTIES = (
     (
         "_ensure_selection_state",
         (
-            ("_selected_plan_target_kind", "selected_plan_target_kind", _coerce_identity),
-            ("_selected_plan_target_obj", "selected_plan_target_obj", _coerce_identity),
             ("hovered_wall", "hovered_wall", _coerce_identity),
             ("hovered_opening", "hovered_opening", _coerce_identity),
             ("hovered_symbol", "hovered_symbol", _coerce_identity),
             ("hovered_provider", "hovered_provider", _coerce_identity),
             ("hovered_space", "hovered_space", _coerce_identity),
             ("hovered_region", "hovered_region", _coerce_identity),
-            (
-                "_pending_selected_plan_target",
-                "pending_selected_plan_target",
-                _coerce_optional_plan_target_ref,
-            ),
-            (
-                "_secondary_selected_plan_targets_state",
-                "secondary_selected_plan_targets_state",
-                _coerce_plan_target_ref_list,
-            ),
         ),
     ),
     (

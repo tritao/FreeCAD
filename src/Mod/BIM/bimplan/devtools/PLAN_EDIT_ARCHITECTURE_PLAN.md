@@ -483,6 +483,11 @@ Validation:
 
 ### Phase 5: Finish Typed State Migration
 
+Current progress:
+
+- Private selected-target compatibility aliases are removed for primary, pending, and secondary selection state.
+- Tests that asserted pending selection now use `selection_state.pending_selected_plan_target`.
+
 Steps:
 
 1. Audit remaining state-backed compatibility properties.

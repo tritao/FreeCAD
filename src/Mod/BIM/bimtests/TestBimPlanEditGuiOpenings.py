@@ -1209,7 +1209,7 @@ class BimPlanEditGuiOpeningsMixin:
             if call[0] == 0 and getattr(call[1], "__name__", "") == "<lambda>"
         ]
         self.assertGreaterEqual(len(restore_calls), 1)
-        self.assertEqual(session._pending_selected_plan_target, ("opening", door))
+        self.assertEqual(session.selection_state.pending_selected_plan_target, ("opening", door))
 
         restore_calls[0][1]()
         self.assertEqual([obj.Name for obj in FreeCADGui.Selection.getSelection()], [door.Name])
@@ -1219,7 +1219,7 @@ class BimPlanEditGuiOpeningsMixin:
 
         self.assertEqual(FreeCADGui.Selection.getSelection(), [])
         self._assert_selected_plan_target(session, "opening", door)
-        self.assertIsNone(session._pending_selected_plan_target)
+        self.assertIsNone(session.selection_state.pending_selected_plan_target)
 
         from pivy import coin
 
@@ -1255,7 +1255,7 @@ class BimPlanEditGuiOpeningsMixin:
 
         self.pump_gui_events()
         self._assert_no_selected_plan_target(session)
-        self.assertIsNone(session._pending_selected_plan_target)
+        self.assertIsNone(session.selection_state.pending_selected_plan_target)
         self.assertEqual(len(session._opening_overlay_trackers), 0)
         self.assertEqual(len(session._opening_handle_trackers), 0)
 
