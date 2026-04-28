@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: LGPL-2.1-or-later
 
-from contextlib import nullcontext
+from contextlib import ExitStack, contextmanager, nullcontext
 import unittest
 import sys
 import weakref
@@ -108,6 +108,7 @@ from bimplan.selection import (
 )
 from bimplan.selection import selection as plan_selection_module
 from bimplan.selection import gui_sync as plan_selection_gui_sync
+from bimplan.selection import target_kinds as plan_target_kinds
 from bimplan.tools.spaces import (
     start_space_region_pick,
     create_space_from_current_selection,
@@ -194,6 +195,126 @@ def _make_provider_runtime_state_stub(**kwargs):
 
 def _make_provider_transient_state_stub(**kwargs):
     return SimpleNamespace(**{"provider_selected_objects": [], **kwargs})
+
+
+def _make_plan_target_ref(kind=None, obj=None):
+    return plan_target_kinds.make_plan_target_ref(kind, obj)
+
+
+def _make_selection_state_stub(
+    selected_target=None,
+    *,
+    selected_targets=None,
+    selected_objects=None,
+    calls=None,
+    valid=True,
+):
+    selected_ref = plan_target_kinds.coerce_plan_target_ref(selected_target)
+    if selected_targets is None:
+        selected_target_refs = (selected_ref,) if selected_ref.obj is not None else ()
+    else:
+        selected_target_refs = tuple(
+            plan_target_kinds.coerce_plan_target_ref(target) for target in selected_targets
+        )
+    selected_objects = dict(selected_objects or {})
+    calls = calls if calls is not None else []
+
+    def get_selected_plan_target_object(kind=None):
+        if kind in selected_objects:
+            return selected_objects[kind]
+        if kind is not None and selected_ref.kind != kind:
+            return None
+        return selected_ref.obj
+
+    return SimpleNamespace(
+        get_selected_plan_target=lambda: selected_ref,
+        get_selected_plan_targets=lambda: selected_target_refs,
+        get_selected_plan_target_object=get_selected_plan_target_object,
+        set_selected_plan_target=lambda *args, **kwargs: calls.append(
+            ("set-selected", args, kwargs)
+        ),
+        set_selected_plan_target_state=lambda *args, **kwargs: calls.append(
+            ("set-selected-state", args, kwargs)
+        ),
+        is_valid_plan_target=lambda _kind, _obj: bool(valid),
+    )
+
+
+def _make_selection_stub(
+    selected_target=None,
+    *,
+    selected_targets=None,
+    hovered_target=None,
+    picked_target=None,
+    selected_objects=None,
+    calls=None,
+    valid=True,
+):
+    calls = calls if calls is not None else []
+    hovered_ref = plan_target_kinds.coerce_plan_target_ref(hovered_target)
+    picked_ref = plan_target_kinds.coerce_plan_target_ref(picked_target)
+    return SimpleNamespace(
+        state=_make_selection_state_stub(
+            selected_target,
+            selected_targets=selected_targets,
+            selected_objects=selected_objects,
+            calls=calls,
+            valid=valid,
+        ),
+        hover=SimpleNamespace(
+            get_hovered_plan_target=lambda: hovered_ref,
+            clear_hovered_plan_targets=lambda *args, **kwargs: calls.append(
+                ("clear-hovered", args, kwargs)
+            ),
+        ),
+        picking=SimpleNamespace(
+            get_plan_target_at_position=lambda _mouse_pos: picked_ref,
+        ),
+        refresh=SimpleNamespace(
+            sanitize_plan_target_references=lambda: calls.append("sanitize"),
+            refresh_primary_selected_plan_target=lambda *args, **kwargs: calls.append(
+                ("refresh-primary", args, kwargs)
+            ),
+        ),
+    )
+
+
+@contextmanager
+def _patched_plan_target_overlay_pickers(**overrides):
+    defaults = {
+        "pick_provider_overlay_target_from_overlays": (
+            lambda *_args, **_kwargs: _make_plan_target_ref()
+        ),
+        "pick_plan_opening_target_from_overlays": (lambda *_args, **_kwargs: None),
+        "pick_plan_symbol_target_from_overlays": (lambda *_args, **_kwargs: None),
+        "pick_plan_region_target_from_polylines": (lambda *_args, **_kwargs: None),
+        "pick_plan_region_target_from_footprints": (lambda *_args, **_kwargs: None),
+        "pick_plan_region_target_from_overlays": (lambda *_args, **_kwargs: None),
+        "pick_plan_space_target_from_footprints": (lambda *_args, **_kwargs: None),
+        "pick_plan_space_target_from_overlays": (lambda *_args, **_kwargs: None),
+    }
+    defaults.update(overrides)
+    with ExitStack() as stack:
+        for name, replacement in defaults.items():
+            stack.enter_context(
+                patch(
+                    f"bimplan.selection.picking.{name}",
+                    side_effect=replacement,
+                )
+            )
+        yield
+
+
+@contextmanager
+def _patched_space_boundary_links_from_session():
+    def _get_links(session, fallback_space=None):
+        return session.spaces.get_selected_space_boundary_links(fallback_space=fallback_space)
+
+    with patch(
+        "bimplan.tools.space_boundaries.get_selected_space_boundary_links",
+        side_effect=_get_links,
+    ):
+        yield
 
 
 class _DummyDoc:
@@ -298,6 +419,7 @@ class TestBimPlanCore(unittest.TestCase):
                 count=lambda name, value=1: perf_counts.append((name, value)),
             ),
             get_plan_provider_registry=lambda: registry,
+            selection=_make_selection_stub(),
         )
         session.document_visuals = SimpleNamespace(document_is_alive=lambda: True)
         session.providers = SimpleNamespace(
@@ -493,7 +615,7 @@ class TestBimPlanCore(unittest.TestCase):
 
     def test_build_action_context_view_model_derives_tool_controls(self):
         wall = SimpleNamespace(Name="Wall001")
-        selection = SimpleNamespace(get_selected_plan_target=lambda: ("wall", wall))
+        selection = _make_selection_stub(("wall", wall))
         windows = SimpleNamespace(can_place_window=lambda: True)
         wall_relations = SimpleNamespace(get_plan_candidate_joint=lambda target_wall=None: object())
         providers = SimpleNamespace(get_provider_point_tool_label=lambda: "Provider Point")
@@ -519,10 +641,7 @@ class TestBimPlanCore(unittest.TestCase):
 
     def test_build_status_text_view_model_derives_wall_guidance(self):
         wall = SimpleNamespace(Name="Wall001", Label="Wall 001")
-        selection = SimpleNamespace(
-            get_selected_plan_target=lambda: ("wall", wall),
-            get_selected_plan_targets=lambda: (("wall", wall),),
-        )
+        selection = _make_selection_stub(("wall", wall))
         status_text = SimpleNamespace(
             format_plan_target_selection_state=lambda kind, obj: f"{kind}:{obj.Label}",
             format_provider_selected_object_state=lambda: "",
@@ -551,11 +670,11 @@ class TestBimPlanCore(unittest.TestCase):
 
         space_session = SimpleNamespace(
             current_tool="Set Space Text",
-            selection=SimpleNamespace(get_selected_plan_target=lambda: ("space", space)),
+            selection=_make_selection_stub(("space", space)),
         )
         region_session = SimpleNamespace(
             current_tool="Select",
-            selection=SimpleNamespace(get_selected_plan_target=lambda: ("region", region)),
+            selection=_make_selection_stub(("region", region)),
         )
 
         space_view_model = build_space_editor_view_model(space_session)
@@ -570,7 +689,7 @@ class TestBimPlanCore(unittest.TestCase):
         window = SimpleNamespace(Name="Window001", Document=SimpleNamespace(Name="Doc"))
         session = SimpleNamespace(
             current_tool="Select",
-            selection=SimpleNamespace(get_selected_plan_target=lambda: ("opening", window)),
+            selection=_make_selection_stub(("opening", window)),
             windows=SimpleNamespace(
                 can_edit_window_width=lambda obj: obj is window,
                 can_edit_window_height=lambda obj: False,
@@ -600,6 +719,7 @@ class TestBimPlanCore(unittest.TestCase):
 
     def test_activate_plan_region_tool_uses_shared_space_setup(self):
         parent_space = SimpleNamespace(Name="Space001")
+        calls = []
         session = SimpleNamespace(
             current_tool="Select",
             _cancel_rect_wall_tool=lambda refresh=False: None,
@@ -608,6 +728,9 @@ class TestBimPlanCore(unittest.TestCase):
             _set_selected_plan_target=lambda *args, **kwargs: None,
             _clear_hovered_plan_targets=lambda *args, **kwargs: None,
             task_panels=SimpleNamespace(refresh_task_panel_status=lambda *args, **kwargs: None),
+            wall_create=SimpleNamespace(cancel_rect_wall_tool=lambda refresh=False: None),
+            providers=SimpleNamespace(cancel_provider_point_tool=lambda refresh=False: None),
+            wall_relations=SimpleNamespace(clear_plan_relation_status=lambda: None),
             lifecycle=SimpleNamespace(
                 has_active_embedded_tool=lambda: False,
                 cancel_embedded_tool=lambda: None,
@@ -621,10 +744,10 @@ class TestBimPlanCore(unittest.TestCase):
                 handle_plan_region_point=lambda *args, **kwargs: None,
                 update_plan_region_preview=lambda *args, **kwargs: None,
             ),
-            selection=SimpleNamespace(
-                get_selected_plan_target_object=lambda kind: (
-                    parent_space if kind == "space" else None
-                )
+            selection=_make_selection_stub(
+                ("space", parent_space),
+                selected_objects={"space": parent_space},
+                calls=calls,
             ),
         )
 
@@ -638,6 +761,7 @@ class TestBimPlanCore(unittest.TestCase):
         prepare.assert_called_once_with(session, parent_space=parent_space)
 
     def test_activate_space_separator_tool_uses_shared_space_setup(self):
+        calls = []
         session = SimpleNamespace(
             current_tool="Select",
             _cancel_rect_wall_tool=lambda refresh=False: None,
@@ -646,6 +770,9 @@ class TestBimPlanCore(unittest.TestCase):
             _set_selected_plan_target=lambda *args, **kwargs: None,
             _get_wall_defaults=lambda: {"height": 2500},
             task_panels=SimpleNamespace(refresh_task_panel_status=lambda *args, **kwargs: None),
+            wall_create=SimpleNamespace(cancel_rect_wall_tool=lambda refresh=False: None),
+            providers=SimpleNamespace(cancel_provider_point_tool=lambda refresh=False: None),
+            wall_relations=SimpleNamespace(clear_plan_relation_status=lambda: None),
             lifecycle=SimpleNamespace(
                 has_active_embedded_tool=lambda: False,
                 cancel_embedded_tool=lambda: None,
@@ -658,6 +785,7 @@ class TestBimPlanCore(unittest.TestCase):
                 cancel_plan_region_tool=lambda refresh=False: None,
                 handle_space_separator_point=lambda *args, **kwargs: None,
             ),
+            selection=_make_selection_stub(calls=calls),
         )
 
         with patch(
@@ -698,9 +826,7 @@ class TestBimPlanCore(unittest.TestCase):
                     events.append(("report-failure", space)) or False
                 ),
             ),
-            selection=SimpleNamespace(
-                get_selected_plan_targets=lambda: [("wall", wall_a), ("wall", wall_b)]
-            ),
+            selection=_make_selection_stub(selected_targets=(("wall", wall_a), ("wall", wall_b))),
         )
         arch_module = SimpleNamespace(
             makeSpace=lambda value: events.append(("make-space", value)) or created_space
@@ -709,7 +835,9 @@ class TestBimPlanCore(unittest.TestCase):
             analyzeBoundaryLinks=lambda value: events.append(("analyze", value)) or {}
         )
 
-        with patch.dict(sys.modules, {"Arch": arch_module, "ArchSpace": archspace_module}):
+        with patch.dict(
+            sys.modules, {"Arch": arch_module, "ArchSpace": archspace_module}
+        ), _patched_space_boundary_links_from_session():
             self.assertTrue(create_space_from_current_selection(session))
 
         self.assertEqual(
@@ -792,12 +920,11 @@ class TestBimPlanCore(unittest.TestCase):
                     boundaries if fallback_space is None else ()
                 )
             ),
-            selection=SimpleNamespace(
-                get_selected_plan_targets=lambda: [("wall", wall_a), ("wall", wall_b)]
-            ),
+            selection=_make_selection_stub(selected_targets=(("wall", wall_a), ("wall", wall_b))),
         )
 
-        request = build_space_creation_request(session)
+        with _patched_space_boundary_links_from_session():
+            request = build_space_creation_request(session)
 
         self.assertTrue(
             should_run_space_preflight_for_targets([("wall", wall_a), ("wall", wall_b)])
@@ -813,10 +940,11 @@ class TestBimPlanCore(unittest.TestCase):
             spaces=SimpleNamespace(
                 get_selected_space_boundary_links=lambda fallback_space=None: []
             ),
-            selection=SimpleNamespace(get_selected_plan_targets=lambda: [("space", space)]),
+            selection=_make_selection_stub(selected_targets=(("space", space),)),
         )
-        self.assertEqual((None, []), resolve_space_region_seed_targets(empty_session))
-        self.assertIsNone(build_space_creation_request(empty_session))
+        with _patched_space_boundary_links_from_session():
+            self.assertEqual((None, []), resolve_space_region_seed_targets(empty_session))
+            self.assertIsNone(build_space_creation_request(empty_session))
 
         seeded_session = SimpleNamespace(
             spaces=SimpleNamespace(
@@ -824,10 +952,11 @@ class TestBimPlanCore(unittest.TestCase):
                     [boundary] if fallback_space is space else []
                 )
             ),
-            selection=SimpleNamespace(get_selected_plan_targets=lambda: [("space", space)]),
+            selection=_make_selection_stub(selected_targets=(("space", space),)),
         )
-        self.assertEqual((space, []), resolve_space_region_seed_targets(seeded_session))
-        request = build_space_creation_request(seeded_session)
+        with _patched_space_boundary_links_from_session():
+            self.assertEqual((space, []), resolve_space_region_seed_targets(seeded_session))
+            request = build_space_creation_request(seeded_session)
         self.assertIsNotNone(request)
         self.assertEqual("Living Room", request["label"])
         self.assertIs(space, request["region_seed_space"])
@@ -844,12 +973,13 @@ class TestBimPlanCore(unittest.TestCase):
                     [boundary] if fallback_space is space else []
                 )
             ),
-            selection=SimpleNamespace(get_selected_plan_targets=lambda: targets),
+            selection=_make_selection_stub(selected_targets=targets),
         )
 
         self.assertTrue(should_run_space_preflight_for_targets(targets))
-        self.assertEqual((space, [("wall", wall)]), resolve_space_region_seed_targets(session))
-        request = build_space_creation_request(session)
+        with _patched_space_boundary_links_from_session():
+            self.assertEqual((space, [("wall", wall)]), resolve_space_region_seed_targets(session))
+            request = build_space_creation_request(session)
         self.assertIsNotNone(request)
         self.assertIs(space, request["region_seed_space"])
         self.assertEqual([boundary], request["boundaries"])
@@ -888,7 +1018,7 @@ class TestBimPlanCore(unittest.TestCase):
         calls = []
         target = SimpleNamespace(Name="Wall001")
         session = SimpleNamespace(
-            selection=SimpleNamespace(get_hovered_plan_target=lambda: ("wall", target)),
+            selection=_make_selection_stub(hovered_target=("wall", target)),
             hover_pick_state=_make_hover_pick_state_stub(last_mouse_pos=(50.0, 60.0)),
             performance=_make_perf_stub(),
         )
@@ -907,7 +1037,7 @@ class TestBimPlanCore(unittest.TestCase):
                         "event_callback": None,
                         "sync_gui_selection": True,
                         "clear_hovered_kinds": ("wall", "symbol", "space", "region"),
-                        "resolved_target": ("wall", target),
+                        "resolved_target": _make_plan_target_ref("wall", target),
                         "defer_gui_selection": True,
                         "defer_wall_grips": True,
                     },
@@ -921,9 +1051,9 @@ class TestBimPlanCore(unittest.TestCase):
         hovered = SimpleNamespace(Name="Wall001")
         picked = SimpleNamespace(Name="Wall002")
         session = SimpleNamespace(
-            selection=SimpleNamespace(
-                get_hovered_plan_target=lambda: ("wall", hovered),
-                get_plan_target_at_position=lambda _mouse_pos: ("wall", picked),
+            selection=_make_selection_stub(
+                hovered_target=("wall", hovered),
+                picked_target=("wall", picked),
             ),
             hover_pick_state=_make_hover_pick_state_stub(last_mouse_pos=(10.0, 10.0)),
             performance=_make_perf_stub(),
@@ -943,7 +1073,7 @@ class TestBimPlanCore(unittest.TestCase):
                         "event_callback": None,
                         "sync_gui_selection": True,
                         "clear_hovered_kinds": ("wall", "symbol", "space", "region"),
-                        "resolved_target": ("wall", picked),
+                        "resolved_target": _make_plan_target_ref("wall", picked),
                         "defer_gui_selection": True,
                         "defer_wall_grips": True,
                     },
@@ -1028,7 +1158,9 @@ class TestBimPlanCore(unittest.TestCase):
             viewport=SimpleNamespace(focus_plan_view=lambda: None),
             get_plan_provider_registry=lambda: registry,
             defer_document_visual_updates=lambda: nullcontext(),
-            selection=SimpleNamespace(refresh_primary_selected_plan_target=lambda: None),
+            selection=SimpleNamespace(
+                refresh=SimpleNamespace(refresh_primary_selected_plan_target=lambda: None)
+            ),
             document_visuals=SimpleNamespace(
                 document_is_alive=lambda: True,
                 invalidate_document_dependent_plan_visuals=lambda: None,
@@ -1155,6 +1287,7 @@ class TestBimPlanCore(unittest.TestCase):
         session = SimpleNamespace(
             doc=doc,
             _is_valid_plan_target=lambda _kind, _obj: False,
+            selection=_make_selection_stub(valid=False),
         )
         point = SimpleNamespace(
             documentName=_Field(""),
@@ -1473,9 +1606,8 @@ class TestBimPlanCore(unittest.TestCase):
                 "bimplan.selection.picking.plan_targets.get_plan_pick_target_for_object",
                 side_effect=_get_plan_pick_target_for_object,
             ),
-            patch(
-                "bimplan.selection.picking.pick_plan_opening_target_from_overlays",
-                side_effect=_pick_opening,
+            _patched_plan_target_overlay_pickers(
+                pick_plan_opening_target_from_overlays=_pick_opening,
             ),
         ):
             target_ref = get_plan_target_at_position(session, (100, 200))
@@ -1536,9 +1668,18 @@ class TestBimPlanCore(unittest.TestCase):
             ),
         )
 
-        with patch(
-            "bimplan.picking.plan_targets.get_plan_pick_target_for_object",
-            return_value=("space", space),
+        with (
+            patch(
+                "bimplan.picking.plan_targets.get_plan_pick_target_for_object",
+                return_value=("space", space),
+            ),
+            _patched_plan_target_overlay_pickers(
+                pick_provider_overlay_target_from_overlays=lambda *_args, **_kwargs: (
+                    _make_plan_target_ref("provider", marker)
+                ),
+                pick_plan_space_target_from_footprints=lambda *_args, **_kwargs: space,
+                pick_plan_space_target_from_overlays=lambda *_args, **_kwargs: space,
+            ),
         ):
             self.assertEqual(
                 ("provider", marker),
@@ -1605,9 +1746,12 @@ class TestBimPlanCore(unittest.TestCase):
             ),
         )
 
-        with patch(
-            "bimplan.picking.plan_targets.get_plan_pick_target_for_object",
-            side_effect=_get_plan_pick_target_for_object,
+        with (
+            patch(
+                "bimplan.picking.plan_targets.get_plan_pick_target_for_object",
+                side_effect=_get_plan_pick_target_for_object,
+            ),
+            _patched_plan_target_overlay_pickers(),
         ):
             self.assertEqual(
                 ("provider", marker),
@@ -1674,9 +1818,12 @@ class TestBimPlanCore(unittest.TestCase):
             ),
         )
 
-        with patch(
-            "bimplan.picking.plan_targets.get_plan_pick_target_for_object",
-            side_effect=_get_plan_pick_target_for_object,
+        with (
+            patch(
+                "bimplan.picking.plan_targets.get_plan_pick_target_for_object",
+                side_effect=_get_plan_pick_target_for_object,
+            ),
+            _patched_plan_target_overlay_pickers(),
         ):
             self.assertEqual(
                 ("wall", wall),
@@ -1726,9 +1873,15 @@ class TestBimPlanCore(unittest.TestCase):
             ),
         )
 
-        with patch(
-            "bimplan.picking.plan_targets.get_plan_pick_target_for_object",
-            return_value=("space", space),
+        with (
+            patch(
+                "bimplan.picking.plan_targets.get_plan_pick_target_for_object",
+                return_value=("space", space),
+            ),
+            _patched_plan_target_overlay_pickers(
+                pick_plan_space_target_from_footprints=lambda *_args, **_kwargs: space,
+                pick_plan_space_target_from_overlays=lambda *_args, **_kwargs: space,
+            ),
         ):
             self.assertEqual(
                 ("space", space),
@@ -1778,9 +1931,15 @@ class TestBimPlanCore(unittest.TestCase):
             ),
         )
 
-        with patch(
-            "bimplan.picking.plan_targets.get_plan_pick_target_for_object",
-            return_value=("space", space),
+        with (
+            patch(
+                "bimplan.picking.plan_targets.get_plan_pick_target_for_object",
+                return_value=("space", space),
+            ),
+            _patched_plan_target_overlay_pickers(
+                pick_plan_space_target_from_footprints=lambda *_args, **_kwargs: space,
+                pick_plan_space_target_from_overlays=lambda *_args, **_kwargs: space,
+            ),
         ):
             self.assertEqual(
                 (None, None),
@@ -1798,10 +1957,7 @@ class TestBimPlanCore(unittest.TestCase):
             Document=SimpleNamespace(Name="TestDoc"),
         )
         session = SimpleNamespace(
-            _is_valid_plan_target=lambda kind, obj: kind == "provider" and obj is marker,
-            selection=SimpleNamespace(
-                get_plan_target_for_object=lambda _selected: ("symbol", marker)
-            ),
+            selection=_make_selection_stub(valid=True),
         )
 
         self.assertEqual(
@@ -1821,10 +1977,7 @@ class TestBimPlanCore(unittest.TestCase):
             Document=SimpleNamespace(Name="TestDoc"),
         )
         session = SimpleNamespace(
-            _is_valid_plan_target=lambda kind, obj: kind == "provider" and obj is marker,
-            selection=SimpleNamespace(
-                get_plan_target_for_object=lambda _selected: ("symbol", marker)
-            ),
+            selection=_make_selection_stub(valid=True),
         )
 
         with patch(
@@ -1934,7 +2087,7 @@ class TestBimPlanCore(unittest.TestCase):
             performance=SimpleNamespace(
                 plan_perf_trace_span=lambda *_args, **_kwargs: nullcontext()
             ),
-            selection=SimpleNamespace(get_selected_plan_target=lambda: ("wall", object())),
+            selection=_make_selection_stub(("wall", object())),
             interaction=SimpleNamespace(is_modal_plan_interaction_active=lambda: False),
             status_text=SimpleNamespace(get_provider_selected_objects=lambda: ()),
         )
@@ -1976,7 +2129,7 @@ class TestBimPlanCore(unittest.TestCase):
             performance=SimpleNamespace(
                 plan_perf_trace_span=lambda *_args, **_kwargs: nullcontext()
             ),
-            selection=SimpleNamespace(get_selected_plan_target=lambda: ("wall", object())),
+            selection=_make_selection_stub(("wall", object())),
             interaction=SimpleNamespace(is_modal_plan_interaction_active=lambda: False),
             status_text=SimpleNamespace(get_provider_selected_objects=lambda: ()),
         )
@@ -2007,7 +2160,9 @@ class TestBimPlanCore(unittest.TestCase):
             lifecycle_state=SimpleNamespace(tearing_down=False),
             document_visuals=SimpleNamespace(document_is_alive=lambda: True),
             selection=SimpleNamespace(
-                sanitize_plan_target_references=lambda: lifecycle_calls.append("sanitize")
+                refresh=SimpleNamespace(
+                    sanitize_plan_target_references=lambda: lifecycle_calls.append("sanitize")
+                )
             ),
             status_text=SimpleNamespace(
                 update_input_hints=lambda: lifecycle_calls.append("status")
@@ -2042,7 +2197,9 @@ class TestBimPlanCore(unittest.TestCase):
             lifecycle_state=SimpleNamespace(tearing_down=False),
             document_visuals=SimpleNamespace(document_is_alive=lambda: True),
             selection=SimpleNamespace(
-                sanitize_plan_target_references=lambda: lifecycle_calls.append("sanitize")
+                refresh=SimpleNamespace(
+                    sanitize_plan_target_references=lambda: lifecycle_calls.append("sanitize")
+                )
             ),
             status_text=SimpleNamespace(
                 update_input_hints=lambda: lifecycle_calls.append("status")
@@ -2084,7 +2241,7 @@ class TestBimPlanCore(unittest.TestCase):
         with patch.object(
             session,
             "selection",
-            SimpleNamespace(get_selected_plan_target=lambda: ("wall", object())),
+            _make_selection_stub(("wall", object())),
             create=True,
         ), patch.object(
             plan_selection_gui_sync,
@@ -2099,13 +2256,16 @@ class TestBimPlanCore(unittest.TestCase):
         session = SimpleNamespace(
             document_visuals=SimpleNamespace(document_is_alive=lambda: True),
             lifecycle_state=_make_lifecycle_state_stub(),
+            performance=_make_perf_stub(),
             provider_runtime_state=_make_provider_runtime_state_stub(
                 document_cache={},
                 refresh_cache=None,
             ),
             provider_transient_state=_make_provider_transient_state_stub(),
             _provider_overlay_mode="architecture",
-            selection=SimpleNamespace(get_selected_plan_targets=lambda: tuple(selected_targets)),
+            selection=SimpleNamespace(
+                state=SimpleNamespace(get_selected_plan_targets=lambda: tuple(selected_targets))
+            ),
         )
         context = SimpleNamespace(
             document_name="TestDoc",
@@ -2136,17 +2296,20 @@ class TestBimPlanCore(unittest.TestCase):
     def test_provider_contributions_cache_key_tracks_selected_targets(self):
         wall1 = SimpleNamespace(Name="Wall001", Document=SimpleNamespace(Name="TestDoc"))
         wall2 = SimpleNamespace(Name="Wall002", Document=SimpleNamespace(Name="TestDoc"))
-        selected_targets = [SimpleNamespace(kind="wall", obj=wall1)]
+        selected_targets = [_make_plan_target_ref("wall", wall1)]
         session = SimpleNamespace(
             document_visuals=SimpleNamespace(document_is_alive=lambda: True),
             lifecycle_state=_make_lifecycle_state_stub(),
+            performance=_make_perf_stub(),
             provider_runtime_state=_make_provider_runtime_state_stub(
                 document_cache={},
                 refresh_cache=None,
             ),
             provider_transient_state=_make_provider_transient_state_stub(),
             _provider_overlay_mode="architecture",
-            selection=SimpleNamespace(get_selected_plan_targets=lambda: tuple(selected_targets)),
+            selection=SimpleNamespace(
+                state=SimpleNamespace(get_selected_plan_targets=lambda: tuple(selected_targets))
+            ),
         )
         context = SimpleNamespace(
             document_name="TestDoc",
@@ -2164,7 +2327,7 @@ class TestBimPlanCore(unittest.TestCase):
             return_value=("overlay",),
         ) as collect:
             collect_plan_provider_contributions(session, "get_overlays", object())
-            selected_targets[:] = [SimpleNamespace(kind="wall", obj=wall2)]
+            selected_targets[:] = [_make_plan_target_ref("wall", wall2)]
             collect_plan_provider_contributions(session, "get_overlays", object())
 
         self.assertEqual(2, collect.call_count)
@@ -2172,17 +2335,20 @@ class TestBimPlanCore(unittest.TestCase):
     def test_provider_target_contributions_cache_key_ignores_selected_targets(self):
         wall1 = SimpleNamespace(Name="Wall001", Document=SimpleNamespace(Name="TestDoc"))
         wall2 = SimpleNamespace(Name="Wall002", Document=SimpleNamespace(Name="TestDoc"))
-        selected_targets = [SimpleNamespace(kind="wall", obj=wall1)]
+        selected_targets = [_make_plan_target_ref("wall", wall1)]
         session = SimpleNamespace(
             document_visuals=SimpleNamespace(document_is_alive=lambda: True),
             lifecycle_state=_make_lifecycle_state_stub(),
+            performance=_make_perf_stub(),
             provider_runtime_state=_make_provider_runtime_state_stub(
                 document_cache={},
                 refresh_cache=None,
             ),
             provider_transient_state=_make_provider_transient_state_stub(),
             _provider_overlay_mode="architecture",
-            selection=SimpleNamespace(get_selected_plan_targets=lambda: tuple(selected_targets)),
+            selection=SimpleNamespace(
+                state=SimpleNamespace(get_selected_plan_targets=lambda: tuple(selected_targets))
+            ),
         )
         context = SimpleNamespace(
             document_name="TestDoc",
@@ -2200,7 +2366,7 @@ class TestBimPlanCore(unittest.TestCase):
             return_value=("target",),
         ) as collect:
             collect_plan_provider_contributions(session, "get_targets", object())
-            selected_targets[:] = [SimpleNamespace(kind="wall", obj=wall2)]
+            selected_targets[:] = [_make_plan_target_ref("wall", wall2)]
             collect_plan_provider_contributions(session, "get_targets", object())
 
         self.assertEqual(1, collect.call_count)
@@ -2209,13 +2375,14 @@ class TestBimPlanCore(unittest.TestCase):
         session = SimpleNamespace(
             document_visuals=SimpleNamespace(document_is_alive=lambda: True),
             lifecycle_state=_make_lifecycle_state_stub(),
+            performance=_make_perf_stub(),
             provider_runtime_state=_make_provider_runtime_state_stub(
                 document_cache={},
                 refresh_cache=None,
             ),
             provider_transient_state=_make_provider_transient_state_stub(),
             _provider_overlay_mode="architecture",
-            selection=SimpleNamespace(get_selected_plan_targets=lambda: ()),
+            selection=SimpleNamespace(state=SimpleNamespace(get_selected_plan_targets=lambda: ())),
         )
         context = SimpleNamespace(
             document_name="TestDoc",
@@ -2265,7 +2432,7 @@ class TestBimPlanCore(unittest.TestCase):
             ),
             provider_transient_state=_make_provider_transient_state_stub(),
             _provider_overlay_mode="architecture",
-            selection=SimpleNamespace(get_selected_plan_targets=lambda: ()),
+            selection=SimpleNamespace(state=SimpleNamespace(get_selected_plan_targets=lambda: ())),
         )
         context = SimpleNamespace(
             document_name="TestDoc",
@@ -2415,17 +2582,17 @@ class TestBimPlanCore(unittest.TestCase):
         )
         session = SimpleNamespace(
             selection=SimpleNamespace(
-                get_plan_target_kind_for_object=lambda obj: "provider" if obj is marker else None,
-                get_plan_target_state_key=lambda kind, obj: (kind, getattr(obj, "Name", "")),
+                targets=SimpleNamespace(
+                    resolve_plan_semantic_object=lambda target: (
+                        marker if target == provider_target else None
+                    )
+                )
             ),
             visibility=SimpleNamespace(get_plan_semantic_object=lambda obj: obj),
             providers=SimpleNamespace(
                 get_plan_provider_target_for_object=lambda obj: (
                     provider_target if obj is marker else None
                 )
-            ),
-            resolve_plan_semantic_object=lambda target: (
-                marker if target == provider_target else None
             ),
         )
 

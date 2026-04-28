@@ -61,15 +61,104 @@ class PlanViewportAPI:
             _PlanEditViewportStatusChip,
         )
 
+    def discard_stale_runtime_object(self, obj):
+        return discard_stale_runtime_object(self.session, obj)
 
-def _make_session_forwarder(func):
-    def _forward(self, *args, **kwargs):
-        return func(self.session, *args, **kwargs)
+    def get_runtime_attr(self, obj, attr_name):
+        return get_runtime_attr(self.session, obj, attr_name)
 
-    _forward.__name__ = func.__name__
-    _forward.__qualname__ = "PlanViewportAPI.{}".format(func.__name__)
-    _forward.__doc__ = func.__doc__
-    return _forward
+    def get_navigation_style(self):
+        return get_navigation_style(self.session)
+
+    def get_main_window(self):
+        return get_main_window(self.session)
+
+    def find_main_window_action(self, command_name):
+        return find_main_window_action(self.session, command_name)
+
+    def capture_navigation_flag(self, target, getter_name, state_key):
+        return capture_navigation_flag(self.session, target, getter_name, state_key)
+
+    def apply_navigation_flag(self, target, setter_name, state_key, enabled):
+        return apply_navigation_flag(self.session, target, setter_name, state_key, enabled)
+
+    def capture_navigation_state(self):
+        return capture_navigation_state(self.session)
+
+    def clear_plan_background_override(self):
+        return clear_plan_background_override(self.session)
+
+    def restore_navigation_state(self):
+        return restore_navigation_state(self.session)
+
+    def force_plan_preselection(self):
+        return force_plan_preselection(self.session)
+
+    def restore_preselection_state(self):
+        return restore_preselection_state(self.session)
+
+    def apply_plan_view(self, fit=True):
+        return apply_plan_view(self.session, fit=fit)
+
+    def restore_state(self):
+        return restore_state(self.session)
+
+    def capture_state(self):
+        return capture_state(self.session)
+
+    def get_interaction_plane(self):
+        return get_interaction_plane(self.session)
+
+    def project_plan_point(self, point):
+        return project_plan_point(self.session, point)
+
+    def get_plan_view_height(self):
+        return get_plan_view_height(self.session)
+
+    def get_plan_overlay_scale(self):
+        return get_plan_overlay_scale(self.session)
+
+    def scaled_line_width(self, base_width):
+        return scaled_line_width(self.session, base_width)
+
+    def scaled_marker_size(self, base_size):
+        return scaled_marker_size(self.session, base_size)
+
+    def get_plan_view_units_per_pixel(self):
+        return get_plan_view_units_per_pixel(self.session)
+
+    def get_plan_projection_cache_key(self):
+        return get_plan_projection_cache_key(self.session)
+
+    def get_plan_point_from_mouse_pos(self, mouse_pos):
+        return get_plan_point_from_mouse_pos(self.session, mouse_pos)
+
+    def set_active_object(self, obj):
+        return set_active_object(self.session, obj)
+
+    def sync_active_plan_target_object(self):
+        return sync_active_plan_target_object(self.session)
+
+    def register_edit_callbacks(self):
+        return register_edit_callbacks(self.session)
+
+    def unregister_edit_callbacks(self):
+        return unregister_edit_callbacks(self.session)
+
+    def focus_plan_view(self):
+        return focus_plan_view(self.session)
+
+    def queue_focus_plan_view(self):
+        return queue_focus_plan_view(self.session)
+
+    def get_plan_view_widget(self):
+        return get_plan_view_widget(self.session)
+
+    def clear_viewport_status_chip(self):
+        return clear_viewport_status_chip(self.session)
+
+    def request_view_redraw(self):
+        return request_view_redraw(self.session)
 
 
 def _copy_plane(plane):
@@ -845,43 +934,3 @@ def request_view_redraw(session):
             return
         except Exception:
             session.viewport.discard_stale_runtime_object(session.view)
-
-
-_PLAN_VIEWPORT_SESSION_FORWARDERS = (
-    discard_stale_runtime_object,
-    get_runtime_attr,
-    get_navigation_style,
-    get_main_window,
-    find_main_window_action,
-    capture_navigation_flag,
-    apply_navigation_flag,
-    capture_navigation_state,
-    clear_plan_background_override,
-    restore_navigation_state,
-    force_plan_preselection,
-    restore_preselection_state,
-    apply_plan_view,
-    restore_state,
-    capture_state,
-    get_interaction_plane,
-    project_plan_point,
-    get_plan_view_height,
-    get_plan_overlay_scale,
-    scaled_line_width,
-    scaled_marker_size,
-    get_plan_view_units_per_pixel,
-    get_plan_projection_cache_key,
-    get_plan_point_from_mouse_pos,
-    set_active_object,
-    sync_active_plan_target_object,
-    register_edit_callbacks,
-    unregister_edit_callbacks,
-    focus_plan_view,
-    queue_focus_plan_view,
-    get_plan_view_widget,
-    clear_viewport_status_chip,
-    request_view_redraw,
-)
-
-for _func in _PLAN_VIEWPORT_SESSION_FORWARDERS:
-    setattr(PlanViewportAPI, _func.__name__, _make_session_forwarder(_func))

@@ -210,6 +210,8 @@ SET(bimcommands_SRCS
 SET(bimplan_SRCS
     bimplan/__init__.py
     bimplan/benchmark.py
+    bimplan/devtools/PLAN_EDIT_ARCHITECTURE_PLAN.md
+    bimplan/devtools/cruft_report.py
     bimplan/document_visuals.py
     bimplan/object_visibility.py
     bimplan/overlays/__init__.py
@@ -246,6 +248,7 @@ SET(bimplan_SRCS
     bimplan/selection/gui_sync.py
     bimplan/selection/hover_picking.py
     bimplan/selection/picking.py
+    bimplan/selection/provider_overlay_picking.py
     bimplan/selection/selection.py
     bimplan/selection/service_common.py
     bimplan/selection/service_interaction.py

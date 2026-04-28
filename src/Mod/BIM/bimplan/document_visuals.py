@@ -613,42 +613,78 @@ class PlanDocumentVisualsAPI:
     is_hidden_library_definition_object = staticmethod(is_hidden_library_definition_object)
     is_opening_visual_dependency = staticmethod(is_opening_visual_dependency)
 
+    def should_register_created_plan_object(self, obj):
+        return should_register_created_plan_object(self.session, obj)
 
-def _make_document_visuals_session_forwarder(func):
-    def _forward(self, *args, **kwargs):
-        return func(self.session, *args, **kwargs)
+    def queue_created_plan_object(self, obj):
+        return queue_created_plan_object(self.session, obj)
 
-    _forward.__name__ = func.__name__
-    _forward.__qualname__ = "PlanDocumentVisualsAPI.{}".format(func.__name__)
-    _forward.__doc__ = func.__doc__
-    return _forward
+    def flush_created_plan_objects(self, force=False):
+        return flush_created_plan_objects(self.session, force=force)
 
+    def are_document_visual_updates_deferred(self):
+        return are_document_visual_updates_deferred(self.session)
 
-_PLAN_DOCUMENT_VISUALS_SESSION_FORWARDERS = (
-    should_register_created_plan_object,
-    queue_created_plan_object,
-    flush_created_plan_objects,
-    are_document_visual_updates_deferred,
-    defer_document_visual_refresh,
-    document_is_alive,
-    attach_document_observer,
-    detach_document_observer,
-    is_symbol_visual_dependency,
-    refresh_plan_object_footprint_display,
-    refresh_opening_footprint_display,
-    refresh_wall_footprint_display,
-    refresh_opening_host_footprint_displays,
-    queue_recompute_opening_hosts,
-    flush_recompute_opening_hosts,
-    invalidate_document_dependent_plan_visuals,
-    slot_created_object,
-    slot_changed_object,
-    slot_deleted_object,
-    slot_undo_document,
-    slot_redo_document,
-    slot_recomputed_document,
-    slot_deleted_document,
-)
+    def defer_document_visual_refresh(self):
+        return defer_document_visual_refresh(self.session)
 
-for _func in _PLAN_DOCUMENT_VISUALS_SESSION_FORWARDERS:
-    setattr(PlanDocumentVisualsAPI, _func.__name__, _make_document_visuals_session_forwarder(_func))
+    def document_is_alive(self):
+        return document_is_alive(self.session)
+
+    def attach_document_observer(self):
+        return attach_document_observer(self.session)
+
+    def detach_document_observer(self):
+        return detach_document_observer(self.session)
+
+    def is_symbol_visual_dependency(self, symbol, obj):
+        return is_symbol_visual_dependency(self.session, symbol, obj)
+
+    def refresh_plan_object_footprint_display(self, obj, *, request_redraw=True):
+        return refresh_plan_object_footprint_display(
+            self.session,
+            obj,
+            request_redraw=request_redraw,
+        )
+
+    def refresh_opening_footprint_display(self, opening):
+        return refresh_opening_footprint_display(self.session, opening)
+
+    def refresh_wall_footprint_display(self, wall):
+        return refresh_wall_footprint_display(self.session, wall)
+
+    def refresh_opening_host_footprint_displays(self, opening):
+        return refresh_opening_host_footprint_displays(self.session, opening)
+
+    def queue_recompute_opening_hosts(self, *openings):
+        return queue_recompute_opening_hosts(self.session, *openings)
+
+    def flush_recompute_opening_hosts(self, hosts):
+        return flush_recompute_opening_hosts(self.session, hosts)
+
+    def invalidate_document_dependent_plan_visuals(self, recompute_opening_hosts=False):
+        return invalidate_document_dependent_plan_visuals(
+            self.session,
+            recompute_opening_hosts=recompute_opening_hosts,
+        )
+
+    def slot_created_object(self, obj):
+        return slot_created_object(self.session, obj)
+
+    def slot_changed_object(self, obj, prop):
+        return slot_changed_object(self.session, obj, prop)
+
+    def slot_deleted_object(self, obj):
+        return slot_deleted_object(self.session, obj)
+
+    def slot_undo_document(self, doc):
+        return slot_undo_document(self.session, doc)
+
+    def slot_redo_document(self, doc):
+        return slot_redo_document(self.session, doc)
+
+    def slot_recomputed_document(self, doc):
+        return slot_recomputed_document(self.session, doc)
+
+    def slot_deleted_document(self, doc):
+        return slot_deleted_document(self.session, doc)

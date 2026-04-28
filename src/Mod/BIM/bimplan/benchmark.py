@@ -585,7 +585,7 @@ def _run_interactions(session, scene, spec, operations_handle, settle_ms, timer_
         screen = _screen_point(session, point)
         if screen is None:
             return
-        session._hover_pick_last_time = time.monotonic()
+        session.hover_pick_state.last_time = time.monotonic()
         session.hover_pick_state.last_mouse_pos = (float(screen[0]), float(screen[1]))
         _trace_direct_operation(
             session,
