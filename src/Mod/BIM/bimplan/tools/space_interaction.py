@@ -5,7 +5,6 @@
 import FreeCAD
 import FreeCADGui
 
-from bimplan import selection as plan_selection
 from bimplan.selection import target_dispatch as plan_target_dispatch
 from bimplan.selection import target_kinds as plan_target_kinds
 from bimplan.tools import space_boundaries as plan_space_boundaries
@@ -437,7 +436,7 @@ def start_space_text_position_pick(session):
 
 
 def _get_selected_space_text_target(session):
-    return plan_selection.get_selected_plan_target_object(session, "space")
+    return session.selection.state.get_selected_plan_target_object("space")
 
 
 def _begin_space_text_position_pick(session, space):

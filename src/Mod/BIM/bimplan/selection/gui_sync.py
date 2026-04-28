@@ -129,122 +129,43 @@ def _apply_gui_selection(session, selection):
 
 
 def set_gui_selection(session, selection):
-    _reset_gui_selection_sync_state(session)
-    _apply_gui_selection(session, selection)
+    return session.selection.sync.set_gui_selection(selection)
 
 
 def set_gui_selection_object(session, obj):
-    if not obj:
-        return
-    set_gui_selection(session, [obj])
+    return session.selection.sync.set_gui_selection_object(obj)
 
 
 def schedule_gui_selection_object(session, obj, delay_ms=80):
-    if session.lifecycle_state.tearing_down or not obj:
-        return
-    state = session.selection_sync_state
-    state.gui_selection_sync_queued = True
-    state.gui_selection_sync_generation += 1
-    state.queued_gui_selection_object = obj
-    generation = state.gui_selection_sync_generation
-    try:
-        from PySide import QtCore
-
-        QtCore.QTimer.singleShot(
-            delay_ms,
-            lambda generation=generation: run_scheduled_gui_selection_sync(session, generation),
-        )
-    except Exception:
-        run_scheduled_gui_selection_sync(session, generation)
+    return session.selection.sync.schedule_gui_selection_object(obj, delay_ms=delay_ms)
 
 
 def run_scheduled_gui_selection_sync(session, generation=None):
-    state = session.selection_sync_state
-    if not state.gui_selection_sync_queued:
-        return
-    if generation is not None and generation != state.gui_selection_sync_generation:
-        return
-    obj = state.queued_gui_selection_object
-    if obj is None:
-        state.gui_selection_sync_queued = False
-        return
-    with session.performance.plan_perf_trace_event("scheduled_gui_selection_sync"):
-        if session.lifecycle_state.tearing_down:
-            state.gui_selection_sync_queued = False
-            state.queued_gui_selection_object = None
-            return
-        state.gui_selection_sync_in_progress = True
-        current_generation = state.gui_selection_sync_generation
-        try:
-            set_gui_selection_object(session, obj)
-        finally:
-            _schedule_finish_gui_selection_sync(session, current_generation)
+    return session.selection.sync.run_scheduled_gui_selection_sync(generation)
 
 
 def attach_selection_observer(session):
-    selection_sync_state = session.selection_sync_state
-    if not selection_sync_state.selection_observer_added:
-        FreeCADGui.Selection.addObserver(session)
-        selection_sync_state.selection_observer_added = True
+    return session.selection.sync.attach_selection_observer()
 
 
 def detach_selection_observer(session):
-    selection_sync_state = session.selection_sync_state
-    if selection_sync_state.selection_observer_added:
-        FreeCADGui.Selection.removeObserver(session)
-        selection_sync_state.selection_observer_added = False
+    return session.selection.sync.detach_selection_observer()
 
 
 def schedule_selection_refresh(session):
-    if session.lifecycle_state.tearing_down or session.lifecycle_state.ignore_selection_changes:
-        return
-    state = session.selection_sync_state
-    if state.selection_refresh_queued:
-        return
-    state.selection_refresh_queued = True
-    try:
-        from PySide import QtCore
-
-        QtCore.QTimer.singleShot(0, lambda: run_scheduled_selection_refresh(session))
-    except Exception:
-        run_scheduled_selection_refresh(session)
+    return session.selection.sync.schedule_selection_refresh()
 
 
 def schedule_clear_plan_selection_state(session):
-    if session.lifecycle_state.tearing_down or session.lifecycle_state.ignore_selection_changes:
-        return
-    state = session.selection_sync_state
-    if state.clear_plan_selection_state_queued:
-        return
-    state.clear_plan_selection_state_queued = True
-    try:
-        from PySide import QtCore
-
-        QtCore.QTimer.singleShot(0, lambda: run_scheduled_clear_plan_selection_state(session))
-    except Exception:
-        run_scheduled_clear_plan_selection_state(session)
+    return session.selection.sync.schedule_clear_plan_selection_state()
 
 
 def run_scheduled_clear_plan_selection_state(session):
-    state = session.selection_sync_state
-    if not state.clear_plan_selection_state_queued:
-        return
-    state.clear_plan_selection_state_queued = False
-    with session.performance.plan_perf_trace_event("scheduled_clear_plan_selection_state"):
-        if session.lifecycle_state.tearing_down or session.lifecycle_state.ignore_selection_changes:
-            return
-        session.selection.activation.clear_plan_selection_state()
+    return session.selection.sync.run_scheduled_clear_plan_selection_state()
 
 
 def run_scheduled_selection_refresh(session):
-    state = session.selection_sync_state
-    if not state.selection_refresh_queued:
-        return
-    state.selection_refresh_queued = False
-    with session.performance.plan_perf_trace_event("selection_observer_refresh"):
-        if session.lifecycle_state.tearing_down or session.lifecycle_state.ignore_selection_changes:
-            return
-        session.selection.refresh.refresh_primary_selected_plan_target()
+    return session.selection.sync.run_scheduled_selection_refresh()
 
 
 def _trace_selection_observer_event(session, event_name, **fields):

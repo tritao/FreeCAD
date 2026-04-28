@@ -7,7 +7,6 @@ import math
 import FreeCAD
 import FreeCADGui
 from . import manager as overlay_manager
-from .. import selection as plan_selection
 
 
 def _perf_count(session, name, delta=1):
@@ -296,7 +295,7 @@ def clear_hovered_symbol_overlay(session):
 def sync_selected_symbol_overlay(session):
     with _perf_trace_span(session, "sync_selected_symbol_overlay"):
         tracker_state = _symbol_tracker_state(session)
-        symbol = plan_selection.get_selected_plan_target_object(session, "symbol")
+        symbol = session.selection.state.get_selected_plan_target_object("symbol")
         if session.current_tool != "Select" or not session.visibility.is_plan_symbol_instance(
             symbol
         ):
@@ -540,7 +539,7 @@ def get_selected_symbol_handle_specs(session, symbol):
 def sync_selected_symbol_handles(session):
     with _perf_trace_span(session, "sync_selected_symbol_handles"):
         tracker_state = _symbol_tracker_state(session)
-        symbol = plan_selection.get_selected_plan_target_object(session, "symbol")
+        symbol = session.selection.state.get_selected_plan_target_object("symbol")
         if session.current_tool != "Select":
             clear_selected_symbol_handles(session)
             return
@@ -572,7 +571,7 @@ def clear_selected_symbol_handles(session):
 
 
 def pick_selected_symbol_handle(session, mouse_pos, radius_px=10):
-    symbol = plan_selection.get_selected_plan_target_object(session, "symbol")
+    symbol = session.selection.state.get_selected_plan_target_object("symbol")
     if not session.visibility.is_plan_symbol_instance(symbol) or not session.view:
         return None
     try:

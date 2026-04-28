@@ -34,6 +34,7 @@ __url__ = "https://www.freecad.org"
 #  Spaces define an open volume inside or outside a
 #  building, ie. a room.
 
+from contextlib import contextmanager
 import json
 import heapq
 import math
@@ -188,10 +189,31 @@ ConditioningTypes = [
 
 AreaCalculationType = ["XY-plane projection", "At Center of Mass"]
 
-_BOUNDARY_SIDE_HINT_VERSION = 1
+_BOUNDARY_SIDE_HINT_VERSION = 2
 _BOUNDARY_REGION_HINT_VERSION = 1
+_BOUNDARY_STATUS_OK = "OK"
+_BOUNDARY_STATUS_CONFLICT = "Conflict"
+_BOUNDARY_STATUS_INVALID = "Invalid"
 _SCHEDULED_AUTO_SPACE_TEXT_REFRESHES = {}
 _SPACE_TEXT_VERTICAL_DISTANCE_WEIGHT = 1.75
+_SUPPRESSED_BOUNDARY_FAILURE_CONSOLE_REPORTS = 0
+
+
+@contextmanager
+def suppress_boundary_failure_console_reports():
+    global _SUPPRESSED_BOUNDARY_FAILURE_CONSOLE_REPORTS
+    _SUPPRESSED_BOUNDARY_FAILURE_CONSOLE_REPORTS += 1
+    try:
+        yield
+    finally:
+        _SUPPRESSED_BOUNDARY_FAILURE_CONSOLE_REPORTS = max(
+            0,
+            _SUPPRESSED_BOUNDARY_FAILURE_CONSOLE_REPORTS - 1,
+        )
+
+
+def _should_report_boundary_failure_to_console():
+    return _SUPPRESSED_BOUNDARY_FAILURE_CONSOLE_REPORTS <= 0
 
 
 class _Space(ArchComponent.Component):
@@ -202,6 +224,7 @@ class _Space(ArchComponent.Component):
         ArchComponent.Component.__init__(self, obj)
         self.Type = "Space"
         self._clear_boundary_failure()
+        self._pending_boundary_conflict_retries = set()
         self.setProperties(obj)
         obj.IfcType = "Space"
         obj.CompositionType = "ELEMENT"
@@ -258,6 +281,47 @@ class _Space(ArchComponent.Component):
             )
         if "BoundaryRegionHint" in obj.PropertiesList:
             obj.setEditorMode("BoundaryRegionHint", 2)
+        if not "BoundaryStatus" in pl:
+            obj.addProperty(
+                "App::PropertyString",
+                "BoundaryStatus",
+                "Space",
+                QT_TRANSLATE_NOOP(
+                    "App::Property",
+                    "Read-only boundary validation state for spaces driven by wall or face boundaries",
+                ),
+                locked=True,
+            )
+        if "BoundaryStatus" in obj.PropertiesList:
+            obj.setEditorMode("BoundaryStatus", 1)
+        if not "BoundaryStatusMessage" in pl:
+            obj.addProperty(
+                "App::PropertyString",
+                "BoundaryStatusMessage",
+                "Space",
+                QT_TRANSLATE_NOOP(
+                    "App::Property",
+                    "Read-only boundary validation message for this space",
+                ),
+                locked=True,
+            )
+        if "BoundaryStatusMessage" in obj.PropertiesList:
+            obj.setEditorMode("BoundaryStatusMessage", 1)
+        if not "BoundaryStatusDetails" in pl:
+            obj.addProperty(
+                "App::PropertyStringList",
+                "BoundaryStatusDetails",
+                "Space",
+                QT_TRANSLATE_NOOP(
+                    "App::Property",
+                    "Read-only boundary validation details for this space",
+                ),
+                locked=True,
+            )
+        if "BoundaryStatusDetails" in obj.PropertiesList:
+            obj.setEditorMode("BoundaryStatusDetails", 1)
+        if not str(getattr(obj, "BoundaryStatus", "") or "").strip():
+            self._set_boundary_status(obj, _BOUNDARY_STATUS_OK)
         if not "Area" in pl:
             obj.addProperty(
                 "App::PropertyArea",
@@ -403,6 +467,7 @@ class _Space(ArchComponent.Component):
 
         self.Type = "Space"
         self._clear_boundary_failure()
+        self._pending_boundary_conflict_retries = set()
 
     def execute(self, obj):
 
@@ -504,10 +569,76 @@ class _Space(ArchComponent.Component):
         ]
 
     def getLastBoundaryError(self, obj=None):
-        return getattr(self, "_last_boundary_error", "")
+        message = getattr(self, "_last_boundary_error", "")
+        if message:
+            return message
+        if obj is not None:
+            return str(getattr(obj, "BoundaryStatusMessage", "") or "").strip()
+        return ""
 
     def getLastBoundaryErrorDetails(self, obj=None):
-        return list(getattr(self, "_last_boundary_error_details", []))
+        details = list(getattr(self, "_last_boundary_error_details", []))
+        if details:
+            return details
+        if obj is not None:
+            return [
+                str(detail).strip()
+                for detail in list(getattr(obj, "BoundaryStatusDetails", []) or [])
+                if str(detail).strip()
+            ]
+        return []
+
+    def _set_boundary_status(self, obj, status=_BOUNDARY_STATUS_OK, message="", details=None):
+        if obj is None:
+            return
+        status = str(status or _BOUNDARY_STATUS_OK).strip() or _BOUNDARY_STATUS_OK
+        message = str(message or "").strip()
+        detail_values = [str(detail).strip() for detail in details or [] if str(detail).strip()]
+        for property_name, value in (
+            ("BoundaryStatus", status),
+            ("BoundaryStatusMessage", message),
+            ("BoundaryStatusDetails", detail_values),
+        ):
+            if not hasattr(obj, property_name):
+                continue
+            try:
+                current = getattr(obj, property_name)
+            except Exception:
+                current = None
+            if property_name == "BoundaryStatusDetails":
+                current = list(current or [])
+            if current == value:
+                continue
+            try:
+                setattr(obj, property_name, value)
+            except Exception:
+                pass
+
+    def getBoundaryStatus(self, obj=None):
+        if obj is None:
+            return _BOUNDARY_STATUS_OK
+        return str(getattr(obj, "BoundaryStatus", _BOUNDARY_STATUS_OK) or _BOUNDARY_STATUS_OK)
+
+    def getBoundaryStatusMessage(self, obj=None):
+        if obj is None:
+            return ""
+        return str(getattr(obj, "BoundaryStatusMessage", "") or "").strip()
+
+    def getBoundaryStatusDetails(self, obj=None):
+        if obj is None:
+            return []
+        return [
+            str(detail).strip()
+            for detail in list(getattr(obj, "BoundaryStatusDetails", []) or [])
+            if str(detail).strip()
+        ]
+
+    def _report_boundary_failure(self, message, details=None):
+        if not message or not _should_report_boundary_failure_to_console():
+            return
+        FreeCAD.Console.PrintError(message + "\n")
+        for detail in details or []:
+            FreeCAD.Console.PrintError(f"  - {detail}\n")
 
     def _get_shape_horizontal_slice_edges(self, shape, cut_z):
         return self._merge_shape_slice_edges(
@@ -720,6 +851,19 @@ class _Space(ArchComponent.Component):
     def getStableBoundaryLinks(self, obj):
         return self._get_stable_boundary_links(obj)
 
+    def setBoundaryLinks(self, obj, boundaries):
+        normalized = self.normalizeBoundaryLinks(boundaries, exclude_objects=obj)
+        if self._get_boundary_region_reference_point(obj) is not None:
+            self._write_boundary_side_hints(
+                obj,
+                self._build_boundary_side_hints_from_links(obj, normalized),
+            )
+        self._write_boundary_storage(
+            obj,
+            normalized,
+            hints=self._load_boundary_side_hints(obj),
+        )
+
     def _get_shape_reference_point(self, shape):
         if shape is None:
             return None
@@ -746,6 +890,9 @@ class _Space(ArchComponent.Component):
         point = self._get_boundary_region_reference_point(obj)
         if point is not None:
             return point
+        return self._get_space_shape_reference_point(obj)
+
+    def _get_space_shape_reference_point(self, obj):
         point = self._get_shape_reference_point(getattr(obj, "Shape", None))
         if point is not None:
             return point
@@ -819,6 +966,16 @@ class _Space(ArchComponent.Component):
                 hints[str(object_name)] = hint
         return hints
 
+    def _write_boundary_side_hints(self, obj, raw_hints):
+        if not hasattr(obj, "BoundarySideHints"):
+            return
+        raw_hints = list(raw_hints or [])
+        try:
+            if list(getattr(obj, "BoundarySideHints", []) or []) != raw_hints:
+                obj.BoundarySideHints = raw_hints
+        except Exception:
+            pass
+
     def _load_boundary_region_hint(self, obj):
         try:
             raw_hint = str(getattr(obj, "BoundaryRegionHint", "") or "").strip()
@@ -868,8 +1025,23 @@ class _Space(ArchComponent.Component):
         except Exception:
             pass
 
-    def _sync_boundary_region_hint(self, obj, shape=None):
+    def setBoundaryRegionReferencePoint(self, obj, point):
+        self._set_boundary_region_hint(obj, point)
+
+    def _get_boundary_region_record_reference_point(self, record=None, shape=None):
+        if record is not None:
+            sample_point = record.get("sample")
+            if sample_point is not None:
+                return FreeCAD.Vector(sample_point)
         point = self._get_shape_reference_point(shape)
+        if point is not None:
+            return point
+        return None
+
+    def _sync_boundary_region_hint(self, obj, shape=None, record=None, force=False):
+        if not force and self._get_boundary_region_reference_point(obj) is not None:
+            return
+        point = self._get_boundary_region_record_reference_point(record=record, shape=shape)
         if point is None:
             try:
                 base_shape = obj.Base.Shape
@@ -879,6 +1051,152 @@ class _Space(ArchComponent.Component):
         if point is None:
             return
         self._set_boundary_region_hint(obj, point)
+
+    def _is_boundary_region_base_object(self, base_obj):
+        if not base_obj:
+            return False
+        try:
+            if getattr(base_obj, "TypeId", "") != "Part::Feature":
+                return False
+            return str(getattr(base_obj, "Name", "") or "").startswith("SpaceRegionBase")
+        except Exception:
+            return False
+
+    def _loop_analysis_regions_match_reference_point(self, obj, loop_analysis):
+        if not loop_analysis:
+            return False
+        reference_point = self._get_space_reference_point(obj)
+        if reference_point is None:
+            return False
+
+        records = list(loop_analysis.get("records", []) or [])
+        for record in loop_analysis.get("top_level", []) or []:
+            region_face = self._build_face_from_region_record(records, record)
+            if region_face is None:
+                continue
+            sample_point = record.get("sample")
+            sample_z = getattr(sample_point, "z", reference_point.z)
+            plan_reference = FreeCAD.Vector(reference_point.x, reference_point.y, sample_z)
+            try:
+                if region_face.isInside(plan_reference, 0.001, True):
+                    return True
+            except Exception:
+                continue
+        return False
+
+    def _describe_boundary_region_reference_conflict(self, label):
+        label = str(label or translate("Arch", "Space"))
+        return (
+            translate(
+                "Arch",
+                "Arch Space '{label}' kept its previous shape because its stored room reference no longer matches any enclosed region.",
+            ).format(label=label),
+            [
+                translate(
+                    "Arch",
+                    "Update the boundary selection or reassign the space to the intended enclosed region.",
+                )
+            ],
+        )
+
+    def _preserve_current_shape_with_boundary_failure(
+        self,
+        obj,
+        pl,
+        *,
+        status=_BOUNDARY_STATUS_INVALID,
+        message,
+        details=None,
+        initialize_boundary_region_point=None,
+    ):
+        current_shape = self._copy_without_element_map(getattr(obj, "Shape", None))
+        if current_shape is None or not getattr(current_shape, "Solids", None):
+            return False
+
+        shape = self.processSubShapes(obj, current_shape.Solids[0], pl)
+        self.applyShape(obj, shape, pl)
+        self._sync_area_properties(obj)
+        if (
+            initialize_boundary_region_point is not None
+            and self._get_boundary_region_reference_point(obj) is None
+        ):
+            self._set_boundary_region_hint(obj, initialize_boundary_region_point)
+        self._sync_boundary_side_hints(obj, shape)
+        self._set_boundary_failure(message, details)
+        self._set_boundary_status(obj, status, message, details)
+        self._report_boundary_failure(message, details)
+        return True
+
+    def _preserve_current_shape_with_boundary_conflict(
+        self,
+        obj,
+        pl,
+        *,
+        message,
+        details=None,
+        initialize_boundary_region_point=None,
+    ):
+        if self._preserve_current_shape_with_boundary_failure(
+            obj,
+            pl,
+            status=_BOUNDARY_STATUS_CONFLICT,
+            message=message,
+            details=details,
+            initialize_boundary_region_point=initialize_boundary_region_point,
+        ):
+            return True
+        self._set_boundary_failure(message, details)
+        self._set_boundary_status(obj, _BOUNDARY_STATUS_CONFLICT, message, details)
+        self._report_boundary_failure(message, details)
+        return False
+
+    def _pop_pending_boundary_conflict_retry(self, obj):
+        object_name = getattr(obj, "Name", None)
+        if not object_name:
+            return False
+        pending = getattr(self, "_pending_boundary_conflict_retries", None)
+        if not isinstance(pending, set):
+            pending = set()
+            self._pending_boundary_conflict_retries = pending
+        if object_name not in pending:
+            return False
+        pending.discard(object_name)
+        return True
+
+    def _schedule_boundary_conflict_retry(self, obj):
+        object_name = getattr(obj, "Name", None)
+        if not object_name:
+            return False
+        pending = getattr(self, "_pending_boundary_conflict_retries", None)
+        if not isinstance(pending, set):
+            pending = set()
+            self._pending_boundary_conflict_retries = pending
+        if object_name in pending:
+            return False
+        pending.add(object_name)
+        try:
+            request_deferred_recompute = getattr(obj, "requestDeferredRecompute", None)
+            if callable(request_deferred_recompute):
+                request_deferred_recompute()
+            else:
+                obj.touch()
+        except Exception:
+            pending.discard(object_name)
+            return False
+        return True
+
+    def _can_preserve_current_legacy_region_shape(self, obj, boundary_faces, loop_analysis):
+        if not boundary_faces or not loop_analysis:
+            return False
+        if self._get_boundary_region_reference_point(obj) is not None:
+            return False
+        if not self._is_boundary_region_base_object(getattr(obj, "Base", None)):
+            return False
+        if not self._is_usable_solid_shape(getattr(obj, "Shape", None)):
+            return False
+        if not loop_analysis.get("top_level"):
+            return True
+        return not self._loop_analysis_regions_match_reference_point(obj, loop_analysis)
 
     def _get_boundary_face(self, obj, face_name):
         try:
@@ -909,6 +1227,17 @@ class _Space(ArchComponent.Component):
         if normal is None or center is None:
             return None
         return float(normal.dot(FreeCAD.Vector(reference_point).sub(center)))
+
+    def _get_boundary_face_tangential_distance(self, face, reference_point):
+        if face is None or reference_point is None:
+            return None
+        normal, center = self._get_boundary_face_normal_and_center(face)
+        if normal is None or center is None:
+            return None
+        reference_vector = FreeCAD.Vector(reference_point).sub(center)
+        normal_offset = float(normal.dot(reference_vector))
+        tangential = reference_vector.sub(FreeCAD.Vector(normal).multiply(normal_offset))
+        return float(tangential.Length)
 
     def _get_wall_side_reference_point(self, wall, face_name, fallback_reference=None):
         face = self._get_boundary_face(wall, face_name)
@@ -956,6 +1285,127 @@ class _Space(ArchComponent.Component):
         normal.normalize()
         return normal
 
+    def _get_semantic_wall_boundary_face_names(
+        self,
+        wall,
+        *,
+        reference_point=None,
+        hint=None,
+        use_wall_face_sets=False,
+    ):
+        if not wall:
+            return ()
+
+        normal = self._get_boundary_hint_normal(wall, hint)
+        if use_wall_face_sets:
+            candidate_face_names = ()
+            if normal is not None:
+                candidate_face_names = self._get_wall_boundary_face_names(
+                    wall,
+                    reference_point=reference_point,
+                    normal=normal,
+                )
+            if not candidate_face_names:
+                candidate_face_names = self._get_wall_boundary_face_names(
+                    wall,
+                    reference_point=reference_point,
+                )
+            return tuple(candidate_face_names)
+
+        candidate_face_name = None
+        if normal is not None:
+            candidate_face_name = self._get_wall_boundary_face_name_for_normal(
+                wall,
+                normal,
+                reference_point=reference_point,
+            )
+        if not candidate_face_name:
+            candidate_face_name = self._get_wall_boundary_face_name(
+                wall,
+                reference_point,
+            )
+        return (candidate_face_name,) if candidate_face_name else ()
+
+    def _serialize_boundary_side_hint(self, boundary_obj, face_names, space_reference):
+        object_name = getattr(boundary_obj, "Name", None)
+        if not object_name or not self._is_wall_object(boundary_obj):
+            return None
+
+        face_names = self.normalizeBoundarySubnames(face_names)
+        if not face_names:
+            return None
+
+        primary_face_name = face_names[0]
+        if len(face_names) > 1 and space_reference is not None:
+            candidate_face_name = self._get_wall_boundary_face_name(
+                boundary_obj,
+                space_reference,
+            )
+            if candidate_face_name in face_names:
+                primary_face_name = candidate_face_name
+
+        face = self._get_boundary_face(boundary_obj, primary_face_name)
+        reference_point = self._get_wall_side_reference_point(
+            boundary_obj,
+            primary_face_name,
+            fallback_reference=space_reference,
+        )
+        reference_hint = self._vector_to_boundary_hint(reference_point)
+        if reference_hint is None:
+            return None
+
+        local_reference_hint = self._vector_to_boundary_hint(
+            self._object_local_point_from_global(boundary_obj, reference_point)
+        )
+        normal, _center = self._get_boundary_face_normal_and_center(face)
+        normal_hint = self._vector_to_boundary_hint(normal)
+        local_normal_hint = self._vector_to_boundary_hint(
+            self._object_local_direction_from_global(boundary_obj, normal)
+        )
+
+        hint = {
+            "version": _BOUNDARY_SIDE_HINT_VERSION,
+            "kind": "wall-side",
+            "object": object_name,
+            "reference": reference_hint,
+        }
+        if local_reference_hint is not None:
+            hint["local_reference"] = local_reference_hint
+        if normal_hint is not None:
+            hint["normal"] = normal_hint
+        if local_normal_hint is not None:
+            hint["local_normal"] = local_normal_hint
+        return json.dumps(
+            hint,
+            sort_keys=True,
+            separators=(",", ":"),
+        )
+
+    def _build_boundary_side_hints_from_links(self, obj, boundaries, shape=None):
+        if not hasattr(obj, "BoundarySideHints"):
+            return []
+
+        space_reference = self._get_shape_reference_point(shape)
+        if space_reference is None:
+            space_reference = self._get_space_reference_point(obj)
+
+        hints = []
+        seen = set()
+        for boundary_obj, subnames in boundaries or []:
+            object_name = getattr(boundary_obj, "Name", None)
+            if not object_name or object_name in seen:
+                continue
+            raw_hint = self._serialize_boundary_side_hint(
+                boundary_obj,
+                subnames,
+                space_reference,
+            )
+            if raw_hint is None:
+                continue
+            hints.append(raw_hint)
+            seen.add(object_name)
+        return hints
+
     def _get_wall_boundary_face_name_for_normal(self, wall, normal, reference_point=None):
         if wall is None or normal is None:
             return None
@@ -985,11 +1435,23 @@ class _Space(ArchComponent.Component):
             if normal_score <= 0.8:
                 continue
             facing_score = 0.0
+            tangential_distance = 0.0
             if reference_point is not None:
                 facing_score = float(
                     face_normal.dot(FreeCAD.Vector(reference_point).sub(face_center))
                 )
-            sort_key = (normal_score, float(face.Area or 0.0), facing_score)
+                tangential_distance = self._get_boundary_face_tangential_distance(
+                    face,
+                    reference_point,
+                )
+                if tangential_distance is None:
+                    tangential_distance = float("inf")
+            sort_key = (
+                normal_score,
+                -float(tangential_distance),
+                facing_score,
+                float(face.Area or 0.0),
+            )
             if best_sort_key is None or sort_key > best_sort_key:
                 best_sort_key = sort_key
                 best_face_name = f"Face{index}"
@@ -1047,6 +1509,7 @@ class _Space(ArchComponent.Component):
 
         hints = self._load_boundary_side_hints(obj)
         fallback_reference = self._get_space_reference_point(obj)
+        boundary_region_reference = self._get_boundary_region_reference_point(obj)
         use_wall_face_sets = self._get_boundary_region_reference_point(obj) is not None
         stable_boundaries = []
 
@@ -1060,126 +1523,55 @@ class _Space(ArchComponent.Component):
 
             if is_wall and object_name:
                 hint = hints.get(object_name)
-                reference_point = None
-                if hint:
-                    reference_point = self._get_boundary_hint_reference_point(
+                if boundary_region_reference is not None:
+                    # When the room anchor is known, let the current wall topology decide
+                    # which face bounds that room. This handles join-generated trim faces
+                    # that are no longer described by the original wall-side normal.
+                    face_names = self.getBoundaryFaceNamesForObject(
                         boundary_obj,
-                        hint,
+                        reference_point=boundary_region_reference,
                     )
-                if reference_point is None:
-                    reference_point = fallback_reference
-
-                if not face_names:
-                    if use_wall_face_sets:
-                        candidate_face_names = ()
-                        if hint:
-                            candidate_face_names = self._get_wall_boundary_face_names(
-                                boundary_obj,
-                                reference_point=reference_point,
-                                normal=self._get_boundary_hint_normal(boundary_obj, hint),
-                                face_name=str(hint.get("face", "") or ""),
-                            )
-                        if not candidate_face_names:
-                            candidate_face_names = self._get_wall_boundary_face_names(
-                                boundary_obj,
-                                reference_point=reference_point,
-                            )
-                        face_names = tuple(candidate_face_names)
-                    else:
-                        candidate_face_name = None
-                        if hint:
-                            candidate_face_name = self._get_wall_boundary_face_name_for_normal(
-                                boundary_obj,
-                                self._get_boundary_hint_normal(boundary_obj, hint),
-                                reference_point=reference_point,
-                            )
-                            if not candidate_face_name:
-                                hint_face_name = str(hint.get("face", "") or "")
-                                if (
-                                    hint_face_name
-                                    and self._get_boundary_face(boundary_obj, hint_face_name)
-                                    is not None
-                                ):
-                                    candidate_face_name = hint_face_name
-                        if not candidate_face_name:
-                            candidate_face_name = self._get_wall_boundary_face_name(
-                                boundary_obj,
-                                reference_point,
-                            )
-                        face_names = (candidate_face_name,) if candidate_face_name else ()
-                elif len(face_names) == 1:
-                    current_face_name = face_names[0]
-                    hint_face_name = str(hint.get("face", "")) if hint else ""
-                    hint_matches_current_face = bool(hint) and (
-                        not hint_face_name or hint_face_name == current_face_name
-                    )
-                    if (
-                        hint
-                        and not hint_matches_current_face
-                        and self._get_boundary_face(boundary_obj, current_face_name) is not None
-                    ):
-                        stable_boundaries.append((boundary_obj, tuple(face_names)))
-                        continue
+                else:
+                    reference_point = None
+                    if hint:
+                        reference_point = self._get_boundary_hint_reference_point(
+                            boundary_obj,
+                            hint,
+                        )
+                    if reference_point is None:
+                        reference_point = fallback_reference
 
                     if use_wall_face_sets:
-                        candidate_face_names = self._get_wall_boundary_face_names(
+                        face_names = self._get_semantic_wall_boundary_face_names(
                             boundary_obj,
                             reference_point=reference_point,
-                            face_name=current_face_name,
+                            hint=hint,
+                            use_wall_face_sets=True,
                         )
-                        if not candidate_face_names and hint_matches_current_face:
-                            candidate_face_names = self._get_wall_boundary_face_names(
-                                boundary_obj,
-                                reference_point=reference_point,
-                                normal=self._get_boundary_hint_normal(boundary_obj, hint),
-                                face_name=current_face_name,
-                            )
-                        if (
-                            candidate_face_names
-                            and tuple(candidate_face_names) != tuple(face_names)
-                            and len(candidate_face_names) > 1
-                        ):
-                            face_names = tuple(candidate_face_names)
-                        elif (
-                            candidate_face_names
-                            and len(candidate_face_names) == 1
-                            and candidate_face_names[0] != current_face_name
-                        ):
-                            candidate_face_name = candidate_face_names[0]
-                            should_refresh = (
-                                hint_matches_current_face
-                                or self._should_refresh_wall_boundary_face(
-                                    boundary_obj,
-                                    current_face_name,
-                                    candidate_face_name,
-                                    reference_point,
-                                )
-                            )
-                            if should_refresh:
-                                face_names = tuple(candidate_face_names)
-                    else:
-                        candidate_face_name = self._get_wall_boundary_face_name(
+                    elif not face_names:
+                        face_names = self._get_semantic_wall_boundary_face_names(
                             boundary_obj,
-                            reference_point,
+                            reference_point=reference_point,
+                            hint=hint,
+                            use_wall_face_sets=False,
                         )
-                        if not candidate_face_name and hint_matches_current_face:
-                            candidate_face_name = self._get_wall_boundary_face_name_for_normal(
+                    elif len(face_names) == 1:
+                        current_face_name = face_names[0]
+                        candidate_face_names = self._get_semantic_wall_boundary_face_names(
+                            boundary_obj,
+                            reference_point=reference_point,
+                            hint=hint,
+                            use_wall_face_sets=False,
+                        )
+                        if candidate_face_names and candidate_face_names[0] != current_face_name:
+                            candidate_face_name = candidate_face_names[0]
+                            if self._should_refresh_wall_boundary_face(
                                 boundary_obj,
-                                self._get_boundary_hint_normal(boundary_obj, hint),
-                                reference_point=reference_point,
-                            )
-                        if candidate_face_name and candidate_face_name != current_face_name:
-                            should_refresh = (
-                                hint_matches_current_face
-                                or self._should_refresh_wall_boundary_face(
-                                    boundary_obj,
-                                    current_face_name,
-                                    candidate_face_name,
-                                    reference_point,
-                                )
-                            )
-                            if should_refresh:
-                                face_names = (candidate_face_name,)
+                                current_face_name,
+                                candidate_face_name,
+                                reference_point,
+                            ):
+                                face_names = tuple(candidate_face_names)
 
             if face_names:
                 stable_boundaries.append((boundary_obj, tuple(face_names)))
@@ -1217,7 +1609,12 @@ class _Space(ArchComponent.Component):
             boundaries.append((wall, ()))
         return boundaries
 
-    def _split_boundary_storage_links(self, boundaries, hints=None, store_single_wall_sides=False):
+    def _split_boundary_storage_links(
+        self,
+        boundaries,
+        hints=None,
+        store_hinted_wall_boundaries=False,
+    ):
         hinted_objects = set()
         if isinstance(hints, dict):
             hinted_objects = {str(name) for name in hints.keys() if str(name)}
@@ -1230,12 +1627,7 @@ class _Space(ArchComponent.Component):
             object_name = getattr(boundary_obj, "Name", None)
             is_wall = self._is_wall_object(boundary_obj)
             face_names = tuple(self.normalizeBoundarySubnames(subnames))
-            if (
-                store_single_wall_sides
-                and is_wall
-                and object_name in hinted_objects
-                and self._is_single_wall_side_face_set(boundary_obj, face_names)
-            ):
+            if store_hinted_wall_boundaries and is_wall and object_name in hinted_objects:
                 if object_name not in seen_wall_names:
                     wall_objects.append(boundary_obj)
                     seen_wall_names.add(object_name)
@@ -1247,7 +1639,7 @@ class _Space(ArchComponent.Component):
         explicit_boundaries, wall_objects = self._split_boundary_storage_links(
             stable_boundaries,
             hints=hints,
-            store_single_wall_sides=self._get_boundary_region_reference_point(obj) is not None,
+            store_hinted_wall_boundaries=self._get_boundary_region_reference_point(obj) is not None,
         )
         try:
             if list(getattr(obj, "Boundaries", []) or []) != explicit_boundaries:
@@ -1262,74 +1654,11 @@ class _Space(ArchComponent.Component):
                 pass
 
     def _sync_boundary_side_hints(self, obj, shape=None):
-        if not hasattr(obj, "BoundarySideHints"):
-            return
-
-        space_reference = self._get_shape_reference_point(shape)
-        if space_reference is None:
-            space_reference = self._get_space_reference_point(obj)
-
-        hints = []
-        seen = set()
         stable_links = self._get_stable_boundary_links(obj)
-        for boundary_obj, subnames in stable_links:
-            object_name = getattr(boundary_obj, "Name", None)
-            if not object_name or object_name in seen:
-                continue
-            if not self._is_wall_object(boundary_obj):
-                continue
-            face_names = self.normalizeBoundarySubnames(subnames)
-            if len(face_names) != 1:
-                continue
-            face = self._get_boundary_face(boundary_obj, face_names[0])
-            reference_point = self._get_wall_side_reference_point(
-                boundary_obj,
-                face_names[0],
-                fallback_reference=space_reference,
-            )
-            reference_hint = self._vector_to_boundary_hint(reference_point)
-            if reference_hint is None:
-                continue
-            local_reference_hint = self._vector_to_boundary_hint(
-                self._object_local_point_from_global(boundary_obj, reference_point)
-            )
-            normal, _center = self._get_boundary_face_normal_and_center(face)
-            normal_hint = self._vector_to_boundary_hint(normal)
-            local_normal_hint = self._vector_to_boundary_hint(
-                self._object_local_direction_from_global(boundary_obj, normal)
-            )
-            try:
-                face_area = float(face.Area or 0.0) if face is not None else 0.0
-            except Exception:
-                face_area = 0.0
-            hint = {
-                "version": _BOUNDARY_SIDE_HINT_VERSION,
-                "kind": "wall-side",
-                "object": object_name,
-                "face": face_names[0],
-                "reference": reference_hint,
-                "area": face_area,
-            }
-            if local_reference_hint is not None:
-                hint["local_reference"] = local_reference_hint
-            if normal_hint is not None:
-                hint["normal"] = normal_hint
-            if local_normal_hint is not None:
-                hint["local_normal"] = local_normal_hint
-            hints.append(
-                json.dumps(
-                    hint,
-                    sort_keys=True,
-                    separators=(",", ":"),
-                )
-            )
-            seen.add(object_name)
-
-        try:
-            if list(getattr(obj, "BoundarySideHints", []) or []) != hints:
-                obj.BoundarySideHints = hints
-        except Exception:
-            pass
+        self._write_boundary_side_hints(
+            obj,
+            self._build_boundary_side_hints_from_links(obj, stable_links, shape=shape),
+        )
         self._write_boundary_storage(
             obj,
             stable_links,
@@ -1610,86 +1939,82 @@ class _Space(ArchComponent.Component):
             return ()
         return tuple(sorted(points))
 
-    def _get_horizontal_slice_wires(self, shapes, cut_z):
+    def _get_wires_from_slice_edges(self, candidate_edges):
         import Part
 
-        def get_sorted_edge_wires(candidate_edges):
-            plain_edges = [self._copy_clean_slice_edge(edge) for edge in candidate_edges]
+        plain_edges = [self._copy_clean_slice_edge(edge) for edge in candidate_edges]
+        try:
+            edge_groups = Part.sortEdges(plain_edges)
+        except AttributeError:
+            edge_groups = Part.__sortEdges__(plain_edges)
+
+        if edge_groups and hasattr(edge_groups[0], "ShapeType"):
+            edge_groups = [edge_groups]
+
+        wires = []
+        for edges in edge_groups or []:
+            if not edges:
+                continue
             try:
-                edge_groups = Part.sortEdges(plain_edges)
-            except AttributeError:
-                edge_groups = Part.__sortEdges__(plain_edges)
+                wire = Part.Wire(edges)
+            except Exception:
+                return []
+            if not wire.isClosed() or len(wire.Vertexes) < 3:
+                return []
+            wires.append(wire)
+        return wires
 
-            if edge_groups and hasattr(edge_groups[0], "ShapeType"):
-                edge_groups = [edge_groups]
-
-            wires = []
-            for edges in edge_groups or []:
-                if not edges:
-                    continue
-                try:
-                    wire = Part.Wire(edges)
-                except Exception:
-                    return []
-                if not wire.isClosed() or len(wire.Vertexes) < 3:
-                    return []
-                wires.append(wire)
-            return wires
-
-        section_edges = self._get_horizontal_slice_edges(shapes, cut_z)
+    def _get_horizontal_slice_region_data(self, section_edges):
+        region_data = {
+            "record_source": None,
+            "wires": [],
+            "records": [],
+            "region_faces": [],
+        }
+        section_edges = list(section_edges or [])
         if not section_edges:
-            return []
+            return region_data
 
         bridged_edges = self._get_gap_bridged_slice_edges(section_edges)
         has_bridged_edges = len(bridged_edges) > len(section_edges)
 
-        wires = get_sorted_edge_wires(section_edges)
-        if wires:
-            return wires
-
+        candidates = [("wire", section_edges, "wire")]
         if has_bridged_edges:
-            wires = get_sorted_edge_wires(bridged_edges)
-            if wires:
-                return wires
+            candidates.append(("bridged-wire", bridged_edges, "wire"))
+        candidates.append(("face", section_edges, "face"))
+        if has_bridged_edges:
+            candidates.append(("bridged-face", bridged_edges, "face"))
 
-        for candidate_edges in ([bridged_edges] if has_bridged_edges else []):
-            if not self._can_build_faces_from_slice_edges(candidate_edges):
+        for source, candidate_edges, mode in candidates:
+            if mode == "wire":
+                wires = self._get_wires_from_slice_edges(candidate_edges)
+                records = self._classify_wire_records(wires) if wires else []
+            else:
+                region_faces = self._get_horizontal_slice_faces_from_edges(candidate_edges)
+                records = self._classify_region_faces(region_faces) if region_faces else []
+            if not records:
                 continue
-            build_faces = self._get_horizontal_slice_faces_from_edges(candidate_edges)
-            if build_faces:
-                wires = []
-                seen = set()
-                for face in build_faces:
-                    for wire in getattr(face, "Wires", []) or []:
-                        if not wire.isClosed() or len(wire.Vertexes) < 3:
-                            continue
-                        identity = self._get_wire_identity(wire)
-                        if identity in seen:
-                            continue
-                        seen.add(identity)
-                        wires.append(wire)
-                if wires:
-                    return wires
 
-        for candidate_edges in [section_edges]:
-            if not self._can_build_faces_from_slice_edges(candidate_edges):
+            region_faces = self._build_faces_from_records(records)
+            if not region_faces:
                 continue
-            build_faces = self._get_horizontal_slice_faces_from_edges(candidate_edges)
-            if build_faces:
-                wires = []
-                seen = set()
-                for face in build_faces:
-                    for wire in getattr(face, "Wires", []) or []:
-                        if not wire.isClosed() or len(wire.Vertexes) < 3:
-                            continue
-                        identity = self._get_wire_identity(wire)
-                        if identity in seen:
-                            continue
-                        seen.add(identity)
-                        wires.append(wire)
-                if wires:
-                    return wires
-        return []
+
+            region_data.update(
+                {
+                    "record_source": source,
+                    "wires": self._get_region_record_wires(records),
+                    "records": records,
+                    "region_faces": region_faces,
+                }
+            )
+            return region_data
+        return region_data
+
+    def _get_horizontal_slice_wires(self, shapes, cut_z):
+        section_edges = self._get_horizontal_slice_edges(shapes, cut_z)
+        if not section_edges:
+            return []
+        return self._get_horizontal_slice_region_data(section_edges).get("wires", [])
 
     def _get_wire_face_sample_point(self, face):
         try:
@@ -1722,6 +2047,7 @@ class _Space(ArchComponent.Component):
                 continue
             records.append(
                 {
+                    "kind": "wire",
                     "wire": wire,
                     "face": face,
                     "area": float(face.Area),
@@ -1748,6 +2074,77 @@ class _Space(ArchComponent.Component):
                 record["depth"] = len(parent_candidates)
         return records
 
+    def _classify_region_faces(self, faces):
+        records = []
+        for face in faces or []:
+            if not face or getattr(face, "Area", 0.0) <= 0.000001:
+                continue
+            region_face = self._copy_without_element_map(face)
+            if region_face is None:
+                region_face = face
+            sample_point = self._get_wire_face_sample_point(region_face)
+            if sample_point is None:
+                continue
+            wires = tuple(getattr(region_face, "Wires", []) or [])
+            if not wires:
+                continue
+            records.append(
+                {
+                    "kind": "region-face",
+                    "wire": wires[0],
+                    "wires": wires,
+                    "face": region_face,
+                    "area": float(region_face.Area),
+                    "sample": sample_point,
+                    "parent": None,
+                    "depth": 0,
+                }
+            )
+        if not records:
+            return []
+
+        for record in records:
+            parent_candidates = []
+            for other in records:
+                if other is record or other["area"] <= record["area"] + 0.000001:
+                    continue
+                try:
+                    if other["face"].isInside(record["sample"], 0.001, True):
+                        parent_candidates.append(other)
+                except Exception:
+                    continue
+            if parent_candidates:
+                record["parent"] = min(parent_candidates, key=lambda item: item["area"])
+                record["depth"] = len(parent_candidates)
+        return records
+
+    def _get_region_record_wires(self, records):
+        wires = []
+        seen = set()
+        for record in records or []:
+            record_wires = list(record.get("wires") or [])
+            if not record_wires and record.get("wire") is not None:
+                record_wires = [record["wire"]]
+            for wire in record_wires:
+                if not wire or not wire.isClosed() or len(wire.Vertexes) < 3:
+                    continue
+                identity = self._get_wire_identity(wire)
+                if identity in seen:
+                    continue
+                seen.add(identity)
+                wires.append(wire)
+        return wires
+
+    def _count_region_inner_voids(self, records):
+        inner_void_count = 0
+        for record in records or []:
+            if record.get("kind") == "region-face":
+                inner_void_count += max(len(getattr(record.get("face"), "Wires", []) or []) - 1, 0)
+                continue
+            if record.get("depth") == 1:
+                inner_void_count += 1
+        return inner_void_count
+
     def _build_faces_from_wires(self, wires, require_single_outer=False):
 
         records = self._classify_wire_records(wires)
@@ -1757,34 +2154,24 @@ class _Space(ArchComponent.Component):
         return self._build_faces_from_records(records, require_single_outer=require_single_outer)
 
     def _build_faces_from_records(self, records, require_single_outer=False):
+        if not records:
+            return []
+
+        top_level = [record for record in records if record["depth"] == 0]
+        nested_islands = [
+            record for record in records if record["depth"] > 0 and record["depth"] % 2 == 0
+        ]
         if require_single_outer:
-            top_level = [record for record in records if record["depth"] == 0]
-            nested_islands = [
-                record for record in records if record["depth"] > 0 and record["depth"] % 2 == 0
-            ]
             if len(top_level) != 1 or nested_islands:
                 return []
-            outer = top_level[0]
-            wires_for_face = [outer["wire"]]
-            wires_for_face.extend(
-                record["wire"]
-                for record in records
-                if record["parent"] is outer and record["depth"] == 1
-            )
-            face = self._make_transient_face_from_wires(wires_for_face)
+            face = self._build_face_from_region_record(records, top_level[0])
             if face is None:
                 return []
             return [face]
 
         faces = []
         for outer in [record for record in records if record["depth"] % 2 == 0]:
-            wires_for_face = [outer["wire"]]
-            wires_for_face.extend(
-                record["wire"]
-                for record in records
-                if record["parent"] is outer and record["depth"] == outer["depth"] + 1
-            )
-            face = self._make_transient_face_from_wires(wires_for_face)
+            face = self._build_face_from_region_record(records, outer)
             if face is None:
                 continue
             if getattr(face, "Area", 0.0) > 0.000001:
@@ -2044,7 +2431,10 @@ class _Space(ArchComponent.Component):
             facing_score = float(normal.dot(reference_point.sub(center)))
             if facing_score <= 1e-7:
                 continue
-            sort_key = (float(face.Area or 0.0), facing_score)
+            tangential_distance = self._get_boundary_face_tangential_distance(face, reference_point)
+            if tangential_distance is None:
+                tangential_distance = float("inf")
+            sort_key = (-float(tangential_distance), facing_score, float(face.Area or 0.0))
             if best_sort_key is None or sort_key > best_sort_key:
                 best_sort_key = sort_key
                 best_face_name = f"Face{index}"
@@ -2082,6 +2472,14 @@ class _Space(ArchComponent.Component):
         primary_normal, _primary_center = self._get_boundary_face_normal_and_center(primary_face)
         if primary_normal is None:
             return (primary_face_name,)
+        candidate_distance_limit = None
+        if reference_point is not None:
+            primary_tangential_distance = self._get_boundary_face_tangential_distance(
+                primary_face,
+                reference_point,
+            )
+            if primary_tangential_distance is not None:
+                candidate_distance_limit = max(primary_tangential_distance * 2.0 + 1.0, 1500.0)
 
         face_names = [primary_face_name]
         candidates = []
@@ -2104,11 +2502,30 @@ class _Space(ArchComponent.Component):
                 )
                 if facing_score <= 1e-7:
                     continue
-            candidates.append((normal_score, facing_score, candidate_face_name))
+                tangential_distance = self._get_boundary_face_tangential_distance(
+                    candidate_face,
+                    reference_point,
+                )
+                if (
+                    candidate_distance_limit is not None
+                    and tangential_distance is not None
+                    and tangential_distance > candidate_distance_limit
+                ):
+                    continue
+            else:
+                tangential_distance = 0.0
+            candidates.append(
+                (
+                    -float(tangential_distance or 0.0),
+                    normal_score,
+                    facing_score,
+                    candidate_face_name,
+                )
+            )
 
         candidates.sort(reverse=True)
         face_names.extend(
-            candidate_face_name for _score, _facing, candidate_face_name in candidates
+            candidate_face_name for _distance, _score, _facing, candidate_face_name in candidates
         )
         return tuple(face_names)
 
@@ -2215,7 +2632,9 @@ class _Space(ArchComponent.Component):
             "shared_z_min": None,
             "shared_z_max": None,
             "section_edges": [],
+            "record_source": None,
             "wires": [],
+            "region_faces": [],
             "records": [],
             "top_level": [],
             "nested_islands": [],
@@ -2236,8 +2655,14 @@ class _Space(ArchComponent.Component):
 
         cut_z = 0.5 * (shared_z_min + shared_z_max)
         section_edges = self._get_horizontal_slice_edges(boundary_faces, cut_z)
-        wires = self._get_horizontal_slice_wires(boundary_faces, cut_z) if section_edges else []
-        records = self._classify_wire_records(wires) if wires else []
+        region_data = (
+            self._get_horizontal_slice_region_data(section_edges)
+            if section_edges
+            else {"record_source": None, "wires": [], "region_faces": [], "records": []}
+        )
+        wires = region_data["wires"]
+        region_faces = region_data["region_faces"]
+        records = region_data["records"]
         top_level = [record for record in records if record["depth"] == 0]
         nested_islands = [
             record for record in records if record["depth"] > 0 and record["depth"] % 2 == 0
@@ -2249,11 +2674,15 @@ class _Space(ArchComponent.Component):
                 "shared_z_min": shared_z_min,
                 "shared_z_max": shared_z_max,
                 "section_edges": section_edges,
+                "record_source": region_data["record_source"],
                 "wires": wires,
+                "region_faces": region_faces,
                 "records": records,
                 "top_level": top_level,
                 "nested_islands": nested_islands,
-                "supports_single_outer": len(top_level) == 1 and not nested_islands,
+                "supports_single_outer": len(top_level) == 1
+                and len(region_faces) == 1
+                and not nested_islands,
             }
         )
         return analysis
@@ -2316,8 +2745,8 @@ class _Space(ArchComponent.Component):
                     details,
                 )
 
-            wires = analysis["wires"]
-            if not wires:
+            records = analysis["records"]
+            if not records:
                 return (
                     translate(
                         "Arch",
@@ -2403,7 +2832,7 @@ class _Space(ArchComponent.Component):
             return "no_height"
         if not loop_analysis.get("section_edges"):
             return "no_intersection"
-        if not loop_analysis.get("wires"):
+        if not loop_analysis.get("records"):
             return "open_loop"
         if len(loop_analysis.get("top_level", [])) > 1:
             return "multiple_regions"
@@ -2435,9 +2864,7 @@ class _Space(ArchComponent.Component):
                 boundary_faces,
                 loop_analysis=loop_analysis,
             )
-        inner_void_count = len(
-            [record for record in loop_analysis.get("records", []) if record.get("depth") == 1]
-        )
+        inner_void_count = self._count_region_inner_voids(loop_analysis.get("records", []))
         return {
             "label": label,
             "code": code,
@@ -2469,9 +2896,7 @@ class _Space(ArchComponent.Component):
                 boundary_faces,
                 loop_analysis=loop_analysis,
             )
-        inner_void_count = len(
-            [record for record in loop_analysis.get("records", []) if record.get("depth") == 1]
-        )
+        inner_void_count = self._count_region_inner_voids(loop_analysis.get("records", []))
         return {
             "label": label,
             "code": code,
@@ -2487,6 +2912,13 @@ class _Space(ArchComponent.Component):
     def _build_face_from_region_record(self, records, outer_record):
         if not outer_record:
             return None
+        if outer_record.get("kind") == "region-face":
+            face = self._copy_without_element_map(outer_record.get("face"))
+            if face is None:
+                face = outer_record.get("face")
+            if face is None or getattr(face, "Area", 0.0) <= 0.000001:
+                return None
+            return face
         wires_for_face = [outer_record["wire"]]
         wires_for_face.extend(
             record["wire"]
@@ -2529,7 +2961,9 @@ class _Space(ArchComponent.Component):
             pass
         return shape.Solids[0] if len(shape.Solids) == 1 else shape
 
-    def _select_boundary_region_record(self, records, top_level, reference_point):
+    def _select_boundary_region_record(
+        self, records, top_level, reference_point, require_containment=False
+    ):
         if not top_level or reference_point is None:
             return None
 
@@ -2549,6 +2983,8 @@ class _Space(ArchComponent.Component):
                     contains_reference = bool(region_face.isInside(plan_reference, 0.001, True))
                 except Exception:
                     contains_reference = False
+            if require_containment and not contains_reference:
+                continue
             distance = float(sample_point.sub(plan_reference).Length)
             sort_key = (
                 0 if contains_reference else 1,
@@ -2654,9 +3090,7 @@ class _Space(ArchComponent.Component):
                 }
             )
 
-        inner_void_count = len(
-            [record for record in loop_analysis.get("records", []) if record.get("depth") == 1]
-        )
+        inner_void_count = self._count_region_inner_voids(loop_analysis.get("records", []))
         return {
             "label": label,
             "code": code,
@@ -2720,44 +3154,167 @@ class _Space(ArchComponent.Component):
         import Part
 
         self._clear_boundary_failure()
+        self._set_boundary_status(obj, _BOUNDARY_STATUS_OK)
         shape = None
-        boundary_faces = self._get_boundary_faces(obj)
+        stored_boundary_links = self.normalizeBoundaryLinks(self._get_boundary_storage_links(obj))
+        boundary_links = self._get_stable_boundary_links(obj)
+        boundary_links_changed = stored_boundary_links != boundary_links
+        boundary_faces = self._get_boundary_faces_from_links(boundary_links)
         loop_analysis = self._analyze_boundary_loops(boundary_faces) if boundary_faces else None
-        boundary_reference = self._get_space_reference_point(obj)
+        stored_boundary_reference = self._get_boundary_region_reference_point(obj)
+        boundary_reference = stored_boundary_reference
+        if boundary_reference is None:
+            boundary_reference = self._get_space_shape_reference_point(obj)
         pl = obj.Placement
+        retrying_boundary_conflict = self._pop_pending_boundary_conflict_retry(obj)
+
+        if (
+            boundary_faces
+            and boundary_reference is not None
+            and self._is_usable_solid_shape(getattr(obj, "Shape", None))
+        ):
+            current_region_record = None
+            if loop_analysis and loop_analysis.get("top_level"):
+                current_region_record = self._select_boundary_region_record(
+                    loop_analysis.get("records", []),
+                    loop_analysis.get("top_level", []),
+                    boundary_reference,
+                    require_containment=True,
+                )
+
+            if current_region_record is None:
+                seeded_boundary_faces = self.getBoundaryFacesFromLinks(
+                    boundary_links,
+                    seed_space=obj,
+                )
+                if len(seeded_boundary_faces) > len(boundary_faces):
+                    seeded_loop_analysis = self._analyze_boundary_loops(seeded_boundary_faces)
+                    seeded_region_record = None
+                    if seeded_loop_analysis.get("top_level"):
+                        seeded_region_record = self._select_boundary_region_record(
+                            seeded_loop_analysis.get("records", []),
+                            seeded_loop_analysis.get("top_level", []),
+                            boundary_reference,
+                            require_containment=True,
+                        )
+                    if seeded_region_record is not None:
+                        boundary_faces = seeded_boundary_faces
+                        loop_analysis = seeded_loop_analysis
 
         # print("starting compute")
-
-        if boundary_faces and loop_analysis and loop_analysis["supports_single_outer"]:
-            loop_shape = self._build_shape_from_boundary_loops(
-                boundary_faces, loop_analysis=loop_analysis
-            )
-            if loop_shape is not None:
-                shape = self.processSubShapes(obj, loop_shape.Solids[0], pl)
-                self.applyShape(obj, shape, pl)
-                self._sync_area_properties(obj)
-                self._sync_boundary_region_hint(obj, shape)
-                self._sync_boundary_side_hints(obj, shape)
-                return
 
         if (
             boundary_faces
             and loop_analysis
-            and len(loop_analysis.get("top_level", [])) > 1
-            and boundary_reference is not None
+            and stored_boundary_reference is not None
+            and len(boundary_links) > 1
+            and not loop_analysis.get("top_level")
         ):
-            region_shape = self._build_shape_from_boundary_region_reference(
-                boundary_faces,
-                boundary_reference,
-                loop_analysis=loop_analysis,
+            label = str(
+                getattr(obj, "Label", "") or getattr(obj, "Name", "") or translate("Arch", "Space")
             )
-            if region_shape is not None:
-                shape = self.processSubShapes(obj, region_shape.Solids[0], pl)
+            message, details = self._describe_boundary_region_reference_conflict(label)
+            if (
+                boundary_links_changed
+                and not retrying_boundary_conflict
+                and self._schedule_boundary_conflict_retry(obj)
+            ):
+                return
+            if self._preserve_current_shape_with_boundary_conflict(
+                obj,
+                pl,
+                message=message,
+                details=details,
+            ):
+                return
+
+        if self._can_preserve_current_legacy_region_shape(obj, boundary_faces, loop_analysis):
+            current_shape = self._copy_without_element_map(getattr(obj, "Shape", None))
+            if current_shape is not None and current_shape.Solids:
+                shape = self.processSubShapes(obj, current_shape.Solids[0], pl)
                 self.applyShape(obj, shape, pl)
                 self._sync_area_properties(obj)
                 self._sync_boundary_region_hint(obj, shape)
                 self._sync_boundary_side_hints(obj, shape)
+                self._set_boundary_status(obj, _BOUNDARY_STATUS_OK)
                 return
+
+        if boundary_faces and loop_analysis and loop_analysis.get("top_level"):
+            selected_region_record = None
+            if boundary_reference is not None:
+                selected_region_record = self._select_boundary_region_record(
+                    loop_analysis.get("records", []),
+                    loop_analysis.get("top_level", []),
+                    boundary_reference,
+                    require_containment=True,
+                )
+                if selected_region_record is None:
+                    label = str(
+                        getattr(obj, "Label", "")
+                        or getattr(obj, "Name", "")
+                        or translate("Arch", "Space")
+                    )
+                    message, details = self._describe_boundary_region_reference_conflict(label)
+                    if (
+                        boundary_links_changed
+                        and not retrying_boundary_conflict
+                        and self._schedule_boundary_conflict_retry(obj)
+                    ):
+                        return
+                    if self._preserve_current_shape_with_boundary_conflict(
+                        obj,
+                        pl,
+                        message=message,
+                        details=details,
+                        initialize_boundary_region_point=(
+                            boundary_reference if stored_boundary_reference is None else None
+                        ),
+                    ):
+                        return
+            elif loop_analysis["supports_single_outer"]:
+                selected_region_record = loop_analysis.get("top_level", [None])[0]
+
+            if selected_region_record is not None:
+                region_shape = self._build_shape_from_boundary_region(
+                    boundary_faces,
+                    selected_region_record,
+                    loop_analysis=loop_analysis,
+                )
+                if region_shape is not None:
+                    shape = self.processSubShapes(obj, region_shape.Solids[0], pl)
+                    self.applyShape(obj, shape, pl)
+                    self._sync_area_properties(obj)
+                    self._sync_boundary_region_hint(
+                        obj,
+                        shape,
+                        record=selected_region_record,
+                    )
+                    self._sync_boundary_side_hints(obj, shape)
+                    return
+
+                if boundary_reference is not None:
+                    label = str(
+                        getattr(obj, "Label", "")
+                        or getattr(obj, "Name", "")
+                        or translate("Arch", "Space")
+                    )
+                    message, details = self._describe_boundary_region_reference_conflict(label)
+                    if (
+                        boundary_links_changed
+                        and not retrying_boundary_conflict
+                        and self._schedule_boundary_conflict_retry(obj)
+                    ):
+                        return
+                    if self._preserve_current_shape_with_boundary_conflict(
+                        obj,
+                        pl,
+                        message=message,
+                        details=details,
+                        initialize_boundary_region_point=(
+                            boundary_reference if stored_boundary_reference is None else None
+                        ),
+                    ):
+                        return
 
         # 1: if we have a base shape, we use it
         # Check if there is obj.Base and its validity to proceed
@@ -2777,6 +3334,7 @@ class _Space(ArchComponent.Component):
                 self._sync_area_properties(obj)
                 self._sync_boundary_region_hint(obj, shape)
                 self._sync_boundary_side_hints(obj, shape)
+                self._set_boundary_status(obj, _BOUNDARY_STATUS_OK)
                 return
         else:
             if boundary_faces and not loop_analysis["supports_single_outer"]:
@@ -2792,10 +3350,8 @@ class _Space(ArchComponent.Component):
                     loop_analysis=loop_analysis,
                 )
                 self._set_boundary_failure(message, details)
-                if message:
-                    FreeCAD.Console.PrintError(message + "\n")
-                    for detail in details:
-                        FreeCAD.Console.PrintError(f"  - {detail}\n")
+                self._set_boundary_status(obj, _BOUNDARY_STATUS_INVALID, message, details)
+                self._report_boundary_failure(message, details)
                 return
             bb = self._get_boundary_bounding_box(boundary_faces)
             if not bb:
@@ -2839,6 +3395,7 @@ class _Space(ArchComponent.Component):
                 self._sync_area_properties(obj)
                 self._sync_boundary_region_hint(obj, shape)
                 self._sync_boundary_side_hints(obj, shape)
+                self._set_boundary_status(obj, _BOUNDARY_STATUS_OK)
 
                 return
 
@@ -2849,10 +3406,8 @@ class _Space(ArchComponent.Component):
             label, boundary_faces, has_base_shape=has_base_shape
         )
         self._set_boundary_failure(message, details)
-        if message:
-            FreeCAD.Console.PrintError(message + "\n")
-            for detail in details:
-                FreeCAD.Console.PrintError(f"  - {detail}\n")
+        self._set_boundary_status(obj, _BOUNDARY_STATUS_INVALID, message, details)
+        self._report_boundary_failure(message, details)
 
     def getArea(self, obj, notouch=False):
         "returns the horizontal area at the center of the space"
@@ -2998,6 +3553,24 @@ def getStableBoundaryLinks(space):
     if callable(stable_links):
         return stable_links(space)
     return []
+
+
+def setBoundaryLinks(space, boundaries):
+    """Store explicit boundary links, using semantic wall-side storage when available."""
+
+    proxy = getattr(space, "Proxy", None)
+    setter = getattr(proxy, "setBoundaryLinks", None)
+    if callable(setter):
+        setter(space, boundaries)
+
+
+def setBoundaryRegionReferencePoint(space, point):
+    """Store an explicit interior reference point for choosing a boundary-derived room region."""
+
+    proxy = getattr(space, "Proxy", None)
+    setter = getattr(proxy, "setBoundaryRegionReferencePoint", None)
+    if callable(setter):
+        setter(space, point)
 
 
 def resolveBoundaryLinks(entries, reference_point=None, exclude_objects=None):

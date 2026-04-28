@@ -4,7 +4,6 @@
 
 import FreeCAD
 
-from bimplan import selection as plan_selection
 from bimplan.selection import target_kinds as plan_target_kinds
 from bimplan.tools import space_boundaries as plan_space_boundaries
 from bimplan.tools import space_editing as plan_space_editing
@@ -15,6 +14,21 @@ translate = FreeCAD.Qt.translate
 
 def _space_region_pick_state(session):
     return session.space_region_pick_state
+
+
+def _selection_targets_api(session):
+    selection = getattr(session, "selection", None)
+    return getattr(selection, "targets", selection)
+
+
+def _selection_hover_api(session):
+    selection = getattr(session, "selection", None)
+    return getattr(selection, "hover", selection)
+
+
+def _selection_refresh_api(session):
+    selection = getattr(session, "selection", None)
+    return getattr(selection, "refresh", selection)
 
 
 def build_space_region_candidate_report(session, boundaries, label=None, seed_space=None):
@@ -80,6 +94,7 @@ def set_space_region_pick_state(
     candidates=None,
     *,
     seed_space=None,
+    edit_space=None,
     hovered_candidate=None,
 ):
     state = _space_region_pick_state(session)
@@ -87,6 +102,7 @@ def set_space_region_pick_state(
     state.candidates = list(candidates or [])
     state.hovered_candidate = hovered_candidate
     state.seed_space = seed_space
+    state.edit_space = edit_space
 
 
 def _get_space_region_pick_candidates(session):
@@ -118,6 +134,7 @@ def _get_space_region_pick_context(session):
     return {
         "boundaries": list(state.boundaries or ()),
         "seed_space": state.seed_space,
+        "edit_space": state.edit_space,
     }
 
 
@@ -135,6 +152,15 @@ def _finish_created_space(session, space, event_callback=None, claim_click=False
     return True
 
 
+def _report_space_reassignment_failure(space):
+    proxy = getattr(space, "Proxy", None)
+    message = _get_proxy_last_boundary_error(proxy, space) if proxy is not None else ""
+    if message:
+        FreeCAD.Console.PrintError(message + "\n")
+        return True
+    return False
+
+
 def _create_space_in_transaction(
     session,
     *,
@@ -142,6 +168,8 @@ def _create_space_in_transaction(
     boundaries=None,
     keep_boundaries=False,
 ):
+    import ArchSpace
+
     boundaries = list(boundaries or [])
     space = None
     reported_failure = False
@@ -151,9 +179,7 @@ def _create_space_in_transaction(
         if not space:
             raise RuntimeError("Unable to create space")
         if keep_boundaries and boundaries:
-            if hasattr(space, "BoundaryWalls"):
-                space.BoundaryWalls = []
-            space.Boundaries = boundaries
+            ArchSpace.setBoundaryLinks(space, boundaries)
         session.visibility.add_object_to_active_storey(space)
         session.doc.recompute()
         geometry_valid = bool(session.spaces.space_has_valid_geometry(space))
@@ -174,21 +200,71 @@ def _create_space_in_transaction(
     return space
 
 
+def _reassign_space_in_transaction(
+    session,
+    space,
+    candidate,
+    *,
+    boundaries=None,
+):
+    import ArchSpace
+
+    if space is None or not isinstance(candidate, dict):
+        return None
+    sample_point = candidate.get("sample_point")
+    if sample_point is None:
+        return None
+    boundaries = list(boundaries or session.spaces.get_space_boundary_entries(space))
+    reported_failure = False
+    try:
+        session.doc.openTransaction(translate("BIM_PlanEdit", "Reassign Space Region"))
+        if boundaries:
+            ArchSpace.setBoundaryLinks(space, boundaries)
+        ArchSpace.setBoundaryRegionReferencePoint(space, sample_point)
+        space.touch()
+        session.doc.recompute()
+        geometry_valid = bool(session.spaces.space_has_valid_geometry(space))
+        status = str(getattr(space, "BoundaryStatus", "") or "").strip()
+        if not geometry_valid or status == "Conflict":
+            reported_failure = _report_space_reassignment_failure(space)
+            raise RuntimeError("Unable to reassign space region")
+        session.doc.commitTransaction()
+    except Exception:
+        try:
+            session.doc.abortTransaction()
+        except Exception:
+            pass
+        if not reported_failure:
+            FreeCAD.Console.PrintError(
+                translate("BIM_PlanEdit", "Failed to reassign the selected space.\n")
+            )
+        return None
+    return space
+
+
 def _create_and_finish_space_region_candidate(
     session,
     candidate,
     *,
     boundaries,
     keep_boundaries,
+    edit_space=None,
     event_callback=None,
     claim_click=False,
     clear_region_pick_state=False,
 ):
-    space = session.spaces.create_space_from_region_candidate(
-        candidate,
-        boundaries=boundaries,
-        keep_boundaries=keep_boundaries,
-    )
+    if edit_space is not None:
+        space = session.spaces.reassign_space_from_region_candidate(
+            edit_space,
+            candidate,
+            boundaries=boundaries,
+        )
+    else:
+        space = session.spaces.create_space_from_region_candidate(
+            candidate,
+            boundaries=boundaries,
+            keep_boundaries=keep_boundaries,
+        )
     if not space:
         return False
     if clear_region_pick_state:
@@ -201,25 +277,40 @@ def _create_and_finish_space_region_candidate(
     )
 
 
-def _start_space_region_pick_mode(session, boundaries, candidates, seed_space=None):
+def _start_space_region_pick_mode(
+    session,
+    boundaries,
+    candidates,
+    seed_space=None,
+    edit_space=None,
+):
     session.current_tool = "Pick Space Region"
     set_space_region_pick_state(
         session,
         boundaries=boundaries,
         candidates=candidates,
         seed_space=seed_space,
+        edit_space=edit_space,
     )
     session.overlays.walls.clear_wall_grips()
-    session.selection.hover.clear_hovered_plan_targets(
+    _selection_hover_api(session).clear_hovered_plan_targets(
         kinds=plan_target_kinds.SPACE_EDIT_CLEAR_HOVERED_KINDS
     )
-    session.selection.refresh.refresh_primary_selected_plan_target()
-    FreeCAD.Console.PrintMessage(
-        translate(
-            "BIM_PlanEdit",
-            "Multiple enclosed regions found. Hover a dashed region and click to create that space.\n",
+    _selection_refresh_api(session).refresh_primary_selected_plan_target()
+    if edit_space is not None:
+        FreeCAD.Console.PrintMessage(
+            translate(
+                "BIM_PlanEdit",
+                "Multiple enclosed regions found. Hover a dashed region and click to reassign the selected space.\n",
+            )
         )
-    )
+    else:
+        FreeCAD.Console.PrintMessage(
+            translate(
+                "BIM_PlanEdit",
+                "Multiple enclosed regions found. Hover a dashed region and click to create that space.\n",
+            )
+        )
     return True
 
 
@@ -241,6 +332,7 @@ def _create_space_from_single_region_candidate(
     report,
     *,
     keep_boundaries,
+    edit_space=None,
 ):
     candidates = list(report.get("candidates", []) or [])
     if len(candidates) != 1:
@@ -250,6 +342,7 @@ def _create_space_from_single_region_candidate(
         candidates[0],
         boundaries=boundaries,
         keep_boundaries=keep_boundaries,
+        edit_space=edit_space,
     )
 
 
@@ -259,6 +352,7 @@ def _consume_space_region_candidate_report(
     report,
     *,
     seed_space=None,
+    edit_space=None,
     keep_boundaries=True,
     announce_skipped_claimed=False,
 ):
@@ -277,6 +371,7 @@ def _consume_space_region_candidate_report(
         boundaries,
         report,
         keep_boundaries=keep_boundaries,
+        edit_space=edit_space,
     )
     if created is not None:
         return created
@@ -286,6 +381,7 @@ def _consume_space_region_candidate_report(
         boundaries,
         candidates,
         seed_space=seed_space,
+        edit_space=edit_space,
     )
 
 
@@ -354,7 +450,9 @@ def pick_space_region_candidate(session, mouse_pos, radius_px=10):
     best_distance_sq = None
     for candidate in candidates:
         for start, end in get_space_region_candidate_segments(session, candidate):
-            distance_sq = session.selection.picking.get_screen_distance_sq_to_segment(mouse_pos, start, end)
+            distance_sq = session.selection.picking.get_screen_distance_sq_to_segment(
+                mouse_pos, start, end
+            )
             if distance_sq is None or distance_sq > radius_sq:
                 continue
             if best_distance_sq is None or distance_sq < best_distance_sq:
@@ -437,6 +535,31 @@ def start_space_region_pick(session, boundaries, label=None, seed_space=None, re
     )
 
 
+def start_space_region_reassignment(session, space, boundaries=None, label=None, report=None):
+    if space is None:
+        return False
+    if boundaries is None:
+        boundaries = session.spaces.get_space_boundary_entries(space)
+    boundaries = list(boundaries or [])
+    if not boundaries:
+        return False
+    if report is None:
+        report = build_space_region_candidate_report(
+            session,
+            boundaries,
+            label=label or getattr(space, "Label", None),
+            seed_space=space,
+        )
+    return _consume_space_region_candidate_report(
+        session,
+        boundaries,
+        report,
+        seed_space=space,
+        edit_space=space,
+        keep_boundaries=True,
+    )
+
+
 def cancel_space_region_pick(session, refresh=True):
     was_active = session.current_tool == "Pick Space Region" or bool(
         _space_region_pick_state(session).candidates
@@ -445,7 +568,7 @@ def cancel_space_region_pick(session, refresh=True):
     if session.current_tool == "Pick Space Region":
         session.current_tool = "Select"
     if was_active:
-        session.selection.refresh.refresh_primary_selected_plan_target()
+        _selection_refresh_api(session).refresh_primary_selected_plan_target()
     elif refresh:
         session.task_panels.refresh_task_panel_status()
     return was_active
@@ -453,6 +576,7 @@ def cancel_space_region_pick(session, refresh=True):
 
 def create_space_from_region_candidate(session, candidate, boundaries=None, keep_boundaries=True):
     import Arch
+    import ArchSpace
 
     if not isinstance(candidate, dict):
         return None
@@ -461,13 +585,26 @@ def create_space_from_region_candidate(session, candidate, boundaries=None, keep
         base = create_space_region_base_object(session, candidate)
         if not base:
             return None
-        return Arch.makeSpace(base)
+        space = Arch.makeSpace(base)
+        sample_point = candidate.get("sample_point")
+        if space is not None and sample_point is not None:
+            ArchSpace.setBoundaryRegionReferencePoint(space, sample_point)
+        return space
 
     return _create_space_in_transaction(
         session,
         create_space=create_space,
         boundaries=boundaries,
         keep_boundaries=keep_boundaries,
+    )
+
+
+def reassign_space_from_region_candidate(session, space, candidate, boundaries=None):
+    return _reassign_space_in_transaction(
+        session,
+        space,
+        candidate,
+        boundaries=boundaries,
     )
 
 
@@ -478,7 +615,8 @@ def activate_space_region_candidate(session, candidate, event_callback=None):
     pick_context = _get_space_region_pick_context(session)
     boundaries = pick_context["boundaries"]
     seed_space = pick_context["seed_space"]
-    if not boundaries and seed_space is None:
+    edit_space = pick_context["edit_space"]
+    if not boundaries and seed_space is None and edit_space is None:
         return False
 
     return _create_and_finish_space_region_candidate(
@@ -486,6 +624,7 @@ def activate_space_region_candidate(session, candidate, event_callback=None):
         candidate,
         boundaries=boundaries,
         keep_boundaries=seed_space is None,
+        edit_space=edit_space,
         event_callback=event_callback,
         claim_click=True,
         clear_region_pick_state=True,
@@ -557,7 +696,7 @@ def create_space_from_current_selection(session):
 
 
 def space_has_valid_geometry(session, space):
-    if not session.selection.targets.is_plan_space_object(space):
+    if not _selection_targets_api(session).is_plan_space_object(space):
         return False
     try:
         shape = getattr(space, "Shape", None)

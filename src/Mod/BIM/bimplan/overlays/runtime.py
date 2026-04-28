@@ -203,6 +203,63 @@ class PlanSymbolOverlayService(_BoundOverlayService):
         "get_symbol_local_facing",
     )
 
+    def refresh_target_document_visual_dependency(self, symbol, obj, prop):
+        if not (
+            plan_document_visuals.is_symbol_visual_dependency(self.session, symbol, obj)
+            and prop in plan_document_visuals.SYMBOL_VISUAL_PROPERTIES
+        ):
+            return False
+        plan_document_visuals.refresh_plan_object_footprint_display(self.session, symbol)
+        return True
+
+    def refresh_symbol_visual_footprint(self, symbol):
+        if symbol is None:
+            return False
+        plan_document_visuals.refresh_plan_object_footprint_display(self.session, symbol)
+        return True
+
+    def handle_document_visual_dependency_change(self, obj, prop):
+        selected_symbol = self.session.selection.state.get_selected_plan_target_object("symbol")
+        if self.refresh_target_document_visual_dependency(selected_symbol, obj, prop):
+            self.session.overlays.queue_plan_overlay_visual_refresh(
+                plan_document_visuals.PLAN_VISUAL_SELECTED_SYMBOL
+            )
+            return True
+        hovered_symbol = self.session.hovered_symbol
+        if (
+            hovered_symbol
+            and not self.session.selection.state.is_selected_plan_target("symbol", hovered_symbol)
+            and self.refresh_target_document_visual_dependency(hovered_symbol, obj, prop)
+        ):
+            self.session.overlays.queue_plan_overlay_visual_refresh(
+                plan_document_visuals.PLAN_VISUAL_HOVERED_SYMBOL
+            )
+            return True
+        return False
+
+    def handle_deleted_visual_target(self, obj):
+        if obj == self.session.hovered_symbol:
+            self.session.hovered_symbol = None
+            self.clear_hovered_symbol_overlay()
+        if self.session.selection.refresh.clear_selected_plan_target_if_matches("symbol", obj):
+            self.refresh_selected_symbol_visuals()
+            return True
+        return False
+
+    def refresh_document_dependent_visuals(self):
+        visuals = []
+        selected_symbol = self.session.selection.state.get_selected_plan_target_object("symbol")
+        if self.refresh_symbol_visual_footprint(selected_symbol):
+            visuals.append(plan_document_visuals.PLAN_VISUAL_SELECTED_SYMBOL)
+        hovered_symbol = self.session.hovered_symbol
+        if (
+            hovered_symbol
+            and not self.session.selection.state.is_selected_plan_target("symbol", hovered_symbol)
+            and self.refresh_symbol_visual_footprint(hovered_symbol)
+        ):
+            visuals.append(plan_document_visuals.PLAN_VISUAL_HOVERED_SYMBOL)
+        return tuple(visuals)
+
 
 class PlanOverlaysAPI:
     """Owned session surface for BIM Plan Edit overlay behavior."""

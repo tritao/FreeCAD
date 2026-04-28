@@ -8,7 +8,6 @@ import FreeCADGui
 from . import geometry as overlay_geometry
 from . import manager as overlay_manager
 from . import openings as overlay_openings
-from .. import selection as plan_selection
 
 
 def _perf_count(session, name, delta=1):
@@ -80,7 +79,7 @@ def sync_wall_grips(session):
                 clear_wall_grips(session)
                 return
 
-        wall = plan_selection.get_selected_plan_target_object(session, "wall")
+        wall = session.selection.state.get_selected_plan_target_object("wall")
         proxy = getattr(wall, "Proxy", None)
         calc_endpoints = _get_proxy_method(proxy, "calc_endpoints")
         if calc_endpoints is None:
@@ -234,8 +233,11 @@ def clear_hovered_wall_overlay(session):
 
 def sync_selected_wall_overlay(session):
     with _perf_trace_span(session, "sync_selected_wall_overlay"):
-        wall = plan_selection.get_selected_plan_target_object(session, "wall")
-        if session.current_tool != "Select" or not session.selection.targets.is_plan_selectable_wall(wall):
+        wall = session.selection.state.get_selected_plan_target_object("wall")
+        if (
+            session.current_tool != "Select"
+            or not session.selection.targets.is_plan_selectable_wall(wall)
+        ):
             clear_selected_wall_overlay(session)
             return
         width = session.viewport.scaled_line_width(4)
@@ -276,7 +278,7 @@ def clear_selected_wall_overlay(session):
 def apply_selected_wall_selection_feedback(session, *, defer_grips=False):
     tracker_state = _wall_tracker_state(session)
     had_wall_visuals = bool(tracker_state.grip_trackers or tracker_state.wall_overlay_trackers)
-    wall = plan_selection.get_selected_plan_target_object(session, "wall")
+    wall = session.selection.state.get_selected_plan_target_object("wall")
     if session.current_tool == "Select" and session.selection.targets.is_plan_selectable_wall(wall):
         sync_selected_wall_overlay(session)
         if defer_grips:
@@ -299,7 +301,7 @@ def get_plan_context_junctions(session):
 
     junctions = []
     seen = set()
-    selected_wall = plan_selection.get_selected_plan_target_object(session, "wall")
+    selected_wall = session.selection.state.get_selected_plan_target_object("wall")
     for wall in (selected_wall, session.hovered_wall):
         if not session.selection.targets.is_plan_selectable_wall(wall):
             continue
@@ -354,7 +356,7 @@ def create_junction_node_trackers(session, junction, color, width, tracker_store
 
 def sync_junction_node_overlays(session):
     clear_junction_node_overlays(session)
-    selected_wall = plan_selection.get_selected_plan_target_object(session, "wall")
+    selected_wall = session.selection.state.get_selected_plan_target_object("wall")
     for junction in get_plan_context_junctions(session):
         if selected_wall and selected_wall in (getattr(junction, "Walls", None) or []):
             color = (0.92, 0.58, 0.12)

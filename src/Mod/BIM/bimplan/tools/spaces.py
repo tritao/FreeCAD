@@ -39,6 +39,10 @@ def start_space_region_pick(session, *args, **kwargs):
     return plan_space_regions.start_space_region_pick(session, *args, **kwargs)
 
 
+def start_space_region_reassignment(session, *args, **kwargs):
+    return plan_space_regions.start_space_region_reassignment(session, *args, **kwargs)
+
+
 def create_space_from_current_selection(session, *args, **kwargs):
     return plan_space_regions.create_space_from_current_selection(session, *args, **kwargs)
 
@@ -170,11 +174,21 @@ class PlanSpacesAPI(_SessionAPI):
     def start_space_region_pick(self, *args, **kwargs):
         return plan_space_regions.start_space_region_pick(self.session, *args, **kwargs)
 
+    def start_space_region_reassignment(self, *args, **kwargs):
+        return plan_space_regions.start_space_region_reassignment(self.session, *args, **kwargs)
+
     def cancel_space_region_pick(self, *args, **kwargs):
         return plan_space_regions.cancel_space_region_pick(self.session, *args, **kwargs)
 
     def create_space_from_region_candidate(self, *args, **kwargs):
         return plan_space_regions.create_space_from_region_candidate(self.session, *args, **kwargs)
+
+    def reassign_space_from_region_candidate(self, *args, **kwargs):
+        return plan_space_regions.reassign_space_from_region_candidate(
+            self.session,
+            *args,
+            **kwargs,
+        )
 
     def space_has_valid_geometry(self, *args, **kwargs):
         return plan_space_regions.space_has_valid_geometry(self.session, *args, **kwargs)
@@ -229,6 +243,110 @@ class PlanSpacesAPI(_SessionAPI):
 
     def refresh_selected_region_visuals(self, *args, **kwargs):
         return plan_space_editing.refresh_selected_region_visuals(self.session, *args, **kwargs)
+
+    def refresh_target_document_visual_change(self, kind, target_obj, obj, prop):
+        from bimplan import document_visuals as plan_document_visuals
+
+        if target_obj is None:
+            return False
+        property_map = {
+            "region": plan_document_visuals.REGION_VISUAL_PROPERTIES,
+            "space": plan_document_visuals.SPACE_VISUAL_PROPERTIES,
+        }
+        if kind not in property_map or obj != target_obj or prop not in property_map[kind]:
+            return False
+        plan_document_visuals.refresh_plan_object_footprint_display(self.session, target_obj)
+        return True
+
+    def refresh_plan_target_footprint(self, kind, target_obj):
+        from bimplan import document_visuals as plan_document_visuals
+
+        if kind not in ("region", "space") or target_obj is None:
+            return False
+        plan_document_visuals.refresh_plan_object_footprint_display(self.session, target_obj)
+        return True
+
+    def handle_document_visual_change(self, obj, prop):
+        from bimplan import document_visuals as plan_document_visuals
+
+        selected_region = self.session.selection.state.get_selected_plan_target_object("region")
+        if self.refresh_target_document_visual_change("region", selected_region, obj, prop):
+            self.session.overlays.queue_plan_overlay_visual_refresh(
+                plan_document_visuals.PLAN_VISUAL_SELECTED_REGION
+            )
+            self.session.task_panels.refresh_task_panel_status(reason="selection")
+            return True
+        hovered_region = self.session.hovered_region
+        if (
+            hovered_region
+            and not self.session.selection.state.is_selected_plan_target("region", hovered_region)
+            and self.refresh_target_document_visual_change("region", hovered_region, obj, prop)
+        ):
+            self.session.overlays.queue_plan_overlay_visual_refresh(
+                plan_document_visuals.PLAN_VISUAL_HOVERED_REGION
+            )
+            return True
+        selected_space = self.session.selection.state.get_selected_plan_target_object("space")
+        if self.refresh_target_document_visual_change("space", selected_space, obj, prop):
+            self.session.overlays.queue_plan_overlay_visual_refresh(
+                plan_document_visuals.PLAN_VISUAL_SELECTED_SPACE
+            )
+            self.session.task_panels.refresh_task_panel_status(reason="selection")
+            return True
+        hovered_space = self.session.hovered_space
+        if (
+            hovered_space
+            and not self.session.selection.state.is_selected_plan_target("space", hovered_space)
+            and self.refresh_target_document_visual_change("space", hovered_space, obj, prop)
+        ):
+            self.session.overlays.queue_plan_overlay_visual_refresh(
+                plan_document_visuals.PLAN_VISUAL_HOVERED_SPACE
+            )
+            return True
+        return False
+
+    def handle_deleted_visual_target(self, obj):
+        if obj == self.session.hovered_space:
+            self.session.hovered_space = None
+            self.session.overlays.spaces.clear_hovered_space_overlay()
+        if obj == self.session.hovered_region:
+            self.session.hovered_region = None
+            self.session.overlays.spaces.clear_hovered_region_overlay()
+        if self.session.selection.refresh.clear_selected_plan_target_if_matches("region", obj):
+            self.refresh_selected_region_visuals()
+            self.session.task_panels.refresh_task_panel_status(reason="selection")
+            return True
+        if self.session.selection.refresh.clear_selected_plan_target_if_matches("space", obj):
+            self.refresh_selected_space_visuals()
+            self.session.task_panels.refresh_task_panel_status(reason="selection")
+            return True
+        return False
+
+    def refresh_document_dependent_visuals(self):
+        from bimplan import document_visuals as plan_document_visuals
+
+        visuals = []
+        selected_region = self.session.selection.state.get_selected_plan_target_object("region")
+        if self.refresh_plan_target_footprint("region", selected_region):
+            visuals.append(plan_document_visuals.PLAN_VISUAL_SELECTED_REGION)
+        hovered_region = self.session.hovered_region
+        if (
+            hovered_region
+            and not self.session.selection.state.is_selected_plan_target("region", hovered_region)
+            and self.refresh_plan_target_footprint("region", hovered_region)
+        ):
+            visuals.append(plan_document_visuals.PLAN_VISUAL_HOVERED_REGION)
+        selected_space = self.session.selection.state.get_selected_plan_target_object("space")
+        if self.refresh_plan_target_footprint("space", selected_space):
+            visuals.append(plan_document_visuals.PLAN_VISUAL_SELECTED_SPACE)
+        hovered_space = self.session.hovered_space
+        if (
+            hovered_space
+            and not self.session.selection.state.is_selected_plan_target("space", hovered_space)
+            and self.refresh_plan_target_footprint("space", hovered_space)
+        ):
+            visuals.append(plan_document_visuals.PLAN_VISUAL_HOVERED_SPACE)
+        return tuple(visuals)
 
     def restore_selected_semantic_target(self, *args, **kwargs):
         return plan_space_editing.restore_selected_semantic_target(self.session, *args, **kwargs)

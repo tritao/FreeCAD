@@ -10,7 +10,6 @@ from bimplan.providers import PlanOverlayMarkerKind
 from bimplan.providers import runtime as plan_provider_runtime
 from . import manager as overlay_manager
 from . import tracker_pool as overlay_tracker_pool
-from .. import selection as plan_selection
 
 _PROVIDER_OVERLAY_POINT_PREFIX = "ProviderOverlayPoint"
 _PROVIDER_OVERLAY_PICK_TRACKER_SCALE = 0.14
@@ -267,7 +266,7 @@ def get_selected_provider_handle_specs(session, provider_obj):
 def sync_selected_provider_handles(session):
     with _perf_trace_span(session, "sync_selected_provider_handles"):
         provider_state = _provider_transient_state(session)
-        provider_obj = plan_selection.get_selected_plan_target_object(session, "provider")
+        provider_obj = session.selection.state.get_selected_plan_target_object("provider")
         if session.current_tool != "Select":
             clear_selected_provider_handles(session)
             return
@@ -322,7 +321,7 @@ def clear_selected_provider_handles(session):
 
 
 def pick_selected_provider_handle(session, mouse_pos, radius_px=10):
-    provider_obj = plan_selection.get_selected_plan_target_object(session, "provider")
+    provider_obj = session.selection.state.get_selected_plan_target_object("provider")
     if (
         not plan_provider_runtime.is_plan_provider_target_object(session, provider_obj)
         or not session.view
@@ -686,7 +685,7 @@ def _get_selected_provider_objects(session):
     selected_objects = []
     seen = set()
     for provider_obj in (
-        plan_selection.get_selected_plan_target_object(session, "provider"),
+        session.selection.state.get_selected_plan_target_object("provider"),
         *tuple(provider_state.provider_selected_objects or ()),
     ):
         if provider_obj is None:

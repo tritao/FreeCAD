@@ -6,7 +6,6 @@ import ArchWindow
 import FreeCAD
 import FreeCADGui
 from bimplan.tools import hosted_openings as plan_hosted_openings
-from bimplan import selection as plan_selection
 
 translate = FreeCAD.Qt.translate
 
@@ -158,7 +157,7 @@ def get_window_height_user_string(window):
 
 
 def get_selected_window_style_preset(session):
-    window = plan_selection.get_selected_plan_target_object(session, "opening")
+    window = session.selection.state.get_selected_plan_target_object("opening")
     if not ArchWindow.isWindowObject(window):
         return ""
     preset_name = ArchWindow.getWindowPresetName(window)
@@ -168,42 +167,42 @@ def get_selected_window_style_preset(session):
 
 
 def can_apply_selected_window_style_preset(session):
-    window = plan_selection.get_selected_plan_target_object(session, "opening")
+    window = session.selection.state.get_selected_plan_target_object("opening")
     return can_edit_window_style_preset(window)
 
 
 def get_selected_window_width_mm(session):
-    window = plan_selection.get_selected_plan_target_object(session, "opening")
+    window = session.selection.state.get_selected_plan_target_object("opening")
     return get_window_width_mm(window)
 
 
 def get_selected_window_width_text(session):
-    window = plan_selection.get_selected_plan_target_object(session, "opening")
+    window = session.selection.state.get_selected_plan_target_object("opening")
     return get_window_width_user_string(window)
 
 
 def get_selected_window_height_mm(session):
-    window = plan_selection.get_selected_plan_target_object(session, "opening")
+    window = session.selection.state.get_selected_plan_target_object("opening")
     return get_window_height_mm(window)
 
 
 def get_selected_window_height_text(session):
-    window = plan_selection.get_selected_plan_target_object(session, "opening")
+    window = session.selection.state.get_selected_plan_target_object("opening")
     return get_window_height_user_string(window)
 
 
 def can_apply_selected_window_width(session):
-    window = plan_selection.get_selected_plan_target_object(session, "opening")
+    window = session.selection.state.get_selected_plan_target_object("opening")
     return can_edit_window_width(window)
 
 
 def can_apply_selected_window_height(session):
-    window = plan_selection.get_selected_plan_target_object(session, "opening")
+    window = session.selection.state.get_selected_plan_target_object("opening")
     return can_edit_window_height(window)
 
 
 def can_apply_selected_window_size(session, width_value=None, height_value=None):
-    window = plan_selection.get_selected_plan_target_object(session, "opening")
+    window = session.selection.state.get_selected_plan_target_object("opening")
     resize_targets = _resolve_window_resize_targets(
         window,
         width_value=width_value,
@@ -222,7 +221,7 @@ def can_apply_selected_window_size(session, width_value=None, height_value=None)
 
 
 def apply_selected_window_style_preset(session, preset_name):
-    window = plan_selection.get_selected_plan_target_object(session, "opening")
+    window = session.selection.state.get_selected_plan_target_object("opening")
     if not can_edit_window_style_preset(window):
         return False
 
@@ -274,7 +273,7 @@ def can_place_window(session):
 
 
 def get_window_host_wall(session):
-    wall = plan_selection.get_selected_plan_target_object(session, "wall")
+    wall = session.selection.state.get_selected_plan_target_object("wall")
     if session.selection.targets.is_plan_selectable_wall(wall):
         return wall
     wall = getattr(session, "hovered_wall", None)
@@ -733,7 +732,7 @@ def _set_selected_window_size(
     height_value=None,
     transaction_label=None,
 ):
-    window = plan_selection.get_selected_plan_target_object(session, "opening")
+    window = session.selection.state.get_selected_plan_target_object("opening")
     resize_targets = _resolve_window_resize_targets(
         window,
         width_value=width_value,

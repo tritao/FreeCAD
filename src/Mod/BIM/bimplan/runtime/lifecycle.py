@@ -8,7 +8,6 @@ import FreeCAD
 import FreeCADGui
 from bimplan.runtime import command_gate as plan_command_gate
 from bimplan.runtime import tools as plan_runtime_tools
-from bimplan import selection as plan_selection
 from bimplan.tools import spaces as plan_spaces
 from bimplan.tools import window_create as plan_window_create
 from bimplan.selection import target_dispatch as plan_target_dispatch
@@ -525,15 +524,8 @@ def _apply_cleanup_profile(session, profile):
 
 
 def _get_selected_space_for_activation(session):
-    selection_api = getattr(session, "selection", None)
-    get_selected_plan_target_object = getattr(
-        selection_api, "get_selected_plan_target_object", None
-    )
-    if callable(get_selected_plan_target_object):
-        return get_selected_plan_target_object(plan_target_kinds.PLAN_TARGET_SPACE)
-    return plan_selection.get_selected_plan_target_object(
-        session,
-        plan_target_kinds.PLAN_TARGET_SPACE,
+    return session.selection.state.get_selected_plan_target_object(
+        plan_target_kinds.PLAN_TARGET_SPACE
     )
 
 

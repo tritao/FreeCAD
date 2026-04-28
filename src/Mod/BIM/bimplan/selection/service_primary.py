@@ -60,9 +60,7 @@ class PlanSelectionStateService(_SessionAPI):
         self.session.selection.refresh.sanitize_plan_target_references()
         target_ref = self.get_selected_plan_target_state()
         if self.is_valid_plan_target(target_ref.kind, target_ref.obj):
-            return plan_target_kinds.make_plan_target_ref(
-                target_ref.kind, target_ref.obj
-            )
+            return plan_target_kinds.make_plan_target_ref(target_ref.kind, target_ref.obj)
         if target_ref.kind is not None or target_ref.obj is not None:
             self.set_selected_plan_target_state()
         return plan_target_kinds.make_plan_target_ref()
@@ -77,19 +75,13 @@ class PlanSelectionStateService(_SessionAPI):
             if key is None or key in seen:
                 continue
             seen.add(key)
-            yield plan_target_kinds.make_plan_target_ref(
-                target_ref.kind, target_ref.obj
-            )
+            yield plan_target_kinds.make_plan_target_ref(target_ref.kind, target_ref.obj)
 
-    def _filter_secondary_selected_plan_targets(
-        self, targets, primary_kind, primary_obj
-    ):
+    def _filter_secondary_selected_plan_targets(self, targets, primary_kind, primary_obj):
         for target_ref in targets:
             if target_ref.kind == primary_kind and target_ref.obj == primary_obj:
                 continue
-            yield plan_target_kinds.make_plan_target_ref(
-                target_ref.kind, target_ref.obj
-            )
+            yield plan_target_kinds.make_plan_target_ref(target_ref.kind, target_ref.obj)
 
     def _get_current_secondary_selected_plan_targets(self):
         primary_target_ref = self._get_native_selected_plan_target()
@@ -125,8 +117,7 @@ class PlanSelectionStateService(_SessionAPI):
         current_target_ref = self.get_selected_plan_target()
         if kind is None:
             return (
-                previous_kind != current_target_ref.kind
-                or previous_obj != current_target_ref.obj
+                previous_kind != current_target_ref.kind or previous_obj != current_target_ref.obj
             )
         previous_target = self.get_plan_target_object_from_state(
             previous_kind,
@@ -147,8 +138,8 @@ class PlanSelectionStateService(_SessionAPI):
             kind = target_ref.kind
             obj = target_ref.obj
         if self.is_valid_plan_target(kind, obj):
-            selection_state.pending_selected_plan_target = (
-                plan_target_kinds.make_plan_target_ref(kind, obj)
+            selection_state.pending_selected_plan_target = plan_target_kinds.make_plan_target_ref(
+                kind, obj
             )
             return
         selection_state.pending_selected_plan_target = None
@@ -168,13 +159,9 @@ class PlanSelectionStateService(_SessionAPI):
 
     def get_first_plan_target_from_selection(self, selection):
         for selected in selection or []:
-            target_ref = self.session.selection.targets.get_plan_target_for_object(
-                selected
-            )
+            target_ref = self.session.selection.targets.get_plan_target_for_object(selected)
             if target_ref.kind and target_ref.obj:
-                return plan_target_kinds.make_plan_target_ref(
-                    target_ref.kind, target_ref.obj
-                )
+                return plan_target_kinds.make_plan_target_ref(target_ref.kind, target_ref.obj)
         return plan_target_kinds.make_plan_target_ref()
 
     def is_valid_plan_target(self, kind, obj):
@@ -198,9 +185,7 @@ class PlanSelectionStateService(_SessionAPI):
             ],
         )
 
-    def set_secondary_selected_plan_targets(
-        self, targets, primary_kind=None, primary_obj=None
-    ):
+    def set_secondary_selected_plan_targets(self, targets, primary_kind=None, primary_obj=None):
         if primary_kind is None and primary_obj is None:
             primary_target_ref = self.get_selected_plan_target()
             primary_kind = primary_target_ref.kind
@@ -310,9 +295,7 @@ class PlanSelectionRefreshService(_SessionAPI):
             self.session, preselected_obj
         ):
             return False
-        self.session.performance.plan_perf_count(
-            "provider_preselection_cleared_for_mode"
-        )
+        self.session.performance.plan_perf_count("provider_preselection_cleared_for_mode")
         return _clear_gui_preselection()
 
     def sanitize_plan_target_references(self):
@@ -344,26 +327,19 @@ class PlanSelectionRefreshService(_SessionAPI):
         normalized_secondary = self.session.selection.state.normalize_plan_target_list(
             selection_state.secondary_selected_plan_targets_state
         )
-        if (
-            normalized_secondary
-            != selection_state.secondary_selected_plan_targets_state
-        ):
+        if normalized_secondary != selection_state.secondary_selected_plan_targets_state:
             selection_state.secondary_selected_plan_targets_state = normalized_secondary
             changed = True
         return changed
 
     def clear_selected_plan_target_if_matches(self, kind, obj):
-        return self.session.selection.state.clear_selected_plan_target_if_matches(
-            kind, obj
-        )
+        return self.session.selection.state.clear_selected_plan_target_if_matches(kind, obj)
 
     def handle_secondary_selection_document_visual_change(self, obj, prop):
         from bimplan import document_visuals as plan_document_visuals
 
         secondary_overlay_refresh = False
-        for (
-            target_ref
-        ) in self.session.selection.state.get_secondary_selected_plan_targets():
+        for target_ref in self.session.selection.state.get_secondary_selected_plan_targets():
             if target_ref.kind in ("region", "space"):
                 handled = self.session.spaces.refresh_target_document_visual_change(
                     target_ref.kind, target_ref.obj, obj, prop
@@ -373,10 +349,8 @@ class PlanSelectionRefreshService(_SessionAPI):
                     target_ref.obj, obj, prop
                 )
             elif target_ref.kind == "opening":
-                handled = (
-                    self.session.openings.refresh_target_document_visual_dependency(
-                        target_ref.obj, obj, prop
-                    )
+                handled = self.session.openings.refresh_target_document_visual_dependency(
+                    target_ref.obj, obj, prop
                 )
             elif (
                 target_ref.kind == "wall"
@@ -396,18 +370,14 @@ class PlanSelectionRefreshService(_SessionAPI):
         return True
 
     def refresh_document_dependent_secondary_selection_visuals(self):
-        for (
-            target_ref
-        ) in self.session.selection.state.get_secondary_selected_plan_targets():
+        for target_ref in self.session.selection.state.get_secondary_selected_plan_targets():
             if target_ref.kind in ("region", "space"):
                 self.session.spaces.refresh_plan_target_footprint(
                     target_ref.kind,
                     target_ref.obj,
                 )
             elif target_ref.kind == "symbol":
-                self.session.overlays.symbols.refresh_symbol_visual_footprint(
-                    target_ref.obj
-                )
+                self.session.overlays.symbols.refresh_symbol_visual_footprint(target_ref.obj)
             elif target_ref.kind == "opening":
                 self.session.openings.refresh_opening_visual_footprints(target_ref.obj)
 
@@ -479,17 +449,13 @@ class PlanSelectionRefreshService(_SessionAPI):
                     plan_target_kinds.PLAN_TARGET_WALL,
                 )
             ):
-                with self.session.performance.plan_perf_trace_span(
-                    "sync_selected_wall_overlay"
-                ):
+                with self.session.performance.plan_perf_trace_span("sync_selected_wall_overlay"):
                     self.session.overlays.walls.sync_selected_wall_overlay()
             with self.session.performance.plan_perf_trace_span(
                 "sync_selected_wall_opening_context_overlay"
             ):
                 self.session.overlays.openings.sync_selected_wall_opening_context_overlay()
-            with self.session.performance.plan_perf_trace_span(
-                "sync_hovered_wall_overlay"
-            ):
+            with self.session.performance.plan_perf_trace_span("sync_hovered_wall_overlay"):
                 self.session.overlays.walls.sync_hovered_wall_overlay()
             with self.session.performance.plan_perf_trace_span(
                 "sync_hovered_wall_opening_context_overlay"
@@ -525,13 +491,9 @@ class PlanSelectionRefreshService(_SessionAPI):
                 ),
                 trace_style="by_method",
             )
-            with self.session.performance.plan_perf_trace_span(
-                "sync_secondary_selected_overlays"
-            ):
+            with self.session.performance.plan_perf_trace_span("sync_secondary_selected_overlays"):
                 self.session.overlays.spaces.sync_secondary_selected_overlays()
-            with self.session.performance.plan_perf_trace_span(
-                "sync_active_plan_target_object"
-            ):
+            with self.session.performance.plan_perf_trace_span("sync_active_plan_target_object"):
                 self.session.viewport.sync_active_plan_target_object()
             self.session.task_panels.refresh_task_panel_status(
                 reason=(
@@ -542,9 +504,7 @@ class PlanSelectionRefreshService(_SessionAPI):
             )
 
     def refresh_selected_plan_target(self, *, force_wall_visual_resync=False):
-        with self.session.performance.plan_perf_trace_span(
-            "refresh_selected_plan_target"
-        ):
+        with self.session.performance.plan_perf_trace_span("refresh_selected_plan_target"):
             self.session.performance.plan_perf_count("selection_refreshes")
             if self.session.lifecycle_state.tearing_down:
                 return
@@ -552,17 +512,13 @@ class PlanSelectionRefreshService(_SessionAPI):
                 return
 
             previous_kind, previous_obj, previous_wall = (
-                plan_selection_state_refresh._get_selection_refresh_baseline(
-                    self.session
-                )
+                plan_selection_state_refresh._get_selection_refresh_baseline(self.session)
             )
-            refresh_result = (
-                plan_selection_state_refresh._resolve_selection_refresh_result(
-                    self.session,
-                    previous_kind,
-                    previous_obj,
-                    previous_wall,
-                )
+            refresh_result = plan_selection_state_refresh._resolve_selection_refresh_result(
+                self.session,
+                previous_kind,
+                previous_obj,
+                previous_wall,
             )
             plan_selection_state_refresh._apply_selection_refresh_result(
                 self.session, refresh_result
@@ -584,9 +540,7 @@ class PlanSelectionRefreshService(_SessionAPI):
             )
 
     def refresh_primary_selected_plan_target(self, *, force_wall_visual_resync=False):
-        self.refresh_selected_plan_target(
-            force_wall_visual_resync=force_wall_visual_resync
-        )
+        self.refresh_selected_plan_target(force_wall_visual_resync=force_wall_visual_resync)
 
 
 class PlanSelectionSyncService(_SessionAPI):
@@ -637,9 +591,7 @@ class PlanSelectionSyncService(_SessionAPI):
         if not state.selection_refresh_queued:
             return
         state.selection_refresh_queued = False
-        with self.session.performance.plan_perf_trace_event(
-            "selection_observer_refresh"
-        ):
+        with self.session.performance.plan_perf_trace_event("selection_observer_refresh"):
             if (
                 self.session.lifecycle_state.tearing_down
                 or self.session.lifecycle_state.ignore_selection_changes
@@ -660,9 +612,7 @@ class PlanSelectionSyncService(_SessionAPI):
         try:
             from PySide import QtCore
 
-            QtCore.QTimer.singleShot(
-                0, lambda: self.run_scheduled_clear_plan_selection_state()
-            )
+            QtCore.QTimer.singleShot(0, lambda: self.run_scheduled_clear_plan_selection_state())
         except Exception:
             self.run_scheduled_clear_plan_selection_state()
 
@@ -671,9 +621,7 @@ class PlanSelectionSyncService(_SessionAPI):
         if not state.clear_plan_selection_state_queued:
             return
         state.clear_plan_selection_state_queued = False
-        with self.session.performance.plan_perf_trace_event(
-            "scheduled_clear_plan_selection_state"
-        ):
+        with self.session.performance.plan_perf_trace_event("scheduled_clear_plan_selection_state"):
             if (
                 self.session.lifecycle_state.tearing_down
                 or self.session.lifecycle_state.ignore_selection_changes
@@ -703,9 +651,7 @@ class PlanSelectionSyncService(_SessionAPI):
 
             QtCore.QTimer.singleShot(
                 delay_ms,
-                lambda generation=generation: self.run_scheduled_gui_selection_sync(
-                    generation
-                ),
+                lambda generation=generation: self.run_scheduled_gui_selection_sync(generation),
             )
         except Exception:
             self.run_scheduled_gui_selection_sync(generation)
@@ -720,9 +666,7 @@ class PlanSelectionSyncService(_SessionAPI):
         if obj is None:
             state.gui_selection_sync_queued = False
             return
-        with self.session.performance.plan_perf_trace_event(
-            "scheduled_gui_selection_sync"
-        ):
+        with self.session.performance.plan_perf_trace_event("scheduled_gui_selection_sync"):
             if self.session.lifecycle_state.tearing_down:
                 state.gui_selection_sync_queued = False
                 state.queued_gui_selection_object = None
@@ -749,14 +693,10 @@ class PlanSelectionSyncService(_SessionAPI):
             self.session.lifecycle_state.ignore_selection_changes = previous_ignore
 
     def selection_observer_add(self, doc, obj, sub, point):
-        return plan_selection_gui_sync.selection_observer_add(
-            self.session, doc, obj, sub, point
-        )
+        return plan_selection_gui_sync.selection_observer_add(self.session, doc, obj, sub, point)
 
     def selection_observer_remove(self, doc, obj, sub):
-        return plan_selection_gui_sync.selection_observer_remove(
-            self.session, doc, obj, sub
-        )
+        return plan_selection_gui_sync.selection_observer_remove(self.session, doc, obj, sub)
 
     def selection_observer_set(self, doc):
         return plan_selection_gui_sync.selection_observer_set(self.session, doc)
