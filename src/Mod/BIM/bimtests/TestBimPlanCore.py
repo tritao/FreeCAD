@@ -1476,7 +1476,7 @@ class TestBimPlanCore(unittest.TestCase):
         )
 
         with patch(
-            "bimplan.selection.picking.should_skip_opening_by_plan_bounds",
+            "bimplan.selection.overlay_picking.should_skip_opening_by_plan_bounds",
             return_value=False,
         ):
             self.assertIsNone(
