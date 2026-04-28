@@ -235,6 +235,16 @@ def _handle_direct_tool_key_press(session, key, event_callback, coin):
     ).on_key(key, event_callback, coin):
         return True
     if (
+        session.current_tool == plan_runtime_tools.PlanTool.SET_SPACE_TEXT
+        and plan_spaces_tool.SpaceTextTool(session).on_key(key, event_callback, coin)
+    ):
+        return True
+    if (
+        session.current_tool == plan_runtime_tools.PlanTool.SEPARATOR
+        and plan_spaces_tool.SpaceSeparatorTool(session).on_key(key, event_callback, coin)
+    ):
+        return True
+    if (
         session.current_tool == plan_runtime_tools.PlanTool.PROVIDER_POINT
         and key == coin.SoKeyboardEvent.ESCAPE
     ):
@@ -264,7 +274,7 @@ def _handle_escape_cancels(session):
         plan_symbol_tool.SymbolEditTool(session).cancel()
         return True
     if session.current_tool == plan_runtime_tools.PlanTool.SET_SPACE_TEXT:
-        session.spaces.cancel_space_text_position_pick()
+        plan_spaces_tool.SpaceTextTool(session).cancel()
         return True
     if session.providers.has_active_provider_point_tool():
         session.providers.cancel_provider_point_tool()
@@ -276,10 +286,10 @@ def _handle_escape_cancels(session):
         session.wall_create.cancel_rect_wall_tool()
         return True
     if session.spaces.has_active_plan_region_tool():
-        session.spaces.cancel_plan_region_tool()
+        plan_spaces_tool.RegionTool(session).cancel()
         return True
     if session.spaces.has_active_space_separator_tool():
-        session.spaces.cancel_space_separator_tool()
+        plan_spaces_tool.SpaceSeparatorTool(session).cancel()
         return True
     return False
 

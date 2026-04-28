@@ -79,6 +79,42 @@ class RegionTool(plan_runtime_tools.PlanToolHandler):
             return True
         return False
 
+    def cancel(self):
+        self.session.spaces.cancel_plan_region_tool()
+        return True
+
+
+class SpaceTextTool(plan_runtime_tools.PlanToolHandler):
+    """Keyboard behavior for active space text placement."""
+
+    tool_id = plan_runtime_tools.PlanTool.SET_SPACE_TEXT
+
+    def on_key(self, key, event_callback, coin):
+        del event_callback
+        if key != coin.SoKeyboardEvent.ESCAPE:
+            return False
+        return self.cancel()
+
+    def cancel(self):
+        self.session.spaces.cancel_space_text_position_pick()
+        return True
+
+
+class SpaceSeparatorTool(plan_runtime_tools.PlanToolHandler):
+    """Keyboard behavior for active space separator placement."""
+
+    tool_id = plan_runtime_tools.PlanTool.SEPARATOR
+
+    def on_key(self, key, event_callback, coin):
+        del event_callback
+        if key != coin.SoKeyboardEvent.ESCAPE:
+            return False
+        return self.cancel()
+
+    def cancel(self):
+        self.session.spaces.cancel_space_separator_tool()
+        return True
+
 
 def _set_key_event_handled(event_callback):
     setter = getattr(event_callback, "setHandled", None)
