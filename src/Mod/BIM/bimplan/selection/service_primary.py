@@ -381,6 +381,23 @@ class PlanSelectionRefreshService(_SessionAPI):
             elif target_ref.kind == "opening":
                 self.session.openings.refresh_opening_visual_footprints(target_ref.obj)
 
+    def handle_wall_document_visual_change(self, obj, prop, selected_wall):
+        from bimplan import document_visuals as plan_document_visuals
+
+        if (
+            obj == self.session.hovered_wall
+            and prop in plan_document_visuals.WALL_VISUAL_PROPERTIES
+        ):
+            self.session.overlays.queue_plan_overlay_visual_refresh(
+                plan_document_visuals.PLAN_VISUAL_HOVERED_WALL
+            )
+            return True
+        if obj != selected_wall or prop not in plan_document_visuals.WALL_VISUAL_PROPERTIES:
+            return False
+        self.session.openings.refresh_wall_hosted_opening_footprints(obj)
+        self.schedule_selected_wall_reset(prop, obj)
+        return True
+
     def schedule_selected_wall_reset(self, reason, obj):
         del reason, obj
         selection_sync_state = self.session.selection_sync_state

@@ -433,27 +433,28 @@ def flush_recompute_opening_hosts(session, hosts):
         opening_state.opening_host_recompute_running = False
 
 
-def slot_created_object(session, obj):
-    if session.lifecycle_state.tearing_down:
-        return
+def _invalidate_document_visual_dependency_caches(session):
     session.providers.invalidate_plan_provider_document_cache()
     _provider_overlay_state(session).render_state = None
     session.visibility.invalidate_plan_classification_cache()
     session.openings.invalidate_wall_hosted_openings_cache()
+
+
+def slot_created_object(session, obj):
+    if session.lifecycle_state.tearing_down:
+        return
+    _invalidate_document_visual_dependency_caches(session)
     queue_created_plan_object(session, obj)
 
 
 def _refresh_wall_related_visuals(session, obj, prop, selected_wall):
     if session.openings.handle_wall_related_document_visual_change(obj, prop, selected_wall):
         return True
-    if obj == session.hovered_wall and prop in _WALL_VISUAL_PROPERTIES:
-        session.overlays.queue_plan_overlay_visual_refresh(_PLAN_VISUAL_HOVERED_WALL)
-        return True
-    if obj != selected_wall or prop not in _WALL_VISUAL_PROPERTIES:
-        return False
-    session.openings.refresh_wall_hosted_opening_footprints(obj)
-    session.selection.refresh.schedule_selected_wall_reset(prop, obj)
-    return True
+    return session.selection.refresh.handle_wall_document_visual_change(
+        obj,
+        prop,
+        selected_wall,
+    )
 
 
 def _maybe_queue_deferred_selected_wall_suspension(session, obj, prop, selected_wall):
@@ -470,10 +471,7 @@ def _maybe_queue_deferred_selected_wall_suspension(session, obj, prop, selected_
 def slot_changed_object(session, obj, prop):
     if session.lifecycle_state.tearing_down:
         return
-    session.providers.invalidate_plan_provider_document_cache()
-    _provider_overlay_state(session).render_state = None
-    session.visibility.invalidate_plan_classification_cache()
-    session.openings.invalidate_wall_hosted_openings_cache()
+    _invalidate_document_visual_dependency_caches(session)
     selected_wall = session.selection.state.get_selected_plan_target_object("wall")
     if are_document_visual_updates_deferred(session):
         _maybe_queue_deferred_selected_wall_suspension(session, obj, prop, selected_wall)
@@ -497,10 +495,7 @@ def slot_changed_object(session, obj, prop):
 def slot_deleted_object(session, obj):
     if session.lifecycle_state.tearing_down:
         return
-    session.providers.invalidate_plan_provider_document_cache()
-    _provider_overlay_state(session).render_state = None
-    session.visibility.invalidate_plan_classification_cache()
-    session.openings.invalidate_wall_hosted_openings_cache()
+    _invalidate_document_visual_dependency_caches(session)
     session.overlays.geometry.invalidate_plan_overlay_geometry_cache(obj)
     if are_document_visual_updates_deferred(session):
         if session.selection.state.is_selected_plan_target("wall", obj):
