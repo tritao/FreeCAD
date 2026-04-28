@@ -372,8 +372,6 @@ class PlanEditSession:
 
     removePreselection = _make_selection_observer_delegate("removePreselection")
 
-    _is_opening_visual_dependency = _make_document_visuals_delegate("is_opening_visual_dependency")
-
     slotCreatedObject = _make_document_visuals_delegate("slot_created_object")
 
     slotChangedObject = _make_document_visuals_delegate("slot_changed_object")
