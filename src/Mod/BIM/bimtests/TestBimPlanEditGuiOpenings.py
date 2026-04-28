@@ -1114,7 +1114,7 @@ class BimPlanEditGuiOpeningsMixin:
 
         self.assertTrue(press._handled)
         self.assertTrue(release._handled)
-        self.assertFalse(session._consume_left_button_release)
+        self.assertFalse(session.input_event_state.consume_left_button_release)
         self._assert_selected_plan_target(session, "opening", door)
         self.assertEqual(len(session._grip_trackers), 0)
         self.assertGreater(len(session._opening_overlay_trackers), 0)

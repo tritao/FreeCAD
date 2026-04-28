@@ -490,6 +490,7 @@ Current progress:
 - Private lifecycle compatibility aliases are removed; lifecycle code uses `lifecycle_state`.
 - Private task-panel compatibility aliases are removed; task-panel code uses `task_panel_state`.
 - Private provider point compatibility aliases are removed; provider tests use `provider_point_state`.
+- Private input-event compatibility aliases are removed; input tests use `input_event_state`.
 
 Steps:
 

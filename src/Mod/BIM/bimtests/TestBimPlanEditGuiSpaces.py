@@ -252,7 +252,7 @@ class BimPlanEditGuiSpacesMixin:
 
         self.assertTrue(press._handled)
         self.assertTrue(release._handled)
-        self.assertFalse(session._consume_left_button_release)
+        self.assertFalse(session.input_event_state.consume_left_button_release)
         self._assert_selected_plan_target(session, "region", region)
         self.assertEqual([obj.Name for obj in FreeCADGui.Selection.getSelection()], [region.Name])
         selection_ex = FreeCADGui.Selection.getSelectionEx("*")

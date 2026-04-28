@@ -598,17 +598,6 @@ _PLAN_EDIT_SESSION_STATE_PROPERTIES = (
         ),
     ),
     (
-        "_ensure_input_event_state",
-        (
-            ("_mouse_moved_cb", "mouse_moved_cb", _coerce_identity),
-            ("_mouse_wheel_cb", "mouse_wheel_cb", _coerce_identity),
-            ("_mouse_wheel_event_type", "mouse_wheel_event_type", _coerce_identity),
-            ("_mouse_pressed_cb", "mouse_pressed_cb", _coerce_identity),
-            ("_key_pressed_cb", "key_pressed_cb", _coerce_identity),
-            ("_consume_left_button_release", "consume_left_button_release", _coerce_bool),
-        ),
-    ),
-    (
         "_ensure_overlay_refresh_state",
         (
             ("_overlay_refresh_queued", "overlay_refresh_queued", _coerce_bool),
