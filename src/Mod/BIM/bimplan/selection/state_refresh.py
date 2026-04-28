@@ -50,10 +50,7 @@ class GuiSelectionResolutionState:
 
 
 def sanitize_plan_target_references(session):
-    visibility = getattr(session, "visibility", None)
-    is_live_document_object = getattr(visibility, "is_live_document_object", None)
-    if not callable(is_live_document_object):
-        return False
+    is_live_document_object = session.visibility.is_live_document_object
     changed = False
     for kind in ("wall", "opening", "symbol", "region", "space"):
         obj = session.selection.state.get_selected_target_for_kind(kind)
@@ -85,14 +82,7 @@ def sanitize_plan_target_references(session):
 
 
 def _is_valid_plan_target(session, kind, obj):
-    selection_api = getattr(session, "selection", None)
-    validate = getattr(selection_api, "is_valid_plan_target", None)
-    if callable(validate):
-        return bool(validate(kind, obj))
-    validate = getattr(session, "_is_valid_plan_target", None)
-    if callable(validate):
-        return bool(validate(kind, obj))
-    return plan_target_dispatch.validate_plan_target(session, kind, obj)
+    return session.selection.state.is_valid_plan_target(kind, obj)
 
 
 def _should_preserve_provider_selected_target(session, kind, obj, selected):
@@ -142,10 +132,6 @@ def resolve_selected_target_for_gui_object(
         return plan_target_kinds.make_plan_target_ref(
             preserved_target_ref.kind, preserved_target_ref.obj
         )
-    selection_api = getattr(session, "selection", None)
-    get_plan_target_for_object = getattr(selection_api, "get_plan_target_for_object", None)
-    if callable(get_plan_target_for_object):
-        return plan_target_kinds.coerce_plan_target_ref(get_plan_target_for_object(selected))
     return plan_targets.get_plan_target_for_object(session, selected)
 
 

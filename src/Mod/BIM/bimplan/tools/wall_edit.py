@@ -65,7 +65,7 @@ def _tracker_update_points(tracker, start, end, *, sync_spinbox):
     tracker.p2(end)
 
 
-def _bind_editing_canceled_callback(dim, callback):
+def _set_editing_canceled_callback(dim, callback):
     set_callback = _get_callable_attr(dim, "setEditingCanceledCallback")
     if set_callback is not None:
         set_callback(callback)
@@ -1299,7 +1299,7 @@ def bind_wall_edit_readout_callbacks(session, dim, mode):
         dim.setEditingFinishedCallback(
             lambda value: on_wall_stretch_length_finished(session, value)
         )
-        _bind_editing_canceled_callback(
+        _set_editing_canceled_callback(
             dim, lambda value: on_wall_stretch_length_canceled(session, value)
         )
         return
@@ -1310,7 +1310,7 @@ def bind_wall_edit_readout_callbacks(session, dim, mode):
     dim.setEditingFinishedCallback(
         lambda value, delta_mode=mode: on_wall_move_delta_finished(session, delta_mode, value)
     )
-    _bind_editing_canceled_callback(
+    _set_editing_canceled_callback(
         dim, lambda value, delta_mode=mode: on_wall_move_delta_canceled(session, delta_mode, value)
     )
 

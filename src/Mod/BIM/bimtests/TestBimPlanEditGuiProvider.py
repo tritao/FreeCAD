@@ -8,6 +8,7 @@ from .TestBimPlanEditGuiBase import (
     _DeletedDocument,
     _TestPlanProvider,
 )
+from bimplan.selection import target_kinds as plan_target_kinds
 
 
 class BimPlanEditGuiProviderMixin:
@@ -278,9 +279,9 @@ class BimPlanEditGuiProviderMixin:
             "Component": "Edge1",
             "SubName": "Edge1",
         }
-        selected_target = ("wall", wall)
-        selected_targets = ("selected-wall-target",)
-        hovered_target = ("wall", wall)
+        selected_target = plan_target_kinds.make_plan_target_ref("wall", wall)
+        selected_targets = (selected_target,)
+        hovered_target = plan_target_kinds.make_plan_target_ref("wall", wall)
 
         with (
             patch.object(FreeCADGui.Snapper, "getPoint") as get_point,
@@ -475,11 +476,15 @@ class BimPlanEditGuiProviderMixin:
             patch.object(FreeCADGui.Snapper, "setSelectMode", return_value=None),
             patch.object(FreeCADGui.Snapper, "snapInfo", {}, create=True),
             patch.object(
-                session.selection.state, "get_selected_plan_target", return_value=(None, None)
+                session.selection.state,
+                "get_selected_plan_target",
+                return_value=plan_target_kinds.make_plan_target_ref(),
             ),
             patch.object(session.selection.state, "get_selected_plan_targets", return_value=()),
             patch.object(
-                session.selection.hover, "get_hovered_plan_target", return_value=(None, None)
+                session.selection.hover,
+                "get_hovered_plan_target",
+                return_value=plan_target_kinds.make_plan_target_ref(),
             ),
         ):
             self.assertTrue(session.providers.start_plan_provider_point_tool(tool))

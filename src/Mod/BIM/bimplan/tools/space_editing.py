@@ -27,18 +27,15 @@ def _apply_space_edit(session, title, apply_change):
 
 
 def _selection_targets_api(session):
-    selection = getattr(session, "selection", None)
-    return getattr(selection, "targets", selection)
+    return session.selection.targets
 
 
 def _selection_state_api(session):
-    selection = getattr(session, "selection", None)
-    return getattr(selection, "state", selection)
+    return session.selection.state
 
 
 def _selection_sync_api(session):
-    selection = getattr(session, "selection", None)
-    return getattr(selection, "sync", selection)
+    return session.selection.sync
 
 
 def set_selected_space_label(session, label):

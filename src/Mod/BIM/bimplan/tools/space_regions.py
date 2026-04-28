@@ -17,18 +17,15 @@ def _space_region_pick_state(session):
 
 
 def _selection_targets_api(session):
-    selection = getattr(session, "selection", None)
-    return getattr(selection, "targets", selection)
+    return session.selection.targets
 
 
 def _selection_hover_api(session):
-    selection = getattr(session, "selection", None)
-    return getattr(selection, "hover", selection)
+    return session.selection.hover
 
 
 def _selection_refresh_api(session):
-    selection = getattr(session, "selection", None)
-    return getattr(selection, "refresh", selection)
+    return session.selection.refresh
 
 
 def build_space_region_candidate_report(session, boundaries, label=None, seed_space=None):

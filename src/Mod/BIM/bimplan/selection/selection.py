@@ -33,9 +33,6 @@ from .service_primary import (
     PlanSelectionSyncService,
 )
 
-SelectionRefreshResult = plan_selection_state_refresh.SelectionRefreshResult
-GuiSelectionResolutionState = plan_selection_state_refresh.GuiSelectionResolutionState
-
 
 def _make_set_hovered_target_function(kind):
     def _set_hovered_target(session, obj):
@@ -137,10 +134,6 @@ def get_selected_plan_target_object(session, kind=None):
 
 
 def is_selected_plan_target(session, kind, obj=None):
-    selection_api = getattr(session, "selection", None)
-    predicate = getattr(selection_api, "is_selected_plan_target", None)
-    if callable(predicate) and not isinstance(selection_api, PlanSelectionAPI):
-        return bool(predicate(kind, obj))
     return session.selection.state.is_selected_plan_target(kind, obj)
 
 
@@ -161,10 +154,6 @@ def consume_pending_selected_plan_target(session):
 
 
 def get_selected_plan_target(session):
-    selection_api = getattr(session, "selection", None)
-    getter = getattr(selection_api, "get_selected_plan_target", None)
-    if callable(getter) and not isinstance(selection_api, PlanSelectionAPI):
-        return plan_target_kinds.coerce_plan_target_ref(getter())
     return session.selection.state.get_selected_plan_target()
 
 
@@ -200,9 +189,7 @@ def normalize_plan_targets_from_selection(session, selection):
     return session.selection.state.normalize_plan_targets_from_selection(selection)
 
 
-def set_secondary_selected_plan_targets(
-    session, targets, primary_kind=None, primary_obj=None
-):
+def set_secondary_selected_plan_targets(session, targets, primary_kind=None, primary_obj=None):
     return session.selection.state.set_secondary_selected_plan_targets(
         targets,
         primary_kind=primary_kind,
@@ -223,11 +210,9 @@ def sync_secondary_selected_plan_targets_from_selection(
 def sync_secondary_selected_plan_targets_from_gui_selection(
     session, primary_kind=None, primary_obj=None
 ):
-    return (
-        session.selection.state.sync_secondary_selected_plan_targets_from_gui_selection(
-            primary_kind=primary_kind,
-            primary_obj=primary_obj,
-        )
+    return session.selection.state.sync_secondary_selected_plan_targets_from_gui_selection(
+        primary_kind=primary_kind,
+        primary_obj=primary_obj,
     )
 
 
@@ -236,13 +221,6 @@ def get_secondary_selected_plan_targets(session):
 
 
 def get_selected_plan_targets(session):
-    selection_api = getattr(session, "selection", None)
-    getter = getattr(selection_api, "get_selected_plan_targets", None)
-    if callable(getter) and not isinstance(selection_api, PlanSelectionAPI):
-        return tuple(
-            plan_target_kinds.coerce_plan_target_ref(target)
-            for target in (getter() or ())
-        )
     return session.selection.state.get_selected_plan_targets()
 
 
@@ -275,9 +253,7 @@ def set_selected_plan_target(
 
 
 def schedule_selected_wall_reset(session, reason, obj):
-    return plan_selection_state_refresh.schedule_selected_wall_reset(
-        session, reason, obj
-    )
+    return plan_selection_state_refresh.schedule_selected_wall_reset(session, reason, obj)
 
 
 def reset_selected_wall_after_change(session):
@@ -327,29 +303,19 @@ def set_hovered_wall(session, wall):
         session.task_panels.refresh_task_panel_status(reason="full")
 
 
-set_hovered_opening = _make_set_hovered_target_function(
-    plan_target_kinds.PLAN_TARGET_OPENING
-)
+set_hovered_opening = _make_set_hovered_target_function(plan_target_kinds.PLAN_TARGET_OPENING)
 
 
-set_hovered_symbol = _make_set_hovered_target_function(
-    plan_target_kinds.PLAN_TARGET_SYMBOL
-)
+set_hovered_symbol = _make_set_hovered_target_function(plan_target_kinds.PLAN_TARGET_SYMBOL)
 
 
-set_hovered_provider = _make_set_hovered_target_function(
-    plan_target_kinds.PLAN_TARGET_PROVIDER
-)
+set_hovered_provider = _make_set_hovered_target_function(plan_target_kinds.PLAN_TARGET_PROVIDER)
 
 
-set_hovered_space = _make_set_hovered_target_function(
-    plan_target_kinds.PLAN_TARGET_SPACE
-)
+set_hovered_space = _make_set_hovered_target_function(plan_target_kinds.PLAN_TARGET_SPACE)
 
 
-set_hovered_region = _make_set_hovered_target_function(
-    plan_target_kinds.PLAN_TARGET_REGION
-)
+set_hovered_region = _make_set_hovered_target_function(plan_target_kinds.PLAN_TARGET_REGION)
 
 
 def queue_restore_selected_plan_target(session, kind, obj):
@@ -377,27 +343,19 @@ def select_plan_target_for_plan_edit(
 
 
 def select_opening_for_plan_edit(session, *args, **kwargs):
-    return plan_selection_activation.select_opening_for_plan_edit(
-        session, *args, **kwargs
-    )
+    return plan_selection_activation.select_opening_for_plan_edit(session, *args, **kwargs)
 
 
 def select_symbol_for_plan_edit(session, *args, **kwargs):
-    return plan_selection_activation.select_symbol_for_plan_edit(
-        session, *args, **kwargs
-    )
+    return plan_selection_activation.select_symbol_for_plan_edit(session, *args, **kwargs)
 
 
 def select_region_for_plan_edit(session, *args, **kwargs):
-    return plan_selection_activation.select_region_for_plan_edit(
-        session, *args, **kwargs
-    )
+    return plan_selection_activation.select_region_for_plan_edit(session, *args, **kwargs)
 
 
 def select_space_for_plan_edit(session, *args, **kwargs):
-    return plan_selection_activation.select_space_for_plan_edit(
-        session, *args, **kwargs
-    )
+    return plan_selection_activation.select_space_for_plan_edit(session, *args, **kwargs)
 
 
 def select_wall_for_plan_edit(session, *args, **kwargs):
@@ -478,9 +436,7 @@ def activate_semantic_plan_target(session, mouse_pos, event_callback=None):
     )
 
 
-def activate_opening_target(
-    session, mouse_pos, event_callback=None, resolved_target=None
-):
+def activate_opening_target(session, mouse_pos, event_callback=None, resolved_target=None):
     return plan_selection_activation.activate_opening_target(
         session,
         mouse_pos,
@@ -489,9 +445,7 @@ def activate_opening_target(
     )
 
 
-def activate_symbol_target(
-    session, mouse_pos, event_callback=None, resolved_target=None
-):
+def activate_symbol_target(session, mouse_pos, event_callback=None, resolved_target=None):
     return plan_selection_activation.activate_symbol_target(
         session,
         mouse_pos,
@@ -500,9 +454,7 @@ def activate_symbol_target(
     )
 
 
-def activate_region_target(
-    session, mouse_pos, event_callback=None, resolved_target=None
-):
+def activate_region_target(session, mouse_pos, event_callback=None, resolved_target=None):
     return plan_selection_activation.activate_region_target(
         session,
         mouse_pos,
@@ -511,9 +463,7 @@ def activate_region_target(
     )
 
 
-def activate_space_target(
-    session, mouse_pos, event_callback=None, resolved_target=None
-):
+def activate_space_target(session, mouse_pos, event_callback=None, resolved_target=None):
     return plan_selection_activation.activate_space_target(
         session,
         mouse_pos,

@@ -41,28 +41,79 @@ class PlanLifecycleAPI:
     def session(self):
         return self._session
 
+    def connect_teardown_signal(self, signal):
+        return connect_teardown_signal(self.session, signal)
 
-def _make_lifecycle_session_forwarder(func):
-    def _forward(self, *args, **kwargs):
-        return func(self.session, *args, **kwargs)
+    def connect_teardown_signals(self, QtGui):
+        return connect_teardown_signals(self.session, QtGui)
 
-    _forward.__name__ = func.__name__
-    _forward.__qualname__ = "PlanLifecycleAPI.{}".format(func.__name__)
-    _forward.__doc__ = func.__doc__
-    return _forward
+    def disconnect_teardown_signals(self):
+        return disconnect_teardown_signals(self.session)
 
+    def discard_runtime_references(self):
+        return discard_runtime_references(self.session)
 
-def _make_lifecycle_module_forwarder(module_name, func_name):
-    def _forward(self, *args, **kwargs):
-        if module_name == "wall_create":
-            from bimplan.tools import wall_create as lifecycle_module
-        else:
-            from bimplan.tools import wall_relations as lifecycle_module
-        return getattr(lifecycle_module, func_name)(self.session, *args, **kwargs)
+    def on_embedded_command_started(self, tool_name, command=None):
+        return on_embedded_command_started(self.session, tool_name, command=command)
 
-    _forward.__name__ = func_name
-    _forward.__qualname__ = "PlanLifecycleAPI.{}".format(func_name)
-    return _forward
+    def on_embedded_command_finished(self, tool_name, command=None):
+        return on_embedded_command_finished(self.session, tool_name, command=command)
+
+    def activate_select_tool(self):
+        return activate_select_tool(self.session)
+
+    def activate_window_tool(self):
+        return activate_window_tool(self.session)
+
+    def activate_plan_region_tool(self):
+        return activate_plan_region_tool(self.session)
+
+    def activate_space_separator_tool(self):
+        return activate_space_separator_tool(self.session)
+
+    def activate_space_tool(self):
+        return activate_space_tool(self.session)
+
+    def activate_move_tool(self):
+        return activate_move_tool(self.session)
+
+    def activate_wall_tool(self):
+        from bimplan.tools import wall_create
+
+        return wall_create.activate_wall_tool(self.session)
+
+    def activate_rect_wall_tool(self):
+        from bimplan.tools import wall_create
+
+        return wall_create.activate_rect_wall_tool(self.session)
+
+    def activate_join_tool(self):
+        from bimplan.tools import wall_relations
+
+        return wall_relations.activate_join_tool(self.session)
+
+    def start_embedded_tool(self, tool_name, command, host_class=None):
+        return start_embedded_tool(
+            self.session,
+            tool_name,
+            command,
+            host_class=host_class,
+        )
+
+    def cancel_pending_edit(self):
+        return cancel_pending_edit(self.session)
+
+    def stop_snapper(self):
+        return stop_snapper(self.session)
+
+    def set_draft_point_focus_suppressed(self, suppressed):
+        return set_draft_point_focus_suppressed(self.session, suppressed)
+
+    def has_active_embedded_tool(self):
+        return has_active_embedded_tool(self.session)
+
+    def cancel_embedded_tool(self, tool_name=None):
+        return cancel_embedded_tool(self.session, tool_name=tool_name)
 
 
 def connect_teardown_signal(session, signal):
@@ -860,11 +911,7 @@ def shutdown(session, close_dialog=True, teardown=False):
     if teardown:
         session.lifecycle.discard_runtime_references()
     else:
-        restore_state = getattr(getattr(session, "viewport", None), "restore_state", None)
-        if callable(restore_state):
-            restore_state()
-        else:
-            session.restore_state()
+        session.viewport.restore_state()
         if session.doc:
             try:
                 session.doc.recompute()
@@ -1065,41 +1112,3 @@ def _set_toolbar_point_focus_suppressed(toolbar, suppressed):
 
 def has_active_embedded_tool(session):
     return session.interaction_state.embedded_tool is not None
-
-
-_PLAN_LIFECYCLE_SESSION_FORWARDERS = (
-    activate_select_tool,
-    activate_window_tool,
-    activate_plan_region_tool,
-    activate_space_separator_tool,
-    activate_space_tool,
-    activate_move_tool,
-    on_embedded_command_started,
-    on_embedded_command_finished,
-    start_embedded_tool,
-    cancel_pending_edit,
-    stop_snapper,
-    set_draft_point_focus_suppressed,
-    has_active_embedded_tool,
-    cancel_embedded_tool,
-    connect_teardown_signal,
-    connect_teardown_signals,
-    disconnect_teardown_signals,
-    discard_runtime_references,
-)
-
-for _func in _PLAN_LIFECYCLE_SESSION_FORWARDERS:
-    setattr(PlanLifecycleAPI, _func.__name__, _make_lifecycle_session_forwarder(_func))
-
-PlanLifecycleAPI.activate_wall_tool = _make_lifecycle_module_forwarder(
-    "wall_create",
-    "activate_wall_tool",
-)
-PlanLifecycleAPI.activate_rect_wall_tool = _make_lifecycle_module_forwarder(
-    "wall_create",
-    "activate_rect_wall_tool",
-)
-PlanLifecycleAPI.activate_join_tool = _make_lifecycle_module_forwarder(
-    "wall_relations",
-    "activate_join_tool",
-)
