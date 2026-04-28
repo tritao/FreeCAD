@@ -586,17 +586,7 @@ _PLAN_EDIT_SESSION_STATE_PROPERTIES = (
     (
         "_ensure_provider_transient_state",
         (
-            (
-                "_selected_provider_overlay_render_state",
-                "selected_provider_overlay_render_state",
-                _coerce_identity,
-            ),
             ("_provider_handle_trackers", "provider_handle_trackers", _coerce_list),
-            (
-                "_selected_provider_handle_render_state",
-                "selected_provider_handle_render_state",
-                _coerce_identity,
-            ),
             ("_provider_selected_objects", "provider_selected_objects", _coerce_list),
         ),
     ),
