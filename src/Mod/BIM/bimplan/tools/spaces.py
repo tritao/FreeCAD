@@ -4,6 +4,7 @@
 
 import FreeCAD
 
+from bimplan.runtime import tools as plan_runtime_tools
 from bimplan.selection import targets as plan_targets
 from bimplan.tools import space_boundaries as plan_space_boundaries
 from bimplan.tools import space_editing as plan_space_editing
@@ -61,6 +62,28 @@ def reset_space_region_pick_state(session, *args, **kwargs):
 
 def reset_space_text_pick_state(session, *args, **kwargs):
     return plan_space_interaction.reset_space_text_pick_state(session, *args, **kwargs)
+
+
+class RegionTool(plan_runtime_tools.PlanToolHandler):
+    """Keyboard behavior for active plan-region drawing."""
+
+    tool_id = plan_runtime_tools.PlanTool.REGION
+
+    def on_key(self, key, event_callback, coin):
+        if key in (coin.SoKeyboardEvent.RETURN, coin.SoKeyboardEvent.ENTER):
+            if self.session.spaces.finalize_plan_region():
+                _set_key_event_handled(event_callback)
+            return True
+        if key == coin.SoKeyboardEvent.ESCAPE:
+            self.session.spaces.cancel_plan_region_tool()
+            return True
+        return False
+
+
+def _set_key_event_handled(event_callback):
+    setter = getattr(event_callback, "setHandled", None)
+    if callable(setter):
+        setter()
 
 
 class PlanSpacesAPI(_SessionAPI):
