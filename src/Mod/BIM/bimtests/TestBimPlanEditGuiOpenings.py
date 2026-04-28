@@ -1019,10 +1019,10 @@ class BimPlanEditGuiOpeningsMixin:
 
         with patch.object(
             session.picking,
-            "get_plan_target_at_position",
+            "pick",
             return_value=("opening", door),
         ):
-            session.selection.hover.update_hovered_plan_target((100, 100))
+            session.picking.hover((100, 100))
 
         self.assertIs(session.hovered_opening, door)
         self.assertGreater(len(session._opening_hover_trackers), 0)
@@ -1047,7 +1047,7 @@ class BimPlanEditGuiOpeningsMixin:
 
         with patch.object(
             session.picking,
-            "get_plan_target_at_position",
+            "pick",
             return_value=("opening", door),
         ):
             activated = session.selection.activation.activate_opening_target((100, 100))
@@ -1195,7 +1195,7 @@ class BimPlanEditGuiOpeningsMixin:
             patch("PySide.QtCore.QTimer.singleShot", side_effect=fake_single_shot),
             patch.object(
                 session.picking,
-                "get_plan_target_at_position",
+                "pick",
                 return_value=("opening", door),
             ),
         ):
@@ -1244,10 +1244,10 @@ class BimPlanEditGuiOpeningsMixin:
                 return self._position
 
         with (
-            patch.object(session.picking, "get_edit_node", return_value=None),
+            patch.object(session.picking, "pick_edit_node", return_value=None),
             patch.object(
                 session.picking,
-                "get_plan_target_at_position",
+                "pick",
                 return_value=(None, None),
             ),
         ):
@@ -1747,7 +1747,7 @@ class BimPlanEditGuiOpeningsMixin:
 
         with patch.object(
             session.picking,
-            "get_plan_target_at_position",
+            "pick",
             return_value=("opening", door),
         ):
             activated = session.selection.activation.activate_opening_target((100, 100))
@@ -1781,7 +1781,7 @@ class BimPlanEditGuiOpeningsMixin:
         with (
             patch.object(
                 session.picking,
-                "get_edit_node",
+                "pick_edit_node",
                 return_value=("opening_handle", door, 0),
             ),
             patch.object(session.openings, "activate_opening_handle") as activate_handle,
@@ -1833,7 +1833,7 @@ class BimPlanEditGuiOpeningsMixin:
         with (
             patch.object(
                 session.picking,
-                "get_edit_node",
+                "pick_edit_node",
                 return_value=("edit_node", picked_point),
             ),
             patch.object(session.openings, "activate_opening_handle") as activate_handle,

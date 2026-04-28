@@ -25,7 +25,8 @@ class PlanPickingAPI:
 
     def pick(self, mouse_pos, *, mode="click", include_space_fallback=True):
         del mode
-        return self.get_plan_target_at_position(
+        return plan_picking_coordinator.get_plan_target_at_position(
+            self.session,
             mouse_pos,
             include_space_fallback=include_space_fallback,
         )
@@ -38,16 +39,6 @@ class PlanPickingAPI:
         )
 
     def pick_edit_node(self, mouse_pos):
-        return self.get_edit_node(mouse_pos)
-
-    def get_plan_target_at_position(self, mouse_pos, *, include_space_fallback=True):
-        return plan_picking_coordinator.get_plan_target_at_position(
-            self.session,
-            mouse_pos,
-            include_space_fallback=include_space_fallback,
-        )
-
-    def get_edit_node(self, mouse_pos):
         return plan_edit_node_picking.get_edit_node(self.session, mouse_pos)
 
     def get_plan_target_from_edit_node(self, node):

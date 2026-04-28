@@ -276,10 +276,10 @@ class BimPlanEditGuiWallsMixin:
         self.pump_gui_events()
 
         with (
-            patch.object(session.picking, "get_edit_node", return_value=None),
+            patch.object(session.picking, "pick_edit_node", return_value=None),
             patch.object(
                 session.picking,
-                "get_plan_target_at_position",
+                "pick",
                 return_value=("wall", wall_a),
             ),
         ):
@@ -296,12 +296,12 @@ class BimPlanEditGuiWallsMixin:
             ),
             patch.object(
                 session.picking,
-                "get_edit_node",
+                "pick_edit_node",
                 return_value=None,
             ),
             patch.object(
                 session.picking,
-                "get_plan_target_at_position",
+                "pick",
                 return_value=("wall", wall_b),
             ),
         ):
@@ -328,12 +328,12 @@ class BimPlanEditGuiWallsMixin:
             ),
             patch.object(
                 session.picking,
-                "get_edit_node",
+                "pick_edit_node",
                 return_value=None,
             ),
             patch.object(
                 session.picking,
-                "get_plan_target_at_position",
+                "pick",
                 return_value=("wall", wall_a),
             ),
         ):
@@ -400,7 +400,7 @@ class BimPlanEditGuiWallsMixin:
 
         with patch.object(
             session.picking,
-            "get_plan_target_at_position",
+            "pick",
             return_value=("wall", wall),
         ):
             activated = session.selection.activation.activate_wall_target((100, 100))
@@ -439,10 +439,10 @@ class BimPlanEditGuiWallsMixin:
                 return self._position
 
         with (
-            patch.object(session.picking, "get_edit_node", return_value=None),
+            patch.object(session.picking, "pick_edit_node", return_value=None),
             patch.object(
                 session.picking,
-                "get_plan_target_at_position",
+                "pick",
                 return_value=(None, None),
             ),
         ):
@@ -470,10 +470,10 @@ class BimPlanEditGuiWallsMixin:
         self.assertEqual([obj.Name for obj in FreeCADGui.Selection.getSelection()], [level.Name])
 
         with (
-            patch.object(session.picking, "get_edit_node", return_value=None),
+            patch.object(session.picking, "pick_edit_node", return_value=None),
             patch.object(
                 session.picking,
-                "get_plan_target_at_position",
+                "pick",
                 return_value=(None, None),
             ),
         ):
@@ -500,10 +500,10 @@ class BimPlanEditGuiWallsMixin:
 
         with patch.object(
             session.picking,
-            "get_plan_target_at_position",
+            "pick",
             return_value=("wall", wall),
         ):
-            session.selection.hover.update_hovered_plan_target((100, 100))
+            session.picking.hover((100, 100))
 
         self.assertIs(session.hovered_wall, wall)
         self.assertIsNone(session.hovered_opening)
@@ -523,10 +523,10 @@ class BimPlanEditGuiWallsMixin:
 
         with patch.object(
             session.picking,
-            "get_plan_target_at_position",
+            "pick",
             return_value=("wall", wall),
         ):
-            session.selection.hover.update_hovered_plan_target((100, 100))
+            session.picking.hover((100, 100))
 
         self.assertIs(session.hovered_wall, wall)
         self._assert_no_selected_plan_target(session)
@@ -547,7 +547,7 @@ class BimPlanEditGuiWallsMixin:
 
         with patch.object(
             session.picking,
-            "get_plan_target_at_position",
+            "pick",
             return_value=("wall", wall),
         ):
             activated = session.selection.activation.activate_wall_target((100, 100))
@@ -569,10 +569,10 @@ class BimPlanEditGuiWallsMixin:
         self.pump_gui_events()
 
         with (
-            patch.object(session.picking, "get_edit_node", return_value=None),
+            patch.object(session.picking, "pick_edit_node", return_value=None),
             patch.object(
                 session.picking,
-                "get_plan_target_at_position",
+                "pick",
                 return_value=("wall", wall),
             ),
             patch.object(session.viewport, "request_view_redraw") as request_view_redraw,
@@ -608,7 +608,7 @@ class BimPlanEditGuiWallsMixin:
 
         with patch.object(
             session.picking,
-            "get_plan_target_at_position",
+            "pick",
             return_value=("wall", wall),
         ):
             activated = session.selection.activation.activate_wall_target((100, 100))
@@ -647,7 +647,7 @@ class BimPlanEditGuiWallsMixin:
 
         with patch.object(
             session.picking,
-            "get_plan_target_at_position",
+            "pick",
             return_value=("wall", wall),
         ):
             activated = session.selection.activation.activate_wall_target((100, 100))
@@ -692,10 +692,10 @@ class BimPlanEditGuiWallsMixin:
 
         with patch.object(
             session.picking,
-            "get_plan_target_at_position",
+            "pick",
             return_value=("wall", target_wall),
         ):
-            session.selection.hover.update_hovered_plan_target((100, 100))
+            session.picking.hover((100, 100))
             session.overlays.manager.refresh_plan_overlay_visuals()
 
         self.assertIs(session.hovered_wall, target_wall)
@@ -803,10 +803,10 @@ class BimPlanEditGuiWallsMixin:
                 return self._position
 
         with (
-            patch.object(session.picking, "get_edit_node", return_value=None),
+            patch.object(session.picking, "pick_edit_node", return_value=None),
             patch.object(
                 session.picking,
-                "get_plan_target_at_position",
+                "pick",
                 return_value=("wall", target_wall),
             ),
         ):
@@ -877,10 +877,10 @@ class BimPlanEditGuiWallsMixin:
                 return self._position
 
         with (
-            patch.object(session.picking, "get_edit_node", return_value=None),
+            patch.object(session.picking, "pick_edit_node", return_value=None),
             patch.object(
                 session.picking,
-                "get_plan_target_at_position",
+                "pick",
                 return_value=("wall", target_wall),
             ),
         ):
@@ -954,10 +954,10 @@ class BimPlanEditGuiWallsMixin:
                 return self._position
 
         with (
-            patch.object(session.picking, "get_edit_node", return_value=None),
+            patch.object(session.picking, "pick_edit_node", return_value=None),
             patch.object(
                 session.picking,
-                "get_plan_target_at_position",
+                "pick",
                 return_value=("wall", target_wall),
             ),
         ):
@@ -1058,10 +1058,10 @@ class BimPlanEditGuiWallsMixin:
                 return self._position
 
         with (
-            patch.object(session.picking, "get_edit_node", return_value=None),
+            patch.object(session.picking, "pick_edit_node", return_value=None),
             patch.object(
                 session.picking,
-                "get_plan_target_at_position",
+                "pick",
                 return_value=("wall", target_wall),
             ),
         ):
@@ -1141,10 +1141,10 @@ class BimPlanEditGuiWallsMixin:
         session.selection.hover.set_hovered_wall(target_wall)
 
         with (
-            patch.object(session.picking, "get_edit_node", return_value=None),
+            patch.object(session.picking, "pick_edit_node", return_value=None),
             patch.object(
                 session.picking,
-                "get_plan_target_at_position",
+                "pick",
                 return_value=("wall", target_wall),
                 create=True,
             ),
@@ -1376,10 +1376,10 @@ class BimPlanEditGuiWallsMixin:
                 return self._position
 
         with (
-            patch.object(session.picking, "get_edit_node", return_value=None),
+            patch.object(session.picking, "pick_edit_node", return_value=None),
             patch.object(
                 session.picking,
-                "get_plan_target_at_position",
+                "pick",
                 return_value=("wall", branch_down),
             ),
         ):
@@ -1459,10 +1459,10 @@ class BimPlanEditGuiWallsMixin:
                 return self._position
 
         with (
-            patch.object(session.picking, "get_edit_node", return_value=None),
+            patch.object(session.picking, "pick_edit_node", return_value=None),
             patch.object(
                 session.picking,
-                "get_plan_target_at_position",
+                "pick",
                 return_value=("wall", branch_down),
             ),
         ):
@@ -2799,10 +2799,10 @@ class BimPlanEditGuiWallsMixin:
         self.assertIs(session.hovered_wall, wall)
 
         with (
-            patch.object(session.picking, "get_edit_node", return_value=None),
+            patch.object(session.picking, "pick_edit_node", return_value=None),
             patch.object(
                 session.picking,
-                "get_plan_target_at_position",
+                "pick",
             ) as get_target,
         ):
             press = self._make_fake_left_mouse_press(250, 250)
@@ -2830,10 +2830,10 @@ class BimPlanEditGuiWallsMixin:
         self.pump_gui_events()
 
         with (
-            patch.object(session.picking, "get_edit_node", return_value=None),
+            patch.object(session.picking, "pick_edit_node", return_value=None),
             patch.object(
                 session.picking,
-                "get_plan_target_at_position",
+                "pick",
                 return_value=("wall", wall),
             ),
         ):
@@ -2868,10 +2868,10 @@ class BimPlanEditGuiWallsMixin:
         self.pump_gui_events()
 
         with (
-            patch.object(session.picking, "get_edit_node", return_value=None),
+            patch.object(session.picking, "pick_edit_node", return_value=None),
             patch.object(
                 session.picking,
-                "get_plan_target_at_position",
+                "pick",
                 return_value=("wall", wall),
             ),
         ):
@@ -2903,10 +2903,10 @@ class BimPlanEditGuiWallsMixin:
         session._hover_pick_dirty = True
 
         with (
-            patch.object(session.picking, "get_edit_node", return_value=None),
+            patch.object(session.picking, "pick_edit_node", return_value=None),
             patch.object(
                 session.picking,
-                "get_plan_target_at_position",
+                "pick",
                 return_value=("wall", target_wall),
             ) as get_target,
         ):

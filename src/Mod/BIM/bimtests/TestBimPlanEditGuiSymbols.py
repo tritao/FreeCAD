@@ -211,16 +211,12 @@ class BimPlanEditGuiSymbolsMixin:
             session.view = FakeView(
                 [{"Document": self.document.Name, "Object": plan_symbol.Name, "ParentObject": link}]
             )
-            self.assertEqual(
-                ("symbol", link), session.picking.get_plan_target_at_position((100, 100))
-            )
+            self.assertEqual(("symbol", link), session.picking.pick((100, 100)))
 
             session.view = FakeView(
                 [{"Document": self.document.Name, "Object": base.Name, "ParentObject": link}]
             )
-            self.assertEqual(
-                ("symbol", link), session.picking.get_plan_target_at_position((100, 100))
-            )
+            self.assertEqual(("symbol", link), session.picking.pick((100, 100)))
             self.assertEqual([], opening_pick_calls)
         finally:
             session.picking.pick_plan_opening_target_from_overlays = original_pick_opening
@@ -267,9 +263,7 @@ class BimPlanEditGuiSymbolsMixin:
         try:
             session.view = FakeView(real_view)
             mouse_pos = (int(screen_pos[0]), int(screen_pos[1]))
-            self.assertEqual(
-                ("symbol", link), session.picking.get_plan_target_at_position(mouse_pos)
-            )
+            self.assertEqual(("symbol", link), session.picking.pick(mouse_pos))
         finally:
             session.view = real_view
 
@@ -357,16 +351,12 @@ class BimPlanEditGuiSymbolsMixin:
                     }
                 ]
             )
-            self.assertEqual(
-                ("symbol", equipment), session.picking.get_plan_target_at_position((100, 100))
-            )
+            self.assertEqual(("symbol", equipment), session.picking.pick((100, 100)))
 
             session.view = FakeView(
                 [{"Document": self.document.Name, "Object": base.Name, "ParentObject": equipment}]
             )
-            self.assertEqual(
-                ("symbol", equipment), session.picking.get_plan_target_at_position((100, 100))
-            )
+            self.assertEqual(("symbol", equipment), session.picking.pick((100, 100)))
         finally:
             session.view = original_view
 

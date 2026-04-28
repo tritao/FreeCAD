@@ -396,7 +396,7 @@ Current progress:
 - Production interaction code now calls `session.picking`.
 - Click target resolution and priority ordering now live in `bimplan/picking/coordinator.py`.
 - `selection/picking.py` has been removed.
-- The next move should finish the owned picking API naming cleanup so production code calls `session.picking.pick(...)`, `session.picking.hover(...)`, and `session.picking.pick_edit_node(...)` consistently.
+- The owned picking service now uses `session.picking.pick(...)`, `session.picking.hover(...)`, and `session.picking.pick_edit_node(...)` consistently.
 
 Steps:
 
@@ -406,8 +406,8 @@ Steps:
 4. Move opening and symbol picking into owned picker modules. Done in `selection/overlay_picking.py`.
 5. Move region/space fallback picking into owned picker modules. Done in `selection/area_picking.py`.
 6. Remove the old `selection/picking.py` shim and `session.selection.picking` adapter. Done.
-7. Make `session.picking.pick(...)` the owned Plan Edit call path. Done for production code.
-8. Remove shim functions once internal call sites and low-level tests are migrated.
+7. Make `session.picking.pick(...)` the owned Plan Edit call path. Done.
+8. Remove shim functions once internal call sites and low-level tests are migrated. Done.
 
 Validation:
 
