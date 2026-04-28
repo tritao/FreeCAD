@@ -39,7 +39,7 @@ from .runtime import (
     session_state,
     view,
 )
-from .selection import picking
+from . import picking
 from .semantics import PlanSemanticRecord
 from .selection.targets import PlanTarget
 from .transactions import PlanEditTransaction
