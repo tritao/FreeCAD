@@ -572,30 +572,6 @@ _PLAN_EDIT_SESSION_STATE_PROPERTIES = (
         ),
     ),
     (
-        "_ensure_document_visual_state",
-        (
-            ("_pending_created_plan_objects", "pending_created_plan_objects", _coerce_dict),
-            (
-                "_created_plan_objects_flush_queued",
-                "created_plan_objects_flush_queued",
-                _coerce_bool,
-            ),
-            (
-                "_created_plan_objects_flush_deferred",
-                "created_plan_objects_flush_deferred",
-                _coerce_bool,
-            ),
-            (
-                "_document_visual_update_defer_depth",
-                "document_visual_update_defer_depth",
-                _coerce_int,
-            ),
-            ("_document_visual_refresh_deferred", "document_visual_refresh_deferred", _coerce_bool),
-            ("_deferred_selection_effects", "deferred_selection_effects", _coerce_list),
-            ("_document_observer_added", "document_observer_added", _coerce_bool),
-        ),
-    ),
-    (
         "_ensure_performance_state",
         (("_plan_edit_params", "plan_edit_params", _coerce_identity),),
     ),

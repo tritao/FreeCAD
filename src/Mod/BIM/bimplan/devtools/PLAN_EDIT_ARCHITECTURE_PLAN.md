@@ -497,6 +497,7 @@ Current progress:
 - Private plan-region tool compatibility aliases are removed; region creation uses `plan_region_tool_state`.
 - Private performance trace compatibility aliases are removed; tracing uses `performance_state`.
 - Private viewport compatibility aliases are removed; view setup and status chips use `viewport_state`.
+- Private document-visual compatibility aliases are removed; visual update deferral uses `document_visual_state`.
 
 Steps:
 
