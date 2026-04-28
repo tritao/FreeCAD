@@ -473,6 +473,16 @@ def resolve_wall_hosted_opening_layout(session, wall):
     return wall_edit.resolve_wall_hosted_opening_layout(session, wall)
 
 
+def is_opening_visual_dependency(opening, obj):
+    if not opening or not obj:
+        return False
+    if obj == opening:
+        return True
+    if obj == getattr(opening, "Base", None):
+        return True
+    return obj in (getattr(opening, "Hosts", None) or [])
+
+
 def refresh_opening_footprint_display(session, opening):
     if not session.openings.is_hosted_opening_object(opening):
         return
@@ -634,6 +644,9 @@ class PlanOpeningsAPI(_SessionAPI):
     def resolve_wall_hosted_opening_layout(self, *args, **kwargs):
         return resolve_wall_hosted_opening_layout(self.session, *args, **kwargs)
 
+    def is_opening_visual_dependency(self, *args, **kwargs):
+        return is_opening_visual_dependency(*args, **kwargs)
+
     def refresh_opening_footprint_display(self, *args, **kwargs):
         return refresh_opening_footprint_display(self.session, *args, **kwargs)
 
@@ -659,7 +672,7 @@ class PlanOpeningsAPI(_SessionAPI):
         from bimplan import document_visuals as plan_document_visuals
 
         if not (
-            plan_document_visuals.is_opening_visual_dependency(opening, obj)
+            self.is_opening_visual_dependency(opening, obj)
             and prop in plan_document_visuals.OPENING_VISUAL_PROPERTIES
         ):
             return False

@@ -525,7 +525,7 @@ def apply_context_object_selectability(session, obj, view_object):
     if not _has_view_object_property(view_object, "Selectable"):
         return
     semantic_obj = get_plan_semantic_object(session, obj)
-    if semantic_obj is not None and session.document_visuals.is_symbol_visual_dependency(
+    if semantic_obj is not None and session.overlays.symbols.is_symbol_visual_dependency(
         semantic_obj,
         obj,
     ):

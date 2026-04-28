@@ -266,29 +266,6 @@ def defer_document_visual_updates(session):
             session.task_panels.refresh_task_panel_status(reason="selection")
 
 
-def is_opening_visual_dependency(opening, obj):
-    if not opening or not obj:
-        return False
-    if obj == opening:
-        return True
-    if obj == getattr(opening, "Base", None):
-        return True
-    return obj in (getattr(opening, "Hosts", None) or [])
-
-
-def is_symbol_visual_dependency(session, symbol, obj):
-    if not session.visibility.is_plan_symbol_instance(symbol) or not obj:
-        return False
-    if obj == symbol:
-        return True
-    semantic_obj = session.visibility.get_plan_semantic_object(symbol)
-    if obj == semantic_obj:
-        return True
-    if obj == getattr(semantic_obj, "Base", None):
-        return True
-    return obj in (getattr(semantic_obj, "PlanSymbols", None) or [])
-
-
 def refresh_plan_object_footprint_display(session, obj, *, request_redraw=True):
     if not session.visibility.is_supported_plan_object(obj):
         return
@@ -546,7 +523,6 @@ class PlanDocumentVisualsAPI:
         return self._session
 
     is_hidden_library_definition_object = staticmethod(is_hidden_library_definition_object)
-    is_opening_visual_dependency = staticmethod(is_opening_visual_dependency)
 
     def should_register_created_plan_object(self, obj):
         return should_register_created_plan_object(self.session, obj)
@@ -571,9 +547,6 @@ class PlanDocumentVisualsAPI:
 
     def detach_document_observer(self):
         return detach_document_observer(self.session)
-
-    def is_symbol_visual_dependency(self, symbol, obj):
-        return is_symbol_visual_dependency(self.session, symbol, obj)
 
     def refresh_plan_object_footprint_display(self, obj, *, request_redraw=True):
         return refresh_plan_object_footprint_display(

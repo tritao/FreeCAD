@@ -203,9 +203,21 @@ class PlanSymbolOverlayService(_BoundOverlayService):
         "get_symbol_local_facing",
     )
 
+    def is_symbol_visual_dependency(self, symbol, obj):
+        if not self.session.visibility.is_plan_symbol_instance(symbol) or not obj:
+            return False
+        if obj == symbol:
+            return True
+        semantic_obj = self.session.visibility.get_plan_semantic_object(symbol)
+        if obj == semantic_obj:
+            return True
+        if obj == getattr(semantic_obj, "Base", None):
+            return True
+        return obj in (getattr(semantic_obj, "PlanSymbols", None) or [])
+
     def refresh_target_document_visual_dependency(self, symbol, obj, prop):
         if not (
-            plan_document_visuals.is_symbol_visual_dependency(self.session, symbol, obj)
+            self.is_symbol_visual_dependency(symbol, obj)
             and prop in plan_document_visuals.SYMBOL_VISUAL_PROPERTIES
         ):
             return False
