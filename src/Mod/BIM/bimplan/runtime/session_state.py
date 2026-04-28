@@ -501,15 +501,6 @@ _PLAN_EDIT_SESSION_STATE_PROPERTIES = (
         ),
     ),
     (
-        "_ensure_lifecycle_state",
-        (
-            ("_ignore_selection_changes", "ignore_selection_changes", _coerce_bool),
-            ("_finishing", "finishing", _coerce_bool),
-            ("_tearing_down", "tearing_down", _coerce_bool),
-            ("_teardown_signal_sources", "teardown_signal_sources", _coerce_list),
-        ),
-    ),
-    (
         "_ensure_wall_edit_state",
         (
             ("_wall_edit_modal_active", "wall_edit_modal_active", _coerce_bool),
