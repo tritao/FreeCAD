@@ -498,6 +498,7 @@ Current progress:
 - Private performance trace compatibility aliases are removed; tracing uses `performance_state`.
 - Private viewport compatibility aliases are removed; view setup and status chips use `viewport_state`.
 - Private document-visual compatibility aliases are removed; visual update deferral uses `document_visual_state`.
+- Unused private interaction compatibility aliases are removed; embedded host/name and space editing use `interaction_state`.
 
 Steps:
 

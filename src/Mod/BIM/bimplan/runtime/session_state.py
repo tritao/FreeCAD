@@ -544,9 +544,7 @@ _PLAN_EDIT_SESSION_STATE_PROPERTIES = (
     (
         "_ensure_interaction_state",
         (
-            ("_embedded_host", "embedded_host", _coerce_identity),
             ("_embedded_tool", "embedded_tool", _coerce_identity),
-            ("_embedded_tool_name", "embedded_tool_name", _coerce_optional_nonempty_str),
             ("_edit_opening", "edit_opening", _coerce_identity),
             ("_edit_opening_handle_index", "edit_opening_handle_index", _coerce_identity),
             ("_edit_symbol", "edit_symbol", _coerce_identity),
@@ -556,7 +554,6 @@ _PLAN_EDIT_SESSION_STATE_PROPERTIES = (
             ("_edit_provider", "edit_provider", _coerce_identity),
             ("_edit_provider_handle_index", "edit_provider_handle_index", _coerce_identity),
             ("_edit_provider_handle", "edit_provider_handle", _coerce_identity),
-            ("_edit_space", "edit_space", _coerce_identity),
         ),
     ),
     (
