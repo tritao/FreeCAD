@@ -542,14 +542,6 @@ _PLAN_EDIT_SESSION_STATE_PROPERTIES = (
         ),
     ),
     (
-        "_ensure_plan_region_tool_state",
-        (
-            ("_plan_region_points", "points", _coerce_list),
-            ("_plan_region_preview_trackers", "preview_trackers", _coerce_list),
-            ("_plan_region_parent_space", "parent_space", _coerce_identity),
-        ),
-    ),
-    (
         "_ensure_interaction_state",
         (
             ("_embedded_host", "embedded_host", _coerce_identity),

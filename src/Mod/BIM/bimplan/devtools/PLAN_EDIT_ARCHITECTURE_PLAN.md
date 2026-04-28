@@ -494,6 +494,7 @@ Current progress:
 - Private selection-sync compatibility aliases are removed; selection sync uses `selection_sync_state`.
 - Private hover-pick compatibility aliases are removed; hover picking uses `hover_pick_state`.
 - Private wall-grip runtime compatibility aliases are removed; wall grip sync uses `wall_grip_state`.
+- Private plan-region tool compatibility aliases are removed; region creation uses `plan_region_tool_state`.
 
 Steps:
 
