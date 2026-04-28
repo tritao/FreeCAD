@@ -2,6 +2,8 @@
 
 """Owned overlay API surface for BIM Plan Edit."""
 
+from functools import partial
+
 from bimplan import document_visuals as plan_document_visuals
 from bimplan.overlays import geometry as overlay_geometry
 from bimplan.overlays import manager as overlay_manager
@@ -14,13 +16,206 @@ from bimplan.overlays import walls as wall_overlays
 _PLAN_VIEW_SCALE_REFRESH_DELAY_MS = 40
 
 
-class PlanOverlaysAPI:
-    """Owned session surface for Plan Edit overlay behavior."""
-
-    __slots__ = ("_session", "__dict__")
+class _BoundOverlayService:
+    MODULE = None
+    SESSION_EXPORTS = ()
+    STATIC_EXPORTS = ()
 
     def __init__(self, session):
         self._session = session
+
+    @property
+    def session(self):
+        return self._session
+
+    def __getattr__(self, name):
+        if name in self.SESSION_EXPORTS:
+            bound = partial(getattr(self.MODULE, name), self._session)
+        elif name in self.STATIC_EXPORTS:
+            bound = getattr(self.MODULE, name)
+        else:
+            raise AttributeError("{} has no attribute {!r}".format(type(self).__name__, name))
+        setattr(self, name, bound)
+        return bound
+
+    def __dir__(self):
+        return sorted(set(super().__dir__()) | set(self.SESSION_EXPORTS) | set(self.STATIC_EXPORTS))
+
+
+class PlanOverlayManagerService(_BoundOverlayService):
+    MODULE = overlay_manager
+    SESSION_EXPORTS = (
+        "flush_plan_overlay_visual_refresh",
+        "flush_view_scale_overlay_refresh",
+        "refresh_plan_overlay_view_scale",
+        "refresh_plan_overlay_visuals",
+    )
+    STATIC_EXPORTS = (
+        "finalize_trackers",
+        "make_plan_line_tracker",
+        "set_plan_line_tracker_width",
+    )
+
+
+class PlanOverlayGeometryService(_BoundOverlayService):
+    MODULE = overlay_geometry
+    SESSION_EXPORTS = (
+        "get_plan_overlay_geometry_kinds_for_object",
+        "get_plan_overlay_geometry_cache_entry",
+        "invalidate_plan_overlay_geometry_cache",
+        "get_cached_plan_overlay_geometry",
+        "get_wall_overlay_polylines",
+        "get_space_footprint_faces",
+        "get_space_overlay_polylines",
+        "get_space_overlay_segments",
+        "get_region_footprint_faces",
+        "get_region_overlay_polylines",
+        "get_region_overlay_segments",
+        "get_opening_overlay_polylines",
+        "get_opening_overlay_screen_polylines",
+        "get_opening_overlay_screen_bounds",
+        "get_opening_pick_bounds",
+        "get_opening_overlay_segments",
+    )
+    STATIC_EXPORTS = (
+        "get_footprint_overlay_polylines",
+        "build_overlay_segments_from_polylines",
+    )
+
+
+class PlanSpaceOverlayService(_BoundOverlayService):
+    MODULE = space_overlays
+    SESSION_EXPORTS = (
+        "sync_secondary_selected_overlays",
+        "clear_secondary_selected_overlays",
+        "sync_space_region_pick_overlays",
+        "clear_space_region_pick_overlays",
+        "create_space_overlay_trackers",
+        "create_region_overlay_trackers",
+        "sync_hovered_space_overlay",
+        "clear_hovered_space_overlay",
+        "sync_hovered_region_overlay",
+        "clear_hovered_region_overlay",
+        "invalidate_selected_space_overlay_cache",
+        "sync_selected_space_overlay",
+        "clear_selected_space_overlay",
+        "sync_selected_region_overlay",
+        "clear_selected_region_overlay",
+    )
+
+
+class PlanWallOverlayService(_BoundOverlayService):
+    MODULE = wall_overlays
+    SESSION_EXPORTS = (
+        "retarget_edit_tracker",
+        "sync_wall_grips",
+        "schedule_wall_grip_sync",
+        "run_scheduled_wall_grip_sync",
+        "clear_wall_grips",
+        "sync_hovered_wall_overlay",
+        "clear_hovered_wall_overlay",
+        "sync_selected_wall_overlay",
+        "clear_selected_wall_overlay",
+        "apply_selected_wall_selection_feedback",
+        "get_plan_context_junctions",
+        "create_junction_node_trackers",
+        "sync_junction_node_overlays",
+        "clear_junction_node_overlays",
+        "sync_hovered_wall_opening_context_overlay",
+        "clear_hovered_wall_opening_context_overlay",
+        "create_wall_overlay_trackers",
+    )
+
+
+class PlanProviderOverlayService(_BoundOverlayService):
+    MODULE = provider_overlays
+    SESSION_EXPORTS = (
+        "sync_provider_overlays",
+        "clear_provider_overlays",
+        "sync_hovered_provider_overlay",
+        "clear_hovered_provider_overlay",
+        "sync_selected_provider_overlay",
+        "clear_selected_provider_overlay",
+        "get_selected_provider_handle_specs",
+        "sync_selected_provider_handles",
+        "clear_selected_provider_handles",
+        "pick_selected_provider_handle",
+        "sync_provider_point_preview",
+        "clear_provider_point_preview",
+    )
+
+
+class PlanOpeningOverlayService(_BoundOverlayService):
+    MODULE = opening_overlays
+    SESSION_EXPORTS = (
+        "get_opening_handle_markers",
+        "set_opening_handle_tracker_marker",
+        "discard_opening_handle_tracker_pool",
+        "queue_prime_opening_handle_tracker_pool",
+        "prime_opening_handle_tracker_pool",
+        "sync_hovered_opening_overlay",
+        "clear_hovered_opening_overlay",
+        "invalidate_hovered_opening_overlay_cache",
+        "create_opening_overlay_trackers",
+        "sync_selected_opening_overlay",
+        "clear_selected_opening_overlay",
+        "invalidate_selected_opening_overlay_cache",
+        "sync_selected_wall_opening_context_overlay",
+        "clear_selected_wall_opening_context_overlay",
+        "get_selected_opening_handle_specs",
+        "sync_selected_opening_handles",
+        "clear_selected_opening_handles",
+    )
+
+
+class PlanSymbolOverlayService(_BoundOverlayService):
+    MODULE = symbol_overlays
+    SESSION_EXPORTS = (
+        "clear_symbol_edit_preview",
+        "get_plan_symbol_instances",
+        "get_symbol_global_placement",
+        "get_symbol_parent_global_placement",
+        "get_symbol_plan_proxy",
+        "get_symbol_semantic_proxy",
+        "get_symbol_overlay_polylines",
+        "get_symbol_overlay_segments",
+        "get_symbol_overlay_screen_polylines",
+        "get_symbol_overlay_screen_bounds",
+        "refresh_selected_symbol_visuals",
+        "create_symbol_overlay_trackers",
+        "sync_hovered_symbol_overlay",
+        "clear_hovered_symbol_overlay",
+        "sync_selected_symbol_overlay",
+        "clear_selected_symbol_overlay",
+        "get_symbol_rotation_snap_increment_degrees",
+        "get_symbol_rotation_snap_step_radians",
+        "symbol_rotation_free_angle_override_active",
+        "resolve_symbol_handle_target_point",
+        "get_symbol_handle_radius",
+        "get_selected_symbol_handle_specs",
+        "get_symbol_anchor_point",
+        "get_symbol_facing_vector",
+        "sync_selected_symbol_handles",
+        "clear_selected_symbol_handles",
+        "sync_symbol_edit_preview",
+        "pick_selected_symbol_handle",
+        "get_symbol_local_anchor",
+        "get_symbol_local_facing",
+    )
+
+
+class PlanOverlaysAPI:
+    """Owned session surface for BIM Plan Edit overlay behavior."""
+
+    def __init__(self, session):
+        self._session = session
+        self.manager = PlanOverlayManagerService(session)
+        self.geometry = PlanOverlayGeometryService(session)
+        self.spaces = PlanSpaceOverlayService(session)
+        self.walls = PlanWallOverlayService(session)
+        self.providers = PlanProviderOverlayService(session)
+        self.openings = PlanOpeningOverlayService(session)
+        self.symbols = PlanSymbolOverlayService(session)
 
     @property
     def session(self):
@@ -50,158 +245,3 @@ class PlanOverlaysAPI:
             plan_document_visuals.PLAN_VISUAL_ALL,
             default_all=default_all,
         )
-
-
-def _make_overlay_session_forwarder(func):
-    def _forward(self, *args, **kwargs):
-        return func(self.session, *args, **kwargs)
-
-    _forward.__name__ = func.__name__
-    _forward.__qualname__ = "PlanOverlaysAPI.{}".format(func.__name__)
-    _forward.__doc__ = func.__doc__
-    return _forward
-
-
-def _make_overlay_static_forwarder(func):
-    def _forward(*args, **kwargs):
-        return func(*args, **kwargs)
-
-    _forward.__name__ = func.__name__
-    _forward.__qualname__ = "PlanOverlaysAPI.{}".format(func.__name__)
-    _forward.__doc__ = func.__doc__
-    return staticmethod(_forward)
-
-
-_PLAN_OVERLAY_STATIC_FORWARDERS = (
-    overlay_manager.finalize_trackers,
-    overlay_manager.make_plan_line_tracker,
-    overlay_manager.set_plan_line_tracker_width,
-    overlay_geometry.get_footprint_overlay_polylines,
-    overlay_geometry.build_overlay_segments_from_polylines,
-)
-
-_PLAN_OVERLAY_SESSION_FORWARDERS = (
-    overlay_manager.flush_plan_overlay_visual_refresh,
-    overlay_manager.flush_view_scale_overlay_refresh,
-    overlay_manager.refresh_plan_overlay_view_scale,
-    overlay_manager.refresh_plan_overlay_visuals,
-    overlay_geometry.get_plan_overlay_geometry_kinds_for_object,
-    overlay_geometry.get_plan_overlay_geometry_cache_entry,
-    overlay_geometry.invalidate_plan_overlay_geometry_cache,
-    overlay_geometry.get_cached_plan_overlay_geometry,
-    overlay_geometry.get_wall_overlay_polylines,
-    overlay_geometry.get_space_footprint_faces,
-    overlay_geometry.get_space_overlay_polylines,
-    overlay_geometry.get_space_overlay_segments,
-    overlay_geometry.get_region_footprint_faces,
-    overlay_geometry.get_region_overlay_polylines,
-    overlay_geometry.get_region_overlay_segments,
-    overlay_geometry.get_opening_overlay_polylines,
-    overlay_geometry.get_opening_overlay_screen_polylines,
-    overlay_geometry.get_opening_overlay_screen_bounds,
-    overlay_geometry.get_opening_pick_bounds,
-    overlay_geometry.get_opening_overlay_segments,
-    space_overlays.sync_secondary_selected_overlays,
-    space_overlays.clear_secondary_selected_overlays,
-    space_overlays.sync_space_region_pick_overlays,
-    space_overlays.clear_space_region_pick_overlays,
-    space_overlays.create_space_overlay_trackers,
-    space_overlays.create_region_overlay_trackers,
-    space_overlays.sync_hovered_space_overlay,
-    space_overlays.clear_hovered_space_overlay,
-    space_overlays.sync_hovered_region_overlay,
-    space_overlays.clear_hovered_region_overlay,
-    space_overlays.invalidate_selected_space_overlay_cache,
-    space_overlays.sync_selected_space_overlay,
-    space_overlays.clear_selected_space_overlay,
-    space_overlays.sync_selected_region_overlay,
-    space_overlays.clear_selected_region_overlay,
-    wall_overlays.retarget_edit_tracker,
-    wall_overlays.sync_wall_grips,
-    wall_overlays.schedule_wall_grip_sync,
-    wall_overlays.run_scheduled_wall_grip_sync,
-    wall_overlays.clear_wall_grips,
-    wall_overlays.sync_hovered_wall_overlay,
-    wall_overlays.clear_hovered_wall_overlay,
-    wall_overlays.sync_selected_wall_overlay,
-    wall_overlays.clear_selected_wall_overlay,
-    wall_overlays.apply_selected_wall_selection_feedback,
-    wall_overlays.get_plan_context_junctions,
-    wall_overlays.create_junction_node_trackers,
-    wall_overlays.sync_junction_node_overlays,
-    wall_overlays.clear_junction_node_overlays,
-    wall_overlays.sync_hovered_wall_opening_context_overlay,
-    wall_overlays.clear_hovered_wall_opening_context_overlay,
-    wall_overlays.create_wall_overlay_trackers,
-    provider_overlays.sync_provider_overlays,
-    provider_overlays.clear_provider_overlays,
-    provider_overlays.sync_hovered_provider_overlay,
-    provider_overlays.clear_hovered_provider_overlay,
-    provider_overlays.sync_selected_provider_overlay,
-    provider_overlays.clear_selected_provider_overlay,
-    provider_overlays.get_selected_provider_handle_specs,
-    provider_overlays.sync_selected_provider_handles,
-    provider_overlays.clear_selected_provider_handles,
-    provider_overlays.pick_selected_provider_handle,
-    provider_overlays.sync_provider_point_preview,
-    provider_overlays.clear_provider_point_preview,
-    opening_overlays.get_opening_handle_markers,
-    opening_overlays.set_opening_handle_tracker_marker,
-    opening_overlays.discard_opening_handle_tracker_pool,
-    opening_overlays.queue_prime_opening_handle_tracker_pool,
-    opening_overlays.prime_opening_handle_tracker_pool,
-    opening_overlays.sync_hovered_opening_overlay,
-    opening_overlays.clear_hovered_opening_overlay,
-    opening_overlays.invalidate_hovered_opening_overlay_cache,
-    opening_overlays.create_opening_overlay_trackers,
-    opening_overlays.sync_selected_opening_overlay,
-    opening_overlays.clear_selected_opening_overlay,
-    opening_overlays.invalidate_selected_opening_overlay_cache,
-    opening_overlays.sync_selected_wall_opening_context_overlay,
-    opening_overlays.clear_selected_wall_opening_context_overlay,
-    opening_overlays.get_selected_opening_handle_specs,
-    opening_overlays.sync_selected_opening_handles,
-    opening_overlays.clear_selected_opening_handles,
-    symbol_overlays.clear_symbol_edit_preview,
-    symbol_overlays.get_plan_symbol_instances,
-    symbol_overlays.get_symbol_global_placement,
-    symbol_overlays.get_symbol_parent_global_placement,
-    symbol_overlays.get_symbol_plan_proxy,
-    symbol_overlays.get_symbol_semantic_proxy,
-    symbol_overlays.get_symbol_overlay_polylines,
-    symbol_overlays.get_symbol_overlay_segments,
-    symbol_overlays.get_symbol_overlay_screen_polylines,
-    symbol_overlays.get_symbol_overlay_screen_bounds,
-    symbol_overlays.refresh_selected_symbol_visuals,
-    symbol_overlays.create_symbol_overlay_trackers,
-    symbol_overlays.sync_hovered_symbol_overlay,
-    symbol_overlays.clear_hovered_symbol_overlay,
-    symbol_overlays.sync_selected_symbol_overlay,
-    symbol_overlays.clear_selected_symbol_overlay,
-    symbol_overlays.get_symbol_rotation_snap_increment_degrees,
-    symbol_overlays.get_symbol_rotation_snap_step_radians,
-    symbol_overlays.symbol_rotation_free_angle_override_active,
-    symbol_overlays.resolve_symbol_handle_target_point,
-    symbol_overlays.get_symbol_handle_radius,
-    symbol_overlays.get_selected_symbol_handle_specs,
-    symbol_overlays.get_symbol_anchor_point,
-    symbol_overlays.get_symbol_facing_vector,
-    symbol_overlays.sync_selected_symbol_handles,
-    symbol_overlays.clear_selected_symbol_handles,
-    symbol_overlays.sync_symbol_edit_preview,
-    symbol_overlays.pick_selected_symbol_handle,
-    symbol_overlays.get_symbol_local_anchor,
-    symbol_overlays.get_symbol_local_facing,
-)
-
-for _overlay_func in _PLAN_OVERLAY_STATIC_FORWARDERS:
-    setattr(PlanOverlaysAPI, _overlay_func.__name__, _make_overlay_static_forwarder(_overlay_func))
-
-for _overlay_func in _PLAN_OVERLAY_SESSION_FORWARDERS:
-    setattr(
-        PlanOverlaysAPI,
-        _overlay_func.__name__,
-        _make_overlay_session_forwarder(_overlay_func),
-    )
-
-del _overlay_func

@@ -188,9 +188,9 @@ def clear_hover_visuals(
     include_hovered_wall_opening_context=False,
 ):
     if include_junction_nodes:
-        session.overlays.clear_junction_node_overlays()
+        session.overlays.walls.clear_junction_node_overlays()
     if include_hovered_wall_opening_context:
-        session.overlays.clear_hovered_wall_opening_context_overlay()
+        session.overlays.walls.clear_hovered_wall_opening_context_overlay()
     plan_target_dispatch.clear_hovered_target_visuals(session, kinds=kinds)
 
 
@@ -204,16 +204,16 @@ def clear_selection_visuals(
     include_secondary_selection=False,
 ):
     if include_wall_grips:
-        session.overlays.clear_wall_grips()
+        session.overlays.walls.clear_wall_grips()
     plan_target_dispatch.clear_selected_target_visuals(
         session,
         kinds=kinds,
         clear_handle_kinds=clear_handle_kinds,
     )
     if include_selected_wall_opening_context:
-        session.overlays.clear_selected_wall_opening_context_overlay()
+        session.overlays.openings.clear_selected_wall_opening_context_overlay()
     if include_secondary_selection:
-        session.overlays.clear_secondary_selected_overlays()
+        session.overlays.spaces.clear_secondary_selected_overlays()
 
 
 def clear_transient_visuals(
@@ -228,13 +228,13 @@ def clear_transient_visuals(
     include_plan_region_preview=False,
 ):
     if include_provider_overlays:
-        session.overlays.clear_provider_overlays()
+        session.overlays.providers.clear_provider_overlays()
     if include_provider_point_preview:
-        session.overlays.clear_provider_point_preview()
+        session.overlays.providers.clear_provider_point_preview()
     if include_space_region_pick:
-        session.overlays.clear_space_region_pick_overlays()
+        session.overlays.spaces.clear_space_region_pick_overlays()
     if include_opening_handle_pool:
-        session.overlays.discard_opening_handle_tracker_pool()
+        session.overlays.openings.discard_opening_handle_tracker_pool()
     if include_opening_move_preview:
         session.openings.clear_opening_move_preview()
     if include_symbol_edit_preview:
@@ -893,7 +893,7 @@ def on_embedded_command_started(session, tool_name, command=None):
     if command is not None:
         session.interaction_state.embedded_tool = command
     session.current_tool = tool_name
-    session.overlays.sync_selected_wall_opening_context_overlay()
+    session.overlays.openings.sync_selected_wall_opening_context_overlay()
     session.task_panels.refresh_task_panel_status()
 
 
@@ -907,7 +907,7 @@ def on_embedded_command_finished(session, tool_name, command=None):
         interaction_state.embedded_tool_name = None
     if session.current_tool == tool_name:
         session.current_tool = plan_runtime_tools.PlanTool.SELECT
-        session.overlays.sync_selected_wall_opening_context_overlay()
+        session.overlays.openings.sync_selected_wall_opening_context_overlay()
         session.task_panels.refresh_task_panel_status()
 
 
@@ -956,7 +956,7 @@ def start_embedded_tool(session, tool_name, command, host_class=None):
         session,
         kinds=plan_target_kinds.EMBEDDED_TOOL_CLEAR_HOVERED_KINDS,
     )
-    session.overlays.sync_secondary_selected_overlays()
+    session.overlays.spaces.sync_secondary_selected_overlays()
     session.task_panels.refresh_task_panel_status()
     interaction_state.embedded_tool = command
     interaction_state.embedded_tool_name = tool_name
@@ -1004,7 +1004,7 @@ def cancel_pending_edit(session):
     FreeCAD.activeDraftCommand = None
     _reset_pending_edit_state(session, clear_opening_edit=True)
     session.wall_relations.clear_plan_relation_status()
-    session.overlays.sync_wall_grips()
+    session.overlays.walls.sync_wall_grips()
     plan_target_dispatch.sync_selected_target_visuals(
         session,
         kinds=plan_target_kinds.PENDING_EDIT_VISUAL_SYNC_KINDS,

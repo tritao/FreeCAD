@@ -106,7 +106,7 @@ def sync_opening_move_preview(session, opening, point):
         if len(polyline) < 2:
             continue
         for start, end in zip(polyline, polyline[1:]):
-            tracker = session.overlays.make_plan_line_tracker(
+            tracker = session.overlays.manager.make_plan_line_tracker(
                 DraftTrackers,
                 "opening-move-preview:{}".format(getattr(opening, "Name", "unknown")),
                 scolor=preview_color,
@@ -123,7 +123,7 @@ def sync_opening_move_preview(session, opening, point):
     if guide_start is None or guide_end is None:
         return
 
-    guide = session.overlays.make_plan_line_tracker(
+    guide = session.overlays.manager.make_plan_line_tracker(
         DraftTrackers,
         "opening-move-guide:{}".format(getattr(opening, "Name", "unknown")),
         dotted=True,
@@ -150,7 +150,9 @@ def sync_opening_move_preview(session, opening, point):
 
 def clear_opening_move_preview(session):
     opening_transient_state = session.opening_transient_state
-    session.overlays.finalize_trackers(opening_transient_state.opening_move_preview_trackers)
+    session.overlays.manager.finalize_trackers(
+        opening_transient_state.opening_move_preview_trackers
+    )
     opening_transient_state.opening_move_preview_trackers = []
 
 
@@ -220,7 +222,7 @@ def activate_opening_handle_now(session, opening, handle_index):
             return
         with session.performance.plan_perf_trace_span("activate_opening_handle_set_target"):
             session.selection.set_selected_plan_target("opening", opening)
-            session.overlays.clear_wall_grips()
+            session.overlays.walls.clear_wall_grips()
         with session.performance.plan_perf_trace_span("activate_opening_handle_get_handles"):
             handles = session.openings.get_selected_opening_edit_handles(opening)
         if handle_index < 0 or handle_index >= len(handles):
@@ -244,15 +246,15 @@ def start_opening_handle_point_pick(session, opening, handle_index, handle):
             session.current_tool = "Move Opening"
             session.selection.set_hovered_wall(None)
             session.selection.set_hovered_opening(None)
-            session.overlays.sync_secondary_selected_overlays()
+            session.overlays.spaces.sync_secondary_selected_overlays()
             interaction_state = session.interaction_state
             opening_transient_state = session.opening_transient_state
             interaction_state.edit_opening = opening
             interaction_state.edit_opening_handle_index = handle_index
             opening_transient_state.edit_opening_move_anchor = "center"
             opening_transient_state.edit_opening_move_raw_point = FreeCAD.Vector(handle.point)
-            session.overlays.clear_selected_opening_overlay()
-            session.overlays.clear_selected_opening_handles()
+            session.overlays.openings.clear_selected_opening_overlay()
+            session.overlays.openings.clear_selected_opening_handles()
         with session.performance.plan_perf_trace_span("start_opening_handle_preview"):
             queue_opening_move_initial_preview(session, opening, handle.point)
         session.task_panels.refresh_task_panel_status(reason="selection")
@@ -310,8 +312,8 @@ def finish_opening_handle_point_pick(session, point=None, obj=None):
     if point is None or not opening:
         session.current_tool = "Select"
         opening_transient_state.edit_opening_move_anchor = "center"
-        session.overlays.sync_selected_opening_overlay()
-        session.overlays.sync_selected_opening_handles()
+        session.overlays.openings.sync_selected_opening_overlay()
+        session.overlays.openings.sync_selected_opening_handles()
         session.task_panels.refresh_task_panel_status()
         return
 
@@ -361,8 +363,8 @@ def cancel_opening_handle_point_pick(session):
     session.current_tool = "Select"
     if opening:
         session.selection.set_selected_plan_target("opening", opening, pending_restore=True)
-    session.overlays.sync_selected_opening_overlay()
-    session.overlays.sync_selected_opening_handles()
+    session.overlays.openings.sync_selected_opening_overlay()
+    session.overlays.openings.sync_selected_opening_handles()
     session.task_panels.refresh_task_panel_status()
 
 
@@ -373,13 +375,13 @@ def restore_selected_opening(session, opening):
     else:
         session.selection.set_selected_plan_target()
     if not opening:
-        session.overlays.sync_selected_opening_overlay()
-        session.overlays.sync_selected_opening_handles()
+        session.overlays.openings.sync_selected_opening_overlay()
+        session.overlays.openings.sync_selected_opening_handles()
         session.task_panels.refresh_task_panel_status()
         return
     session.selection.set_gui_selection_object(opening)
-    session.overlays.sync_selected_opening_overlay()
-    session.overlays.sync_selected_opening_handles()
+    session.overlays.openings.sync_selected_opening_overlay()
+    session.overlays.openings.sync_selected_opening_handles()
     session.task_panels.refresh_task_panel_status()
 
 
@@ -407,8 +409,8 @@ def execute_selected_opening_handle(session, opening, handle_index, handle):
             pass
         return
     session.selection.set_selected_plan_target("opening", opening, pending_restore=True)
-    session.overlays.sync_selected_opening_overlay()
-    session.overlays.sync_selected_opening_handles()
+    session.overlays.openings.sync_selected_opening_overlay()
+    session.overlays.openings.sync_selected_opening_handles()
 
 
 def invalidate_wall_hosted_openings_cache(session):

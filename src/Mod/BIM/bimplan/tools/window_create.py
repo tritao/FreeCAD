@@ -330,7 +330,7 @@ def has_active_window_tool(session):
 
 def clear_window_preview(session):
     creation_preview_state = session.creation_preview_state
-    session.overlays.finalize_trackers(creation_preview_state.window_preview_trackers)
+    session.overlays.manager.finalize_trackers(creation_preview_state.window_preview_trackers)
     creation_preview_state.window_preview_trackers = []
 
 
@@ -556,7 +556,7 @@ def update_window_tool_preview(session, point=None, info=None):
     color = (0.12, 0.38, 0.95)
     width = session.viewport.scaled_line_width(2)
     for index, (start, end) in enumerate(zip(points, points[1:] + points[:1])):
-        tracker = session.overlays.make_plan_line_tracker(
+        tracker = session.overlays.manager.make_plan_line_tracker(
             DraftTrackers,
             "window-placement-preview:{}".format(index),
             scolor=color,

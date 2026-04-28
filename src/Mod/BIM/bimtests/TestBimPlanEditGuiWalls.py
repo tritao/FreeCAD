@@ -654,7 +654,7 @@ class BimPlanEditGuiWallsMixin:
             return_value=("wall", target_wall),
         ):
             session.selection.update_hovered_plan_target((100, 100))
-            session.overlays.refresh_plan_overlay_visuals()
+            session.overlays.manager.refresh_plan_overlay_visuals()
 
         self.assertIs(session.hovered_wall, target_wall)
         self.assertIsNone(session.hovered_opening)
@@ -2411,7 +2411,7 @@ class BimPlanEditGuiWallsMixin:
         delta = FreeCAD.Vector(item["target_point"]).sub(item["current"])
         self.assertGreater(delta.Length, 1e-6)
 
-        original_polylines = session.overlays.get_opening_overlay_polylines(door)
+        original_polylines = session.overlays.geometry.get_opening_overlay_polylines(door)
         self.assertTrue(original_polylines)
         first_polyline = next(polyline for polyline in original_polylines if len(polyline) >= 2)
 

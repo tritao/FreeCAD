@@ -386,7 +386,9 @@ class BimPlanEditGuiSpacesMixin:
         try:
             session.view = FakeView(self.document.Name, space.Name, level)
             with (
-                patch.object(session.overlays, "get_region_footprint_faces", return_value=[]),
+                patch.object(
+                    session.overlays.geometry, "get_region_footprint_faces", return_value=[]
+                ),
                 patch.object(
                     session.viewport,
                     "get_plan_point_from_mouse_pos",
@@ -552,7 +554,7 @@ class BimPlanEditGuiSpacesMixin:
         space = _FakeSpace()
         space.Proxy = _FakeSpaceProxy(face_shape.Faces)
 
-        polylines = session.overlays.get_space_overlay_polylines(space)
+        polylines = session.overlays.geometry.get_space_overlay_polylines(space)
         self.assertEqual(len(polylines), 1)
 
         polyline = polylines[0]

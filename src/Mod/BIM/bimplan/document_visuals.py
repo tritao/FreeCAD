@@ -165,6 +165,33 @@ def defer_document_visual_refresh(session):
     _document_visual_state(session).document_visual_refresh_deferred = True
 
 
+_DEFERRED_SELECTION_EFFECT_SUSPEND_SELECTED_WALL = "suspend_selected_wall"
+
+
+def queue_deferred_selection_effect(session, effect_kind, obj=None):
+    effect = (str(effect_kind or ""), obj)
+    effects = _document_visual_state(session).deferred_selection_effects
+    if effect not in effects:
+        effects.append(effect)
+
+
+def _take_deferred_selection_effects(session):
+    visual_state = _document_visual_state(session)
+    effects = list(visual_state.deferred_selection_effects)
+    visual_state.deferred_selection_effects.clear()
+    return effects
+
+
+def _apply_deferred_selection_effects(session, effects):
+    if not effects:
+        return
+    for effect_kind, obj in effects:
+        if effect_kind == _DEFERRED_SELECTION_EFFECT_SUSPEND_SELECTED_WALL:
+            if session.current_tool != "Select":
+                continue
+            session.selection.suspend_selected_wall_state(wall=obj)
+
+
 def document_is_alive(session):
     doc = session.doc
     if doc is None:
@@ -228,8 +255,10 @@ def defer_document_visual_updates(session):
                 flush_created_plan_objects(session, force=True)
             finally:
                 visual_state.document_visual_update_defer_depth = 0
-        if visual_state.document_visual_refresh_deferred:
+        if visual_state.document_visual_refresh_deferred or visual_state.deferred_selection_effects:
+            effects = _take_deferred_selection_effects(session)
             visual_state.document_visual_refresh_deferred = False
+            _apply_deferred_selection_effects(session, effects)
             if not document_is_alive(session):
                 return
             invalidate_document_dependent_plan_visuals(session)
@@ -248,9 +277,9 @@ def is_opening_visual_dependency(opening, obj):
 
 
 def refresh_selected_opening_visuals(session):
-    session.overlays.sync_selected_opening_overlay()
-    session.overlays.sync_selected_opening_handles()
-    session.overlays.sync_selected_wall_opening_context_overlay()
+    session.overlays.openings.sync_selected_opening_overlay()
+    session.overlays.openings.sync_selected_opening_handles()
+    session.overlays.openings.sync_selected_wall_opening_context_overlay()
     session.viewport.request_view_redraw()
 
 
@@ -270,7 +299,7 @@ def is_symbol_visual_dependency(session, symbol, obj):
 def refresh_plan_object_footprint_display(session, obj, *, request_redraw=True):
     if not session.visibility.is_supported_plan_object(obj):
         return
-    session.overlays.invalidate_plan_overlay_geometry_cache(obj)
+    session.overlays.geometry.invalidate_plan_overlay_geometry_cache(obj)
     semantic_obj = session.visibility.get_plan_semantic_object(obj)
     refresh_targets = []
     for candidate in (semantic_obj, obj):
@@ -416,8 +445,8 @@ def queue_hard_refresh_selected_opening_visuals(session):
     if session.lifecycle_state.tearing_down or opening_state.selected_opening_hard_refresh_queued:
         return
     opening_state.selected_opening_hard_refresh_queued = True
-    session.overlays.clear_selected_opening_overlay()
-    session.overlays.clear_selected_opening_handles()
+    session.overlays.openings.clear_selected_opening_overlay()
+    session.overlays.openings.clear_selected_opening_handles()
     session.viewport.request_view_redraw()
     try:
         from PySide import QtCore
@@ -437,8 +466,8 @@ def flush_hard_refresh_selected_opening_visuals(session):
     opening = session.selection.get_selected_plan_target_object("opening")
     if not session.openings.is_hosted_opening_object(opening):
         return
-    session.overlays.sync_selected_opening_overlay()
-    session.overlays.sync_selected_opening_handles()
+    session.overlays.openings.sync_selected_opening_overlay()
+    session.overlays.openings.sync_selected_opening_handles()
     session.viewport.request_view_redraw()
 
 
@@ -591,6 +620,17 @@ def _refresh_wall_related_visuals(session, obj, prop, selected_wall):
     return True
 
 
+def _maybe_queue_deferred_selected_wall_suspension(session, obj, prop, selected_wall):
+    if obj != selected_wall or prop not in _WALL_VISUAL_PROPERTIES:
+        return False
+    queue_deferred_selection_effect(
+        session,
+        _DEFERRED_SELECTION_EFFECT_SUSPEND_SELECTED_WALL,
+        selected_wall,
+    )
+    return True
+
+
 def slot_changed_object(session, obj, prop):
     if session.lifecycle_state.tearing_down:
         return
@@ -598,13 +638,14 @@ def slot_changed_object(session, obj, prop):
     _provider_overlay_state(session).render_state = None
     session.visibility.invalidate_plan_classification_cache()
     session.openings.invalidate_wall_hosted_openings_cache()
+    selected_wall = session.selection.get_selected_plan_target_object("wall")
     if are_document_visual_updates_deferred(session):
+        _maybe_queue_deferred_selected_wall_suspension(session, obj, prop, selected_wall)
         defer_document_visual_refresh(session)
         return
     if session.current_tool != "Select":
         return
     session.selection.sanitize_plan_target_references()
-    selected_wall = session.selection.get_selected_plan_target_object("wall")
     selected_opening = session.selection.get_selected_plan_target_object("opening")
     selected_symbol = session.selection.get_selected_plan_target_object("symbol")
     selected_region = session.selection.get_selected_plan_target_object("region")
@@ -628,33 +669,39 @@ def slot_deleted_object(session, obj):
     _provider_overlay_state(session).render_state = None
     session.visibility.invalidate_plan_classification_cache()
     session.openings.invalidate_wall_hosted_openings_cache()
-    session.overlays.invalidate_plan_overlay_geometry_cache(obj)
+    session.overlays.geometry.invalidate_plan_overlay_geometry_cache(obj)
     if are_document_visual_updates_deferred(session):
+        if session.selection.is_selected_plan_target("wall", obj):
+            queue_deferred_selection_effect(
+                session,
+                _DEFERRED_SELECTION_EFFECT_SUSPEND_SELECTED_WALL,
+                obj,
+            )
         defer_document_visual_refresh(session)
         return
     if obj == session.hovered_wall:
         session.hovered_wall = None
-        session.overlays.clear_hovered_wall_overlay()
+        session.overlays.walls.clear_hovered_wall_overlay()
     if obj == session.hovered_opening:
         session.hovered_opening = None
-        session.overlays.clear_hovered_opening_overlay()
+        session.overlays.openings.clear_hovered_opening_overlay()
     if obj == session.hovered_symbol:
         session.hovered_symbol = None
-        session.overlays.clear_hovered_symbol_overlay()
+        session.overlays.symbols.clear_hovered_symbol_overlay()
     if obj == session.hovered_provider:
         session.hovered_provider = None
-        session.overlays.clear_hovered_provider_overlay()
+        session.overlays.providers.clear_hovered_provider_overlay()
     if obj == session.hovered_space:
         session.hovered_space = None
-        session.overlays.clear_hovered_space_overlay()
+        session.overlays.spaces.clear_hovered_space_overlay()
     if obj == session.hovered_region:
         session.hovered_region = None
-        session.overlays.clear_hovered_region_overlay()
+        session.overlays.spaces.clear_hovered_region_overlay()
     if session.selection.clear_selected_plan_target_if_matches("opening", obj):
         refresh_selected_opening_visuals(session)
         return
     if session.selection.clear_selected_plan_target_if_matches("symbol", obj):
-        session.overlays.refresh_selected_symbol_visuals()
+        session.overlays.symbols.refresh_selected_symbol_visuals()
         return
     if session.selection.clear_selected_plan_target_if_matches("region", obj):
         session.spaces.refresh_selected_region_visuals()
@@ -679,7 +726,7 @@ def invalidate_document_dependent_plan_visuals(session, recompute_opening_hosts=
     session.providers.invalidate_plan_provider_document_cache()
     session.visibility.invalidate_plan_classification_cache()
     session.openings.invalidate_wall_hosted_openings_cache()
-    session.overlays.invalidate_plan_overlay_geometry_cache()
+    session.overlays.geometry.invalidate_plan_overlay_geometry_cache()
     session.selection.sanitize_plan_target_references()
     selected_symbol = session.selection.get_selected_plan_target_object("symbol")
     selected_region = session.selection.get_selected_plan_target_object("region")

@@ -2,6 +2,8 @@
 
 """Wall edit interaction control for BIM Plan Edit."""
 
+from contextlib import nullcontext
+
 import FreeCAD
 import FreeCADGui
 from bimplan import selection as plan_selection
@@ -130,7 +132,7 @@ def cancel_wall_edit(session, restore=True, refresh=True):
 
     session.current_tool = "Select"
     session.lifecycle.cancel_pending_edit()
-    session.overlays.sync_selected_wall_opening_context_overlay()
+    session.overlays.openings.sync_selected_wall_opening_context_overlay()
     if refresh:
         session.task_panels.refresh_task_panel_status()
     return True
@@ -171,8 +173,8 @@ def _set_wall_edit_start_state(session, wall, endpoints, mode):
     session.selection.set_hovered_provider(None)
     if not session.selection.is_selected_plan_target("wall", wall):
         session.selection.set_selected_plan_target("wall", wall)
-    session.overlays.clear_selected_wall_overlay()
-    session.overlays.clear_selected_wall_opening_context_overlay()
+    session.overlays.walls.clear_selected_wall_overlay()
+    session.overlays.openings.clear_selected_wall_opening_context_overlay()
     state.wall_edit_modal_active = True
     state.edit_wall = wall
     state.edit_endpoint = mode
@@ -202,8 +204,8 @@ def _prepare_wall_edit_preview(session, wall, endpoints):
         wall.ViewObject.Visibility = False
     except Exception:
         state.edit_wall_visibility = None
-    session.overlays.clear_wall_grips()
-    session.overlays.clear_selected_wall_overlay()
+    session.overlays.walls.clear_wall_grips()
+    session.overlays.walls.clear_selected_wall_overlay()
     sync_wall_edit_preview(session, state.preview_points, include_opening_preview=False)
 
 
@@ -407,10 +409,18 @@ def _abort_wall_edit_commit(session, openings_fit=True, refresh=True):
 
 def _apply_wall_edit_transaction(session, wall, proxy, new_points, transaction_name):
     openings_fit = True
+    suppress_boundary_console = nullcontext()
+    try:
+        import ArchSpace
+
+        suppress_boundary_console = ArchSpace.suppress_boundary_failure_console_reports()
+    except Exception:
+        pass
     try:
         session.doc.openTransaction(transaction_name)
         proxy.set_from_endpoints(wall, new_points)
-        session.doc.recompute()
+        with suppress_boundary_console:
+            session.doc.recompute()
         openings_fit = session.openings.resolve_wall_hosted_opening_layout(wall)
         if not openings_fit:
             raise RuntimeError("Hosted openings no longer fit within resized wall")
@@ -433,8 +443,8 @@ def _finalize_wall_edit_commit(session, wall):
     session.lifecycle.cancel_pending_edit()
     session.selection.set_selected_plan_target("wall", wall, pending_restore=True)
     session.wall_relations.update_wall_relation_status(wall)
-    session.overlays.sync_selected_wall_overlay()
-    session.overlays.sync_wall_grips()
+    session.overlays.walls.sync_selected_wall_overlay()
+    session.overlays.walls.sync_wall_grips()
     session.task_panels.refresh_task_panel_status()
 
 
@@ -828,7 +838,7 @@ def get_opening_move_readout_offset(session, opening):
 def _ensure_wall_edit_preview_axis_tracker(session, DraftTrackers):
     state = _wall_edit_state(session)
     if state.preview_line_tracker is None:
-        state.preview_line_tracker = session.overlays.make_plan_line_tracker(
+        state.preview_line_tracker = session.overlays.manager.make_plan_line_tracker(
             DraftTrackers,
             "wall-edit-preview-axis",
             swidth=session.viewport.scaled_line_width(2),
@@ -863,10 +873,10 @@ def _get_wall_edit_preview_segments(polylines):
 def _ensure_wall_edit_preview_footprint_trackers(session, segments, DraftTrackers, color, width):
     state = _wall_edit_state(session)
     if len(state.preview_footprint_trackers) != len(segments):
-        session.overlays.finalize_trackers(state.preview_footprint_trackers)
+        session.overlays.manager.finalize_trackers(state.preview_footprint_trackers)
         state.preview_footprint_trackers = []
         for _start, _end in segments:
-            tracker = session.overlays.make_plan_line_tracker(
+            tracker = session.overlays.manager.make_plan_line_tracker(
                 DraftTrackers,
                 "wall-edit-preview-footprint",
                 scolor=color,
@@ -985,13 +995,13 @@ def is_wall_readout_edit_active(session):
 def clear_wall_edit_preview(session):
     state = _wall_edit_state(session)
     if state.preview_line_tracker:
-        session.overlays.finalize_trackers([state.preview_line_tracker])
+        session.overlays.manager.finalize_trackers([state.preview_line_tracker])
     state.preview_line_tracker = None
 
-    session.overlays.finalize_trackers(state.preview_footprint_trackers)
+    session.overlays.manager.finalize_trackers(state.preview_footprint_trackers)
     state.preview_footprint_trackers = []
 
-    session.overlays.finalize_trackers(state.preview_grip_trackers)
+    session.overlays.manager.finalize_trackers(state.preview_grip_trackers)
     state.preview_grip_trackers = []
     clear_wall_edit_readout(session)
     clear_wall_hosted_opening_preview(session)
@@ -1012,7 +1022,7 @@ def get_wall_hosted_opening_preview_segments(session, wall, points):
         delta = FreeCAD.Vector(item["target_point"]).sub(item["current"])
         if delta.Length < 1e-6:
             continue
-        for polyline in session.overlays.get_opening_overlay_polylines(item["opening"]):
+        for polyline in session.overlays.geometry.get_opening_overlay_polylines(item["opening"]):
             if len(polyline) < 2:
                 continue
             translated = [FreeCAD.Vector(point).add(delta) for point in polyline]
@@ -1043,7 +1053,7 @@ def sync_wall_hosted_opening_preview(session, points):
     if len(state.wall_edit_opening_preview_trackers) != len(segments):
         clear_wall_hosted_opening_preview(session)
         for _start, _end in segments:
-            tracker = session.overlays.make_plan_line_tracker(
+            tracker = session.overlays.manager.make_plan_line_tracker(
                 DraftTrackers,
                 "wall-edit-opening-preview",
                 scolor=color,
@@ -1061,13 +1071,14 @@ def sync_wall_hosted_opening_preview(session, points):
 
 def clear_wall_hosted_opening_preview(session):
     state = _wall_edit_state(session)
-    session.overlays.finalize_trackers(state.wall_edit_opening_preview_trackers)
+    session.overlays.manager.finalize_trackers(state.wall_edit_opening_preview_trackers)
     state.wall_edit_opening_preview_trackers = []
 
 
 def refresh_wall_hosted_opening_footprints(session, wall):
     for opening in session.openings.get_wall_hosted_openings(wall):
         session.document_visuals.refresh_opening_footprint_display(opening)
+        session.document_visuals.refresh_opening_host_footprint_displays(opening)
 
 
 def _get_wall_hosted_opening_layout_axis(endpoints):
@@ -1392,7 +1403,7 @@ def sync_wall_edit_readout(session, points):
 
 def clear_wall_edit_readout(session):
     state = _wall_edit_state(session)
-    session.overlays.finalize_trackers(state.wall_edit_readout_trackers)
+    session.overlays.manager.finalize_trackers(state.wall_edit_readout_trackers)
     state.wall_edit_readout_trackers = []
     state.wall_edit_active_readout_tracker = None
     state.wall_edit_active_readout_mode = None

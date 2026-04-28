@@ -83,14 +83,14 @@ def arm_provider_point_tool(session):
 
 def cancel_provider_point_tool(session, refresh=True):
     if not has_active_provider_point_tool(session):
-        session.overlays.clear_provider_point_preview()
+        session.overlays.providers.clear_provider_point_preview()
         return False
     session.lifecycle.stop_snapper()
     state = _provider_point_state(session)
     state.provider_point_tool = None
     state.provider_point_host_target = None
     state.provider_point_host_source = ""
-    session.overlays.clear_provider_point_preview()
+    session.overlays.providers.clear_provider_point_preview()
     FreeCAD.activeDraftCommand = None
     session.current_tool = plan_runtime_tools.PlanTool.SELECT
     if refresh:
@@ -126,12 +126,12 @@ def start_plan_provider_point_tool(session, tool):
     session.selection.set_hovered_provider(None)
     session.selection.set_hovered_space(None)
     session.selection.set_hovered_region(None)
-    session.overlays.clear_wall_grips()
-    session.overlays.clear_selected_wall_overlay()
-    session.overlays.clear_selected_wall_opening_context_overlay()
-    session.overlays.clear_selected_opening_handles()
-    session.overlays.clear_selected_symbol_handles()
-    session.overlays.clear_provider_point_preview()
+    session.overlays.walls.clear_wall_grips()
+    session.overlays.walls.clear_selected_wall_overlay()
+    session.overlays.openings.clear_selected_wall_opening_context_overlay()
+    session.overlays.openings.clear_selected_opening_handles()
+    session.overlays.symbols.clear_selected_symbol_handles()
+    session.overlays.providers.clear_provider_point_preview()
     host_target, host_source = get_provider_point_context_host_state(session)
     host_kind, host_obj = plan_host_targets.unpack_provider_host_target_ref(host_target)
     if host_obj is None:
@@ -166,7 +166,7 @@ def handle_provider_point_tool_point(session, point=None, obj=None):
         return
     plan_point = session.viewport.project_plan_point(point)
     if plan_point is None:
-        session.overlays.clear_provider_point_preview()
+        session.overlays.providers.clear_provider_point_preview()
         arm_provider_point_tool(session)
         return
     tool = _provider_point_state(session).provider_point_tool
@@ -186,21 +186,21 @@ def handle_provider_point_tool_point(session, point=None, obj=None):
         transaction_label=getattr(tool, "transaction_label", ""),
         payload=payload,
     )
-    session.overlays.clear_provider_point_preview()
+    session.overlays.providers.clear_provider_point_preview()
     if has_active_provider_point_tool(session):
         arm_provider_point_tool(session)
 
 
 def update_provider_point_tool_preview(session, point=None, obj=None):
     if not has_active_provider_point_tool(session):
-        session.overlays.clear_provider_point_preview()
+        session.overlays.providers.clear_provider_point_preview()
         return
     if point is None:
-        session.overlays.clear_provider_point_preview()
+        session.overlays.providers.clear_provider_point_preview()
         return
     plan_point = session.viewport.project_plan_point(point)
     if plan_point is None:
-        session.overlays.clear_provider_point_preview()
+        session.overlays.providers.clear_provider_point_preview()
         return
     snap_info = get_provider_point_snap_info()
     snap_object = resolve_provider_point_snap_object(session, obj, snap_info)
@@ -225,7 +225,7 @@ def update_provider_point_tool_preview(session, point=None, obj=None):
     state.provider_point_preview_point = placement_point
     state.provider_point_preview_host_target = host_target
     state.provider_point_preview_host_source = host_source
-    session.overlays.sync_provider_point_preview()
+    session.overlays.providers.sync_provider_point_preview()
 
 
 def get_provider_point_snap_info():

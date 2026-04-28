@@ -111,34 +111,38 @@ _TARGET_KIND_POLICIES = {
         validate=_validate_plan_selectable_wall,
         get_hovered=_get_hovered_wall,
         set_hovered=_set_hovered_wall_state,
-        hovered_visual_clearers=(lambda session: session.overlays.clear_hovered_wall_overlay(),),
-        selected_visual_clearers=(lambda session: session.overlays.clear_selected_wall_overlay(),),
+        hovered_visual_clearers=(
+            lambda session: session.overlays.walls.clear_hovered_wall_overlay(),
+        ),
+        selected_visual_clearers=(
+            lambda session: session.overlays.walls.clear_selected_wall_overlay(),
+        ),
         selected_visual_label="wall_overlay",
         selected_visual_sync=_sync_specs(
             (
                 "sync_selected_wall_overlay",
-                lambda session: session.overlays.sync_selected_wall_overlay(),
+                lambda session: session.overlays.walls.sync_selected_wall_overlay(),
             ),
         ),
         hovered_visual_label="wall_overlay",
         hovered_visual_sync=_sync_specs(
             (
                 "sync_hovered_wall_overlay",
-                lambda session: session.overlays.sync_hovered_wall_overlay(),
+                lambda session: session.overlays.walls.sync_hovered_wall_overlay(),
             ),
         ),
         hover_set_sync=_sync_specs(
             (
                 "sync_junction_node_overlays",
-                lambda session: session.overlays.sync_junction_node_overlays(),
+                lambda session: session.overlays.walls.sync_junction_node_overlays(),
             ),
             (
                 "sync_hovered_wall_overlay",
-                lambda session: session.overlays.sync_hovered_wall_overlay(),
+                lambda session: session.overlays.walls.sync_hovered_wall_overlay(),
             ),
             (
                 "sync_hovered_wall_opening_context_overlay",
-                lambda session: session.overlays.sync_hovered_wall_opening_context_overlay(),
+                lambda session: session.overlays.walls.sync_hovered_wall_opening_context_overlay(),
             ),
             (
                 "refresh_task_panel_status",
@@ -155,39 +159,41 @@ _TARGET_KIND_POLICIES = {
         queue_restore=lambda session, obj: session.openings.queue_restore_selected_opening(obj),
         get_hovered=_get_hovered_opening,
         set_hovered=_set_hovered_opening_state,
-        hovered_visual_clearers=(lambda session: session.overlays.clear_hovered_opening_overlay(),),
+        hovered_visual_clearers=(
+            lambda session: session.overlays.openings.clear_hovered_opening_overlay(),
+        ),
         selected_visual_clearers=(
-            lambda session: session.overlays.clear_selected_opening_overlay(),
+            lambda session: session.overlays.openings.clear_selected_opening_overlay(),
         ),
         selected_handle_clearers=(
-            lambda session: session.overlays.clear_selected_opening_handles(),
+            lambda session: session.overlays.openings.clear_selected_opening_handles(),
         ),
         selected_visual_label="opening_overlay",
         selected_visual_sync=(
             SyncSpec(
                 "sync_selected_opening_overlay",
-                lambda session: session.overlays.sync_selected_opening_overlay(),
+                lambda session: session.overlays.openings.sync_selected_opening_overlay(),
             ),
             SyncSpec(
                 "sync_selected_opening_handles",
-                lambda session: session.overlays.sync_selected_opening_handles(),
+                lambda session: session.overlays.openings.sync_selected_opening_handles(),
             ),
         ),
         hovered_visual_label="opening_overlay",
         hovered_visual_sync=_sync_specs(
             (
                 "sync_hovered_opening_overlay",
-                lambda session: session.overlays.sync_hovered_opening_overlay(),
+                lambda session: session.overlays.openings.sync_hovered_opening_overlay(),
             ),
         ),
         hover_set_sync=_sync_specs(
             (
                 "sync_selected_wall_opening_context_overlay",
-                lambda session: session.overlays.sync_selected_wall_opening_context_overlay(),
+                lambda session: session.overlays.openings.sync_selected_wall_opening_context_overlay(),
             ),
             (
                 "sync_hovered_opening_overlay",
-                lambda session: session.overlays.sync_hovered_opening_overlay(),
+                lambda session: session.overlays.openings.sync_hovered_opening_overlay(),
             ),
         ),
     ),
@@ -196,35 +202,37 @@ _TARGET_KIND_POLICIES = {
         queue_restore=lambda session, obj: session.symbols.queue_restore_selected_symbol(obj),
         get_hovered=_get_hovered_symbol,
         set_hovered=_set_hovered_symbol_state,
-        hovered_visual_clearers=(lambda session: session.overlays.clear_hovered_symbol_overlay(),),
+        hovered_visual_clearers=(
+            lambda session: session.overlays.symbols.clear_hovered_symbol_overlay(),
+        ),
         selected_visual_clearers=(
-            lambda session: session.overlays.clear_selected_symbol_overlay(),
+            lambda session: session.overlays.symbols.clear_selected_symbol_overlay(),
         ),
         selected_handle_clearers=(
-            lambda session: session.overlays.clear_selected_symbol_handles(),
+            lambda session: session.overlays.symbols.clear_selected_symbol_handles(),
         ),
         selected_visual_label="symbol_overlay",
         selected_visual_sync=_sync_specs(
             (
                 "sync_selected_symbol_overlay",
-                lambda session: session.overlays.sync_selected_symbol_overlay(),
+                lambda session: session.overlays.symbols.sync_selected_symbol_overlay(),
             ),
             (
                 "sync_selected_symbol_handles",
-                lambda session: session.overlays.sync_selected_symbol_handles(),
+                lambda session: session.overlays.symbols.sync_selected_symbol_handles(),
             ),
         ),
         hovered_visual_label="symbol_overlay",
         hovered_visual_sync=_sync_specs(
             (
                 "sync_hovered_symbol_overlay",
-                lambda session: session.overlays.sync_hovered_symbol_overlay(),
+                lambda session: session.overlays.symbols.sync_hovered_symbol_overlay(),
             ),
         ),
         hover_set_sync=_sync_specs(
             (
                 "sync_hovered_symbol_overlay",
-                lambda session: session.overlays.sync_hovered_symbol_overlay(),
+                lambda session: session.overlays.symbols.sync_hovered_symbol_overlay(),
             ),
         ),
     ),
@@ -233,36 +241,36 @@ _TARGET_KIND_POLICIES = {
         get_hovered=_get_hovered_provider,
         set_hovered=_set_hovered_provider_state,
         hovered_visual_clearers=(
-            lambda session: session.overlays.clear_hovered_provider_overlay(),
+            lambda session: session.overlays.providers.clear_hovered_provider_overlay(),
         ),
         selected_visual_clearers=(
-            lambda session: session.overlays.clear_selected_provider_overlay(),
+            lambda session: session.overlays.providers.clear_selected_provider_overlay(),
         ),
         selected_handle_clearers=(
-            lambda session: session.overlays.clear_selected_provider_handles(),
+            lambda session: session.overlays.providers.clear_selected_provider_handles(),
         ),
         selected_visual_label="provider_overlay",
         selected_visual_sync=_sync_specs(
             (
                 "sync_selected_provider_overlay",
-                lambda session: session.overlays.sync_selected_provider_overlay(),
+                lambda session: session.overlays.providers.sync_selected_provider_overlay(),
             ),
             (
                 "sync_selected_provider_handles",
-                lambda session: session.overlays.sync_selected_provider_handles(),
+                lambda session: session.overlays.providers.sync_selected_provider_handles(),
             ),
         ),
         hovered_visual_label="provider_overlay",
         hovered_visual_sync=_sync_specs(
             (
                 "sync_hovered_provider_overlay",
-                lambda session: session.overlays.sync_hovered_provider_overlay(),
+                lambda session: session.overlays.providers.sync_hovered_provider_overlay(),
             ),
         ),
         hover_set_sync=_sync_specs(
             (
                 "sync_hovered_provider_overlay",
-                lambda session: session.overlays.sync_hovered_provider_overlay(),
+                lambda session: session.overlays.providers.sync_hovered_provider_overlay(),
             ),
         ),
     ),
@@ -271,26 +279,30 @@ _TARGET_KIND_POLICIES = {
         queue_restore=lambda session, obj: session.spaces.queue_restore_selected_space(obj),
         get_hovered=_get_hovered_space,
         set_hovered=_set_hovered_space_state,
-        hovered_visual_clearers=(lambda session: session.overlays.clear_hovered_space_overlay(),),
-        selected_visual_clearers=(lambda session: session.overlays.clear_selected_space_overlay(),),
+        hovered_visual_clearers=(
+            lambda session: session.overlays.spaces.clear_hovered_space_overlay(),
+        ),
+        selected_visual_clearers=(
+            lambda session: session.overlays.spaces.clear_selected_space_overlay(),
+        ),
         selected_visual_label="space_overlay",
         selected_visual_sync=_sync_specs(
             (
                 "sync_selected_space_overlay",
-                lambda session: session.overlays.sync_selected_space_overlay(),
+                lambda session: session.overlays.spaces.sync_selected_space_overlay(),
             ),
         ),
         hovered_visual_label="space_overlay",
         hovered_visual_sync=_sync_specs(
             (
                 "sync_hovered_space_overlay",
-                lambda session: session.overlays.sync_hovered_space_overlay(),
+                lambda session: session.overlays.spaces.sync_hovered_space_overlay(),
             ),
         ),
         hover_set_sync=_sync_specs(
             (
                 "sync_hovered_space_overlay",
-                lambda session: session.overlays.sync_hovered_space_overlay(),
+                lambda session: session.overlays.spaces.sync_hovered_space_overlay(),
             ),
         ),
     ),
@@ -299,28 +311,30 @@ _TARGET_KIND_POLICIES = {
         queue_restore=lambda session, obj: session.spaces.queue_restore_selected_region(obj),
         get_hovered=_get_hovered_region,
         set_hovered=_set_hovered_region_state,
-        hovered_visual_clearers=(lambda session: session.overlays.clear_hovered_region_overlay(),),
+        hovered_visual_clearers=(
+            lambda session: session.overlays.spaces.clear_hovered_region_overlay(),
+        ),
         selected_visual_clearers=(
-            lambda session: session.overlays.clear_selected_region_overlay(),
+            lambda session: session.overlays.spaces.clear_selected_region_overlay(),
         ),
         selected_visual_label="region_overlay",
         selected_visual_sync=_sync_specs(
             (
                 "sync_selected_region_overlay",
-                lambda session: session.overlays.sync_selected_region_overlay(),
+                lambda session: session.overlays.spaces.sync_selected_region_overlay(),
             ),
         ),
         hovered_visual_label="region_overlay",
         hovered_visual_sync=_sync_specs(
             (
                 "sync_hovered_region_overlay",
-                lambda session: session.overlays.sync_hovered_region_overlay(),
+                lambda session: session.overlays.spaces.sync_hovered_region_overlay(),
             ),
         ),
         hover_set_sync=_sync_specs(
             (
                 "sync_hovered_region_overlay",
-                lambda session: session.overlays.sync_hovered_region_overlay(),
+                lambda session: session.overlays.spaces.sync_hovered_region_overlay(),
             ),
         ),
     ),

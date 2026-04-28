@@ -124,7 +124,7 @@ def _get_space_region_pick_context(session):
 def reset_space_region_pick_state(session, clear_overlays=True):
     set_space_region_pick_state(session)
     if clear_overlays:
-        session.overlays.clear_space_region_pick_overlays()
+        session.overlays.spaces.clear_space_region_pick_overlays()
 
 
 def _finish_created_space(session, space, event_callback=None, claim_click=False):
@@ -209,7 +209,7 @@ def _start_space_region_pick_mode(session, boundaries, candidates, seed_space=No
         candidates=candidates,
         seed_space=seed_space,
     )
-    session.overlays.clear_wall_grips()
+    session.overlays.walls.clear_wall_grips()
     session.selection.clear_hovered_plan_targets(
         kinds=plan_target_kinds.SPACE_EDIT_CLEAR_HOVERED_KINDS
     )
@@ -293,7 +293,7 @@ def get_space_region_candidate_polylines(session, candidate):
     face = candidate.get("face") if isinstance(candidate, dict) else None
     if not face:
         return []
-    return session.overlays.get_footprint_overlay_polylines([face])
+    return session.overlays.geometry.get_footprint_overlay_polylines([face])
 
 
 def get_space_region_candidate_segments(session, candidate):

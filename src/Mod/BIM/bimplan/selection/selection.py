@@ -415,9 +415,9 @@ def set_selected_plan_target(
     else:
         set_pending_selected_plan_target(session)
     if not session.lifecycle_state.tearing_down:
-        session.overlays.sync_junction_node_overlays()
-        session.overlays.sync_selected_wall_opening_context_overlay()
-        session.overlays.sync_hovered_wall_opening_context_overlay()
+        session.overlays.walls.sync_junction_node_overlays()
+        session.overlays.openings.sync_selected_wall_opening_context_overlay()
+        session.overlays.walls.sync_hovered_wall_opening_context_overlay()
         plan_target_dispatch.sync_hovered_target_visuals(
             session,
             kinds=(plan_target_kinds.PLAN_TARGET_OPENING,),
@@ -480,9 +480,9 @@ def set_hovered_wall(session, wall):
     if session.hovered_wall == wall:
         return
     session.hovered_wall = wall
-    session.overlays.sync_junction_node_overlays()
-    session.overlays.sync_hovered_wall_overlay()
-    session.overlays.sync_hovered_wall_opening_context_overlay()
+    session.overlays.walls.sync_junction_node_overlays()
+    session.overlays.walls.sync_hovered_wall_overlay()
+    session.overlays.walls.sync_hovered_wall_opening_context_overlay()
     if session.current_tool == plan_runtime_tools.PlanTool.JOIN:
         session.task_panels.refresh_task_panel_status(reason="full")
 

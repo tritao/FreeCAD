@@ -69,11 +69,11 @@ def activate_wall_tool(session):
     session.lifecycle.cancel_pending_edit()
     session.wall_relations.clear_plan_relation_status()
     session.selection.set_selected_plan_target()
-    session.overlays.clear_wall_grips()
-    session.overlays.clear_selected_wall_overlay()
-    session.overlays.clear_selected_wall_opening_context_overlay()
-    session.overlays.clear_selected_space_overlay()
-    session.overlays.clear_secondary_selected_overlays()
+    session.overlays.walls.clear_wall_grips()
+    session.overlays.walls.clear_selected_wall_overlay()
+    session.overlays.openings.clear_selected_wall_opening_context_overlay()
+    session.overlays.spaces.clear_selected_space_overlay()
+    session.overlays.spaces.clear_secondary_selected_overlays()
     session.selection.set_gui_selection([])
     session.lifecycle.start_embedded_tool(
         "Wall",
@@ -94,11 +94,11 @@ def activate_rect_wall_tool(session):
     session.lifecycle.cancel_pending_edit()
     session.wall_relations.clear_plan_relation_status()
     session.selection.set_selected_plan_target()
-    session.overlays.clear_wall_grips()
-    session.overlays.clear_selected_wall_overlay()
-    session.overlays.clear_selected_wall_opening_context_overlay()
-    session.overlays.clear_selected_space_overlay()
-    session.overlays.clear_secondary_selected_overlays()
+    session.overlays.walls.clear_wall_grips()
+    session.overlays.walls.clear_selected_wall_overlay()
+    session.overlays.openings.clear_selected_wall_opening_context_overlay()
+    session.overlays.spaces.clear_selected_space_overlay()
+    session.overlays.spaces.clear_secondary_selected_overlays()
     session.wall_create.clear_rect_wall_preview()
     preview_state.rect_wall_start = None
     preview_state.rect_wall_params = get_wall_defaults(session)
@@ -133,7 +133,7 @@ def has_active_rect_wall_tool(session):
 
 def clear_rect_wall_preview(session):
     preview_state = _creation_preview_state(session)
-    session.overlays.finalize_trackers(preview_state.rect_wall_preview_trackers)
+    session.overlays.manager.finalize_trackers(preview_state.rect_wall_preview_trackers)
     preview_state.rect_wall_preview_trackers = []
 
 
@@ -149,11 +149,11 @@ def cancel_rect_wall_tool(session, refresh=True):
     session.current_tool = "Select"
     if refresh:
         session.task_panels.refresh_task_panel_status()
-    session.overlays.sync_selected_opening_overlay()
-    session.overlays.sync_selected_opening_handles()
-    session.overlays.sync_selected_space_overlay()
-    session.overlays.sync_selected_provider_overlay()
-    session.overlays.sync_selected_provider_handles()
+    session.overlays.openings.sync_selected_opening_overlay()
+    session.overlays.openings.sync_selected_opening_handles()
+    session.overlays.spaces.sync_selected_space_overlay()
+    session.overlays.providers.sync_selected_provider_overlay()
+    session.overlays.providers.sync_selected_provider_handles()
     return True
 
 

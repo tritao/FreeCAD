@@ -1054,7 +1054,7 @@ class BimPlanEditGuiOpeningsMixin:
         proxy = getattr(door.ViewObject, "Proxy", None)
         self.assertIsNotNone(proxy)
         projected_polylines = list(
-            session.overlays.get_opening_overlay_screen_polylines(door) or []
+            session.overlays.geometry.get_opening_overlay_screen_polylines(door) or []
         )
         self.assertTrue(projected_polylines)
         self.assertGreaterEqual(len(projected_polylines[0]), 2)
@@ -1661,9 +1661,9 @@ class BimPlanEditGuiOpeningsMixin:
         self.assertEqual(len(session._selected_wall_opening_context_trackers), 0)
 
         with patch.object(
-            session.overlays,
+            session.overlays.openings,
             "sync_hovered_opening_overlay",
-            wraps=session.overlays.sync_hovered_opening_overlay,
+            wraps=session.overlays.openings.sync_hovered_opening_overlay,
         ) as sync_hover:
             session.selection.set_selected_plan_target("wall", wall)
 

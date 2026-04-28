@@ -115,8 +115,8 @@ def activate_join_tool(session):
     session.wall_edit.cancel_wall_edit()
     session.lifecycle.cancel_pending_edit()
     clear_plan_relation_status(session)
-    session.overlays.clear_wall_grips()
-    session.overlays.clear_selected_wall_overlay()
+    session.overlays.walls.clear_wall_grips()
+    session.overlays.walls.clear_selected_wall_overlay()
     session.selection.set_hovered_opening(None)
     session.selection.set_hovered_wall(None)
     session.selection.set_hovered_symbol(None)
@@ -143,7 +143,7 @@ def activate_join_tool(session):
     session.current_tool = "Join"
     session.selection.set_selected_plan_target("wall", wall)
     session.selection.set_gui_selection_object(wall)
-    session.overlays.sync_secondary_selected_overlays()
+    session.overlays.spaces.sync_secondary_selected_overlays()
     session.task_panels.refresh_task_panel_status()
 
 

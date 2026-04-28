@@ -238,10 +238,10 @@ class BimPlanEditGuiProviderMixin:
 
         try:
             with patch.object(
-                session.overlays,
+                session.overlays.manager,
                 "refresh_plan_overlay_visuals",
             ) as refresh_visuals:
-                session.overlays.flush_plan_overlay_visual_refresh()
+                session.overlays.manager.flush_plan_overlay_visual_refresh()
 
             refresh_visuals.assert_not_called()
             self.assertFalse(session._overlay_refresh_queued)
