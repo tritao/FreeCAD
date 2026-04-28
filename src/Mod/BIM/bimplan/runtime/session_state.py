@@ -577,27 +577,6 @@ _PLAN_EDIT_SESSION_STATE_PROPERTIES = (
         ),
     ),
     (
-        "_ensure_selection_sync_state",
-        (
-            ("_selection_refresh_queued", "selection_refresh_queued", _coerce_bool),
-            ("_gui_selection_sync_queued", "gui_selection_sync_queued", _coerce_bool),
-            ("_gui_selection_sync_generation", "gui_selection_sync_generation", _coerce_int),
-            ("_queued_gui_selection_object", "queued_gui_selection_object", _coerce_identity),
-            (
-                "_gui_selection_sync_in_progress",
-                "gui_selection_sync_in_progress",
-                _coerce_bool,
-            ),
-            (
-                "_clear_plan_selection_state_queued",
-                "clear_plan_selection_state_queued",
-                _coerce_bool,
-            ),
-            ("_selection_observer_added", "selection_observer_added", _coerce_bool),
-            ("_pending_selected_wall_reset", "pending_selected_wall_reset", _coerce_bool),
-        ),
-    ),
-    (
         "_ensure_overlay_refresh_state",
         (
             ("_overlay_refresh_queued", "overlay_refresh_queued", _coerce_bool),
