@@ -8,6 +8,7 @@ import FreeCAD
 import math
 from bimplan.selection import edit_nodes as plan_edit_nodes
 from bimplan.selection import hover_picking as plan_hover_picking
+from bimplan.selection import picking_debug as plan_picking_debug
 from bimplan.selection import provider_overlay_picking as plan_provider_overlay_picking
 from bimplan.selection import target_kinds as plan_target_kinds
 from bimplan.providers import runtime as plan_provider_runtime
@@ -20,7 +21,15 @@ _PROVIDER_OVERLAY_PICK_PADDING_PX = 3.0
 _PROVIDER_OVERLAY_PICK_PADDING_RATIO = 0.15
 _PROVIDER_OVERLAY_MARKER_TOLERANCE_BASE_PX = 4.5
 _PROVIDER_OVERLAY_MARKER_TOLERANCE_WIDTH_SCALE = 1.25
-_MAX_PICK_DEBUG_ITEMS = 40
+
+_MAX_PICK_DEBUG_ITEMS = plan_picking_debug.MAX_PICK_DEBUG_ITEMS
+_append_pick_debug_item = plan_picking_debug.append_pick_debug_item
+_describe_pick_info_entry = plan_picking_debug.describe_pick_info_entry
+_describe_pick_object = plan_picking_debug.describe_pick_object
+_describe_pick_overlay = plan_picking_debug.describe_pick_overlay
+_describe_pick_overlay_target = plan_picking_debug.describe_pick_overlay_target
+_describe_pick_target = plan_picking_debug.describe_pick_target
+_emit_pick_debug = plan_picking_debug.emit_pick_debug
 
 
 @dataclass(frozen=True)
@@ -154,54 +163,6 @@ def _should_prioritize_provider_targets_for_mode(session):
     )
 
 
-def _emit_pick_debug(session, name, **fields):
-    if not session.performance.is_plan_pick_debug_active():
-        return
-    session.performance.plan_pick_debug_event(name, **fields)
-
-
-def _append_pick_debug_item(items, value, limit=_MAX_PICK_DEBUG_ITEMS):
-    if items is None or value is None or len(items) >= int(limit):
-        return
-    items.append(value)
-
-
-def _describe_pick_object(session, obj):
-    try:
-        return session.performance.plan_perf_describe_object(obj)
-    except Exception:
-        pass
-    if obj is None:
-        return None
-    document_name = str(getattr(getattr(obj, "Document", None), "Name", "") or "").strip()
-    object_name = str(getattr(obj, "Name", "") or "").strip()
-    label = str(getattr(obj, "Label", "") or "").strip()
-    result = {}
-    if document_name:
-        result["document"] = document_name
-    if object_name:
-        result["name"] = object_name
-    if label and label != object_name:
-        result["label"] = label
-    return result or repr(obj)
-
-
-def _describe_pick_target(session, kind, obj):
-    try:
-        return session.performance.plan_perf_describe_target(kind, obj)
-    except Exception:
-        pass
-    if not kind or obj is None:
-        return None
-    result = {"kind": str(kind)}
-    described = _describe_pick_object(session, obj)
-    if isinstance(described, dict):
-        result.update(described)
-    elif described is not None:
-        result["value"] = described
-    return result
-
-
 def _is_pick_visible_view_object(view_object):
     return not (view_object and getattr(view_object, "Visibility", True) is False)
 
@@ -230,58 +191,6 @@ def _perf_set_fields(session, **fields):
 
 def _perf_trace_span(session, name, **fields):
     return session.performance.plan_perf_trace_span(name, **fields)
-
-
-def _describe_pick_info_entry(info):
-    if not info:
-        return None
-    result = {}
-    for key in ("Document", "Object"):
-        value = str(info.get(key) or "").strip()
-        if value:
-            result[key.lower()] = value
-    parent_obj = info.get("ParentObject")
-    if parent_obj is not None:
-        result["parent_object"] = {
-            "document": str(
-                getattr(getattr(parent_obj, "Document", None), "Name", "") or ""
-            ).strip(),
-            "name": str(getattr(parent_obj, "Name", "") or "").strip(),
-        }
-    return result or None
-
-
-def _describe_pick_overlay_target(target):
-    if target is None:
-        return None
-    target_kind = getattr(target, "target_kind", None)
-    if target_kind is not None:
-        target_kind = getattr(target_kind, "value", target_kind)
-    result = {
-        "document_name": str(getattr(target, "document_name", "") or "").strip(),
-        "object_name": str(getattr(target, "object_name", "") or "").strip(),
-        "target_kind": str(target_kind or "").strip(),
-    }
-    subname = str(getattr(target, "subname", "") or "").strip()
-    if subname:
-        result["subname"] = subname
-    return result
-
-
-def _describe_pick_overlay(overlay):
-    if overlay is None:
-        return None
-    marker_kind = getattr(overlay, "marker_kind", None)
-    if marker_kind is not None:
-        marker_kind = getattr(marker_kind, "value", marker_kind)
-    return {
-        "provider_id": str(getattr(overlay, "provider_id", "") or "").strip(),
-        "key": str(getattr(overlay, "key", "") or "").strip(),
-        "category": str(getattr(overlay, "category", "") or "").strip(),
-        "marker_kind": str(marker_kind or "").strip(),
-        "marker_size": float(getattr(overlay, "marker_size", 0.0) or 0.0),
-        "point_count": len(tuple(getattr(overlay, "points", ()) or ())),
-    }
 
 
 def _get_cached_plan_instances(session, cache_field, is_target, count_name, span_name):
