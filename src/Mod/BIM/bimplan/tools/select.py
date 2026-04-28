@@ -13,6 +13,10 @@ class SelectTool(plan_runtime_tools.PlanToolHandler):
 
     tool_id = plan_runtime_tools.PlanTool.SELECT
 
+    def on_mouse_move(self, mouse_pos, event_callback):
+        del event_callback
+        return sync_selectable_hover(self.session, mouse_pos)
+
     def on_left_mouse_down(self, mouse_pos, event_callback):
         session = self.session
         if session.selection.activation.is_plan_additive_selection_active():
@@ -33,6 +37,20 @@ class SelectTool(plan_runtime_tools.PlanToolHandler):
             return True
 
         return _activate_edit_node(session, node, event_callback)
+
+
+def sync_selectable_hover(session, mouse_pos):
+    if mouse_pos is None:
+        return False
+    if not session.picking.hover(mouse_pos):
+        return False
+    if (
+        session.overlay_tracker_state.grip_trackers
+        or session.selection.state.is_selected_plan_target("wall")
+    ):
+        session.overlays.walls.sync_wall_grips()
+    session.viewport.request_view_redraw()
+    return True
 
 
 def _activate_edit_node(session, node, event_callback):

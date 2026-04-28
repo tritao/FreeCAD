@@ -111,6 +111,15 @@ def _handle_left_mouse_button_down(session, mouse_pos, event_callback):
     plan_select_tool.SelectTool(session).on_left_mouse_down(mouse_pos, event_callback)
 
 
+def _record_hovered_after(session):
+    hovered_after = session.selection.hover.get_hovered_plan_target()
+    session.performance.plan_perf_set_fields(
+        hovered_after=session.performance.plan_perf_describe_target(
+            hovered_after.kind, hovered_after.obj
+        ),
+    )
+
+
 def on_mouse_pressed(session, event_callback):
     if session.lifecycle_state.tearing_down:
         return
@@ -187,33 +196,21 @@ def on_mouse_moved(session, event_callback):
                 )
                 session.overlays.manager.refresh_plan_overlay_visuals()
             return
-        if session.current_tool not in (
-            plan_runtime_tools.PlanTool.SELECT,
-            plan_runtime_tools.PlanTool.JOIN,
-        ):
-            session.selection.hover.set_hovered_wall(None)
-            session.selection.hover.set_hovered_opening(None)
-            session.selection.hover.set_hovered_symbol(None)
-            session.selection.hover.set_hovered_provider(None)
-            session.selection.hover.set_hovered_space(None)
-            session.selection.hover.set_hovered_region(None)
+        if session.current_tool == plan_runtime_tools.PlanTool.SELECT:
+            if plan_select_tool.SelectTool(session).on_mouse_move(mouse_pos, event_callback):
+                _record_hovered_after(session)
             return
-        if mouse_pos is None:
+        if session.current_tool == plan_runtime_tools.PlanTool.JOIN:
+            if plan_select_tool.sync_selectable_hover(session, mouse_pos):
+                _record_hovered_after(session)
             return
-        if not session.picking.hover(mouse_pos):
-            return
-        if (
-            session.overlay_tracker_state.grip_trackers
-            or session.selection.state.is_selected_plan_target("wall")
-        ):
-            session.overlays.walls.sync_wall_grips()
-        session.viewport.request_view_redraw()
-        hovered_after = session.selection.hover.get_hovered_plan_target()
-        session.performance.plan_perf_set_fields(
-            hovered_after=session.performance.plan_perf_describe_target(
-                hovered_after.kind, hovered_after.obj
-            ),
-        )
+        session.selection.hover.set_hovered_wall(None)
+        session.selection.hover.set_hovered_opening(None)
+        session.selection.hover.set_hovered_symbol(None)
+        session.selection.hover.set_hovered_provider(None)
+        session.selection.hover.set_hovered_space(None)
+        session.selection.hover.set_hovered_region(None)
+        return
 
 
 def on_mouse_wheel(session, event_callback):
