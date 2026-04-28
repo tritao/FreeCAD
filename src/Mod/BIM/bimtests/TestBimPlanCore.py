@@ -750,8 +750,10 @@ class TestBimPlanCore(unittest.TestCase):
                 ),
             ),
             overlays=SimpleNamespace(
-                clear_space_region_pick_overlays=lambda: calls.append("clear-pick-overlays"),
-                clear_wall_grips=lambda: calls.append("clear-wall-grips"),
+                spaces=SimpleNamespace(
+                    clear_space_region_pick_overlays=lambda: calls.append("clear-pick-overlays"),
+                ),
+                walls=SimpleNamespace(clear_wall_grips=lambda: calls.append("clear-wall-grips")),
             ),
         )
         boundaries = [("Boundary001", ("Face1",))]
@@ -1290,13 +1292,20 @@ class TestBimPlanCore(unittest.TestCase):
             doc=SimpleNamespace(Name="TestDoc"),
             view=SimpleNamespace(),
             overlays=SimpleNamespace(
-                get_plan_symbol_instances=lambda: (symbol,),
-                get_symbol_overlay_screen_bounds=lambda _symbol: (300.0, 300.0, 360.0, 360.0),
-                get_symbol_overlay_screen_polylines=lambda _symbol: (_ for _ in ()).throw(
-                    AssertionError("screen polylines should not be requested")
-                ),
-                get_symbol_overlay_segments=lambda _symbol: (_ for _ in ()).throw(
-                    AssertionError("segments should not be requested")
+                symbols=SimpleNamespace(
+                    get_plan_symbol_instances=lambda: (symbol,),
+                    get_symbol_overlay_screen_bounds=lambda _symbol: (
+                        300.0,
+                        300.0,
+                        360.0,
+                        360.0,
+                    ),
+                    get_symbol_overlay_screen_polylines=lambda _symbol: (_ for _ in ()).throw(
+                        AssertionError("screen polylines should not be requested")
+                    ),
+                    get_symbol_overlay_segments=lambda _symbol: (_ for _ in ()).throw(
+                        AssertionError("segments should not be requested")
+                    ),
                 ),
             ),
             visibility=SimpleNamespace(is_plan_symbol_instance=lambda obj: obj is symbol),
@@ -1314,9 +1323,16 @@ class TestBimPlanCore(unittest.TestCase):
                 get_plan_point_from_mouse_pos=lambda _mouse_pos: FreeCAD.Vector()
             ),
             overlays=SimpleNamespace(
-                get_opening_overlay_screen_bounds=lambda _opening: (300.0, 300.0, 360.0, 360.0),
-                get_opening_overlay_screen_polylines=lambda _opening: (_ for _ in ()).throw(
-                    AssertionError("screen polylines should not be requested")
+                geometry=SimpleNamespace(
+                    get_opening_overlay_screen_bounds=lambda _opening: (
+                        300.0,
+                        300.0,
+                        360.0,
+                        360.0,
+                    ),
+                    get_opening_overlay_screen_polylines=lambda _opening: (_ for _ in ()).throw(
+                        AssertionError("screen polylines should not be requested")
+                    ),
                 ),
             ),
             openings=SimpleNamespace(
@@ -1354,10 +1370,17 @@ class TestBimPlanCore(unittest.TestCase):
                 get_plan_view_units_per_pixel=lambda: 1.0,
             ),
             overlays=SimpleNamespace(
-                get_opening_pick_bounds=lambda _opening: (50.0, 50.0, 150.0, 150.0),
-                get_opening_overlay_screen_bounds=lambda _opening: (90.0, 90.0, 110.0, 110.0),
-                get_opening_overlay_screen_polylines=lambda _opening: (
-                    ((95.0, 100.0), (105.0, 100.0)),
+                geometry=SimpleNamespace(
+                    get_opening_pick_bounds=lambda _opening: (50.0, 50.0, 150.0, 150.0),
+                    get_opening_overlay_screen_bounds=lambda _opening: (
+                        90.0,
+                        90.0,
+                        110.0,
+                        110.0,
+                    ),
+                    get_opening_overlay_screen_polylines=lambda _opening: (
+                        ((95.0, 100.0), (105.0, 100.0)),
+                    ),
                 ),
             ),
             openings=SimpleNamespace(

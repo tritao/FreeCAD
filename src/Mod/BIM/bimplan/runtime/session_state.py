@@ -234,6 +234,7 @@ class PlanDocumentVisualState:
     created_plan_objects_flush_deferred: bool = False
     document_visual_update_defer_depth: int = 0
     document_visual_refresh_deferred: bool = False
+    deferred_selection_effects: list = field(default_factory=list)
     document_observer_added: bool = False
 
 
@@ -729,6 +730,7 @@ _PLAN_EDIT_SESSION_STATE_PROPERTIES = (
                 _coerce_int,
             ),
             ("_document_visual_refresh_deferred", "document_visual_refresh_deferred", _coerce_bool),
+            ("_deferred_selection_effects", "deferred_selection_effects", _coerce_list),
             ("_document_observer_added", "document_observer_added", _coerce_bool),
         ),
     ),

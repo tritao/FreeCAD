@@ -294,7 +294,7 @@ class PlanEditSession:
             with self.performance.plan_perf_trace_span("task_panel_initial_refresh"):
                 panel.refresh(refresh_integrations=False)
             with self.performance.plan_perf_trace_span("queue_prime_opening_handle_tracker_pool"):
-                self.overlays.queue_prime_opening_handle_tracker_pool()
+                self.overlays.openings.queue_prime_opening_handle_tracker_pool()
             with self.performance.plan_perf_trace_span("queue_prime_wall_hosted_openings_cache"):
                 self.openings.queue_prime_wall_hosted_openings_cache()
             with self.performance.plan_perf_trace_span("queue_prime_hover_pick_caches"):

@@ -99,7 +99,7 @@ def is_space_region_candidate_claimed(
         return False
 
     for space in spaces or []:
-        footprint_faces = session.overlays.get_space_footprint_faces(space)
+        footprint_faces = session.overlays.geometry.get_space_footprint_faces(space)
         if not footprint_faces:
             continue
         for footprint_face in footprint_faces:

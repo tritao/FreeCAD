@@ -205,20 +205,20 @@ def remove_selected_space_boundaries(session, row_indexes=None):
 
 
 def refresh_selected_space_visuals(session):
-    session.overlays.invalidate_selected_space_overlay_cache()
-    session.overlays.sync_selected_space_overlay()
+    session.overlays.spaces.invalidate_selected_space_overlay_cache()
+    session.overlays.spaces.sync_selected_space_overlay()
     session.viewport.request_view_redraw()
 
 
 def refresh_selected_region_visuals(session):
-    session.overlays.sync_selected_region_overlay()
+    session.overlays.spaces.sync_selected_region_overlay()
     session.viewport.request_view_redraw()
 
 
 def restore_selected_semantic_target(session, kind, obj, *, clear_edit_space=False):
     sync_method = {
-        plan_target_kinds.PLAN_TARGET_REGION: session.overlays.sync_selected_region_overlay,
-        plan_target_kinds.PLAN_TARGET_SPACE: session.overlays.sync_selected_space_overlay,
+        plan_target_kinds.PLAN_TARGET_REGION: session.overlays.spaces.sync_selected_region_overlay,
+        plan_target_kinds.PLAN_TARGET_SPACE: session.overlays.spaces.sync_selected_space_overlay,
     }.get(kind)
     if sync_method is None:
         return

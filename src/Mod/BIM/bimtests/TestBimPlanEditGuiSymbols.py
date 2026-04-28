@@ -162,7 +162,9 @@ class BimPlanEditGuiSymbolsMixin:
             {"move", "rotate"},
             {
                 role
-                for role, _point, _marker in session.overlays.get_selected_symbol_handle_specs(link)
+                for role, _point, _marker in session.overlays.symbols.get_selected_symbol_handle_specs(
+                    link
+                )
             },
         )
         self.assertEqual(2, len(session._symbol_handle_trackers))
@@ -242,7 +244,7 @@ class BimPlanEditGuiSymbolsMixin:
         session.document_visuals.refresh_plan_object_footprint_display(link)
         self.pump_gui_events()
 
-        segments = session.overlays.get_symbol_overlay_segments(link)
+        segments = session.overlays.symbols.get_symbol_overlay_segments(link)
         self.assertTrue(segments, "Expected linked symbolic equipment to expose overlay segments.")
         start, end = segments[0]
         mid = FreeCAD.Vector(
@@ -302,7 +304,7 @@ class BimPlanEditGuiSymbolsMixin:
             {"move", "rotate"},
             {
                 role
-                for role, _point, _marker in session.overlays.get_selected_symbol_handle_specs(
+                for role, _point, _marker in session.overlays.symbols.get_selected_symbol_handle_specs(
                     equipment
                 )
             },
@@ -397,7 +399,9 @@ class BimPlanEditGuiSymbolsMixin:
 
         handle_points = {
             role: point
-            for role, point, _marker in session.overlays.get_selected_symbol_handle_specs(link)
+            for role, point, _marker in session.overlays.symbols.get_selected_symbol_handle_specs(
+                link
+            )
         }
 
         session.current_tool = "Move Symbol"
@@ -414,7 +418,9 @@ class BimPlanEditGuiSymbolsMixin:
 
         handle_points = {
             role: point
-            for role, point, _marker in session.overlays.get_selected_symbol_handle_specs(link)
+            for role, point, _marker in session.overlays.symbols.get_selected_symbol_handle_specs(
+                link
+            )
         }
         anchor = FreeCAD.Vector(link.Placement.Base)
 
@@ -458,7 +464,9 @@ class BimPlanEditGuiSymbolsMixin:
 
         handle_points = {
             role: point
-            for role, point, _marker in session.overlays.get_selected_symbol_handle_specs(link)
+            for role, point, _marker in session.overlays.symbols.get_selected_symbol_handle_specs(
+                link
+            )
         }
         expected_anchor = link.Placement.multVec(equipment.PlanAnchor)
         self.assertAlmostEqual(expected_anchor.x, handle_points["move"].x, delta=1e-6)
@@ -487,7 +495,9 @@ class BimPlanEditGuiSymbolsMixin:
 
         handle_points = {
             role: point
-            for role, point, _marker in session.overlays.get_selected_symbol_handle_specs(link)
+            for role, point, _marker in session.overlays.symbols.get_selected_symbol_handle_specs(
+                link
+            )
         }
         anchor = link.Placement.multVec(equipment.PlanAnchor)
         session.current_tool = "Rotate Symbol"
@@ -530,7 +540,9 @@ class BimPlanEditGuiSymbolsMixin:
 
         handle_points = {
             role: point
-            for role, point, _marker in session.overlays.get_selected_symbol_handle_specs(link)
+            for role, point, _marker in session.overlays.symbols.get_selected_symbol_handle_specs(
+                link
+            )
         }
         anchor = session.symbols.get_symbol_anchor_point(link)
         target_angle = math.radians(10.0)
@@ -548,10 +560,14 @@ class BimPlanEditGuiSymbolsMixin:
         with (
             patch.object(session.symbols, "symbol_rotation_snap_enabled", return_value=True),
             patch.object(
-                session.overlays, "get_symbol_rotation_snap_increment_degrees", return_value=15.0
+                session.overlays.symbols,
+                "get_symbol_rotation_snap_increment_degrees",
+                return_value=15.0,
             ),
             patch.object(
-                session.overlays, "symbol_rotation_free_angle_override_active", return_value=False
+                session.overlays.symbols,
+                "symbol_rotation_free_angle_override_active",
+                return_value=False,
             ),
         ):
             session.symbols.finish_symbol_handle_point_pick(raw_point)
@@ -585,7 +601,9 @@ class BimPlanEditGuiSymbolsMixin:
 
         handle_points = {
             role: point
-            for role, point, _marker in session.overlays.get_selected_symbol_handle_specs(link)
+            for role, point, _marker in session.overlays.symbols.get_selected_symbol_handle_specs(
+                link
+            )
         }
         anchor = session.symbols.get_symbol_anchor_point(link)
         target_angle = math.radians(10.0)
@@ -603,10 +621,14 @@ class BimPlanEditGuiSymbolsMixin:
         with (
             patch.object(session.symbols, "symbol_rotation_snap_enabled", return_value=True),
             patch.object(
-                session.overlays, "get_symbol_rotation_snap_increment_degrees", return_value=15.0
+                session.overlays.symbols,
+                "get_symbol_rotation_snap_increment_degrees",
+                return_value=15.0,
             ),
             patch.object(
-                session.overlays, "symbol_rotation_free_angle_override_active", return_value=True
+                session.overlays.symbols,
+                "symbol_rotation_free_angle_override_active",
+                return_value=True,
             ),
         ):
             session.symbols.finish_symbol_handle_point_pick(raw_point)

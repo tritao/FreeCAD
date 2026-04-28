@@ -401,7 +401,7 @@ def get_screen_distance_sq_to_projected_segment(cursor_xy, start_xy, end_xy):
 def should_skip_opening_by_plan_bounds(session, opening, plan_point, radius_px):
     if plan_point is None:
         return False
-    bound_box = session.overlays.get_opening_pick_bounds(opening)
+    bound_box = session.overlays.geometry.get_opening_pick_bounds(opening)
     if bound_box is None:
         return False
 
@@ -515,11 +515,11 @@ def pick_plan_symbol_target_from_overlays(session, mouse_pos, radius_px=10):
     ):
         if not session.doc or not session.view or not mouse_pos:
             return None
-        symbol_instances = tuple(session.overlays.get_plan_symbol_instances() or ())
+        symbol_instances = tuple(session.overlays.symbols.get_plan_symbol_instances() or ())
         filtered_symbols = []
         for symbol in symbol_instances:
             _perf_count(session, "symbol_overlay_pick_objects_scanned")
-            bounds = session.overlays.get_symbol_overlay_screen_bounds(symbol)
+            bounds = session.overlays.symbols.get_symbol_overlay_screen_bounds(symbol)
             if not _screen_bounds_intersects_pick_radius(bounds, mouse_pos, radius_px):
                 _perf_count(session, "symbol_overlay_pick_bounds_skipped")
                 continue
@@ -527,7 +527,7 @@ def pick_plan_symbol_target_from_overlays(session, mouse_pos, radius_px=10):
         best_symbol = _pick_best_target_from_projected_polylines(
             session,
             filtered_symbols,
-            session.overlays.get_symbol_overlay_screen_polylines,
+            session.overlays.symbols.get_symbol_overlay_screen_polylines,
             mouse_pos,
             radius_px,
             candidate_count_name="symbol_overlay_pick_candidates",
@@ -537,7 +537,7 @@ def pick_plan_symbol_target_from_overlays(session, mouse_pos, radius_px=10):
             best_symbol = _pick_best_target_from_overlay_segments(
                 session,
                 filtered_symbols,
-                session.overlays.get_symbol_overlay_segments,
+                session.overlays.symbols.get_symbol_overlay_segments,
                 mouse_pos,
                 radius_px,
             )
@@ -575,7 +575,7 @@ def pick_plan_opening_target_from_overlays(session, mouse_pos, radius_px=10, can
             if should_skip_opening_by_plan_bounds(session, obj, plan_point, radius_px):
                 _perf_count(session, "opening_overlay_pick_bounds_skipped")
                 continue
-            screen_bounds = session.overlays.get_opening_overlay_screen_bounds(obj)
+            screen_bounds = session.overlays.geometry.get_opening_overlay_screen_bounds(obj)
             if not _screen_bounds_intersects_pick_radius(screen_bounds, mouse_pos, radius_px):
                 _perf_count(session, "opening_overlay_pick_screen_bounds_skipped")
                 continue
@@ -583,7 +583,7 @@ def pick_plan_opening_target_from_overlays(session, mouse_pos, radius_px=10, can
         best_opening = _pick_best_target_from_projected_polylines(
             session,
             filtered_objects,
-            session.overlays.get_opening_overlay_screen_polylines,
+            session.overlays.geometry.get_opening_overlay_screen_polylines,
             mouse_pos,
             radius_px,
             candidate_count_name="opening_overlay_pick_candidates",
@@ -913,7 +913,7 @@ def pick_plan_space_target_from_overlays(session, mouse_pos, radius_px=10):
             )
             if plan_targets.is_plan_space_object(session, obj)
         ),
-        session.overlays.get_space_overlay_segments,
+        session.overlays.geometry.get_space_overlay_segments,
         mouse_pos,
         radius_px,
     )
@@ -932,7 +932,7 @@ def pick_plan_region_target_from_overlays(session, mouse_pos, radius_px=10):
             )
             if plan_targets.is_plan_region_object(session, obj)
         ),
-        session.overlays.get_region_overlay_segments,
+        session.overlays.geometry.get_region_overlay_segments,
         mouse_pos,
         radius_px,
     )
@@ -942,7 +942,7 @@ def get_region_pick_polylines(session, region):
     if not plan_targets.is_plan_region_object(session, region):
         return []
 
-    polylines = session.overlays.get_region_overlay_polylines(region)
+    polylines = session.overlays.geometry.get_region_overlay_polylines(region)
     if polylines:
         return polylines
 
@@ -1110,7 +1110,7 @@ def pick_plan_space_target_from_footprints(session, mouse_pos):
         session,
         mouse_pos,
         lambda obj: plan_targets.is_plan_space_object(session, obj),
-        session.overlays.get_space_footprint_faces,
+        session.overlays.geometry.get_space_footprint_faces,
         target_label="space",
     )
 
@@ -1120,7 +1120,7 @@ def pick_plan_region_target_from_footprints(session, mouse_pos):
         session,
         mouse_pos,
         lambda obj: plan_targets.is_plan_region_object(session, obj),
-        session.overlays.get_region_footprint_faces,
+        session.overlays.geometry.get_region_footprint_faces,
         target_label="region",
     )
 
@@ -1533,7 +1533,7 @@ def _emit_get_edit_node_result(session, mouse_pos, source, result):
 
 
 def _get_selected_handle_edit_node(session, mouse_pos):
-    symbol_handle_role = session.overlays.pick_selected_symbol_handle(mouse_pos)
+    symbol_handle_role = session.overlays.symbols.pick_selected_symbol_handle(mouse_pos)
     if symbol_handle_role is not None:
         return _emit_get_edit_node_result(
             session,
@@ -1555,7 +1555,7 @@ def _get_selected_handle_edit_node(session, mouse_pos):
                 opening_handle_index,
             ),
         )
-    provider_handle_index = session.overlays.pick_selected_provider_handle(mouse_pos)
+    provider_handle_index = session.overlays.providers.pick_selected_provider_handle(mouse_pos)
     if provider_handle_index is not None:
         return _emit_get_edit_node_result(
             session,
@@ -1645,7 +1645,9 @@ def pick_selected_opening_handle(session, mouse_pos, radius_px=10):
         return None
     best_index = None
     best_distance_sq = None
-    for idx, _role, point, _marker in session.overlays.get_selected_opening_handle_specs(opening):
+    for idx, _role, point, _marker in session.overlays.openings.get_selected_opening_handle_specs(
+        opening
+    ):
         try:
             screen_x, screen_y = session.view.getPointOnScreen(point)
         except Exception:

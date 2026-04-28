@@ -82,17 +82,17 @@ def get_symbol_handle_placement(session, symbol, handle_role, point):
     start_placement = interaction_state.edit_symbol_start_placement
     if start_placement is None:
         start_placement = session.visibility.copy_placement(getattr(symbol, "Placement", None))
-    point = session.overlays.resolve_symbol_handle_target_point(
+    point = session.overlays.symbols.resolve_symbol_handle_target_point(
         symbol, handle_role, point, placement=start_placement
     )
     if point is None:
         return None
     placement = session.visibility.copy_placement(start_placement)
-    parent_global = session.overlays.get_symbol_parent_global_placement(
+    parent_global = session.overlays.symbols.get_symbol_parent_global_placement(
         symbol, placement=start_placement
     )
     anchor_global = session.symbols.get_symbol_anchor_point(symbol, placement=start_placement)
-    local_anchor = session.overlays.get_symbol_local_anchor(symbol)
+    local_anchor = session.overlays.symbols.get_symbol_local_anchor(symbol)
     if handle_role == "move":
         point_global = FreeCAD.Vector(point.x, point.y, anchor_global.z)
         try:
@@ -113,7 +113,7 @@ def get_symbol_handle_placement(session, symbol, handle_role, point):
     if reference_point is None:
         specs = dict(
             (role, handle_point)
-            for role, handle_point, _marker in session.overlays.get_selected_symbol_handle_specs(
+            for role, handle_point, _marker in session.overlays.symbols.get_selected_symbol_handle_specs(
                 symbol
             )
         )
@@ -135,7 +135,9 @@ def get_symbol_handle_placement(session, symbol, handle_role, point):
     delta_rotation = FreeCAD.Rotation(
         FreeCAD.Vector(0, 0, 1), math.degrees(target_angle - reference_angle)
     )
-    current_global = session.overlays.get_symbol_global_placement(symbol, placement=start_placement)
+    current_global = session.overlays.symbols.get_symbol_global_placement(
+        symbol, placement=start_placement
+    )
     try:
         global_rotation = delta_rotation.multiply(current_global.Rotation)
         placement.Rotation = parent_global.Rotation.inverse().multiply(global_rotation)
@@ -176,21 +178,21 @@ def activate_symbol_handle_now(session, symbol, handle_role):
             return
         with session.performance.plan_perf_trace_span("activate_symbol_handle_set_target"):
             session.selection.set_selected_plan_target("symbol", symbol)
-            session.overlays.clear_wall_grips()
+            session.overlays.walls.clear_wall_grips()
         with session.performance.plan_perf_trace_span("activate_symbol_handle_start_point_pick"):
             session.symbols.start_symbol_handle_point_pick(symbol, handle_role)
 
 
 def get_symbol_anchor_point(session, symbol, placement=None):
-    return session.overlays.get_symbol_anchor_point(symbol, placement=placement)
+    return session.overlays.symbols.get_symbol_anchor_point(symbol, placement=placement)
 
 
 def get_symbol_facing_vector(session, symbol, placement=None):
-    return session.overlays.get_symbol_facing_vector(symbol, placement=placement)
+    return session.overlays.symbols.get_symbol_facing_vector(symbol, placement=placement)
 
 
 def sync_symbol_edit_preview(session, symbol, placement, guide_start=None, guide_end=None):
-    return session.overlays.sync_symbol_edit_preview(
+    return session.overlays.symbols.sync_symbol_edit_preview(
         symbol,
         placement,
         guide_start=guide_start,
@@ -199,7 +201,7 @@ def sync_symbol_edit_preview(session, symbol, placement, guide_start=None, guide
 
 
 def clear_symbol_edit_preview(session):
-    return session.overlays.clear_symbol_edit_preview()
+    return session.overlays.symbols.clear_symbol_edit_preview()
 
 
 def start_symbol_handle_point_pick(session, symbol, handle_role):
@@ -209,7 +211,7 @@ def start_symbol_handle_point_pick(session, symbol, handle_role):
         with session.performance.plan_perf_trace_span("start_symbol_handle_get_handles"):
             handle_points = {
                 role: point
-                for role, point, _marker in session.overlays.get_selected_symbol_handle_specs(
+                for role, point, _marker in session.overlays.symbols.get_selected_symbol_handle_specs(
                     symbol
                 )
             }
@@ -221,7 +223,7 @@ def start_symbol_handle_point_pick(session, symbol, handle_role):
             session.selection.set_hovered_wall(None)
             session.selection.set_hovered_opening(None)
             session.selection.set_hovered_symbol(None)
-            session.overlays.sync_secondary_selected_overlays()
+            session.overlays.spaces.sync_secondary_selected_overlays()
             interaction_state = session.interaction_state
             interaction_state.edit_symbol = symbol
             interaction_state.edit_symbol_handle_role = handle_role
@@ -229,8 +231,8 @@ def start_symbol_handle_point_pick(session, symbol, handle_role):
                 getattr(symbol, "Placement", None)
             )
             interaction_state.edit_symbol_reference_point = FreeCAD.Vector(start_point)
-            session.overlays.clear_selected_symbol_overlay()
-            session.overlays.clear_selected_symbol_handles()
+            session.overlays.symbols.clear_selected_symbol_overlay()
+            session.overlays.symbols.clear_selected_symbol_handles()
         with session.performance.plan_perf_trace_span("start_symbol_handle_preview"):
             anchor = session.symbols.get_symbol_anchor_point(
                 symbol, placement=interaction_state.edit_symbol_start_placement
@@ -269,7 +271,7 @@ def update_symbol_handle_point_pick(session, point=None, snap_info=None):
     if not symbol or not handle_role:
         session.symbols.clear_symbol_edit_preview()
         return
-    target_point = session.overlays.resolve_symbol_handle_target_point(
+    target_point = session.overlays.symbols.resolve_symbol_handle_target_point(
         symbol, handle_role, point, placement=interaction_state.edit_symbol_start_placement
     )
     if target_point is None:
@@ -357,10 +359,10 @@ def cancel_symbol_handle_point_pick(session):
     session.current_tool = "Select"
     if symbol:
         session.selection.set_selected_plan_target("symbol", symbol, pending_restore=True)
-    session.overlays.sync_selected_opening_overlay()
-    session.overlays.sync_selected_opening_handles()
-    session.overlays.sync_selected_symbol_overlay()
-    session.overlays.sync_selected_symbol_handles()
+    session.overlays.openings.sync_selected_opening_overlay()
+    session.overlays.openings.sync_selected_opening_handles()
+    session.overlays.symbols.sync_selected_symbol_overlay()
+    session.overlays.symbols.sync_selected_symbol_handles()
     session.task_panels.refresh_task_panel_status()
 
 
@@ -371,17 +373,17 @@ def restore_selected_symbol(session, symbol):
     else:
         session.selection.set_selected_plan_target()
     if not symbol:
-        session.overlays.sync_selected_opening_overlay()
-        session.overlays.sync_selected_opening_handles()
-        session.overlays.sync_selected_symbol_overlay()
-        session.overlays.sync_selected_symbol_handles()
+        session.overlays.openings.sync_selected_opening_overlay()
+        session.overlays.openings.sync_selected_opening_handles()
+        session.overlays.symbols.sync_selected_symbol_overlay()
+        session.overlays.symbols.sync_selected_symbol_handles()
         session.task_panels.refresh_task_panel_status()
         return
     session.selection.set_gui_selection_object(symbol)
-    session.overlays.sync_selected_opening_overlay()
-    session.overlays.sync_selected_opening_handles()
-    session.overlays.sync_selected_symbol_overlay()
-    session.overlays.sync_selected_symbol_handles()
+    session.overlays.openings.sync_selected_opening_overlay()
+    session.overlays.openings.sync_selected_opening_handles()
+    session.overlays.symbols.sync_selected_symbol_overlay()
+    session.overlays.symbols.sync_selected_symbol_handles()
     session.task_panels.refresh_task_panel_status()
 
 

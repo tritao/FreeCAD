@@ -108,7 +108,7 @@ def activate_provider_handle_now(session, provider_obj, handle_index):
     handle = handles[handle_index]
     session.selection.set_selected_plan_target("provider", provider_obj)
     session.selection.set_gui_selection_object(provider_obj)
-    session.overlays.clear_wall_grips()
+    session.overlays.walls.clear_wall_grips()
     if handle.interaction == PlanToolInteraction.POINT:
         start_provider_handle_point_pick(session, provider_obj, handle_index, handle)
         return
@@ -147,13 +147,13 @@ def start_provider_handle_point_pick(session, provider_obj, handle_index, handle
     session.selection.set_hovered_provider(None)
     session.selection.set_hovered_space(None)
     session.selection.set_hovered_region(None)
-    session.overlays.sync_secondary_selected_overlays()
+    session.overlays.spaces.sync_secondary_selected_overlays()
     interaction_state = session.interaction_state
     interaction_state.edit_provider = provider_obj
     interaction_state.edit_provider_handle_index = handle_index
     interaction_state.edit_provider_handle = handle
-    session.overlays.clear_selected_provider_overlay()
-    session.overlays.clear_selected_provider_handles()
+    session.overlays.providers.clear_selected_provider_overlay()
+    session.overlays.providers.clear_selected_provider_handles()
     session.task_panels.refresh_task_panel_status()
     FreeCAD.activeDraftCommand = session
     session.lifecycle.set_draft_point_focus_suppressed(True)

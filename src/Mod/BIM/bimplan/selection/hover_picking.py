@@ -36,32 +36,32 @@ def prime_hover_pick_caches(session):
         return
     with session.performance.plan_perf_trace_event("prime_hover_pick_caches"):
         with session.performance.plan_perf_trace_span("prime_hover_pick_symbol_instances"):
-            symbols = tuple(session.overlays.get_plan_symbol_instances())
+            symbols = tuple(session.overlays.symbols.get_plan_symbol_instances())
         for symbol in symbols:
             session.performance.plan_perf_count("prime_hover_pick_symbols")
             with session.performance.plan_perf_trace_span("prime_hover_pick_symbol_geometry"):
-                session.overlays.get_symbol_overlay_segments(symbol)
-                session.overlays.get_symbol_overlay_screen_polylines(symbol)
+                session.overlays.symbols.get_symbol_overlay_segments(symbol)
+                session.overlays.symbols.get_symbol_overlay_screen_polylines(symbol)
 
         for obj in getattr(session.doc, "Objects", []) or []:
             if session.openings.is_hosted_opening_object(obj):
                 session.performance.plan_perf_count("prime_hover_pick_openings")
                 with session.performance.plan_perf_trace_span("prime_hover_pick_opening_geometry"):
-                    session.overlays.get_opening_overlay_polylines(obj)
-                    session.overlays.get_opening_overlay_segments(obj)
-                    session.overlays.get_opening_overlay_screen_polylines(obj)
+                    session.overlays.geometry.get_opening_overlay_polylines(obj)
+                    session.overlays.geometry.get_opening_overlay_segments(obj)
+                    session.overlays.geometry.get_opening_overlay_screen_polylines(obj)
             if plan_selection_targets.is_plan_space_object(session, obj):
                 session.performance.plan_perf_count("prime_hover_pick_spaces")
                 with session.performance.plan_perf_trace_span("prime_hover_pick_space_geometry"):
-                    session.overlays.get_space_footprint_faces(obj)
-                    session.overlays.get_space_overlay_polylines(obj)
-                    session.overlays.get_space_overlay_segments(obj)
+                    session.overlays.geometry.get_space_footprint_faces(obj)
+                    session.overlays.geometry.get_space_overlay_polylines(obj)
+                    session.overlays.geometry.get_space_overlay_segments(obj)
             if plan_selection_targets.is_plan_region_object(session, obj):
                 session.performance.plan_perf_count("prime_hover_pick_regions")
                 with session.performance.plan_perf_trace_span("prime_hover_pick_region_geometry"):
-                    session.overlays.get_region_footprint_faces(obj)
-                    session.overlays.get_region_overlay_polylines(obj)
-                    session.overlays.get_region_overlay_segments(obj)
+                    session.overlays.geometry.get_region_footprint_faces(obj)
+                    session.overlays.geometry.get_region_overlay_polylines(obj)
+                    session.overlays.geometry.get_region_overlay_segments(obj)
 
         with session.performance.plan_perf_trace_span("prime_hover_pick_provider_contributions"):
             with session.providers.plan_provider_refresh_cache_scope():

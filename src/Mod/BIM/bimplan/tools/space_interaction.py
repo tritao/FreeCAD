@@ -32,7 +32,7 @@ def has_active_plan_region_tool(session):
 
 def clear_plan_region_preview(session):
     state = _plan_region_tool_state(session)
-    session.overlays.finalize_trackers(state.preview_trackers)
+    session.overlays.manager.finalize_trackers(state.preview_trackers)
     state.preview_trackers = []
 
 
@@ -167,7 +167,7 @@ def update_plan_region_preview(session, point, info):
     color = (0.86, 0.48, 0.12)
     width = session.viewport.scaled_line_width(2)
     for index, (start, end, dotted) in enumerate(segments):
-        tracker = session.overlays.make_plan_line_tracker(
+        tracker = session.overlays.manager.make_plan_line_tracker(
             DraftTrackers,
             "plan_region_preview:{}".format(index),
             dotted=dotted,
@@ -195,7 +195,7 @@ def create_plan_region(session, points):
             raise RuntimeError("Unable to create plan region")
         session.visibility.add_object_to_active_storey(region)
         session.doc.recompute()
-        if not session.overlays.get_region_footprint_faces(region):
+        if not session.overlays.geometry.get_region_footprint_faces(region):
             raise RuntimeError("Plan region has no valid footprint")
         session.doc.commitTransaction()
     except Exception:
@@ -258,7 +258,7 @@ def handle_plan_region_point(session, point=None, obj=None):
 
 def clear_space_separator_preview(session):
     preview_state = session.creation_preview_state
-    session.overlays.finalize_trackers(preview_state.space_separator_preview_trackers)
+    session.overlays.manager.finalize_trackers(preview_state.space_separator_preview_trackers)
     preview_state.space_separator_preview_trackers = []
 
 
@@ -324,7 +324,7 @@ def _is_valid_space_separator_length(start, end):
 def _get_or_create_space_separator_preview_tracker(session, DraftTrackers):
     preview_state = session.creation_preview_state
     if not preview_state.space_separator_preview_trackers:
-        tracker = session.overlays.make_plan_line_tracker(
+        tracker = session.overlays.manager.make_plan_line_tracker(
             DraftTrackers,
             "space_separator_preview",
             dotted=True,
@@ -446,7 +446,7 @@ def _begin_space_text_position_pick(session, space):
     session.selection.clear_hovered_plan_targets(
         kinds=plan_target_kinds.SPACE_EDIT_CLEAR_HOVERED_KINDS
     )
-    session.overlays.sync_secondary_selected_overlays()
+    session.overlays.spaces.sync_secondary_selected_overlays()
     session.task_panels.refresh_task_panel_status()
     FreeCAD.activeDraftCommand = session
     session.lifecycle.set_draft_point_focus_suppressed(True)
@@ -499,5 +499,5 @@ def cancel_space_text_position_pick(session):
     session.current_tool = "Select"
     if space:
         session.selection.set_selected_plan_target("space", space, pending_restore=True)
-    session.overlays.sync_selected_space_overlay()
+    session.overlays.spaces.sync_selected_space_overlay()
     session.task_panels.refresh_task_panel_status()

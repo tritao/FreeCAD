@@ -208,9 +208,9 @@ def _apply_selection_refresh_result(session, refresh_result):
         else:
             session.selection.set_pending_selected_plan_target(refresh_result.pending_target)
     if refresh_result.wall_grip_action == _WALL_GRIP_CLEAR:
-        session.overlays.clear_wall_grips()
+        session.overlays.walls.clear_wall_grips()
     elif refresh_result.wall_grip_action == _WALL_GRIP_SYNC:
-        session.overlays.sync_wall_grips()
+        session.overlays.walls.sync_wall_grips()
 
 
 def _get_selection_refresh_baseline(session):
@@ -356,9 +356,9 @@ def _sync_wall_grips_after_selection_refresh(
     if not wall_target_changed and not force_wall_visual_resync:
         return
     if session.selection.get_selected_plan_target_object(plan_target_kinds.PLAN_TARGET_WALL):
-        session.overlays.schedule_wall_grip_sync()
+        session.overlays.walls.schedule_wall_grip_sync()
     else:
-        session.overlays.clear_wall_grips()
+        session.overlays.walls.clear_wall_grips()
 
 
 def _record_selection_refresh_result(session, previous_kind):
@@ -426,8 +426,8 @@ def reset_selected_wall_after_change(session):
     wall = session.selection.get_selected_plan_target_object("wall")
     if not wall:
         return
-    session.overlays.clear_wall_grips()
-    session.overlays.clear_selected_wall_overlay()
+    session.overlays.walls.clear_wall_grips()
+    session.overlays.walls.clear_selected_wall_overlay()
     session.selection.clear_selected_plan_target_if_matches("wall", wall)
     plan_selection_gui_sync.set_gui_selection(session, [])
     session.task_panels.refresh_task_panel_status()
@@ -443,8 +443,8 @@ def suspend_selected_wall_state(session, wall=None, clear_gui_selection=True):
     if not session.selection.is_selected_plan_target("wall", wall):
         return
     session.selection_sync_state.pending_selected_wall_reset = False
-    session.overlays.clear_wall_grips()
-    session.overlays.clear_selected_wall_overlay()
+    session.overlays.walls.clear_wall_grips()
+    session.overlays.walls.clear_selected_wall_overlay()
     session.selection.clear_selected_plan_target_if_matches("wall", wall)
     if clear_gui_selection:
         plan_selection_gui_sync.set_gui_selection(session, [])
@@ -469,13 +469,13 @@ def sync_primary_selected_plan_target_visuals(
             )
         ):
             with session.performance.plan_perf_trace_span("sync_selected_wall_overlay"):
-                session.overlays.sync_selected_wall_overlay()
+                session.overlays.walls.sync_selected_wall_overlay()
         with session.performance.plan_perf_trace_span("sync_selected_wall_opening_context_overlay"):
-            session.overlays.sync_selected_wall_opening_context_overlay()
+            session.overlays.openings.sync_selected_wall_opening_context_overlay()
         with session.performance.plan_perf_trace_span("sync_hovered_wall_overlay"):
-            session.overlays.sync_hovered_wall_overlay()
+            session.overlays.walls.sync_hovered_wall_overlay()
         with session.performance.plan_perf_trace_span("sync_hovered_wall_opening_context_overlay"):
-            session.overlays.sync_hovered_wall_opening_context_overlay()
+            session.overlays.walls.sync_hovered_wall_opening_context_overlay()
         plan_target_dispatch.sync_selected_target_visuals(
             session,
             kinds=plan_target_kinds.PRIMARY_SELECTED_VISUAL_SYNC_KINDS,
@@ -507,7 +507,7 @@ def sync_primary_selected_plan_target_visuals(
             trace_style="by_method",
         )
         with session.performance.plan_perf_trace_span("sync_secondary_selected_overlays"):
-            session.overlays.sync_secondary_selected_overlays()
+            session.overlays.spaces.sync_secondary_selected_overlays()
         with session.performance.plan_perf_trace_span("sync_active_plan_target_object"):
             session.viewport.sync_active_plan_target_object()
         session.task_panels.refresh_task_panel_status(

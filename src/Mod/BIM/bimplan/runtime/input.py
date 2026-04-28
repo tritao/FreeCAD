@@ -103,14 +103,14 @@ def _handle_edit_node_activation(session, node, event_callback):
     elif node_kind == "provider_handle":
         obj, index = plan_edit_nodes.get_edit_node_payload(node)
         session.selection.set_selected_plan_target_state("provider", obj)
-        session.overlays.clear_wall_grips()
-        session.overlays.clear_selected_wall_overlay()
+        session.overlays.walls.clear_wall_grips()
+        session.overlays.walls.clear_selected_wall_overlay()
         session.providers.activate_provider_handle(obj, index)
     elif node_kind == "symbol_handle":
         obj, role = plan_edit_nodes.get_edit_node_payload(node)
         session.selection.set_selected_plan_target_state("symbol", obj)
-        session.overlays.clear_wall_grips()
-        session.overlays.clear_selected_wall_overlay()
+        session.overlays.walls.clear_wall_grips()
+        session.overlays.walls.clear_selected_wall_overlay()
         session.symbols.activate_symbol_handle(obj, role)
     elif node_kind in ("provider_overlay_point", "provider_overlay_target"):
         if not session.selection.activate_provider_overlay_target_node(node, event_callback):
@@ -246,7 +246,7 @@ def on_mouse_moved(session, event_callback):
                     session.spaces.pick_space_region_candidate(mouse_pos),
                     plan_document_visuals.PLAN_VISUAL_SPACE_REGION_PICK,
                 )
-                session.overlays.refresh_plan_overlay_visuals()
+                session.overlays.manager.refresh_plan_overlay_visuals()
             return
         if session.current_tool not in (
             plan_runtime_tools.PlanTool.SELECT,
@@ -267,7 +267,7 @@ def on_mouse_moved(session, event_callback):
             session.overlay_tracker_state.grip_trackers
             or session.selection.is_selected_plan_target("wall")
         ):
-            session.overlays.sync_wall_grips()
+            session.overlays.walls.sync_wall_grips()
         session.viewport.request_view_redraw()
         hovered_after = session.selection.get_hovered_plan_target()
         session.performance.plan_perf_set_fields(

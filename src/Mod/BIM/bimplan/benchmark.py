@@ -606,7 +606,7 @@ def _run_interactions(session, scene, spec, operations_handle, settle_ms, timer_
                 session.overlay_tracker_state.grip_trackers
                 or session.selection.is_selected_plan_target("wall")
             ):
-                session.overlays.sync_wall_grips()
+                session.overlays.walls.sync_wall_grips()
             session.viewport.request_view_redraw()
 
         _trace_direct_operation(session, "hover_pick_resolve", spec.name, resolve)
@@ -655,7 +655,7 @@ def _run_interactions(session, scene, spec, operations_handle, settle_ms, timer_
                 spec.name,
                 lambda: (
                     session.selection.select_wall_for_plan_edit(wall),
-                    session.overlays.sync_wall_grips(),
+                    session.overlays.walls.sync_wall_grips(),
                     session.wall_edit.activate_wall_grip_now(0, wall=wall),
                 ),
             )
@@ -679,7 +679,7 @@ def _run_interactions(session, scene, spec, operations_handle, settle_ms, timer_
                 spec.name,
                 lambda: (
                     session.selection.select_opening_for_plan_edit(opening),
-                    session.overlays.sync_selected_opening_handles(),
+                    session.overlays.openings.sync_selected_opening_handles(),
                     session.openings.activate_opening_handle_now(opening, 0),
                 ),
             )
@@ -697,7 +697,7 @@ def _run_interactions(session, scene, spec, operations_handle, settle_ms, timer_
         symbol = scene.symbols[0]
 
         def activate_symbol_handle():
-            specs = tuple(session.overlays.get_selected_symbol_handle_specs(symbol))
+            specs = tuple(session.overlays.symbols.get_selected_symbol_handle_specs(symbol))
             role = specs[0][0] if specs else "move"
             _trace_direct_operation(
                 session,
@@ -705,7 +705,7 @@ def _run_interactions(session, scene, spec, operations_handle, settle_ms, timer_
                 spec.name,
                 lambda: (
                     session.selection.select_symbol_for_plan_edit(symbol),
-                    session.overlays.sync_selected_symbol_handles(),
+                    session.overlays.symbols.sync_selected_symbol_handles(),
                     session.symbols.activate_symbol_handle_now(symbol, role),
                 ),
             )
@@ -725,7 +725,7 @@ def _run_interactions(session, scene, spec, operations_handle, settle_ms, timer_
             session,
             "benchmark_view_scale_overlay_refresh",
             spec.name,
-            session.overlays.flush_view_scale_overlay_refresh,
+            session.overlays.manager.flush_view_scale_overlay_refresh,
         )
 
     _measure_operation(

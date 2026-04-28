@@ -73,7 +73,7 @@ def select_plan_target_for_plan_edit(
             plan_selection_gui_sync.schedule_gui_selection_object(session, obj)
         else:
             plan_selection_gui_sync.set_gui_selection_object(session, obj)
-    session.overlays.apply_selected_wall_selection_feedback(
+    session.overlays.walls.apply_selected_wall_selection_feedback(
         defer_grips=kind == plan_target_kinds.PLAN_TARGET_WALL and defer_wall_grips
     )
     plan_target_dispatch.sync_selected_target_visuals(
@@ -82,7 +82,7 @@ def select_plan_target_for_plan_edit(
         previous_kind=previous_kind,
         previous_obj=previous_obj,
     )
-    session.overlays.sync_secondary_selected_overlays()
+    session.overlays.spaces.sync_secondary_selected_overlays()
     session.task_panels.refresh_task_panel_status(
         reason=(
             "selection" if session.current_tool == plan_runtime_tools.PlanTool.SELECT else "full"
@@ -371,10 +371,10 @@ def clear_plan_selection_state(session):
         with session.performance.plan_perf_trace_span("clear_plan_selection_hover_state"):
             plan_target_dispatch.clear_hovered_targets(session)
         with session.performance.plan_perf_trace_span("clear_plan_selection_wall_grips"):
-            session.overlays.clear_wall_grips()
-            session.overlays.clear_selected_wall_overlay()
+            session.overlays.walls.clear_wall_grips()
+            session.overlays.walls.clear_selected_wall_overlay()
         with session.performance.plan_perf_trace_span("clear_plan_selection_secondary_overlays"):
-            session.overlays.sync_secondary_selected_overlays()
+            session.overlays.spaces.sync_secondary_selected_overlays()
         plan_target_dispatch.sync_selected_target_visuals(
             session,
             kinds=plan_target_kinds.CLEAR_PLAN_SELECTION_VISUAL_KINDS,
