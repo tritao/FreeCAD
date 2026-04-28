@@ -29,7 +29,7 @@ class ProviderMoveTool(plan_runtime_tools.PlanToolHandler):
         return self.cancel()
 
     def cancel(self):
-        self.session.providers.cancel_provider_handle_point_pick()
+        cancel_provider_handle_point_pick(self.session)
         return True
 
 
