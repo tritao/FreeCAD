@@ -7,6 +7,7 @@ import math
 import FreeCAD
 import FreeCADGui
 from bimplan.overlays import symbols as symbol_overlays
+from bimplan.runtime import tools as plan_runtime_tools
 
 translate = FreeCAD.Qt.translate
 
@@ -73,6 +74,20 @@ class PlanSymbolsAPI:
 
     def queue_restore_selected_symbol(self, symbol):
         return queue_restore_selected_symbol(self.session, symbol)
+
+
+class SymbolEditTool(plan_runtime_tools.PlanToolHandler):
+    """Keyboard behavior for active symbol move/rotate point-pick edits."""
+
+    def on_key(self, key, event_callback, coin):
+        del event_callback
+        if key != coin.SoKeyboardEvent.ESCAPE:
+            return False
+        return self.cancel()
+
+    def cancel(self):
+        self.session.symbols.cancel_symbol_handle_point_pick()
+        return True
 
 
 def get_symbol_handle_placement(session, symbol, handle_role, point):

@@ -8,6 +8,7 @@ from bimplan.tools import join as plan_join_tool
 from bimplan.tools import opening_edit as plan_opening_tool
 from bimplan.tools import select as plan_select_tool
 from bimplan.tools import space_region_pick as plan_space_region_pick_tool
+from bimplan.tools import symbol_edit as plan_symbol_tool
 from bimplan.tools import wall_edit as plan_wall_edit_tool
 
 
@@ -221,15 +222,10 @@ def _handle_direct_tool_key_press(session, key, event_callback, coin):
         and plan_opening_tool.OpeningMoveTool(session).on_key(key, event_callback, coin)
     ):
         return True
-    if (
-        session.current_tool
-        in (
-            plan_runtime_tools.PlanTool.MOVE_SYMBOL,
-            plan_runtime_tools.PlanTool.ROTATE_SYMBOL,
-        )
-        and key == coin.SoKeyboardEvent.ESCAPE
-    ):
-        session.symbols.cancel_symbol_handle_point_pick()
+    if session.current_tool in (
+        plan_runtime_tools.PlanTool.MOVE_SYMBOL,
+        plan_runtime_tools.PlanTool.ROTATE_SYMBOL,
+    ) and plan_symbol_tool.SymbolEditTool(session).on_key(key, event_callback, coin):
         return True
     if (
         session.current_tool == plan_runtime_tools.PlanTool.PICK_SPACE_REGION
@@ -280,7 +276,7 @@ def _handle_escape_cancels(session):
         plan_runtime_tools.PlanTool.MOVE_SYMBOL,
         plan_runtime_tools.PlanTool.ROTATE_SYMBOL,
     ):
-        session.symbols.cancel_symbol_handle_point_pick()
+        plan_symbol_tool.SymbolEditTool(session).cancel()
         return True
     if session.current_tool == plan_runtime_tools.PlanTool.SET_SPACE_TEXT:
         session.spaces.cancel_space_text_position_pick()
