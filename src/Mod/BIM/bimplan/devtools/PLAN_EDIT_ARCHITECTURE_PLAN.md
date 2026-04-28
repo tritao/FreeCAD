@@ -448,10 +448,16 @@ Validation:
 
 ### Phase 4: Make Tools First-Class State Machines
 
+Current progress:
+
+- A minimal `PlanToolHandler` contract exists beside the current tool-id enum.
+- `SelectTool` owns Select left-click behavior and edit-node activation.
+- `runtime/input.py` still owns raw Coin event normalization and dispatch.
+
 Steps:
 
-1. Define a minimal `PlanTool` base contract.
-2. Convert select behavior first.
+1. Define a minimal `PlanTool` base contract. Done.
+2. Convert select behavior first. In progress.
 3. Convert wall create/edit next.
 4. Convert opening/symbol/space/region workflows.
 5. Leave provider point tool last because it crosses provider runtime and UI.
