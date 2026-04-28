@@ -464,7 +464,7 @@ Current progress:
 - `ProviderPointTool` owns provider point placement cancel keyboard behavior.
 - `ProviderMoveTool` owns provider handle-move cancel keyboard behavior.
 - `PickSpaceRegionTool` owns region-candidate mouse and Escape-key behavior.
-- `runtime/input.py` still owns raw Coin event normalization and dispatch.
+- `runtime/input.py` owns raw Coin event normalization and table-based tool dispatch.
 
 Steps:
 
