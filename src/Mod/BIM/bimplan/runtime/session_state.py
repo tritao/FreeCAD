@@ -636,35 +636,6 @@ _PLAN_EDIT_SESSION_STATE_PROPERTIES = (
         (),
     ),
     (
-        "_ensure_overlay_transient_state",
-        (
-            ("_hovered_opening_overlay_dirty", "hovered_opening_overlay_dirty", _coerce_bool),
-            (
-                "_hovered_opening_overlay_render_state",
-                "hovered_opening_overlay_render_state",
-                _coerce_identity,
-            ),
-            ("_selected_opening_overlay_dirty", "selected_opening_overlay_dirty", _coerce_bool),
-            (
-                "_selected_opening_overlay_render_state",
-                "selected_opening_overlay_render_state",
-                _coerce_identity,
-            ),
-            ("_selected_space_overlay_dirty", "selected_space_overlay_dirty", _coerce_bool),
-            (
-                "_selected_space_overlay_geometry_key",
-                "selected_space_overlay_geometry_key",
-                _coerce_identity,
-            ),
-            ("_selected_space_overlay_segments", "selected_space_overlay_segments", _coerce_tuple),
-            (
-                "_selected_space_overlay_render_state",
-                "selected_space_overlay_render_state",
-                _coerce_identity,
-            ),
-        ),
-    ),
-    (
         "_ensure_creation_preview_state",
         (
             ("_rect_wall_start", "rect_wall_start", _coerce_identity),

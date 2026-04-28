@@ -502,6 +502,7 @@ Current progress:
 - Unused private region-pick edit-space compatibility alias is removed; region picking uses `space_region_pick_state`.
 - Unused private provider render-state compatibility aliases are removed; provider overlays use `provider_transient_state`.
 - Unused private opening-transient compatibility aliases are removed; opening overlays/editing use `opening_transient_state`.
+- Unused private overlay-transient compatibility aliases are removed; opening and space overlays use `overlay_transient_state`.
 
 Steps:
 
