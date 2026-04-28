@@ -20,7 +20,9 @@ class BimPlanEditGuiWallsMixin:
         self.pump_gui_events()
 
         self.assertEqual(session.current_tool, "Wall")
-        self.assertIsNotNone(session._embedded_tool, "Wall tool should be embedded in Plan Edit.")
+        self.assertIsNotNone(
+            session._embedded_tool, "Wall tool should be embedded in Plan Edit."
+        )
         self.assertIsInstance(session._embedded_tool, current_arch_wall_class())
 
         self.assertPlaneIsSaneTop(session.viewport.get_interaction_plane())
@@ -58,7 +60,9 @@ class BimPlanEditGuiWallsMixin:
         cmd.update(second, None)
 
         self.assertPlaneIsSaneTop(cmd._plane)
-        self.assertIsNotNone(cmd.tracker.last_points, "Expected a preview update on the tracker.")
+        self.assertIsNotNone(
+            cmd.tracker.last_points, "Expected a preview update on the tracker."
+        )
         self.assertEqual(len(cmd.tracker.last_points), 2)
         for point in cmd.tracker.last_points:
             self.assertLess(abs(point.x), 1e6)
@@ -93,7 +97,9 @@ class BimPlanEditGuiWallsMixin:
 
         created = [obj for obj in self.document.Objects if obj.Name not in before]
         walls = [obj for obj in created if Draft.getType(obj) == "Wall"]
-        self.assertEqual(len(walls), 4, "Expected exactly four walls from a rectangular run.")
+        self.assertEqual(
+            len(walls), 4, "Expected exactly four walls from a rectangular run."
+        )
         for wall in walls:
             self.assertIn(level, wall.InListRecursive)
 
@@ -115,7 +121,9 @@ class BimPlanEditGuiWallsMixin:
             FreeCADGui.Selection.addSelection(level)
 
             session = BimPlanSession.start_session()
-            self.assertIsNotNone(session, "Plan Edit session should start in GUI tests.")
+            self.assertIsNotNone(
+                session, "Plan Edit session should start in GUI tests."
+            )
             self.pump_gui_events()
 
             before = {obj.Name for obj in self.document.Objects}
@@ -213,7 +221,9 @@ class BimPlanEditGuiWallsMixin:
         session.shutdown(close_dialog=False)
         self.pump_gui_events()
 
-    def test_plan_edit_ctrl_click_adds_wall_to_selection_without_replacing_primary_target(self):
+    def test_plan_edit_ctrl_click_adds_wall_to_selection_without_replacing_primary_target(
+        self,
+    ):
         """Ctrl-click should build a wall selection set while keeping the current primary wall."""
 
         from PySide import QtCore
@@ -236,9 +246,9 @@ class BimPlanEditGuiWallsMixin:
         self.pump_gui_events()
 
         with (
-            patch.object(session.selection, "get_edit_node", return_value=None),
+            patch.object(session.selection.picking, "get_edit_node", return_value=None),
             patch.object(
-                session.selection,
+                session.selection.picking,
                 "get_plan_target_at_position",
                 return_value=("wall", wall_a),
             ),
@@ -247,7 +257,9 @@ class BimPlanEditGuiWallsMixin:
 
         self._assert_selected_plan_target(session, "wall", wall_a)
         self.pump_gui_events()
-        self.assertEqual([obj.Name for obj in FreeCADGui.Selection.getSelection()], [wall_a.Name])
+        self.assertEqual(
+            [obj.Name for obj in FreeCADGui.Selection.getSelection()], [wall_a.Name]
+        )
 
         with (
             patch(
@@ -260,7 +272,7 @@ class BimPlanEditGuiWallsMixin:
                 return_value=None,
             ),
             patch.object(
-                session.selection,
+                session.selection.picking,
                 "get_plan_target_at_position",
                 return_value=("wall", wall_b),
             ),
@@ -274,9 +286,12 @@ class BimPlanEditGuiWallsMixin:
             [obj.Name for obj in FreeCADGui.Selection.getSelection()],
             [wall_a.Name, wall_b.Name],
         )
-        self.assertEqual(session.selection.state.get_selected_plan_target(), ("wall", wall_a))
         self.assertEqual(
-            session.selection.state.get_secondary_selected_plan_targets(), [("wall", wall_b)]
+            session.selection.state.get_selected_plan_target(), ("wall", wall_a)
+        )
+        self.assertEqual(
+            session.selection.state.get_secondary_selected_plan_targets(),
+            [("wall", wall_b)],
         )
         self.assertGreater(len(session._secondary_selection_trackers), 0)
         self.assertIn("Selection set: 2 walls", session.task_panel.status.text())
@@ -292,7 +307,7 @@ class BimPlanEditGuiWallsMixin:
                 return_value=None,
             ),
             patch.object(
-                session.selection,
+                session.selection.picking,
                 "get_plan_target_at_position",
                 return_value=("wall", wall_a),
             ),
@@ -302,9 +317,15 @@ class BimPlanEditGuiWallsMixin:
 
         self.assertTrue(callback._handled)
         self._assert_selected_plan_target(session, "wall", wall_b)
-        self.assertEqual([obj.Name for obj in FreeCADGui.Selection.getSelection()], [wall_b.Name])
-        self.assertEqual(session.selection.state.get_selected_plan_target(), ("wall", wall_b))
-        self.assertEqual(session.selection.state.get_secondary_selected_plan_targets(), [])
+        self.assertEqual(
+            [obj.Name for obj in FreeCADGui.Selection.getSelection()], [wall_b.Name]
+        )
+        self.assertEqual(
+            session.selection.state.get_selected_plan_target(), ("wall", wall_b)
+        )
+        self.assertEqual(
+            session.selection.state.get_secondary_selected_plan_targets(), []
+        )
         self.assertEqual(len(session._secondary_selection_trackers), 0)
         self.assertNotIn("Selection set:", session.task_panel.status.text())
 
@@ -323,7 +344,8 @@ class BimPlanEditGuiWallsMixin:
         self.pump_gui_events()
 
         faces = list(
-            getattr(getattr(wall, "Proxy", None), "getFootprint", lambda _obj: [])(wall) or []
+            getattr(getattr(wall, "Proxy", None), "getFootprint", lambda _obj: [])(wall)
+            or []
         )
         self.assertTrue(faces)
         face = faces[0]
@@ -359,7 +381,7 @@ class BimPlanEditGuiWallsMixin:
         self.pump_gui_events()
 
         with patch.object(
-            session.selection,
+            session.selection.picking,
             "get_plan_target_at_position",
             return_value=("wall", wall),
         ):
@@ -399,14 +421,16 @@ class BimPlanEditGuiWallsMixin:
                 return self._position
 
         with (
-            patch.object(session.selection, "get_edit_node", return_value=None),
+            patch.object(session.selection.picking, "get_edit_node", return_value=None),
             patch.object(
-                session.selection,
+                session.selection.picking,
                 "get_plan_target_at_position",
                 return_value=(None, None),
             ),
         ):
-            session.input.on_mouse_pressed(self._FakeEventCallback(_FakeMouseEvent(250, 250)))
+            session.input.on_mouse_pressed(
+                self._FakeEventCallback(_FakeMouseEvent(250, 250))
+            )
         self.pump_gui_events(timeout_ms=500)
 
         self._assert_no_selected_plan_target(session)
@@ -427,12 +451,14 @@ class BimPlanEditGuiWallsMixin:
         self.assertIsNotNone(session)
         self.pump_gui_events()
 
-        self.assertEqual([obj.Name for obj in FreeCADGui.Selection.getSelection()], [level.Name])
+        self.assertEqual(
+            [obj.Name for obj in FreeCADGui.Selection.getSelection()], [level.Name]
+        )
 
         with (
-            patch.object(session.selection, "get_edit_node", return_value=None),
+            patch.object(session.selection.picking, "get_edit_node", return_value=None),
             patch.object(
-                session.selection,
+                session.selection.picking,
                 "get_plan_target_at_position",
                 return_value=(None, None),
             ),
@@ -459,7 +485,7 @@ class BimPlanEditGuiWallsMixin:
         self.pump_gui_events()
 
         with patch.object(
-            session.selection,
+            session.selection.picking,
             "get_plan_target_at_position",
             return_value=("wall", wall),
         ):
@@ -482,7 +508,7 @@ class BimPlanEditGuiWallsMixin:
         self.pump_gui_events()
 
         with patch.object(
-            session.selection,
+            session.selection.picking,
             "get_plan_target_at_position",
             return_value=("wall", wall),
         ):
@@ -506,7 +532,7 @@ class BimPlanEditGuiWallsMixin:
         self.pump_gui_events()
 
         with patch.object(
-            session.selection,
+            session.selection.picking,
             "get_plan_target_at_position",
             return_value=("wall", wall),
         ):
@@ -518,7 +544,9 @@ class BimPlanEditGuiWallsMixin:
         self.assertGreater(len(session._wall_overlay_trackers), 0)
         self.assertEqual(len(session._grip_trackers), 3)
 
-    def test_plan_edit_real_click_selection_draws_wall_outline_before_deferred_grips(self):
+    def test_plan_edit_real_click_selection_draws_wall_outline_before_deferred_grips(
+        self,
+    ):
         """Real wall clicks should paint the selected outline immediately, before grip sync lands."""
 
         wall = Arch.makeWall(length=3000, width=200, height=2500)
@@ -529,13 +557,15 @@ class BimPlanEditGuiWallsMixin:
         self.pump_gui_events()
 
         with (
-            patch.object(session.selection, "get_edit_node", return_value=None),
+            patch.object(session.selection.picking, "get_edit_node", return_value=None),
             patch.object(
-                session.selection,
+                session.selection.picking,
                 "get_plan_target_at_position",
                 return_value=("wall", wall),
             ),
-            patch.object(session.viewport, "request_view_redraw") as request_view_redraw,
+            patch.object(
+                session.viewport, "request_view_redraw"
+            ) as request_view_redraw,
         ):
             callback = self._make_fake_left_mouse_press()
             session.input.on_mouse_pressed(callback)
@@ -567,7 +597,7 @@ class BimPlanEditGuiWallsMixin:
         self.pump_gui_events()
 
         with patch.object(
-            session.selection,
+            session.selection.picking,
             "get_plan_target_at_position",
             return_value=("wall", wall),
         ):
@@ -584,7 +614,9 @@ class BimPlanEditGuiWallsMixin:
         for tracker, bogus in zip(session._grip_trackers, bogus_points):
             tracker.set(bogus)
 
-        session.selection.refresh.refresh_primary_selected_plan_target(force_wall_visual_resync=True)
+        session.selection.refresh.refresh_primary_selected_plan_target(
+            force_wall_visual_resync=True
+        )
         self.pump_gui_events(timeout_ms=250)
 
         self._assert_selected_wall_visuals(session, wall)
@@ -604,7 +636,7 @@ class BimPlanEditGuiWallsMixin:
         self.pump_gui_events()
 
         with patch.object(
-            session.selection,
+            session.selection.picking,
             "get_plan_target_at_position",
             return_value=("wall", wall),
         ):
@@ -630,7 +662,9 @@ class BimPlanEditGuiWallsMixin:
         """Join mode should keep a hovered candidate wall visible for joining."""
 
         source_wall = Arch.makeWall(length=3000, width=200, height=2500)
-        source_wall.Placement = FreeCAD.Placement(FreeCAD.Vector(0, 0, 0), FreeCAD.Rotation())
+        source_wall.Placement = FreeCAD.Placement(
+            FreeCAD.Vector(0, 0, 0), FreeCAD.Rotation()
+        )
         target_wall = Arch.makeWall(length=3000, width=200, height=2500)
         target_wall.Placement = FreeCAD.Placement(
             FreeCAD.Vector(1500, 1500, 0), FreeCAD.Rotation(FreeCAD.Vector(0, 0, 1), 90)
@@ -649,7 +683,7 @@ class BimPlanEditGuiWallsMixin:
         self.assertEqual(len(session._grip_trackers), 0)
 
         with patch.object(
-            session.selection,
+            session.selection.picking,
             "get_plan_target_at_position",
             return_value=("wall", target_wall),
         ):
@@ -665,7 +699,9 @@ class BimPlanEditGuiWallsMixin:
         """Canceling join mode should return to Select with the source wall active."""
 
         source_wall = Arch.makeWall(length=3000, width=200, height=2500)
-        source_wall.Placement = FreeCAD.Placement(FreeCAD.Vector(0, 0, 0), FreeCAD.Rotation())
+        source_wall.Placement = FreeCAD.Placement(
+            FreeCAD.Vector(0, 0, 0), FreeCAD.Rotation()
+        )
         self.document.recompute()
 
         session = BimPlanSession.start_session()
@@ -689,7 +725,9 @@ class BimPlanEditGuiWallsMixin:
         """Join mode should cycle the active join type and reflect it in the UI."""
 
         source_wall = Arch.makeWall(length=3000, width=200, height=2500)
-        source_wall.Placement = FreeCAD.Placement(FreeCAD.Vector(0, 0, 0), FreeCAD.Rotation())
+        source_wall.Placement = FreeCAD.Placement(
+            FreeCAD.Vector(0, 0, 0), FreeCAD.Rotation()
+        )
         self.document.recompute()
 
         session = BimPlanSession.start_session()
@@ -707,7 +745,9 @@ class BimPlanEditGuiWallsMixin:
 
         from pivy import coin
 
-        event_callback = self._FakeEventCallback(self._FakeKeyEvent(coin.SoKeyboardEvent.TAB))
+        event_callback = self._FakeEventCallback(
+            self._FakeKeyEvent(coin.SoKeyboardEvent.TAB)
+        )
         session.input.on_key_pressed(event_callback)
 
         self.assertEqual(session.wall_relations.get_plan_join_type(), "Butt")
@@ -724,7 +764,9 @@ class BimPlanEditGuiWallsMixin:
         """Join mode should create a BIM wall joint from the selected and clicked walls."""
 
         source_wall = Arch.makeWall(length=3000, width=200, height=2500)
-        source_wall.Placement = FreeCAD.Placement(FreeCAD.Vector(0, 0, 0), FreeCAD.Rotation())
+        source_wall.Placement = FreeCAD.Placement(
+            FreeCAD.Vector(0, 0, 0), FreeCAD.Rotation()
+        )
         target_wall = Arch.makeWall(length=3000, width=200, height=2500)
         target_wall.Placement = FreeCAD.Placement(
             FreeCAD.Vector(1500, 1500, 0), FreeCAD.Rotation(FreeCAD.Vector(0, 0, 1), 90)
@@ -761,14 +803,16 @@ class BimPlanEditGuiWallsMixin:
                 return self._position
 
         with (
-            patch.object(session.selection, "get_edit_node", return_value=None),
+            patch.object(session.selection.picking, "get_edit_node", return_value=None),
             patch.object(
-                session.selection,
+                session.selection.picking,
                 "get_plan_target_at_position",
                 return_value=("wall", target_wall),
             ),
         ):
-            session.input.on_mouse_pressed(self._FakeEventCallback(_FakeMouseEvent(250, 250)))
+            session.input.on_mouse_pressed(
+                self._FakeEventCallback(_FakeMouseEvent(250, 250))
+            )
 
         joints = [
             obj
@@ -783,7 +827,9 @@ class BimPlanEditGuiWallsMixin:
 
         self.assertEqual(session.current_tool, "Select")
         self._assert_selected_wall_visuals(session, source_wall)
-        self.assertIsNone(session.selection.state.get_selected_target_for_kind("opening"))
+        self.assertIsNone(
+            session.selection.state.get_selected_target_for_kind("opening")
+        )
         self.assertEqual(len(session._grip_trackers), 3)
         self.assertEqual(len(session._wall_hover_trackers), 0)
 
@@ -791,7 +837,9 @@ class BimPlanEditGuiWallsMixin:
         """Join mode should create the join type currently selected in the dock."""
 
         source_wall = Arch.makeWall(length=3000, width=200, height=2500)
-        source_wall.Placement = FreeCAD.Placement(FreeCAD.Vector(0, 0, 0), FreeCAD.Rotation())
+        source_wall.Placement = FreeCAD.Placement(
+            FreeCAD.Vector(0, 0, 0), FreeCAD.Rotation()
+        )
         target_wall = Arch.makeWall(length=3000, width=200, height=2500)
         target_wall.Placement = FreeCAD.Placement(
             FreeCAD.Vector(1500, 1500, 0), FreeCAD.Rotation(FreeCAD.Vector(0, 0, 1), 90)
@@ -835,14 +883,16 @@ class BimPlanEditGuiWallsMixin:
                 return self._position
 
         with (
-            patch.object(session.selection, "get_edit_node", return_value=None),
+            patch.object(session.selection.picking, "get_edit_node", return_value=None),
             patch.object(
-                session.selection,
+                session.selection.picking,
                 "get_plan_target_at_position",
                 return_value=("wall", target_wall),
             ),
         ):
-            session.input.on_mouse_pressed(self._FakeEventCallback(_FakeMouseEvent(250, 250)))
+            session.input.on_mouse_pressed(
+                self._FakeEventCallback(_FakeMouseEvent(250, 250))
+            )
 
         joints = [
             obj
@@ -860,7 +910,9 @@ class BimPlanEditGuiWallsMixin:
         """Join mode should surface and update an existing wall joint for the hovered pair."""
 
         source_wall = Arch.makeWall(length=3000, width=200, height=2500)
-        source_wall.Placement = FreeCAD.Placement(FreeCAD.Vector(0, 0, 0), FreeCAD.Rotation())
+        source_wall.Placement = FreeCAD.Placement(
+            FreeCAD.Vector(0, 0, 0), FreeCAD.Rotation()
+        )
         target_wall = Arch.makeWall(length=3000, width=200, height=2500)
         target_wall.Placement = FreeCAD.Placement(
             FreeCAD.Vector(1500, 1500, 0), FreeCAD.Rotation(FreeCAD.Vector(0, 0, 1), 90)
@@ -871,7 +923,9 @@ class BimPlanEditGuiWallsMixin:
 
         joint = Arch.makeWallJoint(source_wall, target_wall, "Miter")
         self.assertIsNotNone(joint)
-        self.assertTrue(BIM_Join_Miter()._configure_joint(joint, source_wall, target_wall))
+        self.assertTrue(
+            BIM_Join_Miter()._configure_joint(joint, source_wall, target_wall)
+        )
         self.document.recompute()
 
         session = BimPlanSession.start_session()
@@ -912,14 +966,16 @@ class BimPlanEditGuiWallsMixin:
                 return self._position
 
         with (
-            patch.object(session.selection, "get_edit_node", return_value=None),
+            patch.object(session.selection.picking, "get_edit_node", return_value=None),
             patch.object(
-                session.selection,
+                session.selection.picking,
                 "get_plan_target_at_position",
                 return_value=("wall", target_wall),
             ),
         ):
-            session.input.on_mouse_pressed(self._FakeEventCallback(_FakeMouseEvent(250, 250)))
+            session.input.on_mouse_pressed(
+                self._FakeEventCallback(_FakeMouseEvent(250, 250))
+            )
 
         joints = [
             obj
@@ -935,7 +991,9 @@ class BimPlanEditGuiWallsMixin:
         """Join mode should remove the existing joint for the hovered wall pair."""
 
         source_wall = Arch.makeWall(length=3000, width=200, height=2500)
-        source_wall.Placement = FreeCAD.Placement(FreeCAD.Vector(0, 0, 0), FreeCAD.Rotation())
+        source_wall.Placement = FreeCAD.Placement(
+            FreeCAD.Vector(0, 0, 0), FreeCAD.Rotation()
+        )
         target_wall = Arch.makeWall(length=3000, width=200, height=2500)
         target_wall.Placement = FreeCAD.Placement(
             FreeCAD.Vector(1500, 1500, 0), FreeCAD.Rotation(FreeCAD.Vector(0, 0, 1), 90)
@@ -946,7 +1004,9 @@ class BimPlanEditGuiWallsMixin:
 
         joint = Arch.makeWallJoint(source_wall, target_wall, "Miter")
         self.assertIsNotNone(joint)
-        self.assertTrue(BIM_Join_Miter()._configure_joint(joint, source_wall, target_wall))
+        self.assertTrue(
+            BIM_Join_Miter()._configure_joint(joint, source_wall, target_wall)
+        )
         self.document.recompute()
 
         session = BimPlanSession.start_session()
@@ -968,7 +1028,9 @@ class BimPlanEditGuiWallsMixin:
         ]
         self.assertEqual(len(joints), 0)
         self.assertEqual(session.current_tool, "Join")
-        self.assertIs(session.selection.state.get_selected_target_for_kind("wall"), source_wall)
+        self.assertIs(
+            session.selection.state.get_selected_target_for_kind("wall"), source_wall
+        )
         self.assertIs(session.hovered_wall, target_wall)
         self.assertFalse(session.task_panel.unjoin_button.isEnabled())
         _title, body = session._get_status_chip_text()
@@ -979,7 +1041,9 @@ class BimPlanEditGuiWallsMixin:
         """Wall join creation should roundtrip cleanly through document undo/redo."""
 
         source_wall = Arch.makeWall(length=3000, width=200, height=2500)
-        source_wall.Placement = FreeCAD.Placement(FreeCAD.Vector(0, 0, 0), FreeCAD.Rotation())
+        source_wall.Placement = FreeCAD.Placement(
+            FreeCAD.Vector(0, 0, 0), FreeCAD.Rotation()
+        )
         target_wall = Arch.makeWall(length=3000, width=200, height=2500)
         target_wall.Placement = FreeCAD.Placement(
             FreeCAD.Vector(1500, 1500, 0), FreeCAD.Rotation(FreeCAD.Vector(0, 0, 1), 90)
@@ -1016,14 +1080,16 @@ class BimPlanEditGuiWallsMixin:
                 return self._position
 
         with (
-            patch.object(session.selection, "get_edit_node", return_value=None),
+            patch.object(session.selection.picking, "get_edit_node", return_value=None),
             patch.object(
-                session.selection,
+                session.selection.picking,
                 "get_plan_target_at_position",
                 return_value=("wall", target_wall),
             ),
         ):
-            session.input.on_mouse_pressed(self._FakeEventCallback(_FakeMouseEvent(250, 250)))
+            session.input.on_mouse_pressed(
+                self._FakeEventCallback(_FakeMouseEvent(250, 250))
+            )
 
         joints = [
             obj
@@ -1044,7 +1110,9 @@ class BimPlanEditGuiWallsMixin:
             if getattr(getattr(obj, "Proxy", None), "Type", None) == "WallJoint"
         ]
         self.assertEqual(joints, [])
-        self.assertIs(session.selection.state.get_selected_target_for_kind("wall"), source_wall)
+        self.assertIs(
+            session.selection.state.get_selected_target_for_kind("wall"), source_wall
+        )
         self.assertEqual(len(session._wall_hover_trackers), 0)
 
         self._redo_document()
@@ -1057,13 +1125,17 @@ class BimPlanEditGuiWallsMixin:
         joint = joints[0]
         self.assertEqual(joint.JointType, "Miter")
         self.assertEqual({joint.WallA, joint.WallB}, {source_wall, target_wall})
-        self.assertIs(session.selection.state.get_selected_target_for_kind("wall"), source_wall)
+        self.assertIs(
+            session.selection.state.get_selected_target_for_kind("wall"), source_wall
+        )
         self.assertEqual(len(session._wall_hover_trackers), 0)
 
         session.shutdown(close_dialog=False)
         self.pump_gui_events()
 
-    def test_plan_edit_join_update_undo_keeps_adjacent_wall_linked_spaces_distinct(self):
+    def test_plan_edit_join_update_undo_keeps_adjacent_wall_linked_spaces_distinct(
+        self,
+    ):
         """Updating an existing wall joint should keep adjacent spaces distinct through undo/redo."""
 
         from bimcommands.BimJoin import BIM_Join_Miter
@@ -1085,7 +1157,9 @@ class BimPlanEditGuiWallsMixin:
 
         joint = Arch.makeWallJoint(source_wall, target_wall, "Miter")
         self.assertIsNotNone(joint)
-        self.assertTrue(BIM_Join_Miter()._configure_joint(joint, source_wall, target_wall))
+        self.assertTrue(
+            BIM_Join_Miter()._configure_joint(joint, source_wall, target_wall)
+        )
         self.document.recompute()
         self.pump_gui_events()
 
@@ -1099,9 +1173,9 @@ class BimPlanEditGuiWallsMixin:
         session.selection.hover.set_hovered_wall(target_wall)
 
         with (
-            patch.object(session.selection, "get_edit_node", return_value=None),
+            patch.object(session.selection.picking, "get_edit_node", return_value=None),
             patch.object(
-                session.selection,
+                session.selection.picking,
                 "get_plan_target_at_position",
                 return_value=("wall", target_wall),
             ),
@@ -1117,9 +1191,13 @@ class BimPlanEditGuiWallsMixin:
         joint = joints[0]
         self.assertEqual(joint.JointType, "Butt")
         updated_spaces = self._assert_spaces_stay_distinct(created_spaces)
-        updated_centers = [float(space.Shape.CenterOfMass.x) for space in updated_spaces]
+        updated_centers = [
+            float(space.Shape.CenterOfMass.x) for space in updated_spaces
+        ]
         updated_areas = [float(space.Proxy.getArea(space)) for space in updated_spaces]
-        self.assertIs(session.selection.state.get_selected_target_for_kind("wall"), source_wall)
+        self.assertIs(
+            session.selection.state.get_selected_target_for_kind("wall"), source_wall
+        )
 
         self._undo_document()
 
@@ -1133,13 +1211,19 @@ class BimPlanEditGuiWallsMixin:
         self.assertEqual(joint.JointType, "Miter")
 
         restored_spaces = self._assert_spaces_stay_distinct(created_spaces)
-        restored_centers = [float(space.Shape.CenterOfMass.x) for space in restored_spaces]
-        restored_areas = [float(space.Proxy.getArea(space)) for space in restored_spaces]
+        restored_centers = [
+            float(space.Shape.CenterOfMass.x) for space in restored_spaces
+        ]
+        restored_areas = [
+            float(space.Proxy.getArea(space)) for space in restored_spaces
+        ]
         for initial_center, restored_center in zip(initial_centers, restored_centers):
             self.assertAlmostEqual(restored_center, initial_center, delta=1e-6)
         for initial_area, restored_area in zip(initial_areas, restored_areas):
             self.assertAlmostEqual(restored_area, initial_area, delta=1e-6)
-        self.assertIs(session.selection.state.get_selected_target_for_kind("wall"), source_wall)
+        self.assertIs(
+            session.selection.state.get_selected_target_for_kind("wall"), source_wall
+        )
 
         self._redo_document()
 
@@ -1159,7 +1243,9 @@ class BimPlanEditGuiWallsMixin:
             self.assertAlmostEqual(redone_center, updated_center, delta=1e-6)
         for updated_area, redone_area in zip(updated_areas, redone_areas):
             self.assertAlmostEqual(redone_area, updated_area, delta=1e-6)
-        self.assertIs(session.selection.state.get_selected_target_for_kind("wall"), source_wall)
+        self.assertIs(
+            session.selection.state.get_selected_target_for_kind("wall"), source_wall
+        )
 
         session.shutdown(close_dialog=False)
         self.pump_gui_events()
@@ -1186,7 +1272,9 @@ class BimPlanEditGuiWallsMixin:
 
         joint = Arch.makeWallJoint(source_wall, target_wall, "Miter")
         self.assertIsNotNone(joint)
-        self.assertTrue(BIM_Join_Miter()._configure_joint(joint, source_wall, target_wall))
+        self.assertTrue(
+            BIM_Join_Miter()._configure_joint(joint, source_wall, target_wall)
+        )
         self.document.recompute()
         self.pump_gui_events()
 
@@ -1208,9 +1296,13 @@ class BimPlanEditGuiWallsMixin:
         ]
         self.assertEqual(joints, [])
         updated_spaces = self._assert_spaces_stay_distinct(created_spaces)
-        updated_centers = [float(space.Shape.CenterOfMass.x) for space in updated_spaces]
+        updated_centers = [
+            float(space.Shape.CenterOfMass.x) for space in updated_spaces
+        ]
         updated_areas = [float(space.Proxy.getArea(space)) for space in updated_spaces]
-        self.assertIs(session.selection.state.get_selected_target_for_kind("wall"), source_wall)
+        self.assertIs(
+            session.selection.state.get_selected_target_for_kind("wall"), source_wall
+        )
 
         self._undo_document()
 
@@ -1224,13 +1316,19 @@ class BimPlanEditGuiWallsMixin:
         self.assertEqual(joint.JointType, "Miter")
 
         restored_spaces = self._assert_spaces_stay_distinct(created_spaces)
-        restored_centers = [float(space.Shape.CenterOfMass.x) for space in restored_spaces]
-        restored_areas = [float(space.Proxy.getArea(space)) for space in restored_spaces]
+        restored_centers = [
+            float(space.Shape.CenterOfMass.x) for space in restored_spaces
+        ]
+        restored_areas = [
+            float(space.Proxy.getArea(space)) for space in restored_spaces
+        ]
         for initial_center, restored_center in zip(initial_centers, restored_centers):
             self.assertAlmostEqual(restored_center, initial_center, delta=1e-6)
         for initial_area, restored_area in zip(initial_areas, restored_areas):
             self.assertAlmostEqual(restored_area, initial_area, delta=1e-6)
-        self.assertIs(session.selection.state.get_selected_target_for_kind("wall"), source_wall)
+        self.assertIs(
+            session.selection.state.get_selected_target_for_kind("wall"), source_wall
+        )
 
         self._redo_document()
 
@@ -1248,7 +1346,9 @@ class BimPlanEditGuiWallsMixin:
             self.assertAlmostEqual(redone_center, updated_center, delta=1e-6)
         for updated_area, redone_area in zip(updated_areas, redone_areas):
             self.assertAlmostEqual(redone_area, updated_area, delta=1e-6)
-        self.assertIs(session.selection.state.get_selected_target_for_kind("wall"), source_wall)
+        self.assertIs(
+            session.selection.state.get_selected_target_for_kind("wall"), source_wall
+        )
 
         session.shutdown(close_dialog=False)
         self.pump_gui_events()
@@ -1257,7 +1357,9 @@ class BimPlanEditGuiWallsMixin:
         """Selecting a wall in a wall junction should show the junction node overlay."""
 
         carrier_wall = Arch.makeWall(length=3000, width=200, height=2500)
-        carrier_wall.Placement = FreeCAD.Placement(FreeCAD.Vector(1500, 0, 0), FreeCAD.Rotation())
+        carrier_wall.Placement = FreeCAD.Placement(
+            FreeCAD.Vector(1500, 0, 0), FreeCAD.Rotation()
+        )
         branch_up = Arch.makeWall(length=1500, width=200, height=2500)
         branch_up.Placement = FreeCAD.Placement(
             FreeCAD.Vector(1500, 750, 0), FreeCAD.Rotation(FreeCAD.Vector(0, 0, 1), 90)
@@ -1284,7 +1386,9 @@ class BimPlanEditGuiWallsMixin:
         """Joining a third compatible wall should promote the cluster to a wall junction."""
 
         carrier_wall = Arch.makeWall(length=3000, width=200, height=2500)
-        carrier_wall.Placement = FreeCAD.Placement(FreeCAD.Vector(1500, 0, 0), FreeCAD.Rotation())
+        carrier_wall.Placement = FreeCAD.Placement(
+            FreeCAD.Vector(1500, 0, 0), FreeCAD.Rotation()
+        )
         branch_up = Arch.makeWall(length=1500, width=200, height=2500)
         branch_up.Placement = FreeCAD.Placement(
             FreeCAD.Vector(1500, 750, 0), FreeCAD.Rotation(FreeCAD.Vector(0, 0, 1), 90)
@@ -1333,14 +1437,16 @@ class BimPlanEditGuiWallsMixin:
                 return self._position
 
         with (
-            patch.object(session.selection, "get_edit_node", return_value=None),
+            patch.object(session.selection.picking, "get_edit_node", return_value=None),
             patch.object(
-                session.selection,
+                session.selection.picking,
                 "get_plan_target_at_position",
                 return_value=("wall", branch_down),
             ),
         ):
-            session.input.on_mouse_pressed(self._FakeEventCallback(_FakeMouseEvent(250, 250)))
+            session.input.on_mouse_pressed(
+                self._FakeEventCallback(_FakeMouseEvent(250, 250))
+            )
 
         joints = [
             obj
@@ -1360,14 +1466,18 @@ class BimPlanEditGuiWallsMixin:
             {wall.Name for wall in junction.Walls},
             {carrier_wall.Name, branch_up.Name, branch_down.Name},
         )
-        self.assertIs(session.selection.state.get_selected_target_for_kind("wall"), carrier_wall)
+        self.assertIs(
+            session.selection.state.get_selected_target_for_kind("wall"), carrier_wall
+        )
         self.assertGreater(len(session._junction_node_trackers), 0)
 
     def test_plan_edit_join_promotion_undo_redo_roundtrip(self):
         """Junction promotion should roundtrip cleanly through undo/redo."""
 
         carrier_wall = Arch.makeWall(length=3000, width=200, height=2500)
-        carrier_wall.Placement = FreeCAD.Placement(FreeCAD.Vector(1500, 0, 0), FreeCAD.Rotation())
+        carrier_wall.Placement = FreeCAD.Placement(
+            FreeCAD.Vector(1500, 0, 0), FreeCAD.Rotation()
+        )
         branch_up = Arch.makeWall(length=1500, width=200, height=2500)
         branch_up.Placement = FreeCAD.Placement(
             FreeCAD.Vector(1500, 750, 0), FreeCAD.Rotation(FreeCAD.Vector(0, 0, 1), 90)
@@ -1382,7 +1492,9 @@ class BimPlanEditGuiWallsMixin:
 
         initial_joint = Arch.makeWallJoint(branch_up, carrier_wall, "Tee")
         self.assertIsNotNone(initial_joint)
-        self.assertTrue(BIM_Join_Tee()._configure_joint(initial_joint, branch_up, carrier_wall))
+        self.assertTrue(
+            BIM_Join_Tee()._configure_joint(initial_joint, branch_up, carrier_wall)
+        )
         self.document.recompute()
         self.assertEqual(initial_joint.Status, "OK")
 
@@ -1416,14 +1528,16 @@ class BimPlanEditGuiWallsMixin:
                 return self._position
 
         with (
-            patch.object(session.selection, "get_edit_node", return_value=None),
+            patch.object(session.selection.picking, "get_edit_node", return_value=None),
             patch.object(
-                session.selection,
+                session.selection.picking,
                 "get_plan_target_at_position",
                 return_value=("wall", branch_down),
             ),
         ):
-            session.input.on_mouse_pressed(self._FakeEventCallback(_FakeMouseEvent(250, 250)))
+            session.input.on_mouse_pressed(
+                self._FakeEventCallback(_FakeMouseEvent(250, 250))
+            )
 
         joints = [
             obj
@@ -1443,7 +1557,9 @@ class BimPlanEditGuiWallsMixin:
             {wall.Name for wall in junction.Walls},
             {carrier_wall.Name, branch_up.Name, branch_down.Name},
         )
-        self.assertIs(session.selection.state.get_selected_target_for_kind("wall"), carrier_wall)
+        self.assertIs(
+            session.selection.state.get_selected_target_for_kind("wall"), carrier_wall
+        )
         self.assertGreater(len(session._junction_node_trackers), 0)
 
         self._undo_document()
@@ -1463,7 +1579,9 @@ class BimPlanEditGuiWallsMixin:
         joint = joints[0]
         self.assertEqual(joint.JointType, "Tee")
         self.assertEqual({joint.WallA, joint.WallB}, {branch_up, carrier_wall})
-        self.assertIs(session.selection.state.get_selected_target_for_kind("wall"), carrier_wall)
+        self.assertIs(
+            session.selection.state.get_selected_target_for_kind("wall"), carrier_wall
+        )
         self.assertEqual(len(session._junction_node_trackers), 0)
 
         self._redo_document()
@@ -1486,7 +1604,9 @@ class BimPlanEditGuiWallsMixin:
             {wall.Name for wall in junction.Walls},
             {carrier_wall.Name, branch_up.Name, branch_down.Name},
         )
-        self.assertIs(session.selection.state.get_selected_target_for_kind("wall"), carrier_wall)
+        self.assertIs(
+            session.selection.state.get_selected_target_for_kind("wall"), carrier_wall
+        )
         self.assertGreater(len(session._junction_node_trackers), 0)
 
     def test_plan_edit_wall_resize_keeps_relation_status_clear_when_join_stays_resolvable(
@@ -1495,10 +1615,13 @@ class BimPlanEditGuiWallsMixin:
         """Wall resize should keep relation status clear when the committed join remains valid."""
 
         source_wall = Arch.makeWall(length=3000, width=200, height=2500)
-        source_wall.Placement = FreeCAD.Placement(FreeCAD.Vector(0, 0, 0), FreeCAD.Rotation())
+        source_wall.Placement = FreeCAD.Placement(
+            FreeCAD.Vector(0, 0, 0), FreeCAD.Rotation()
+        )
         target_wall = Arch.makeWall(length=3000, width=200, height=2500)
         target_wall.Placement = FreeCAD.Placement(
-            FreeCAD.Vector(3000, -1500, 0), FreeCAD.Rotation(FreeCAD.Vector(0, 0, 1), 90)
+            FreeCAD.Vector(3000, -1500, 0),
+            FreeCAD.Rotation(FreeCAD.Vector(0, 0, 1), 90),
         )
         self.document.recompute()
 
@@ -1506,7 +1629,9 @@ class BimPlanEditGuiWallsMixin:
 
         joint = Arch.makeWallJoint(source_wall, target_wall, "Miter")
         self.assertIsNotNone(joint)
-        self.assertTrue(BIM_Join_Miter()._configure_joint(joint, source_wall, target_wall))
+        self.assertTrue(
+            BIM_Join_Miter()._configure_joint(joint, source_wall, target_wall)
+        )
         self.document.recompute()
         self.assertEqual(joint.Status, "OK")
 
@@ -1521,7 +1646,9 @@ class BimPlanEditGuiWallsMixin:
             original_endpoints[0].add(FreeCAD.Vector(1000, 0, 0)),
         ]
 
-        session.wall_edit.commit_wall_edit_points(source_wall, "End", source_wall.Proxy, new_points)
+        session.wall_edit.commit_wall_edit_points(
+            source_wall, "End", source_wall.Proxy, new_points
+        )
         self.pump_gui_events()
         self.pump_gui_events()
 
@@ -1535,10 +1662,13 @@ class BimPlanEditGuiWallsMixin:
         """Wall stretch preview should clip the footprint using active wall joins."""
 
         source_wall = Arch.makeWall(length=3000, width=200, height=2500)
-        source_wall.Placement = FreeCAD.Placement(FreeCAD.Vector(0, 0, 0), FreeCAD.Rotation())
+        source_wall.Placement = FreeCAD.Placement(
+            FreeCAD.Vector(0, 0, 0), FreeCAD.Rotation()
+        )
         target_wall = Arch.makeWall(length=3000, width=200, height=2500)
         target_wall.Placement = FreeCAD.Placement(
-            FreeCAD.Vector(1500, -1500, 0), FreeCAD.Rotation(FreeCAD.Vector(0, 0, 1), 90)
+            FreeCAD.Vector(1500, -1500, 0),
+            FreeCAD.Rotation(FreeCAD.Vector(0, 0, 1), 90),
         )
         self.document.recompute()
 
@@ -1546,7 +1676,9 @@ class BimPlanEditGuiWallsMixin:
 
         joint = Arch.makeWallJoint(source_wall, target_wall, "Miter")
         self.assertIsNotNone(joint)
-        self.assertTrue(BIM_Join_Miter()._configure_joint(joint, source_wall, target_wall))
+        self.assertTrue(
+            BIM_Join_Miter()._configure_joint(joint, source_wall, target_wall)
+        )
         self.document.recompute()
         self.assertEqual(joint.Status, "OK")
 
@@ -1557,7 +1689,9 @@ class BimPlanEditGuiWallsMixin:
         session._edit_wall = source_wall
         endpoints = source_wall.Proxy.calc_endpoints(source_wall)
         plain = session.wall_edit.get_preview_footprint(endpoints)
-        polylines, warnings = session.wall_edit.get_preview_footprint_polylines(endpoints)
+        polylines, warnings = session.wall_edit.get_preview_footprint_polylines(
+            endpoints
+        )
 
         self.assertEqual(warnings, [])
         self.assertEqual(len(polylines), 1)
@@ -1573,14 +1707,19 @@ class BimPlanEditGuiWallsMixin:
             )
         )
 
-    def test_plan_edit_joined_wall_preview_drops_trim_when_span_no_longer_reaches_join(self):
+    def test_plan_edit_joined_wall_preview_drops_trim_when_span_no_longer_reaches_join(
+        self,
+    ):
         """Wall stretch preview should fall back to the plain footprint when the edited span no longer reaches the join."""
 
         source_wall = Arch.makeWall(length=3000, width=200, height=2500)
-        source_wall.Placement = FreeCAD.Placement(FreeCAD.Vector(0, 0, 0), FreeCAD.Rotation())
+        source_wall.Placement = FreeCAD.Placement(
+            FreeCAD.Vector(0, 0, 0), FreeCAD.Rotation()
+        )
         target_wall = Arch.makeWall(length=3000, width=200, height=2500)
         target_wall.Placement = FreeCAD.Placement(
-            FreeCAD.Vector(1500, -1500, 0), FreeCAD.Rotation(FreeCAD.Vector(0, 0, 1), 90)
+            FreeCAD.Vector(1500, -1500, 0),
+            FreeCAD.Rotation(FreeCAD.Vector(0, 0, 1), 90),
         )
         self.document.recompute()
 
@@ -1588,7 +1727,9 @@ class BimPlanEditGuiWallsMixin:
 
         joint = Arch.makeWallJoint(source_wall, target_wall, "Miter")
         self.assertIsNotNone(joint)
-        self.assertTrue(BIM_Join_Miter()._configure_joint(joint, source_wall, target_wall))
+        self.assertTrue(
+            BIM_Join_Miter()._configure_joint(joint, source_wall, target_wall)
+        )
         self.document.recompute()
         self.assertEqual(joint.Status, "OK")
 
@@ -1613,7 +1754,9 @@ class BimPlanEditGuiWallsMixin:
 
         self.assertIsNone(session._plan_relation_status_message)
         plain = session.wall_edit.get_preview_footprint(invalid_points)
-        polylines, warnings = session.wall_edit.get_preview_footprint_polylines(invalid_points)
+        polylines, warnings = session.wall_edit.get_preview_footprint_polylines(
+            invalid_points
+        )
         self.assertEqual(warnings, [])
         self.assertEqual(len(polylines), 1)
         closed_plain = [FreeCAD.Vector(point) for point in plain]
@@ -1721,8 +1864,12 @@ class BimPlanEditGuiWallsMixin:
         self.pump_gui_events()
 
         canceled_endpoints = wall.Proxy.calc_endpoints(wall)
-        self.assertAlmostEqual(canceled_endpoints[0].x, original_endpoints[0].x, delta=1e-6)
-        self.assertAlmostEqual(canceled_endpoints[1].x, original_endpoints[1].x, delta=1e-6)
+        self.assertAlmostEqual(
+            canceled_endpoints[0].x, original_endpoints[0].x, delta=1e-6
+        )
+        self.assertAlmostEqual(
+            canceled_endpoints[1].x, original_endpoints[1].x, delta=1e-6
+        )
         self.assertEqual(session.current_tool, "Select")
         self._assert_selected_plan_target(session, "wall", wall)
         self.assertEqual(len(session._grip_trackers), 3)
@@ -1787,13 +1934,19 @@ class BimPlanEditGuiWallsMixin:
         edit_nodes = self._get_scenegraph_edit_nodes(session)
         self.assertEqual(
             edit_nodes,
-            [(wall.Name, "EditNode2"), (wall.Name, "EditNode1"), (wall.Name, "EditNode0")],
+            [
+                (wall.Name, "EditNode2"),
+                (wall.Name, "EditNode1"),
+                (wall.Name, "EditNode0"),
+            ],
         )
 
         session.selection.activation.clear_plan_selection_state()
         self.pump_gui_events(timeout_ms=500)
 
-        self.assertEqual(session.selection.state.get_selected_plan_target(), (None, None))
+        self.assertEqual(
+            session.selection.state.get_selected_plan_target(), (None, None)
+        )
         self.assertEqual(len(session._grip_trackers), 0)
         self.assertEqual(len(session._preview_grip_trackers), 0)
         self.assertEqual(self._get_scenegraph_edit_nodes(session), [])
@@ -1816,13 +1969,19 @@ class BimPlanEditGuiWallsMixin:
 
         self.assertEqual(
             self._get_scenegraph_edit_nodes(session),
-            [(wall.Name, "EditNode2"), (wall.Name, "EditNode1"), (wall.Name, "EditNode0")],
+            [
+                (wall.Name, "EditNode2"),
+                (wall.Name, "EditNode1"),
+                (wall.Name, "EditNode0"),
+            ],
         )
 
         FreeCADGui.Selection.clearSelection()
         self.pump_gui_events(timeout_ms=500)
 
-        self.assertEqual(session.selection.state.get_selected_plan_target(), (None, None))
+        self.assertEqual(
+            session.selection.state.get_selected_plan_target(), (None, None)
+        )
         self.assertEqual(len(session._grip_trackers), 0)
         self.assertEqual(len(session._preview_grip_trackers), 0)
         self.assertEqual(self._get_scenegraph_edit_nodes(session), [])
@@ -1845,14 +2004,20 @@ class BimPlanEditGuiWallsMixin:
 
         self.assertEqual(
             self._get_scenegraph_edit_nodes(session),
-            [(wall.Name, "EditNode2"), (wall.Name, "EditNode1"), (wall.Name, "EditNode0")],
+            [
+                (wall.Name, "EditNode2"),
+                (wall.Name, "EditNode1"),
+                (wall.Name, "EditNode0"),
+            ],
         )
 
         session.lifecycle.activate_wall_tool()
         self.pump_gui_events(timeout_ms=500)
 
         self.assertEqual(session.current_tool, "Wall")
-        self.assertEqual(session.selection.state.get_selected_plan_target(), (None, None))
+        self.assertEqual(
+            session.selection.state.get_selected_plan_target(), (None, None)
+        )
         self.assertEqual(len(session._grip_trackers), 0)
         self.assertEqual(self._get_scenegraph_edit_nodes(session), [])
 
@@ -1885,7 +2050,10 @@ class BimPlanEditGuiWallsMixin:
 
         self.assertEqual(len(session._wall_edit_readout_trackers), 2)
         self.assertTrue(
-            all(hasattr(tracker, "dimnode") for tracker in session._wall_edit_readout_trackers)
+            all(
+                hasattr(tracker, "dimnode")
+                for tracker in session._wall_edit_readout_trackers
+            )
         )
         self.assertEqual(
             sorted(
@@ -1896,12 +2064,16 @@ class BimPlanEditGuiWallsMixin:
         )
         self.assertTrue(
             all(
-                tracker.offset == session.wall_edit.get_wall_edit_readout_offset(tracker.mode)
+                tracker.offset
+                == session.wall_edit.get_wall_edit_readout_offset(tracker.mode)
                 for tracker in session._wall_edit_readout_trackers
             )
         )
         self.assertTrue(
-            all(tracker.offset >= 100.0 for tracker in session._wall_edit_readout_trackers)
+            all(
+                tracker.offset >= 100.0
+                for tracker in session._wall_edit_readout_trackers
+            )
         )
 
     def test_plan_edit_wall_stretch_preview_shows_length_readout(self):
@@ -1951,10 +2123,14 @@ class BimPlanEditGuiWallsMixin:
         self.assertIsNotNone(session)
         self.pump_gui_events()
 
-        with patch.object(session.viewport, "get_plan_view_units_per_pixel", return_value=1.0):
+        with patch.object(
+            session.viewport, "get_plan_view_units_per_pixel", return_value=1.0
+        ):
             close_offset = session.wall_edit.get_aligned_readout_offset_for_wall(wall)
 
-        with patch.object(session.viewport, "get_plan_view_units_per_pixel", return_value=40.0):
+        with patch.object(
+            session.viewport, "get_plan_view_units_per_pixel", return_value=40.0
+        ):
             far_offset = session.wall_edit.get_aligned_readout_offset_for_wall(wall)
 
         self.assertGreater(far_offset, close_offset)
@@ -1965,7 +2141,9 @@ class BimPlanEditGuiWallsMixin:
         class DeletedView:
             def __getattribute__(self, name):
                 if name in ("getCameraNode", "getSize", "redraw"):
-                    raise RuntimeError(f"Cannot access attribute '{name}' of deleted object")
+                    raise RuntimeError(
+                        f"Cannot access attribute '{name}' of deleted object"
+                    )
                 return object.__getattribute__(self, name)
 
         session = BimPlanSession.PlanEditSession()
@@ -2005,7 +2183,9 @@ class BimPlanEditGuiWallsMixin:
 
         from pivy import coin
 
-        callback = self._FakeEventCallback(self._FakeKeyEvent(coin.SoKeyboardEvent.RETURN))
+        callback = self._FakeEventCallback(
+            self._FakeKeyEvent(coin.SoKeyboardEvent.RETURN)
+        )
         session.input.on_key_pressed(callback)
         self.pump_gui_events()
 
@@ -2041,7 +2221,9 @@ class BimPlanEditGuiWallsMixin:
 
         from pivy import coin
 
-        callback = self._FakeEventCallback(self._FakeKeyEvent(coin.SoKeyboardEvent.RETURN))
+        callback = self._FakeEventCallback(
+            self._FakeKeyEvent(coin.SoKeyboardEvent.RETURN)
+        )
         session.input.on_key_pressed(callback)
         self.pump_gui_events()
 
@@ -2116,7 +2298,9 @@ class BimPlanEditGuiWallsMixin:
         session.wall_edit.on_wall_stretch_length_changed(4200.0)
 
         self.assertIs(session._wall_edit_active_readout_tracker, tracker)
-        self.assertAlmostEqual(session._preview_points[0].x, original_endpoints[0].x, delta=1e-6)
+        self.assertAlmostEqual(
+            session._preview_points[0].x, original_endpoints[0].x, delta=1e-6
+        )
         self.assertAlmostEqual(
             session._preview_points[1].x, original_endpoints[0].x + 4200.0, delta=1e-6
         )
@@ -2183,10 +2367,16 @@ class BimPlanEditGuiWallsMixin:
         self.pump_gui_events()
 
         endpoints = wall.Proxy.calc_endpoints(wall)
-        self.assertAlmostEqual(endpoints[0].x, original_endpoints[0].x + 500.0, delta=1e-6)
-        self.assertAlmostEqual(endpoints[1].x, original_endpoints[1].x + 500.0, delta=1e-6)
+        self.assertAlmostEqual(
+            endpoints[0].x, original_endpoints[0].x + 500.0, delta=1e-6
+        )
+        self.assertAlmostEqual(
+            endpoints[1].x, original_endpoints[1].x + 500.0, delta=1e-6
+        )
         self.assertEqual(session.current_tool, "Select")
-        self.assertIs(session.selection.state.get_selected_target_for_kind("wall"), wall)
+        self.assertIs(
+            session.selection.state.get_selected_target_for_kind("wall"), wall
+        )
 
     def test_plan_edit_wall_move_undo_redo_roundtrip(self):
         """Wall move undo/redo should restore wall geometry and selected-wall visuals."""
@@ -2215,7 +2405,9 @@ class BimPlanEditGuiWallsMixin:
             patch.object(FreeCADGui.Snapper, "setSelectMode", return_value=None),
         ):
             session.wall_edit.start_wall_grip_edit(2)
-            moved_midpoint = FreeCAD.Vector(captured["last"]).add(FreeCAD.Vector(500.0, 0.0, 0.0))
+            moved_midpoint = FreeCAD.Vector(captured["last"]).add(
+                FreeCAD.Vector(500.0, 0.0, 0.0)
+            )
             captured["callback"](moved_midpoint, None)
 
         moved_start, moved_end = self._get_wall_endpoints(wall)
@@ -2271,9 +2463,13 @@ class BimPlanEditGuiWallsMixin:
         self.pump_gui_events()
 
         endpoints = wall.Proxy.calc_endpoints(wall)
-        self.assertAlmostEqual(endpoints[1].sub(endpoints[0]).Length, 4200.0, delta=1e-6)
+        self.assertAlmostEqual(
+            endpoints[1].sub(endpoints[0]).Length, 4200.0, delta=1e-6
+        )
         self.assertEqual(session.current_tool, "Select")
-        self.assertIs(session.selection.state.get_selected_target_for_kind("wall"), wall)
+        self.assertIs(
+            session.selection.state.get_selected_target_for_kind("wall"), wall
+        )
 
     def test_plan_edit_wall_edit_refreshes_hosted_opening_footprints(self):
         """Wall edits should refresh footprints for openings hosted by that wall."""
@@ -2360,7 +2556,9 @@ class BimPlanEditGuiWallsMixin:
             .sub(updated_context["origin"])
             .dot(updated_context["axis_u"])
         )
-        self.assertAlmostEqual(current_center_u, updated_context["move_u_max"], delta=1e-6)
+        self.assertAlmostEqual(
+            current_center_u, updated_context["move_u_max"], delta=1e-6
+        )
         self.assertIn("callback", captured)
         self.assertIn("movecallback", captured)
 
@@ -2395,7 +2593,9 @@ class BimPlanEditGuiWallsMixin:
         session._edit_endpoint = "End"
         session._edit_endpoints = original_endpoints
         session._wall_edit_opening_clearances = (
-            session.wall_edit.snapshot_wall_hosted_opening_clearances(wall, original_endpoints)
+            session.wall_edit.snapshot_wall_hosted_opening_clearances(
+                wall, original_endpoints
+            )
         )
         session.current_tool = "Stretch End"
 
@@ -2405,20 +2605,28 @@ class BimPlanEditGuiWallsMixin:
             original_endpoints[0].add(axis.multiply(1600.0)),
         ]
 
-        layout = session.openings.compute_wall_hosted_opening_layout(wall, shortened_points)
+        layout = session.openings.compute_wall_hosted_opening_layout(
+            wall, shortened_points
+        )
         self.assertIsNotNone(layout)
         item = next(candidate for candidate in layout if candidate["opening"] is door)
         delta = FreeCAD.Vector(item["target_point"]).sub(item["current"])
         self.assertGreater(delta.Length, 1e-6)
 
-        original_polylines = session.overlays.geometry.get_opening_overlay_polylines(door)
+        original_polylines = session.overlays.geometry.get_opening_overlay_polylines(
+            door
+        )
         self.assertTrue(original_polylines)
-        first_polyline = next(polyline for polyline in original_polylines if len(polyline) >= 2)
+        first_polyline = next(
+            polyline for polyline in original_polylines if len(polyline) >= 2
+        )
 
         session.wall_edit.sync_wall_edit_preview(shortened_points)
 
         expected_segment_count = sum(
-            max(len(polyline) - 1, 0) for polyline in original_polylines if len(polyline) >= 2
+            max(len(polyline) - 1, 0)
+            for polyline in original_polylines
+            if len(polyline) >= 2
         )
         self.assertEqual(
             len(session._wall_edit_opening_preview_trackers),
@@ -2436,7 +2644,9 @@ class BimPlanEditGuiWallsMixin:
 
         wall = Arch.makeWall(length=3000, width=200, height=2500)
         self.document.recompute()
-        door = self._make_hosted_door(wall, name="PreserveEdgeClearanceDoor", width=900.0)
+        door = self._make_hosted_door(
+            wall, name="PreserveEdgeClearanceDoor", width=900.0
+        )
         self.document.recompute()
 
         door_proxy = door.ViewObject.Proxy
@@ -2457,7 +2667,9 @@ class BimPlanEditGuiWallsMixin:
             .sub(initial_context["origin"])
             .dot(initial_context["axis_u"])
         )
-        initial_left_clearance = initial_center_u - initial_context["opening_half_width_u"]
+        initial_left_clearance = (
+            initial_center_u - initial_context["opening_half_width_u"]
+        )
         self.assertAlmostEqual(initial_left_clearance, 300.0, delta=1e-6)
 
         session = BimPlanSession.start_session()
@@ -2475,7 +2687,9 @@ class BimPlanEditGuiWallsMixin:
             captured.update(kwargs)
 
         original_endpoints = wall.Proxy.calc_endpoints(wall)
-        new_start = FreeCAD.Vector(original_endpoints[0]).add(FreeCAD.Vector(200.0, 0.0, 0.0))
+        new_start = FreeCAD.Vector(original_endpoints[0]).add(
+            FreeCAD.Vector(200.0, 0.0, 0.0)
+        )
 
         with (
             patch.object(FreeCADGui.Snapper, "getPoint", side_effect=fake_get_point),
@@ -2493,9 +2707,15 @@ class BimPlanEditGuiWallsMixin:
         updated_context = door_proxy.get_plan_move_context()
         updated_center = door_proxy.get_plan_center_point()
         self.assertIsNotNone(updated_center)
-        updated_center_u = FreeCAD.Vector(updated_center).sub(wall_start).dot(wall_axis_u)
-        updated_left_clearance = updated_center_u - updated_context["opening_half_width_u"]
-        self.assertAlmostEqual(updated_left_clearance, initial_left_clearance, delta=1e-6)
+        updated_center_u = (
+            FreeCAD.Vector(updated_center).sub(wall_start).dot(wall_axis_u)
+        )
+        updated_left_clearance = (
+            updated_center_u - updated_context["opening_half_width_u"]
+        )
+        self.assertAlmostEqual(
+            updated_left_clearance, initial_left_clearance, delta=1e-6
+        )
 
     def test_plan_edit_wall_stretch_undo_redo_roundtrip_with_hosted_opening(self):
         """Wall stretch undo/redo should restore both wall geometry and hosted opening layout."""
@@ -2546,7 +2766,9 @@ class BimPlanEditGuiWallsMixin:
         self.assertLess(updated_end.distanceToPoint(initial_end), 1e-6)
         updated_center_u, updated_half_width = self._get_hosted_opening_center_u(door)
         updated_left_clearance = updated_center_u - updated_half_width
-        self.assertAlmostEqual(updated_left_clearance, initial_left_clearance, delta=1e-6)
+        self.assertAlmostEqual(
+            updated_left_clearance, initial_left_clearance, delta=1e-6
+        )
         self._assert_selected_wall_visuals(session, wall)
         self._assert_no_wall_edit_preview_visuals(session)
 
@@ -2556,7 +2778,9 @@ class BimPlanEditGuiWallsMixin:
         self.assertLess(undo_end.distanceToPoint(initial_end), 1e-6)
         undo_center_u, undo_half_width = self._get_hosted_opening_center_u(door)
         self.assertAlmostEqual(undo_center_u, initial_center_u, delta=1e-6)
-        self.assertAlmostEqual(undo_center_u - undo_half_width, initial_left_clearance, delta=1e-6)
+        self.assertAlmostEqual(
+            undo_center_u - undo_half_width, initial_left_clearance, delta=1e-6
+        )
         self._assert_wall_selection_visual_consistency(session)
         self._assert_no_wall_edit_preview_visuals(session)
 
@@ -2566,7 +2790,9 @@ class BimPlanEditGuiWallsMixin:
         self.assertLess(redo_end.distanceToPoint(updated_end), 1e-6)
         redo_center_u, redo_half_width = self._get_hosted_opening_center_u(door)
         self.assertAlmostEqual(redo_center_u, updated_center_u, delta=1e-6)
-        self.assertAlmostEqual(redo_center_u - redo_half_width, updated_left_clearance, delta=1e-6)
+        self.assertAlmostEqual(
+            redo_center_u - redo_half_width, updated_left_clearance, delta=1e-6
+        )
         self._assert_wall_selection_visual_consistency(session)
         self._assert_no_wall_edit_preview_visuals(session)
 
@@ -2578,7 +2804,9 @@ class BimPlanEditGuiWallsMixin:
 
         wall = Arch.makeWall(length=3000, width=200, height=2500)
         self.document.recompute()
-        door = self._make_hosted_door(wall, name="CenteredAfterStretchDoor", width=900.0)
+        door = self._make_hosted_door(
+            wall, name="CenteredAfterStretchDoor", width=900.0
+        )
         self.document.recompute()
 
         door_proxy = door.ViewObject.Proxy
@@ -2647,7 +2875,9 @@ class BimPlanEditGuiWallsMixin:
                     u_values.append(vertex.Point.sub(wall_start).dot(wall_axis_u))
             return min(u_values), max(u_values)
 
-        wall_bounds = sorted((get_u_bounds(face) for face in wall_faces), key=lambda item: item[0])
+        wall_bounds = sorted(
+            (get_u_bounds(face) for face in wall_faces), key=lambda item: item[0]
+        )
         left_jamb_u = actual_center_u - actual_context["opening_half_width_u"]
         right_jamb_u = actual_center_u + actual_context["opening_half_width_u"]
 
@@ -2663,7 +2893,8 @@ class BimPlanEditGuiWallsMixin:
         self.assertEqual(len(wall_bounds), 1)
         single_min_u, single_max_u = wall_bounds[0]
         flush_start = (
-            abs(single_min_u - right_jamb_u) < 1e-6 and abs(single_max_u - wall_length) < 1e-6
+            abs(single_min_u - right_jamb_u) < 1e-6
+            and abs(single_max_u - wall_length) < 1e-6
         )
         flush_end = abs(single_min_u) < 1e-6 and abs(single_max_u - left_jamb_u) < 1e-6
         self.assertTrue(flush_start or flush_end)
@@ -2683,9 +2914,9 @@ class BimPlanEditGuiWallsMixin:
         self.assertIs(session.hovered_wall, wall)
 
         with (
-            patch.object(session.selection, "get_edit_node", return_value=None),
+            patch.object(session.selection.picking, "get_edit_node", return_value=None),
             patch.object(
-                session.selection,
+                session.selection.picking,
                 "get_plan_target_at_position",
             ) as get_target,
         ):
@@ -2698,7 +2929,9 @@ class BimPlanEditGuiWallsMixin:
         self.assertEqual(FreeCADGui.Selection.getSelection(), [])
         self.pump_gui_events()
         self.assertEqual(len(session._grip_trackers), 3)
-        self.assertEqual([obj.Name for obj in FreeCADGui.Selection.getSelection()], [wall.Name])
+        self.assertEqual(
+            [obj.Name for obj in FreeCADGui.Selection.getSelection()], [wall.Name]
+        )
 
         session.shutdown(close_dialog=False)
         self.pump_gui_events()
@@ -2714,9 +2947,9 @@ class BimPlanEditGuiWallsMixin:
         self.pump_gui_events()
 
         with (
-            patch.object(session.selection, "get_edit_node", return_value=None),
+            patch.object(session.selection.picking, "get_edit_node", return_value=None),
             patch.object(
-                session.selection,
+                session.selection.picking,
                 "get_plan_target_at_position",
                 return_value=("wall", wall),
             ),
@@ -2752,9 +2985,9 @@ class BimPlanEditGuiWallsMixin:
         self.pump_gui_events()
 
         with (
-            patch.object(session.selection, "get_edit_node", return_value=None),
+            patch.object(session.selection.picking, "get_edit_node", return_value=None),
             patch.object(
-                session.selection,
+                session.selection.picking,
                 "get_plan_target_at_position",
                 return_value=("wall", wall),
             ),
@@ -2776,7 +3009,9 @@ class BimPlanEditGuiWallsMixin:
 
         stale_wall = Arch.makeWall(length=3000, width=200, height=2500)
         target_wall = Arch.makeWall(length=3000, width=200, height=2500)
-        target_wall.Placement = FreeCAD.Placement(FreeCAD.Vector(0, 1000, 0), FreeCAD.Rotation())
+        target_wall.Placement = FreeCAD.Placement(
+            FreeCAD.Vector(0, 1000, 0), FreeCAD.Rotation()
+        )
         self.document.recompute()
 
         session = BimPlanSession.start_session()
@@ -2787,9 +3022,9 @@ class BimPlanEditGuiWallsMixin:
         session._hover_pick_dirty = True
 
         with (
-            patch.object(session.selection, "get_edit_node", return_value=None),
+            patch.object(session.selection.picking, "get_edit_node", return_value=None),
             patch.object(
-                session.selection,
+                session.selection.picking,
                 "get_plan_target_at_position",
                 return_value=("wall", target_wall),
             ) as get_target,
@@ -2849,7 +3084,9 @@ class BimPlanEditGuiWallsMixin:
         FreeCADGui.Selection.clearSelection()
         FreeCADGui.Selection.addSelection(wall)
         self.pump_gui_events()
-        self.assertIs(session.selection.state.get_selected_target_for_kind("wall"), wall)
+        self.assertIs(
+            session.selection.state.get_selected_target_for_kind("wall"), wall
+        )
         self.assertGreater(len(session._grip_trackers), 0)
 
         self._make_hosted_door(wall, name="ResetDoor")

@@ -247,6 +247,9 @@ SET(bimplan_SRCS
     bimplan/selection/hover_picking.py
     bimplan/selection/picking.py
     bimplan/selection/selection.py
+    bimplan/selection/service_common.py
+    bimplan/selection/service_interaction.py
+    bimplan/selection/service_primary.py
     bimplan/selection/state_refresh.py
     bimplan/selection/target_dispatch.py
     bimplan/selection/target_kinds.py

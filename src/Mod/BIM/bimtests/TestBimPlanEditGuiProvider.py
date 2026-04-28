@@ -33,7 +33,8 @@ class BimPlanEditGuiProviderMixin:
         self.assertFalse(panel.integration_panel.isHidden())
         self.assertTrue(panel.integration_panel.isVisibleTo(panel.form))
         labels = [
-            str(widget.text()) for widget in panel.integration_panel.findChildren(QtGui.QLabel)
+            str(widget.text())
+            for widget in panel.integration_panel.findChildren(QtGui.QLabel)
         ]
         self.assertTrue(any("Action Needed" in text for text in labels))
         self.assertTrue(any("Utilities" in text for text in labels))
@@ -119,7 +120,9 @@ class BimPlanEditGuiProviderMixin:
         panel.refresh_from_session()
         self.pump_gui_events()
 
-        self.assertEqual("architecture", session.providers.get_plan_provider_overlay_mode())
+        self.assertEqual(
+            "architecture", session.providers.get_plan_provider_overlay_mode()
+        )
 
         architecture_checkboxes = [
             widget
@@ -127,10 +130,16 @@ class BimPlanEditGuiProviderMixin:
             if "Preview" in str(widget.text())
         ]
         self.assertTrue(
-            any("Provider Preview" in str(widget.text()) for widget in architecture_checkboxes)
+            any(
+                "Provider Preview" in str(widget.text())
+                for widget in architecture_checkboxes
+            )
         )
         self.assertFalse(
-            any("Electrical Preview" in str(widget.text()) for widget in architecture_checkboxes)
+            any(
+                "Electrical Preview" in str(widget.text())
+                for widget in architecture_checkboxes
+            )
         )
 
         overlay_mode_combo = panel._integration_overlay_mode_combo
@@ -140,17 +149,25 @@ class BimPlanEditGuiProviderMixin:
         overlay_mode_combo.setCurrentIndex(overlay_mode_combo.findData("electrical"))
         self.pump_gui_events()
 
-        self.assertEqual("electrical", session.providers.get_plan_provider_overlay_mode())
+        self.assertEqual(
+            "electrical", session.providers.get_plan_provider_overlay_mode()
+        )
         electrical_checkboxes = [
             widget
             for widget in panel.integration_panel.findChildren(QtGui.QCheckBox)
             if "Preview" in str(widget.text())
         ]
         self.assertTrue(
-            any("Electrical Preview" in str(widget.text()) for widget in electrical_checkboxes)
+            any(
+                "Electrical Preview" in str(widget.text())
+                for widget in electrical_checkboxes
+            )
         )
         self.assertFalse(
-            any("Provider Preview" in str(widget.text()) for widget in electrical_checkboxes)
+            any(
+                "Provider Preview" in str(widget.text())
+                for widget in electrical_checkboxes
+            )
         )
 
         self.assertIsNotNone(overlay_mode_combo)
@@ -164,10 +181,16 @@ class BimPlanEditGuiProviderMixin:
             if "Preview" in str(widget.text())
         ]
         self.assertTrue(
-            any("Provider Preview" in str(widget.text()) for widget in all_mode_checkboxes)
+            any(
+                "Provider Preview" in str(widget.text())
+                for widget in all_mode_checkboxes
+            )
         )
         self.assertTrue(
-            any("Electrical Preview" in str(widget.text()) for widget in all_mode_checkboxes)
+            any(
+                "Electrical Preview" in str(widget.text())
+                for widget in all_mode_checkboxes
+            )
         )
 
         session.shutdown(close_dialog=False)
@@ -269,7 +292,9 @@ class BimPlanEditGuiProviderMixin:
         )
         captured = []
 
-        def _capture_action(provider_id, action_key, transaction_label="", payload=None):
+        def _capture_action(
+            provider_id, action_key, transaction_label="", payload=None
+        ):
             captured.append((provider_id, action_key, transaction_label, payload))
             return True
 
@@ -296,17 +321,17 @@ class BimPlanEditGuiProviderMixin:
                 side_effect=_capture_action,
             ),
             patch.object(
-                session.selection,
+                session.selection.state,
                 "get_selected_plan_target",
                 return_value=selected_target,
             ),
             patch.object(
-                session.selection,
+                session.selection.state,
                 "get_selected_plan_targets",
                 return_value=selected_targets,
             ),
             patch.object(
-                session.selection,
+                session.selection.hover,
                 "get_hovered_plan_target",
                 return_value=hovered_target,
             ),
@@ -366,7 +391,9 @@ class BimPlanEditGuiProviderMixin:
         )
         captured = []
 
-        def _capture_action(provider_id, action_key, transaction_label="", payload=None):
+        def _capture_action(
+            provider_id, action_key, transaction_label="", payload=None
+        ):
             captured.append((provider_id, action_key, transaction_label, payload))
             return True
 
@@ -374,11 +401,15 @@ class BimPlanEditGuiProviderMixin:
             patch.object(FreeCADGui.Snapper, "getPoint"),
             patch.object(FreeCADGui.Snapper, "snapInfo", {}, create=True),
             patch.object(
-                session.providers, "execute_plan_provider_action", side_effect=_capture_action
+                session.providers,
+                "execute_plan_provider_action",
+                side_effect=_capture_action,
             ),
         ):
             self.assertTrue(
-                session.selection.activation.select_wall_for_plan_edit(wall, sync_gui_selection=True)
+                session.selection.activation.select_wall_for_plan_edit(
+                    wall, sync_gui_selection=True
+                )
             )
             self.assertTrue(session.providers.start_plan_provider_point_tool(tool))
             raw_point = FreeCAD.Vector(120.0, 340.0, 999.0)
@@ -425,7 +456,9 @@ class BimPlanEditGuiProviderMixin:
             patch.object(FreeCADGui.Snapper, "snapInfo", {}, create=True),
         ):
             self.assertTrue(
-                session.selection.activation.select_wall_for_plan_edit(wall, sync_gui_selection=True)
+                session.selection.activation.select_wall_for_plan_edit(
+                    wall, sync_gui_selection=True
+                )
             )
             self.assertTrue(session.providers.start_plan_provider_point_tool(tool))
             self.assertIn("movecallback", captured)
@@ -434,12 +467,20 @@ class BimPlanEditGuiProviderMixin:
             captured["movecallback"](raw_point, None)
 
             plan_point = session.viewport.project_plan_point(raw_point)
-            expected_placement = session.providers.project_provider_point_to_host(plan_point, wall)
+            expected_placement = session.providers.project_provider_point_to_host(
+                plan_point, wall
+            )
             self.assertIsNotNone(expected_placement)
-            self.assertEqual(("wall", wall), session._provider_point_preview_host_target)
+            self.assertEqual(
+                ("wall", wall), session._provider_point_preview_host_target
+            )
             self.assertEqual("selected", session._provider_point_preview_host_source)
-            self.assertAlmostEqual(expected_placement.x, session._provider_point_preview_point.x)
-            self.assertAlmostEqual(expected_placement.y, session._provider_point_preview_point.y)
+            self.assertAlmostEqual(
+                expected_placement.x, session._provider_point_preview_point.x
+            )
+            self.assertAlmostEqual(
+                expected_placement.y, session._provider_point_preview_point.y
+            )
             self.assertGreater(len(session._provider_point_preview_trackers), 2)
 
             self.assertTrue(session.providers.cancel_provider_point_tool())
@@ -470,9 +511,19 @@ class BimPlanEditGuiProviderMixin:
             patch.object(FreeCADGui.Snapper, "getPoint", side_effect=fake_get_point),
             patch.object(FreeCADGui.Snapper, "setSelectMode", return_value=None),
             patch.object(FreeCADGui.Snapper, "snapInfo", {}, create=True),
-            patch.object(session.selection, "get_selected_plan_target", return_value=(None, None)),
-            patch.object(session.selection, "get_selected_plan_targets", return_value=()),
-            patch.object(session.selection, "get_hovered_plan_target", return_value=(None, None)),
+            patch.object(
+                session.selection.state,
+                "get_selected_plan_target",
+                return_value=(None, None),
+            ),
+            patch.object(
+                session.selection.state, "get_selected_plan_targets", return_value=()
+            ),
+            patch.object(
+                session.selection.hover,
+                "get_hovered_plan_target",
+                return_value=(None, None),
+            ),
         ):
             self.assertTrue(session.providers.start_plan_provider_point_tool(tool))
             self.assertIn("movecallback", captured)
@@ -483,8 +534,12 @@ class BimPlanEditGuiProviderMixin:
             plan_point = session.viewport.project_plan_point(raw_point)
             self.assertEqual((None, None), session._provider_point_preview_host_target)
             self.assertEqual("", session._provider_point_preview_host_source)
-            self.assertAlmostEqual(plan_point.x, session._provider_point_preview_point.x)
-            self.assertAlmostEqual(plan_point.y, session._provider_point_preview_point.y)
+            self.assertAlmostEqual(
+                plan_point.x, session._provider_point_preview_point.x
+            )
+            self.assertAlmostEqual(
+                plan_point.y, session._provider_point_preview_point.y
+            )
             self.assertEqual(2, len(session._provider_point_preview_trackers))
 
             self.assertTrue(session.providers.cancel_provider_point_tool())
@@ -519,7 +574,9 @@ class BimPlanEditGuiProviderMixin:
         provider.overlay_calls = 0
 
         session.selection.hover.set_hovered_wall(wall)
-        with patch.object(session.selection, "get_edit_node", return_value=None):
+        with patch.object(
+            session.selection.picking, "get_edit_node", return_value=None
+        ):
             press = self._make_fake_left_mouse_press(250, 250)
             session.input.on_mouse_pressed(press)
 
@@ -581,7 +638,11 @@ class BimPlanEditGuiProviderMixin:
         self.assertIsNotNone(session)
         self.pump_gui_events()
 
-        self.assertTrue(session.selection.activation.select_wall_for_plan_edit(wall, sync_gui_selection=True))
+        self.assertTrue(
+            session.selection.activation.select_wall_for_plan_edit(
+                wall, sync_gui_selection=True
+            )
+        )
         self.pump_gui_events()
         self._assert_selected_plan_target(session, "wall", wall)
         self.assertEqual([wall], FreeCADGui.Selection.getSelection())
@@ -594,12 +655,14 @@ class BimPlanEditGuiProviderMixin:
         event = self._make_fake_left_mouse_press()
 
         with patch.object(
-            session.selection,
+            session.selection.picking,
             "get_edit_node",
             return_value=("provider_overlay_point", node),
         ):
             self.assertTrue(
-                session.selection.activation.toggle_plan_target_selection_at_position((250, 250), event)
+                session.selection.activation.toggle_plan_target_selection_at_position(
+                    (250, 250), event
+                )
             )
 
         self.assertTrue(event._handled)
@@ -688,7 +751,9 @@ class BimPlanEditGuiProviderMixin:
             "get_plan_provider_targets",
             return_value=(
                 PlanProviderTargetSpec(
-                    key="electrical-fixture:{}:{}".format(self.document.Name, marker.Name),
+                    key="electrical-fixture:{}:{}".format(
+                        self.document.Name, marker.Name
+                    ),
                     label=marker.Label,
                     provider_id="materia-electrical-fixtures",
                     document_name=self.document.Name,
@@ -707,7 +772,9 @@ class BimPlanEditGuiProviderMixin:
                 )
             )
             self.assertTrue(event._handled)
-            self.assertEqual(("provider", marker), session.selection.state.get_selected_plan_target())
+            self.assertEqual(
+                ("provider", marker), session.selection.state.get_selected_plan_target()
+            )
             self.assertEqual([], session._provider_selected_objects)
             self.assertIn(marker, FreeCADGui.Selection.getSelection())
 
