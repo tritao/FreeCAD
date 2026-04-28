@@ -27,7 +27,7 @@ class ProviderPointTool(plan_runtime_tools.PlanToolHandler):
         return self.cancel()
 
     def cancel(self):
-        self.session.providers.cancel_provider_point_tool()
+        cancel_provider_point_tool(self.session)
         return True
 
 

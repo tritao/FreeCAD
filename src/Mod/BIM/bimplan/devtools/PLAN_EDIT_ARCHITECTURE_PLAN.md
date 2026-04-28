@@ -470,10 +470,10 @@ Steps:
 
 1. Define a minimal `PlanTool` base contract. Done.
 2. Convert select behavior first. Done.
-3. Convert wall create/edit next. In progress.
-4. Convert opening/symbol/space/region workflows. In progress.
-5. Leave provider point tool last because it crosses provider runtime and UI.
-6. Shrink `runtime/input.py` to event dispatch.
+3. Convert wall create/edit next. Done.
+4. Convert opening/symbol/space/region workflows. Done.
+5. Leave provider point tool last because it crosses provider runtime and UI. Done.
+6. Shrink `runtime/input.py` to event dispatch. Done.
 
 Validation:
 
