@@ -5,6 +5,7 @@
 import FreeCAD
 import FreeCADGui
 
+from bimplan.runtime import tools as plan_runtime_tools
 from bimplan.tools.hosted_openings import _PlanEditWallHost
 
 translate = FreeCAD.Qt.translate
@@ -54,6 +55,22 @@ class PlanWallCreateAPI:
 
     def handle_rect_wall_point(self, point=None, obj=None):
         return handle_rect_wall_point(self.session, point=point, obj=obj)
+
+
+class RectWallTool(plan_runtime_tools.PlanToolHandler):
+    """Keyboard behavior for active rectangular wall placement."""
+
+    tool_id = plan_runtime_tools.PlanTool.RECT_WALL
+
+    def on_key(self, key, event_callback, coin):
+        del event_callback
+        if key != coin.SoKeyboardEvent.ESCAPE:
+            return False
+        return self.cancel()
+
+    def cancel(self):
+        self.session.wall_create.cancel_rect_wall_tool()
+        return True
 
 
 def activate_wall_tool(session):

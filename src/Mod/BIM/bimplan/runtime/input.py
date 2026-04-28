@@ -10,6 +10,7 @@ from bimplan.tools import select as plan_select_tool
 from bimplan.tools import spaces as plan_spaces_tool
 from bimplan.tools import space_region_pick as plan_space_region_pick_tool
 from bimplan.tools import symbol_edit as plan_symbol_tool
+from bimplan.tools import wall_create as plan_wall_create_tool
 from bimplan.tools import wall_edit as plan_wall_edit_tool
 from bimplan.tools import window_create as plan_window_tool
 
@@ -245,6 +246,11 @@ def _handle_direct_tool_key_press(session, key, event_callback, coin):
     ):
         return True
     if (
+        session.current_tool == plan_runtime_tools.PlanTool.RECT_WALL
+        and plan_wall_create_tool.RectWallTool(session).on_key(key, event_callback, coin)
+    ):
+        return True
+    if (
         session.current_tool == plan_runtime_tools.PlanTool.PROVIDER_POINT
         and key == coin.SoKeyboardEvent.ESCAPE
     ):
@@ -283,7 +289,7 @@ def _handle_escape_cancels(session):
         plan_window_tool.WindowTool(session).cancel()
         return True
     if session.wall_create.has_active_rect_wall_tool():
-        session.wall_create.cancel_rect_wall_tool()
+        plan_wall_create_tool.RectWallTool(session).cancel()
         return True
     if session.spaces.has_active_plan_region_tool():
         plan_spaces_tool.RegionTool(session).cancel()
