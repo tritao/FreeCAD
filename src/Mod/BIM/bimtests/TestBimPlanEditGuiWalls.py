@@ -2343,7 +2343,7 @@ class BimPlanEditGuiWallsMixin:
             patch.object(FreeCADGui.Snapper, "getPoint", side_effect=fake_get_point),
             patch.object(FreeCADGui.Snapper, "setSelectMode", return_value=None),
             patch.object(
-                session.document_visuals,
+                session.openings,
                 "refresh_opening_footprint_display",
             ) as refresh_opening,
         ):
@@ -2727,8 +2727,8 @@ class BimPlanEditGuiWallsMixin:
         session = BimPlanSession.start_session()
         self.assertIsNotNone(session)
         self.pump_gui_events()
-        session.document_visuals.refresh_opening_footprint_display(opening)
-        session.document_visuals.refresh_opening_host_footprint_displays(opening)
+        session.openings.refresh_opening_footprint_display(opening)
+        session.openings.refresh_opening_host_footprint_displays(opening)
         self.pump_gui_events(timeout_ms=250)
 
         display_before = self._get_displayed_opening_symbol_points(opening)

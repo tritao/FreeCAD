@@ -1076,8 +1076,8 @@ def clear_wall_hosted_opening_preview(session):
 
 def refresh_wall_hosted_opening_footprints(session, wall):
     for opening in session.openings.get_wall_hosted_openings(wall):
-        session.document_visuals.refresh_opening_footprint_display(opening)
-        session.document_visuals.refresh_opening_host_footprint_displays(opening)
+        session.openings.refresh_opening_footprint_display(opening)
+        session.openings.refresh_opening_host_footprint_displays(opening)
 
 
 def _get_wall_hosted_opening_layout_axis(endpoints):

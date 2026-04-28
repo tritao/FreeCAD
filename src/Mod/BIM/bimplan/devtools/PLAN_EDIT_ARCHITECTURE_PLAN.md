@@ -423,6 +423,7 @@ Validation:
 
 Current progress:
 
+- Opening footprint refresh and host recompute helpers now live on `session.openings`.
 - `document_visuals.py` routes opening, symbol, space/region, and secondary-selection document changes to owner services.
 - Selected/hovered wall document-change handling now lives in `selection.refresh`.
 - `document_visuals.py` still owns document observer attach/detach, deferral, flush ordering, and shared invalidation.
@@ -430,7 +431,7 @@ Current progress:
 Steps:
 
 1. List every branch in `document_visuals.py` by target kind. Done.
-2. Move opening-specific refresh to the opening owner.
+2. Move opening-specific refresh to the opening owner. Done.
 3. Move symbol-specific refresh to symbol overlays.
 4. Move space/region-specific refresh to the space/region owner.
 5. Move secondary selection refresh to selection refresh service. Done.

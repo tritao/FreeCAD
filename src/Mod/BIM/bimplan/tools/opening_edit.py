@@ -473,6 +473,61 @@ def resolve_wall_hosted_opening_layout(session, wall):
     return wall_edit.resolve_wall_hosted_opening_layout(session, wall)
 
 
+def refresh_opening_footprint_display(session, opening):
+    if not session.openings.is_hosted_opening_object(opening):
+        return
+    session.document_visuals.refresh_plan_object_footprint_display(opening)
+
+
+def refresh_opening_host_footprint_displays(session, opening):
+    if not session.openings.is_hosted_opening_object(opening):
+        return
+    for host in getattr(opening, "Hosts", None) or []:
+        if host:
+            session.document_visuals.refresh_plan_object_footprint_display(host)
+
+
+def queue_recompute_opening_hosts(session, *openings):
+    opening_state = session.opening_transient_state
+    if (
+        session.lifecycle_state.tearing_down
+        or opening_state.opening_host_recompute_queued
+        or opening_state.opening_host_recompute_running
+    ):
+        return
+    hosts = []
+    for opening in openings:
+        if not session.openings.is_hosted_opening_object(opening):
+            continue
+        hosts.extend(getattr(opening, "Hosts", None) or [])
+    hosts = [host for host in dict.fromkeys(hosts) if host]
+    if not hosts:
+        return
+    opening_state.opening_host_recompute_queued = True
+    flush_recompute_opening_hosts(session, hosts)
+
+
+def flush_recompute_opening_hosts(session, hosts):
+    opening_state = session.opening_transient_state
+    opening_state.opening_host_recompute_queued = False
+    if (
+        session.lifecycle_state.tearing_down
+        or opening_state.opening_host_recompute_running
+        or not session.doc
+    ):
+        return
+    opening_state.opening_host_recompute_running = True
+    try:
+        for host in hosts:
+            try:
+                host.touch()
+            except (AttributeError, ReferenceError, RuntimeError):
+                continue
+        session.doc.recompute()
+    finally:
+        opening_state.opening_host_recompute_running = False
+
+
 class _SessionAPI:
     __slots__ = ("_session",)
 
@@ -579,6 +634,18 @@ class PlanOpeningsAPI(_SessionAPI):
     def resolve_wall_hosted_opening_layout(self, *args, **kwargs):
         return resolve_wall_hosted_opening_layout(self.session, *args, **kwargs)
 
+    def refresh_opening_footprint_display(self, *args, **kwargs):
+        return refresh_opening_footprint_display(self.session, *args, **kwargs)
+
+    def refresh_opening_host_footprint_displays(self, *args, **kwargs):
+        return refresh_opening_host_footprint_displays(self.session, *args, **kwargs)
+
+    def queue_recompute_opening_hosts(self, *args, **kwargs):
+        return queue_recompute_opening_hosts(self.session, *args, **kwargs)
+
+    def flush_recompute_opening_hosts(self, *args, **kwargs):
+        return flush_recompute_opening_hosts(self.session, *args, **kwargs)
+
     def refresh_selected_opening_visuals(self):
         return refresh_selected_opening_visuals(self.session)
 
@@ -596,17 +663,15 @@ class PlanOpeningsAPI(_SessionAPI):
             and prop in plan_document_visuals.OPENING_VISUAL_PROPERTIES
         ):
             return False
-        plan_document_visuals.refresh_opening_footprint_display(self.session, opening)
-        plan_document_visuals.refresh_opening_host_footprint_displays(self.session, opening)
+        self.refresh_opening_footprint_display(opening)
+        self.refresh_opening_host_footprint_displays(opening)
         return True
 
     def refresh_opening_visual_footprints(self, opening):
-        from bimplan import document_visuals as plan_document_visuals
-
         if opening is None:
             return False
-        plan_document_visuals.refresh_opening_footprint_display(self.session, opening)
-        plan_document_visuals.refresh_opening_host_footprint_displays(self.session, opening)
+        self.refresh_opening_footprint_display(opening)
+        self.refresh_opening_host_footprint_displays(opening)
         return True
 
     def handle_document_visual_dependency_change(self, obj, prop):
@@ -638,15 +703,15 @@ class PlanOpeningsAPI(_SessionAPI):
             return False
         hovered_wall = self.session.hovered_wall
         if hovered_wall and obj in self.get_wall_hosted_openings(hovered_wall):
-            plan_document_visuals.refresh_opening_footprint_display(self.session, obj)
-            plan_document_visuals.refresh_opening_host_footprint_displays(self.session, obj)
+            self.refresh_opening_footprint_display(obj)
+            self.refresh_opening_host_footprint_displays(obj)
             self.session.overlays.queue_plan_overlay_visual_refresh(
                 plan_document_visuals.PLAN_VISUAL_HOVERED_WALL
             )
             return True
         if selected_wall and obj in self.get_wall_hosted_openings(selected_wall):
-            plan_document_visuals.refresh_opening_footprint_display(self.session, obj)
-            plan_document_visuals.refresh_opening_host_footprint_displays(self.session, obj)
+            self.refresh_opening_footprint_display(obj)
+            self.refresh_opening_host_footprint_displays(obj)
             self.session.overlays.queue_plan_overlay_visual_refresh(
                 plan_document_visuals.PLAN_VISUAL_WALL_GRIPS
             )
@@ -678,8 +743,7 @@ class PlanOpeningsAPI(_SessionAPI):
         ):
             visuals.append(plan_document_visuals.PLAN_VISUAL_HOVERED_OPENING)
         if recompute_hosts:
-            plan_document_visuals.queue_recompute_opening_hosts(
-                self.session,
+            self.queue_recompute_opening_hosts(
                 selected_opening,
                 hovered_opening,
             )

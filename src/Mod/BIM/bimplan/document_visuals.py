@@ -331,18 +331,6 @@ def refresh_plan_object_footprint_display(session, obj, *, request_redraw=True):
         session.viewport.request_view_redraw()
 
 
-def refresh_opening_footprint_display(session, opening):
-    if not session.openings.is_hosted_opening_object(opening):
-        return
-    refresh_plan_object_footprint_display(session, opening)
-
-
-def refresh_wall_footprint_display(session, wall):
-    if not wall:
-        return
-    refresh_plan_object_footprint_display(session, wall)
-
-
 def _get_footprint_refresh_proxy(view_object):
     if not view_object:
         return None
@@ -383,54 +371,6 @@ def _update_view_object(view_object):
         update()
     except (AttributeError, ReferenceError, RuntimeError, TypeError):
         pass
-
-
-def refresh_opening_host_footprint_displays(session, opening):
-    if not session.openings.is_hosted_opening_object(opening):
-        return
-    for host in getattr(opening, "Hosts", None) or []:
-        refresh_wall_footprint_display(session, host)
-
-
-def queue_recompute_opening_hosts(session, *openings):
-    opening_state = session.opening_transient_state
-    if (
-        session.lifecycle_state.tearing_down
-        or opening_state.opening_host_recompute_queued
-        or opening_state.opening_host_recompute_running
-    ):
-        return
-    hosts = []
-    for opening in openings:
-        if not session.openings.is_hosted_opening_object(opening):
-            continue
-        hosts.extend(getattr(opening, "Hosts", None) or [])
-    hosts = [host for host in dict.fromkeys(hosts) if host]
-    if not hosts:
-        return
-    opening_state.opening_host_recompute_queued = True
-    flush_recompute_opening_hosts(session, hosts)
-
-
-def flush_recompute_opening_hosts(session, hosts):
-    opening_state = session.opening_transient_state
-    opening_state.opening_host_recompute_queued = False
-    if (
-        session.lifecycle_state.tearing_down
-        or opening_state.opening_host_recompute_running
-        or not session.doc
-    ):
-        return
-    opening_state.opening_host_recompute_running = True
-    try:
-        for host in hosts:
-            try:
-                host.touch()
-            except (AttributeError, ReferenceError, RuntimeError):
-                continue
-        session.doc.recompute()
-    finally:
-        opening_state.opening_host_recompute_running = False
 
 
 def _invalidate_document_visual_dependency_caches(session):
@@ -641,21 +581,6 @@ class PlanDocumentVisualsAPI:
             obj,
             request_redraw=request_redraw,
         )
-
-    def refresh_opening_footprint_display(self, opening):
-        return refresh_opening_footprint_display(self.session, opening)
-
-    def refresh_wall_footprint_display(self, wall):
-        return refresh_wall_footprint_display(self.session, wall)
-
-    def refresh_opening_host_footprint_displays(self, opening):
-        return refresh_opening_host_footprint_displays(self.session, opening)
-
-    def queue_recompute_opening_hosts(self, *openings):
-        return queue_recompute_opening_hosts(self.session, *openings)
-
-    def flush_recompute_opening_hosts(self, hosts):
-        return flush_recompute_opening_hosts(self.session, hosts)
 
     def invalidate_document_dependent_plan_visuals(self, recompute_opening_hosts=False):
         return invalidate_document_dependent_plan_visuals(
