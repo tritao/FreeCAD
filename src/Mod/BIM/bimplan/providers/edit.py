@@ -11,9 +11,26 @@ from bimplan.providers import payloads as plan_provider_payloads
 from bimplan.providers import PlanEditHandleSpec, PlanOverlayMarkerKind, PlanToolInteraction
 from bimplan.providers import point as plan_provider_point
 from bimplan.providers import runtime as plan_provider_runtime
+from bimplan.runtime import tools as plan_runtime_tools
 from bimplan.selection import target_kinds as plan_target_kinds
 
 translate = FreeCAD.Qt.translate
+
+
+class ProviderMoveTool(plan_runtime_tools.PlanToolHandler):
+    """Keyboard behavior for active provider handle movement."""
+
+    tool_id = plan_runtime_tools.PlanTool.MOVE_PROVIDER
+
+    def on_key(self, key, event_callback, coin):
+        del event_callback
+        if key != coin.SoKeyboardEvent.ESCAPE:
+            return False
+        return self.cancel()
+
+    def cancel(self):
+        self.session.providers.cancel_provider_handle_point_pick()
+        return True
 
 
 def get_selected_provider_edit_handles(session, provider_obj):

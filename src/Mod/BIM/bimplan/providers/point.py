@@ -15,6 +15,22 @@ from bimplan.selection import target_kinds as plan_target_kinds
 translate = FreeCAD.Qt.translate
 
 
+class ProviderPointTool(plan_runtime_tools.PlanToolHandler):
+    """Keyboard behavior for active provider point placement."""
+
+    tool_id = plan_runtime_tools.PlanTool.PROVIDER_POINT
+
+    def on_key(self, key, event_callback, coin):
+        del event_callback
+        if key != coin.SoKeyboardEvent.ESCAPE:
+            return False
+        return self.cancel()
+
+    def cancel(self):
+        self.session.providers.cancel_provider_point_tool()
+        return True
+
+
 def _provider_point_state(session):
     return session.provider_point_state
 
@@ -263,7 +279,9 @@ def normalize_provider_point_host_target(session, target):
     if not target:
         return plan_host_targets.make_provider_host_target_ref()
     target_ref = plan_target_kinds.coerce_plan_target_ref(target)
-    if target_ref.kind == "wall" and session.selection.targets.is_plan_selectable_wall(target_ref.obj):
+    if target_ref.kind == "wall" and session.selection.targets.is_plan_selectable_wall(
+        target_ref.obj
+    ):
         return plan_host_targets.make_provider_host_target_ref("wall", target_ref.obj)
     return plan_host_targets.make_provider_host_target_ref()
 
