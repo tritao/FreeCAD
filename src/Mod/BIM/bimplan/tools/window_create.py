@@ -5,6 +5,7 @@
 import ArchWindow
 import FreeCAD
 import FreeCADGui
+from bimplan.runtime import tools as plan_runtime_tools
 from bimplan.tools import hosted_openings as plan_hosted_openings
 
 translate = FreeCAD.Qt.translate
@@ -114,6 +115,22 @@ class PlanWindowsAPI:
             width_value=width_value,
             height_value=height_value,
         )
+
+
+class WindowTool(plan_runtime_tools.PlanToolHandler):
+    """Keyboard behavior for active hosted-window placement."""
+
+    tool_id = plan_runtime_tools.PlanTool.WINDOW
+
+    def on_key(self, key, event_callback, coin):
+        del event_callback
+        if key != coin.SoKeyboardEvent.ESCAPE:
+            return False
+        return self.cancel()
+
+    def cancel(self):
+        self.session.windows.cancel_window_tool()
+        return True
 
 
 def get_window_style_preset_options():
