@@ -441,16 +441,26 @@ class BimPlanEditGuiProviderMixin:
             plan_point = session.viewport.project_plan_point(raw_point)
             expected_placement = session.providers.project_provider_point_to_host(plan_point, wall)
             self.assertIsNotNone(expected_placement)
-            self.assertEqual(("wall", wall), session._provider_point_preview_host_target)
-            self.assertEqual("selected", session._provider_point_preview_host_source)
-            self.assertAlmostEqual(expected_placement.x, session._provider_point_preview_point.x)
-            self.assertAlmostEqual(expected_placement.y, session._provider_point_preview_point.y)
-            self.assertGreater(len(session._provider_point_preview_trackers), 2)
+            provider_point_state = session.provider_point_state
+            self.assertEqual(
+                ("wall", wall), provider_point_state.provider_point_preview_host_target
+            )
+            self.assertEqual("selected", provider_point_state.provider_point_preview_host_source)
+            self.assertAlmostEqual(
+                expected_placement.x,
+                provider_point_state.provider_point_preview_point.x,
+            )
+            self.assertAlmostEqual(
+                expected_placement.y,
+                provider_point_state.provider_point_preview_point.y,
+            )
+            self.assertGreater(len(provider_point_state.provider_point_preview_trackers), 2)
 
             self.assertTrue(session.providers.cancel_provider_point_tool())
 
-        self.assertIsNone(session._provider_point_preview_point)
-        self.assertEqual([], session._provider_point_preview_trackers)
+        provider_point_state = session.provider_point_state
+        self.assertIsNone(provider_point_state.provider_point_preview_point)
+        self.assertEqual([], provider_point_state.provider_point_preview_trackers)
 
         session.shutdown(close_dialog=False)
         self.pump_gui_events()
@@ -494,11 +504,16 @@ class BimPlanEditGuiProviderMixin:
             captured["movecallback"](raw_point, None)
 
             plan_point = session.viewport.project_plan_point(raw_point)
-            self.assertEqual((None, None), session._provider_point_preview_host_target)
-            self.assertEqual("", session._provider_point_preview_host_source)
-            self.assertAlmostEqual(plan_point.x, session._provider_point_preview_point.x)
-            self.assertAlmostEqual(plan_point.y, session._provider_point_preview_point.y)
-            self.assertEqual(2, len(session._provider_point_preview_trackers))
+            provider_point_state = session.provider_point_state
+            self.assertEqual((None, None), provider_point_state.provider_point_preview_host_target)
+            self.assertEqual("", provider_point_state.provider_point_preview_host_source)
+            self.assertAlmostEqual(
+                plan_point.x, provider_point_state.provider_point_preview_point.x
+            )
+            self.assertAlmostEqual(
+                plan_point.y, provider_point_state.provider_point_preview_point.y
+            )
+            self.assertEqual(2, len(provider_point_state.provider_point_preview_trackers))
 
             self.assertTrue(session.providers.cancel_provider_point_tool())
 

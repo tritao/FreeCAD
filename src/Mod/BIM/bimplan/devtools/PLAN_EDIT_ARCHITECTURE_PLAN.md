@@ -489,6 +489,7 @@ Current progress:
 - Tests that asserted pending selection now use `selection_state.pending_selected_plan_target`.
 - Private lifecycle compatibility aliases are removed; lifecycle code uses `lifecycle_state`.
 - Private task-panel compatibility aliases are removed; task-panel code uses `task_panel_state`.
+- Private provider point compatibility aliases are removed; provider tests use `provider_point_state`.
 
 Steps:
 

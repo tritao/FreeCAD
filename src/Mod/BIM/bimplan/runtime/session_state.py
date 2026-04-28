@@ -532,45 +532,6 @@ _PLAN_EDIT_SESSION_STATE_PROPERTIES = (
         ),
     ),
     (
-        "_ensure_provider_point_state",
-        (
-            ("_provider_point_tool", "provider_point_tool", _coerce_identity),
-            (
-                "_provider_point_host_target",
-                "provider_point_host_target",
-                _coerce_optional_provider_host_target_ref,
-            ),
-            ("_provider_point_host_source", "provider_point_host_source", _make_str_coercer("")),
-            ("_provider_point_preview_trackers", "provider_point_preview_trackers", _coerce_list),
-            (
-                "_provider_point_preview_render_state",
-                "provider_point_preview_render_state",
-                _coerce_identity,
-            ),
-            (
-                "_provider_point_preview_style_state",
-                "provider_point_preview_style_state",
-                _coerce_identity,
-            ),
-            (
-                "_provider_point_preview_source_point",
-                "provider_point_preview_source_point",
-                _coerce_identity,
-            ),
-            ("_provider_point_preview_point", "provider_point_preview_point", _coerce_identity),
-            (
-                "_provider_point_preview_host_target",
-                "provider_point_preview_host_target",
-                _coerce_optional_provider_host_target_ref,
-            ),
-            (
-                "_provider_point_preview_host_source",
-                "provider_point_preview_host_source",
-                _make_str_coercer(""),
-            ),
-        ),
-    ),
-    (
         "_ensure_space_region_pick_state",
         (
             ("_space_region_pick_boundaries", "boundaries", _coerce_list),
