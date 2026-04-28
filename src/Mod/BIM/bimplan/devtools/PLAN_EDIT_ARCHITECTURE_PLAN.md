@@ -459,6 +459,7 @@ Current progress:
 - `RegionTool` owns region drawing finalize/cancel keyboard behavior.
 - `SpaceTextTool` owns space text placement cancel keyboard behavior.
 - `SpaceSeparatorTool` owns separator placement cancel keyboard behavior.
+- `RectWallTool` owns rectangular wall placement cancel keyboard behavior.
 - `WindowTool` owns hosted-window placement cancel keyboard behavior.
 - `PickSpaceRegionTool` owns region-candidate mouse and Escape-key behavior.
 - `runtime/input.py` still owns raw Coin event normalization and dispatch.
