@@ -614,16 +614,7 @@ _PLAN_EDIT_SESSION_STATE_PROPERTIES = (
     ),
     (
         "_ensure_performance_state",
-        (
-            ("_plan_edit_params", "plan_edit_params", _coerce_identity),
-            ("_plan_perf_log_path", "plan_perf_log_path", _coerce_identity),
-            ("_plan_pick_debug_log_path", "plan_pick_debug_log_path", _coerce_identity),
-            ("_plan_perf_current_event", "plan_perf_current_event", _coerce_identity),
-            ("_plan_perf_sequence", "plan_perf_sequence", _coerce_int),
-            ("_plan_pick_debug_sequence", "plan_pick_debug_sequence", _coerce_int),
-            ("_plan_pick_debug_scope_depth", "plan_pick_debug_scope_depth", _coerce_int),
-            ("_plan_pick_debug_scope_name", "plan_pick_debug_scope_name", _make_str_coercer("")),
-        ),
+        (("_plan_edit_params", "plan_edit_params", _coerce_identity),),
     ),
     (
         "_ensure_provider_runtime_state",
@@ -810,13 +801,16 @@ def initialize_session_state(session):
     session._plan_edit_params = FreeCAD.ParamGet(
         "User parameter:BaseApp/Preferences/Mod/BIM/PlanEdit"
     )
-    session._plan_perf_log_path = session.performance.resolve_plan_perf_log_path()
-    session._plan_pick_debug_log_path = session.performance.resolve_plan_pick_debug_log_path()
-    session._plan_perf_current_event = None
-    session._plan_perf_sequence = 0
-    session._plan_pick_debug_sequence = 0
-    session._plan_pick_debug_scope_depth = 0
-    session._plan_pick_debug_scope_name = ""
+    performance_state = session.performance_state
+    performance_state.plan_perf_log_path = session.performance.resolve_plan_perf_log_path()
+    performance_state.plan_pick_debug_log_path = (
+        session.performance.resolve_plan_pick_debug_log_path()
+    )
+    performance_state.plan_perf_current_event = None
+    performance_state.plan_perf_sequence = 0
+    performance_state.plan_pick_debug_sequence = 0
+    performance_state.plan_pick_debug_scope_depth = 0
+    performance_state.plan_pick_debug_scope_name = ""
     session.provider_runtime_state.refresh_cache = None
     session.provider_runtime_state.document_cache = {}
     session.provider_runtime_state.target_collection_depth = 0
