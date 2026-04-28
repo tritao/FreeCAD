@@ -5,9 +5,11 @@
 from bimplan.runtime import tools as plan_runtime_tools
 
 from . import activation as plan_selection_activation
+from . import area_picking as plan_area_picking
 from . import edit_nodes as plan_edit_nodes
 from . import hover_picking as plan_hover_picking
-from . import picking as plan_selection_picking
+from . import picking_geometry as plan_picking_geometry
+from . import provider_overlay_picking as plan_provider_overlay_picking
 from . import target_dispatch as plan_target_dispatch
 from . import target_kinds as plan_target_kinds
 from . import targets as plan_targets
@@ -379,10 +381,10 @@ class PlanSelectionHoverService(_SessionAPI):
 
 
 class PlanSelectionPickingService(_SessionAPI):
-    xy_polygon_area = staticmethod(plan_selection_picking.xy_polygon_area)
-    xy_point_in_polygon = staticmethod(plan_selection_picking.xy_point_in_polygon)
+    xy_polygon_area = staticmethod(plan_area_picking.xy_polygon_area)
+    xy_point_in_polygon = staticmethod(plan_area_picking.xy_point_in_polygon)
     get_screen_distance_sq_to_projected_segment = staticmethod(
-        plan_selection_picking.get_screen_distance_sq_to_projected_segment
+        plan_picking_geometry.get_screen_distance_sq_to_projected_segment
     )
 
     def get_plan_space_instances(self):
@@ -425,7 +427,7 @@ class PlanSelectionPickingService(_SessionAPI):
     def pick_provider_overlay_target_from_overlays(
         self,
         mouse_pos,
-        radius_px=plan_selection_picking._PROVIDER_OVERLAY_PICK_RADIUS_PX,
+        radius_px=plan_provider_overlay_picking.PROVIDER_OVERLAY_PICK_RADIUS_PX,
     ):
         return self.session.picking.pick_provider_overlay_target_from_overlays(
             mouse_pos,

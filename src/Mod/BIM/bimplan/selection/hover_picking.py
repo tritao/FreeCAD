@@ -6,7 +6,6 @@ import time
 
 from bimplan.providers import runtime as plan_provider_runtime
 from bimplan.selection import selection as plan_selection_runtime
-from bimplan.selection import picking as plan_selection_picking
 from bimplan.selection import target_dispatch as plan_target_dispatch
 from bimplan.selection import target_kinds as plan_target_kinds
 from bimplan.selection import targets as plan_selection_targets

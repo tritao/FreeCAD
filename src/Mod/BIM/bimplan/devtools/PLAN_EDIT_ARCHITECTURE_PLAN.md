@@ -394,7 +394,9 @@ Current progress:
   - `selection/provider_overlay_picking.py` for provider overlay picking.
 - `session.picking` now exists as the owned Plan Edit picking service.
 - Production interaction code now calls `session.picking`; `session.selection.picking` remains only as a temporary compatibility adapter.
-- The next move should migrate remaining low-level tests from `bimplan.selection.picking` module entrypoints to the owned picking service, then reduce `selection/picking.py` to a shim or remove it.
+- Click target resolution and priority ordering now live in `bimplan/picking/coordinator.py`.
+- `selection/picking.py` has been reduced to a temporary import shim for compatibility.
+- The next move should remove the remaining internal compatibility uses of `selection/picking.py`, then delete the shim if no external entrypoint needs it.
 
 Steps:
 
@@ -403,7 +405,7 @@ Steps:
 3. Move provider overlay picking into an owned picker module. Done in `selection/provider_overlay_picking.py`.
 4. Move opening and symbol picking into owned picker modules. Done in `selection/overlay_picking.py`.
 5. Move region/space fallback picking into owned picker modules. Done in `selection/area_picking.py`.
-6. Keep `selection/picking.py` as a temporary import shim only if external imports require it. In progress.
+6. Keep `selection/picking.py` as a temporary import shim only if external imports require it. Done.
 7. Make `session.picking.pick(...)` the owned Plan Edit call path. Done for production code.
 8. Remove shim functions once internal call sites and low-level tests are migrated.
 

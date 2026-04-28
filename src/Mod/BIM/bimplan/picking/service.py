@@ -2,11 +2,11 @@
 
 """Session-owned Plan Edit picking API."""
 
+from bimplan.picking import coordinator as plan_picking_coordinator
 from bimplan.selection import area_picking as plan_area_picking
 from bimplan.selection import edit_node_picking as plan_edit_node_picking
 from bimplan.selection import hover_picking as plan_hover_picking
 from bimplan.selection import overlay_picking as plan_overlay_picking
-from bimplan.selection import picking as plan_selection_picking
 from bimplan.selection import picking_geometry as plan_picking_geometry
 from bimplan.selection import provider_overlay_picking as plan_provider_overlay_picking
 
@@ -41,7 +41,7 @@ class PlanPickingAPI:
         return self.get_edit_node(mouse_pos)
 
     def get_plan_target_at_position(self, mouse_pos, *, include_space_fallback=True):
-        return plan_selection_picking.get_plan_target_at_position(
+        return plan_picking_coordinator.get_plan_target_at_position(
             self.session,
             mouse_pos,
             include_space_fallback=include_space_fallback,
