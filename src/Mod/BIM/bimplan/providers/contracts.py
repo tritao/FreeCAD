@@ -219,7 +219,7 @@ class PlanProviderActionContext:
         )
 
     def queue_recompute_opening_hosts(self, opening):
-        self._session.document_visuals.queue_recompute_opening_hosts(opening)
+        self._session.openings.queue_recompute_opening_hosts(opening)
         return True
 
     def recompute_document(self, doc=None):
@@ -234,8 +234,8 @@ class PlanProviderActionContext:
 
     def refresh_opening_visuals(self, opening):
         self._session.openings.invalidate_wall_hosted_openings_cache()
-        self._session.document_visuals.refresh_opening_host_footprint_displays(opening)
-        self._session.document_visuals.refresh_opening_footprint_display(opening)
+        self._session.openings.refresh_opening_host_footprint_displays(opening)
+        self._session.openings.refresh_opening_footprint_display(opening)
 
 
 class PlanEditRegistry:
