@@ -2,13 +2,11 @@
 
 """Input event routing for BIM Plan Edit."""
 
-import FreeCAD
-
 from bimplan import document_visuals as plan_document_visuals
 from bimplan.runtime import tools as plan_runtime_tools
-from bimplan.selection import edit_nodes as plan_edit_nodes
 from bimplan.selection import target_kinds as plan_target_kinds
 from bimplan.tools import space_regions as plan_space_regions
+from bimplan.tools import select as plan_select_tool
 
 
 class PlanInputAPI:
@@ -92,66 +90,6 @@ def _handle_pick_space_region_mouse_down(session, mouse_pos, event_callback):
         session.spaces.activate_space_region_candidate(candidate, event_callback)
 
 
-def _handle_edit_node_activation(session, node, event_callback):
-    node_kind = plan_edit_nodes.get_edit_node_kind(node)
-    if node_kind == "opening_handle":
-        obj, index = plan_edit_nodes.get_edit_node_payload(node)
-        session.selection.activation.select_opening_for_plan_edit(obj)
-        session.selection.sync.set_gui_selection_object(obj)
-        session.openings.activate_opening_handle(obj, index)
-    elif node_kind == "provider_handle":
-        obj, index = plan_edit_nodes.get_edit_node_payload(node)
-        session.selection.state.set_selected_plan_target_state("provider", obj)
-        session.overlays.walls.clear_wall_grips()
-        session.overlays.walls.clear_selected_wall_overlay()
-        session.providers.activate_provider_handle(obj, index)
-    elif node_kind == "symbol_handle":
-        obj, role = plan_edit_nodes.get_edit_node_payload(node)
-        session.selection.state.set_selected_plan_target_state("symbol", obj)
-        session.overlays.walls.clear_wall_grips()
-        session.overlays.walls.clear_selected_wall_overlay()
-        session.symbols.activate_symbol_handle(obj, role)
-    elif node_kind in ("provider_overlay_point", "provider_overlay_target"):
-        if not session.selection.activation.activate_provider_overlay_target_node(
-            node, event_callback
-        ):
-            return False
-    else:
-        (point,) = plan_edit_nodes.get_edit_node_payload(node)
-        try:
-            doc = FreeCAD.getDocument(str(point.documentName.getValue()))
-            obj = doc.getObject(str(point.objectName.getValue()))
-            index = int(str(point.subElementName.getValue())[8:])
-        except Exception:
-            return False
-        if session.openings.is_hosted_opening_object(obj):
-            session.selection.activation.select_opening_for_plan_edit(obj)
-            session.selection.sync.set_gui_selection_object(obj)
-            session.openings.activate_opening_handle(obj, index)
-        else:
-            session.selection.state.set_selected_plan_target_state("wall", obj)
-            session.wall_edit.activate_wall_grip(index, wall=obj)
-    session.input.claim_left_button_click(event_callback)
-    return True
-
-
-def _handle_select_tool_mouse_down(session, mouse_pos, event_callback):
-    if session.selection.activation.is_plan_additive_selection_active():
-        if not session.selection.activation.toggle_plan_target_selection_at_position(
-            mouse_pos, event_callback
-        ):
-            session.input.claim_left_button_click(event_callback)
-        return
-    node = session.picking.pick_edit_node(mouse_pos)
-    if not node:
-        if session.selection.activation.activate_semantic_plan_target(mouse_pos, event_callback):
-            return
-        session.selection.sync.schedule_clear_plan_selection_state()
-        session.input.claim_left_button_click(event_callback)
-        return
-    _handle_edit_node_activation(session, node, event_callback)
-
-
 def _handle_left_mouse_button_release(session, event_callback):
     if not session.input_event_state.consume_left_button_release:
         return False
@@ -170,7 +108,7 @@ def _handle_left_mouse_button_down(session, mouse_pos, event_callback):
         return
     if session.current_tool != plan_runtime_tools.PlanTool.SELECT:
         return
-    _handle_select_tool_mouse_down(session, mouse_pos, event_callback)
+    plan_select_tool.SelectTool(session).on_left_mouse_down(mouse_pos, event_callback)
 
 
 def on_mouse_pressed(session, event_callback):

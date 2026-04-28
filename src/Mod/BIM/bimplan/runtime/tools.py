@@ -35,3 +35,33 @@ def coerce_plan_tool(value):
         return PlanTool(value)
     except ValueError:
         return value
+
+
+class PlanToolHandler:
+    """Minimal behavior contract for a Plan Edit tool state."""
+
+    tool_id = None
+
+    def __init__(self, session):
+        self.session = session
+
+    def enter(self):
+        return False
+
+    def leave(self):
+        return False
+
+    def on_mouse_move(self, mouse_pos, event_callback):
+        del mouse_pos, event_callback
+        return False
+
+    def on_left_mouse_down(self, mouse_pos, event_callback):
+        del mouse_pos, event_callback
+        return False
+
+    def on_key(self, key, event_callback, coin):
+        del key, event_callback, coin
+        return False
+
+    def cancel(self):
+        return False
