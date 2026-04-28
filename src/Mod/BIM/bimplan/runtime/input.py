@@ -7,6 +7,7 @@ from bimplan.selection import target_kinds as plan_target_kinds
 from bimplan.tools import join as plan_join_tool
 from bimplan.tools import opening_edit as plan_opening_tool
 from bimplan.tools import select as plan_select_tool
+from bimplan.tools import spaces as plan_spaces_tool
 from bimplan.tools import space_region_pick as plan_space_region_pick_tool
 from bimplan.tools import symbol_edit as plan_symbol_tool
 from bimplan.tools import wall_edit as plan_wall_edit_tool
@@ -210,12 +211,6 @@ def on_mouse_wheel(session, event_callback):
         session.overlays.queue_plan_overlay_view_scale_refresh()
 
 
-def _set_key_event_handled(event_callback):
-    setter = _get_event_handled_setter(event_callback)
-    if setter is not None:
-        setter()
-
-
 def _handle_direct_tool_key_press(session, key, event_callback, coin):
     if (
         session.current_tool == plan_runtime_tools.PlanTool.MOVE_OPENING
@@ -234,18 +229,9 @@ def _handle_direct_tool_key_press(session, key, event_callback, coin):
         )
     ):
         return True
-    if session.current_tool == plan_runtime_tools.PlanTool.REGION and key in (
-        coin.SoKeyboardEvent.RETURN,
-        coin.SoKeyboardEvent.ENTER,
-    ):
-        if session.spaces.finalize_plan_region():
-            _set_key_event_handled(event_callback)
-        return True
-    if (
-        session.current_tool == plan_runtime_tools.PlanTool.REGION
-        and key == coin.SoKeyboardEvent.ESCAPE
-    ):
-        session.spaces.cancel_plan_region_tool()
+    if session.current_tool == plan_runtime_tools.PlanTool.REGION and plan_spaces_tool.RegionTool(
+        session
+    ).on_key(key, event_callback, coin):
         return True
     if (
         session.current_tool == plan_runtime_tools.PlanTool.PROVIDER_POINT
