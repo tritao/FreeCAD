@@ -127,11 +127,9 @@ void FCBRepAlgoAPI_BooleanOperation::Build(const Message_ProgressRange& progress
         myArguments = myOriginalArguments;
     }
     else {
-#if OCC_VERSION_HEX >= 0x070600
-        BRepAlgoAPI_BooleanOperation::Build(progressRange);
-#else
+        // Avoid forwarding FreeCAD's progress indicator into OCCT boolean operations. On Windows
+        // LibPack builds, OCCT progress callbacks from this path can freeze the GUI.
         BRepAlgoAPI_BooleanOperation::Build();
-#endif
     }
     if (progressRange.UserBreak()) {
         Standard_ConstructionError::Raise("User aborted");
