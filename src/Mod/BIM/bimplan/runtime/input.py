@@ -7,6 +7,7 @@ from bimplan.selection import target_kinds as plan_target_kinds
 from bimplan.tools import join as plan_join_tool
 from bimplan.tools import select as plan_select_tool
 from bimplan.tools import space_region_pick as plan_space_region_pick_tool
+from bimplan.tools import wall_edit as plan_wall_edit_tool
 
 
 class PlanInputAPI:
@@ -273,32 +274,7 @@ def _handle_direct_tool_key_press(session, key, event_callback, coin):
     return False
 
 
-def _handle_wall_edit_key_press(session, key, event_callback, coin):
-    if session.wall_edit.is_wall_move_edit_active() and key == coin.SoKeyboardEvent.TAB:
-        if session.wall_edit.start_wall_readout_edit(cycle=True):
-            _set_key_event_handled(event_callback)
-        return True
-    if session.wall_edit.is_wall_readout_edit_active() and key in (
-        coin.SoKeyboardEvent.RETURN,
-        coin.SoKeyboardEvent.ENTER,
-    ):
-        if session.wall_edit.start_wall_readout_edit():
-            _set_key_event_handled(event_callback)
-        return True
-    if session.wall_edit.is_wall_stretch_edit_active() and key == coin.SoKeyboardEvent.TAB:
-        if session.wall_edit.start_wall_readout_edit():
-            _set_key_event_handled(event_callback)
-        return True
-    return False
-
-
 def _handle_escape_cancels(session):
-    if (
-        session.wall_edit_state.edit_wall
-        and session.current_tool != plan_runtime_tools.PlanTool.SELECT
-    ):
-        session.wall_edit.cancel_wall_edit_point_pick()
-        return True
     if session.current_tool == plan_runtime_tools.PlanTool.MOVE_OPENING:
         session.openings.cancel_opening_handle_point_pick()
         return True
@@ -347,7 +323,7 @@ def on_key_pressed(session, event_callback):
         session
     ).on_key(key, event_callback, coin):
         return
-    if _handle_wall_edit_key_press(session, key, event_callback, coin):
+    if plan_wall_edit_tool.WallEditTool(session).on_key(key, event_callback, coin):
         return
     if key != coin.SoKeyboardEvent.ESCAPE:
         return

@@ -7,6 +7,7 @@ from contextlib import nullcontext
 import FreeCAD
 import FreeCADGui
 from bimplan.runtime import capabilities as runtime_capabilities
+from bimplan.runtime import tools as plan_runtime_tools
 
 translate = FreeCAD.Qt.translate
 
@@ -1655,6 +1656,42 @@ class _SessionAPI:
     @property
     def session(self):
         return self._session
+
+
+class WallEditTool(plan_runtime_tools.PlanToolHandler):
+    """Keyboard behavior for active wall point-pick edits."""
+
+    def on_key(self, key, event_callback, coin):
+        session = self.session
+        if is_wall_move_edit_active(session) and key == coin.SoKeyboardEvent.TAB:
+            if start_wall_readout_edit(session, cycle=True):
+                _set_key_event_handled(event_callback)
+            return True
+        if is_wall_readout_edit_active(session) and key in (
+            coin.SoKeyboardEvent.RETURN,
+            coin.SoKeyboardEvent.ENTER,
+        ):
+            if start_wall_readout_edit(session):
+                _set_key_event_handled(event_callback)
+            return True
+        if is_wall_stretch_edit_active(session) and key == coin.SoKeyboardEvent.TAB:
+            if start_wall_readout_edit(session):
+                _set_key_event_handled(event_callback)
+            return True
+        if (
+            _wall_edit_state(session).edit_wall
+            and session.current_tool != plan_runtime_tools.PlanTool.SELECT
+            and key == coin.SoKeyboardEvent.ESCAPE
+        ):
+            cancel_wall_edit_point_pick(session)
+            return True
+        return False
+
+
+def _set_key_event_handled(event_callback):
+    setter = getattr(event_callback, "setHandled", None)
+    if callable(setter):
+        setter()
 
 
 class PlanWallEditAPI(_SessionAPI):
