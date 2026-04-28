@@ -26,6 +26,9 @@
 
 #include "ProgressIndicator.h"
 
+#include <algorithm>
+#include <cmath>
+
 
 using namespace Part;
 /*!
@@ -54,11 +57,17 @@ ProgressIndicator::~ProgressIndicator()
 
 void ProgressIndicator::Show(const Message_ProgressScope& theScope, const Standard_Boolean isForce)
 {
-    (void)isForce;
     const char* name = theScope.Name();
-    progress->setText(name ? name : "Processing...");
-    std::size_t current = static_cast<std::size_t>(100. * theScope.Value() / theScope.MaxValue());
-    if (current != currentStep) {
+    const std::string text = name ? name : "Processing...";
+    if (text != currentText) {
+        currentText = text;
+        progress->setText(currentText.c_str());
+    }
+
+    // Scope values are local to nested OCCT operations; the total position is monotonic.
+    const double position = std::clamp(static_cast<double>(GetPosition()), 0.0, 1.0);
+    const auto current = static_cast<std::size_t>(std::floor(position * 100.0));
+    if (current != currentStep || isForce) {
         currentStep = current;
         progress->setProgress(currentStep);
     }
@@ -70,4 +79,7 @@ Standard_Boolean ProgressIndicator::UserBreak()
 }
 
 void ProgressIndicator::Reset()
-{}
+{
+    currentStep = std::numeric_limits<std::size_t>::max();
+    currentText.clear();
+}

@@ -24,7 +24,9 @@
 
 #pragma once
 
+#include <limits>
 #include <memory>
+#include <string>
 
 #include <Message_ProgressIndicator.hxx>
 #include <Standard_Version.hxx>
@@ -47,7 +49,8 @@ public:
     void Reset() override;
 
 private:
-    std::size_t currentStep {0};
+    std::size_t currentStep {std::numeric_limits<std::size_t>::max()};
+    std::string currentText;
     std::unique_ptr<Base::SequencerLauncher> progress;
 };
 
