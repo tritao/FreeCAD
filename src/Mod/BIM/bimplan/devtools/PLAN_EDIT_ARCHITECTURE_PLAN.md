@@ -421,13 +421,19 @@ Validation:
 
 ### Phase 3: Reduce Document Visuals To A Coordinator
 
+Current progress:
+
+- `document_visuals.py` routes opening, symbol, space/region, and secondary-selection document changes to owner services.
+- Selected/hovered wall document-change handling now lives in `selection.refresh`.
+- `document_visuals.py` still owns document observer attach/detach, deferral, flush ordering, and shared invalidation.
+
 Steps:
 
-1. List every branch in `document_visuals.py` by target kind.
+1. List every branch in `document_visuals.py` by target kind. Done.
 2. Move opening-specific refresh to the opening owner.
 3. Move symbol-specific refresh to symbol overlays.
 4. Move space/region-specific refresh to the space/region owner.
-5. Move secondary selection refresh to selection refresh service.
+5. Move secondary selection refresh to selection refresh service. Done.
 6. Keep document observer attach/detach, deferral, and flush ordering in `document_visuals`.
 
 Validation:
