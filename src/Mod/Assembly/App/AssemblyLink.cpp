@@ -294,7 +294,7 @@ void AssemblyLink::updateParentJoints()
             }
         }
         if (joint->isTouched()) {
-            joint->recomputeFeature();
+            joint->requestDeferredRecompute(App::RecomputePhase::PostUpstream);
         }
     }
 }

@@ -1076,8 +1076,8 @@ class TestArchSpace(TestArchBase.TestArchBase):
             space.Proxy.getLastBoundaryError(space).lower(),
         )
 
-    def test_legacy_region_base_space_marks_boundary_conflict_on_wall_resize(self):
-        """Legacy region-base spaces should preserve shape but mark a boundary conflict after hint-aware resize."""
+    def test_legacy_region_base_space_resolves_wall_resize_without_boundary_conflict(self):
+        """Legacy region-base spaces should preserve shape and avoid a false boundary conflict after phased retry."""
 
         self._open_fixture_document("../../../../../tests/t2-symbols.FCStd")
 
@@ -1106,12 +1106,9 @@ class TestArchSpace(TestArchBase.TestArchBase):
 
         stable_links = list(space.Proxy.getStableBoundaryLinks(space) or [])
         self.assertTrue(any(getattr(obj, "Name", None) == "Wall005" for obj, _subs in stable_links))
-        self.assertEqual(getattr(space, "BoundaryStatus", ""), "Conflict")
-        self.assertIn(
-            "stored room reference",
-            str(getattr(space, "BoundaryStatusMessage", "") or "").lower(),
-        )
-        self.assertTrue(space.Proxy.getLastBoundaryError(space))
+        self.assertEqual(getattr(space, "BoundaryStatus", ""), "OK")
+        self.assertFalse(str(getattr(space, "BoundaryStatusMessage", "") or "").strip())
+        self.assertFalse(space.Proxy.getLastBoundaryError(space))
         self.assertTrue(str(getattr(space, "BoundaryRegionHint", "") or "").strip())
         self.assertGreater(float(space.Proxy.getArea(space)), initial_area * 0.85)
         self.assertGreater(space.Shape.BoundBox.XMax, initial_bounds.XMax - 500.0)

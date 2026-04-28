@@ -1177,7 +1177,7 @@ class _Space(ArchComponent.Component):
         try:
             request_deferred_recompute = getattr(obj, "requestDeferredRecompute", None)
             if callable(request_deferred_recompute):
-                request_deferred_recompute()
+                request_deferred_recompute("PostUpstream")
             else:
                 obj.touch()
         except Exception:
