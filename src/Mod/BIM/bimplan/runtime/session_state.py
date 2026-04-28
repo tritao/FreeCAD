@@ -536,7 +536,6 @@ _PLAN_EDIT_SESSION_STATE_PROPERTIES = (
         (
             ("_space_region_pick_boundaries", "boundaries", _coerce_list),
             ("_space_region_pick_seed_space", "seed_space", _coerce_identity),
-            ("_space_region_pick_edit_space", "edit_space", _coerce_identity),
             ("_space_region_candidates", "candidates", _coerce_list),
             ("_hovered_space_region_candidate", "hovered_candidate", _coerce_identity),
         ),
