@@ -277,7 +277,7 @@ class PlanEditSession:
                 self.snap.apply_plan_snap_profile()
             self.visibility.apply_storey_visibility()
             with self.performance.plan_perf_trace_span("attach_selection_observer"):
-                self.selection.attach_selection_observer()
+                self.selection.sync.attach_selection_observer()
             with self.performance.plan_perf_trace_span("attach_document_observer"):
                 self.document_visuals.attach_document_observer()
             with self.performance.plan_perf_trace_span("register_edit_callbacks"):
@@ -285,7 +285,7 @@ class PlanEditSession:
             with self.performance.plan_perf_trace_span(
                 "refresh_primary_selected_plan_target_on_enter"
             ):
-                self.selection.refresh_primary_selected_plan_target()
+                self.selection.refresh.refresh_primary_selected_plan_target()
 
             with self.performance.plan_perf_trace_span("build_task_panel"):
                 panel = PlanEditControlsWidget(self)
@@ -298,7 +298,7 @@ class PlanEditSession:
             with self.performance.plan_perf_trace_span("queue_prime_wall_hosted_openings_cache"):
                 self.openings.queue_prime_wall_hosted_openings_cache()
             with self.performance.plan_perf_trace_span("queue_prime_hover_pick_caches"):
-                self.selection.queue_prime_hover_pick_caches()
+                self.selection.hover.queue_prime_hover_pick_caches()
             with self.performance.plan_perf_trace_span("install_command_gate"):
                 plan_command_gate.install(self)
             if self.performance.is_plan_perf_trace_enabled():
