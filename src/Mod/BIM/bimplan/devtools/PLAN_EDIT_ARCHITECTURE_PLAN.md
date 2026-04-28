@@ -491,6 +491,7 @@ Current progress:
 - Private task-panel compatibility aliases are removed; task-panel code uses `task_panel_state`.
 - Private provider point compatibility aliases are removed; provider tests use `provider_point_state`.
 - Private input-event compatibility aliases are removed; input tests use `input_event_state`.
+- Private selection-sync compatibility aliases are removed; selection sync uses `selection_sync_state`.
 
 Steps:
 
