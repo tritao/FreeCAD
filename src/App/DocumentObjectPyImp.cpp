@@ -23,6 +23,8 @@
  ***************************************************************************/
 
 
+#include <array>
+
 #include <Base/GeometryPyCXX.h>
 #include <Base/MatrixPy.h>
 #include <Base/PlacementPy.h>
@@ -47,6 +49,72 @@
 #include <App/DocumentObjectPy.cpp>
 
 using namespace App;
+
+namespace
+{
+
+bool parseRecomputePhaseArg(PyObject* arg, RecomputePhase& phase, std::string& error)
+{
+    if (PyUnicode_Check(arg)) {
+        const char* value = PyUnicode_AsUTF8(arg);
+        if (!value) {
+            error = "recompute phase must be a valid UTF-8 string";
+            return false;
+        }
+
+        std::string name(value);
+        if (name == "Normal") {
+            phase = RecomputePhase::Normal;
+            return true;
+        }
+        if (name == "PostUpstream") {
+            phase = RecomputePhase::PostUpstream;
+            return true;
+        }
+        if (name == "PostGeometry") {
+            phase = RecomputePhase::PostGeometry;
+            return true;
+        }
+        if (name == "Finalize") {
+            phase = RecomputePhase::Finalize;
+            return true;
+        }
+
+        error = "unknown recompute phase: " + name;
+        return false;
+    }
+
+    if (PyLong_Check(arg)) {
+        long value = PyLong_AsLong(arg);
+        if (PyErr_Occurred()) {
+            error = "recompute phase integer could not be parsed";
+            return false;
+        }
+
+        switch (value) {
+            case 0:
+                phase = RecomputePhase::Normal;
+                return true;
+            case 1:
+                phase = RecomputePhase::PostUpstream;
+                return true;
+            case 2:
+                phase = RecomputePhase::PostGeometry;
+                return true;
+            case 3:
+                phase = RecomputePhase::Finalize;
+                return true;
+            default:
+                error = "recompute phase integer must be between 0 and 3";
+                return false;
+        }
+    }
+
+    error = "recompute phase must be a string phase name or integer phase index";
+    return false;
+}
+
+}  // namespace
 
 // returns a string which represent the object e.g. when printed in python
 std::string DocumentObjectPy::representation() const
@@ -221,12 +289,27 @@ PyObject* DocumentObjectPy::enforceRecompute(PyObject* args)
     Py_Return;
 }
 
-PyObject* DocumentObjectPy::requestDeferredRecompute(PyObject* args)
+PyObject* DocumentObjectPy::requestDeferredRecompute(PyObject* args, PyObject* kwd)
 {
-    if (!PyArg_ParseTuple(args, "")) {
+    PyObject* phaseObj = nullptr;
+    const std::array<const char*, 2> kwlist {"phase", nullptr};
+    if (!Base::Wrapped_ParseTupleAndKeywords(args, kwd, "|O", kwlist, &phaseObj)) {
         return nullptr;
     }
-    getDocumentObjectPtr()->requestDeferredRecompute();
+
+    if (!phaseObj || phaseObj == Py_None) {
+        getDocumentObjectPtr()->requestDeferredRecompute();
+        Py_Return;
+    }
+
+    RecomputePhase phase = RecomputePhase::Idle;
+    std::string error;
+    if (!parseRecomputePhaseArg(phaseObj, phase, error)) {
+        PyErr_SetString(PyExc_ValueError, error.c_str());
+        return nullptr;
+    }
+
+    getDocumentObjectPtr()->requestDeferredRecompute(phase);
     Py_Return;
 }
 
@@ -246,12 +329,24 @@ Py::List DocumentObjectPy::getState() const
     if (object->isRecomputing()) {
         uptodate = false;
         list.append(Py::String("Recompute"));
+        if (auto* doc = object->getDocument()) {
+            auto phase = doc->currentRecomputePhase();
+            if (isActiveRecomputePhase(phase)) {
+                list.append(Py::String(std::string("RecomputePhase:")
+                                       + recomputePhaseName(phase)));
+            }
+        }
     }
     if (object->testStatus(App::Recompute2)) {
         list.append(Py::String("Recompute2"));
     }
     if (object->hasDeferredRecomputeRequest()) {
         list.append(Py::String("DeferredRecompute"));
+        auto phase = object->getDeferredRecomputePhase();
+        if (isActiveRecomputePhase(phase)) {
+            list.append(Py::String(std::string("DeferredRecomputePhase:")
+                                   + recomputePhaseName(phase)));
+        }
     }
     if (object->isRestoring()) {
         uptodate = false;

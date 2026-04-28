@@ -1239,6 +1239,11 @@ Py::Boolean DocumentPy::getRecomputing() const
     return {getDocumentPtr()->testStatus(Document::Status::Recomputing)};
 }
 
+Py::Long DocumentPy::getCurrentRecomputePhase() const
+{
+    return Py::Long(static_cast<long>(getDocumentPtr()->currentRecomputePhase()));
+}
+
 Py::Boolean DocumentPy::getTransacting() const
 {
     return {getDocumentPtr()->isPerformingTransaction()};

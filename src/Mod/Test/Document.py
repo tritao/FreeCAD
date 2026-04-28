@@ -176,10 +176,37 @@ class DocumentBasicCases(unittest.TestCase):
                     False,
                     False,
                 )
+                obj.addProperty(
+                    "App::PropertyStringList",
+                    "PhaseLog",
+                    "Test",
+                    "Execution phase log",
+                    FreeCAD.PropertyType.Prop_Output,
+                    False,
+                    False,
+                )
+                obj.addProperty(
+                    "App::PropertyIntegerList",
+                    "DocumentPhaseLog",
+                    "Test",
+                    "Document phase log",
+                    FreeCAD.PropertyType.Prop_Output,
+                    False,
+                    False,
+                )
                 self.defer_once = True
 
             def execute(self, obj):
                 obj.ExecCount = int(getattr(obj, "ExecCount", 0) or 0) + 1
+                phases = [
+                    state.split(":", 1)[1]
+                    for state in list(obj.State)
+                    if state.startswith("RecomputePhase:")
+                ]
+                obj.PhaseLog = list(getattr(obj, "PhaseLog", []) or []) + phases
+                obj.DocumentPhaseLog = list(getattr(obj, "DocumentPhaseLog", []) or []) + [
+                    int(obj.Document.CurrentRecomputePhase)
+                ]
                 if self.defer_once:
                     self.defer_once = False
                     obj.requestDeferredRecompute()
@@ -194,8 +221,72 @@ class DocumentBasicCases(unittest.TestCase):
         self.assertEqual(source.ExecCount, 2)
         self.assertEqual(sink.ExecCount, 2)
         self.assertEqual(objectcount, 4)
+        self.assertEqual(self.Doc.CurrentRecomputePhase, FreeCAD.RecomputePhase.Idle)
+        self.assertEqual(
+            list(getattr(source, "DocumentPhaseLog", []) or []),
+            [
+                FreeCAD.RecomputePhase.Normal,
+                FreeCAD.RecomputePhase.PostUpstream,
+            ],
+        )
+        self.assertEqual(list(source.PhaseLog), ["Normal", "PostUpstream"])
         self.assertFalse(source.MustExecute)
         self.assertNotIn("DeferredRecompute", list(source.State))
+
+    def testDeferredRecomputeCanTargetLaterNamedPhase(self):
+        class DeferredFeature:
+            def __init__(self, obj):
+                obj.Proxy = self
+                obj.addProperty(
+                    "App::PropertyStringList",
+                    "PhaseLog",
+                    "Test",
+                    "Execution phase log",
+                    FreeCAD.PropertyType.Prop_Output,
+                    False,
+                    False,
+                )
+                obj.addProperty(
+                    "App::PropertyIntegerList",
+                    "DocumentPhaseLog",
+                    "Test",
+                    "Document phase log",
+                    FreeCAD.PropertyType.Prop_Output,
+                    False,
+                    False,
+                )
+                self.defer_once = True
+
+            def execute(self, obj):
+                phases = [
+                    state.split(":", 1)[1]
+                    for state in list(obj.State)
+                    if state.startswith("RecomputePhase:")
+                ]
+                obj.PhaseLog = list(getattr(obj, "PhaseLog", []) or []) + phases
+                obj.DocumentPhaseLog = list(getattr(obj, "DocumentPhaseLog", []) or []) + [
+                    int(obj.Document.CurrentRecomputePhase)
+                ]
+                if self.defer_once:
+                    self.defer_once = False
+                    obj.requestDeferredRecompute("Finalize")
+
+        source = self.Doc.addObject("App::FeaturePython", "DeferredFinalize")
+        DeferredFeature(source)
+
+        objectcount = self.Doc.recompute()
+
+        self.assertEqual(objectcount, 2)
+        self.assertEqual(self.Doc.CurrentRecomputePhase, FreeCAD.RecomputePhase.Idle)
+        self.assertEqual(
+            list(getattr(source, "DocumentPhaseLog", []) or []),
+            [
+                FreeCAD.RecomputePhase.Normal,
+                FreeCAD.RecomputePhase.Finalize,
+            ],
+        )
+        self.assertEqual(list(source.PhaseLog), ["Normal", "Finalize"])
+        self.assertFalse(source.MustExecute)
 
     def testAbortTransaction(self):
         self.Doc.openTransaction("Add")
