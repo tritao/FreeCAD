@@ -3,11 +3,13 @@
 """Primary BIM Plan Edit selection services."""
 
 from contextlib import contextmanager
+from dataclasses import dataclass, field
+
+import FreeCADGui
 
 from bimplan.runtime import tools as plan_runtime_tools
 
 from . import gui_sync as plan_selection_gui_sync
-from . import state_refresh as plan_selection_state_refresh
 from . import target_dispatch as plan_target_dispatch
 from . import target_kinds as plan_target_kinds
 from .service_common import (
@@ -18,6 +20,42 @@ from .service_common import (
     get_plan_target_state_key,
     normalize_gui_object_selection,
 )
+
+_PRIMARY_SELECTED_TARGET_PRIORITY = {
+    kind: index
+    for index, kind in enumerate(plan_target_kinds.PRIMARY_SELECTED_TARGET_PRIORITY_KINDS)
+}
+_GUI_SELECTION_TOOL_NAMES = (
+    plan_runtime_tools.PlanTool.SELECT,
+    plan_runtime_tools.PlanTool.PICK_SPACE_REGION,
+)
+_PENDING_TARGET_UNCHANGED = object()
+_WALL_GRIP_NONE = "none"
+_WALL_GRIP_CLEAR = "clear"
+_WALL_GRIP_SYNC = "sync"
+_MISSING = object()
+
+
+@dataclass(frozen=True)
+class SelectionRefreshResult:
+    primary_target_ref: object = field(default_factory=plan_target_kinds.make_plan_target_ref)
+    secondary_targets: tuple = ()
+    pending_target: object = _PENDING_TARGET_UNCHANGED
+    wall_grip_action: str = _WALL_GRIP_NONE
+
+    @property
+    def primary_kind(self):
+        return self.primary_target_ref.kind
+
+    @property
+    def primary_obj(self):
+        return self.primary_target_ref.obj
+
+
+@dataclass(frozen=True)
+class GuiSelectionResolutionState:
+    pending_target_ref: object = None
+    preserved_target_ref: object = None
 
 
 class PlanSelectionStateService(_SessionAPI):
@@ -297,6 +335,280 @@ class PlanSelectionStateService(_SessionAPI):
 
 
 class PlanSelectionRefreshService(_SessionAPI):
+    def _is_valid_plan_target(self, kind, obj):
+        return self.session.selection.state.is_valid_plan_target(kind, obj)
+
+    def _should_preserve_provider_selected_target(self, kind, obj, selected):
+        if kind != "provider" or obj is None or selected != obj:
+            return False
+        if not self._is_valid_plan_target(kind, obj):
+            return False
+        return plan_selection_gui_sync.is_visible_provider_target_object(self.session, obj)
+
+    def resolve_selected_target_for_gui_object(
+        self,
+        selected,
+        *,
+        pending_target_ref=None,
+        preserved_target_ref=None,
+        pending_kind=None,
+        pending_target=None,
+        preserved_kind=None,
+        preserved_target=None,
+    ):
+        if selected is None:
+            return plan_target_kinds.make_plan_target_ref()
+        if pending_target_ref is None and (pending_kind is not None or pending_target is not None):
+            pending_target_ref = plan_target_kinds.make_plan_target_ref(
+                pending_kind, pending_target
+            )
+        pending_target_ref = plan_target_kinds.coerce_plan_target_ref(pending_target_ref)
+        if selected == pending_target_ref.obj and self._is_valid_plan_target(
+            pending_target_ref.kind, pending_target_ref.obj
+        ):
+            return plan_target_kinds.make_plan_target_ref(
+                pending_target_ref.kind, pending_target_ref.obj
+            )
+        if preserved_target_ref is None and (
+            preserved_kind is not None or preserved_target is not None
+        ):
+            preserved_target_ref = plan_target_kinds.make_plan_target_ref(
+                preserved_kind,
+                preserved_target,
+            )
+        preserved_target_ref = plan_target_kinds.coerce_plan_target_ref(preserved_target_ref)
+        if self._should_preserve_provider_selected_target(
+            preserved_target_ref.kind,
+            preserved_target_ref.obj,
+            selected,
+        ):
+            return plan_target_kinds.make_plan_target_ref(
+                preserved_target_ref.kind, preserved_target_ref.obj
+            )
+        return self.session.selection.targets.get_plan_target_for_object(selected)
+
+    def _get_gui_selection_resolution_state(self, previous_kind, previous_obj):
+        pending_target_ref = plan_target_kinds.coerce_plan_target_ref(
+            self.session.selection_state.pending_selected_plan_target
+        )
+        preserved_target_ref = plan_target_kinds.make_plan_target_ref()
+        if previous_kind == plan_target_kinds.PLAN_TARGET_PROVIDER:
+            preserved_target_ref = plan_target_kinds.make_plan_target_ref(
+                previous_kind, previous_obj
+            )
+        return GuiSelectionResolutionState(
+            pending_target_ref=pending_target_ref,
+            preserved_target_ref=preserved_target_ref,
+        )
+
+    def _resolve_gui_selection_target(self, selected, resolution_state):
+        return self.resolve_selected_target_for_gui_object(
+            selected,
+            pending_target_ref=resolution_state.pending_target_ref,
+            preserved_target_ref=resolution_state.preserved_target_ref,
+        )
+
+    def _choose_primary_selected_target(self, selected_targets, pending_target_ref=None):
+        pending_target_ref = plan_target_kinds.coerce_plan_target_ref(pending_target_ref)
+        if pending_target_ref.kind is not None and pending_target_ref.obj is not None:
+            for target_ref in selected_targets:
+                if (
+                    target_ref.kind == pending_target_ref.kind
+                    and target_ref.obj == pending_target_ref.obj
+                ):
+                    return plan_target_kinds.make_plan_target_ref(target_ref.kind, target_ref.obj)
+        if not selected_targets:
+            return plan_target_kinds.make_plan_target_ref()
+        primary_target_ref = min(
+            selected_targets,
+            key=lambda target_ref: _PRIMARY_SELECTED_TARGET_PRIORITY.get(
+                target_ref.kind, len(_PRIMARY_SELECTED_TARGET_PRIORITY)
+            ),
+        )
+        return plan_target_kinds.make_plan_target_ref(
+            primary_target_ref.kind, primary_target_ref.obj
+        )
+
+    def _apply_selection_refresh_result(self, refresh_result):
+        primary_target_ref = plan_target_kinds.coerce_plan_target_ref(
+            refresh_result.primary_target_ref
+        )
+        self.session.selection.state.set_selected_plan_target_state(
+            primary_target_ref.kind,
+            primary_target_ref.obj,
+        )
+        self.session.selection.state.set_secondary_selected_plan_targets(
+            refresh_result.secondary_targets,
+            primary_kind=primary_target_ref.kind,
+            primary_obj=primary_target_ref.obj,
+        )
+        if refresh_result.pending_target is not _PENDING_TARGET_UNCHANGED:
+            if refresh_result.pending_target is None:
+                self.session.selection.state.set_pending_selected_plan_target()
+            else:
+                self.session.selection.state.set_pending_selected_plan_target(
+                    refresh_result.pending_target
+                )
+        if refresh_result.wall_grip_action == _WALL_GRIP_CLEAR:
+            self.session.overlays.walls.clear_wall_grips()
+        elif refresh_result.wall_grip_action == _WALL_GRIP_SYNC:
+            self.session.overlays.walls.sync_wall_grips()
+
+    def _get_selection_refresh_baseline(self):
+        previous_target_ref = self.session.selection.state.get_selected_plan_target()
+        self.session.performance.plan_perf_set_fields(
+            selected_before=self.session.performance.plan_perf_describe_target(
+                previous_target_ref.kind, previous_target_ref.obj
+            ),
+            selected_before_kind=previous_target_ref.kind or "none",
+        )
+        previous_wall = self.session.selection.state.get_plan_target_object_from_state(
+            previous_target_ref.kind,
+            previous_target_ref.obj,
+            plan_target_kinds.PLAN_TARGET_WALL,
+        )
+        return previous_target_ref.kind, previous_target_ref.obj, previous_wall
+
+    def _resolve_direct_selection_refresh_result(self, previous_wall):
+        if self.session.wall_edit.is_wall_edit_modal_active():
+            interaction_state = self.session.interaction_state
+            return SelectionRefreshResult(
+                primary_target_ref=plan_target_kinds.make_plan_target_ref(
+                    plan_target_kinds.PLAN_TARGET_WALL,
+                    interaction_state.edit_wall,
+                ),
+                wall_grip_action=_WALL_GRIP_SYNC,
+            )
+        if self.session.current_tool == plan_runtime_tools.PlanTool.SET_SPACE_TEXT:
+            interaction_state = self.session.interaction_state
+            return SelectionRefreshResult(
+                primary_target_ref=plan_target_kinds.make_plan_target_ref(
+                    plan_target_kinds.PLAN_TARGET_SPACE,
+                    (
+                        interaction_state.edit_space
+                        if self.session.selection.targets.is_plan_space_object(
+                            interaction_state.edit_space
+                        )
+                        else None
+                    ),
+                ),
+                wall_grip_action=_WALL_GRIP_CLEAR,
+            )
+        if self.session.current_tool == plan_runtime_tools.PlanTool.JOIN:
+            wall = previous_wall
+            if not self.session.selection.targets.is_plan_selectable_wall(wall):
+                self.session.current_tool = plan_runtime_tools.PlanTool.SELECT
+                wall = None
+            return SelectionRefreshResult(
+                primary_target_ref=plan_target_kinds.make_plan_target_ref(
+                    plan_target_kinds.PLAN_TARGET_WALL,
+                    wall,
+                ),
+                wall_grip_action=_WALL_GRIP_CLEAR,
+            )
+        if self.session.current_tool not in _GUI_SELECTION_TOOL_NAMES:
+            return SelectionRefreshResult(pending_target=None)
+        return None
+
+    def _get_gui_selection(self):
+        try:
+            return FreeCADGui.Selection.getSelection()
+        except (ReferenceError, RuntimeError):
+            return _MISSING
+
+    def _collect_selected_targets_from_gui_selection(self, selection, previous_kind, previous_obj):
+        selected_targets = []
+        resolution_state = self._get_gui_selection_resolution_state(previous_kind, previous_obj)
+        provider_refresh_scope = self.session.providers.plan_provider_refresh_cache_scope()
+        with provider_refresh_scope:
+            for selected in selection:
+                target_ref = self._resolve_gui_selection_target(selected, resolution_state)
+                if target_ref.kind:
+                    selected_targets.append(target_ref)
+        self.session.performance.plan_perf_count(
+            "selected_targets_considered", len(selected_targets)
+        )
+        return selected_targets, resolution_state.pending_target_ref
+
+    def _resolve_gui_selection_refresh_result(self, selection, previous_kind, previous_obj):
+        if not selection:
+            pending_target_ref = self.session.selection.state.consume_pending_selected_plan_target()
+            return SelectionRefreshResult(
+                primary_target_ref=plan_target_kinds.coerce_plan_target_ref(pending_target_ref),
+            )
+
+        selected_targets, pending_target_ref = self._collect_selected_targets_from_gui_selection(
+            selection,
+            previous_kind,
+            previous_obj,
+        )
+        primary_target_ref = self._choose_primary_selected_target(
+            selected_targets,
+            pending_target_ref=pending_target_ref,
+        )
+        if primary_target_ref.kind is None:
+            return SelectionRefreshResult(pending_target=None)
+        pending_selection = primary_target_ref
+        if len(selection) == 1 and primary_target_ref.kind not in (
+            plan_target_kinds.PLAN_TARGET_SPACE,
+            plan_target_kinds.PLAN_TARGET_REGION,
+        ):
+            pending_selection = None
+        return SelectionRefreshResult(
+            primary_target_ref=primary_target_ref,
+            secondary_targets=tuple(selected_targets),
+            pending_target=pending_selection,
+        )
+
+    def _resolve_selection_refresh_result(self, previous_kind, previous_obj, previous_wall):
+        refresh_result = self._resolve_direct_selection_refresh_result(previous_wall)
+        if refresh_result is not None:
+            return refresh_result
+        selection = self._get_gui_selection()
+        if selection is _MISSING:
+            self.session.selection.state.set_selected_plan_target_state()
+            return None
+        self.session.performance.plan_perf_count("gui_selection_size", len(selection or []))
+        return self._resolve_gui_selection_refresh_result(
+            selection,
+            previous_kind,
+            previous_obj,
+        )
+
+    def _sync_wall_grips_after_selection_refresh(
+        self,
+        refresh_result,
+        previous_kind,
+        previous_obj,
+        *,
+        force_wall_visual_resync=False,
+    ):
+        if refresh_result.wall_grip_action != _WALL_GRIP_NONE:
+            return
+        wall_target_changed = self.session.selection.state.selected_plan_target_changed(
+            previous_kind,
+            previous_obj,
+            plan_target_kinds.PLAN_TARGET_WALL,
+        )
+        if not wall_target_changed and not force_wall_visual_resync:
+            return
+        if self.session.selection.state.get_selected_plan_target_object(
+            plan_target_kinds.PLAN_TARGET_WALL
+        ):
+            self.session.overlays.walls.schedule_wall_grip_sync()
+        else:
+            self.session.overlays.walls.clear_wall_grips()
+
+    def _record_selection_refresh_result(self, previous_kind):
+        selected_kind, selected_obj = self.session.selection.state.get_selected_plan_target()
+        self.session.performance.plan_perf_set_fields(
+            selected_after=self.session.performance.plan_perf_describe_target(
+                selected_kind, selected_obj
+            ),
+            selected_after_kind=selected_kind or "none",
+            selection_refresh_cleared_target=bool(previous_kind and not selected_kind),
+        )
+
     def clear_selected_visuals(
         self,
         kinds=None,
@@ -561,20 +873,14 @@ class PlanSelectionRefreshService(_SessionAPI):
             if self.session.lifecycle_state.ignore_selection_changes:
                 return
 
-            previous_kind, previous_obj, previous_wall = (
-                plan_selection_state_refresh._get_selection_refresh_baseline(self.session)
-            )
-            refresh_result = plan_selection_state_refresh._resolve_selection_refresh_result(
-                self.session,
+            previous_kind, previous_obj, previous_wall = self._get_selection_refresh_baseline()
+            refresh_result = self._resolve_selection_refresh_result(
                 previous_kind,
                 previous_obj,
                 previous_wall,
             )
-            plan_selection_state_refresh._apply_selection_refresh_result(
-                self.session, refresh_result
-            )
-            plan_selection_state_refresh._sync_wall_grips_after_selection_refresh(
-                self.session,
+            self._apply_selection_refresh_result(refresh_result)
+            self._sync_wall_grips_after_selection_refresh(
                 refresh_result,
                 previous_kind,
                 previous_obj,
@@ -585,9 +891,7 @@ class PlanSelectionRefreshService(_SessionAPI):
                 previous_obj,
                 force_wall_visual_resync=force_wall_visual_resync,
             )
-            plan_selection_state_refresh._record_selection_refresh_result(
-                self.session, previous_kind
-            )
+            self._record_selection_refresh_result(previous_kind)
 
     def refresh_primary_selected_plan_target(self, *, force_wall_visual_resync=False):
         self.refresh_selected_plan_target(force_wall_visual_resync=force_wall_visual_resync)
