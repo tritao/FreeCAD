@@ -50,35 +50,7 @@ class GuiSelectionResolutionState:
 
 
 def sanitize_plan_target_references(session):
-    is_live_document_object = session.visibility.is_live_document_object
-    changed = False
-    for kind in ("wall", "opening", "symbol", "region", "space"):
-        obj = session.selection.state.get_selected_target_for_kind(kind)
-        if obj is None or is_live_document_object(obj):
-            continue
-        session.selection.state.set_selected_target_for_kind(kind, None)
-        changed = True
-    for attr in (
-        "hovered_wall",
-        "hovered_opening",
-        "hovered_symbol",
-        "hovered_provider",
-        "hovered_region",
-        "hovered_space",
-    ):
-        obj = getattr(session, attr, None)
-        if obj is None or is_live_document_object(obj):
-            continue
-        setattr(session, attr, None)
-        changed = True
-    selection_state = session.selection_state
-    normalized_secondary = session.selection.state.normalize_plan_target_list(
-        selection_state.secondary_selected_plan_targets_state
-    )
-    if normalized_secondary != selection_state.secondary_selected_plan_targets_state:
-        selection_state.secondary_selected_plan_targets_state = normalized_secondary
-        changed = True
-    return changed
+    return session.selection.refresh.sanitize_plan_target_references()
 
 
 def _is_valid_plan_target(session, kind, obj):
@@ -357,84 +329,24 @@ def _record_selection_refresh_result(session, previous_kind):
 
 
 def refresh_selected_plan_target(session, *, force_wall_visual_resync=False):
-    with session.performance.plan_perf_trace_span("refresh_selected_plan_target"):
-        session.performance.plan_perf_count("selection_refreshes")
-        if session.lifecycle_state.tearing_down:
-            return
-        if session.lifecycle_state.ignore_selection_changes:
-            return
-
-        previous_kind, previous_obj, previous_wall = _get_selection_refresh_baseline(session)
-        refresh_result = _resolve_selection_refresh_result(
-            session,
-            previous_kind,
-            previous_obj,
-            previous_wall,
-        )
-        _apply_selection_refresh_result(session, refresh_result)
-        _sync_wall_grips_after_selection_refresh(
-            session,
-            refresh_result,
-            previous_kind,
-            previous_obj,
-            force_wall_visual_resync=force_wall_visual_resync,
-        )
-        sync_primary_selected_plan_target_visuals(
-            session,
-            previous_kind,
-            previous_obj,
-            force_wall_visual_resync=force_wall_visual_resync,
-        )
-        _record_selection_refresh_result(session, previous_kind)
+    return session.selection.refresh.refresh_selected_plan_target(
+        force_wall_visual_resync=force_wall_visual_resync,
+    )
 
 
 def schedule_selected_wall_reset(session, reason, obj):
-    del reason, obj
-    selection_sync_state = session.selection_sync_state
-    if selection_sync_state.pending_selected_wall_reset or session.lifecycle_state.tearing_down:
-        return
-    selection_sync_state.pending_selected_wall_reset = True
-    try:
-        from PySide import QtCore
-
-        QtCore.QTimer.singleShot(0, lambda: reset_selected_wall_after_change(session))
-    except ImportError:
-        reset_selected_wall_after_change(session)
+    return session.selection.refresh.schedule_selected_wall_reset(reason, obj)
 
 
 def reset_selected_wall_after_change(session):
-    session.selection_sync_state.pending_selected_wall_reset = False
-    if (
-        session.lifecycle_state.tearing_down
-        or session.current_tool != plan_runtime_tools.PlanTool.SELECT
-    ):
-        return
-    wall = session.selection.state.get_selected_plan_target_object("wall")
-    if not wall:
-        return
-    session.overlays.walls.clear_wall_grips()
-    session.overlays.walls.clear_selected_wall_overlay()
-    session.selection.refresh.clear_selected_plan_target_if_matches("wall", wall)
-    plan_selection_gui_sync.set_gui_selection(session, [])
-    session.task_panels.refresh_task_panel_status()
+    return session.selection.refresh.reset_selected_wall_after_change()
 
 
 def suspend_selected_wall_state(session, wall=None, clear_gui_selection=True):
-    if session.lifecycle_state.tearing_down:
-        return
-    if wall is None:
-        wall = session.selection.state.get_selected_plan_target_object("wall")
-    if wall is None:
-        return
-    if not session.selection.state.is_selected_plan_target("wall", wall):
-        return
-    session.selection_sync_state.pending_selected_wall_reset = False
-    session.overlays.walls.clear_wall_grips()
-    session.overlays.walls.clear_selected_wall_overlay()
-    session.selection.refresh.clear_selected_plan_target_if_matches("wall", wall)
-    if clear_gui_selection:
-        plan_selection_gui_sync.set_gui_selection(session, [])
-    session.task_panels.refresh_task_panel_status(reason="selection")
+    return session.selection.refresh.suspend_selected_wall_state(
+        wall=wall,
+        clear_gui_selection=clear_gui_selection,
+    )
 
 
 def sync_primary_selected_plan_target_visuals(
@@ -444,69 +356,14 @@ def sync_primary_selected_plan_target_visuals(
     *,
     force_wall_visual_resync=False,
 ):
-    with session.performance.plan_perf_trace_span("sync_primary_selected_plan_target_visuals"):
-        if (
-            session.current_tool != plan_runtime_tools.PlanTool.SELECT
-            or force_wall_visual_resync
-            or session.selection.state.selected_plan_target_changed(
-                previous_kind,
-                previous_obj,
-                plan_target_kinds.PLAN_TARGET_WALL,
-            )
-        ):
-            with session.performance.plan_perf_trace_span("sync_selected_wall_overlay"):
-                session.overlays.walls.sync_selected_wall_overlay()
-        with session.performance.plan_perf_trace_span("sync_selected_wall_opening_context_overlay"):
-            session.overlays.openings.sync_selected_wall_opening_context_overlay()
-        with session.performance.plan_perf_trace_span("sync_hovered_wall_overlay"):
-            session.overlays.walls.sync_hovered_wall_overlay()
-        with session.performance.plan_perf_trace_span("sync_hovered_wall_opening_context_overlay"):
-            session.overlays.walls.sync_hovered_wall_opening_context_overlay()
-        plan_target_dispatch.sync_selected_target_visuals(
-            session,
-            kinds=plan_target_kinds.PRIMARY_SELECTED_VISUAL_SYNC_KINDS,
-            previous_kind=previous_kind,
-            previous_obj=previous_obj,
-            trace_style="by_method",
-        )
-        plan_target_dispatch.sync_hovered_target_visuals(
-            session,
-            kinds=(
-                plan_target_kinds.PLAN_TARGET_SYMBOL,
-                plan_target_kinds.PLAN_TARGET_PROVIDER,
-            ),
-            trace_style="by_method",
-        )
-        plan_target_dispatch.sync_selected_target_visuals(
-            session,
-            kinds=(plan_target_kinds.PLAN_TARGET_PROVIDER,),
-            force=True,
-            trace_style="by_method",
-        )
-        plan_target_dispatch.sync_hovered_target_visuals(
-            session,
-            kinds=(
-                plan_target_kinds.PLAN_TARGET_OPENING,
-                plan_target_kinds.PLAN_TARGET_SPACE,
-                plan_target_kinds.PLAN_TARGET_REGION,
-            ),
-            trace_style="by_method",
-        )
-        with session.performance.plan_perf_trace_span("sync_secondary_selected_overlays"):
-            session.overlays.spaces.sync_secondary_selected_overlays()
-        with session.performance.plan_perf_trace_span("sync_active_plan_target_object"):
-            session.viewport.sync_active_plan_target_object()
-        session.task_panels.refresh_task_panel_status(
-            reason=(
-                "selection"
-                if session.current_tool == plan_runtime_tools.PlanTool.SELECT
-                else "full"
-            )
-        )
+    return session.selection.refresh.sync_primary_selected_plan_target_visuals(
+        previous_kind=previous_kind,
+        previous_obj=previous_obj,
+        force_wall_visual_resync=force_wall_visual_resync,
+    )
 
 
 def refresh_primary_selected_plan_target(session, *, force_wall_visual_resync=False):
-    refresh_selected_plan_target(
-        session,
+    return session.selection.refresh.refresh_primary_selected_plan_target(
         force_wall_visual_resync=force_wall_visual_resync,
     )

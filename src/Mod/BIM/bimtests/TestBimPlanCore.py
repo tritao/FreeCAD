@@ -110,6 +110,7 @@ from bimplan.selection import (
 )
 from bimplan.selection import selection as plan_selection_module
 from bimplan.selection import gui_sync as plan_selection_gui_sync
+from bimplan.selection.service_interaction import PlanSelectionActivationService
 from bimplan.selection import target_kinds as plan_target_kinds
 from bimplan.tools.spaces import (
     start_space_region_pick,
@@ -296,6 +297,11 @@ def _make_selection_stub(
             ("clear-selected-visuals", args, kwargs)
         ),
     )
+
+
+def _attach_activation_service(session):
+    session.selection.activation = PlanSelectionActivationService(session)
+    return session
 
 
 @contextmanager
@@ -1003,10 +1009,10 @@ class TestBimPlanCore(unittest.TestCase):
     def test_activate_opening_target_uses_behavior_policy(self):
         calls = []
         target = SimpleNamespace(Name="Opening001")
-        session = SimpleNamespace()
+        session = _attach_activation_service(SimpleNamespace(selection=SimpleNamespace()))
 
         with patch(
-            "bimplan.selection.selection.plan_selection_activation.activate_plan_target",
+            "bimplan.selection.activation.activate_plan_target",
             side_effect=lambda *args, **kwargs: calls.append((args, kwargs)) or True,
         ):
             self.assertTrue(
@@ -1033,14 +1039,16 @@ class TestBimPlanCore(unittest.TestCase):
     def test_activate_semantic_plan_target_uses_wall_behavior_overrides(self):
         calls = []
         target = SimpleNamespace(Name="Wall001")
-        session = SimpleNamespace(
-            selection=_make_selection_stub(hovered_target=("wall", target)),
-            hover_pick_state=_make_hover_pick_state_stub(last_mouse_pos=(50.0, 60.0)),
-            performance=_make_perf_stub(),
+        session = _attach_activation_service(
+            SimpleNamespace(
+                selection=_make_selection_stub(hovered_target=("wall", target)),
+                hover_pick_state=_make_hover_pick_state_stub(last_mouse_pos=(50.0, 60.0)),
+                performance=_make_perf_stub(),
+            )
         )
 
         with patch(
-            "bimplan.selection.selection.plan_selection_activation.activate_plan_target",
+            "bimplan.selection.activation.activate_plan_target",
             side_effect=lambda *args, **kwargs: calls.append((args, kwargs)) or True,
         ):
             self.assertTrue(activate_semantic_plan_target(session, (50, 60)))
@@ -1066,20 +1074,22 @@ class TestBimPlanCore(unittest.TestCase):
         calls = []
         hovered = SimpleNamespace(Name="Wall001")
         picked = SimpleNamespace(Name="Wall002")
-        session = SimpleNamespace(
-            selection=_make_selection_stub(
-                hovered_target=("wall", hovered),
-                picked_target=("wall", picked),
-            ),
-            picking=SimpleNamespace(
-                pick=lambda _mouse_pos: _make_plan_target_ref("wall", picked),
-            ),
-            hover_pick_state=_make_hover_pick_state_stub(last_mouse_pos=(10.0, 10.0)),
-            performance=_make_perf_stub(),
+        session = _attach_activation_service(
+            SimpleNamespace(
+                selection=_make_selection_stub(
+                    hovered_target=("wall", hovered),
+                    picked_target=("wall", picked),
+                ),
+                picking=SimpleNamespace(
+                    pick=lambda _mouse_pos: _make_plan_target_ref("wall", picked),
+                ),
+                hover_pick_state=_make_hover_pick_state_stub(last_mouse_pos=(10.0, 10.0)),
+                performance=_make_perf_stub(),
+            )
         )
 
         with patch(
-            "bimplan.selection.selection.plan_selection_activation.activate_plan_target",
+            "bimplan.selection.activation.activate_plan_target",
             side_effect=lambda *args, **kwargs: calls.append((args, kwargs)) or True,
         ):
             self.assertTrue(activate_semantic_plan_target(session, (50, 60)))
@@ -2014,7 +2024,7 @@ class TestBimPlanCore(unittest.TestCase):
         )
 
         with patch(
-            "bimplan.selection.selection.plan_selection_gui_sync.is_visible_provider_target_object",
+            "bimplan.selection.state_refresh.plan_selection_gui_sync.is_visible_provider_target_object",
             return_value=True,
         ):
             self.assertEqual(

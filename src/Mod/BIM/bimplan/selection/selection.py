@@ -4,17 +4,10 @@
 
 from contextlib import contextmanager
 
-from bimplan.runtime import tools as plan_runtime_tools
-from . import activation as plan_selection_activation
-from . import gui_sync as plan_selection_gui_sync
 from . import state_refresh as plan_selection_state_refresh
-from . import target_dispatch as plan_target_dispatch
 from . import target_kinds as plan_target_kinds
-from . import targets as plan_targets
 from .service_common import (
     _SessionAPI,
-    _clear_gui_preselection,
-    _get_gui_preselection_object,
     get_plan_target_object_from_state,
     get_plan_target_state_key,
     normalize_gui_object_selection as _normalize_gui_object_selection,
@@ -33,7 +26,8 @@ from .service_primary import (
 
 def _make_set_hovered_target_function(kind):
     def _set_hovered_target(session, obj):
-        return plan_target_dispatch.set_hovered_target(session, kind, obj)
+        setter = getattr(session.selection.hover, f"set_hovered_{kind}")
+        return setter(obj)
 
     _set_hovered_target.__name__ = "set_hovered_{}".format(kind)
     _set_hovered_target.__qualname__ = _set_hovered_target.__name__
@@ -41,17 +35,7 @@ def _make_set_hovered_target_function(kind):
 
 
 def clear_hidden_provider_preselection(session):
-    if session.lifecycle_state.tearing_down:
-        return False
-    preselected_obj = _get_gui_preselection_object(session)
-    if preselected_obj is None:
-        return False
-    if not plan_selection_gui_sync.should_filter_hidden_provider_preselection_for_object(
-        session, preselected_obj
-    ):
-        return False
-    session.performance.plan_perf_count("provider_preselection_cleared_for_mode")
-    return _clear_gui_preselection()
+    return session.selection.refresh.clear_hidden_provider_preselection()
 
 
 def resolve_selected_target_for_gui_object(
@@ -78,12 +62,11 @@ def resolve_selected_target_for_gui_object(
 
 
 def sanitize_plan_target_references(session):
-    return plan_selection_state_refresh.sanitize_plan_target_references(session)
+    return session.selection.refresh.sanitize_plan_target_references()
 
 
 def refresh_selected_plan_target(session, *, force_wall_visual_resync=False):
-    return plan_selection_state_refresh.refresh_selected_plan_target(
-        session,
+    return session.selection.refresh.refresh_selected_plan_target(
         force_wall_visual_resync=force_wall_visual_resync,
     )
 
@@ -254,16 +237,15 @@ def set_selected_plan_target(
 
 
 def schedule_selected_wall_reset(session, reason, obj):
-    return plan_selection_state_refresh.schedule_selected_wall_reset(session, reason, obj)
+    return session.selection.refresh.schedule_selected_wall_reset(reason, obj)
 
 
 def reset_selected_wall_after_change(session):
-    return plan_selection_state_refresh.reset_selected_wall_after_change(session)
+    return session.selection.refresh.reset_selected_wall_after_change()
 
 
 def suspend_selected_wall_state(session, wall=None, clear_gui_selection=True):
-    return plan_selection_state_refresh.suspend_selected_wall_state(
-        session,
+    return session.selection.refresh.suspend_selected_wall_state(
         wall=wall,
         clear_gui_selection=clear_gui_selection,
     )
@@ -276,8 +258,7 @@ def sync_primary_selected_plan_target_visuals(
     *,
     force_wall_visual_resync=False,
 ):
-    return plan_selection_state_refresh.sync_primary_selected_plan_target_visuals(
-        session,
+    return session.selection.refresh.sync_primary_selected_plan_target_visuals(
         previous_kind=previous_kind,
         previous_obj=previous_obj,
         force_wall_visual_resync=force_wall_visual_resync,
@@ -285,23 +266,13 @@ def sync_primary_selected_plan_target_visuals(
 
 
 def refresh_primary_selected_plan_target(session, *, force_wall_visual_resync=False):
-    return plan_selection_state_refresh.refresh_primary_selected_plan_target(
-        session,
+    return session.selection.refresh.refresh_primary_selected_plan_target(
         force_wall_visual_resync=force_wall_visual_resync,
     )
 
 
 def set_hovered_wall(session, wall):
-    if is_selected_plan_target(session, "wall", wall):
-        wall = None
-    if session.hovered_wall == wall:
-        return
-    session.hovered_wall = wall
-    session.overlays.walls.sync_junction_node_overlays()
-    session.overlays.walls.sync_hovered_wall_overlay()
-    session.overlays.walls.sync_hovered_wall_opening_context_overlay()
-    if session.current_tool == plan_runtime_tools.PlanTool.JOIN:
-        session.task_panels.refresh_task_panel_status(reason="full")
+    return session.selection.hover.set_hovered_wall(wall)
 
 
 set_hovered_opening = _make_set_hovered_target_function(plan_target_kinds.PLAN_TARGET_OPENING)
@@ -320,7 +291,7 @@ set_hovered_region = _make_set_hovered_target_function(plan_target_kinds.PLAN_TA
 
 
 def queue_restore_selected_plan_target(session, kind, obj):
-    plan_target_dispatch.queue_restore_selected_target(session, kind, obj)
+    return session.selection.activation.queue_restore_selected_plan_target(kind, obj)
 
 
 def select_plan_target_for_plan_edit(
@@ -332,8 +303,7 @@ def select_plan_target_for_plan_edit(
     defer_gui_selection=False,
     defer_wall_grips=False,
 ):
-    return plan_selection_activation.select_plan_target_for_plan_edit(
-        session,
+    return session.selection.activation.select_plan_target_for_plan_edit(
         kind,
         obj,
         queue_restore=queue_restore,
@@ -344,23 +314,23 @@ def select_plan_target_for_plan_edit(
 
 
 def select_opening_for_plan_edit(session, *args, **kwargs):
-    return plan_selection_activation.select_opening_for_plan_edit(session, *args, **kwargs)
+    return session.selection.activation.select_opening_for_plan_edit(*args, **kwargs)
 
 
 def select_symbol_for_plan_edit(session, *args, **kwargs):
-    return plan_selection_activation.select_symbol_for_plan_edit(session, *args, **kwargs)
+    return session.selection.activation.select_symbol_for_plan_edit(*args, **kwargs)
 
 
 def select_region_for_plan_edit(session, *args, **kwargs):
-    return plan_selection_activation.select_region_for_plan_edit(session, *args, **kwargs)
+    return session.selection.activation.select_region_for_plan_edit(*args, **kwargs)
 
 
 def select_space_for_plan_edit(session, *args, **kwargs):
-    return plan_selection_activation.select_space_for_plan_edit(session, *args, **kwargs)
+    return session.selection.activation.select_space_for_plan_edit(*args, **kwargs)
 
 
 def select_wall_for_plan_edit(session, *args, **kwargs):
-    return plan_selection_activation.select_wall_for_plan_edit(session, *args, **kwargs)
+    return session.selection.activation.select_wall_for_plan_edit(*args, **kwargs)
 
 
 def _activate_configured_plan_target(
@@ -373,8 +343,7 @@ def _activate_configured_plan_target(
     defer_gui_selection=None,
     defer_wall_grips=None,
 ):
-    return plan_selection_activation._activate_configured_plan_target(
-        session,
+    return session.selection.activation.activate_plan_target_for_kind(
         kind,
         mouse_pos,
         event_callback=event_callback,
@@ -394,8 +363,7 @@ def activate_plan_target_for_kind(
     defer_gui_selection=None,
     defer_wall_grips=None,
 ):
-    return plan_selection_activation.activate_plan_target_for_kind(
-        session,
+    return session.selection.activation.activate_plan_target_for_kind(
         kind,
         mouse_pos,
         event_callback=event_callback,
@@ -416,8 +384,7 @@ def activate_plan_target(
     defer_gui_selection=False,
     defer_wall_grips=False,
 ):
-    return plan_selection_activation.activate_plan_target(
-        session,
+    return session.selection.activation.activate_plan_target(
         kind,
         mouse_pos,
         event_callback=event_callback,
@@ -430,16 +397,14 @@ def activate_plan_target(
 
 
 def activate_semantic_plan_target(session, mouse_pos, event_callback=None):
-    return plan_selection_activation.activate_semantic_plan_target(
-        session,
+    return session.selection.activation.activate_semantic_plan_target(
         mouse_pos,
         event_callback=event_callback,
     )
 
 
 def activate_opening_target(session, mouse_pos, event_callback=None, resolved_target=None):
-    return plan_selection_activation.activate_opening_target(
-        session,
+    return session.selection.activation.activate_opening_target(
         mouse_pos,
         event_callback=event_callback,
         resolved_target=resolved_target,
@@ -447,8 +412,7 @@ def activate_opening_target(session, mouse_pos, event_callback=None, resolved_ta
 
 
 def activate_symbol_target(session, mouse_pos, event_callback=None, resolved_target=None):
-    return plan_selection_activation.activate_symbol_target(
-        session,
+    return session.selection.activation.activate_symbol_target(
         mouse_pos,
         event_callback=event_callback,
         resolved_target=resolved_target,
@@ -456,8 +420,7 @@ def activate_symbol_target(session, mouse_pos, event_callback=None, resolved_tar
 
 
 def activate_region_target(session, mouse_pos, event_callback=None, resolved_target=None):
-    return plan_selection_activation.activate_region_target(
-        session,
+    return session.selection.activation.activate_region_target(
         mouse_pos,
         event_callback=event_callback,
         resolved_target=resolved_target,
@@ -465,8 +428,7 @@ def activate_region_target(session, mouse_pos, event_callback=None, resolved_tar
 
 
 def activate_space_target(session, mouse_pos, event_callback=None, resolved_target=None):
-    return plan_selection_activation.activate_space_target(
-        session,
+    return session.selection.activation.activate_space_target(
         mouse_pos,
         event_callback=event_callback,
         resolved_target=resolved_target,
@@ -481,8 +443,7 @@ def activate_wall_target(
     defer_gui_selection=False,
     defer_wall_grips=False,
 ):
-    return plan_selection_activation.activate_wall_target(
-        session,
+    return session.selection.activation.activate_wall_target(
         mouse_pos,
         event_callback=event_callback,
         resolved_target=resolved_target,
@@ -492,32 +453,29 @@ def activate_wall_target(
 
 
 def clear_plan_selection_state(session):
-    return plan_selection_activation.clear_plan_selection_state(session)
+    return session.selection.activation.clear_plan_selection_state()
 
 
 def is_plan_additive_selection_active(session):
-    return plan_selection_activation.is_plan_additive_selection_active(session)
+    return session.selection.activation.is_plan_additive_selection_active()
 
 
 def activate_provider_overlay_target_node(session, node, event_callback=None):
-    return plan_selection_activation.activate_provider_overlay_target_node(
-        session,
+    return session.selection.activation.activate_provider_overlay_target_node(
         node,
         event_callback=event_callback,
     )
 
 
 def toggle_raw_plan_object_selection(session, obj, event_callback=None):
-    return plan_selection_activation.toggle_raw_plan_object_selection(
-        session,
+    return session.selection.activation.toggle_raw_plan_object_selection(
         obj,
         event_callback=event_callback,
     )
 
 
 def toggle_plan_target_selection_at_position(session, mouse_pos, event_callback=None):
-    return plan_selection_activation.toggle_plan_target_selection_at_position(
-        session,
+    return session.selection.activation.toggle_plan_target_selection_at_position(
         mouse_pos,
         event_callback=event_callback,
     )
@@ -539,14 +497,6 @@ def clear_selected_visuals(
         include_selected_wall_opening_context=include_selected_wall_opening_context,
         include_secondary_selection=include_secondary_selection,
     )
-
-
-def _should_preserve_provider_selected_target(session, kind, obj, selected):
-    if kind != "provider" or obj is None or selected != obj:
-        return False
-    if not is_valid_plan_target(session, kind, obj):
-        return False
-    return plan_selection_gui_sync.is_visible_provider_target_object(session, obj)
 
 
 class PlanSelectionAPI(_SessionAPI):
