@@ -7,6 +7,73 @@ from bimplan.overlays import openings as opening_overlays
 from bimplan.overlays import spaces as space_overlays
 
 
+class PlanOverlayGeometryService:
+    """Owned session surface for overlay geometry queries."""
+
+    __slots__ = ("_session",)
+
+    def __init__(self, session):
+        self._session = session
+
+    @property
+    def session(self):
+        return self._session
+
+    def get_footprint_overlay_polylines(self, *args, **kwargs):
+        return get_footprint_overlay_polylines(*args, **kwargs)
+
+    def build_overlay_segments_from_polylines(self, *args, **kwargs):
+        return build_overlay_segments_from_polylines(*args, **kwargs)
+
+    def get_plan_overlay_geometry_kinds_for_object(self, *args, **kwargs):
+        return get_plan_overlay_geometry_kinds_for_object(self.session, *args, **kwargs)
+
+    def get_plan_overlay_geometry_cache_entry(self, *args, **kwargs):
+        return get_plan_overlay_geometry_cache_entry(self.session, *args, **kwargs)
+
+    def invalidate_plan_overlay_geometry_cache(self, *args, **kwargs):
+        return invalidate_plan_overlay_geometry_cache(self.session, *args, **kwargs)
+
+    def get_cached_plan_overlay_geometry(self, *args, **kwargs):
+        return get_cached_plan_overlay_geometry(self.session, *args, **kwargs)
+
+    def get_wall_overlay_polylines(self, *args, **kwargs):
+        return get_wall_overlay_polylines(self.session, *args, **kwargs)
+
+    def get_space_footprint_faces(self, *args, **kwargs):
+        return get_space_footprint_faces(self.session, *args, **kwargs)
+
+    def get_space_overlay_polylines(self, *args, **kwargs):
+        return get_space_overlay_polylines(self.session, *args, **kwargs)
+
+    def get_space_overlay_segments(self, *args, **kwargs):
+        return get_space_overlay_segments(self.session, *args, **kwargs)
+
+    def get_region_footprint_faces(self, *args, **kwargs):
+        return get_region_footprint_faces(self.session, *args, **kwargs)
+
+    def get_region_overlay_polylines(self, *args, **kwargs):
+        return get_region_overlay_polylines(self.session, *args, **kwargs)
+
+    def get_region_overlay_segments(self, *args, **kwargs):
+        return get_region_overlay_segments(self.session, *args, **kwargs)
+
+    def get_opening_overlay_polylines(self, *args, **kwargs):
+        return get_opening_overlay_polylines(self.session, *args, **kwargs)
+
+    def get_opening_overlay_screen_polylines(self, *args, **kwargs):
+        return get_opening_overlay_screen_polylines(self.session, *args, **kwargs)
+
+    def get_opening_overlay_screen_bounds(self, *args, **kwargs):
+        return get_opening_overlay_screen_bounds(self.session, *args, **kwargs)
+
+    def get_opening_pick_bounds(self, *args, **kwargs):
+        return get_opening_pick_bounds(self.session, *args, **kwargs)
+
+    def get_opening_overlay_segments(self, *args, **kwargs):
+        return get_opening_overlay_segments(self.session, *args, **kwargs)
+
+
 def _perf_count(session, name, delta=1):
     return session.performance.plan_perf_count(name, delta=delta)
 

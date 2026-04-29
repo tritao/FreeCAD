@@ -10,6 +10,73 @@ from . import manager as overlay_manager
 from . import openings as overlay_openings
 
 
+class PlanWallOverlayService:
+    """Owned session surface for wall overlays and grips."""
+
+    __slots__ = ("_session",)
+
+    def __init__(self, session):
+        self._session = session
+
+    @property
+    def session(self):
+        return self._session
+
+    def discard_runtime_references(self):
+        self.session.overlay_tracker_state.junction_node_trackers = []
+
+    def retarget_edit_tracker(self, *args, **kwargs):
+        return retarget_edit_tracker(*args, **kwargs)
+
+    def sync_wall_grips(self, *args, **kwargs):
+        return sync_wall_grips(self.session, *args, **kwargs)
+
+    def schedule_wall_grip_sync(self, *args, **kwargs):
+        return schedule_wall_grip_sync(self.session, *args, **kwargs)
+
+    def run_scheduled_wall_grip_sync(self, *args, **kwargs):
+        return run_scheduled_wall_grip_sync(self.session, *args, **kwargs)
+
+    def clear_wall_grips(self, *args, **kwargs):
+        return clear_wall_grips(self.session, *args, **kwargs)
+
+    def sync_hovered_wall_overlay(self, *args, **kwargs):
+        return sync_hovered_wall_overlay(self.session, *args, **kwargs)
+
+    def clear_hovered_wall_overlay(self, *args, **kwargs):
+        return clear_hovered_wall_overlay(self.session, *args, **kwargs)
+
+    def sync_selected_wall_overlay(self, *args, **kwargs):
+        return sync_selected_wall_overlay(self.session, *args, **kwargs)
+
+    def clear_selected_wall_overlay(self, *args, **kwargs):
+        return clear_selected_wall_overlay(self.session, *args, **kwargs)
+
+    def apply_selected_wall_selection_feedback(self, *args, **kwargs):
+        return apply_selected_wall_selection_feedback(self.session, *args, **kwargs)
+
+    def get_plan_context_junctions(self, *args, **kwargs):
+        return get_plan_context_junctions(self.session, *args, **kwargs)
+
+    def create_junction_node_trackers(self, *args, **kwargs):
+        return create_junction_node_trackers(self.session, *args, **kwargs)
+
+    def sync_junction_node_overlays(self, *args, **kwargs):
+        return sync_junction_node_overlays(self.session, *args, **kwargs)
+
+    def clear_junction_node_overlays(self, *args, **kwargs):
+        return clear_junction_node_overlays(self.session, *args, **kwargs)
+
+    def sync_hovered_wall_opening_context_overlay(self, *args, **kwargs):
+        return sync_hovered_wall_opening_context_overlay(self.session, *args, **kwargs)
+
+    def clear_hovered_wall_opening_context_overlay(self, *args, **kwargs):
+        return clear_hovered_wall_opening_context_overlay(self.session, *args, **kwargs)
+
+    def create_wall_overlay_trackers(self, *args, **kwargs):
+        return create_wall_overlay_trackers(self.session, *args, **kwargs)
+
+
 def _perf_count(session, name, delta=1):
     return session.performance.plan_perf_count(name, delta=delta)
 

@@ -24,6 +24,40 @@ def _overlay_refresh_state(session):
     return session.overlay_refresh_state
 
 
+class PlanOverlayManagerService:
+    """Owned session surface for shared overlay management."""
+
+    __slots__ = ("_session",)
+
+    def __init__(self, session):
+        self._session = session
+
+    @property
+    def session(self):
+        return self._session
+
+    def finalize_trackers(self, *args, **kwargs):
+        return finalize_trackers(*args, **kwargs)
+
+    def make_plan_line_tracker(self, *args, **kwargs):
+        return make_plan_line_tracker(*args, **kwargs)
+
+    def set_plan_line_tracker_width(self, *args, **kwargs):
+        return set_plan_line_tracker_width(*args, **kwargs)
+
+    def flush_plan_overlay_visual_refresh(self, *args, **kwargs):
+        return flush_plan_overlay_visual_refresh(self.session, *args, **kwargs)
+
+    def flush_view_scale_overlay_refresh(self, *args, **kwargs):
+        return flush_view_scale_overlay_refresh(self.session, *args, **kwargs)
+
+    def refresh_plan_overlay_view_scale(self, *args, **kwargs):
+        return refresh_plan_overlay_view_scale(self.session, *args, **kwargs)
+
+    def refresh_plan_overlay_visuals(self, *args, **kwargs):
+        return refresh_plan_overlay_visuals(self.session, *args, **kwargs)
+
+
 def queue_plan_overlay_visual_refresh(session, visuals, visual_all, visual_selected_space):
     if _session_is_inactive(session):
         return
