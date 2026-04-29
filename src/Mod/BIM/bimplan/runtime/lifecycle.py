@@ -47,21 +47,6 @@ class PlanLifecycleAPI:
     def activate_select_tool(self):
         return activate_select_tool(self.session)
 
-    def activate_window_tool(self):
-        return activate_window_tool(self.session)
-
-    def activate_plan_region_tool(self):
-        return activate_plan_region_tool(self.session)
-
-    def activate_space_separator_tool(self):
-        return activate_space_separator_tool(self.session)
-
-    def activate_space_tool(self):
-        return activate_space_tool(self.session)
-
-    def activate_move_tool(self):
-        return activate_move_tool(self.session)
-
     def start_embedded_tool(self, tool_name, command, host_class=None):
         return start_embedded_tool(
             self.session,
@@ -311,9 +296,6 @@ def _clear_space_region_pick_state(session):
     plan_spaces.reset_space_region_pick_state(session, clear_overlays=False)
 
 
-_MOVE_TOOL_SELECTION_KINDS = (plan_target_kinds.PLAN_TARGET_WALL,)
-
-
 def _cancel_current_tool_for_finish(session):
     if session.current_tool == plan_runtime_tools.PlanTool.MOVE_PROVIDER:
         session.providers.cancel_provider_handle_point_pick()
@@ -462,12 +444,6 @@ def _cleanup_shutdown(session, *, teardown=False):
     detach_runtime_observers(session)
 
 
-def _start_move_tool(session):
-    from draftguitools import gui_move
-
-    return start_embedded_tool(session, plan_runtime_tools.PlanTool.MOVE, gui_move.Move())
-
-
 def finish(session, close_dialog=True):
     if _cancel_current_tool_for_finish(session):
         return True
@@ -578,40 +554,6 @@ def activate_select_tool(session):
         session.spaces.cancel_space_separator_tool()
     session.wall_edit.cancel_wall_edit()
     session.wall_relations.cancel_join_tool()
-
-
-def activate_window_tool(session):
-    return session.windows.activate_window_tool()
-
-
-def activate_plan_region_tool(session):
-    return session.spaces.activate_plan_region_tool()
-
-
-def activate_space_separator_tool(session):
-    return session.spaces.activate_space_separator_tool()
-
-
-def activate_space_tool(session):
-    return session.spaces.activate_space_tool()
-
-
-def activate_move_tool(session):
-    session.spaces.cancel_space_region_pick(refresh=False)
-    session.spaces.cancel_plan_region_tool(refresh=False)
-    session.wall_create.cancel_rect_wall_tool(refresh=False)
-    session.windows.cancel_window_tool(refresh=False)
-    session.spaces.cancel_space_separator_tool(refresh=False)
-    session.providers.cancel_provider_point_tool(refresh=False)
-    session.wall_edit.cancel_wall_edit()
-    cancel_pending_edit(session)
-    session.wall_relations.clear_plan_relation_status()
-    clear_selection_visuals(
-        session,
-        kinds=_MOVE_TOOL_SELECTION_KINDS,
-        include_wall_grips=True,
-    )
-    return _start_move_tool(session)
 
 
 def start_embedded_tool(session, tool_name, command, host_class=None):
