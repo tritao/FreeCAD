@@ -26,6 +26,127 @@ def _symbol_preview_state(session):
     return session.opening_transient_state
 
 
+class PlanSymbolOverlayService:
+    """Owned session surface for symbol overlay behavior."""
+
+    __slots__ = ("_session",)
+
+    def __init__(self, session):
+        self._session = session
+
+    @property
+    def session(self):
+        return self._session
+
+    def clear_symbol_edit_preview(self, *args, **kwargs):
+        return clear_symbol_edit_preview(self.session, *args, **kwargs)
+
+    def get_plan_symbol_instances(self, *args, **kwargs):
+        return get_plan_symbol_instances(self.session, *args, **kwargs)
+
+    def get_symbol_global_placement(self, *args, **kwargs):
+        return get_symbol_global_placement(self.session, *args, **kwargs)
+
+    def get_symbol_parent_global_placement(self, *args, **kwargs):
+        return get_symbol_parent_global_placement(self.session, *args, **kwargs)
+
+    def get_symbol_plan_proxy(self, *args, **kwargs):
+        return get_symbol_plan_proxy(self.session, *args, **kwargs)
+
+    def get_symbol_semantic_proxy(self, *args, **kwargs):
+        return get_symbol_semantic_proxy(self.session, *args, **kwargs)
+
+    def get_symbol_overlay_polylines(self, *args, **kwargs):
+        return get_symbol_overlay_polylines(self.session, *args, **kwargs)
+
+    def get_symbol_overlay_segments(self, *args, **kwargs):
+        return get_symbol_overlay_segments(self.session, *args, **kwargs)
+
+    def get_symbol_overlay_screen_polylines(self, *args, **kwargs):
+        return get_symbol_overlay_screen_polylines(self.session, *args, **kwargs)
+
+    def get_symbol_overlay_screen_bounds(self, *args, **kwargs):
+        return get_symbol_overlay_screen_bounds(self.session, *args, **kwargs)
+
+    def refresh_selected_symbol_visuals(self, *args, **kwargs):
+        return refresh_selected_symbol_visuals(self.session, *args, **kwargs)
+
+    def create_symbol_overlay_trackers(self, *args, **kwargs):
+        return create_symbol_overlay_trackers(self.session, *args, **kwargs)
+
+    def sync_hovered_symbol_overlay(self, *args, **kwargs):
+        return sync_hovered_symbol_overlay(self.session, *args, **kwargs)
+
+    def clear_hovered_symbol_overlay(self, *args, **kwargs):
+        return clear_hovered_symbol_overlay(self.session, *args, **kwargs)
+
+    def sync_selected_symbol_overlay(self, *args, **kwargs):
+        return sync_selected_symbol_overlay(self.session, *args, **kwargs)
+
+    def clear_selected_symbol_overlay(self, *args, **kwargs):
+        return clear_selected_symbol_overlay(self.session, *args, **kwargs)
+
+    def get_symbol_rotation_snap_increment_degrees(self, *args, **kwargs):
+        return get_symbol_rotation_snap_increment_degrees(self.session, *args, **kwargs)
+
+    def get_symbol_rotation_snap_step_radians(self, *args, **kwargs):
+        return get_symbol_rotation_snap_step_radians(self.session, *args, **kwargs)
+
+    def symbol_rotation_free_angle_override_active(self, *args, **kwargs):
+        return symbol_rotation_free_angle_override_active(self.session, *args, **kwargs)
+
+    def resolve_symbol_handle_target_point(self, *args, **kwargs):
+        return resolve_symbol_handle_target_point(self.session, *args, **kwargs)
+
+    def get_symbol_handle_radius(self, *args, **kwargs):
+        return get_symbol_handle_radius(self.session, *args, **kwargs)
+
+    def get_selected_symbol_handle_specs(self, *args, **kwargs):
+        return get_selected_symbol_handle_specs(self.session, *args, **kwargs)
+
+    def get_symbol_anchor_point(self, *args, **kwargs):
+        return get_symbol_anchor_point(self.session, *args, **kwargs)
+
+    def get_symbol_facing_vector(self, *args, **kwargs):
+        return get_symbol_facing_vector(self.session, *args, **kwargs)
+
+    def sync_selected_symbol_handles(self, *args, **kwargs):
+        return sync_selected_symbol_handles(self.session, *args, **kwargs)
+
+    def clear_selected_symbol_handles(self, *args, **kwargs):
+        return clear_selected_symbol_handles(self.session, *args, **kwargs)
+
+    def sync_symbol_edit_preview(self, *args, **kwargs):
+        return sync_symbol_edit_preview(self.session, *args, **kwargs)
+
+    def pick_selected_symbol_handle(self, *args, **kwargs):
+        return pick_selected_symbol_handle(self.session, *args, **kwargs)
+
+    def get_symbol_local_anchor(self, *args, **kwargs):
+        return get_symbol_local_anchor(self.session, *args, **kwargs)
+
+    def get_symbol_local_facing(self, *args, **kwargs):
+        return get_symbol_local_facing(self.session, *args, **kwargs)
+
+    def is_symbol_visual_dependency(self, symbol, obj):
+        return is_symbol_visual_dependency(self.session, symbol, obj)
+
+    def refresh_target_document_visual_dependency(self, symbol, obj, prop):
+        return refresh_target_document_visual_dependency(self.session, symbol, obj, prop)
+
+    def refresh_symbol_visual_footprint(self, symbol):
+        return refresh_symbol_visual_footprint(self.session, symbol)
+
+    def handle_document_visual_dependency_change(self, obj, prop):
+        return handle_document_visual_dependency_change(self.session, obj, prop)
+
+    def handle_deleted_visual_target(self, obj):
+        return handle_deleted_visual_target(self.session, obj)
+
+    def refresh_document_dependent_visuals(self):
+        return refresh_document_dependent_visuals(self.session)
+
+
 def get_symbol_global_placement(session, symbol, placement=None):
     current_global = session.visibility.get_plan_object_global_placement(symbol)
     if placement is None:
