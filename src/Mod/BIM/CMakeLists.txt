@@ -226,7 +226,13 @@ SET(bimplan_SRCS
     bimplan/overlays/walls.py
     bimplan/performance.py
     bimplan/picking/__init__.py
+    bimplan/picking/area.py
     bimplan/picking/coordinator.py
+    bimplan/picking/debug.py
+    bimplan/picking/edit_nodes.py
+    bimplan/picking/geometry.py
+    bimplan/picking/hover.py
+    bimplan/picking/overlays.py
     bimplan/picking/service.py
     bimplan/providers/__init__.py
     bimplan/providers/edit.py
@@ -247,15 +253,8 @@ SET(bimplan_SRCS
     bimplan/runtime/view_properties.py
     bimplan/selection/__init__.py
     bimplan/selection/activation.py
-    bimplan/selection/area_picking.py
-    bimplan/selection/edit_node_picking.py
     bimplan/selection/edit_nodes.py
     bimplan/selection/gui_sync.py
-    bimplan/selection/hover_picking.py
-    bimplan/selection/overlay_picking.py
-    bimplan/selection/picking_debug.py
-    bimplan/selection/picking_geometry.py
-    bimplan/selection/provider_overlay_picking.py
     bimplan/selection/selection.py
     bimplan/selection/service_common.py
     bimplan/selection/service_interaction.py

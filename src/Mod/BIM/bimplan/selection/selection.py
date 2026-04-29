@@ -7,7 +7,6 @@ from contextlib import contextmanager
 from bimplan.runtime import tools as plan_runtime_tools
 from . import activation as plan_selection_activation
 from . import gui_sync as plan_selection_gui_sync
-from . import hover_picking as plan_hover_picking
 from . import state_refresh as plan_selection_state_refresh
 from . import target_dispatch as plan_target_dispatch
 from . import target_kinds as plan_target_kinds

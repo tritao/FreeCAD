@@ -3,11 +3,11 @@
 """Session-owned Plan Edit picking API."""
 
 from bimplan.picking import coordinator as plan_picking_coordinator
-from bimplan.selection import area_picking as plan_area_picking
-from bimplan.selection import edit_node_picking as plan_edit_node_picking
-from bimplan.selection import hover_picking as plan_hover_picking
-from bimplan.selection import overlay_picking as plan_overlay_picking
-from bimplan.selection import picking_geometry as plan_picking_geometry
+from bimplan.picking import area as plan_area_picking
+from bimplan.picking import edit_nodes as plan_edit_node_picking
+from bimplan.picking import geometry as plan_picking_geometry
+from bimplan.picking import hover as plan_hover_picking
+from bimplan.picking import overlays as plan_overlay_picking
 from bimplan.providers import picking as plan_provider_picking
 
 

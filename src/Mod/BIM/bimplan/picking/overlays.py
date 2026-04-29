@@ -2,8 +2,8 @@
 
 """Overlay-geometry picking helpers for BIM Plan Edit."""
 
-from . import picking_debug as plan_picking_debug
-from . import picking_geometry as plan_picking_geometry
+from bimplan.picking import debug as plan_picking_debug
+from bimplan.picking import geometry as plan_picking_geometry
 
 
 def _perf_count(session, name, delta=1):

@@ -5,11 +5,11 @@
 import FreeCAD
 
 from bimplan import selection as plan_selection
+from bimplan.picking import debug as plan_picking_debug
 from bimplan.providers import picking as plan_provider_picking
-from . import edit_nodes as plan_edit_nodes
-from . import picking_debug as plan_picking_debug
-from . import target_kinds as plan_target_kinds
-from . import targets as plan_targets
+from bimplan.selection import edit_nodes as plan_edit_nodes
+from bimplan.selection import target_kinds as plan_target_kinds
+from bimplan.selection import targets as plan_targets
 
 
 def get_plan_target_from_edit_node(session, node):

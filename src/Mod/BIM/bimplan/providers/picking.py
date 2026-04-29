@@ -10,8 +10,8 @@ import FreeCAD
 from bimplan.providers import PlanOverlayMarkerKind
 from bimplan.providers import runtime as plan_provider_runtime
 from bimplan.selection import edit_nodes as plan_edit_nodes
-from bimplan.selection import picking_debug as plan_picking_debug
-from bimplan.selection import picking_geometry as plan_picking_geometry
+from bimplan.picking import debug as plan_picking_debug
+from bimplan.picking import geometry as plan_picking_geometry
 from bimplan.selection import target_kinds as plan_target_kinds
 from bimplan.selection import targets as plan_targets
 

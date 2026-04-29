@@ -68,8 +68,8 @@ from bimplan.runtime.lifecycle import activate_plan_region_tool, activate_space_
 from bimplan.overlays import providers as provider_overlays
 from bimplan import task_panel as plan_task_panel_module
 from bimplan.picking.coordinator import get_plan_target_at_position
-from bimplan.selection.hover_picking import get_hovered_plan_target
-from bimplan.selection.overlay_picking import (
+from bimplan.picking.hover import get_hovered_plan_target
+from bimplan.picking.overlays import (
     pick_plan_opening_target_from_overlays,
     pick_plan_symbol_target_from_overlays,
 )
@@ -1507,7 +1507,7 @@ class TestBimPlanCore(unittest.TestCase):
         )
 
         with patch(
-            "bimplan.selection.overlay_picking.should_skip_opening_by_plan_bounds",
+            "bimplan.picking.overlays.should_skip_opening_by_plan_bounds",
             return_value=False,
         ):
             self.assertIsNone(
