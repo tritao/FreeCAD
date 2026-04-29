@@ -549,18 +549,6 @@ _PLAN_EDIT_SESSION_STATE_PROPERTIES = (
         (("_plan_edit_params", "plan_edit_params", _coerce_identity),),
     ),
     (
-        "_ensure_provider_runtime_state",
-        (
-            ("_plan_provider_refresh_cache", "refresh_cache", _coerce_identity),
-            ("_plan_provider_document_cache", "document_cache", _coerce_dict),
-            (
-                "_plan_provider_target_collection_depth",
-                "target_collection_depth",
-                _coerce_int,
-            ),
-        ),
-    ),
-    (
         "_ensure_provider_transient_state",
         (
             ("_provider_handle_trackers", "provider_handle_trackers", _coerce_list),

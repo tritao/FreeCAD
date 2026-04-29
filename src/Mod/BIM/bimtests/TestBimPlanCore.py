@@ -2645,7 +2645,7 @@ class TestBimPlanCore(unittest.TestCase):
         )
         session = SimpleNamespace(
             doc=SimpleNamespace(Name="PlanDoc"),
-            _plan_provider_refresh_cache={},
+            provider_runtime_state=_make_provider_runtime_state_stub(refresh_cache={}),
             get_plan_provider_targets=lambda: (provider_target,),
         )
 

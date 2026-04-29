@@ -554,30 +554,19 @@ def plan_provider_integrations_disabled(session):
 
 
 def _get_provider_runtime_state(session):
-    return getattr(session, "provider_runtime_state", None)
+    return session.provider_runtime_state
 
 
 def _get_provider_target_collection_depth(session):
-    provider_runtime_state = _get_provider_runtime_state(session)
-    if provider_runtime_state is not None:
-        return int(provider_runtime_state.target_collection_depth or 0)
-    return int(getattr(session, "_plan_provider_target_collection_depth", 0) or 0)
+    return int(_get_provider_runtime_state(session).target_collection_depth or 0)
 
 
 def _set_provider_target_collection_depth(session, depth):
-    provider_runtime_state = _get_provider_runtime_state(session)
-    if provider_runtime_state is not None:
-        provider_runtime_state.target_collection_depth = int(depth or 0)
-        return
-    session._plan_provider_target_collection_depth = int(depth or 0)
+    _get_provider_runtime_state(session).target_collection_depth = int(depth or 0)
 
 
 def invalidate_plan_provider_document_cache(session):
-    provider_runtime_state = _get_provider_runtime_state(session)
-    if provider_runtime_state is not None:
-        provider_runtime_state.document_cache = {}
-        return
-    session._plan_provider_document_cache = {}
+    _get_provider_runtime_state(session).document_cache = {}
 
 
 @contextmanager
@@ -588,42 +577,24 @@ def plan_provider_refresh_cache_scope(session):
             yield external_scope
         return
     provider_runtime_state = _get_provider_runtime_state(session)
-    if provider_runtime_state is not None:
-        previous_cache = provider_runtime_state.refresh_cache
-        provider_runtime_state.refresh_cache = {}
-        current_cache = provider_runtime_state.refresh_cache
-    else:
-        previous_cache = session._plan_provider_refresh_cache
-        session._plan_provider_refresh_cache = {}
-        current_cache = session._plan_provider_refresh_cache
+    previous_cache = provider_runtime_state.refresh_cache
+    provider_runtime_state.refresh_cache = {}
+    current_cache = provider_runtime_state.refresh_cache
     try:
         yield current_cache
     finally:
-        if provider_runtime_state is not None:
-            provider_runtime_state.refresh_cache = previous_cache
-        else:
-            session._plan_provider_refresh_cache = previous_cache
+        provider_runtime_state.refresh_cache = previous_cache
 
 
 def _get_provider_refresh_cache(session):
-    provider_runtime_state = _get_provider_runtime_state(session)
-    refresh_cache = (
-        provider_runtime_state.refresh_cache
-        if provider_runtime_state is not None
-        else getattr(session, "_plan_provider_refresh_cache", None)
-    )
+    refresh_cache = _get_provider_runtime_state(session).refresh_cache
     if isinstance(refresh_cache, dict):
         return refresh_cache
     return None
 
 
 def _get_provider_document_cache(session):
-    provider_runtime_state = _get_provider_runtime_state(session)
-    document_cache = (
-        provider_runtime_state.document_cache
-        if provider_runtime_state is not None
-        else getattr(session, "_plan_provider_document_cache", None)
-    )
+    document_cache = _get_provider_runtime_state(session).document_cache
     if isinstance(document_cache, dict):
         return document_cache
     return None

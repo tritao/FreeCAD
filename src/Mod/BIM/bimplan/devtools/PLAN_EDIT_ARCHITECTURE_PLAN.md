@@ -507,6 +507,7 @@ Current progress:
 - Unused private symbol/space overlay tracker compatibility aliases are removed; overlays use `overlay_tracker_state`.
 - Unused private wall-edit compatibility aliases are removed; wall editing uses `wall_edit_state`.
 - Private provider overlay read compatibility aliases are removed; provider overlay mode, visibility, and render cache use `provider_overlay_read_state`.
+- Private provider runtime compatibility aliases are removed; provider caches and target collection depth use `provider_runtime_state`.
 
 Steps:
 
