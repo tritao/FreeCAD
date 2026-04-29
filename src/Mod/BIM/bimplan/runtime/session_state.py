@@ -475,14 +475,6 @@ _PLAN_EDIT_SESSION_STATE_ENSURERS = (
 
 _PLAN_EDIT_SESSION_STATE_PROPERTIES = (
     (
-        "_ensure_provider_overlay_read_state",
-        (
-            ("_provider_overlay_mode", "mode", _make_str_coercer("architecture")),
-            ("_provider_overlay_visibility", "visibility", _coerce_dict),
-            ("_provider_overlay_state", "render_state", _coerce_identity),
-        ),
-    ),
-    (
         "_ensure_selection_state",
         (
             ("hovered_wall", "hovered_wall", _coerce_identity),
