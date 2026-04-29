@@ -319,19 +319,6 @@ def _dispatch_current_tool(session, handler_specs):
 
 
 def _resolve_action_callable(session, method_name):
-    compat_action_names = {
-        "providers.cancel_provider_point_tool": "_cancel_provider_point_tool",
-        "providers.has_active_provider_point_tool": "_has_active_provider_point_tool",
-        "status_text.clear_input_hints": "_clear_input_hints",
-        "wall_relations.clear_plan_relation_status": "_clear_plan_relation_status",
-        "wall_create.cancel_rect_wall_tool": "_cancel_rect_wall_tool",
-        "wall_create.has_active_rect_wall_tool": "_has_active_rect_wall_tool",
-        "wall_relations.cancel_join_tool": "_cancel_join_tool",
-    }
-    compat_name = compat_action_names.get(str(method_name or ""))
-    compat_callable = getattr(session, compat_name, None) if compat_name else None
-    if callable(compat_callable):
-        return compat_callable
     target = session
     parts = str(method_name or "").split(".")
     for part in parts:

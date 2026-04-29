@@ -539,6 +539,8 @@ Current progress:
   not generated delegates.
 - Provider contribution APIs are explicit module functions backed by one shared collector,
   not generated from a contribution-surface list.
+- Lifecycle activation resolves explicit service paths only; private action-name fallbacks
+  are removed from production code and tests.
 
 Steps:
 
