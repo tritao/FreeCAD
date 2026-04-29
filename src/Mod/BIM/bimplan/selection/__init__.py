@@ -2,8 +2,10 @@
 
 """Plan Edit selection and target resolution."""
 
-from .selection import *  # noqa: F401,F403
+from .api import PlanSelectionAPI
 from .gui_sync import (
     clear_gui_preselection as _clear_gui_preselection,
     get_gui_preselection_object as _get_gui_preselection_object,
 )
+
+__all__ = ("PlanSelectionAPI",)
