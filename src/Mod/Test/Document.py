@@ -269,7 +269,7 @@ class DocumentBasicCases(unittest.TestCase):
                 ]
                 if self.defer_once:
                     self.defer_once = False
-                    obj.requestDeferredRecompute("Finalize")
+                    obj.requestDeferredRecompute(FreeCAD.RecomputePhase.Finalize)
 
         source = self.Doc.addObject("App::FeaturePython", "DeferredFinalize")
         DeferredFeature(source)
