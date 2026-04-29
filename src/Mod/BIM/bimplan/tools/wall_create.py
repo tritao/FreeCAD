@@ -6,7 +6,7 @@ import FreeCAD
 import FreeCADGui
 
 from bimplan.runtime import tools as plan_runtime_tools
-from bimplan.tools.hosted_openings import _PlanEditWallHost
+from bimplan.runtime.embedded_commands import _PlanEditWallHost
 
 translate = FreeCAD.Qt.translate
 
@@ -34,6 +34,9 @@ class PlanWallCreateAPI:
 
     def activate_rect_wall_tool(self):
         return activate_rect_wall_tool(self.session)
+
+    def get_wall_defaults(self):
+        return get_wall_defaults(self.session)
 
     def has_active_rect_wall_tool(self):
         return has_active_rect_wall_tool(self.session)

@@ -432,11 +432,11 @@ class TestBimPlanCore(unittest.TestCase):
                 trace_span=lambda _name: nullcontext(),
                 count=lambda name, value=1: perf_counts.append((name, value)),
             ),
-            get_plan_provider_registry=lambda: registry,
             selection=_make_selection_stub(),
         )
         session.document_visuals = SimpleNamespace(document_is_alive=lambda: True)
         session.providers = SimpleNamespace(
+            get_plan_provider_registry=lambda: registry,
             get_plan_edit_context=_get_plan_edit_context,
             plan_provider_integrations_disabled=lambda: False,
             get_plan_provider_id=lambda current_provider: current_provider.get_provider_id(),
@@ -742,6 +742,7 @@ class TestBimPlanCore(unittest.TestCase):
             wall_create=SimpleNamespace(cancel_rect_wall_tool=lambda refresh=False: None),
             providers=SimpleNamespace(cancel_provider_point_tool=lambda refresh=False: None),
             wall_relations=SimpleNamespace(clear_plan_relation_status=lambda: None),
+            interaction_state=SimpleNamespace(embedded_tool=None),
             lifecycle=SimpleNamespace(
                 has_active_embedded_tool=lambda: False,
                 cancel_embedded_tool=lambda: None,
@@ -765,6 +766,8 @@ class TestBimPlanCore(unittest.TestCase):
         with patch(
             "bimplan.lifecycle.plan_spaces.prepare_plan_region_tool_state"
         ) as prepare, patch("bimplan.lifecycle.clear_selection_visuals"), patch(
+            "bimplan.lifecycle.cancel_pending_edit"
+        ), patch(
             "bimplan.lifecycle._start_snap_tool", return_value=True
         ):
             self.assertTrue(activate_plan_region_tool(session))
@@ -776,11 +779,14 @@ class TestBimPlanCore(unittest.TestCase):
         session = SimpleNamespace(
             current_tool="Select",
             _set_selected_plan_target=lambda *args, **kwargs: None,
-            _get_wall_defaults=lambda: {"height": 2500},
             task_panels=SimpleNamespace(refresh_task_panel_status=lambda *args, **kwargs: None),
-            wall_create=SimpleNamespace(cancel_rect_wall_tool=lambda refresh=False: None),
+            wall_create=SimpleNamespace(
+                cancel_rect_wall_tool=lambda refresh=False: None,
+                get_wall_defaults=lambda: {"height": 2500},
+            ),
             providers=SimpleNamespace(cancel_provider_point_tool=lambda refresh=False: None),
             wall_relations=SimpleNamespace(clear_plan_relation_status=lambda: None),
+            interaction_state=SimpleNamespace(embedded_tool=None),
             lifecycle=SimpleNamespace(
                 has_active_embedded_tool=lambda: False,
                 cancel_embedded_tool=lambda: None,
@@ -799,6 +805,8 @@ class TestBimPlanCore(unittest.TestCase):
         with patch(
             "bimplan.lifecycle.plan_spaces.prepare_space_separator_tool_state"
         ) as prepare, patch("bimplan.lifecycle.clear_selection_visuals"), patch(
+            "bimplan.lifecycle.cancel_pending_edit"
+        ), patch(
             "bimplan.lifecycle._start_snap_tool",
             return_value=True,
         ):
@@ -1169,17 +1177,17 @@ class TestBimPlanCore(unittest.TestCase):
         session = SimpleNamespace(
             doc=doc,
             viewport=SimpleNamespace(focus_plan_view=lambda: None),
-            get_plan_provider_registry=lambda: registry,
-            defer_document_visual_updates=lambda: nullcontext(),
             selection=SimpleNamespace(
                 refresh=SimpleNamespace(refresh_primary_selected_plan_target=lambda: None)
             ),
             document_visuals=SimpleNamespace(
                 document_is_alive=lambda: True,
+                defer_document_visual_updates=lambda: nullcontext(),
                 invalidate_document_dependent_plan_visuals=lambda: None,
             ),
             task_panels=SimpleNamespace(refresh_task_panel_status=lambda *args, **kwargs: None),
             providers=SimpleNamespace(
+                get_plan_provider_registry=lambda: registry,
                 get_plan_edit_context=lambda: plan_context,
                 get_plan_provider_action_context=lambda payload=None: action_context,
             ),

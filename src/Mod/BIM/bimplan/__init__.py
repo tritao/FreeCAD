@@ -2,9 +2,11 @@
 
 """BIM-owned Plan Edit integration primitives."""
 
-from .tools.hosted_openings import (
+from .runtime.embedded_commands import (
     _PlanEditCommandHost,
     _PlanEditWallHost,
+)
+from .tools.hosted_openings import (
     create_hosted_opening,
     has_built_opening_shape,
 )
@@ -33,6 +35,7 @@ from .providers import (
 from .providers import PlanEditRegistry, get_plan_edit_registry
 from .runtime import (
     command_gate,
+    embedded_commands,
     input,
     lifecycle,
     session,
@@ -74,6 +77,7 @@ __all__ = [
     "PlanToolSpec",
     "PlanToolInteraction",
     "command_gate",
+    "embedded_commands",
     "get_plan_edit_registry",
     "input",
     "lifecycle",
