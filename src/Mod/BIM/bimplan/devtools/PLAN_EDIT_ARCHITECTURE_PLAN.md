@@ -535,6 +535,7 @@ Validation:
 Current progress:
 
 - Provider overlay picking lives under `bimplan.providers.picking`; selection and picking code call that provider-owned module instead of owning provider-specific hit testing.
+- Provider runtime no longer falls back to provider hooks attached directly to `PlanEditSession`; test fakes and external overrides use `session.providers`.
 
 Steps:
 

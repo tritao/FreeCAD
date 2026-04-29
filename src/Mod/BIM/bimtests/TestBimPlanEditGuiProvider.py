@@ -669,7 +669,7 @@ class BimPlanEditGuiProviderMixin:
             session.view = FakeView()
             with (
                 patch.object(
-                    session,
+                    session.providers,
                     "get_plan_provider_overlays",
                     return_value=(
                         PlanOverlaySpec(
@@ -717,7 +717,7 @@ class BimPlanEditGuiProviderMixin:
         event = self._make_fake_left_mouse_press()
 
         with patch.object(
-            session,
+            session.providers,
             "get_plan_provider_targets",
             return_value=(
                 PlanProviderTargetSpec(

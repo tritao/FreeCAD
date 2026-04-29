@@ -81,31 +81,18 @@ def _call_provider_method(session, method_name, *args, default=None, **kwargs):
     method = getattr(providers, method_name, None) if providers is not None else None
     if callable(method):
         return method(*args, **kwargs)
-    method = _get_instance_override(session, method_name)
-    if callable(method):
-        return method(*args, **kwargs)
     return default
 
 
 def _get_external_provider_refresh_cache_scope(session):
-    external_scope = _call_provider_method(
-        session,
-        "plan_provider_refresh_cache_scope",
-        default=None,
-    )
-    if external_scope is not None:
-        return external_scope
     return _call_provider_method(
         session,
-        "_plan_provider_refresh_cache_scope",
+        "plan_provider_refresh_cache_scope",
         default=None,
     )
 
 
 def _get_external_provider_targets(session):
-    direct_get_plan_provider_targets = _get_instance_override(session, "get_plan_provider_targets")
-    if callable(direct_get_plan_provider_targets):
-        return tuple(direct_get_plan_provider_targets() or ())
     direct_targets = _call_provider_method(session, "get_plan_provider_targets", default=_MISSING)
     if direct_targets is _MISSING:
         return _MISSING
