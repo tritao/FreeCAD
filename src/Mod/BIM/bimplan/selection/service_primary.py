@@ -24,6 +24,18 @@ class PlanSelectionStateService(_SessionAPI):
     get_plan_target_object_from_state = staticmethod(get_plan_target_object_from_state)
     get_plan_target_state_key = staticmethod(get_plan_target_state_key)
 
+    def discard_runtime_references(self):
+        selection_state = self.session.selection_state
+        self.set_selected_plan_target_state()
+        selection_state.secondary_selected_plan_targets_state = []
+        self.session.hovered_wall = None
+        self.session.hovered_opening = None
+        self.session.hovered_symbol = None
+        self.session.hovered_provider = None
+        self.session.hovered_space = None
+        self.session.hovered_region = None
+        selection_state.pending_selected_plan_target = None
+
     def get_selected_target_for_kind(self, kind):
         selection_state = self.session.selection_state
         if selection_state.selected_plan_target_kind == kind:
@@ -285,6 +297,27 @@ class PlanSelectionStateService(_SessionAPI):
 
 
 class PlanSelectionRefreshService(_SessionAPI):
+    def clear_selected_visuals(
+        self,
+        kinds=None,
+        *,
+        clear_handle_kinds=None,
+        include_wall_grips=False,
+        include_selected_wall_opening_context=False,
+        include_secondary_selection=False,
+    ):
+        if include_wall_grips:
+            self.session.overlays.walls.clear_wall_grips()
+        plan_target_dispatch.clear_selected_target_visuals(
+            self.session,
+            kinds=kinds,
+            clear_handle_kinds=clear_handle_kinds,
+        )
+        if include_selected_wall_opening_context:
+            self.session.overlays.openings.clear_selected_wall_opening_context_overlay()
+        if include_secondary_selection:
+            self.session.overlays.spaces.clear_secondary_selected_overlays()
+
     def clear_hidden_provider_preselection(self):
         if self.session.lifecycle_state.tearing_down:
             return False

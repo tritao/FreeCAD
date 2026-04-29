@@ -288,6 +288,9 @@ def _make_selection_stub(
             refresh_primary_selected_plan_target=lambda *args, **kwargs: calls.append(
                 ("refresh-primary", args, kwargs)
             ),
+            clear_selected_visuals=lambda *args, **kwargs: calls.append(
+                ("clear-selected-visuals", args, kwargs)
+            ),
         ),
         clear_selected_visuals=lambda *args, **kwargs: calls.append(
             ("clear-selected-visuals", args, kwargs)

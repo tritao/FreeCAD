@@ -105,7 +105,7 @@ def activate_plan_region_tool(session):
     session.wall_relations.clear_plan_relation_status()
     session.selection.state.set_selected_plan_target()
     session.selection.hover.clear_hovered_plan_targets()
-    session.selection.clear_selected_visuals(
+    session.selection.refresh.clear_selected_visuals(
         kinds=_PLAN_REGION_TOOL_SELECTION_KINDS,
         include_wall_grips=True,
         include_selected_wall_opening_context=True,
@@ -133,7 +133,7 @@ def activate_space_separator_tool(session):
     session.lifecycle.cancel_pending_edit()
     session.wall_relations.clear_plan_relation_status()
     session.selection.state.set_selected_plan_target()
-    session.selection.clear_selected_visuals(
+    session.selection.refresh.clear_selected_visuals(
         kinds=_SPACE_SEPARATOR_TOOL_SELECTION_KINDS,
         include_wall_grips=True,
         include_selected_wall_opening_context=True,

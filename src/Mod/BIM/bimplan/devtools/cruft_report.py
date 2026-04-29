@@ -54,7 +54,8 @@ FLAT_OVERLAYS_API_PATTERN = re.compile(
     r"\bsession\.overlays\.(?!"
     r"manager\b|geometry\b|walls\b|openings\b|symbols\b|spaces\b|providers\b|"
     r"queue_plan_overlay_visual_refresh\b|queue_plan_overlay_view_scale_refresh\b|"
-    r"consume_dirty_plan_visuals\b"
+    r"consume_dirty_plan_visuals\b|discard_runtime_references\b|"
+    r"clear_begin_teardown_visuals\b|clear_shutdown_visuals\b"
     r")[A-Za-z_][A-Za-z0-9_]*\s*\("
 )
 OWNED_API_NAMES = (

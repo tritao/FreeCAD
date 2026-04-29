@@ -139,16 +139,7 @@ def clear_selected_plan_target_if_matches(session, kind, obj):
 
 
 def discard_runtime_references(session):
-    selection_state = session.selection_state
-    session.selection.state.set_selected_plan_target_state()
-    selection_state.secondary_selected_plan_targets_state = []
-    session.hovered_wall = None
-    session.hovered_opening = None
-    session.hovered_symbol = None
-    session.hovered_provider = None
-    session.hovered_space = None
-    session.hovered_region = None
-    selection_state.pending_selected_plan_target = None
+    return session.selection.state.discard_runtime_references()
 
 
 def is_valid_plan_target(session, kind, obj):
@@ -541,17 +532,13 @@ def clear_selected_visuals(
     include_selected_wall_opening_context=False,
     include_secondary_selection=False,
 ):
-    if include_wall_grips:
-        session.overlays.walls.clear_wall_grips()
-    plan_target_dispatch.clear_selected_target_visuals(
-        session,
+    return session.selection.refresh.clear_selected_visuals(
         kinds=kinds,
         clear_handle_kinds=clear_handle_kinds,
+        include_wall_grips=include_wall_grips,
+        include_selected_wall_opening_context=include_selected_wall_opening_context,
+        include_secondary_selection=include_secondary_selection,
     )
-    if include_selected_wall_opening_context:
-        session.overlays.openings.clear_selected_wall_opening_context_overlay()
-    if include_secondary_selection:
-        session.overlays.spaces.clear_secondary_selected_overlays()
 
 
 def _should_preserve_provider_selected_target(session, kind, obj, selected):
@@ -587,10 +574,10 @@ class PlanSelectionAPI(_SessionAPI):
         return self.sync.selection_observer_clear(doc)
 
     def clear_selected_visuals(self, *args, **kwargs):
-        return clear_selected_visuals(self.session, *args, **kwargs)
+        return self.refresh.clear_selected_visuals(*args, **kwargs)
 
     def discard_runtime_references(self):
-        return discard_runtime_references(self.session)
+        return self.state.discard_runtime_references()
 
     def setPreselection(self, doc, obj, sub):
         return self.sync.selection_observer_set_preselection(doc, obj, sub)
