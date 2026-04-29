@@ -86,58 +86,6 @@ def discard_runtime_references(session):
     session.embedded_tools.discard_runtime_references()
 
 
-def _clear_begin_teardown_visuals(session):
-    session.overlays.walls.clear_junction_node_overlays()
-    session.overlays.walls.clear_hovered_wall_opening_context_overlay()
-    plan_target_dispatch.clear_hovered_target_visuals(session)
-    session.overlays.walls.clear_wall_grips()
-    plan_target_dispatch.clear_selected_target_visuals(
-        session,
-        clear_handle_kinds=(
-            plan_target_kinds.PLAN_TARGET_PROVIDER,
-            plan_target_kinds.PLAN_TARGET_OPENING,
-            plan_target_kinds.PLAN_TARGET_SYMBOL,
-        ),
-    )
-    session.overlays.openings.clear_selected_wall_opening_context_overlay()
-    session.overlays.spaces.clear_secondary_selected_overlays()
-    session.overlays.providers.clear_provider_overlays()
-    session.overlays.providers.clear_provider_point_preview()
-    session.overlays.spaces.clear_space_region_pick_overlays()
-    session.overlays.openings.discard_opening_handle_tracker_pool()
-    session.openings.clear_opening_move_preview()
-    session.symbols.clear_symbol_edit_preview()
-    session.spaces.clear_plan_region_preview()
-
-
-def _clear_shutdown_visuals(session):
-    session.overlays.walls.clear_junction_node_overlays()
-    session.overlays.walls.clear_hovered_wall_opening_context_overlay()
-    plan_target_dispatch.clear_hovered_target_visuals(
-        session,
-        kinds=(
-            plan_target_kinds.PLAN_TARGET_WALL,
-            plan_target_kinds.PLAN_TARGET_OPENING,
-            plan_target_kinds.PLAN_TARGET_SYMBOL,
-            plan_target_kinds.PLAN_TARGET_PROVIDER,
-        ),
-    )
-    session.overlays.walls.clear_wall_grips()
-    plan_target_dispatch.clear_selected_target_visuals(
-        session,
-        clear_handle_kinds=(
-            plan_target_kinds.PLAN_TARGET_OPENING,
-            plan_target_kinds.PLAN_TARGET_SYMBOL,
-        ),
-    )
-    session.overlays.openings.clear_selected_wall_opening_context_overlay()
-    session.overlays.providers.clear_provider_overlays()
-    session.overlays.providers.clear_provider_point_preview()
-    session.overlays.openings.discard_opening_handle_tracker_pool()
-    session.openings.clear_opening_move_preview()
-    session.symbols.clear_symbol_edit_preview()
-
-
 def detach_runtime_observers(session):
     session.selection.sync.detach_selection_observer()
     session.document_visuals.detach_document_observer()
@@ -194,7 +142,7 @@ def _cleanup_begin_teardown(session):
     session.wall_edit.cancel_wall_edit(restore=False, refresh=False)
     cancel_pending_edit(session)
     _cancel_current_tool_for_begin_teardown(session)
-    _clear_begin_teardown_visuals(session)
+    session.overlays.clear_begin_teardown_visuals()
     detach_runtime_observers(session)
 
 
@@ -207,7 +155,7 @@ def _cleanup_shutdown(session, *, teardown=False):
     session.wall_edit.cancel_wall_edit(restore=not teardown, refresh=False)
     cancel_pending_edit(session)
     _cancel_current_tool_for_shutdown(session)
-    _clear_shutdown_visuals(session)
+    session.overlays.clear_shutdown_visuals()
     detach_runtime_observers(session)
 
 
