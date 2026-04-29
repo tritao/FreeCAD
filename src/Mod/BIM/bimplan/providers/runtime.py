@@ -194,11 +194,6 @@ class PlanProvidersAPI:
 
         return point.has_active_provider_point_tool(self.session)
 
-    def arm_provider_point_tool(self):
-        from bimplan.providers import point
-
-        return point.arm_provider_point_tool(self.session)
-
     def cancel_provider_point_tool(self, refresh=True):
         from bimplan.providers import point
 
@@ -224,93 +219,16 @@ class PlanProvidersAPI:
             obj=obj,
         )
 
-    def update_provider_point_tool_preview(self, point=None, obj=None):
-        from bimplan.providers import point
-
-        return point.update_provider_point_tool_preview(
-            self.session,
-            point=point,
-            obj=obj,
-        )
-
-    def get_provider_point_snap_info(self):
-        del self
-        from bimplan.providers import point
-
-        return point.get_provider_point_snap_info()
-
-    def resolve_provider_point_snap_object(self, snap_object, snap_info):
-        from bimplan.providers import point
-
-        return point.resolve_provider_point_snap_object(
-            self.session,
-            snap_object,
-            snap_info,
-        )
-
-    def normalize_provider_point_host_target(self, target):
-        from bimplan.providers import point
-
-        return point.normalize_provider_point_host_target(self.session, target)
-
-    def get_provider_point_context_host_state(self):
-        from bimplan.providers import point
-
-        return point.get_provider_point_context_host_state(self.session)
-
-    def get_provider_point_payload_host_target(
-        self,
-        *,
-        snap_target,
-        selected_target,
-        selected_targets,
-        hovered_target,
-    ):
-        from bimplan.providers import point
-
-        return point.get_provider_point_payload_host_target(
-            self.session,
-            snap_target=snap_target,
-            selected_target=selected_target,
-            selected_targets=selected_targets,
-            hovered_target=hovered_target,
-        )
-
     def project_provider_point_to_host(self, point, host_wall):
         del self
         from bimplan.providers import point as provider_point
 
         return provider_point.project_provider_point_to_host(point, host_wall)
 
-    def build_provider_point_tool_payload(
-        self,
-        tool,
-        *,
-        raw_point,
-        plan_point,
-        snap_object,
-        snap_info,
-    ):
-        from bimplan.providers import point
-
-        return point.build_provider_point_tool_payload(
-            self.session,
-            tool,
-            raw_point=raw_point,
-            plan_point=plan_point,
-            snap_object=snap_object,
-            snap_info=snap_info,
-        )
-
     def get_selected_provider_edit_handles(self, provider_obj):
         from bimplan.providers import edit
 
         return edit.get_selected_provider_edit_handles(self.session, provider_obj)
-
-    def can_move_provider_target_by_placement(self, provider_obj):
-        from bimplan.providers import edit
-
-        return edit.can_move_provider_target_by_placement(self.session, provider_obj)
 
     def activate_provider_handle(self, provider_obj, handle_index):
         from bimplan.providers import edit
@@ -321,25 +239,6 @@ class PlanProvidersAPI:
         from bimplan.providers import edit
 
         return edit.activate_provider_handle_now(self.session, provider_obj, handle_index)
-
-    def start_provider_handle_point_pick(self, provider_obj, handle_index, handle):
-        from bimplan.providers import edit
-
-        return edit.start_provider_handle_point_pick(
-            self.session,
-            provider_obj,
-            handle_index,
-            handle,
-        )
-
-    def update_provider_handle_point_pick(self, point=None, snap_info=None):
-        from bimplan.providers import edit
-
-        return edit.update_provider_handle_point_pick(
-            self.session,
-            point=point,
-            snap_info=snap_info,
-        )
 
     def finish_provider_handle_point_pick(self, point=None, obj=None):
         from bimplan.providers import edit
@@ -367,85 +266,21 @@ class PlanProvidersAPI:
         self.cancel_provider_handle_point_pick()
         return True
 
-    def restore_selected_provider(self, provider_obj):
-        from bimplan.providers import edit
-
-        return edit.restore_selected_provider(self.session, provider_obj)
-
-    def queue_restore_selected_provider(self, provider_obj):
-        from bimplan.providers import edit
-
-        return edit.queue_restore_selected_provider(self.session, provider_obj)
-
     def plan_provider_integrations_disabled(self):
         return plan_provider_integrations_disabled(self.session)
-
-    def get_plan_provider_id(self, provider):
-        del self
-        return get_plan_provider_id(provider)
-
-    def coerce_plan_provider_results(self, result):
-        del self
-        return coerce_plan_provider_results(result)
-
-    def normalize_plan_provider_action(self, provider_id, action):
-        del self
-        return normalize_plan_provider_action(provider_id, action)
 
     def normalize_plan_provider_tool(self, provider_id, tool):
         del self
         return normalize_plan_provider_tool(provider_id, tool)
 
-    def normalize_plan_provider_edit_handle(self, provider_id, handle):
-        del self
-        return normalize_plan_provider_edit_handle(provider_id, handle)
-
-    def normalize_plan_provider_issue(self, provider_id, issue):
-        return normalize_plan_provider_issue(self.session, provider_id, issue)
-
-    def normalize_plan_provider_suggestion(self, provider_id, suggestion):
-        return normalize_plan_provider_suggestion(self.session, provider_id, suggestion)
-
-    def normalize_plan_provider_section(self, provider_id, section):
-        return normalize_plan_provider_section(self.session, provider_id, section)
-
-    def normalize_plan_provider_context_panel(self, provider_id, panel):
-        return normalize_plan_provider_context_panel(self.session, provider_id, panel)
-
-    def normalize_plan_provider_overlay(self, provider_id, overlay):
-        del self
-        return normalize_plan_provider_overlay(provider_id, overlay)
-
-    def normalize_plan_provider_target(self, provider_id, target):
-        del self
-        return normalize_plan_provider_target(provider_id, target)
-
-    def collect_plan_provider_contributions(self, method_name, normalizer):
-        return collect_plan_provider_contributions(self.session, method_name, normalizer)
-
     def get_plan_provider_display_name(self, provider_id):
         return get_plan_provider_display_name(self.session, provider_id)
-
-    def get_plan_provider_issues(self):
-        return get_plan_provider_issues(self.session)
-
-    def get_plan_provider_suggestions(self):
-        return get_plan_provider_suggestions(self.session)
 
     def get_plan_provider_tools(self):
         return get_plan_provider_tools(self.session)
 
     def get_plan_provider_snapshot(self):
         return get_plan_provider_snapshot(self.session)
-
-    def get_plan_provider_edit_handles(self):
-        return get_plan_provider_edit_handles(self.session)
-
-    def get_plan_provider_inspector_sections(self):
-        return get_plan_provider_inspector_sections(self.session)
-
-    def get_plan_provider_context_panels(self):
-        return get_plan_provider_context_panels(self.session)
 
     def get_plan_provider_overlays(self):
         return get_plan_provider_overlays(self.session)
@@ -468,13 +303,6 @@ class PlanProvidersAPI:
     def is_plan_provider_overlay_enabled(self, overlay):
         return is_plan_provider_overlay_enabled(self.session, overlay)
 
-    def is_plan_provider_overlay_visible_for_mode(self, overlay, mode=None):
-        return is_plan_provider_overlay_visible_for_mode(
-            self.session,
-            overlay,
-            mode=mode,
-        )
-
     def is_plan_provider_overlay_visible(self, overlay):
         return is_plan_provider_overlay_visible(self.session, overlay)
 
@@ -486,23 +314,8 @@ class PlanProvidersAPI:
             visible,
         )
 
-    def queue_plan_provider_overlay_refresh(self):
-        return queue_plan_provider_overlay_refresh(self.session)
-
     def queue_plan_provider_overlay_sync(self):
         return queue_plan_provider_overlay_sync(self.session)
-
-    def build_plan_semantic_record(self, target_kind, target_obj):
-        return build_plan_semantic_record(self.session, target_kind, target_obj)
-
-    def get_plan_semantic_records(self, targets=None):
-        return get_plan_semantic_records(self.session, targets=targets)
-
-    def get_plan_edit_context(self):
-        return get_plan_edit_context(self.session)
-
-    def get_plan_provider_action_context(self, payload=None):
-        return get_plan_provider_action_context(self.session, payload=payload)
 
     def plan_provider_refresh_cache_scope(self):
         return plan_provider_refresh_cache_scope(self.session)
