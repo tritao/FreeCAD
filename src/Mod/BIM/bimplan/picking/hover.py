@@ -5,7 +5,6 @@
 import time
 
 from bimplan.providers import runtime as plan_provider_runtime
-from bimplan.selection import selection as plan_selection_runtime
 from bimplan.selection import target_dispatch as plan_target_dispatch
 from bimplan.selection import target_kinds as plan_target_kinds
 from bimplan.selection import targets as plan_selection_targets
@@ -101,10 +100,8 @@ def update_hovered_plan_target(session, mouse_pos, force=False):
         session.hover_pick_state.dirty = False
         target_kind = getattr(target_ref, "kind", None)
         target_obj = getattr(target_ref, "obj", None)
-        if target_kind == "wall" and not plan_selection_runtime.is_selected_plan_target(
-            session,
-            "wall",
-            target_obj,
+        if target_kind == "wall" and not session.selection.state.is_selected_plan_target(
+            "wall", target_obj
         ):
             plan_target_dispatch.set_only_hovered_target(session, target_kind, target_obj)
         else:

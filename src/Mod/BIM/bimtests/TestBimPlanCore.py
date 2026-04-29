@@ -103,12 +103,6 @@ from bimplan.providers import (
     PlanToolSpec,
 )
 from bimplan.providers import PlanEditRegistry
-from bimplan.selection import (
-    activate_opening_target,
-    activate_semantic_plan_target,
-    resolve_selected_target_for_gui_object,
-)
-from bimplan.selection import selection as plan_selection_module
 from bimplan.selection import gui_sync as plan_selection_gui_sync
 from bimplan.selection.service_interaction import PlanSelectionActivationService
 from bimplan.selection.service_primary import PlanSelectionRefreshService
@@ -1023,7 +1017,9 @@ class TestBimPlanCore(unittest.TestCase):
             side_effect=lambda *args, **kwargs: calls.append((args, kwargs)) or True,
         ):
             self.assertTrue(
-                activate_opening_target(session, (100, 200), resolved_target=("opening", target))
+                session.selection.activation.activate_opening_target(
+                    (100, 200), resolved_target=("opening", target)
+                )
             )
 
         self.assertEqual(
@@ -1059,7 +1055,7 @@ class TestBimPlanCore(unittest.TestCase):
             "activate_plan_target",
             side_effect=lambda *args, **kwargs: calls.append((args, kwargs)) or True,
         ):
-            self.assertTrue(activate_semantic_plan_target(session, (50, 60)))
+            self.assertTrue(session.selection.activation.activate_semantic_plan_target((50, 60)))
 
         self.assertEqual(
             [
@@ -1101,7 +1097,7 @@ class TestBimPlanCore(unittest.TestCase):
             "activate_plan_target",
             side_effect=lambda *args, **kwargs: calls.append((args, kwargs)) or True,
         ):
-            self.assertTrue(activate_semantic_plan_target(session, (50, 60)))
+            self.assertTrue(session.selection.activation.activate_semantic_plan_target((50, 60)))
 
         self.assertEqual(
             [
@@ -2016,8 +2012,7 @@ class TestBimPlanCore(unittest.TestCase):
 
         self.assertEqual(
             ("provider", marker),
-            resolve_selected_target_for_gui_object(
-                session,
+            session.selection.refresh.resolve_selected_target_for_gui_object(
                 marker,
                 pending_kind="provider",
                 pending_target=marker,
@@ -2042,8 +2037,7 @@ class TestBimPlanCore(unittest.TestCase):
         ):
             self.assertEqual(
                 ("provider", marker),
-                resolve_selected_target_for_gui_object(
-                    session,
+                session.selection.refresh.resolve_selected_target_for_gui_object(
                     marker,
                     preserved_kind="provider",
                     preserved_target=marker,
