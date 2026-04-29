@@ -14,7 +14,14 @@ from .contracts import (
     PlanProviderTargetSpec,
 )
 from bimplan.semantics import PlanSemanticRecord
-from bimplan.transactions import PlanEditTransaction
+from .actions import (
+    _execute_plan_provider_action_callback,
+    _finalize_plan_provider_action,
+    _get_plan_provider_action_executor,
+    _run_plan_provider_action,
+    execute_plan_provider_action,
+    get_plan_provider_action_context,
+)
 from .snapshot import (
     PlanProviderSnapshot,
     collect_plan_provider_contributions,
@@ -959,111 +966,6 @@ def get_plan_provider_overlays(session):
     )
 
 
-def _execute_plan_provider_action_callback(
-    execute_action,
-    action_key,
-    context,
-    action_context,
-    payload,
-):
-    if payload is None:
-        return execute_action(action_key, context, action_context)
-    return execute_action(action_key, context, action_context, payload)
-
-
-def _get_plan_provider_action_executor(session, provider_id):
-    provider = _get_plan_provider_registry(session).get_provider(provider_id)
-    if provider is None:
-        return None
-    execute_action = getattr(provider, "execute_action", None)
-    if not callable(execute_action):
-        return None
-    return execute_action
-
-
-def _run_plan_provider_action(
-    session,
-    execute_action,
-    action_key,
-    transaction_label="",
-    payload=None,
-):
-    context = _get_plan_edit_context_or_none(session)
-    if context is None:
-        return False
-    action_context = get_plan_provider_action_context(session, payload=payload)
-    transaction_label = str(transaction_label or "").strip()
-    with _get_document_visual_update_scope(session):
-        if transaction_label:
-            with PlanEditTransaction(session.doc, transaction_label):
-                handled = _execute_plan_provider_action_callback(
-                    execute_action,
-                    action_key,
-                    context,
-                    action_context,
-                    payload,
-                )
-        else:
-            handled = _execute_plan_provider_action_callback(
-                execute_action,
-                action_key,
-                context,
-                action_context,
-                payload,
-            )
-        if handled is not False:
-            try:
-                if session.doc is not None:
-                    session.doc.recompute()
-            except Exception:
-                pass
-    return handled
-
-
-def _finalize_plan_provider_action(session):
-    session.selection.refresh.refresh_primary_selected_plan_target()
-    session.document_visuals.invalidate_document_dependent_plan_visuals()
-    session.task_panels.refresh_task_panel_status()
-    session.viewport.focus_plan_view()
-
-
-def execute_plan_provider_action(
-    session,
-    provider_id,
-    action_key,
-    transaction_label="",
-    payload=None,
-):
-    if not session.document_visuals.document_is_alive():
-        return False
-    execute_action = _get_plan_provider_action_executor(session, provider_id)
-    if execute_action is None:
-        return False
-
-    try:
-        handled = _run_plan_provider_action(
-            session,
-            execute_action,
-            action_key,
-            transaction_label=transaction_label,
-            payload=payload,
-        )
-    except Exception as exc:
-        FreeCAD.Console.PrintError(
-            translate(
-                "BIM_PlanEdit",
-                "Plan Edit provider '{provider}' action '{action}' failed: {error}\n",
-            ).format(provider=provider_id, action=action_key, error=exc)
-        )
-        return False
-
-    if handled is False:
-        return False
-
-    _finalize_plan_provider_action(session)
-    return True
-
-
 def get_plan_edit_context(session):
     doc = getattr(session, "doc", None)
     if not session.document_visuals.document_is_alive():
@@ -1080,24 +982,6 @@ def get_plan_edit_context(session):
         active_storey_name=active_storey_name,
         active_storey_label=str(session.storey.get_storey_label(active_storey) or ""),
         current_tool=str(getattr(session, "current_tool", "") or ""),
-    )
-
-
-def get_plan_provider_action_context(session, payload=None):
-    action_context = _call_provider_method(
-        session,
-        "get_plan_provider_action_context",
-        payload=payload,
-        default=_MISSING,
-    )
-    if action_context is not _MISSING:
-        return action_context
-    doc = session.doc if session.document_visuals.document_is_alive() else None
-    return PlanEditContext.make_action_context(
-        session,
-        payload=payload,
-        document_name=session.visibility.safe_plan_object_name(doc),
-        current_tool=str(session.current_tool or ""),
     )
 
 
