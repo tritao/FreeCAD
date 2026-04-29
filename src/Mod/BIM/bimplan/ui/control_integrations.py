@@ -5,7 +5,7 @@
 import weakref
 
 import FreeCAD
-from bimplan import task_panel_view_model as plan_task_panel_view_model
+from bimplan.ui import task_panel_view_model as plan_task_panel_view_model
 from bimplan.providers import PlanIssueSeverity, PlanToolInteraction
 
 translate = FreeCAD.Qt.translate

@@ -346,8 +346,12 @@ bimplan/
 
   ui/
     task_panel.py
+    task_panel_view_model.py
     controls.py
-    status.py
+    control_shell.py
+    control_editors.py
+    control_integrations.py
+    status_text.py
 ```
 
 This is a target shape, not a required one-shot move.
@@ -654,6 +658,8 @@ Current completion status:
   tests use typed state groups.
 - Provider session fallback hooks have been removed; runtime overrides and test
   fakes now belong on `session.providers`.
+- Task-panel ownership, task-panel view models, and status text helpers now live
+  under `bimplan.ui` with the other Plan Edit UI code.
 - `cruft_report.py --check-no-private-session-reads` passes.
 - `cruft_report.py --max-forwarder-surfaces 0` passes.
 - The maintained Plan Edit core, wall, opening, space, symbol, provider, and

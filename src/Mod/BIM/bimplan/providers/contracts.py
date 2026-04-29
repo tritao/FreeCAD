@@ -11,7 +11,7 @@ from typing import Sequence, Tuple
 
 import FreeCAD
 
-from . import host_targets as plan_host_targets
+from . import payloads as plan_provider_payloads
 from bimplan.runtime import capabilities as runtime_capabilities
 
 
@@ -206,7 +206,7 @@ class PlanProviderActionContext:
         )
 
     def get_host_target(self):
-        return plan_host_targets.coerce_provider_host_target_ref(
+        return plan_provider_payloads.coerce_provider_host_target_ref(
             self.get_action_payload_value("host_target")
         )
 

@@ -6,7 +6,6 @@ import FreeCAD
 import FreeCADGui
 
 from bimplan import document_visuals as plan_document_visuals
-from bimplan.providers import host_targets as plan_host_targets
 from bimplan.providers import payloads as plan_provider_payloads
 from bimplan.providers import runtime as plan_provider_runtime
 from bimplan.runtime import tools as plan_runtime_tools
@@ -149,12 +148,12 @@ def start_plan_provider_point_tool(session, tool):
     session.overlays.symbols.clear_selected_symbol_handles()
     session.overlays.providers.clear_provider_point_preview()
     host_target, host_source = get_provider_point_context_host_state(session)
-    host_kind, host_obj = plan_host_targets.unpack_provider_host_target_ref(host_target)
+    host_kind, host_obj = plan_provider_payloads.unpack_provider_host_target_ref(host_target)
     if host_obj is None:
         host_target = normalize_provider_point_host_target(
             session, getattr(tool, "default_host_target", ())
         )
-        host_kind, host_obj = plan_host_targets.unpack_provider_host_target_ref(host_target)
+        host_kind, host_obj = plan_provider_payloads.unpack_provider_host_target_ref(host_target)
         if host_obj is not None:
             host_source = "tool"
     state = _provider_point_state(session)
@@ -230,7 +229,7 @@ def update_provider_point_tool_preview(session, point=None, obj=None):
         selected_targets=session.selection.state.get_selected_plan_targets(),
         hovered_target=session.selection.hover.get_hovered_plan_target(),
     )
-    host_kind, host_obj = plan_host_targets.unpack_provider_host_target_ref(host_target)
+    host_kind, host_obj = plan_provider_payloads.unpack_provider_host_target_ref(host_target)
     placement_point = (
         project_provider_point_to_host(plan_point, host_obj) if host_kind == "wall" else None
     )
@@ -277,13 +276,13 @@ def resolve_provider_point_snap_object(session, snap_object, snap_info):
 
 def normalize_provider_point_host_target(session, target):
     if not target:
-        return plan_host_targets.make_provider_host_target_ref()
+        return plan_provider_payloads.make_provider_host_target_ref()
     target_ref = plan_target_kinds.coerce_plan_target_ref(target)
     if target_ref.kind == "wall" and session.selection.targets.is_plan_selectable_wall(
         target_ref.obj
     ):
-        return plan_host_targets.make_provider_host_target_ref("wall", target_ref.obj)
-    return plan_host_targets.make_provider_host_target_ref()
+        return plan_provider_payloads.make_provider_host_target_ref("wall", target_ref.obj)
+    return plan_provider_payloads.make_provider_host_target_ref()
 
 
 def get_provider_point_context_host_state(session):
@@ -297,7 +296,7 @@ def get_provider_point_context_host_state(session):
     )
     if hovered_target.obj is not None:
         return hovered_target, "hovered"
-    return plan_host_targets.make_provider_host_target_ref(), ""
+    return plan_provider_payloads.make_provider_host_target_ref(), ""
 
 
 def get_provider_point_payload_host_target(
@@ -318,7 +317,7 @@ def get_provider_point_payload_host_target(
             selected_walls.append(target_ref.obj)
     if len(selected_walls) == 1:
         return (
-            plan_host_targets.make_provider_host_target_ref("wall", selected_walls[0]),
+            plan_provider_payloads.make_provider_host_target_ref("wall", selected_walls[0]),
             "selected",
         )
     snap_target_ref = normalize_provider_point_host_target(session, snap_target)
@@ -336,7 +335,7 @@ def get_provider_point_payload_host_target(
     hovered_target_ref = normalize_provider_point_host_target(session, hovered_target)
     if hovered_target_ref.obj is not None:
         return hovered_target_ref, "hovered"
-    return plan_host_targets.make_provider_host_target_ref(), ""
+    return plan_provider_payloads.make_provider_host_target_ref(), ""
 
 
 def project_provider_point_to_host(point, host_wall):
@@ -396,7 +395,7 @@ def build_provider_point_tool_payload(
         selected_targets=selected_targets,
         hovered_target=hovered_target,
     )
-    host_kind, host_obj = plan_host_targets.unpack_provider_host_target_ref(host_target)
+    host_kind, host_obj = plan_provider_payloads.unpack_provider_host_target_ref(host_target)
     placement_point = (
         project_provider_point_to_host(plan_point, host_obj) if host_kind == "wall" else None
     )

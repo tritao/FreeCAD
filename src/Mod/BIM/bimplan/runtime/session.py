@@ -39,7 +39,7 @@ from bimplan import snap as plan_snap
 from bimplan.runtime import session_state as plan_session_state
 from bimplan.runtime.session_state import PlanInteractionAPI
 from bimplan.storeys import PlanStoreysAPI
-from bimplan import task_panel as plan_task_panel
+from bimplan.ui import task_panel as plan_task_panel
 from bimplan.selection.selection import PlanSelectionAPI
 from bimplan.tools.symbol_edit import PlanSymbolsAPI
 from bimplan.tools.opening_edit import PlanOpeningsAPI
@@ -52,7 +52,7 @@ from bimplan.tools.window_create import PlanWindowsAPI
 from bimplan.tools.spaces import PlanSpacesAPI
 from bimplan.runtime.view import PlanViewportAPI
 from bimplan.overlays.runtime import PlanOverlaysAPI
-from bimplan.status_text import PlanStatusTextAPI
+from bimplan.ui.status_text import PlanStatusTextAPI
 from bimplan.ui.controls import PlanEditControlsWidget
 
 QT_TRANSLATE_NOOP = FreeCAD.Qt.QT_TRANSLATE_NOOP

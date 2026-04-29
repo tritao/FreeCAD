@@ -3,7 +3,7 @@
 """Editor panel helpers for BIM Plan Edit controls."""
 
 import FreeCAD
-from bimplan import task_panel_view_model as plan_task_panel_view_model
+from bimplan.ui import task_panel_view_model as plan_task_panel_view_model
 from bimplan.runtime import capabilities as runtime_capabilities
 
 translate = FreeCAD.Qt.translate

@@ -46,7 +46,7 @@ class PlanViewportAPI:
         )
 
     def ensure_viewport_status_chip(self):
-        from bimplan.task_panel import _PlanEditViewportStatusChip
+        from bimplan.ui.task_panel import _PlanEditViewportStatusChip
 
         return ensure_viewport_status_chip(
             self.session,
@@ -54,7 +54,7 @@ class PlanViewportAPI:
         )
 
     def refresh_viewport_status_chip(self):
-        from bimplan.task_panel import _PlanEditViewportStatusChip
+        from bimplan.ui.task_panel import _PlanEditViewportStatusChip
 
         return refresh_viewport_status_chip(
             self.session,

@@ -37,7 +37,7 @@ Today:
 - [bimcommands/BimPlanSession.py](bimcommands/BimPlanSession.py) is a compatibility shim
 - [bimplan/runtime/session.py](bimplan/runtime/session.py) is the real session composition root
 - the task-panel shell and controls already live under `bimplan/ui/`
-- the viewport status chip already lives in [bimplan/task_panel.py](bimplan/task_panel.py)
+- the viewport status chip already lives in [bimplan/ui/task_panel.py](bimplan/ui/task_panel.py)
 - selection, overlays, tools, providers, and view/runtime concerns already have dedicated packages
 - dock close already routes through `task_panels.on_panel_closed()` into `session.shutdown()`
 - the explicit exit button already calls `session.shutdown()`
@@ -104,7 +104,7 @@ Primary files:
 
 - [bimplan/runtime/session.py](bimplan/runtime/session.py)
 - [bimplan/runtime/lifecycle.py](bimplan/runtime/lifecycle.py)
-- [bimplan/task_panel.py](bimplan/task_panel.py)
+- [bimplan/ui/task_panel.py](bimplan/ui/task_panel.py)
 - [bimplan/ui/control_shell.py](bimplan/ui/control_shell.py)
 
 Current state:
@@ -170,8 +170,8 @@ Primary files:
 
 - [bimplan/ui/controls.py](bimplan/ui/controls.py)
 - [bimplan/ui/control_shell.py](bimplan/ui/control_shell.py)
-- [bimplan/task_panel.py](bimplan/task_panel.py)
-- [bimplan/status_text.py](bimplan/status_text.py)
+- [bimplan/ui/task_panel.py](bimplan/ui/task_panel.py)
+- [bimplan/ui/status_text.py](bimplan/ui/status_text.py)
 
 Current state:
 
