@@ -503,6 +503,7 @@ Current progress:
 - Unused private provider render-state compatibility aliases are removed; provider overlays use `provider_transient_state`.
 - Unused private opening-transient compatibility aliases are removed; opening overlays/editing use `opening_transient_state`.
 - Unused private overlay-transient compatibility aliases are removed; opening and space overlays use `overlay_transient_state`.
+- Unused private creation-preview compatibility aliases are removed; creation tools use `creation_preview_state`.
 
 Steps:
 
