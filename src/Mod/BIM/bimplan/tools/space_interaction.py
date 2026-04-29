@@ -92,8 +92,6 @@ def _start_snap_tool(session, tool_name, callback, title, *, movecallback=None):
 
 
 def activate_plan_region_tool(session):
-    from bimplan.runtime import lifecycle as plan_lifecycle
-
     parent_space = _get_selected_space_for_activation(session)
     session.spaces.cancel_space_region_pick(refresh=False)
     session.wall_create.cancel_rect_wall_tool(refresh=False)
@@ -107,8 +105,7 @@ def activate_plan_region_tool(session):
     session.wall_relations.clear_plan_relation_status()
     session.selection.state.set_selected_plan_target()
     session.selection.hover.clear_hovered_plan_targets()
-    plan_lifecycle.clear_selection_visuals(
-        session,
+    session.selection.clear_selected_visuals(
         kinds=_PLAN_REGION_TOOL_SELECTION_KINDS,
         include_wall_grips=True,
         include_selected_wall_opening_context=True,
@@ -125,8 +122,6 @@ def activate_plan_region_tool(session):
 
 
 def activate_space_separator_tool(session):
-    from bimplan.runtime import lifecycle as plan_lifecycle
-
     session.spaces.cancel_space_region_pick(refresh=False)
     session.spaces.cancel_plan_region_tool(refresh=False)
     session.wall_create.cancel_rect_wall_tool(refresh=False)
@@ -138,8 +133,7 @@ def activate_space_separator_tool(session):
     session.lifecycle.cancel_pending_edit()
     session.wall_relations.clear_plan_relation_status()
     session.selection.state.set_selected_plan_target()
-    plan_lifecycle.clear_selection_visuals(
-        session,
+    session.selection.clear_selected_visuals(
         kinds=_SPACE_SEPARATOR_TOOL_SELECTION_KINDS,
         include_wall_grips=True,
         include_selected_wall_opening_context=True,

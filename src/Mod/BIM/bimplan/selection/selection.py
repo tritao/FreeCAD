@@ -519,6 +519,28 @@ def toggle_plan_target_selection_at_position(session, mouse_pos, event_callback=
     )
 
 
+def clear_selected_visuals(
+    session,
+    kinds=None,
+    *,
+    clear_handle_kinds=None,
+    include_wall_grips=False,
+    include_selected_wall_opening_context=False,
+    include_secondary_selection=False,
+):
+    if include_wall_grips:
+        session.overlays.walls.clear_wall_grips()
+    plan_target_dispatch.clear_selected_target_visuals(
+        session,
+        kinds=kinds,
+        clear_handle_kinds=clear_handle_kinds,
+    )
+    if include_selected_wall_opening_context:
+        session.overlays.openings.clear_selected_wall_opening_context_overlay()
+    if include_secondary_selection:
+        session.overlays.spaces.clear_secondary_selected_overlays()
+
+
 def _should_preserve_provider_selected_target(session, kind, obj, selected):
     if kind != "provider" or obj is None or selected != obj:
         return False
@@ -550,6 +572,9 @@ class PlanSelectionAPI(_SessionAPI):
 
     def clearSelection(self, doc):
         return self.sync.selection_observer_clear(doc)
+
+    def clear_selected_visuals(self, *args, **kwargs):
+        return clear_selected_visuals(self.session, *args, **kwargs)
 
     def setPreselection(self, doc, obj, sub):
         return self.sync.selection_observer_set_preselection(doc, obj, sub)
