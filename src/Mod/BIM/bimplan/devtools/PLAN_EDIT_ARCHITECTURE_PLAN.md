@@ -401,9 +401,11 @@ Current progress:
 - Selection no longer carries a second copy of click/edit-node/provider/space/region picking logic.
 - Provider-overlay edit-node decoding, document-object resolution, and visible-target object-info helpers now live in `providers/picking.py`.
 - Target-specific picking logic is split into owner modules:
-  - `selection/overlay_picking.py` for symbol/opening overlay hit testing.
-  - `selection/area_picking.py` for space/region area picking.
-  - `selection/edit_node_picking.py` for handle and edit-node picking.
+  - `picking/overlays.py` for symbol/opening overlay hit testing.
+  - `picking/area.py` for space/region area picking.
+  - `picking/edit_nodes.py` for handle and edit-node picking.
+  - `picking/hover.py` for hover throttling and hover-cache priming.
+  - `picking/geometry.py` and `picking/debug.py` for shared picking adapters.
   - `providers/picking.py` for provider overlay picking.
 - `session.picking` now exists as the owned Plan Edit picking service.
 - Production interaction code now calls `session.picking`.
@@ -416,8 +418,8 @@ Steps:
 1. Introduce the owned `session.picking` service. Done.
 2. Move selected-handle picking into an owned picker module. Done in `selection/edit_node_picking.py`.
 3. Move provider overlay picking into an owned picker module. Done in `providers/picking.py`.
-4. Move opening and symbol picking into owned picker modules. Done in `selection/overlay_picking.py`.
-5. Move region/space fallback picking into owned picker modules. Done in `selection/area_picking.py`.
+4. Move opening and symbol picking into owned picker modules. Done in `picking/overlays.py`.
+5. Move region/space fallback picking into owned picker modules. Done in `picking/area.py`.
 6. Remove the old `selection/picking.py` shim and `session.selection.picking` adapter. Done.
 7. Make `session.picking.pick(...)` the owned Plan Edit call path. Done.
 8. Remove shim functions once internal call sites and low-level tests are migrated. Done.
@@ -643,7 +645,7 @@ Current completion status:
 - Perf trace support is available through `bimplan.benchmark` and the maintained
   headless wrapper `bimtests/run_plan_edit_benchmark_headless.py`.
 - A small-scenario benchmark run on 2026-04-29 passed all measured readiness
-  limits: hover pick p95 5.394 ms, mouse fast path p95 0.013 ms, mouse press
-  p95 8.632 ms, task-panel refresh 3.731 ms, and wall handle activation
-  93.130 ms. The provider integration panel event was absent in the ordinary
+  limits: hover pick p95 5.263 ms, mouse fast path p95 0.015 ms, mouse press
+  p95 8.397 ms, task-panel refresh 3.744 ms, and wall handle activation
+  91.265 ms. The provider integration panel event was absent in the ordinary
   wall-selection trace, which is the desired result for that hot path.

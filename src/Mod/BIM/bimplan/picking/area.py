@@ -4,9 +4,9 @@
 
 import FreeCAD
 
-from . import overlay_picking as plan_overlay_picking
-from . import picking_debug as plan_picking_debug
-from . import targets as plan_targets
+from bimplan.picking import debug as plan_picking_debug
+from bimplan.picking import overlays as plan_overlay_picking
+from bimplan.selection import targets as plan_targets
 
 
 def _perf_count(session, name, delta=1):

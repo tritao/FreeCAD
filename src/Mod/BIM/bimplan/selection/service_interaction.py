@@ -3,10 +3,10 @@
 """Interaction-facing BIM Plan Edit selection services."""
 
 from bimplan.runtime import tools as plan_runtime_tools
+from bimplan.picking import hover as plan_hover_picking
 
 from . import activation as plan_selection_activation
 from . import edit_nodes as plan_edit_nodes
-from . import hover_picking as plan_hover_picking
 from . import target_dispatch as plan_target_dispatch
 from . import target_kinds as plan_target_kinds
 from . import targets as plan_targets
