@@ -332,3 +332,176 @@ def clear_gui_preselection():
     if callable(exported) and exported is not clear_gui_preselection:
         return exported()
     return _clear_gui_preselection_impl()
+
+
+class PlanSelectionSyncService:
+    __slots__ = ("_session",)
+
+    def __init__(self, session):
+        self._session = session
+
+    @property
+    def session(self):
+        return self._session
+
+    def get_gui_selection_ex(self):
+        return get_gui_selection_ex()
+
+    def get_gui_selection(self):
+        return get_gui_selection()
+
+    def add_gui_selection_object(self, obj):
+        return add_gui_selection_object(obj)
+
+    def attach_selection_observer(self):
+        selection_sync_state = self.session.selection_sync_state
+        if not selection_sync_state.selection_observer_added:
+            FreeCADGui.Selection.addObserver(self.session)
+            selection_sync_state.selection_observer_added = True
+
+    def detach_selection_observer(self):
+        selection_sync_state = self.session.selection_sync_state
+        if selection_sync_state.selection_observer_added:
+            FreeCADGui.Selection.removeObserver(self.session)
+            selection_sync_state.selection_observer_added = False
+
+    def schedule_selection_refresh(self):
+        if (
+            self.session.lifecycle_state.tearing_down
+            or self.session.lifecycle_state.ignore_selection_changes
+        ):
+            return
+        state = self.session.selection_sync_state
+        if state.selection_refresh_queued:
+            return
+        state.selection_refresh_queued = True
+        try:
+            from PySide import QtCore
+
+            QtCore.QTimer.singleShot(0, lambda: self.run_scheduled_selection_refresh())
+        except Exception:
+            self.run_scheduled_selection_refresh()
+
+    def run_scheduled_selection_refresh(self):
+        state = self.session.selection_sync_state
+        if not state.selection_refresh_queued:
+            return
+        state.selection_refresh_queued = False
+        with self.session.performance.plan_perf_trace_event("selection_observer_refresh"):
+            if (
+                self.session.lifecycle_state.tearing_down
+                or self.session.lifecycle_state.ignore_selection_changes
+            ):
+                return
+            self.session.selection.refresh.refresh_primary_selected_plan_target()
+
+    def schedule_clear_plan_selection_state(self):
+        if (
+            self.session.lifecycle_state.tearing_down
+            or self.session.lifecycle_state.ignore_selection_changes
+        ):
+            return
+        state = self.session.selection_sync_state
+        if state.clear_plan_selection_state_queued:
+            return
+        state.clear_plan_selection_state_queued = True
+        try:
+            from PySide import QtCore
+
+            QtCore.QTimer.singleShot(0, lambda: self.run_scheduled_clear_plan_selection_state())
+        except Exception:
+            self.run_scheduled_clear_plan_selection_state()
+
+    def run_scheduled_clear_plan_selection_state(self):
+        state = self.session.selection_sync_state
+        if not state.clear_plan_selection_state_queued:
+            return
+        state.clear_plan_selection_state_queued = False
+        with self.session.performance.plan_perf_trace_event("scheduled_clear_plan_selection_state"):
+            if (
+                self.session.lifecycle_state.tearing_down
+                or self.session.lifecycle_state.ignore_selection_changes
+            ):
+                return
+            self.session.selection.activation.clear_plan_selection_state()
+
+    def set_gui_selection(self, selection):
+        _reset_gui_selection_sync_state(self.session)
+        _apply_gui_selection(self.session, selection)
+
+    def set_gui_selection_object(self, obj):
+        if not obj:
+            return
+        self.set_gui_selection([obj])
+
+    def schedule_gui_selection_object(self, obj, delay_ms=80):
+        if self.session.lifecycle_state.tearing_down or not obj:
+            return
+        state = self.session.selection_sync_state
+        state.gui_selection_sync_queued = True
+        state.gui_selection_sync_generation += 1
+        state.queued_gui_selection_object = obj
+        generation = state.gui_selection_sync_generation
+        try:
+            from PySide import QtCore
+
+            QtCore.QTimer.singleShot(
+                delay_ms,
+                lambda generation=generation: self.run_scheduled_gui_selection_sync(generation),
+            )
+        except Exception:
+            self.run_scheduled_gui_selection_sync(generation)
+
+    def run_scheduled_gui_selection_sync(self, generation=None):
+        state = self.session.selection_sync_state
+        if not state.gui_selection_sync_queued:
+            return
+        if generation is not None and generation != state.gui_selection_sync_generation:
+            return
+        obj = state.queued_gui_selection_object
+        if obj is None:
+            state.gui_selection_sync_queued = False
+            return
+        with self.session.performance.plan_perf_trace_event("scheduled_gui_selection_sync"):
+            if self.session.lifecycle_state.tearing_down:
+                state.gui_selection_sync_queued = False
+                state.queued_gui_selection_object = None
+                return
+            state.gui_selection_sync_in_progress = True
+            current_generation = state.gui_selection_sync_generation
+            try:
+                self.set_gui_selection_object(obj)
+            finally:
+                _schedule_finish_gui_selection_sync(self.session, current_generation)
+
+    def normalize_gui_object_selection(self, selection):
+        from .common import normalize_gui_object_selection
+
+        return normalize_gui_object_selection(selection)
+
+    @contextmanager
+    def selection_changes_suppressed(self):
+        previous_ignore = self.session.lifecycle_state.ignore_selection_changes
+        self.session.lifecycle_state.ignore_selection_changes = True
+        try:
+            yield
+        finally:
+            self.session.lifecycle_state.ignore_selection_changes = previous_ignore
+
+    def selection_observer_add(self, doc, obj, sub, point):
+        return selection_observer_add(self.session, doc, obj, sub, point)
+
+    def selection_observer_remove(self, doc, obj, sub):
+        return selection_observer_remove(self.session, doc, obj, sub)
+
+    def selection_observer_set(self, doc):
+        return selection_observer_set(self.session, doc)
+
+    def selection_observer_clear(self, doc):
+        return selection_observer_clear(self.session, doc)
+
+    def selection_observer_set_preselection(self, doc, obj, sub):
+        return selection_observer_set_preselection(self.session, doc, obj, sub)
+
+    def selection_observer_remove_preselection(self, doc, obj, sub):
+        return selection_observer_remove_preselection(self.session, doc, obj, sub)
