@@ -72,8 +72,8 @@ def sync_bim_python_tree(repo_root: Path) -> None:
         "--include=*/",
         "--include=*.py",
         "--exclude=*",
-        str(source_dir),
-        str(build_dir),
+        f"{source_dir}/",
+        f"{build_dir}/",
     ]
     subprocess.run(command, check=True, cwd=repo_root)
 

@@ -551,14 +551,12 @@ class BimPlanEditGuiSymbolsMixin:
         session.interaction_state.edit_symbol_reference_point = handle_points["rotate"]
         with (
             patch.object(session.symbols, "symbol_rotation_snap_enabled", return_value=True),
-            patch.object(
-                session.overlays.symbols,
-                "get_symbol_rotation_snap_increment_degrees",
+            patch(
+                "bimplan.overlays.symbols.get_symbol_rotation_snap_increment_degrees",
                 return_value=15.0,
             ),
-            patch.object(
-                session.overlays.symbols,
-                "symbol_rotation_free_angle_override_active",
+            patch(
+                "bimplan.overlays.symbols.symbol_rotation_free_angle_override_active",
                 return_value=False,
             ),
         ):
@@ -612,14 +610,12 @@ class BimPlanEditGuiSymbolsMixin:
         session.interaction_state.edit_symbol_reference_point = handle_points["rotate"]
         with (
             patch.object(session.symbols, "symbol_rotation_snap_enabled", return_value=True),
-            patch.object(
-                session.overlays.symbols,
-                "get_symbol_rotation_snap_increment_degrees",
+            patch(
+                "bimplan.overlays.symbols.get_symbol_rotation_snap_increment_degrees",
                 return_value=15.0,
             ),
-            patch.object(
-                session.overlays.symbols,
-                "symbol_rotation_free_angle_override_active",
+            patch(
+                "bimplan.overlays.symbols.symbol_rotation_free_angle_override_active",
                 return_value=True,
             ),
         ):

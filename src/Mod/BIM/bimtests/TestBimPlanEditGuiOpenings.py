@@ -1690,10 +1690,11 @@ class BimPlanEditGuiOpeningsMixin:
             len(session.overlay_tracker_state.selected_wall_opening_context_trackers), 0
         )
 
-        with patch.object(
-            session.overlays.openings,
-            "sync_hovered_opening_overlay",
-            wraps=session.overlays.openings.sync_hovered_opening_overlay,
+        from bimplan.overlays import openings as opening_overlays
+
+        with patch(
+            "bimplan.overlays.openings.sync_hovered_opening_overlay",
+            wraps=opening_overlays.sync_hovered_opening_overlay,
         ) as sync_hover:
             session.selection.state.set_selected_plan_target("wall", wall)
 

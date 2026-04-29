@@ -390,8 +390,9 @@ class BimPlanEditGuiSpacesMixin:
         try:
             session.view = FakeView(self.document.Name, space.Name, level)
             with (
-                patch.object(
-                    session.overlays.geometry, "get_region_footprint_faces", return_value=[]
+                patch(
+                    "bimplan.overlays.geometry.get_region_footprint_faces",
+                    return_value=[],
                 ),
                 patch.object(
                     session.viewport,
