@@ -28,10 +28,8 @@ from dataclasses import dataclass, field
 
 import FreeCAD
 import FreeCADGui
-from bimplan.providers import host_targets as plan_host_targets
 from bimplan.providers import runtime as plan_provider_runtime
 from bimplan.runtime import tools as plan_runtime_tools
-from bimplan.selection import target_kinds as plan_target_kinds
 
 
 class PlanInteractionAPI:
@@ -360,66 +358,6 @@ def _coerce_identity(value):
     return value
 
 
-def _coerce_bool(value):
-    return bool(value)
-
-
-def _coerce_int(value):
-    return int(value or 0)
-
-
-def _coerce_float(value):
-    return float(value or 0.0)
-
-
-def _coerce_list(value):
-    return list(value or [])
-
-
-def _coerce_dict(value):
-    return dict(value or {})
-
-
-def _coerce_set(value):
-    return set(value or ())
-
-
-def _coerce_tuple(value):
-    return tuple(value or ())
-
-
-def _coerce_optional_plan_target_ref(value):
-    if value is None:
-        return None
-    return plan_target_kinds.coerce_plan_target_ref(value)
-
-
-def _coerce_optional_provider_host_target_ref(value):
-    if value is None:
-        return None
-    return plan_host_targets.coerce_provider_host_target_ref(value)
-
-
-def _coerce_plan_target_ref_list(value):
-    return [plan_target_kinds.coerce_plan_target_ref(target_ref) for target_ref in (value or ())]
-
-
-def _make_str_coercer(default=""):
-    def _coerce(value):
-        return str(value or default)
-
-    return _coerce
-
-
-def _coerce_optional_nonempty_str(value):
-    return str(value or "") or None
-
-
-def _coerce_overlay_geometry_cache(value):
-    default_cache = {"opening": {}, "space": {}, "region": {}}
-    return dict(value or default_cache)
-
-
 def _make_state_backed_property(ensure_method_name, field_name, coerce=_coerce_identity):
     def _getter(self):
         return getattr(getattr(self, ensure_method_name)(), field_name)
@@ -485,97 +423,6 @@ _PLAN_EDIT_SESSION_STATE_PROPERTIES = (
             ("hovered_region", "hovered_region", _coerce_identity),
         ),
     ),
-    (
-        "_ensure_wall_edit_state",
-        (
-            ("_wall_edit_modal_active", "wall_edit_modal_active", _coerce_bool),
-            ("_edit_wall", "edit_wall", _coerce_identity),
-            ("_edit_endpoint", "edit_endpoint", _coerce_identity),
-            ("_edit_endpoints", "edit_endpoints", _coerce_identity),
-            ("_wall_edit_opening_clearances", "wall_edit_opening_clearances", _coerce_dict),
-            ("_preview_points", "preview_points", _coerce_identity),
-            ("_preview_grip_trackers", "preview_grip_trackers", _coerce_list),
-            ("_wall_edit_readout_trackers", "wall_edit_readout_trackers", _coerce_list),
-            (
-                "_wall_edit_opening_preview_trackers",
-                "wall_edit_opening_preview_trackers",
-                _coerce_list,
-            ),
-            (
-                "_wall_edit_active_readout_tracker",
-                "wall_edit_active_readout_tracker",
-                _coerce_identity,
-            ),
-        ),
-    ),
-    (
-        "_ensure_space_region_pick_state",
-        (
-            ("_space_region_pick_boundaries", "boundaries", _coerce_list),
-            ("_space_region_pick_seed_space", "seed_space", _coerce_identity),
-            ("_space_region_candidates", "candidates", _coerce_list),
-            ("_hovered_space_region_candidate", "hovered_candidate", _coerce_identity),
-        ),
-    ),
-    (
-        "_ensure_interaction_state",
-        (
-            ("_embedded_tool", "embedded_tool", _coerce_identity),
-            ("_edit_opening", "edit_opening", _coerce_identity),
-            ("_edit_opening_handle_index", "edit_opening_handle_index", _coerce_identity),
-            ("_edit_symbol", "edit_symbol", _coerce_identity),
-            ("_edit_symbol_handle_role", "edit_symbol_handle_role", _coerce_identity),
-            ("_edit_symbol_start_placement", "edit_symbol_start_placement", _coerce_identity),
-            ("_edit_symbol_reference_point", "edit_symbol_reference_point", _coerce_identity),
-            ("_edit_provider", "edit_provider", _coerce_identity),
-            ("_edit_provider_handle_index", "edit_provider_handle_index", _coerce_identity),
-            ("_edit_provider_handle", "edit_provider_handle", _coerce_identity),
-        ),
-    ),
-    (
-        "_ensure_performance_state",
-        (("_plan_edit_params", "plan_edit_params", _coerce_identity),),
-    ),
-    (
-        "_ensure_opening_transient_state",
-        (
-            ("_opening_handle_trackers", "opening_handle_trackers", _coerce_list),
-            ("_opening_move_preview_trackers", "opening_move_preview_trackers", _coerce_list),
-            ("_edit_opening_move_anchor", "edit_opening_move_anchor", _make_str_coercer("center")),
-        ),
-    ),
-    (
-        "_ensure_overlay_tracker_state",
-        (
-            ("_grip_trackers", "grip_trackers", _coerce_list),
-            ("_wall_hover_trackers", "wall_hover_trackers", _coerce_list),
-            ("_wall_overlay_trackers", "wall_overlay_trackers", _coerce_list),
-            ("_junction_node_trackers", "junction_node_trackers", _coerce_list),
-            (
-                "_hovered_wall_opening_context_trackers",
-                "hovered_wall_opening_context_trackers",
-                _coerce_list,
-            ),
-            ("_opening_hover_trackers", "opening_hover_trackers", _coerce_list),
-            ("_provider_hover_trackers", "provider_hover_trackers", _coerce_list),
-            ("_provider_selected_trackers", "provider_selected_trackers", _coerce_list),
-            ("_opening_overlay_trackers", "opening_overlay_trackers", _coerce_list),
-            ("_space_overlay_trackers", "space_overlay_trackers", _coerce_list),
-            ("_region_overlay_trackers", "region_overlay_trackers", _coerce_list),
-            ("_provider_overlay_trackers", "provider_overlay_trackers", _coerce_list),
-            ("_secondary_selection_trackers", "secondary_selection_trackers", _coerce_list),
-            (
-                "_selected_wall_opening_context_trackers",
-                "selected_wall_opening_context_trackers",
-                _coerce_list,
-            ),
-            ("_symbol_handle_trackers", "symbol_handle_trackers", _coerce_list),
-        ),
-    ),
-    (
-        "_ensure_overlay_cache_state",
-        (),
-    ),
 )
 
 
@@ -617,7 +464,7 @@ def initialize_session_state(session):
     session.selection_sync_state.selection_observer_added = False
     session.selection_sync_state.pending_selected_wall_reset = False
     session.document_visual_state.document_observer_added = False
-    session._plan_edit_params = FreeCAD.ParamGet(
+    session.performance_state.plan_edit_params = FreeCAD.ParamGet(
         "User parameter:BaseApp/Preferences/Mod/BIM/PlanEdit"
     )
     performance_state = session.performance_state

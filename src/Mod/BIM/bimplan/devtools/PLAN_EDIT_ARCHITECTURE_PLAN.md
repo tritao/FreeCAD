@@ -510,6 +510,12 @@ Current progress:
 - Private provider runtime compatibility aliases are removed; provider caches and target collection depth use `provider_runtime_state`.
 - Private provider transient compatibility aliases are removed; provider selections and handles use `provider_transient_state`.
 - Private overlay refresh compatibility aliases are removed; queued overlay refreshes use `overlay_refresh_state`.
+- Private wall-edit test compatibility aliases are removed; wall edit tests use `wall_edit_state`.
+- Private interaction compatibility aliases are removed; opening, symbol, provider, and embedded-tool tests use `interaction_state`.
+- Private space-region-pick compatibility aliases are removed; region-pick tests use `space_region_pick_state`.
+- Private opening-transient compatibility aliases are removed; opening tests use `opening_transient_state`.
+- Private overlay-tracker compatibility aliases are removed; overlay tests use `overlay_tracker_state`.
+- Private Plan Edit params compatibility alias is removed; symbol snap settings use `performance_state.plan_edit_params`.
 
 Steps:
 

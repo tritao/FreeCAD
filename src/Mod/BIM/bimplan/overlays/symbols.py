@@ -414,7 +414,7 @@ def get_symbol_facing_vector(session, symbol, placement=None):
 
 
 def symbol_rotation_snap_enabled(session):
-    params = getattr(session, "_plan_edit_params", None)
+    params = getattr(session.performance_state, "plan_edit_params", None)
     if not params:
         return True
     try:
@@ -424,7 +424,7 @@ def symbol_rotation_snap_enabled(session):
 
 
 def get_symbol_rotation_snap_increment_degrees(session):
-    params = getattr(session, "_plan_edit_params", None)
+    params = getattr(session.performance_state, "plan_edit_params", None)
     if not params:
         return 15.0
     try:

@@ -60,11 +60,13 @@ class BimPlanEditGuiWallsMixin:
         self.pump_gui_events()
 
         self.assertEqual(session.current_tool, "Wall")
-        self.assertIsNotNone(session._embedded_tool, "Wall tool should be embedded in Plan Edit.")
-        self.assertIsInstance(session._embedded_tool, current_arch_wall_class())
+        self.assertIsNotNone(
+            session.interaction_state.embedded_tool, "Wall tool should be embedded in Plan Edit."
+        )
+        self.assertIsInstance(session.interaction_state.embedded_tool, current_arch_wall_class())
 
         self.assertPlaneIsSaneTop(session.viewport.get_interaction_plane())
-        self.assertPlaneIsSaneTop(session._embedded_tool._plane)
+        self.assertPlaneIsSaneTop(session.interaction_state.embedded_tool._plane)
 
         session.shutdown(close_dialog=False)
         self.pump_gui_events()
@@ -81,7 +83,7 @@ class BimPlanEditGuiWallsMixin:
         session.lifecycle.activate_wall_tool()
         self.pump_gui_events()
 
-        cmd = session._embedded_tool
+        cmd = session.interaction_state.embedded_tool
         self.assertIsInstance(cmd, current_arch_wall_class())
 
         cmd.tracker = MockTracker()
@@ -318,7 +320,7 @@ class BimPlanEditGuiWallsMixin:
         self.assertEqual(
             session.selection.state.get_secondary_selected_plan_targets(), [("wall", wall_b)]
         )
-        self.assertGreater(len(session._secondary_selection_trackers), 0)
+        self.assertGreater(len(session.overlay_tracker_state.secondary_selection_trackers), 0)
         self.assertIn("Selection set: 2 walls", session.task_panel.status.text())
 
         with (
@@ -345,7 +347,7 @@ class BimPlanEditGuiWallsMixin:
         self.assertEqual([obj.Name for obj in FreeCADGui.Selection.getSelection()], [wall_b.Name])
         self.assertEqual(session.selection.state.get_selected_plan_target(), ("wall", wall_b))
         self.assertEqual(session.selection.state.get_secondary_selected_plan_targets(), [])
-        self.assertEqual(len(session._secondary_selection_trackers), 0)
+        self.assertEqual(len(session.overlay_tracker_state.secondary_selection_trackers), 0)
         self.assertNotIn("Selection set:", session.task_panel.status.text())
 
         session.shutdown(close_dialog=False)
@@ -376,14 +378,14 @@ class BimPlanEditGuiWallsMixin:
         self.pump_gui_events()
 
         self.assertIs(session.hovered_wall, wall)
-        self.assertGreater(len(session._wall_hover_trackers), 0)
+        self.assertGreater(len(session.overlay_tracker_state.wall_hover_trackers), 0)
 
         move_again = self._make_fake_mouse_move_event(*mouse_pos)
         session.input.on_mouse_moved(move_again)
         self.pump_gui_events()
 
         self.assertIs(session.hovered_wall, wall)
-        self.assertGreater(len(session._wall_hover_trackers), 0)
+        self.assertGreater(len(session.overlay_tracker_state.wall_hover_trackers), 0)
 
         session.shutdown(close_dialog=False)
         self.pump_gui_events()
@@ -451,7 +453,7 @@ class BimPlanEditGuiWallsMixin:
 
         self._assert_no_selected_plan_target(session)
         self.assertIsNone(session.selection_state.pending_selected_plan_target)
-        self.assertEqual(len(session._grip_trackers), 0)
+        self.assertEqual(len(session.overlay_tracker_state.grip_trackers), 0)
         self.assertEqual(self._get_scenegraph_edit_nodes(session), [])
 
     def test_plan_edit_empty_canvas_click_clears_lingering_storey_gui_selection(self):
@@ -507,8 +509,8 @@ class BimPlanEditGuiWallsMixin:
 
         self.assertIs(session.hovered_wall, wall)
         self.assertIsNone(session.hovered_opening)
-        self.assertGreater(len(session._wall_hover_trackers), 0)
-        self.assertEqual(len(session._grip_trackers), 0)
+        self.assertGreater(len(session.overlay_tracker_state.wall_hover_trackers), 0)
+        self.assertEqual(len(session.overlay_tracker_state.grip_trackers), 0)
 
     def test_plan_edit_hovered_wall_shows_hosted_opening_context(self):
         """Hovering a wall should passively highlight its hosted openings."""
@@ -530,10 +532,12 @@ class BimPlanEditGuiWallsMixin:
 
         self.assertIs(session.hovered_wall, wall)
         self._assert_no_selected_plan_target(session)
-        self.assertGreater(len(session._wall_hover_trackers), 0)
-        self.assertGreater(len(session._hovered_wall_opening_context_trackers), 0)
-        self.assertEqual(len(session._opening_hover_trackers), 0)
-        self.assertEqual(len(session._opening_handle_trackers), 0)
+        self.assertGreater(len(session.overlay_tracker_state.wall_hover_trackers), 0)
+        self.assertGreater(
+            len(session.overlay_tracker_state.hovered_wall_opening_context_trackers), 0
+        )
+        self.assertEqual(len(session.overlay_tracker_state.opening_hover_trackers), 0)
+        self.assertEqual(len(session.opening_transient_state.opening_handle_trackers), 0)
 
     def test_plan_edit_clicking_hovered_wall_selects_it(self):
         """Clicking a hovered wall should promote it to selected wall state."""
@@ -554,9 +558,9 @@ class BimPlanEditGuiWallsMixin:
 
         self.assertTrue(activated)
         self._assert_selected_plan_target(session, "wall", wall)
-        self.assertEqual(len(session._wall_hover_trackers), 0)
-        self.assertGreater(len(session._wall_overlay_trackers), 0)
-        self.assertEqual(len(session._grip_trackers), 3)
+        self.assertEqual(len(session.overlay_tracker_state.wall_hover_trackers), 0)
+        self.assertGreater(len(session.overlay_tracker_state.wall_overlay_trackers), 0)
+        self.assertEqual(len(session.overlay_tracker_state.grip_trackers), 3)
 
     def test_plan_edit_real_click_selection_draws_wall_outline_before_deferred_grips(self):
         """Real wall clicks should paint the selected outline immediately, before grip sync lands."""
@@ -582,16 +586,16 @@ class BimPlanEditGuiWallsMixin:
 
             self.assertTrue(callback._handled)
             self._assert_selected_plan_target(session, "wall", wall)
-            self.assertEqual(len(session._wall_hover_trackers), 0)
-            self.assertGreater(len(session._wall_overlay_trackers), 0)
-            self.assertEqual(len(session._grip_trackers), 0)
+            self.assertEqual(len(session.overlay_tracker_state.wall_hover_trackers), 0)
+            self.assertGreater(len(session.overlay_tracker_state.wall_overlay_trackers), 0)
+            self.assertEqual(len(session.overlay_tracker_state.grip_trackers), 0)
             request_view_redraw.assert_called()
 
         self.pump_gui_events(timeout_ms=250)
 
         self._assert_selected_plan_target(session, "wall", wall)
-        self.assertGreater(len(session._wall_overlay_trackers), 0)
-        self.assertEqual(len(session._grip_trackers), 3)
+        self.assertGreater(len(session.overlay_tracker_state.wall_overlay_trackers), 0)
+        self.assertEqual(len(session.overlay_tracker_state.grip_trackers), 3)
 
         session.shutdown(close_dialog=False)
         self.pump_gui_events()
@@ -621,7 +625,7 @@ class BimPlanEditGuiWallsMixin:
             FreeCAD.Vector(1111.0, 0.0, 0.0),
             FreeCAD.Vector(1234.0, 0.0, 0.0),
         )
-        for tracker, bogus in zip(session._grip_trackers, bogus_points):
+        for tracker, bogus in zip(session.overlay_tracker_state.grip_trackers, bogus_points):
             tracker.set(bogus)
 
         session.selection.refresh.refresh_primary_selected_plan_target(
@@ -654,19 +658,23 @@ class BimPlanEditGuiWallsMixin:
 
         self.assertTrue(activated)
         self._assert_selected_plan_target(session, "wall", wall)
-        self.assertGreater(len(session._wall_overlay_trackers), 0)
-        self.assertEqual(len(session._grip_trackers), 3)
-        self.assertGreater(len(session._selected_wall_opening_context_trackers), 0)
-        self.assertEqual(len(session._opening_overlay_trackers), 0)
-        self.assertEqual(len(session._opening_handle_trackers), 0)
+        self.assertGreater(len(session.overlay_tracker_state.wall_overlay_trackers), 0)
+        self.assertEqual(len(session.overlay_tracker_state.grip_trackers), 3)
+        self.assertGreater(
+            len(session.overlay_tracker_state.selected_wall_opening_context_trackers), 0
+        )
+        self.assertEqual(len(session.overlay_tracker_state.opening_overlay_trackers), 0)
+        self.assertEqual(len(session.opening_transient_state.opening_handle_trackers), 0)
 
         session.selection.activation.select_opening_for_plan_edit(door)
 
         self._assert_selected_plan_target(session, "opening", door)
-        self.assertEqual(len(session._wall_overlay_trackers), 0)
-        self.assertEqual(len(session._selected_wall_opening_context_trackers), 0)
-        self.assertGreater(len(session._opening_overlay_trackers), 0)
-        self.assertEqual(len(session._opening_handle_trackers), 3)
+        self.assertEqual(len(session.overlay_tracker_state.wall_overlay_trackers), 0)
+        self.assertEqual(
+            len(session.overlay_tracker_state.selected_wall_opening_context_trackers), 0
+        )
+        self.assertGreater(len(session.overlay_tracker_state.opening_overlay_trackers), 0)
+        self.assertEqual(len(session.opening_transient_state.opening_handle_trackers), 3)
 
     def test_plan_edit_join_mode_hover_tracks_candidate_wall(self):
         """Join mode should keep a hovered candidate wall visible for joining."""
@@ -688,7 +696,7 @@ class BimPlanEditGuiWallsMixin:
 
         self.assertEqual(session.current_tool, "Join")
         self._assert_selected_plan_target(session, "wall", source_wall)
-        self.assertEqual(len(session._grip_trackers), 0)
+        self.assertEqual(len(session.overlay_tracker_state.grip_trackers), 0)
 
         with patch.object(
             session.picking,
@@ -700,8 +708,10 @@ class BimPlanEditGuiWallsMixin:
 
         self.assertIs(session.hovered_wall, target_wall)
         self.assertIsNone(session.hovered_opening)
-        self.assertGreater(len(session._wall_hover_trackers), 0)
-        self.assertEqual(len(session._hovered_wall_opening_context_trackers), 0)
+        self.assertGreater(len(session.overlay_tracker_state.wall_hover_trackers), 0)
+        self.assertEqual(
+            len(session.overlay_tracker_state.hovered_wall_opening_context_trackers), 0
+        )
 
     def test_plan_edit_join_mode_cancel_restores_selected_wall_grips(self):
         """Canceling join mode should return to Select with the source wall active."""
@@ -715,17 +725,17 @@ class BimPlanEditGuiWallsMixin:
         self.pump_gui_events()
 
         session.selection.activation.select_wall_for_plan_edit(source_wall)
-        self.assertEqual(len(session._grip_trackers), 3)
+        self.assertEqual(len(session.overlay_tracker_state.grip_trackers), 3)
 
         session.lifecycle.activate_join_tool()
         self.assertEqual(session.current_tool, "Join")
-        self.assertEqual(len(session._grip_trackers), 0)
+        self.assertEqual(len(session.overlay_tracker_state.grip_trackers), 0)
 
         session.wall_relations.cancel_join_tool()
 
         self.assertEqual(session.current_tool, "Select")
         self._assert_selected_plan_target(session, "wall", source_wall)
-        self.assertEqual(len(session._grip_trackers), 3)
+        self.assertEqual(len(session.overlay_tracker_state.grip_trackers), 3)
 
     def test_plan_edit_join_mode_cycles_join_type_with_tab(self):
         """Join mode should cycle the active join type and reflect it in the UI."""
@@ -826,8 +836,8 @@ class BimPlanEditGuiWallsMixin:
         self.assertEqual(session.current_tool, "Select")
         self._assert_selected_wall_visuals(session, source_wall)
         self.assertIsNone(session.selection.state.get_selected_target_for_kind("opening"))
-        self.assertEqual(len(session._grip_trackers), 3)
-        self.assertEqual(len(session._wall_hover_trackers), 0)
+        self.assertEqual(len(session.overlay_tracker_state.grip_trackers), 3)
+        self.assertEqual(len(session.overlay_tracker_state.wall_hover_trackers), 0)
 
     def test_plan_edit_join_mode_uses_selected_join_type_from_dock(self):
         """Join mode should create the join type currently selected in the dock."""
@@ -1077,7 +1087,7 @@ class BimPlanEditGuiWallsMixin:
         self.assertEqual(joint.JointType, "Miter")
         self.assertEqual({joint.WallA, joint.WallB}, {source_wall, target_wall})
         self._assert_selected_wall_visuals(session, source_wall)
-        self.assertEqual(len(session._wall_hover_trackers), 0)
+        self.assertEqual(len(session.overlay_tracker_state.wall_hover_trackers), 0)
 
         self._undo_document()
         joints = [
@@ -1087,7 +1097,7 @@ class BimPlanEditGuiWallsMixin:
         ]
         self.assertEqual(joints, [])
         self.assertIs(session.selection.state.get_selected_target_for_kind("wall"), source_wall)
-        self.assertEqual(len(session._wall_hover_trackers), 0)
+        self.assertEqual(len(session.overlay_tracker_state.wall_hover_trackers), 0)
 
         self._redo_document()
         joints = [
@@ -1100,7 +1110,7 @@ class BimPlanEditGuiWallsMixin:
         self.assertEqual(joint.JointType, "Miter")
         self.assertEqual({joint.WallA, joint.WallB}, {source_wall, target_wall})
         self.assertIs(session.selection.state.get_selected_target_for_kind("wall"), source_wall)
-        self.assertEqual(len(session._wall_hover_trackers), 0)
+        self.assertEqual(len(session.overlay_tracker_state.wall_hover_trackers), 0)
 
         session.shutdown(close_dialog=False)
         self.pump_gui_events()
@@ -1321,7 +1331,7 @@ class BimPlanEditGuiWallsMixin:
 
         session.selection.activation.select_wall_for_plan_edit(carrier_wall)
 
-        self.assertGreater(len(session._junction_node_trackers), 0)
+        self.assertGreater(len(session.overlay_tracker_state.junction_node_trackers), 0)
 
     def test_plan_edit_join_promotes_wall_pair_to_junction(self):
         """Joining a third compatible wall should promote the cluster to a wall junction."""
@@ -1404,7 +1414,7 @@ class BimPlanEditGuiWallsMixin:
             {carrier_wall.Name, branch_up.Name, branch_down.Name},
         )
         self.assertIs(session.selection.state.get_selected_target_for_kind("wall"), carrier_wall)
-        self.assertGreater(len(session._junction_node_trackers), 0)
+        self.assertGreater(len(session.overlay_tracker_state.junction_node_trackers), 0)
 
     def test_plan_edit_join_promotion_undo_redo_roundtrip(self):
         """Junction promotion should roundtrip cleanly through undo/redo."""
@@ -1487,7 +1497,7 @@ class BimPlanEditGuiWallsMixin:
             {carrier_wall.Name, branch_up.Name, branch_down.Name},
         )
         self.assertIs(session.selection.state.get_selected_target_for_kind("wall"), carrier_wall)
-        self.assertGreater(len(session._junction_node_trackers), 0)
+        self.assertGreater(len(session.overlay_tracker_state.junction_node_trackers), 0)
 
         self._undo_document()
 
@@ -1507,7 +1517,7 @@ class BimPlanEditGuiWallsMixin:
         self.assertEqual(joint.JointType, "Tee")
         self.assertEqual({joint.WallA, joint.WallB}, {branch_up, carrier_wall})
         self.assertIs(session.selection.state.get_selected_target_for_kind("wall"), carrier_wall)
-        self.assertEqual(len(session._junction_node_trackers), 0)
+        self.assertEqual(len(session.overlay_tracker_state.junction_node_trackers), 0)
 
         self._redo_document()
 
@@ -1530,7 +1540,7 @@ class BimPlanEditGuiWallsMixin:
             {carrier_wall.Name, branch_up.Name, branch_down.Name},
         )
         self.assertIs(session.selection.state.get_selected_target_for_kind("wall"), carrier_wall)
-        self.assertGreater(len(session._junction_node_trackers), 0)
+        self.assertGreater(len(session.overlay_tracker_state.junction_node_trackers), 0)
 
     def test_plan_edit_wall_resize_keeps_relation_status_clear_when_join_stays_resolvable(
         self,
@@ -1597,7 +1607,7 @@ class BimPlanEditGuiWallsMixin:
         self.assertIsNotNone(session)
         self.pump_gui_events()
 
-        session._edit_wall = source_wall
+        session.wall_edit_state.edit_wall = source_wall
         endpoints = source_wall.Proxy.calc_endpoints(source_wall)
         plain = session.wall_edit.get_preview_footprint(endpoints)
         polylines, warnings = session.wall_edit.get_preview_footprint_polylines(endpoints)
@@ -1641,10 +1651,10 @@ class BimPlanEditGuiWallsMixin:
 
         session.selection.activation.select_wall_for_plan_edit(source_wall)
         original_endpoints = source_wall.Proxy.calc_endpoints(source_wall)
-        session._wall_edit_modal_active = True
-        session._edit_wall = source_wall
-        session._edit_endpoint = "End"
-        session._edit_endpoints = original_endpoints
+        session.wall_edit_state.wall_edit_modal_active = True
+        session.wall_edit_state.edit_wall = source_wall
+        session.wall_edit_state.edit_endpoint = "End"
+        session.wall_edit_state.edit_endpoints = original_endpoints
         session.current_tool = "Stretch End"
 
         invalid_points = [
@@ -1705,8 +1715,8 @@ class BimPlanEditGuiWallsMixin:
 
         new_midpoint = captured["last"].add(FreeCAD.Vector(1000, 0, 0))
         captured["movecallback"](new_midpoint, None)
-        self.assertIsNotNone(session._preview_points)
-        self.assertNotEqual(session._preview_points, list(original_endpoints))
+        self.assertIsNotNone(session.wall_edit_state.preview_points)
+        self.assertNotEqual(session.wall_edit_state.preview_points, list(original_endpoints))
 
         captured["callback"](new_midpoint, None)
         self.pump_gui_events()
@@ -1724,7 +1734,7 @@ class BimPlanEditGuiWallsMixin:
         )
         self.assertEqual(session.current_tool, "Select")
         self._assert_selected_plan_target(session, "wall", wall)
-        self.assertEqual(len(session._grip_trackers), 3)
+        self.assertEqual(len(session.overlay_tracker_state.grip_trackers), 3)
 
     def test_plan_edit_wall_grip_move_escape_cancels_and_keeps_selection(self):
         """Esc should cancel an active wall point-pick edit and restore wall grips."""
@@ -1768,7 +1778,7 @@ class BimPlanEditGuiWallsMixin:
         self.assertAlmostEqual(canceled_endpoints[1].x, original_endpoints[1].x, delta=1e-6)
         self.assertEqual(session.current_tool, "Select")
         self._assert_selected_plan_target(session, "wall", wall)
-        self.assertEqual(len(session._grip_trackers), 3)
+        self.assertEqual(len(session.overlay_tracker_state.grip_trackers), 3)
 
     def test_plan_edit_wall_grip_activation_is_deferred(self):
         """Wall grip activation should defer point-pick start until after the click event unwinds."""
@@ -1837,8 +1847,8 @@ class BimPlanEditGuiWallsMixin:
         self.pump_gui_events(timeout_ms=500)
 
         self.assertEqual(session.selection.state.get_selected_plan_target(), (None, None))
-        self.assertEqual(len(session._grip_trackers), 0)
-        self.assertEqual(len(session._preview_grip_trackers), 0)
+        self.assertEqual(len(session.overlay_tracker_state.grip_trackers), 0)
+        self.assertEqual(len(session.wall_edit_state.preview_grip_trackers), 0)
         self.assertEqual(self._get_scenegraph_edit_nodes(session), [])
 
     def test_plan_edit_gui_wall_deselection_removes_edit_nodes_from_scenegraph(self):
@@ -1866,8 +1876,8 @@ class BimPlanEditGuiWallsMixin:
         self.pump_gui_events(timeout_ms=500)
 
         self.assertEqual(session.selection.state.get_selected_plan_target(), (None, None))
-        self.assertEqual(len(session._grip_trackers), 0)
-        self.assertEqual(len(session._preview_grip_trackers), 0)
+        self.assertEqual(len(session.overlay_tracker_state.grip_trackers), 0)
+        self.assertEqual(len(session.wall_edit_state.preview_grip_trackers), 0)
         self.assertEqual(self._get_scenegraph_edit_nodes(session), [])
 
     def test_plan_edit_wall_tool_activation_clears_selected_wall_edit_nodes(self):
@@ -1896,7 +1906,7 @@ class BimPlanEditGuiWallsMixin:
 
         self.assertEqual(session.current_tool, "Wall")
         self.assertEqual(session.selection.state.get_selected_plan_target(), (None, None))
-        self.assertEqual(len(session._grip_trackers), 0)
+        self.assertEqual(len(session.overlay_tracker_state.grip_trackers), 0)
         self.assertEqual(self._get_scenegraph_edit_nodes(session), [])
 
     def test_plan_edit_wall_move_preview_shows_delta_readouts(self):
@@ -1915,9 +1925,9 @@ class BimPlanEditGuiWallsMixin:
         session.selection.refresh.refresh_primary_selected_plan_target()
 
         original_endpoints = wall.Proxy.calc_endpoints(wall)
-        session._edit_wall = wall
-        session._edit_endpoint = "Move"
-        session._edit_endpoints = original_endpoints
+        session.wall_edit_state.edit_wall = wall
+        session.wall_edit_state.edit_endpoint = "Move"
+        session.wall_edit_state.edit_endpoints = original_endpoints
 
         moved_points = [
             original_endpoints[0].add(FreeCAD.Vector(500, 250, 0)),
@@ -1926,25 +1936,31 @@ class BimPlanEditGuiWallsMixin:
 
         session.wall_edit.sync_wall_edit_preview(moved_points)
 
-        self.assertEqual(len(session._wall_edit_readout_trackers), 2)
+        self.assertEqual(len(session.wall_edit_state.wall_edit_readout_trackers), 2)
         self.assertTrue(
-            all(hasattr(tracker, "dimnode") for tracker in session._wall_edit_readout_trackers)
+            all(
+                hasattr(tracker, "dimnode")
+                for tracker in session.wall_edit_state.wall_edit_readout_trackers
+            )
         )
         self.assertEqual(
             sorted(
                 int(tracker.dimnode.datumtype.getValue())
-                for tracker in session._wall_edit_readout_trackers
+                for tracker in session.wall_edit_state.wall_edit_readout_trackers
             ),
             [2, 3],
         )
         self.assertTrue(
             all(
                 tracker.offset == session.wall_edit.get_wall_edit_readout_offset(tracker.mode)
-                for tracker in session._wall_edit_readout_trackers
+                for tracker in session.wall_edit_state.wall_edit_readout_trackers
             )
         )
         self.assertTrue(
-            all(tracker.offset >= 100.0 for tracker in session._wall_edit_readout_trackers)
+            all(
+                tracker.offset >= 100.0
+                for tracker in session.wall_edit_state.wall_edit_readout_trackers
+            )
         )
 
     def test_plan_edit_wall_stretch_preview_shows_length_readout(self):
@@ -1964,9 +1980,9 @@ class BimPlanEditGuiWallsMixin:
         session.selection.refresh.refresh_primary_selected_plan_target()
 
         original_endpoints = wall.Proxy.calc_endpoints(wall)
-        session._edit_wall = wall
-        session._edit_endpoint = "End"
-        session._edit_endpoints = original_endpoints
+        session.wall_edit_state.edit_wall = wall
+        session.wall_edit_state.edit_endpoint = "End"
+        session.wall_edit_state.edit_endpoints = original_endpoints
         session.current_tool = "Stretch End"
 
         stretched_points = [
@@ -1976,8 +1992,8 @@ class BimPlanEditGuiWallsMixin:
 
         session.wall_edit.sync_wall_edit_preview(stretched_points)
 
-        self.assertEqual(len(session._wall_edit_readout_trackers), 1)
-        tracker = session._wall_edit_readout_trackers[0]
+        self.assertEqual(len(session.wall_edit_state.wall_edit_readout_trackers), 1)
+        tracker = session.wall_edit_state.wall_edit_readout_trackers[0]
         self.assertTrue(hasattr(tracker, "label"))
         self.assertTrue(hasattr(tracker, "startEdit"))
         self.assertEqual(tracker.mode, 1)
@@ -2053,8 +2069,8 @@ class BimPlanEditGuiWallsMixin:
         self.pump_gui_events()
 
         self.assertTrue(callback._handled)
-        self.assertIsNotNone(session._wall_edit_active_readout_tracker)
-        self.assertTrue(session._wall_edit_active_readout_tracker.isInEdit())
+        self.assertIsNotNone(session.wall_edit_state.wall_edit_active_readout_tracker)
+        self.assertTrue(session.wall_edit_state.wall_edit_active_readout_tracker.isInEdit())
 
     def test_plan_edit_wall_move_enter_starts_offset_edit(self):
         """Enter should activate in-view offset editing for a wall move preview."""
@@ -2089,10 +2105,10 @@ class BimPlanEditGuiWallsMixin:
         self.pump_gui_events()
 
         self.assertTrue(callback._handled)
-        self.assertEqual(len(session._wall_edit_readout_trackers), 2)
-        self.assertIsNotNone(session._wall_edit_active_readout_tracker)
-        self.assertEqual(session._wall_edit_active_readout_tracker.mode, 2)
-        self.assertTrue(session._wall_edit_active_readout_tracker.isInEdit())
+        self.assertEqual(len(session.wall_edit_state.wall_edit_readout_trackers), 2)
+        self.assertIsNotNone(session.wall_edit_state.wall_edit_active_readout_tracker)
+        self.assertEqual(session.wall_edit_state.wall_edit_active_readout_tracker.mode, 2)
+        self.assertTrue(session.wall_edit_state.wall_edit_active_readout_tracker.isInEdit())
 
     def test_plan_edit_wall_move_tab_cycles_active_offset_axis(self):
         """Tab should cycle the active in-view move offset between X and Y."""
@@ -2127,9 +2143,9 @@ class BimPlanEditGuiWallsMixin:
         self.pump_gui_events()
 
         self.assertTrue(callback._handled)
-        self.assertIsNotNone(session._wall_edit_active_readout_tracker)
-        self.assertEqual(session._wall_edit_active_readout_tracker.mode, 3)
-        self.assertTrue(session._wall_edit_active_readout_tracker.isInEdit())
+        self.assertIsNotNone(session.wall_edit_state.wall_edit_active_readout_tracker)
+        self.assertEqual(session.wall_edit_state.wall_edit_active_readout_tracker.mode, 3)
+        self.assertTrue(session.wall_edit_state.wall_edit_active_readout_tracker.isInEdit())
 
     def test_plan_edit_wall_stretch_length_edit_updates_preview(self):
         """Numeric wall stretch edits should drive the preview without rebuilding the label."""
@@ -2147,21 +2163,25 @@ class BimPlanEditGuiWallsMixin:
         session.selection.refresh.refresh_primary_selected_plan_target()
 
         original_endpoints = wall.Proxy.calc_endpoints(wall)
-        session._edit_wall = wall
-        session._edit_endpoint = "End"
-        session._edit_endpoints = original_endpoints
+        session.wall_edit_state.edit_wall = wall
+        session.wall_edit_state.edit_endpoint = "End"
+        session.wall_edit_state.edit_endpoints = original_endpoints
         session.current_tool = "Stretch End"
         session.wall_edit.sync_wall_edit_preview(list(original_endpoints))
 
-        tracker = session._wall_edit_active_readout_tracker
+        tracker = session.wall_edit_state.wall_edit_active_readout_tracker
         self.assertIsNotNone(tracker)
 
         session.wall_edit.on_wall_stretch_length_changed(4200.0)
 
-        self.assertIs(session._wall_edit_active_readout_tracker, tracker)
-        self.assertAlmostEqual(session._preview_points[0].x, original_endpoints[0].x, delta=1e-6)
+        self.assertIs(session.wall_edit_state.wall_edit_active_readout_tracker, tracker)
         self.assertAlmostEqual(
-            session._preview_points[1].x, original_endpoints[0].x + 4200.0, delta=1e-6
+            session.wall_edit_state.preview_points[0].x, original_endpoints[0].x, delta=1e-6
+        )
+        self.assertAlmostEqual(
+            session.wall_edit_state.preview_points[1].x,
+            original_endpoints[0].x + 4200.0,
+            delta=1e-6,
         )
 
     def test_plan_edit_wall_move_offset_edit_updates_preview(self):
@@ -2180,24 +2200,24 @@ class BimPlanEditGuiWallsMixin:
         session.selection.refresh.refresh_primary_selected_plan_target()
 
         original_endpoints = wall.Proxy.calc_endpoints(wall)
-        session._edit_wall = wall
-        session._edit_endpoint = "Move"
-        session._edit_endpoints = original_endpoints
+        session.wall_edit_state.edit_wall = wall
+        session.wall_edit_state.edit_endpoint = "Move"
+        session.wall_edit_state.edit_endpoints = original_endpoints
         session.current_tool = "Move Wall"
         session.wall_edit.sync_wall_edit_preview(list(original_endpoints))
 
-        tracker = session._wall_edit_active_readout_tracker
+        tracker = session.wall_edit_state.wall_edit_active_readout_tracker
         self.assertIsNotNone(tracker)
         self.assertEqual(tracker.mode, 2)
 
         session.wall_edit.on_wall_move_delta_changed(2, 500.0)
 
-        self.assertIs(session._wall_edit_active_readout_tracker, tracker)
+        self.assertIs(session.wall_edit_state.wall_edit_active_readout_tracker, tracker)
         self.assertAlmostEqual(
-            session._preview_points[0].x, original_endpoints[0].x + 500.0, delta=1e-6
+            session.wall_edit_state.preview_points[0].x, original_endpoints[0].x + 500.0, delta=1e-6
         )
         self.assertAlmostEqual(
-            session._preview_points[1].x, original_endpoints[1].x + 500.0, delta=1e-6
+            session.wall_edit_state.preview_points[1].x, original_endpoints[1].x + 500.0, delta=1e-6
         )
 
     def test_plan_edit_wall_move_offset_edit_commits_wall(self):
@@ -2216,9 +2236,9 @@ class BimPlanEditGuiWallsMixin:
         session.selection.refresh.refresh_primary_selected_plan_target()
 
         original_endpoints = wall.Proxy.calc_endpoints(wall)
-        session._edit_wall = wall
-        session._edit_endpoint = "Move"
-        session._edit_endpoints = original_endpoints
+        session.wall_edit_state.edit_wall = wall
+        session.wall_edit_state.edit_endpoint = "Move"
+        session.wall_edit_state.edit_endpoints = original_endpoints
         session.current_tool = "Move Wall"
         session.wall_edit.sync_wall_edit_preview(list(original_endpoints))
 
@@ -2434,10 +2454,10 @@ class BimPlanEditGuiWallsMixin:
         session.selection.refresh.refresh_primary_selected_plan_target()
 
         original_endpoints = wall.Proxy.calc_endpoints(wall)
-        session._edit_wall = wall
-        session._edit_endpoint = "End"
-        session._edit_endpoints = original_endpoints
-        session._wall_edit_opening_clearances = (
+        session.wall_edit_state.edit_wall = wall
+        session.wall_edit_state.edit_endpoint = "End"
+        session.wall_edit_state.edit_endpoints = original_endpoints
+        session.wall_edit_state.wall_edit_opening_clearances = (
             session.wall_edit.snapshot_wall_hosted_opening_clearances(wall, original_endpoints)
         )
         session.current_tool = "Stretch End"
@@ -2464,11 +2484,11 @@ class BimPlanEditGuiWallsMixin:
             max(len(polyline) - 1, 0) for polyline in original_polylines if len(polyline) >= 2
         )
         self.assertEqual(
-            len(session._wall_edit_opening_preview_trackers),
+            len(session.wall_edit_state.wall_edit_opening_preview_trackers),
             expected_segment_count,
         )
 
-        tracker = session._wall_edit_opening_preview_trackers[0]
+        tracker = session.wall_edit_state.wall_edit_opening_preview_trackers[0]
         expected_start = FreeCAD.Vector(first_polyline[0]).add(delta)
         expected_end = FreeCAD.Vector(first_polyline[1]).add(delta)
         self.assertLess(tracker.p1().distanceToPoint(expected_start), 1e-6)
@@ -2813,7 +2833,7 @@ class BimPlanEditGuiWallsMixin:
         self._assert_selected_plan_target(session, "wall", wall)
         self.assertEqual(FreeCADGui.Selection.getSelection(), [])
         self.pump_gui_events()
-        self.assertEqual(len(session._grip_trackers), 3)
+        self.assertEqual(len(session.overlay_tracker_state.grip_trackers), 3)
         self.assertEqual([obj.Name for obj in FreeCADGui.Selection.getSelection()], [wall.Name])
 
         session.shutdown(close_dialog=False)
@@ -2842,9 +2862,9 @@ class BimPlanEditGuiWallsMixin:
 
         self.assertTrue(press._handled)
         self._assert_selected_plan_target(session, "wall", wall)
-        self.assertEqual(len(session._grip_trackers), 0)
+        self.assertEqual(len(session.overlay_tracker_state.grip_trackers), 0)
         self.pump_gui_events()
-        self.assertEqual(len(session._grip_trackers), 3)
+        self.assertEqual(len(session.overlay_tracker_state.grip_trackers), 3)
 
         session.shutdown(close_dialog=False)
         self.pump_gui_events()
@@ -2882,7 +2902,7 @@ class BimPlanEditGuiWallsMixin:
         self._assert_selected_plan_target(session, "wall", wall)
         self.assertFalse(session.wall_edit.is_selected_wall_endpoint_editable())
         self.pump_gui_events()
-        self.assertEqual(len(session._grip_trackers), 0)
+        self.assertEqual(len(session.overlay_tracker_state.grip_trackers), 0)
 
         session.shutdown(close_dialog=False)
         self.pump_gui_events()
@@ -2918,7 +2938,7 @@ class BimPlanEditGuiWallsMixin:
         self._assert_selected_plan_target(session, "wall", target_wall)
         self.assertEqual(FreeCADGui.Selection.getSelection(), [])
         self.pump_gui_events()
-        self.assertEqual(len(session._grip_trackers), 3)
+        self.assertEqual(len(session.overlay_tracker_state.grip_trackers), 3)
         self.assertEqual(
             [obj.Name for obj in FreeCADGui.Selection.getSelection()],
             [target_wall.Name],
@@ -2943,7 +2963,7 @@ class BimPlanEditGuiWallsMixin:
         session.selection.refresh.refresh_primary_selected_plan_target()
 
         self.assertTrue(session.wall_edit.is_selected_wall_endpoint_editable())
-        self.assertEqual(len(session._grip_trackers), 3)
+        self.assertEqual(len(session.overlay_tracker_state.grip_trackers), 3)
 
         session.shutdown(close_dialog=False)
         self.pump_gui_events()
@@ -2966,7 +2986,7 @@ class BimPlanEditGuiWallsMixin:
         FreeCADGui.Selection.addSelection(wall)
         self.pump_gui_events()
         self.assertIs(session.selection.state.get_selected_target_for_kind("wall"), wall)
-        self.assertGreater(len(session._grip_trackers), 0)
+        self.assertGreater(len(session.overlay_tracker_state.grip_trackers), 0)
 
         with session.defer_document_visual_updates():
             self._make_hosted_door(wall, name="DeferredResetDoor")
@@ -2974,7 +2994,7 @@ class BimPlanEditGuiWallsMixin:
         self.pump_gui_events(timeout_ms=500)
 
         self.assertIsNone(session.selection.state.get_selected_target_for_kind("wall"))
-        self.assertEqual(len(session._grip_trackers), 0)
+        self.assertEqual(len(session.overlay_tracker_state.grip_trackers), 0)
 
         session.shutdown(close_dialog=False)
         self.pump_gui_events()
@@ -3034,13 +3054,13 @@ class BimPlanEditGuiWallsMixin:
         FreeCADGui.Selection.addSelection(wall)
         self.pump_gui_events()
         self.assertIs(session.selection.state.get_selected_target_for_kind("wall"), wall)
-        self.assertGreater(len(session._grip_trackers), 0)
+        self.assertGreater(len(session.overlay_tracker_state.grip_trackers), 0)
 
         self._make_hosted_door(wall, name="ResetDoor")
         self.pump_gui_events()
 
         self.assertIsNone(session.selection.state.get_selected_target_for_kind("wall"))
-        self.assertEqual(len(session._grip_trackers), 0)
+        self.assertEqual(len(session.overlay_tracker_state.grip_trackers), 0)
 
         session.shutdown(close_dialog=False)
         self.pump_gui_events()

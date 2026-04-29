@@ -113,10 +113,10 @@ class BimPlanEditGuiOpeningsMixin:
         session.selection.refresh.refresh_primary_selected_plan_target()
 
         self._assert_selected_plan_target(session, "opening", door)
-        self.assertEqual(len(session._grip_trackers), 0)
-        self.assertGreater(len(session._opening_overlay_trackers), 0)
+        self.assertEqual(len(session.overlay_tracker_state.grip_trackers), 0)
+        self.assertGreater(len(session.overlay_tracker_state.opening_overlay_trackers), 0)
 
-        self.assertEqual(len(session._opening_handle_trackers), 3)
+        self.assertEqual(len(session.opening_transient_state.opening_handle_trackers), 3)
 
     def test_plan_edit_window_tool_creates_hosted_window_on_selected_wall(self):
         """The Plan Edit Window tool should create a real hosted Arch Window."""
@@ -459,8 +459,8 @@ class BimPlanEditGuiOpeningsMixin:
         self.assertAlmostEqual(original_center.y, updated_center.y, delta=1e-6)
         self.assertAlmostEqual(original_center.z, updated_center.z, delta=1e-6)
         self.assertIs(session.selection.state.get_selected_target_for_kind("opening"), window)
-        self.assertGreater(len(session._opening_overlay_trackers), 0)
-        self.assertGreaterEqual(len(session._opening_handle_trackers), 1)
+        self.assertGreater(len(session.overlay_tracker_state.opening_overlay_trackers), 0)
+        self.assertGreaterEqual(len(session.opening_transient_state.opening_handle_trackers), 1)
         self._assert_no_opening_move_preview_visuals(session)
 
         self._undo_document()
@@ -477,8 +477,8 @@ class BimPlanEditGuiOpeningsMixin:
         self.assertAlmostEqual(original_center.y, undo_center.y, delta=1e-6)
         self.assertAlmostEqual(original_center.z, undo_center.z, delta=1e-6)
         self.assertIs(session.selection.state.get_selected_target_for_kind("opening"), window)
-        self.assertGreater(len(session._opening_overlay_trackers), 0)
-        self.assertGreaterEqual(len(session._opening_handle_trackers), 1)
+        self.assertGreater(len(session.overlay_tracker_state.opening_overlay_trackers), 0)
+        self.assertGreaterEqual(len(session.opening_transient_state.opening_handle_trackers), 1)
         self._assert_no_opening_move_preview_visuals(session)
 
         self._redo_document()
@@ -495,8 +495,8 @@ class BimPlanEditGuiOpeningsMixin:
         self.assertAlmostEqual(updated_center.y, redo_center.y, delta=1e-6)
         self.assertAlmostEqual(updated_center.z, redo_center.z, delta=1e-6)
         self.assertIs(session.selection.state.get_selected_target_for_kind("opening"), window)
-        self.assertGreater(len(session._opening_overlay_trackers), 0)
-        self.assertGreaterEqual(len(session._opening_handle_trackers), 1)
+        self.assertGreater(len(session.overlay_tracker_state.opening_overlay_trackers), 0)
+        self.assertGreaterEqual(len(session.opening_transient_state.opening_handle_trackers), 1)
         self._assert_no_opening_move_preview_visuals(session)
 
     def test_plan_edit_selected_window_can_change_height(self):
@@ -610,8 +610,8 @@ class BimPlanEditGuiOpeningsMixin:
         self.assertAlmostEqual(original_center.y, updated_center.y, delta=1e-6)
         self.assertAlmostEqual(original_center.z, updated_center.z, delta=1e-6)
         self.assertIs(session.selection.state.get_selected_target_for_kind("opening"), window)
-        self.assertGreater(len(session._opening_overlay_trackers), 0)
-        self.assertGreaterEqual(len(session._opening_handle_trackers), 1)
+        self.assertGreater(len(session.overlay_tracker_state.opening_overlay_trackers), 0)
+        self.assertGreaterEqual(len(session.opening_transient_state.opening_handle_trackers), 1)
         self._assert_no_opening_move_preview_visuals(session)
 
         self._undo_document()
@@ -628,8 +628,8 @@ class BimPlanEditGuiOpeningsMixin:
         self.assertAlmostEqual(original_center.y, undo_center.y, delta=1e-6)
         self.assertAlmostEqual(original_center.z, undo_center.z, delta=1e-6)
         self.assertIs(session.selection.state.get_selected_target_for_kind("opening"), window)
-        self.assertGreater(len(session._opening_overlay_trackers), 0)
-        self.assertGreaterEqual(len(session._opening_handle_trackers), 1)
+        self.assertGreater(len(session.overlay_tracker_state.opening_overlay_trackers), 0)
+        self.assertGreaterEqual(len(session.opening_transient_state.opening_handle_trackers), 1)
         self._assert_no_opening_move_preview_visuals(session)
 
         self._redo_document()
@@ -646,8 +646,8 @@ class BimPlanEditGuiOpeningsMixin:
         self.assertAlmostEqual(updated_center.y, redo_center.y, delta=1e-6)
         self.assertAlmostEqual(updated_center.z, redo_center.z, delta=1e-6)
         self.assertIs(session.selection.state.get_selected_target_for_kind("opening"), window)
-        self.assertGreater(len(session._opening_overlay_trackers), 0)
-        self.assertGreaterEqual(len(session._opening_handle_trackers), 1)
+        self.assertGreater(len(session.overlay_tracker_state.opening_overlay_trackers), 0)
+        self.assertGreaterEqual(len(session.opening_transient_state.opening_handle_trackers), 1)
         self._assert_no_opening_move_preview_visuals(session)
 
     def test_plan_edit_selected_window_can_change_size_together(self):
@@ -877,8 +877,8 @@ class BimPlanEditGuiOpeningsMixin:
         self.assertAlmostEqual(original_width, updated_width, delta=1e-6)
         self.assertAlmostEqual(original_height, updated_height, delta=1e-6)
         self.assertIs(session.selection.state.get_selected_target_for_kind("opening"), window)
-        self.assertGreater(len(session._opening_overlay_trackers), 0)
-        self.assertGreaterEqual(len(session._opening_handle_trackers), 1)
+        self.assertGreater(len(session.overlay_tracker_state.opening_overlay_trackers), 0)
+        self.assertGreaterEqual(len(session.opening_transient_state.opening_handle_trackers), 1)
         self._assert_no_opening_move_preview_visuals(session)
 
         self._undo_document()
@@ -896,8 +896,8 @@ class BimPlanEditGuiOpeningsMixin:
         self.assertAlmostEqual(original_width, restored_width, delta=1e-6)
         self.assertAlmostEqual(original_height, restored_height, delta=1e-6)
         self.assertIs(session.selection.state.get_selected_target_for_kind("opening"), window)
-        self.assertGreater(len(session._opening_overlay_trackers), 0)
-        self.assertGreaterEqual(len(session._opening_handle_trackers), 1)
+        self.assertGreater(len(session.overlay_tracker_state.opening_overlay_trackers), 0)
+        self.assertGreaterEqual(len(session.opening_transient_state.opening_handle_trackers), 1)
         self._assert_no_opening_move_preview_visuals(session)
 
         self._redo_document()
@@ -916,8 +916,8 @@ class BimPlanEditGuiOpeningsMixin:
         self.assertAlmostEqual(updated_height, redone_height, delta=1e-6)
         self.assertEqual(target_style, session.windows.get_selected_window_style_preset())
         self.assertIs(session.selection.state.get_selected_target_for_kind("opening"), window)
-        self.assertGreater(len(session._opening_overlay_trackers), 0)
-        self.assertGreaterEqual(len(session._opening_handle_trackers), 1)
+        self.assertGreater(len(session.overlay_tracker_state.opening_overlay_trackers), 0)
+        self.assertGreaterEqual(len(session.opening_transient_state.opening_handle_trackers), 1)
         self._assert_no_opening_move_preview_visuals(session)
 
     def test_plan_edit_selected_window_shows_contextual_window_guidance(self):
@@ -1025,8 +1025,8 @@ class BimPlanEditGuiOpeningsMixin:
             session.picking.hover((100, 100))
 
         self.assertIs(session.hovered_opening, door)
-        self.assertGreater(len(session._opening_hover_trackers), 0)
-        self.assertEqual(len(session._opening_handle_trackers), 0)
+        self.assertGreater(len(session.overlay_tracker_state.opening_hover_trackers), 0)
+        self.assertEqual(len(session.opening_transient_state.opening_handle_trackers), 0)
 
     def test_plan_edit_clicking_hovered_hosted_door_selects_it(self):
         """Clicking a hovered hosted opening should promote it to selected opening state."""
@@ -1054,9 +1054,9 @@ class BimPlanEditGuiOpeningsMixin:
 
         self.assertTrue(activated)
         self._assert_selected_plan_target(session, "opening", door)
-        self.assertEqual(len(session._grip_trackers), 0)
-        self.assertGreater(len(session._opening_overlay_trackers), 0)
-        self.assertEqual(len(session._opening_handle_trackers), 3)
+        self.assertEqual(len(session.overlay_tracker_state.grip_trackers), 0)
+        self.assertGreater(len(session.overlay_tracker_state.opening_overlay_trackers), 0)
+        self.assertEqual(len(session.opening_transient_state.opening_handle_trackers), 3)
 
     def test_plan_edit_real_view_picking_hover_and_click_hosted_door(self):
         """Real view-based hover and click should pick a hosted opening."""
@@ -1095,14 +1095,14 @@ class BimPlanEditGuiOpeningsMixin:
         self.pump_gui_events()
 
         self.assertIs(session.hovered_opening, door)
-        self.assertGreater(len(session._opening_hover_trackers), 0)
+        self.assertGreater(len(session.overlay_tracker_state.opening_hover_trackers), 0)
 
         move_again = self._make_fake_mouse_move_event(*mouse_pos)
         session.input.on_mouse_moved(move_again)
         self.pump_gui_events()
 
         self.assertIs(session.hovered_opening, door)
-        self.assertGreater(len(session._opening_hover_trackers), 0)
+        self.assertGreater(len(session.overlay_tracker_state.opening_hover_trackers), 0)
 
         press = self._make_fake_left_mouse_press(*mouse_pos)
         session.input.on_mouse_pressed(press)
@@ -1116,9 +1116,9 @@ class BimPlanEditGuiOpeningsMixin:
         self.assertTrue(release._handled)
         self.assertFalse(session.input_event_state.consume_left_button_release)
         self._assert_selected_plan_target(session, "opening", door)
-        self.assertEqual(len(session._grip_trackers), 0)
-        self.assertGreater(len(session._opening_overlay_trackers), 0)
-        self.assertEqual(len(session._opening_handle_trackers), 3)
+        self.assertEqual(len(session.overlay_tracker_state.grip_trackers), 0)
+        self.assertGreater(len(session.overlay_tracker_state.opening_overlay_trackers), 0)
+        self.assertEqual(len(session.opening_transient_state.opening_handle_trackers), 3)
 
         session.shutdown(close_dialog=False)
         self.pump_gui_events()
@@ -1158,13 +1158,15 @@ class BimPlanEditGuiOpeningsMixin:
 
         session.selection.hover.set_hovered_opening(door)
         self.pump_gui_events()
-        self.assertEqual(len(session._opening_hover_trackers), symbol_segments)
+        self.assertEqual(len(session.overlay_tracker_state.opening_hover_trackers), symbol_segments)
 
         FreeCADGui.Selection.clearSelection()
         FreeCADGui.Selection.addSelection(self.document.Name, door.Name)
         self.pump_gui_events()
         session.selection.refresh.refresh_primary_selected_plan_target()
-        self.assertEqual(len(session._opening_overlay_trackers), combined_segments)
+        self.assertEqual(
+            len(session.overlay_tracker_state.opening_overlay_trackers), combined_segments
+        )
 
         session.shutdown(close_dialog=False)
         self.pump_gui_events()
@@ -1256,8 +1258,8 @@ class BimPlanEditGuiOpeningsMixin:
         self.pump_gui_events()
         self._assert_no_selected_plan_target(session)
         self.assertIsNone(session.selection_state.pending_selected_plan_target)
-        self.assertEqual(len(session._opening_overlay_trackers), 0)
-        self.assertEqual(len(session._opening_handle_trackers), 0)
+        self.assertEqual(len(session.overlay_tracker_state.opening_overlay_trackers), 0)
+        self.assertEqual(len(session.opening_transient_state.opening_handle_trackers), 0)
 
     def test_plan_edit_opening_move_uses_reduced_snap_profile(self):
         """Opening move should use a constrained snap profile while point-picking."""
@@ -1449,17 +1451,17 @@ class BimPlanEditGuiOpeningsMixin:
             session.input.on_key_pressed(
                 self._FakeEventCallback(self._FakeKeyEvent(coin.SoKeyboardEvent.A))
             )
-            self.assertEqual(session._edit_opening_move_anchor, "left")
+            self.assertEqual(session.opening_transient_state.edit_opening_move_anchor, "left")
 
             session.input.on_key_pressed(
                 self._FakeEventCallback(self._FakeKeyEvent(coin.SoKeyboardEvent.A))
             )
-            self.assertEqual(session._edit_opening_move_anchor, "right")
+            self.assertEqual(session.opening_transient_state.edit_opening_move_anchor, "right")
 
             session.input.on_key_pressed(
                 self._FakeEventCallback(self._FakeKeyEvent(coin.SoKeyboardEvent.A))
             )
-            self.assertEqual(session._edit_opening_move_anchor, "center")
+            self.assertEqual(session.opening_transient_state.edit_opening_move_anchor, "center")
 
             self.assertEqual(refresh_preview.call_count, 3)
 
@@ -1595,12 +1597,12 @@ class BimPlanEditGuiOpeningsMixin:
         preview_point.z = context["base_z"]
 
         session.current_tool = "Move Opening"
-        session._edit_opening_move_anchor = "center"
+        session.opening_transient_state.edit_opening_move_anchor = "center"
         session.openings.sync_opening_move_preview(door, preview_point)
 
         dim_trackers = [
             tracker
-            for tracker in session._opening_move_preview_trackers
+            for tracker in session.opening_transient_state.opening_move_preview_trackers
             if hasattr(tracker, "dimnode") and hasattr(tracker, "offset")
         ]
         self.assertEqual(len(dim_trackers), 1)
@@ -1655,7 +1657,7 @@ class BimPlanEditGuiOpeningsMixin:
 
             self.assertEqual(session.current_tool, "Move Opening")
             self._assert_selected_plan_target(session, "opening", door)
-            self.assertIs(session._edit_opening, door)
+            self.assertIs(session.interaction_state.edit_opening, door)
             self.assertIn("callback", captured)
         else:
             original_parts = list(door.WindowParts)
@@ -1675,14 +1677,18 @@ class BimPlanEditGuiOpeningsMixin:
         self.pump_gui_events()
 
         self.assertTrue(session.selection.activation.select_wall_for_plan_edit(wall))
-        self.assertGreater(len(session._selected_wall_opening_context_trackers), 0)
-        self.assertEqual(len(session._opening_hover_trackers), 0)
+        self.assertGreater(
+            len(session.overlay_tracker_state.selected_wall_opening_context_trackers), 0
+        )
+        self.assertEqual(len(session.overlay_tracker_state.opening_hover_trackers), 0)
 
         session.selection.hover.set_hovered_opening(door)
 
         self.assertIs(session.hovered_opening, door)
-        self.assertGreater(len(session._opening_hover_trackers), 0)
-        self.assertEqual(len(session._selected_wall_opening_context_trackers), 0)
+        self.assertGreater(len(session.overlay_tracker_state.opening_hover_trackers), 0)
+        self.assertEqual(
+            len(session.overlay_tracker_state.selected_wall_opening_context_trackers), 0
+        )
 
         with patch.object(
             session.overlays.openings,
@@ -1692,14 +1698,18 @@ class BimPlanEditGuiOpeningsMixin:
             session.selection.state.set_selected_plan_target("wall", wall)
 
         self.assertGreater(sync_hover.call_count, 0)
-        self.assertGreater(len(session._opening_hover_trackers), 0)
-        self.assertEqual(len(session._selected_wall_opening_context_trackers), 0)
+        self.assertGreater(len(session.overlay_tracker_state.opening_hover_trackers), 0)
+        self.assertEqual(
+            len(session.overlay_tracker_state.selected_wall_opening_context_trackers), 0
+        )
 
         session.selection.hover.set_hovered_opening(None)
 
         self.assertIsNone(session.hovered_opening)
-        self.assertEqual(len(session._opening_hover_trackers), 0)
-        self.assertGreater(len(session._selected_wall_opening_context_trackers), 0)
+        self.assertEqual(len(session.overlay_tracker_state.opening_hover_trackers), 0)
+        self.assertGreater(
+            len(session.overlay_tracker_state.selected_wall_opening_context_trackers), 0
+        )
 
     def test_plan_edit_can_flip_selected_door_hinge(self):
         """Selected door handles should expose hinge flipping in Plan Edit."""
