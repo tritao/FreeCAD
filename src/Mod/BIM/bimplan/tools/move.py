@@ -27,7 +27,7 @@ class PlanMoveAPI:
 def _start_move_tool(session):
     from draftguitools import gui_move
 
-    return session.lifecycle.start_embedded_tool(
+    return session.embedded_tools.start(
         plan_runtime_tools.PlanTool.MOVE,
         gui_move.Move(),
     )

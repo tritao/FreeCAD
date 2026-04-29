@@ -131,8 +131,8 @@ def start_plan_provider_point_tool(session, tool):
         plan_runtime_tools.PlanTool.ROTATE_SYMBOL,
     ):
         session.symbols.cancel_symbol_handle_point_pick()
-    if session.lifecycle.has_active_embedded_tool():
-        session.lifecycle.cancel_embedded_tool()
+    if session.embedded_tools.has_active():
+        session.embedded_tools.cancel()
     session.wall_edit.cancel_wall_edit(refresh=False)
     session.lifecycle.cancel_pending_edit()
     session.wall_relations.clear_plan_relation_status()

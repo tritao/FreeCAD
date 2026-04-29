@@ -742,10 +742,9 @@ class TestBimPlanCore(unittest.TestCase):
             wall_create=SimpleNamespace(cancel_rect_wall_tool=lambda refresh=False: None),
             providers=SimpleNamespace(cancel_provider_point_tool=lambda refresh=False: None),
             wall_relations=SimpleNamespace(clear_plan_relation_status=lambda: None),
+            embedded_tools=SimpleNamespace(has_active=lambda: False, cancel=lambda: None),
             interaction_state=SimpleNamespace(embedded_tool=None),
             lifecycle=SimpleNamespace(
-                has_active_embedded_tool=lambda: False,
-                cancel_embedded_tool=lambda: None,
                 cancel_pending_edit=lambda: None,
             ),
             windows=SimpleNamespace(cancel_window_tool=lambda refresh=False: None),
@@ -784,10 +783,9 @@ class TestBimPlanCore(unittest.TestCase):
             ),
             providers=SimpleNamespace(cancel_provider_point_tool=lambda refresh=False: None),
             wall_relations=SimpleNamespace(clear_plan_relation_status=lambda: None),
+            embedded_tools=SimpleNamespace(has_active=lambda: False, cancel=lambda: None),
             interaction_state=SimpleNamespace(embedded_tool=None),
             lifecycle=SimpleNamespace(
-                has_active_embedded_tool=lambda: False,
-                cancel_embedded_tool=lambda: None,
                 cancel_pending_edit=lambda: None,
             ),
             windows=SimpleNamespace(cancel_window_tool=lambda refresh=False: None),
