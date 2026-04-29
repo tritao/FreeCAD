@@ -46,6 +46,9 @@ class PlanWallRelationsAPI:
     def cycle_plan_join_type(self):
         return cycle_plan_join_type(self.session)
 
+    def activate_join_tool(self):
+        return activate_join_tool(self.session)
+
     def cancel_join_tool(self, refresh=True):
         return cancel_join_tool(self.session, refresh=refresh)
 
