@@ -48,6 +48,9 @@ class PlanSymbolsAPI:
     def clear_symbol_edit_preview(self):
         return clear_symbol_edit_preview(self.session)
 
+    def discard_runtime_references(self):
+        return discard_runtime_references(self.session)
+
     def get_symbol_handle_placement(self, symbol, handle_role, point):
         return get_symbol_handle_placement(self.session, symbol, handle_role, point)
 
@@ -69,6 +72,21 @@ class PlanSymbolsAPI:
     def cancel_symbol_handle_point_pick(self):
         return cancel_symbol_handle_point_pick(self.session)
 
+    def cancel_active_tool_for_finish(self):
+        if self.session.current_tool not in (
+            plan_runtime_tools.PlanTool.MOVE_SYMBOL,
+            plan_runtime_tools.PlanTool.ROTATE_SYMBOL,
+        ):
+            return False
+        self.cancel_symbol_handle_point_pick()
+        return True
+
+    def cancel_active_tool_for_teardown(self):
+        return self.cancel_active_tool_for_finish()
+
+    def cancel_active_tool_for_shutdown(self):
+        return self.cancel_active_tool_for_finish()
+
     def restore_selected_symbol(self, symbol):
         return restore_selected_symbol(self.session, symbol)
 
@@ -88,6 +106,14 @@ class SymbolEditTool(plan_runtime_tools.PlanToolHandler):
     def cancel(self):
         self.session.symbols.cancel_symbol_handle_point_pick()
         return True
+
+
+def discard_runtime_references(session):
+    interaction_state = session.interaction_state
+    interaction_state.edit_symbol = None
+    interaction_state.edit_symbol_handle_role = None
+    interaction_state.edit_symbol_start_placement = None
+    interaction_state.edit_symbol_reference_point = None
 
 
 def get_symbol_handle_placement(session, symbol, handle_role, point):

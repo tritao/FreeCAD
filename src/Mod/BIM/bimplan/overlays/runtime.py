@@ -499,6 +499,11 @@ class PlanOverlaysAPI:
     def queue_plan_overlay_visual_refresh(self, *visuals):
         return _queue_plan_overlay_visual_refresh(self.session, *visuals)
 
+    def discard_runtime_references(self):
+        tracker_state = self.session.overlay_tracker_state
+        tracker_state.junction_node_trackers = []
+        tracker_state.space_region_pick_trackers = []
+
     def queue_plan_overlay_view_scale_refresh(
         self,
         delay_ms=_PLAN_VIEW_SCALE_REFRESH_DELAY_MS,

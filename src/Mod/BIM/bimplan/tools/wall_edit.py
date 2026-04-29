@@ -1690,6 +1690,37 @@ def _set_key_event_handled(event_callback):
         setter()
 
 
+def reset_pending_edit_state(session):
+    state = _wall_edit_state(session)
+    state.wall_edit_modal_active = False
+    session.wall_edit.restore_edit_wall_visibility()
+    session.wall_edit.clear_wall_edit_preview()
+    state.edit_wall = None
+    state.edit_endpoint = None
+    state.edit_endpoints = None
+    state.wall_edit_opening_clearances = {}
+    state.wall_edit_opening_clearances_queued = False
+    state.wall_edit_task_panel_refresh_queued = False
+    state.preview_points = None
+    state.wall_edit_length_edit_queued = False
+
+
+def discard_runtime_references(session):
+    state = _wall_edit_state(session)
+    state.edit_wall = None
+    state.edit_endpoint = None
+    state.edit_endpoints = None
+    state.preview_points = None
+    state.preview_line_tracker = None
+    state.preview_footprint_trackers = []
+    state.preview_grip_trackers = []
+    state.wall_edit_readout_trackers = []
+    state.wall_edit_opening_preview_trackers = []
+    state.wall_edit_active_readout_tracker = None
+    state.wall_edit_active_readout_mode = None
+    state.edit_wall_visibility = None
+
+
 class PlanWallEditAPI(_SessionAPI):
     """Owned session surface for Plan Edit wall edit behavior."""
 
@@ -1706,6 +1737,12 @@ class PlanWallEditAPI(_SessionAPI):
 
     def cancel_wall_edit(self, *args, **kwargs):
         return cancel_wall_edit(self.session, *args, **kwargs)
+
+    def reset_pending_edit_state(self, *args, **kwargs):
+        return reset_pending_edit_state(self.session, *args, **kwargs)
+
+    def discard_runtime_references(self):
+        return discard_runtime_references(self.session)
 
     def cancel_wall_subtool(self, *args, **kwargs):
         return cancel_wall_subtool(self.session, *args, **kwargs)
