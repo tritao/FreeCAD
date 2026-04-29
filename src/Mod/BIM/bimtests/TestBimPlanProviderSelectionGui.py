@@ -304,7 +304,7 @@ class TestBimPlanProviderSelectionGui(ArchWallGuiTestCase):
 
         with (
             patch.object(
-                session,
+                session.providers,
                 "get_plan_provider_targets",
                 return_value=(self._make_provider_target_spec(marker),),
             ),
@@ -394,12 +394,12 @@ class TestBimPlanProviderSelectionGui(ArchWallGuiTestCase):
 
         with (
             patch.object(
-                session,
+                session.providers,
                 "get_plan_provider_targets",
                 return_value=(self._make_provider_target_spec(marker),),
             ),
             patch.object(
-                session,
+                session.providers,
                 "get_plan_provider_overlays",
                 return_value=(self._make_provider_overlay_spec(marker),),
             ),
@@ -434,7 +434,7 @@ class TestBimPlanProviderSelectionGui(ArchWallGuiTestCase):
         self.pump_gui_events()
 
         with patch.object(
-            session,
+            session.providers,
             "get_plan_provider_targets",
             return_value=(self._make_provider_target_spec(marker),),
         ):
@@ -468,7 +468,7 @@ class TestBimPlanProviderSelectionGui(ArchWallGuiTestCase):
 
         with (
             patch.object(
-                session,
+                session.providers,
                 "get_plan_provider_targets",
                 return_value=(self._make_provider_target_spec(marker),),
             ),
@@ -523,7 +523,7 @@ class TestBimPlanProviderSelectionGui(ArchWallGuiTestCase):
         self.pump_gui_events()
 
         with patch.object(
-            session,
+            session.providers,
             "get_plan_provider_targets",
             return_value=(self._make_provider_target_spec(marker),),
         ):
@@ -557,7 +557,7 @@ class TestBimPlanProviderSelectionGui(ArchWallGuiTestCase):
         self.pump_gui_events()
 
         with patch.object(
-            session,
+            session.providers,
             "get_plan_provider_targets",
             return_value=(self._make_provider_target_spec(marker),),
         ):

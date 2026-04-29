@@ -1345,22 +1345,24 @@ class TestBimPlanCore(unittest.TestCase):
             hovered_provider=provider,
             doc=provider.Document,
             provider_overlay_read_state=_make_provider_overlay_read_state_stub(),
-            _plan_provider_refresh_cache_scope=lambda: nullcontext(),
-            get_plan_provider_overlays=lambda: (
-                PlanOverlaySpec(
-                    key="fixture-status",
-                    points=((100.0, 200.0, 0.0),),
-                    point_targets=(
-                        PlanOverlayTargetSpec(
-                            object_name=provider.Name,
-                            target_kind=PlanOverlayTargetKind.PROVIDER,
+            providers=SimpleNamespace(
+                plan_provider_refresh_cache_scope=lambda: nullcontext(),
+                get_plan_provider_overlays=lambda: (
+                    PlanOverlaySpec(
+                        key="fixture-status",
+                        points=((100.0, 200.0, 0.0),),
+                        point_targets=(
+                            PlanOverlayTargetSpec(
+                                object_name=provider.Name,
+                                target_kind=PlanOverlayTargetKind.PROVIDER,
+                            ),
                         ),
+                        marker_kind=PlanOverlayMarkerKind.SQUARE,
+                        marker_size=180.0,
                     ),
-                    marker_kind=PlanOverlayMarkerKind.SQUARE,
-                    marker_size=180.0,
                 ),
+                is_plan_provider_overlay_visible=lambda _overlay: True,
             ),
-            is_plan_provider_overlay_visible=lambda _overlay: True,
             visibility=SimpleNamespace(
                 get_document_object_key=lambda obj: (
                     getattr(getattr(obj, "Document", None), "Name", None),
@@ -1420,20 +1422,22 @@ class TestBimPlanCore(unittest.TestCase):
             doc=doc,
             view=_View(),
             provider_overlay_read_state=_make_provider_overlay_read_state_stub(),
-            get_plan_provider_overlays=lambda: (
-                PlanOverlaySpec(
-                    key="fixture-status",
-                    points=((100.0, 200.0, 0.0),),
-                    point_targets=(
-                        PlanOverlayTargetSpec(
-                            object_name=marker.Name,
-                            target_kind=PlanOverlayTargetKind.OBJECT,
+            providers=SimpleNamespace(
+                get_plan_provider_overlays=lambda: (
+                    PlanOverlaySpec(
+                        key="fixture-status",
+                        points=((100.0, 200.0, 0.0),),
+                        point_targets=(
+                            PlanOverlayTargetSpec(
+                                object_name=marker.Name,
+                                target_kind=PlanOverlayTargetKind.OBJECT,
+                            ),
                         ),
+                        marker_size=220.0,
                     ),
-                    marker_size=220.0,
                 ),
+                is_plan_provider_overlay_visible=lambda _overlay: True,
             ),
-            is_plan_provider_overlay_visible=lambda _overlay: True,
             performance=_make_perf_stub(),
         )
 
@@ -1454,21 +1458,23 @@ class TestBimPlanCore(unittest.TestCase):
             doc=doc,
             view=_View(),
             provider_overlay_read_state=_make_provider_overlay_read_state_stub(),
-            get_plan_provider_overlays=lambda: (
-                PlanOverlaySpec(
-                    key="fixture-status",
-                    points=((100.0, 200.0, 0.0),),
-                    point_targets=(
-                        PlanOverlayTargetSpec(
-                            object_name=marker.Name,
-                            target_kind=PlanOverlayTargetKind.OBJECT,
+            providers=SimpleNamespace(
+                get_plan_provider_overlays=lambda: (
+                    PlanOverlaySpec(
+                        key="fixture-status",
+                        points=((100.0, 200.0, 0.0),),
+                        point_targets=(
+                            PlanOverlayTargetSpec(
+                                object_name=marker.Name,
+                                target_kind=PlanOverlayTargetKind.OBJECT,
+                            ),
                         ),
+                        marker_kind=PlanOverlayMarkerKind.SQUARE,
+                        marker_size=200.0,
                     ),
-                    marker_kind=PlanOverlayMarkerKind.SQUARE,
-                    marker_size=200.0,
                 ),
+                is_plan_provider_overlay_visible=lambda _overlay: True,
             ),
-            is_plan_provider_overlay_visible=lambda _overlay: True,
             performance=_make_perf_stub(),
         )
 
@@ -1502,19 +1508,21 @@ class TestBimPlanCore(unittest.TestCase):
             doc=doc,
             view=_View(),
             provider_overlay_read_state=_make_provider_overlay_read_state_stub(),
-            get_plan_provider_overlays=lambda: (
-                PlanOverlaySpec(
-                    key="fixture-status",
-                    point_targets=(
-                        PlanOverlayTargetSpec(
-                            document_name=doc.Name,
-                            object_name=marker.Name,
-                            target_kind=PlanOverlayTargetKind.OBJECT,
+            providers=SimpleNamespace(
+                get_plan_provider_overlays=lambda: (
+                    PlanOverlaySpec(
+                        key="fixture-status",
+                        point_targets=(
+                            PlanOverlayTargetSpec(
+                                document_name=doc.Name,
+                                object_name=marker.Name,
+                                target_kind=PlanOverlayTargetKind.OBJECT,
+                            ),
                         ),
                     ),
                 ),
+                is_plan_provider_overlay_visible=lambda _overlay: True,
             ),
-            is_plan_provider_overlay_visible=lambda _overlay: True,
             performance=_make_perf_stub(),
         )
 
@@ -1687,7 +1695,7 @@ class TestBimPlanCore(unittest.TestCase):
         session = SimpleNamespace(
             doc=doc,
             view=_View(),
-            get_plan_provider_overlay_mode=lambda: "all",
+            providers=SimpleNamespace(get_plan_provider_overlay_mode=lambda: "all"),
             selection=SimpleNamespace(
                 pick_provider_overlay_target_from_overlays=lambda *_args, **_kwargs: (None, None),
                 pick_plan_symbol_target_from_overlays=lambda *args, **kwargs: None,
@@ -1751,7 +1759,7 @@ class TestBimPlanCore(unittest.TestCase):
         session = SimpleNamespace(
             doc=doc,
             view=_View(),
-            get_plan_provider_overlay_mode=lambda: "all",
+            providers=SimpleNamespace(get_plan_provider_overlay_mode=lambda: "all"),
             selection=SimpleNamespace(
                 pick_provider_overlay_target_from_overlays=lambda mouse_pos, radius_px=16: (
                     "provider",
@@ -1833,7 +1841,7 @@ class TestBimPlanCore(unittest.TestCase):
         session = SimpleNamespace(
             doc=doc,
             view=_View(),
-            get_plan_provider_overlay_mode=lambda: "electrical",
+            providers=SimpleNamespace(get_plan_provider_overlay_mode=lambda: "electrical"),
             selection=SimpleNamespace(
                 pick_provider_overlay_target_from_overlays=lambda *_args, **_kwargs: (None, None),
                 pick_plan_opening_target_from_overlays=lambda *args, **kwargs: None,
@@ -1905,7 +1913,7 @@ class TestBimPlanCore(unittest.TestCase):
         session = SimpleNamespace(
             doc=doc,
             view=_View(),
-            get_plan_provider_overlay_mode=lambda: "all",
+            providers=SimpleNamespace(get_plan_provider_overlay_mode=lambda: "all"),
             selection=SimpleNamespace(
                 pick_provider_overlay_target_from_overlays=lambda *_args, **_kwargs: (None, None),
                 pick_plan_opening_target_from_overlays=lambda *args, **kwargs: None,
@@ -1960,7 +1968,7 @@ class TestBimPlanCore(unittest.TestCase):
         session = SimpleNamespace(
             doc=doc,
             view=_View(),
-            get_plan_provider_overlay_mode=lambda: "electrical",
+            providers=SimpleNamespace(get_plan_provider_overlay_mode=lambda: "electrical"),
             selection=SimpleNamespace(
                 pick_provider_overlay_target_from_overlays=lambda *_args, **_kwargs: (None, None),
                 pick_plan_opening_target_from_overlays=lambda *args, **kwargs: None,
@@ -2018,7 +2026,7 @@ class TestBimPlanCore(unittest.TestCase):
         session = SimpleNamespace(
             doc=doc,
             view=_View(),
-            get_plan_provider_overlay_mode=lambda: "electrical",
+            providers=SimpleNamespace(get_plan_provider_overlay_mode=lambda: "electrical"),
             selection=SimpleNamespace(
                 pick_provider_overlay_target_from_overlays=lambda *_args, **_kwargs: (None, None),
                 pick_plan_opening_target_from_overlays=lambda *args, **kwargs: None,
@@ -2729,7 +2737,7 @@ class TestBimPlanCore(unittest.TestCase):
         session = SimpleNamespace(
             doc=SimpleNamespace(Name="PlanDoc"),
             provider_runtime_state=_make_provider_runtime_state_stub(refresh_cache={}),
-            get_plan_provider_targets=lambda: (provider_target,),
+            providers=SimpleNamespace(get_plan_provider_targets=lambda: (provider_target,)),
         )
 
         self.assertIs(provider_target, get_plan_provider_target_for_object(session, marker))

@@ -348,12 +348,6 @@ class PlanEditSession:
     def get_plan_provider_registry(self):
         return get_plan_edit_registry()
 
-    def get_plan_provider_targets(self, *args, **kwargs):
-        return self.providers.get_plan_provider_targets(*args, **kwargs)
-
-    def get_plan_provider_overlays(self, *args, **kwargs):
-        return self.providers.get_plan_provider_overlays(*args, **kwargs)
-
     def _get_status_chip_text(self):
         return self.status_text.get_status_chip_text()
 
