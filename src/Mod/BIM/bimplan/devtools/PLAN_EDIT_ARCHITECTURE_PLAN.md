@@ -527,6 +527,7 @@ Current progress:
 - Private provider runtime compatibility aliases are removed; provider caches and target collection depth use `provider_runtime_state`.
 - Private provider transient compatibility aliases are removed; provider selections and handles use `provider_transient_state`.
 - Private overlay refresh compatibility aliases are removed; queued overlay refreshes use `overlay_refresh_state`.
+- Overlay services no longer use `__getattr__` export lists; grouped overlay APIs are explicit methods.
 - Private wall-edit test compatibility aliases are removed; wall edit tests use `wall_edit_state`.
 - Private interaction compatibility aliases are removed; opening, symbol, provider, and embedded-tool tests use `interaction_state`.
 - Private space-region-pick compatibility aliases are removed; region-pick tests use `space_region_pick_state`.
@@ -646,7 +647,7 @@ Current completion status:
 - Perf trace support is available through `bimplan.benchmark` and the maintained
   headless wrapper `bimtests/run_plan_edit_benchmark_headless.py`.
 - A small-scenario benchmark run on 2026-04-29 passed all measured readiness
-  limits: hover pick p95 5.263 ms, mouse fast path p95 0.015 ms, mouse press
-  p95 8.397 ms, task-panel refresh 3.744 ms, and wall handle activation
-  91.265 ms. The provider integration panel event was absent in the ordinary
+  limits: hover pick p95 5.686 ms, mouse fast path p95 0.015 ms, mouse press
+  p95 8.416 ms, task-panel refresh 3.600 ms, and wall handle activation
+  98.722 ms. The provider integration panel event was absent in the ordinary
   wall-selection trace, which is the desired result for that hot path.
