@@ -643,6 +643,9 @@ Current completion status:
   of exposing owned feature behavior through generated forwarding lists.
 - Internal Plan Edit code no longer depends on flat `session.selection.*` or
   `session.overlays.*` compatibility APIs.
+- Plan Edit runtime code no longer has generated method-surface lists, runtime
+  `__getattr__` proxy surfaces, broad private session fallbacks, or provider
+  method fallbacks attached directly to `PlanEditSession`.
 - Picking is owned by `session.picking`, with provider-specific picking under
   `providers/picking.py` and explicit click/hover/edit-node entrypoints.
 - `document_visuals` coordinates observer lifecycle, deferral, and flush ordering
@@ -660,7 +663,9 @@ Current completion status:
 - Perf trace support is available through `bimplan.benchmark` and the maintained
   headless wrapper `bimtests/run_plan_edit_benchmark_headless.py`.
 - A small-scenario benchmark run on 2026-04-29 passed all measured readiness
-  limits: hover pick p95 5.686 ms, mouse fast path p95 0.015 ms, mouse press
-  p95 8.416 ms, task-panel refresh 3.600 ms, and wall handle activation
-  98.722 ms. The provider integration panel event was absent in the ordinary
-  wall-selection trace, which is the desired result for that hot path.
+  limits: hover pick p95 5.850 ms, mouse fast path p95 0.016 ms, mouse press
+  p95 8.463 ms, task-panel refresh 3.626 ms, wall handle activation 88.542 ms,
+  opening handle activation 66.572 ms, symbol handle activation 39.547 ms, and
+  view-scale overlay refresh 7.411 ms. The provider integration panel event was
+  absent in the ordinary wall-selection trace, which is the desired result for
+  that hot path.
