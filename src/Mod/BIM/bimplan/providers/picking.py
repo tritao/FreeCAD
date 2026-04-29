@@ -26,6 +26,39 @@ _PROVIDER_OVERLAY_MARKER_TOLERANCE_BASE_PX = 4.5
 _PROVIDER_OVERLAY_MARKER_TOLERANCE_WIDTH_SCALE = 1.25
 
 
+class PlanProviderPickingAPI:
+    """Owned provider picking surface for Plan Edit hit testing."""
+
+    __slots__ = ("_session",)
+
+    def __init__(self, session):
+        self._session = session
+
+    @property
+    def session(self):
+        return self._session
+
+    def get_provider_overlay_target_from_edit_node(self, node):
+        return get_provider_overlay_target_from_edit_node(self.session, node)
+
+    def pick_provider_overlay_target_from_overlays(
+        self,
+        mouse_pos,
+        radius_px=PROVIDER_OVERLAY_PICK_RADIUS_PX,
+    ):
+        return pick_provider_overlay_target_from_overlays(
+            self.session,
+            mouse_pos,
+            radius_px=radius_px,
+        )
+
+    def pick_provider_overlay_target_from_objects_info(self, mouse_pos):
+        return pick_provider_overlay_target_from_objects_info(self.session, mouse_pos)
+
+    def should_prioritize_provider_targets_for_mode(self):
+        return should_prioritize_provider_targets_for_mode(self.session)
+
+
 @dataclass(frozen=True)
 class ProviderOverlayPointCandidate:
     distance_sq: float

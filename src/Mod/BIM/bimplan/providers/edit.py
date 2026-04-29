@@ -35,6 +35,34 @@ class ProviderMoveTool(plan_runtime_tools.PlanToolHandler):
         return True
 
 
+class PlanProviderEditingAPI:
+    """Owned provider edit surface for Plan Edit interaction code."""
+
+    __slots__ = ("_session",)
+
+    def __init__(self, session):
+        self._session = session
+
+    @property
+    def session(self):
+        return self._session
+
+    def get_selected_provider_edit_handles(self, provider_obj):
+        return get_selected_provider_edit_handles(self.session, provider_obj)
+
+    def activate_provider_handle(self, provider_obj, handle_index):
+        return activate_provider_handle(self.session, provider_obj, handle_index)
+
+    def activate_provider_handle_now(self, provider_obj, handle_index):
+        return activate_provider_handle_now(self.session, provider_obj, handle_index)
+
+    def finish_provider_handle_point_pick(self, point=None, obj=None):
+        return finish_provider_handle_point_pick(self.session, point=point, obj=obj)
+
+    def cancel_provider_handle_point_pick(self):
+        return cancel_provider_handle_point_pick(self.session)
+
+
 def get_selected_provider_edit_handles(session, provider_obj):
     if provider_obj is None:
         return []

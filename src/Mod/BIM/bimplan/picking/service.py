@@ -45,10 +45,7 @@ class PlanPickingAPI:
         return plan_edit_node_picking.get_plan_target_from_edit_node(self.session, node)
 
     def get_provider_overlay_target_from_edit_node(self, node):
-        return plan_provider_picking.get_provider_overlay_target_from_edit_node(
-            self.session,
-            node,
-        )
+        return self.session.providers.picking.get_provider_overlay_target_from_edit_node(node)
 
     def get_screen_distance_sq_to_segment(self, mouse_pos, start, end):
         return plan_picking_geometry.get_screen_distance_sq_to_segment(
@@ -89,16 +86,14 @@ class PlanPickingAPI:
         mouse_pos,
         radius_px=plan_provider_picking.PROVIDER_OVERLAY_PICK_RADIUS_PX,
     ):
-        return plan_provider_picking.pick_provider_overlay_target_from_overlays(
-            self.session,
+        return self.session.providers.picking.pick_provider_overlay_target_from_overlays(
             mouse_pos,
             radius_px=radius_px,
         )
 
     def pick_provider_overlay_target_from_objects_info(self, mouse_pos):
-        return plan_provider_picking.pick_provider_overlay_target_from_objects_info(
-            self.session,
-            mouse_pos,
+        return self.session.providers.picking.pick_provider_overlay_target_from_objects_info(
+            mouse_pos
         )
 
     def pick_plan_space_target_from_overlays(self, mouse_pos, radius_px=10):

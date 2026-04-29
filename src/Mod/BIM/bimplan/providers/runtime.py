@@ -138,6 +138,11 @@ class PlanProvidersAPI:
 
     def __init__(self, session):
         self._session = session
+        from bimplan.providers.edit import PlanProviderEditingAPI
+        from bimplan.providers.picking import PlanProviderPickingAPI
+
+        self.editing = PlanProviderEditingAPI(session)
+        self.picking = PlanProviderPickingAPI(session)
 
     @property
     def session(self):
@@ -225,33 +230,19 @@ class PlanProvidersAPI:
         return provider_point.project_provider_point_to_host(point, host_wall)
 
     def get_selected_provider_edit_handles(self, provider_obj):
-        from bimplan.providers import edit
-
-        return edit.get_selected_provider_edit_handles(self.session, provider_obj)
+        return self.editing.get_selected_provider_edit_handles(provider_obj)
 
     def activate_provider_handle(self, provider_obj, handle_index):
-        from bimplan.providers import edit
-
-        return edit.activate_provider_handle(self.session, provider_obj, handle_index)
+        return self.editing.activate_provider_handle(provider_obj, handle_index)
 
     def activate_provider_handle_now(self, provider_obj, handle_index):
-        from bimplan.providers import edit
-
-        return edit.activate_provider_handle_now(self.session, provider_obj, handle_index)
+        return self.editing.activate_provider_handle_now(provider_obj, handle_index)
 
     def finish_provider_handle_point_pick(self, point=None, obj=None):
-        from bimplan.providers import edit
-
-        return edit.finish_provider_handle_point_pick(
-            self.session,
-            point=point,
-            obj=obj,
-        )
+        return self.editing.finish_provider_handle_point_pick(point=point, obj=obj)
 
     def cancel_provider_handle_point_pick(self):
-        from bimplan.providers import edit
-
-        return edit.cancel_provider_handle_point_pick(self.session)
+        return self.editing.cancel_provider_handle_point_pick()
 
     def cancel_active_tool_for_finish(self):
         if self.session.current_tool != plan_runtime_tools.PlanTool.MOVE_PROVIDER:

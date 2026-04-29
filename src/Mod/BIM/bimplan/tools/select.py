@@ -65,7 +65,7 @@ def _activate_edit_node(session, node, event_callback):
         session.selection.state.set_selected_plan_target_state("provider", obj)
         session.overlays.walls.clear_wall_grips()
         session.overlays.walls.clear_selected_wall_overlay()
-        session.providers.activate_provider_handle(obj, index)
+        session.providers.editing.activate_provider_handle(obj, index)
     elif node_kind == "symbol_handle":
         obj, role = plan_edit_nodes.get_edit_node_payload(node)
         session.selection.state.set_selected_plan_target_state("symbol", obj)
