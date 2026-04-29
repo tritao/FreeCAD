@@ -14,6 +14,15 @@ from bimplan.overlays import walls as wall_overlays
 _PLAN_VIEW_SCALE_REFRESH_DELAY_MS = 40
 
 
+def _queue_plan_overlay_visual_refresh(session, *visuals):
+    return overlay_manager.queue_plan_overlay_visual_refresh(
+        session,
+        visuals,
+        plan_document_visuals.PLAN_VISUAL_ALL,
+        plan_document_visuals.PLAN_VISUAL_SELECTED_SPACE,
+    )
+
+
 class _OverlayService:
     def __init__(self, session):
         self._session = session
@@ -430,8 +439,8 @@ class PlanSymbolOverlayService(_OverlayService):
     def handle_document_visual_dependency_change(self, obj, prop):
         selected_symbol = self.session.selection.state.get_selected_plan_target_object("symbol")
         if self.refresh_target_document_visual_dependency(selected_symbol, obj, prop):
-            self.session.overlays.queue_plan_overlay_visual_refresh(
-                plan_document_visuals.PLAN_VISUAL_SELECTED_SYMBOL
+            _queue_plan_overlay_visual_refresh(
+                self.session, plan_document_visuals.PLAN_VISUAL_SELECTED_SYMBOL
             )
             return True
         hovered_symbol = self.session.hovered_symbol
@@ -440,8 +449,8 @@ class PlanSymbolOverlayService(_OverlayService):
             and not self.session.selection.state.is_selected_plan_target("symbol", hovered_symbol)
             and self.refresh_target_document_visual_dependency(hovered_symbol, obj, prop)
         ):
-            self.session.overlays.queue_plan_overlay_visual_refresh(
-                plan_document_visuals.PLAN_VISUAL_HOVERED_SYMBOL
+            _queue_plan_overlay_visual_refresh(
+                self.session, plan_document_visuals.PLAN_VISUAL_HOVERED_SYMBOL
             )
             return True
         return False
@@ -488,12 +497,7 @@ class PlanOverlaysAPI:
         return self._session
 
     def queue_plan_overlay_visual_refresh(self, *visuals):
-        return overlay_manager.queue_plan_overlay_visual_refresh(
-            self.session,
-            visuals,
-            plan_document_visuals.PLAN_VISUAL_ALL,
-            plan_document_visuals.PLAN_VISUAL_SELECTED_SPACE,
-        )
+        return _queue_plan_overlay_visual_refresh(self.session, *visuals)
 
     def queue_plan_overlay_view_scale_refresh(
         self,
