@@ -303,7 +303,6 @@ bimplan/
     state.py
     refresh.py
     gui_sync.py
-    activation.py
 
   picking/
     coordinator.py
