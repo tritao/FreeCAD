@@ -234,12 +234,17 @@ SET(bimplan_SRCS
     bimplan/picking/overlays.py
     bimplan/picking/service.py
     bimplan/providers/__init__.py
+    bimplan/providers/action_payloads.py
     bimplan/providers/builtin.py
+    bimplan/providers/builtin_edit.py
+    bimplan/providers/commands.py
+    bimplan/providers/context.py
     bimplan/providers/edit.py
     bimplan/providers/contracts.py
     bimplan/providers/payloads.py
     bimplan/providers/picking.py
     bimplan/providers/point.py
+    bimplan/providers/registry.py
     bimplan/providers/runtime.py
     bimplan/runtime/__init__.py
     bimplan/runtime/capabilities.py

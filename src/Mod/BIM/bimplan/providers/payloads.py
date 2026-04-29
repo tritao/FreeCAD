@@ -76,8 +76,7 @@ class _PayloadMapping(Mapping):
     def get(self, key, default=None):
         if key not in self._FIELDS:
             return default
-        value = getattr(self, key)
-        return default if value is None and key not in self._FIELDS else value
+        return getattr(self, key)
 
 
 @dataclass(frozen=True, slots=True)
