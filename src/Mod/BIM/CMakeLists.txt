@@ -349,6 +349,7 @@ SET(bimtests_SRCS
     bimtests/TestBimPlanEditGuiSymbols.py
     bimtests/TestBimPlanEditGuiWalls.py
     bimtests/TestBimPlanProviderSelectionGui.py
+    bimtests/run_plan_edit_benchmark_headless.py
     bimtests/run_plan_edit_headless.py
     bimtests/TestBimProjectManagerGui.py
     bimtests/TestArchWallJoinWorkflowGui.py

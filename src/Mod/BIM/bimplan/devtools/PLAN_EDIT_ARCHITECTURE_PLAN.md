@@ -430,7 +430,9 @@ Validation:
 - `TestBimPlanEditGuiSymbols`
 - `TestBimPlanEditGuiSpaces`
 - targeted wall click/hover test
-- compare perf trace before/after for `get_plan_target_at_position`, hover picking, and provider overlay picking
+- compare perf trace before/after for hover picking, click target resolution, and
+  provider overlay picking with
+  `python src/Mod/BIM/bimtests/run_plan_edit_benchmark_headless.py --scenario small`
 
 ### Phase 3: Reduce Document Visuals To A Coordinator
 
@@ -598,6 +600,12 @@ Use perf traces for hot paths:
 - provider overlay picking
 - task-panel refresh
 
+Run perf traces headlessly with:
+
+```sh
+python src/Mod/BIM/bimtests/run_plan_edit_benchmark_headless.py --scenario small
+```
+
 ## Stop Conditions
 
 The architecture is in good shape when:
@@ -632,6 +640,10 @@ Current completion status:
   provider-selection suites pass in the headless runner. The full combined GUI
   run can still hit a Qt/Shiboken teardown crash in the wall suite; the same wall
   suite passes when rerun by itself.
-- Perf trace support remains available through `bimplan.benchmark`; provider
-  refresh behavior is covered by targeted tests such as ordinary wall selection
-  skipping provider refresh and the provider integration performance switch.
+- Perf trace support is available through `bimplan.benchmark` and the maintained
+  headless wrapper `bimtests/run_plan_edit_benchmark_headless.py`.
+- A small-scenario benchmark run on 2026-04-29 passed all measured readiness
+  limits: hover pick p95 5.394 ms, mouse fast path p95 0.013 ms, mouse press
+  p95 8.632 ms, task-panel refresh 3.731 ms, and wall handle activation
+  93.130 ms. The provider integration panel event was absent in the ordinary
+  wall-selection trace, which is the desired result for that hot path.
