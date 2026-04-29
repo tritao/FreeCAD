@@ -535,6 +535,8 @@ Current progress:
 - Private overlay-tracker compatibility aliases are removed; overlay tests use `overlay_tracker_state`.
 - Private Plan Edit params compatibility alias is removed; symbol snap settings use `performance_state.plan_edit_params`.
 - Private wall join-type state is removed; wall relation mode uses `wall_relation_state.join_type`.
+- FreeCAD selection/document observer methods on `PlanEditSession` are explicit adapter methods,
+  not generated delegates.
 
 Steps:
 
