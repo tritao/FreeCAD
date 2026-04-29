@@ -27,7 +27,6 @@
 import FreeCAD
 import FreeCADGui
 from bimplan.runtime import command_gate as plan_command_gate
-from bimplan import document_visuals as plan_document_visuals
 from bimplan.document_visuals import PlanDocumentVisualsAPI
 from bimplan.runtime import input as plan_input
 from bimplan.runtime import lifecycle as plan_lifecycle
@@ -51,7 +50,6 @@ from bimplan.tools.window_create import PlanWindowsAPI
 from bimplan.tools.spaces import PlanSpacesAPI
 from bimplan.runtime.view import PlanViewportAPI
 from bimplan.overlays.runtime import PlanOverlaysAPI
-from bimplan.providers import get_plan_edit_registry
 from bimplan.status_text import PlanStatusTextAPI
 from bimplan.ui.controls import PlanEditControlsWidget
 
@@ -209,6 +207,54 @@ class PlanEditSession:
     def current_tool(self, value):
         self._current_tool = plan_runtime_tools.coerce_plan_tool(value)
 
+    @property
+    def hovered_wall(self):
+        return self.selection_state.hovered_wall
+
+    @hovered_wall.setter
+    def hovered_wall(self, value):
+        self.selection_state.hovered_wall = value
+
+    @property
+    def hovered_opening(self):
+        return self.selection_state.hovered_opening
+
+    @hovered_opening.setter
+    def hovered_opening(self, value):
+        self.selection_state.hovered_opening = value
+
+    @property
+    def hovered_symbol(self):
+        return self.selection_state.hovered_symbol
+
+    @hovered_symbol.setter
+    def hovered_symbol(self, value):
+        self.selection_state.hovered_symbol = value
+
+    @property
+    def hovered_provider(self):
+        return self.selection_state.hovered_provider
+
+    @hovered_provider.setter
+    def hovered_provider(self, value):
+        self.selection_state.hovered_provider = value
+
+    @property
+    def hovered_space(self):
+        return self.selection_state.hovered_space
+
+    @hovered_space.setter
+    def hovered_space(self, value):
+        self.selection_state.hovered_space = value
+
+    @property
+    def hovered_region(self):
+        return self.selection_state.hovered_region
+
+    @hovered_region.setter
+    def hovered_region(self, value):
+        self.selection_state.hovered_region = value
+
     def enter(self):
         with self.performance.plan_perf_trace_event("enter_plan_edit"):
             self.performance.plan_perf_count(
@@ -331,15 +377,6 @@ class PlanEditSession:
             _refresh_contextual_task_watchers()
         return True
 
-    def get_plan_provider_registry(self):
-        return get_plan_edit_registry()
-
-    def _get_status_chip_text(self):
-        return self.status_text.get_status_chip_text()
-
-    def defer_document_visual_updates(self):
-        return plan_document_visuals.defer_document_visual_updates(self)
-
     def addSelection(self, *args):
         return self.selection.addSelection(*args)
 
@@ -378,6 +415,3 @@ class PlanEditSession:
 
     def slotDeletedDocument(self, *args):
         return self.document_visuals.slot_deleted_document(*args)
-
-
-plan_session_state.bind_session_state_accessors(PlanEditSession)

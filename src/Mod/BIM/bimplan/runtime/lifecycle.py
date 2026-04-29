@@ -2,8 +2,6 @@
 
 """Shared lifecycle helpers for BIM Plan Edit."""
 
-from dataclasses import dataclass
-
 import FreeCAD
 import FreeCADGui
 from bimplan.runtime import command_gate as plan_command_gate
@@ -12,21 +10,9 @@ from bimplan.tools import spaces as plan_spaces
 from bimplan.tools import window_create as plan_window_create
 from bimplan.selection import target_dispatch as plan_target_dispatch
 from bimplan.selection import target_kinds as plan_target_kinds
-from bimplan.tools.hosted_openings import _PlanEditCommandHost, _PlanEditWallHost
+from bimplan.runtime.embedded_commands import _PlanEditCommandHost, _PlanEditWallHost
 
 translate = FreeCAD.Qt.translate
-
-
-def _get_lifecycle_state(session):
-    return session.lifecycle_state
-
-
-def _is_tearing_down(session):
-    return bool(_get_lifecycle_state(session).tearing_down)
-
-
-def _set_tearing_down(session, value):
-    _get_lifecycle_state(session).tearing_down = bool(value)
 
 
 class PlanLifecycleAPI:
@@ -127,7 +113,7 @@ def connect_teardown_signal(session, signal):
 def connect_teardown_signals(session, QtGui):
     app = QtGui.QApplication.instance()
     if app:
-        session.lifecycle.connect_teardown_signal(app.aboutToQuit)
+        connect_teardown_signal(session, app.aboutToQuit)
     main_window = session.viewport.get_main_window()
     if main_window:
         try:
@@ -135,7 +121,7 @@ def connect_teardown_signals(session, QtGui):
         except AttributeError:
             signal = None
         if signal is not None:
-            session.lifecycle.connect_teardown_signal(signal)
+            connect_teardown_signal(session, signal)
 
 
 def disconnect_teardown_signals(session):
@@ -307,180 +293,6 @@ def _clear_space_region_pick_state(session):
     plan_spaces.reset_space_region_pick_state(session, clear_overlays=False)
 
 
-def _dispatch_current_tool(session, handler_specs):
-    handler_spec = handler_specs.get(session.current_tool)
-    if handler_spec is None:
-        return False
-    if isinstance(handler_spec, str):
-        _resolve_action_callable(session, handler_spec)()
-    else:
-        handler_spec(session)
-    return True
-
-
-def _resolve_action_callable(session, method_name):
-    target = session
-    parts = str(method_name or "").split(".")
-    for part in parts:
-        target = getattr(target, part)
-    return target
-
-
-@dataclass(frozen=True)
-class ActivationActionSpec:
-    method_name: str
-    kwargs: tuple = ()
-    predicate_name: str | None = None
-    current_tools: tuple = ()
-    stop_after: bool = False
-
-
-@dataclass(frozen=True)
-class ToolActivationProfile:
-    preflight_actions: tuple = ()
-    clear_selection_kinds: tuple = ()
-    clear_handle_kinds: tuple = ()
-    include_wall_grips: bool = False
-    include_selected_wall_opening_context: bool = False
-    include_secondary_selection: bool = False
-    clear_selected_target: bool = False
-    clear_hovered_targets: bool = False
-    clear_plan_relation_status: bool = True
-    capture_state: object = None
-    setup: object = None
-    start: object = None
-
-
-@dataclass(frozen=True)
-class CleanupProfile:
-    action_specs: tuple = ()
-    current_tool_handler_specs: object = None
-    hover_visual_kwargs: tuple = ()
-    selection_visual_kwargs: tuple = ()
-    transient_visual_kwargs: tuple = ()
-    detach_observers: bool = True
-
-
-_FINISH_TOOL_HANDLER_SPECS = {
-    plan_runtime_tools.PlanTool.MOVE_PROVIDER: "providers.cancel_provider_handle_point_pick",
-    plan_runtime_tools.PlanTool.MOVE_OPENING: "openings.cancel_opening_handle_point_pick",
-    plan_runtime_tools.PlanTool.MOVE_SYMBOL: "symbols.cancel_symbol_handle_point_pick",
-    plan_runtime_tools.PlanTool.ROTATE_SYMBOL: "symbols.cancel_symbol_handle_point_pick",
-    plan_runtime_tools.PlanTool.PICK_SPACE_REGION: "spaces.cancel_space_region_pick",
-    plan_runtime_tools.PlanTool.REGION: "spaces.cancel_plan_region_tool",
-    plan_runtime_tools.PlanTool.SET_SPACE_TEXT: "spaces.cancel_space_text_position_pick",
-    plan_runtime_tools.PlanTool.WINDOW: "windows.cancel_window_tool",
-}
-
-_BEGIN_TEARDOWN_TOOL_HANDLER_SPECS = {
-    plan_runtime_tools.PlanTool.MOVE_PROVIDER: "providers.cancel_provider_handle_point_pick",
-    plan_runtime_tools.PlanTool.MOVE_OPENING: "openings.cancel_opening_handle_point_pick",
-    plan_runtime_tools.PlanTool.MOVE_SYMBOL: "symbols.cancel_symbol_handle_point_pick",
-    plan_runtime_tools.PlanTool.ROTATE_SYMBOL: "symbols.cancel_symbol_handle_point_pick",
-    plan_runtime_tools.PlanTool.SET_SPACE_TEXT: _clear_space_text_pick_state,
-    plan_runtime_tools.PlanTool.PICK_SPACE_REGION: _clear_space_region_pick_state,
-}
-
-_SHUTDOWN_TOOL_HANDLER_SPECS = {
-    plan_runtime_tools.PlanTool.MOVE_SYMBOL: "symbols.cancel_symbol_handle_point_pick",
-    plan_runtime_tools.PlanTool.ROTATE_SYMBOL: "symbols.cancel_symbol_handle_point_pick",
-}
-
-_ACTION_CANCEL_SPACE_REGION_PICK = ActivationActionSpec(
-    "spaces.cancel_space_region_pick",
-    kwargs=(("refresh", False),),
-)
-_ACTION_CANCEL_SPACE_REGION_PICK_AND_RETURN = ActivationActionSpec(
-    "spaces.cancel_space_region_pick",
-    current_tools=(plan_runtime_tools.PlanTool.PICK_SPACE_REGION,),
-    stop_after=True,
-)
-_ACTION_CANCEL_PLAN_REGION_TOOL = ActivationActionSpec(
-    "spaces.cancel_plan_region_tool",
-    kwargs=(("refresh", False),),
-)
-_ACTION_CANCEL_PLAN_REGION_TOOL_IF_ACTIVE = ActivationActionSpec(
-    "spaces.cancel_plan_region_tool",
-    predicate_name="spaces.has_active_plan_region_tool",
-)
-_ACTION_CANCEL_RECT_WALL_TOOL = ActivationActionSpec(
-    "wall_create.cancel_rect_wall_tool",
-    kwargs=(("refresh", False),),
-)
-_ACTION_CANCEL_RECT_WALL_TOOL_IF_ACTIVE = ActivationActionSpec(
-    "wall_create.cancel_rect_wall_tool",
-    predicate_name="wall_create.has_active_rect_wall_tool",
-)
-_ACTION_CANCEL_WINDOW_TOOL = ActivationActionSpec(
-    "windows.cancel_window_tool",
-    kwargs=(("refresh", False),),
-)
-_ACTION_CANCEL_WINDOW_TOOL_IF_ACTIVE = ActivationActionSpec(
-    "windows.cancel_window_tool",
-    predicate_name="windows.has_active_window_tool",
-)
-_ACTION_CANCEL_SPACE_SEPARATOR_TOOL = ActivationActionSpec(
-    "spaces.cancel_space_separator_tool",
-    kwargs=(("refresh", False),),
-)
-_ACTION_CANCEL_SPACE_SEPARATOR_TOOL_IF_ACTIVE = ActivationActionSpec(
-    "spaces.cancel_space_separator_tool",
-    predicate_name="spaces.has_active_space_separator_tool",
-)
-_ACTION_CANCEL_PROVIDER_POINT_TOOL = ActivationActionSpec(
-    "providers.cancel_provider_point_tool",
-    kwargs=(("refresh", False),),
-)
-_ACTION_CANCEL_PROVIDER_POINT_TOOL_AND_RETURN = ActivationActionSpec(
-    "providers.cancel_provider_point_tool",
-    predicate_name="providers.has_active_provider_point_tool",
-    stop_after=True,
-)
-_ACTION_CANCEL_EMBEDDED_TOOL_ALWAYS = ActivationActionSpec("lifecycle.cancel_embedded_tool")
-_ACTION_CANCEL_EMBEDDED_TOOL_AND_RETURN = ActivationActionSpec(
-    "lifecycle.cancel_embedded_tool",
-    predicate_name="lifecycle.has_active_embedded_tool",
-    stop_after=True,
-)
-_ACTION_CANCEL_EMBEDDED_TOOL = ActivationActionSpec(
-    "lifecycle.cancel_embedded_tool",
-    predicate_name="lifecycle.has_active_embedded_tool",
-)
-_ACTION_CANCEL_SYMBOL_HANDLE_PICK_AND_RETURN = ActivationActionSpec(
-    "symbols.cancel_symbol_handle_point_pick",
-    current_tools=(
-        plan_runtime_tools.PlanTool.MOVE_SYMBOL,
-        plan_runtime_tools.PlanTool.ROTATE_SYMBOL,
-    ),
-    stop_after=True,
-)
-_ACTION_CANCEL_PENDING_EDIT = ActivationActionSpec("lifecycle.cancel_pending_edit")
-_ACTION_CANCEL_WALL_EDIT = ActivationActionSpec("wall_edit.cancel_wall_edit")
-_ACTION_CANCEL_WALL_EDIT_AND_RETURN = ActivationActionSpec(
-    "wall_edit.cancel_wall_edit",
-    predicate_name="wall_edit.has_active_wall_edit",
-    stop_after=True,
-)
-_ACTION_CANCEL_WALL_EDIT_NO_REFRESH = ActivationActionSpec(
-    "wall_edit.cancel_wall_edit",
-    kwargs=(("refresh", False),),
-)
-_ACTION_CANCEL_SPACE_TEXT_PICK = ActivationActionSpec(
-    "spaces.cancel_space_text_position_pick",
-    current_tools=(plan_runtime_tools.PlanTool.SET_SPACE_TEXT,),
-)
-_ACTION_CANCEL_JOIN_TOOL = ActivationActionSpec("wall_relations.cancel_join_tool")
-_ACTION_CLEAR_VIEWPORT_STATUS_CHIP = ActivationActionSpec("viewport.clear_viewport_status_chip")
-_ACTION_CLEAR_INPUT_HINTS = ActivationActionSpec("status_text.clear_input_hints")
-_ACTION_CANCEL_WALL_EDIT_NO_RESTORE_NO_REFRESH = ActivationActionSpec(
-    "wall_edit.cancel_wall_edit",
-    kwargs=(("restore", False), ("refresh", False)),
-)
-_ACTION_CANCEL_WALL_EDIT_RESTORE_NO_REFRESH = ActivationActionSpec(
-    "wall_edit.cancel_wall_edit",
-    kwargs=(("restore", True), ("refresh", False)),
-)
-
 _WINDOW_TOOL_SELECTION_KINDS = (
     plan_target_kinds.PLAN_TARGET_WALL,
     plan_target_kinds.PLAN_TARGET_OPENING,
@@ -503,82 +315,158 @@ _SPACE_SEPARATOR_TOOL_SELECTION_KINDS = (
 _MOVE_TOOL_SELECTION_KINDS = (plan_target_kinds.PLAN_TARGET_WALL,)
 
 
-def _run_activation_action_specs(session, action_specs):
-    for action_spec in action_specs:
-        if action_spec.current_tools and session.current_tool not in action_spec.current_tools:
-            continue
-        if (
-            action_spec.predicate_name
-            and not _resolve_action_callable(
-                session,
-                action_spec.predicate_name,
-            )()
-        ):
-            continue
-        kwargs = dict(action_spec.kwargs)
-        _resolve_action_callable(session, action_spec.method_name)(**kwargs)
-        if action_spec.stop_after:
-            return True
+def _cancel_current_tool_for_finish(session):
+    if session.current_tool == plan_runtime_tools.PlanTool.MOVE_PROVIDER:
+        session.providers.cancel_provider_handle_point_pick()
+        return True
+    if session.current_tool == plan_runtime_tools.PlanTool.MOVE_OPENING:
+        session.openings.cancel_opening_handle_point_pick()
+        return True
+    if session.current_tool in (
+        plan_runtime_tools.PlanTool.MOVE_SYMBOL,
+        plan_runtime_tools.PlanTool.ROTATE_SYMBOL,
+    ):
+        session.symbols.cancel_symbol_handle_point_pick()
+        return True
+    if session.current_tool == plan_runtime_tools.PlanTool.PICK_SPACE_REGION:
+        session.spaces.cancel_space_region_pick()
+        return True
+    if session.current_tool == plan_runtime_tools.PlanTool.REGION:
+        session.spaces.cancel_plan_region_tool()
+        return True
+    if session.current_tool == plan_runtime_tools.PlanTool.SET_SPACE_TEXT:
+        session.spaces.cancel_space_text_position_pick()
+        return True
+    if session.current_tool == plan_runtime_tools.PlanTool.WINDOW:
+        session.windows.cancel_window_tool()
+        return True
     return False
 
 
-def _activate_tool_with_profile(session, profile):
-    context = profile.capture_state(session) if callable(profile.capture_state) else None
-    _run_activation_action_specs(session, profile.preflight_actions)
-    if profile.clear_plan_relation_status:
-        _resolve_action_callable(session, "wall_relations.clear_plan_relation_status")()
-    if profile.clear_selected_target:
-        _resolve_action_callable(session, "selection.state.set_selected_plan_target")()
-    if profile.clear_hovered_targets:
-        _resolve_action_callable(session, "selection.hover.clear_hovered_plan_targets")()
-    if profile.clear_selection_kinds:
-        clear_selection_visuals(
-            session,
-            kinds=profile.clear_selection_kinds,
-            clear_handle_kinds=profile.clear_handle_kinds,
-            include_wall_grips=profile.include_wall_grips,
-            include_selected_wall_opening_context=profile.include_selected_wall_opening_context,
-            include_secondary_selection=profile.include_secondary_selection,
-        )
-    if callable(profile.setup):
-        profile.setup(session, context)
-    if callable(profile.start):
-        return profile.start(session, context)
-    return True
+def _cancel_finish_fallback(session):
+    if session.providers.has_active_provider_point_tool():
+        session.providers.cancel_provider_point_tool()
+        return True
+    if has_active_embedded_tool(session):
+        cancel_embedded_tool(session)
+        return True
+    if session.wall_create.has_active_rect_wall_tool():
+        session.wall_create.cancel_rect_wall_tool()
+        return True
+    if session.wall_edit.has_active_wall_edit():
+        session.wall_edit.cancel_wall_edit()
+        return True
+    return False
 
 
-def _apply_cleanup_profile(session, profile):
-    _run_activation_action_specs(session, profile.action_specs)
-    if profile.current_tool_handler_specs:
-        _dispatch_current_tool(session, profile.current_tool_handler_specs)
-    if profile.hover_visual_kwargs:
-        clear_hover_visuals(session, **dict(profile.hover_visual_kwargs))
-    if profile.selection_visual_kwargs:
-        clear_selection_visuals(session, **dict(profile.selection_visual_kwargs))
-    if profile.transient_visual_kwargs:
-        clear_transient_visuals(session, **dict(profile.transient_visual_kwargs))
-    if profile.detach_observers:
-        detach_runtime_observers(session)
+def _cancel_current_tool_for_begin_teardown(session):
+    if session.current_tool == plan_runtime_tools.PlanTool.MOVE_PROVIDER:
+        session.providers.cancel_provider_handle_point_pick()
+    elif session.current_tool == plan_runtime_tools.PlanTool.MOVE_OPENING:
+        session.openings.cancel_opening_handle_point_pick()
+    elif session.current_tool in (
+        plan_runtime_tools.PlanTool.MOVE_SYMBOL,
+        plan_runtime_tools.PlanTool.ROTATE_SYMBOL,
+    ):
+        session.symbols.cancel_symbol_handle_point_pick()
+    elif session.current_tool == plan_runtime_tools.PlanTool.SET_SPACE_TEXT:
+        _clear_space_text_pick_state(session)
+    elif session.current_tool == plan_runtime_tools.PlanTool.PICK_SPACE_REGION:
+        _clear_space_region_pick_state(session)
+
+
+def _cancel_current_tool_for_shutdown(session):
+    if session.current_tool in (
+        plan_runtime_tools.PlanTool.MOVE_SYMBOL,
+        plan_runtime_tools.PlanTool.ROTATE_SYMBOL,
+    ):
+        session.symbols.cancel_symbol_handle_point_pick()
+
+
+def _cleanup_begin_teardown(session):
+    session.viewport.clear_viewport_status_chip()
+    session.status_text.clear_input_hints()
+    cancel_embedded_tool(session)
+    session.wall_create.cancel_rect_wall_tool(refresh=False)
+    session.windows.cancel_window_tool(refresh=False)
+    session.spaces.cancel_plan_region_tool(refresh=False)
+    session.providers.cancel_provider_point_tool(refresh=False)
+    session.wall_edit.cancel_wall_edit(restore=False, refresh=False)
+    cancel_pending_edit(session)
+    _cancel_current_tool_for_begin_teardown(session)
+    clear_hover_visuals(
+        session,
+        include_junction_nodes=True,
+        include_hovered_wall_opening_context=True,
+    )
+    clear_selection_visuals(
+        session,
+        clear_handle_kinds=(
+            plan_target_kinds.PLAN_TARGET_PROVIDER,
+            plan_target_kinds.PLAN_TARGET_OPENING,
+            plan_target_kinds.PLAN_TARGET_SYMBOL,
+        ),
+        include_wall_grips=True,
+        include_selected_wall_opening_context=True,
+        include_secondary_selection=True,
+    )
+    clear_transient_visuals(
+        session,
+        include_provider_overlays=True,
+        include_provider_point_preview=True,
+        include_space_region_pick=True,
+        include_opening_handle_pool=True,
+        include_opening_move_preview=True,
+        include_symbol_edit_preview=True,
+        include_plan_region_preview=True,
+    )
+    detach_runtime_observers(session)
+
+
+def _cleanup_shutdown(session, *, teardown=False):
+    session.viewport.clear_viewport_status_chip()
+    session.status_text.clear_input_hints()
+    cancel_embedded_tool(session)
+    session.wall_create.cancel_rect_wall_tool(refresh=False)
+    session.spaces.cancel_space_separator_tool(refresh=False)
+    session.wall_edit.cancel_wall_edit(restore=not teardown, refresh=False)
+    cancel_pending_edit(session)
+    _cancel_current_tool_for_shutdown(session)
+    clear_hover_visuals(
+        session,
+        kinds=(
+            plan_target_kinds.PLAN_TARGET_WALL,
+            plan_target_kinds.PLAN_TARGET_OPENING,
+            plan_target_kinds.PLAN_TARGET_SYMBOL,
+            plan_target_kinds.PLAN_TARGET_PROVIDER,
+        ),
+        include_junction_nodes=True,
+        include_hovered_wall_opening_context=True,
+    )
+    clear_selection_visuals(
+        session,
+        clear_handle_kinds=(
+            plan_target_kinds.PLAN_TARGET_OPENING,
+            plan_target_kinds.PLAN_TARGET_SYMBOL,
+        ),
+        include_wall_grips=True,
+        include_selected_wall_opening_context=True,
+    )
+    clear_transient_visuals(
+        session,
+        include_provider_overlays=True,
+        include_provider_point_preview=True,
+        include_opening_handle_pool=True,
+        include_opening_move_preview=True,
+        include_symbol_edit_preview=True,
+    )
+    detach_runtime_observers(session)
 
 
 def _get_selected_space_for_activation(session):
     return session.selection.state.get_selected_plan_target_object(
         plan_target_kinds.PLAN_TARGET_SPACE
     )
-
-
-def _capture_selected_space(session):
-    return _get_selected_space_for_activation(session)
-
-
-def _prepare_window_tool(session, context):
-    del context
-    session.windows.clear_window_preview()
-
-
-def _start_window_tool(session, context):
-    del context
-    return plan_window_create.activate_window_tool(session)
 
 
 def _prepare_plan_region_tool(session, parent_space):
@@ -598,7 +486,7 @@ def _start_snap_tool(session, tool_name, callback, title, *, movecallback=None):
     session.task_panels.refresh_task_panel_status()
 
 
-def _start_plan_region_tool(session, context):
+def _start_plan_region_tool(session):
     return _start_snap_tool(
         session,
         plan_runtime_tools.PlanTool.REGION,
@@ -608,20 +496,12 @@ def _start_plan_region_tool(session, context):
     )
 
 
-def _prepare_space_separator_tool(session, context):
-    del context
-    get_wall_defaults = getattr(session, "_get_wall_defaults", None)
-    if callable(get_wall_defaults):
-        defaults = get_wall_defaults() or {}
-    else:
-        from bimplan.tools import wall_create as plan_wall_create
-
-        defaults = plan_wall_create.get_wall_defaults(session) or {}
+def _prepare_space_separator_tool(session):
+    defaults = session.wall_create.get_wall_defaults() or {}
     plan_spaces.prepare_space_separator_tool_state(session, height=defaults["height"])
 
 
-def _start_space_separator_tool(session, context):
-    del context
+def _start_space_separator_tool(session):
     return _start_snap_tool(
         session,
         plan_runtime_tools.PlanTool.SEPARATOR,
@@ -630,250 +510,36 @@ def _start_space_separator_tool(session, context):
     )
 
 
-def _start_space_tool(session, context):
-    del context
-    return session.spaces.create_space_from_current_selection()
-
-
-def _start_move_tool(session, context):
-    del context
+def _start_move_tool(session):
     from draftguitools import gui_move
 
-    return session.lifecycle.start_embedded_tool(plan_runtime_tools.PlanTool.MOVE, gui_move.Move())
-
-
-_WINDOW_TOOL_ACTIVATION_PROFILE = ToolActivationProfile(
-    preflight_actions=(
-        _ACTION_CANCEL_SPACE_REGION_PICK,
-        _ACTION_CANCEL_PLAN_REGION_TOOL,
-        _ACTION_CANCEL_RECT_WALL_TOOL,
-        _ACTION_CANCEL_SPACE_SEPARATOR_TOOL,
-        _ACTION_CANCEL_PROVIDER_POINT_TOOL,
-        _ACTION_CANCEL_EMBEDDED_TOOL,
-        _ACTION_CANCEL_WALL_EDIT,
-        _ACTION_CANCEL_PENDING_EDIT,
-    ),
-    clear_selection_kinds=_WINDOW_TOOL_SELECTION_KINDS,
-    clear_handle_kinds=(plan_target_kinds.PLAN_TARGET_OPENING,),
-    include_wall_grips=True,
-    include_selected_wall_opening_context=True,
-    include_secondary_selection=True,
-    setup=_prepare_window_tool,
-    start=_start_window_tool,
-)
-
-_PLAN_REGION_TOOL_ACTIVATION_PROFILE = ToolActivationProfile(
-    preflight_actions=(
-        _ACTION_CANCEL_SPACE_REGION_PICK,
-        _ACTION_CANCEL_RECT_WALL_TOOL,
-        _ACTION_CANCEL_WINDOW_TOOL,
-        _ACTION_CANCEL_SPACE_SEPARATOR_TOOL,
-        _ACTION_CANCEL_PROVIDER_POINT_TOOL,
-        _ACTION_CANCEL_EMBEDDED_TOOL,
-        _ACTION_CANCEL_WALL_EDIT,
-        _ACTION_CANCEL_PENDING_EDIT,
-    ),
-    clear_selection_kinds=_PLAN_REGION_TOOL_SELECTION_KINDS,
-    include_wall_grips=True,
-    include_selected_wall_opening_context=True,
-    include_secondary_selection=True,
-    clear_selected_target=True,
-    clear_hovered_targets=True,
-    capture_state=_capture_selected_space,
-    setup=_prepare_plan_region_tool,
-    start=_start_plan_region_tool,
-)
-
-_SPACE_SEPARATOR_TOOL_ACTIVATION_PROFILE = ToolActivationProfile(
-    preflight_actions=(
-        _ACTION_CANCEL_SPACE_REGION_PICK,
-        _ACTION_CANCEL_PLAN_REGION_TOOL,
-        _ACTION_CANCEL_RECT_WALL_TOOL,
-        _ACTION_CANCEL_WINDOW_TOOL,
-        _ACTION_CANCEL_PROVIDER_POINT_TOOL,
-        _ACTION_CANCEL_EMBEDDED_TOOL,
-        _ACTION_CANCEL_WALL_EDIT,
-        _ACTION_CANCEL_PENDING_EDIT,
-    ),
-    clear_selection_kinds=_SPACE_SEPARATOR_TOOL_SELECTION_KINDS,
-    include_wall_grips=True,
-    include_selected_wall_opening_context=True,
-    include_secondary_selection=True,
-    clear_selected_target=True,
-    setup=_prepare_space_separator_tool,
-    start=_start_space_separator_tool,
-)
-
-_SPACE_TOOL_ACTIVATION_PROFILE = ToolActivationProfile(
-    preflight_actions=(
-        _ACTION_CANCEL_SPACE_REGION_PICK,
-        _ACTION_CANCEL_PLAN_REGION_TOOL,
-        _ACTION_CANCEL_SPACE_TEXT_PICK,
-        _ACTION_CANCEL_RECT_WALL_TOOL,
-        _ACTION_CANCEL_WINDOW_TOOL,
-        _ACTION_CANCEL_SPACE_SEPARATOR_TOOL,
-        _ACTION_CANCEL_PROVIDER_POINT_TOOL,
-        _ACTION_CANCEL_EMBEDDED_TOOL,
-        _ACTION_CANCEL_WALL_EDIT_NO_REFRESH,
-        _ACTION_CANCEL_PENDING_EDIT,
-    ),
-    start=_start_space_tool,
-)
-
-_MOVE_TOOL_ACTIVATION_PROFILE = ToolActivationProfile(
-    preflight_actions=(
-        _ACTION_CANCEL_SPACE_REGION_PICK,
-        _ACTION_CANCEL_PLAN_REGION_TOOL,
-        _ACTION_CANCEL_RECT_WALL_TOOL,
-        _ACTION_CANCEL_WINDOW_TOOL,
-        _ACTION_CANCEL_SPACE_SEPARATOR_TOOL,
-        _ACTION_CANCEL_PROVIDER_POINT_TOOL,
-        _ACTION_CANCEL_WALL_EDIT,
-        _ACTION_CANCEL_PENDING_EDIT,
-    ),
-    clear_selection_kinds=_MOVE_TOOL_SELECTION_KINDS,
-    include_wall_grips=True,
-    start=_start_move_tool,
-)
-
-_FINISH_FALLBACK_ACTION_SPECS = (
-    _ACTION_CANCEL_PROVIDER_POINT_TOOL_AND_RETURN,
-    _ACTION_CANCEL_EMBEDDED_TOOL_AND_RETURN,
-    ActivationActionSpec(
-        "wall_create.cancel_rect_wall_tool",
-        predicate_name="wall_create.has_active_rect_wall_tool",
-        stop_after=True,
-    ),
-    _ACTION_CANCEL_WALL_EDIT_AND_RETURN,
-)
-
-_BEGIN_TEARDOWN_CLEANUP_PROFILE = CleanupProfile(
-    action_specs=(
-        _ACTION_CLEAR_VIEWPORT_STATUS_CHIP,
-        _ACTION_CLEAR_INPUT_HINTS,
-        _ACTION_CANCEL_EMBEDDED_TOOL_ALWAYS,
-        _ACTION_CANCEL_RECT_WALL_TOOL,
-        _ACTION_CANCEL_WINDOW_TOOL,
-        _ACTION_CANCEL_PLAN_REGION_TOOL,
-        _ACTION_CANCEL_PROVIDER_POINT_TOOL,
-        _ACTION_CANCEL_WALL_EDIT_NO_RESTORE_NO_REFRESH,
-        _ACTION_CANCEL_PENDING_EDIT,
-    ),
-    current_tool_handler_specs=_BEGIN_TEARDOWN_TOOL_HANDLER_SPECS,
-    hover_visual_kwargs=(
-        ("include_junction_nodes", True),
-        ("include_hovered_wall_opening_context", True),
-    ),
-    selection_visual_kwargs=(
-        (
-            "clear_handle_kinds",
-            (
-                plan_target_kinds.PLAN_TARGET_PROVIDER,
-                plan_target_kinds.PLAN_TARGET_OPENING,
-                plan_target_kinds.PLAN_TARGET_SYMBOL,
-            ),
-        ),
-        ("include_wall_grips", True),
-        ("include_selected_wall_opening_context", True),
-        ("include_secondary_selection", True),
-    ),
-    transient_visual_kwargs=(
-        ("include_provider_overlays", True),
-        ("include_provider_point_preview", True),
-        ("include_space_region_pick", True),
-        ("include_opening_handle_pool", True),
-        ("include_opening_move_preview", True),
-        ("include_symbol_edit_preview", True),
-        ("include_plan_region_preview", True),
-    ),
-)
-
-_SHUTDOWN_CLEANUP_PROFILE = CleanupProfile(
-    action_specs=(
-        _ACTION_CLEAR_VIEWPORT_STATUS_CHIP,
-        _ACTION_CLEAR_INPUT_HINTS,
-        _ACTION_CANCEL_EMBEDDED_TOOL_ALWAYS,
-        _ACTION_CANCEL_RECT_WALL_TOOL,
-        _ACTION_CANCEL_SPACE_SEPARATOR_TOOL,
-        _ACTION_CANCEL_WALL_EDIT_RESTORE_NO_REFRESH,
-        _ACTION_CANCEL_PENDING_EDIT,
-    ),
-    current_tool_handler_specs=_SHUTDOWN_TOOL_HANDLER_SPECS,
-    hover_visual_kwargs=(
-        (
-            "kinds",
-            (
-                plan_target_kinds.PLAN_TARGET_WALL,
-                plan_target_kinds.PLAN_TARGET_OPENING,
-                plan_target_kinds.PLAN_TARGET_SYMBOL,
-                plan_target_kinds.PLAN_TARGET_PROVIDER,
-            ),
-        ),
-        ("include_junction_nodes", True),
-        ("include_hovered_wall_opening_context", True),
-    ),
-    selection_visual_kwargs=(
-        (
-            "clear_handle_kinds",
-            (
-                plan_target_kinds.PLAN_TARGET_OPENING,
-                plan_target_kinds.PLAN_TARGET_SYMBOL,
-            ),
-        ),
-        ("include_wall_grips", True),
-        ("include_selected_wall_opening_context", True),
-    ),
-    transient_visual_kwargs=(
-        ("include_provider_overlays", True),
-        ("include_provider_point_preview", True),
-        ("include_opening_handle_pool", True),
-        ("include_opening_move_preview", True),
-        ("include_symbol_edit_preview", True),
-    ),
-)
-
-_TEARDOWN_SHUTDOWN_CLEANUP_PROFILE = CleanupProfile(
-    action_specs=(
-        _ACTION_CLEAR_VIEWPORT_STATUS_CHIP,
-        _ACTION_CLEAR_INPUT_HINTS,
-        _ACTION_CANCEL_EMBEDDED_TOOL_ALWAYS,
-        _ACTION_CANCEL_RECT_WALL_TOOL,
-        _ACTION_CANCEL_SPACE_SEPARATOR_TOOL,
-        _ACTION_CANCEL_WALL_EDIT_NO_RESTORE_NO_REFRESH,
-        _ACTION_CANCEL_PENDING_EDIT,
-    ),
-    current_tool_handler_specs=_SHUTDOWN_TOOL_HANDLER_SPECS,
-    hover_visual_kwargs=_SHUTDOWN_CLEANUP_PROFILE.hover_visual_kwargs,
-    selection_visual_kwargs=_SHUTDOWN_CLEANUP_PROFILE.selection_visual_kwargs,
-    transient_visual_kwargs=_SHUTDOWN_CLEANUP_PROFILE.transient_visual_kwargs,
-)
+    return start_embedded_tool(session, plan_runtime_tools.PlanTool.MOVE, gui_move.Move())
 
 
 def finish(session, close_dialog=True):
-    if _dispatch_current_tool(session, _FINISH_TOOL_HANDLER_SPECS):
+    if _cancel_current_tool_for_finish(session):
         return True
-    if _run_activation_action_specs(session, _FINISH_FALLBACK_ACTION_SPECS):
+    if _cancel_finish_fallback(session):
         return True
     return session.shutdown(close_dialog=close_dialog)
 
 
 def begin_teardown(session):
-    if _is_tearing_down(session):
+    if session.lifecycle_state.tearing_down:
         return
-    _set_tearing_down(session, True)
+    session.lifecycle_state.tearing_down = True
     plan_command_gate.uninstall(session)
-    _apply_cleanup_profile(session, _BEGIN_TEARDOWN_CLEANUP_PROFILE)
+    _cleanup_begin_teardown(session)
 
 
 def shutdown(session, close_dialog=True, teardown=False):
     plan_command_gate.uninstall(session)
     if not session.document_visuals.document_is_alive():
         session.begin_teardown()
-    teardown = teardown or _is_tearing_down(session)
+    teardown = teardown or session.lifecycle_state.tearing_down
     panel = session.task_panel
     session.task_panel = None
-    profile = _TEARDOWN_SHUTDOWN_CLEANUP_PROFILE if teardown else _SHUTDOWN_CLEANUP_PROFILE
-    _apply_cleanup_profile(session, profile)
+    _cleanup_shutdown(session, teardown=teardown)
     if panel:
         try:
             mark_closed = getattr(panel, "mark_closed", None)
@@ -896,7 +562,7 @@ def shutdown(session, close_dialog=True, teardown=False):
             except (AttributeError, RuntimeError, TypeError):
                 pass
     if teardown:
-        session.lifecycle.discard_runtime_references()
+        discard_runtime_references(session)
     else:
         session.viewport.restore_state()
         if session.doc:
@@ -936,41 +602,136 @@ def on_embedded_command_finished(session, tool_name, command=None):
 
 
 def activate_select_tool(session):
-    _run_activation_action_specs(
-        session,
-        (
-            _ACTION_CANCEL_SYMBOL_HANDLE_PICK_AND_RETURN,
-            _ACTION_CANCEL_SPACE_REGION_PICK_AND_RETURN,
-            _ACTION_CANCEL_PROVIDER_POINT_TOOL_AND_RETURN,
-            _ACTION_CANCEL_EMBEDDED_TOOL,
-            _ACTION_CANCEL_RECT_WALL_TOOL_IF_ACTIVE,
-            _ACTION_CANCEL_WINDOW_TOOL_IF_ACTIVE,
-            _ACTION_CANCEL_PLAN_REGION_TOOL_IF_ACTIVE,
-            _ACTION_CANCEL_SPACE_SEPARATOR_TOOL_IF_ACTIVE,
-            _ACTION_CANCEL_WALL_EDIT,
-            _ACTION_CANCEL_JOIN_TOOL,
-        ),
-    )
+    if session.current_tool in (
+        plan_runtime_tools.PlanTool.MOVE_SYMBOL,
+        plan_runtime_tools.PlanTool.ROTATE_SYMBOL,
+    ):
+        session.symbols.cancel_symbol_handle_point_pick()
+        return
+    if session.current_tool == plan_runtime_tools.PlanTool.PICK_SPACE_REGION:
+        session.spaces.cancel_space_region_pick()
+        return
+    if session.providers.has_active_provider_point_tool():
+        session.providers.cancel_provider_point_tool()
+        return
+    if has_active_embedded_tool(session):
+        cancel_embedded_tool(session)
+    if session.wall_create.has_active_rect_wall_tool():
+        session.wall_create.cancel_rect_wall_tool()
+    if session.windows.has_active_window_tool():
+        session.windows.cancel_window_tool()
+    if session.spaces.has_active_plan_region_tool():
+        session.spaces.cancel_plan_region_tool()
+    if session.spaces.has_active_space_separator_tool():
+        session.spaces.cancel_space_separator_tool()
+    session.wall_edit.cancel_wall_edit()
+    session.wall_relations.cancel_join_tool()
 
 
 def activate_window_tool(session):
-    return _activate_tool_with_profile(session, _WINDOW_TOOL_ACTIVATION_PROFILE)
+    session.spaces.cancel_space_region_pick(refresh=False)
+    session.spaces.cancel_plan_region_tool(refresh=False)
+    session.wall_create.cancel_rect_wall_tool(refresh=False)
+    session.spaces.cancel_space_separator_tool(refresh=False)
+    session.providers.cancel_provider_point_tool(refresh=False)
+    if has_active_embedded_tool(session):
+        cancel_embedded_tool(session)
+    session.wall_edit.cancel_wall_edit()
+    cancel_pending_edit(session)
+    session.wall_relations.clear_plan_relation_status()
+    clear_selection_visuals(
+        session,
+        kinds=_WINDOW_TOOL_SELECTION_KINDS,
+        clear_handle_kinds=(plan_target_kinds.PLAN_TARGET_OPENING,),
+        include_wall_grips=True,
+        include_selected_wall_opening_context=True,
+        include_secondary_selection=True,
+    )
+    session.windows.clear_window_preview()
+    return plan_window_create.activate_window_tool(session)
 
 
 def activate_plan_region_tool(session):
-    return _activate_tool_with_profile(session, _PLAN_REGION_TOOL_ACTIVATION_PROFILE)
+    parent_space = _get_selected_space_for_activation(session)
+    session.spaces.cancel_space_region_pick(refresh=False)
+    session.wall_create.cancel_rect_wall_tool(refresh=False)
+    session.windows.cancel_window_tool(refresh=False)
+    session.spaces.cancel_space_separator_tool(refresh=False)
+    session.providers.cancel_provider_point_tool(refresh=False)
+    if has_active_embedded_tool(session):
+        cancel_embedded_tool(session)
+    session.wall_edit.cancel_wall_edit()
+    cancel_pending_edit(session)
+    session.wall_relations.clear_plan_relation_status()
+    session.selection.state.set_selected_plan_target()
+    session.selection.hover.clear_hovered_plan_targets()
+    clear_selection_visuals(
+        session,
+        kinds=_PLAN_REGION_TOOL_SELECTION_KINDS,
+        include_wall_grips=True,
+        include_selected_wall_opening_context=True,
+        include_secondary_selection=True,
+    )
+    _prepare_plan_region_tool(session, parent_space)
+    return _start_plan_region_tool(session)
 
 
 def activate_space_separator_tool(session):
-    return _activate_tool_with_profile(session, _SPACE_SEPARATOR_TOOL_ACTIVATION_PROFILE)
+    session.spaces.cancel_space_region_pick(refresh=False)
+    session.spaces.cancel_plan_region_tool(refresh=False)
+    session.wall_create.cancel_rect_wall_tool(refresh=False)
+    session.windows.cancel_window_tool(refresh=False)
+    session.providers.cancel_provider_point_tool(refresh=False)
+    if has_active_embedded_tool(session):
+        cancel_embedded_tool(session)
+    session.wall_edit.cancel_wall_edit()
+    cancel_pending_edit(session)
+    session.wall_relations.clear_plan_relation_status()
+    session.selection.state.set_selected_plan_target()
+    clear_selection_visuals(
+        session,
+        kinds=_SPACE_SEPARATOR_TOOL_SELECTION_KINDS,
+        include_wall_grips=True,
+        include_selected_wall_opening_context=True,
+        include_secondary_selection=True,
+    )
+    _prepare_space_separator_tool(session)
+    return _start_space_separator_tool(session)
 
 
 def activate_space_tool(session):
-    return _activate_tool_with_profile(session, _SPACE_TOOL_ACTIVATION_PROFILE)
+    session.spaces.cancel_space_region_pick(refresh=False)
+    session.spaces.cancel_plan_region_tool(refresh=False)
+    if session.current_tool == plan_runtime_tools.PlanTool.SET_SPACE_TEXT:
+        session.spaces.cancel_space_text_position_pick()
+    session.wall_create.cancel_rect_wall_tool(refresh=False)
+    session.windows.cancel_window_tool(refresh=False)
+    session.spaces.cancel_space_separator_tool(refresh=False)
+    session.providers.cancel_provider_point_tool(refresh=False)
+    if has_active_embedded_tool(session):
+        cancel_embedded_tool(session)
+    session.wall_edit.cancel_wall_edit(refresh=False)
+    cancel_pending_edit(session)
+    session.wall_relations.clear_plan_relation_status()
+    return session.spaces.create_space_from_current_selection()
 
 
 def activate_move_tool(session):
-    return _activate_tool_with_profile(session, _MOVE_TOOL_ACTIVATION_PROFILE)
+    session.spaces.cancel_space_region_pick(refresh=False)
+    session.spaces.cancel_plan_region_tool(refresh=False)
+    session.wall_create.cancel_rect_wall_tool(refresh=False)
+    session.windows.cancel_window_tool(refresh=False)
+    session.spaces.cancel_space_separator_tool(refresh=False)
+    session.providers.cancel_provider_point_tool(refresh=False)
+    session.wall_edit.cancel_wall_edit()
+    cancel_pending_edit(session)
+    session.wall_relations.clear_plan_relation_status()
+    clear_selection_visuals(
+        session,
+        kinds=_MOVE_TOOL_SELECTION_KINDS,
+        include_wall_grips=True,
+    )
+    return _start_move_tool(session)
 
 
 def start_embedded_tool(session, tool_name, command, host_class=None):

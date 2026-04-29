@@ -539,6 +539,9 @@ class PlanDocumentVisualsAPI:
     def defer_document_visual_refresh(self):
         return defer_document_visual_refresh(self.session)
 
+    def defer_document_visual_updates(self):
+        return defer_document_visual_updates(self.session)
+
     def document_is_alive(self):
         return document_is_alive(self.session)
 

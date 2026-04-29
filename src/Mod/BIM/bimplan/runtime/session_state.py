@@ -359,98 +359,32 @@ class PlanCreationPreviewState:
 PlanWallEditState = WallEditState
 
 
-def _coerce_identity(value):
-    return value
-
-
-def _make_state_backed_property(ensure_method_name, field_name, coerce=_coerce_identity):
-    def _getter(self):
-        return getattr(getattr(self, ensure_method_name)(), field_name)
-
-    def _setter(self, value):
-        setattr(getattr(self, ensure_method_name)(), field_name, coerce(value))
-
-    return property(_getter, _setter)
-
-
-def _make_ensure_state_method(slot_name, state_factory):
-    def _ensure_state(self):
-        state = self.__dict__.get(slot_name)
-        if state is None:
-            state = state_factory()
-            self.__dict__[slot_name] = state
-        return state
-
-    return _ensure_state
-
-
-_PLAN_EDIT_SESSION_STATE_ENSURERS = (
-    ("_ensure_task_panel_state", "task_panel_state", PlanTaskPanelState),
-    (
-        "_ensure_provider_overlay_read_state",
-        "provider_overlay_read_state",
-        PlanProviderOverlayReadState,
-    ),
-    ("_ensure_interaction_state", "interaction_state", PlanInteractionState),
-    ("_ensure_lifecycle_state", "lifecycle_state", PlanLifecycleState),
-    ("_ensure_selection_state", "selection_state", PlanSelectionState),
-    ("_ensure_wall_edit_state", "wall_edit_state", WallEditState),
-    ("_ensure_wall_relation_state", "wall_relation_state", PlanWallRelationState),
-    ("_ensure_provider_point_state", "provider_point_state", ProviderPointState),
-    ("_ensure_space_region_pick_state", "space_region_pick_state", SpaceRegionPickState),
-    ("_ensure_plan_region_tool_state", "plan_region_tool_state", PlanRegionToolState),
-    ("_ensure_hover_pick_state", "hover_pick_state", PlanHoverPickState),
-    ("_ensure_selection_sync_state", "selection_sync_state", PlanSelectionSyncState),
-    ("_ensure_input_event_state", "input_event_state", PlanInputEventState),
-    ("_ensure_overlay_refresh_state", "overlay_refresh_state", PlanOverlayRefreshState),
-    ("_ensure_wall_grip_runtime_state", "wall_grip_state", PlanWallGripState),
-    ("_ensure_viewport_state", "viewport_state", PlanViewportState),
-    ("_ensure_document_visual_state", "document_visual_state", PlanDocumentVisualState),
-    ("_ensure_performance_state", "performance_state", PlanPerformanceState),
-    ("_ensure_provider_runtime_state", "provider_runtime_state", PlanProviderRuntimeState),
-    ("_ensure_provider_transient_state", "provider_transient_state", PlanProviderTransientState),
-    ("_ensure_opening_transient_state", "opening_transient_state", PlanOpeningTransientState),
-    ("_ensure_overlay_tracker_state", "overlay_tracker_state", PlanOverlayTrackerState),
-    ("_ensure_overlay_cache_state", "overlay_cache_state", PlanOverlayCacheState),
-    ("_ensure_overlay_transient_state", "overlay_transient_state", PlanOverlayTransientState),
-    ("_ensure_creation_preview_state", "creation_preview_state", PlanCreationPreviewState),
-)
-
-
-_PLAN_EDIT_SESSION_STATE_PROPERTIES = (
-    (
-        "_ensure_selection_state",
-        (
-            ("hovered_wall", "hovered_wall", _coerce_identity),
-            ("hovered_opening", "hovered_opening", _coerce_identity),
-            ("hovered_symbol", "hovered_symbol", _coerce_identity),
-            ("hovered_provider", "hovered_provider", _coerce_identity),
-            ("hovered_space", "hovered_space", _coerce_identity),
-            ("hovered_region", "hovered_region", _coerce_identity),
-        ),
-    ),
-)
-
-
-def bind_session_state_accessors(session_class):
-    for ensure_method_name, slot_name, state_factory in _PLAN_EDIT_SESSION_STATE_ENSURERS:
-        setattr(
-            session_class,
-            ensure_method_name,
-            _make_ensure_state_method(slot_name, state_factory),
-        )
-    for ensure_method_name, property_specs in _PLAN_EDIT_SESSION_STATE_PROPERTIES:
-        for property_name, field_name, coerce in property_specs:
-            setattr(
-                session_class,
-                property_name,
-                _make_state_backed_property(ensure_method_name, field_name, coerce),
-            )
-
-
 def initialize_session_read_state(session):
-    for _ensure_method_name, slot_name, state_factory in _PLAN_EDIT_SESSION_STATE_ENSURERS:
-        setattr(session, slot_name, state_factory())
+    session.task_panel_state = PlanTaskPanelState()
+    session.provider_overlay_read_state = PlanProviderOverlayReadState()
+    session.interaction_state = PlanInteractionState()
+    session.lifecycle_state = PlanLifecycleState()
+    session.selection_state = PlanSelectionState()
+    session.wall_edit_state = WallEditState()
+    session.wall_relation_state = PlanWallRelationState()
+    session.provider_point_state = ProviderPointState()
+    session.space_region_pick_state = SpaceRegionPickState()
+    session.plan_region_tool_state = PlanRegionToolState()
+    session.hover_pick_state = PlanHoverPickState()
+    session.selection_sync_state = PlanSelectionSyncState()
+    session.input_event_state = PlanInputEventState()
+    session.overlay_refresh_state = PlanOverlayRefreshState()
+    session.wall_grip_state = PlanWallGripState()
+    session.viewport_state = PlanViewportState()
+    session.document_visual_state = PlanDocumentVisualState()
+    session.performance_state = PlanPerformanceState()
+    session.provider_runtime_state = PlanProviderRuntimeState()
+    session.provider_transient_state = PlanProviderTransientState()
+    session.opening_transient_state = PlanOpeningTransientState()
+    session.overlay_tracker_state = PlanOverlayTrackerState()
+    session.overlay_cache_state = PlanOverlayCacheState()
+    session.overlay_transient_state = PlanOverlayTransientState()
+    session.creation_preview_state = PlanCreationPreviewState()
 
 
 def initialize_session_state(session):

@@ -2,8 +2,6 @@
 
 """Provider edit interaction helpers for BIM Plan Edit."""
 
-from contextlib import nullcontext
-
 import FreeCAD
 import FreeCADGui
 from bimplan.providers import host_targets as plan_host_targets
@@ -241,10 +239,8 @@ def finish_provider_handle_point_pick(session, point=None, obj=None):
         restore_selected_provider(session, provider_obj)
         return
 
-    defer_updates = getattr(session, "defer_document_visual_updates", None)
-    visual_update_context = defer_updates() if callable(defer_updates) else nullcontext()
     try:
-        with visual_update_context:
+        with session.document_visuals.defer_document_visual_updates():
             session.doc.openTransaction(_get_provider_handle_transaction_label(handle))
             if not _apply_builtin_provider_handle_action(
                 session,

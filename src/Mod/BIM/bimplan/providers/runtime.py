@@ -8,6 +8,7 @@ from dataclasses import dataclass, replace
 import FreeCAD
 
 from bimplan import document_visuals as plan_document_visuals
+from bimplan.providers import get_plan_edit_registry
 from .contracts import (
     PlanActionSpec,
     PlanContextDetailSpec,
@@ -141,6 +142,10 @@ class PlanProvidersAPI:
     @property
     def session(self):
         return self._session
+
+    def get_plan_provider_registry(self):
+        del self
+        return get_plan_edit_registry()
 
     def get_plan_provider_overlay_category(self, provider_id):
         del self
@@ -709,8 +714,24 @@ def _get_plan_edit_context_or_none(session):
         return None
 
 
+def _get_plan_provider_registry(session):
+    providers = getattr(session, "providers", None)
+    registry_getter = getattr(providers, "get_plan_provider_registry", None)
+    if callable(registry_getter):
+        return registry_getter()
+    return get_plan_edit_registry()
+
+
+def _get_document_visual_update_scope(session):
+    document_visuals = getattr(session, "document_visuals", None)
+    defer_updates = getattr(document_visuals, "defer_document_visual_updates", None)
+    if callable(defer_updates):
+        return defer_updates()
+    return nullcontext()
+
+
 def _iter_named_plan_providers(session):
-    for provider in session.get_plan_provider_registry().iter_providers():
+    for provider in _get_plan_provider_registry(session).iter_providers():
         provider_id = get_plan_provider_id(provider)
         if provider_id:
             yield provider, provider_id
@@ -869,7 +890,7 @@ def collect_plan_provider_snapshot(session) -> PlanProviderSnapshot:
 
 
 def get_plan_provider_display_name(session, provider_id):
-    provider = session.get_plan_provider_registry().get_provider(provider_id)
+    provider = _get_plan_provider_registry(session).get_provider(provider_id)
     if provider is None:
         return str(provider_id or "").strip()
     display_name = str(getattr(provider, "display_name", "") or "").strip()
@@ -1820,7 +1841,7 @@ def _execute_plan_provider_action_callback(
 
 
 def _get_plan_provider_action_executor(session, provider_id):
-    provider = session.get_plan_provider_registry().get_provider(provider_id)
+    provider = _get_plan_provider_registry(session).get_provider(provider_id)
     if provider is None:
         return None
     execute_action = getattr(provider, "execute_action", None)
@@ -1841,9 +1862,7 @@ def _run_plan_provider_action(
         return False
     action_context = get_plan_provider_action_context(session, payload=payload)
     transaction_label = str(transaction_label or "").strip()
-    defer_updates = getattr(session, "defer_document_visual_updates", None)
-    visual_update_context = defer_updates() if callable(defer_updates) else nullcontext()
-    with visual_update_context:
+    with _get_document_visual_update_scope(session):
         if transaction_label:
             with PlanEditTransaction(session.doc, transaction_label):
                 handled = _execute_plan_provider_action_callback(

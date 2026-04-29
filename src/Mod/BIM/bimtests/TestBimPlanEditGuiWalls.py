@@ -768,7 +768,7 @@ class BimPlanEditGuiWallsMixin:
             session.task_panel.join_type_combo.findData("Butt"),
         )
         self.assertTrue(event_callback._handled)
-        _title, body = session._get_status_chip_text()
+        _title, body = session.status_text.get_status_chip_text()
         self.assertIn("butt joint", body.lower())
         self.assertIn("Join type: Butt", session.task_panel.status.text())
 
@@ -936,7 +936,7 @@ class BimPlanEditGuiWallsMixin:
         session.selection.hover.set_hovered_wall(target_wall)
 
         self.assertTrue(session.task_panel.unjoin_button.isEnabled())
-        _title, body = session._get_status_chip_text()
+        _title, body = session.status_text.get_status_chip_text()
         self.assertIn("Existing joint", body)
         self.assertIn("change it to a butt joint", body.lower())
         self.assertIn("Existing joint", session.task_panel.status.text())
@@ -1023,7 +1023,7 @@ class BimPlanEditGuiWallsMixin:
         self.assertIs(session.selection.state.get_selected_target_for_kind("wall"), source_wall)
         self.assertIs(session.hovered_wall, target_wall)
         self.assertFalse(session.task_panel.unjoin_button.isEnabled())
-        _title, body = session._get_status_chip_text()
+        _title, body = session.status_text.get_status_chip_text()
         self.assertIn("Candidate wall", body)
         self.assertIn("create a miter joint", body.lower())
 
@@ -1580,7 +1580,7 @@ class BimPlanEditGuiWallsMixin:
 
         self.assertEqual(joint.Status, "OK")
         self.assertIsNone(session.task_panel_state.relation_status_message)
-        _title, body = session._get_status_chip_text()
+        _title, body = session.status_text.get_status_chip_text()
         self.assertNotIn("Relation warning", body)
         self.assertNotIn("Relation warning", session.task_panel.status.text())
 
@@ -2988,7 +2988,7 @@ class BimPlanEditGuiWallsMixin:
         self.assertIs(session.selection.state.get_selected_target_for_kind("wall"), wall)
         self.assertGreater(len(session.overlay_tracker_state.grip_trackers), 0)
 
-        with session.defer_document_visual_updates():
+        with session.document_visuals.defer_document_visual_updates():
             self._make_hosted_door(wall, name="DeferredResetDoor")
 
         self.pump_gui_events(timeout_ms=500)
@@ -3021,7 +3021,7 @@ class BimPlanEditGuiWallsMixin:
         self.pump_gui_events()
         self._assert_selected_wall_visuals(session, wall_a)
 
-        with session.defer_document_visual_updates():
+        with session.document_visuals.defer_document_visual_updates():
             self._make_hosted_door(wall_a, name="DeferredResetDoorA")
             FreeCADGui.Selection.clearSelection()
             FreeCADGui.Selection.addSelection(wall_b)
