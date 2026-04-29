@@ -2414,13 +2414,15 @@ class TestBimPlanCore(unittest.TestCase):
             active_storey_name="",
             current_tool="Select",
         )
-        collected = {
-            "tools": [SimpleNamespace(key="tool")],
-            "overlays": [SimpleNamespace(key="overlay")],
-            "issues": [],
-            "context_panels": [],
-            "inspector_sections": [],
-        }
+        calls = []
+
+        def collect(_session, _context, method_name, _normalizer):
+            calls.append(method_name)
+            if method_name == "get_tools":
+                return (SimpleNamespace(key="tool"),)
+            if method_name == "get_overlays":
+                return (SimpleNamespace(key="overlay"),)
+            return ()
 
         with patch.object(
             plan_provider_runtime_module,
@@ -2428,13 +2430,22 @@ class TestBimPlanCore(unittest.TestCase):
             return_value=context,
         ), patch.object(
             plan_provider_runtime_module,
-            "_collect_plan_provider_snapshot_surfaces",
-            return_value=collected,
-        ) as collect:
+            "_collect_plan_provider_contributions_for_method",
+            side_effect=collect,
+        ):
             snapshot1 = collect_plan_provider_snapshot(session)
             snapshot2 = collect_plan_provider_snapshot(session)
 
-        self.assertEqual(1, collect.call_count)
+        self.assertEqual(
+            [
+                "get_tools",
+                "get_overlays",
+                "get_issues",
+                "get_context_panels",
+                "get_inspector_sections",
+            ],
+            calls,
+        )
         self.assertEqual(snapshot1, snapshot2)
         self.assertEqual(("tool",), tuple(tool.key for tool in snapshot1.tools))
 
