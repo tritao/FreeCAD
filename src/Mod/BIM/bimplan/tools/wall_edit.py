@@ -622,7 +622,6 @@ def make_preview_wall_adapter(session, wall, endpoints):
 
     class _PreviewWall:
         def __init__(self):
-            self._wall = wall
             self.Proxy = _PreviewWallProxy(real_proxy)
             self.Label = getattr(wall, "Label", getattr(wall, "Name", ""))
             self.Name = getattr(wall, "Name", "")
@@ -633,9 +632,6 @@ def make_preview_wall_adapter(session, wall, endpoints):
             self.Base = None
             self.Width = getattr(wall, "Width", None)
             self.Align = getattr(wall, "Align", "Center")
-
-        def __getattr__(self, attr):
-            return getattr(self._wall, attr)
 
     return _PreviewWall()
 

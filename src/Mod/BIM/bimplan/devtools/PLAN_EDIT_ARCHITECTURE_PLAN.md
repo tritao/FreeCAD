@@ -546,6 +546,8 @@ Current progress:
 - Provider snapshot collection is explicit and no longer uses a method-surface list.
 - Select-tool ray edit-node handling is named as the current adapter path, not legacy
   compatibility.
+- Wall-relation preview walls expose an explicit adapter shape; the last `__getattr__`
+  proxy surface is removed from Plan Edit runtime code.
 
 Steps:
 
