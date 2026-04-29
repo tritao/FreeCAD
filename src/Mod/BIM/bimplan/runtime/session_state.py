@@ -635,23 +635,6 @@ _PLAN_EDIT_SESSION_STATE_PROPERTIES = (
         "_ensure_overlay_cache_state",
         (),
     ),
-    (
-        "_ensure_creation_preview_state",
-        (
-            ("_rect_wall_start", "rect_wall_start", _coerce_identity),
-            ("_rect_wall_params", "rect_wall_params", _coerce_identity),
-            ("_rect_wall_preview_trackers", "rect_wall_preview_trackers", _coerce_list),
-            ("_space_separator_start", "space_separator_start", _coerce_identity),
-            ("_space_separator_height", "space_separator_height", _coerce_identity),
-            (
-                "_space_separator_preview_trackers",
-                "space_separator_preview_trackers",
-                _coerce_list,
-            ),
-            ("_window_host_wall", "window_host_wall", _coerce_identity),
-            ("_window_preview_trackers", "window_preview_trackers", _coerce_list),
-        ),
-    ),
 )
 
 
