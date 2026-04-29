@@ -62,21 +62,6 @@ class PlanLifecycleAPI:
     def activate_move_tool(self):
         return activate_move_tool(self.session)
 
-    def activate_wall_tool(self):
-        from bimplan.tools import wall_create
-
-        return wall_create.activate_wall_tool(self.session)
-
-    def activate_rect_wall_tool(self):
-        from bimplan.tools import wall_create
-
-        return wall_create.activate_rect_wall_tool(self.session)
-
-    def activate_join_tool(self):
-        from bimplan.tools import wall_relations
-
-        return wall_relations.activate_join_tool(self.session)
-
     def start_embedded_tool(self, tool_name, command, host_class=None):
         return start_embedded_tool(
             self.session,

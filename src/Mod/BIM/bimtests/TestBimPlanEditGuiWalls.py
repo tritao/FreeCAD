@@ -56,7 +56,7 @@ class BimPlanEditGuiWallsMixin:
         self.assertIsNotNone(session, "Plan Edit session should start in GUI tests.")
         self.pump_gui_events()
 
-        session.lifecycle.activate_wall_tool()
+        session.wall_create.activate_wall_tool()
         self.pump_gui_events()
 
         self.assertEqual(session.current_tool, "Wall")
@@ -80,7 +80,7 @@ class BimPlanEditGuiWallsMixin:
         self.assertIsNotNone(session, "Plan Edit session should start in GUI tests.")
         self.pump_gui_events()
 
-        session.lifecycle.activate_wall_tool()
+        session.wall_create.activate_wall_tool()
         self.pump_gui_events()
 
         cmd = session.interaction_state.embedded_tool
@@ -124,7 +124,7 @@ class BimPlanEditGuiWallsMixin:
         self.pump_gui_events()
 
         before = {obj.Name for obj in self.document.Objects}
-        session.lifecycle.activate_rect_wall_tool()
+        session.wall_create.activate_rect_wall_tool()
         self.pump_gui_events()
 
         self.assertEqual(session.current_tool, "Rect Wall")
@@ -161,7 +161,7 @@ class BimPlanEditGuiWallsMixin:
             self.pump_gui_events()
 
             before = {obj.Name for obj in self.document.Objects}
-            session.lifecycle.activate_rect_wall_tool()
+            session.wall_create.activate_rect_wall_tool()
             self.pump_gui_events()
 
             session.wall_create.handle_rect_wall_point(FreeCAD.Vector(0, 0, 0))
@@ -195,7 +195,7 @@ class BimPlanEditGuiWallsMixin:
             obj.Name for obj in self.document.Objects if Draft.getType(obj) == "Wall"
         }
 
-        session.lifecycle.activate_rect_wall_tool()
+        session.wall_create.activate_rect_wall_tool()
         self.pump_gui_events()
         session.wall_create.handle_rect_wall_point(FreeCAD.Vector(0, 0, 0))
         session.wall_create.handle_rect_wall_point(FreeCAD.Vector(3000, 2000, 0))
@@ -692,7 +692,7 @@ class BimPlanEditGuiWallsMixin:
         self.pump_gui_events()
 
         session.selection.activation.select_wall_for_plan_edit(source_wall)
-        session.lifecycle.activate_join_tool()
+        session.wall_relations.activate_join_tool()
 
         self.assertEqual(session.current_tool, "Join")
         self._assert_selected_plan_target(session, "wall", source_wall)
@@ -727,7 +727,7 @@ class BimPlanEditGuiWallsMixin:
         session.selection.activation.select_wall_for_plan_edit(source_wall)
         self.assertEqual(len(session.overlay_tracker_state.grip_trackers), 3)
 
-        session.lifecycle.activate_join_tool()
+        session.wall_relations.activate_join_tool()
         self.assertEqual(session.current_tool, "Join")
         self.assertEqual(len(session.overlay_tracker_state.grip_trackers), 0)
 
@@ -749,7 +749,7 @@ class BimPlanEditGuiWallsMixin:
         self.pump_gui_events()
 
         session.selection.activation.select_wall_for_plan_edit(source_wall)
-        session.lifecycle.activate_join_tool()
+        session.wall_relations.activate_join_tool()
 
         self.assertEqual(session.wall_relations.get_plan_join_type(), "Miter")
         self.assertEqual(
@@ -788,7 +788,7 @@ class BimPlanEditGuiWallsMixin:
         self.pump_gui_events()
 
         session.selection.activation.select_wall_for_plan_edit(source_wall)
-        session.lifecycle.activate_join_tool()
+        session.wall_relations.activate_join_tool()
 
         from pivy import coin
 
@@ -862,7 +862,7 @@ class BimPlanEditGuiWallsMixin:
         self.assertEqual(session.wall_relations.get_plan_join_type(), "Butt")
 
         session.selection.activation.select_wall_for_plan_edit(source_wall)
-        session.lifecycle.activate_join_tool()
+        session.wall_relations.activate_join_tool()
 
         from pivy import coin
 
@@ -932,7 +932,7 @@ class BimPlanEditGuiWallsMixin:
 
         session.selection.activation.select_wall_for_plan_edit(source_wall)
         session.wall_relations.set_plan_join_type("Butt")
-        session.lifecycle.activate_join_tool()
+        session.wall_relations.activate_join_tool()
         session.selection.hover.set_hovered_wall(target_wall)
 
         self.assertTrue(session.task_panel.unjoin_button.isEnabled())
@@ -1006,7 +1006,7 @@ class BimPlanEditGuiWallsMixin:
         self.pump_gui_events()
 
         session.selection.activation.select_wall_for_plan_edit(source_wall)
-        session.lifecycle.activate_join_tool()
+        session.wall_relations.activate_join_tool()
         session.selection.hover.set_hovered_wall(target_wall)
 
         self.assertTrue(session.task_panel.unjoin_button.isEnabled())
@@ -1043,7 +1043,7 @@ class BimPlanEditGuiWallsMixin:
         self.pump_gui_events()
 
         session.selection.activation.select_wall_for_plan_edit(source_wall)
-        session.lifecycle.activate_join_tool()
+        session.wall_relations.activate_join_tool()
 
         from pivy import coin
 
@@ -1147,7 +1147,7 @@ class BimPlanEditGuiWallsMixin:
 
         session.selection.activation.select_wall_for_plan_edit(source_wall)
         session.wall_relations.set_plan_join_type("Butt")
-        session.lifecycle.activate_join_tool()
+        session.wall_relations.activate_join_tool()
         session.selection.hover.set_hovered_wall(target_wall)
 
         with (
@@ -1248,7 +1248,7 @@ class BimPlanEditGuiWallsMixin:
         initial_areas = [float(space.Proxy.getArea(space)) for space in sorted_spaces]
 
         session.selection.activation.select_wall_for_plan_edit(source_wall)
-        session.lifecycle.activate_join_tool()
+        session.wall_relations.activate_join_tool()
         session.selection.hover.set_hovered_wall(target_wall)
 
         self.assertTrue(session.wall_relations.unjoin_current_plan_wall_pair())
@@ -1361,7 +1361,7 @@ class BimPlanEditGuiWallsMixin:
         self.pump_gui_events()
 
         session.selection.activation.select_wall_for_plan_edit(carrier_wall)
-        session.lifecycle.activate_join_tool()
+        session.wall_relations.activate_join_tool()
 
         from pivy import coin
 
@@ -1444,7 +1444,7 @@ class BimPlanEditGuiWallsMixin:
         self.pump_gui_events()
 
         session.selection.activation.select_wall_for_plan_edit(carrier_wall)
-        session.lifecycle.activate_join_tool()
+        session.wall_relations.activate_join_tool()
 
         from pivy import coin
 
@@ -1901,7 +1901,7 @@ class BimPlanEditGuiWallsMixin:
             [(wall.Name, "EditNode2"), (wall.Name, "EditNode1"), (wall.Name, "EditNode0")],
         )
 
-        session.lifecycle.activate_wall_tool()
+        session.wall_create.activate_wall_tool()
         self.pump_gui_events(timeout_ms=500)
 
         self.assertEqual(session.current_tool, "Wall")

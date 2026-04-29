@@ -690,10 +690,10 @@ class PlanEditControlsShellMixin:
         self.session.lifecycle.activate_select_tool()
 
     def on_wall_clicked(self):
-        self.session.lifecycle.activate_wall_tool()
+        self.session.wall_create.activate_wall_tool()
 
     def on_rect_wall_clicked(self):
-        self.session.lifecycle.activate_rect_wall_tool()
+        self.session.wall_create.activate_rect_wall_tool()
 
     def on_window_clicked(self):
         self.session.lifecycle.activate_window_tool()
@@ -711,7 +711,7 @@ class PlanEditControlsShellMixin:
         self.session.lifecycle.activate_move_tool()
 
     def on_join_clicked(self):
-        self.session.lifecycle.activate_join_tool()
+        self.session.wall_relations.activate_join_tool()
 
     def on_join_type_changed(self, index):
         if self.join_type_combo is None or index < 0:
