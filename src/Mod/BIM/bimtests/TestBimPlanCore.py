@@ -104,9 +104,9 @@ from bimplan.providers import (
 )
 from bimplan.providers import PlanEditRegistry
 from bimplan.selection import gui_sync as plan_selection_gui_sync
-from bimplan.selection.service_interaction import PlanSelectionActivationService
-from bimplan.selection.service_primary import PlanSelectionRefreshService
-from bimplan.selection import target_kinds as plan_target_kinds
+from bimplan.selection.interaction import PlanSelectionActivationService
+from bimplan.selection.state import PlanSelectionRefreshService
+from bimplan.selection import kinds as plan_target_kinds
 from bimplan.tools.spaces import (
     start_space_region_pick,
     create_space_from_current_selection,
@@ -1121,7 +1121,7 @@ class TestBimPlanCore(unittest.TestCase):
             ProviderHostTargetRef,
             ProviderPointActionPayload,
         )
-        from bimplan.selection.target_kinds import PlanTargetRef
+        from bimplan.selection.kinds import PlanTargetRef
 
         wall = object()
         opening = object()
@@ -2032,7 +2032,7 @@ class TestBimPlanCore(unittest.TestCase):
         )
 
         with patch(
-            "bimplan.selection.service_primary.plan_selection_gui_sync.is_visible_provider_target_object",
+            "bimplan.selection.state.plan_selection_gui_sync.is_visible_provider_target_object",
             return_value=True,
         ):
             self.assertEqual(

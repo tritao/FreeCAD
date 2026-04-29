@@ -4,8 +4,8 @@
 
 import FreeCAD
 from bimplan.runtime import command_gate as plan_command_gate
-from bimplan.selection import target_dispatch as plan_target_dispatch
-from bimplan.selection import target_kinds as plan_target_kinds
+from bimplan.selection import targets as plan_targets
+from bimplan.selection import kinds as plan_target_kinds
 
 translate = FreeCAD.Qt.translate
 
@@ -249,7 +249,7 @@ def cancel_pending_edit(session):
     _reset_pending_edit_state(session, clear_opening_edit=True)
     session.wall_relations.clear_plan_relation_status()
     session.overlays.walls.sync_wall_grips()
-    plan_target_dispatch.sync_selected_target_visuals(
+    plan_targets.sync_selected_target_visuals(
         session,
         kinds=plan_target_kinds.PENDING_EDIT_VISUAL_SYNC_KINDS,
         force=True,

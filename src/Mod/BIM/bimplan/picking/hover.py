@@ -5,15 +5,14 @@
 import time
 
 from bimplan.providers import runtime as plan_provider_runtime
-from bimplan.selection import target_dispatch as plan_target_dispatch
-from bimplan.selection import target_kinds as plan_target_kinds
-from bimplan.selection import targets as plan_selection_targets
+from bimplan.selection import targets as plan_targets
+from bimplan.selection import kinds as plan_target_kinds
 
 _HOVER_PICK_INTERVAL_MS = 80
 
 
 def get_hovered_plan_target(session):
-    return plan_target_dispatch.get_hovered_target(session)
+    return plan_targets.get_hovered_target(session)
 
 
 def queue_prime_hover_pick_caches(session):
@@ -48,13 +47,13 @@ def prime_hover_pick_caches(session):
                     session.overlays.geometry.get_opening_overlay_polylines(obj)
                     session.overlays.geometry.get_opening_overlay_segments(obj)
                     session.overlays.geometry.get_opening_overlay_screen_polylines(obj)
-            if plan_selection_targets.is_plan_space_object(session, obj):
+            if plan_targets.is_plan_space_object(session, obj):
                 session.performance.plan_perf_count("prime_hover_pick_spaces")
                 with session.performance.plan_perf_trace_span("prime_hover_pick_space_geometry"):
                     session.overlays.geometry.get_space_footprint_faces(obj)
                     session.overlays.geometry.get_space_overlay_polylines(obj)
                     session.overlays.geometry.get_space_overlay_segments(obj)
-            if plan_selection_targets.is_plan_region_object(session, obj):
+            if plan_targets.is_plan_region_object(session, obj):
                 session.performance.plan_perf_count("prime_hover_pick_regions")
                 with session.performance.plan_perf_trace_span("prime_hover_pick_region_geometry"):
                     session.overlays.geometry.get_region_footprint_faces(obj)
@@ -87,7 +86,7 @@ def should_skip_hover_pick(session, mouse_pos, force=False):
 
 
 def clear_hovered_plan_targets(session, kinds=None):
-    return plan_target_dispatch.clear_hovered_targets(session, kinds=kinds)
+    return plan_targets.clear_hovered_targets(session, kinds=kinds)
 
 
 def update_hovered_plan_target(session, mouse_pos, force=False):
@@ -103,9 +102,9 @@ def update_hovered_plan_target(session, mouse_pos, force=False):
         if target_kind == "wall" and not session.selection.state.is_selected_plan_target(
             "wall", target_obj
         ):
-            plan_target_dispatch.set_only_hovered_target(session, target_kind, target_obj)
+            plan_targets.set_only_hovered_target(session, target_kind, target_obj)
         else:
-            plan_target_dispatch.set_only_hovered_target(session, None, None)
+            plan_targets.set_only_hovered_target(session, None, None)
         return True
     if session.current_tool != "Select":
         session.hover_pick_state.dirty = False
@@ -128,5 +127,5 @@ def update_hovered_plan_target(session, mouse_pos, force=False):
     session.hover_pick_state.dirty = False
     target_kind = getattr(target_ref, "kind", None)
     target_obj = getattr(target_ref, "obj", None)
-    plan_target_dispatch.set_only_hovered_target(session, target_kind, target_obj)
+    plan_targets.set_only_hovered_target(session, target_kind, target_obj)
     return True

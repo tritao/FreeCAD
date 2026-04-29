@@ -4,13 +4,13 @@
 
 from contextlib import contextmanager
 
-from .service_common import _SessionAPI
-from .service_interaction import (
+from .common import _SessionAPI
+from .interaction import (
     PlanSelectionActivationService,
     PlanSelectionHoverService,
     PlanSelectionTargetService,
 )
-from .service_primary import (
+from .state import (
     PlanSelectionRefreshService,
     PlanSelectionStateService,
     PlanSelectionSyncService,

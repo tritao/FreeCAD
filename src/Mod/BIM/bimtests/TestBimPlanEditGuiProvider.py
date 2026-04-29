@@ -8,7 +8,7 @@ from .TestBimPlanEditGuiBase import (
     _DeletedDocument,
     _TestPlanProvider,
 )
-from bimplan.selection import target_kinds as plan_target_kinds
+from bimplan.selection import kinds as plan_target_kinds
 
 
 class BimPlanEditGuiProviderMixin:

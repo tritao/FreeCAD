@@ -3,7 +3,7 @@
 """Move tool activation for BIM Plan Edit."""
 
 from bimplan.runtime import tools as plan_runtime_tools
-from bimplan.selection import target_kinds as plan_target_kinds
+from bimplan.selection import kinds as plan_target_kinds
 
 _MOVE_TOOL_SELECTION_KINDS = (plan_target_kinds.PLAN_TARGET_WALL,)
 

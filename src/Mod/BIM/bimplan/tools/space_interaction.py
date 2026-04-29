@@ -6,8 +6,8 @@ import FreeCAD
 import FreeCADGui
 
 from bimplan.runtime import tools as plan_runtime_tools
-from bimplan.selection import target_dispatch as plan_target_dispatch
-from bimplan.selection import target_kinds as plan_target_kinds
+from bimplan.selection import targets as plan_targets
+from bimplan.selection import kinds as plan_target_kinds
 from bimplan.tools import space_boundaries as plan_space_boundaries
 from bimplan.tools import space_editing as plan_space_editing
 
@@ -176,7 +176,7 @@ def _cancel_snap_tool(session, *, is_active, clear_preview, reset_state, sync_ki
     session.current_tool = "Select"
     if refresh:
         session.task_panels.refresh_task_panel_status()
-    plan_target_dispatch.sync_selected_target_visuals(
+    plan_targets.sync_selected_target_visuals(
         session,
         kinds=sync_kinds,
         force=True,

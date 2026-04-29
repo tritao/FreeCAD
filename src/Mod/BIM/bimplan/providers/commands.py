@@ -55,14 +55,14 @@ class PlanProviderActionContext:
         return str(self.get_action_payload_value("host_source", "") or "")
 
     def get_selected_target(self):
-        from bimplan.selection import target_kinds as plan_target_kinds
+        from bimplan.selection import kinds as plan_target_kinds
 
         return plan_target_kinds.coerce_plan_target_ref(
             self.get_action_payload_value("selected_target")
         )
 
     def get_selected_targets(self):
-        from bimplan.selection import target_kinds as plan_target_kinds
+        from bimplan.selection import kinds as plan_target_kinds
 
         return tuple(
             plan_target_kinds.coerce_plan_target_ref(target)
@@ -70,14 +70,14 @@ class PlanProviderActionContext:
         )
 
     def get_hovered_target(self):
-        from bimplan.selection import target_kinds as plan_target_kinds
+        from bimplan.selection import kinds as plan_target_kinds
 
         return plan_target_kinds.coerce_plan_target_ref(
             self.get_action_payload_value("hovered_target")
         )
 
     def get_snap_target(self):
-        from bimplan.selection import target_kinds as plan_target_kinds
+        from bimplan.selection import kinds as plan_target_kinds
 
         return plan_target_kinds.coerce_plan_target_ref(
             self.get_action_payload_value("snap_target")

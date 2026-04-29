@@ -6,7 +6,7 @@ from dataclasses import dataclass
 
 import FreeCAD
 
-from bimplan.selection import target_kinds as plan_target_kinds
+from bimplan.selection import kinds as plan_target_kinds
 
 translate = FreeCAD.Qt.translate
 
