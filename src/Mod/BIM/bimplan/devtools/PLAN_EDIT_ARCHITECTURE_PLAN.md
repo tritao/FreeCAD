@@ -532,6 +532,10 @@ Validation:
 
 ### Phase 6: Provider Boundary Cleanup
 
+Current progress:
+
+- Provider overlay picking lives under `bimplan.providers.picking`; selection and picking code call that provider-owned module instead of owning provider-specific hit testing.
+
 Steps:
 
 1. Keep provider runtime caching scoped by stable context.

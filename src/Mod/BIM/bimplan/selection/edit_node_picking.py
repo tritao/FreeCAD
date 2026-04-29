@@ -5,9 +5,9 @@
 import FreeCAD
 
 from bimplan import selection as plan_selection
+from bimplan.providers import picking as plan_provider_picking
 from . import edit_nodes as plan_edit_nodes
 from . import picking_debug as plan_picking_debug
-from . import provider_overlay_picking as plan_provider_overlay_picking
 from . import target_kinds as plan_target_kinds
 from . import targets as plan_targets
 
@@ -17,9 +17,7 @@ def get_plan_target_from_edit_node(session, node):
         return plan_target_kinds.make_plan_target_ref()
     node_kind = plan_edit_nodes.get_edit_node_kind(node)
     if node_kind in ("provider_overlay_point", "provider_overlay_target"):
-        target_ref = plan_provider_overlay_picking.get_provider_overlay_target_from_edit_node(
-            session, node
-        )
+        target_ref = plan_provider_picking.get_provider_overlay_target_from_edit_node(session, node)
         if plan_selection.is_valid_plan_target(session, target_ref.kind, target_ref.obj):
             return plan_target_kinds.make_plan_target_ref(target_ref.kind, target_ref.obj)
         fallback_target_ref = plan_target_kinds.coerce_plan_target_ref(
@@ -111,7 +109,7 @@ def _get_selected_handle_edit_node(session, mouse_pos):
 
 
 def _get_provider_overlay_edit_node(session, mouse_pos):
-    target_ref = plan_provider_overlay_picking.pick_provider_overlay_target_from_objects_info(
+    target_ref = plan_provider_picking.pick_provider_overlay_target_from_objects_info(
         session, mouse_pos
     )
     if target_ref.obj is not None:
@@ -121,7 +119,7 @@ def _get_provider_overlay_edit_node(session, mouse_pos):
             "provider_overlay_objects_info",
             plan_edit_nodes.ProviderOverlayTargetEditNode(target_ref.kind, target_ref.obj),
         )
-    target_ref = plan_provider_overlay_picking.pick_provider_overlay_target_from_overlays(
+    target_ref = plan_provider_picking.pick_provider_overlay_target_from_overlays(
         session, mouse_pos
     )
     if target_ref.obj is not None:
@@ -162,7 +160,7 @@ def _get_edit_node_from_picked_points(session, mouse_pos, picked_points):
             sub_element = str(point.subElementName.getValue())
         except Exception:
             continue
-        if plan_provider_overlay_picking.is_provider_overlay_point_subname(sub_element):
+        if plan_provider_picking.is_provider_overlay_point_subname(sub_element):
             return _emit_get_edit_node_result(
                 session,
                 mouse_pos,
