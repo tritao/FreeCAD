@@ -29,6 +29,70 @@ def _opening_overlay_state(session):
     return session.overlay_transient_state
 
 
+class PlanOpeningOverlayService:
+    """Owned session surface for opening overlays and handles."""
+
+    __slots__ = ("_session",)
+
+    def __init__(self, session):
+        self._session = session
+
+    @property
+    def session(self):
+        return self._session
+
+    def get_opening_handle_markers(self, *args, **kwargs):
+        return get_opening_handle_markers(self.session, *args, **kwargs)
+
+    def set_opening_handle_tracker_marker(self, *args, **kwargs):
+        return set_opening_handle_tracker_marker(*args, **kwargs)
+
+    def discard_opening_handle_tracker_pool(self, *args, **kwargs):
+        return discard_opening_handle_tracker_pool(self.session, *args, **kwargs)
+
+    def queue_prime_opening_handle_tracker_pool(self, *args, **kwargs):
+        return queue_prime_opening_handle_tracker_pool(self.session, *args, **kwargs)
+
+    def prime_opening_handle_tracker_pool(self, *args, **kwargs):
+        return prime_opening_handle_tracker_pool(self.session, *args, **kwargs)
+
+    def sync_hovered_opening_overlay(self, *args, **kwargs):
+        return sync_hovered_opening_overlay(self.session, *args, **kwargs)
+
+    def clear_hovered_opening_overlay(self, *args, **kwargs):
+        return clear_hovered_opening_overlay(self.session, *args, **kwargs)
+
+    def invalidate_hovered_opening_overlay_cache(self, *args, **kwargs):
+        return invalidate_hovered_opening_overlay_cache(self.session, *args, **kwargs)
+
+    def create_opening_overlay_trackers(self, *args, **kwargs):
+        return create_opening_overlay_trackers(self.session, *args, **kwargs)
+
+    def sync_selected_opening_overlay(self, *args, **kwargs):
+        return sync_selected_opening_overlay(self.session, *args, **kwargs)
+
+    def clear_selected_opening_overlay(self, *args, **kwargs):
+        return clear_selected_opening_overlay(self.session, *args, **kwargs)
+
+    def invalidate_selected_opening_overlay_cache(self, *args, **kwargs):
+        return invalidate_selected_opening_overlay_cache(self.session, *args, **kwargs)
+
+    def sync_selected_wall_opening_context_overlay(self, *args, **kwargs):
+        return sync_selected_wall_opening_context_overlay(self.session, *args, **kwargs)
+
+    def clear_selected_wall_opening_context_overlay(self, *args, **kwargs):
+        return clear_selected_wall_opening_context_overlay(self.session, *args, **kwargs)
+
+    def get_selected_opening_handle_specs(self, *args, **kwargs):
+        return get_selected_opening_handle_specs(self.session, *args, **kwargs)
+
+    def sync_selected_opening_handles(self, *args, **kwargs):
+        return sync_selected_opening_handles(self.session, *args, **kwargs)
+
+    def clear_selected_opening_handles(self, *args, **kwargs):
+        return clear_selected_opening_handles(self.session, *args, **kwargs)
+
+
 def get_opening_handle_markers(session, marker_size=None):
     from draftutils import params
 

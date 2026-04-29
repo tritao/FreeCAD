@@ -8,6 +8,67 @@ from . import geometry as overlay_geometry
 from . import manager as overlay_manager
 
 
+class PlanSpaceOverlayService:
+    """Owned session surface for space and region overlays."""
+
+    __slots__ = ("_session",)
+
+    def __init__(self, session):
+        self._session = session
+
+    @property
+    def session(self):
+        return self._session
+
+    def discard_runtime_references(self):
+        self.session.overlay_tracker_state.space_region_pick_trackers = []
+
+    def sync_secondary_selected_overlays(self, *args, **kwargs):
+        return sync_secondary_selected_overlays(self.session, *args, **kwargs)
+
+    def clear_secondary_selected_overlays(self, *args, **kwargs):
+        return clear_secondary_selected_overlays(self.session, *args, **kwargs)
+
+    def sync_space_region_pick_overlays(self, *args, **kwargs):
+        return sync_space_region_pick_overlays(self.session, *args, **kwargs)
+
+    def clear_space_region_pick_overlays(self, *args, **kwargs):
+        return clear_space_region_pick_overlays(self.session, *args, **kwargs)
+
+    def create_space_overlay_trackers(self, *args, **kwargs):
+        return create_space_overlay_trackers(self.session, *args, **kwargs)
+
+    def create_region_overlay_trackers(self, *args, **kwargs):
+        return create_region_overlay_trackers(self.session, *args, **kwargs)
+
+    def sync_hovered_space_overlay(self, *args, **kwargs):
+        return sync_hovered_space_overlay(self.session, *args, **kwargs)
+
+    def clear_hovered_space_overlay(self, *args, **kwargs):
+        return clear_hovered_space_overlay(self.session, *args, **kwargs)
+
+    def sync_hovered_region_overlay(self, *args, **kwargs):
+        return sync_hovered_region_overlay(self.session, *args, **kwargs)
+
+    def clear_hovered_region_overlay(self, *args, **kwargs):
+        return clear_hovered_region_overlay(self.session, *args, **kwargs)
+
+    def invalidate_selected_space_overlay_cache(self, *args, **kwargs):
+        return invalidate_selected_space_overlay_cache(self.session, *args, **kwargs)
+
+    def sync_selected_space_overlay(self, *args, **kwargs):
+        return sync_selected_space_overlay(self.session, *args, **kwargs)
+
+    def clear_selected_space_overlay(self, *args, **kwargs):
+        return clear_selected_space_overlay(self.session, *args, **kwargs)
+
+    def sync_selected_region_overlay(self, *args, **kwargs):
+        return sync_selected_region_overlay(self.session, *args, **kwargs)
+
+    def clear_selected_region_overlay(self, *args, **kwargs):
+        return clear_selected_region_overlay(self.session, *args, **kwargs)
+
+
 def _perf_count(session, name, delta=1):
     return session.performance.plan_perf_count(name, delta=delta)
 

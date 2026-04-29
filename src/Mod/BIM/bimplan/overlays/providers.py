@@ -25,6 +25,55 @@ _PROVIDER_POINT_PREVIEW_UNHOSTED_COLOR = (0.95, 0.52, 0.10)
 _PROVIDER_POINT_PREVIEW_HOST_COLOR = (0.10, 0.58, 0.38)
 
 
+class PlanProviderOverlayService:
+    """Owned session surface for provider overlays."""
+
+    __slots__ = ("_session",)
+
+    def __init__(self, session):
+        self._session = session
+
+    @property
+    def session(self):
+        return self._session
+
+    def sync_provider_overlays(self, *args, **kwargs):
+        return sync_provider_overlays(self.session, *args, **kwargs)
+
+    def clear_provider_overlays(self, *args, **kwargs):
+        return clear_provider_overlays(self.session, *args, **kwargs)
+
+    def sync_hovered_provider_overlay(self, *args, **kwargs):
+        return sync_hovered_provider_overlay(self.session, *args, **kwargs)
+
+    def clear_hovered_provider_overlay(self, *args, **kwargs):
+        return clear_hovered_provider_overlay(self.session, *args, **kwargs)
+
+    def sync_selected_provider_overlay(self, *args, **kwargs):
+        return sync_selected_provider_overlay(self.session, *args, **kwargs)
+
+    def clear_selected_provider_overlay(self, *args, **kwargs):
+        return clear_selected_provider_overlay(self.session, *args, **kwargs)
+
+    def get_selected_provider_handle_specs(self, *args, **kwargs):
+        return get_selected_provider_handle_specs(self.session, *args, **kwargs)
+
+    def sync_selected_provider_handles(self, *args, **kwargs):
+        return sync_selected_provider_handles(self.session, *args, **kwargs)
+
+    def clear_selected_provider_handles(self, *args, **kwargs):
+        return clear_selected_provider_handles(self.session, *args, **kwargs)
+
+    def pick_selected_provider_handle(self, *args, **kwargs):
+        return pick_selected_provider_handle(self.session, *args, **kwargs)
+
+    def sync_provider_point_preview(self, *args, **kwargs):
+        return sync_provider_point_preview(self.session, *args, **kwargs)
+
+    def clear_provider_point_preview(self, *args, **kwargs):
+        return clear_provider_point_preview(self.session, *args, **kwargs)
+
+
 def _perf_count(session, name, delta=1):
     return session.performance.plan_perf_count(name, delta=delta)
 
