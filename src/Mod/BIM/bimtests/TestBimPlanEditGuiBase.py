@@ -212,51 +212,51 @@ class BimPlanEditGuiBase(ArchWallGuiTestCase):
     def _assert_wall_grips_match_wall(self, session, wall):
         endpoints = self._get_wall_endpoints(wall)
         midpoint = (endpoints[0] + endpoints[1]) * 0.5
-        self.assertEqual(len(session._grip_trackers), 3)
+        self.assertEqual(len(session.overlay_tracker_state.grip_trackers), 3)
         expected_points = (endpoints[0], endpoints[1], midpoint)
-        for tracker, expected in zip(session._grip_trackers, expected_points):
+        for tracker, expected in zip(session.overlay_tracker_state.grip_trackers, expected_points):
             self.assertLess(tracker.get().distanceToPoint(expected), 1e-6)
 
     def _assert_selected_wall_visuals(self, session, wall):
         self.assertIs(session.selection.state.get_selected_target_for_kind("wall"), wall)
-        self.assertGreater(len(session._wall_overlay_trackers), 0)
+        self.assertGreater(len(session.overlay_tracker_state.wall_overlay_trackers), 0)
         self._assert_wall_grips_match_wall(session, wall)
 
     def _assert_no_wall_edit_preview_visuals(self, session):
-        self.assertEqual(len(session._preview_grip_trackers), 0)
-        self.assertEqual(len(session._wall_edit_readout_trackers), 0)
-        self.assertEqual(len(session._wall_edit_opening_preview_trackers), 0)
+        self.assertEqual(len(session.wall_edit_state.preview_grip_trackers), 0)
+        self.assertEqual(len(session.wall_edit_state.wall_edit_readout_trackers), 0)
+        self.assertEqual(len(session.wall_edit_state.wall_edit_opening_preview_trackers), 0)
 
     def _assert_wall_selection_visual_consistency(self, session):
         selected_wall = session.selection.state.get_selected_target_for_kind("wall")
         if selected_wall is None:
-            self.assertEqual(len(session._wall_overlay_trackers), 0)
-            self.assertEqual(len(session._grip_trackers), 0)
+            self.assertEqual(len(session.overlay_tracker_state.wall_overlay_trackers), 0)
+            self.assertEqual(len(session.overlay_tracker_state.grip_trackers), 0)
             return
-        self.assertGreater(len(session._wall_overlay_trackers), 0)
+        self.assertGreater(len(session.overlay_tracker_state.wall_overlay_trackers), 0)
         if session.wall_edit.is_selected_wall_endpoint_editable():
             self._assert_wall_grips_match_wall(session, selected_wall)
         else:
-            self.assertEqual(len(session._grip_trackers), 0)
+            self.assertEqual(len(session.overlay_tracker_state.grip_trackers), 0)
 
     def _assert_selected_opening_visuals(self, session, opening):
         self.assertIs(session.selection.state.get_selected_target_for_kind("opening"), opening)
-        self.assertGreater(len(session._opening_overlay_trackers), 0)
-        self.assertEqual(len(session._opening_handle_trackers), 3)
+        self.assertGreater(len(session.overlay_tracker_state.opening_overlay_trackers), 0)
+        self.assertEqual(len(session.opening_transient_state.opening_handle_trackers), 3)
 
     def _assert_no_opening_move_preview_visuals(self, session):
-        self.assertEqual(len(session._opening_move_preview_trackers), 0)
-        self.assertIsNone(session._edit_opening)
-        self.assertIsNone(session._edit_opening_handle_index)
+        self.assertEqual(len(session.opening_transient_state.opening_move_preview_trackers), 0)
+        self.assertIsNone(session.interaction_state.edit_opening)
+        self.assertIsNone(session.interaction_state.edit_opening_handle_index)
 
     def _assert_opening_selection_visual_consistency(self, session):
         selected_opening = session.selection.state.get_selected_target_for_kind("opening")
         if selected_opening is None:
-            self.assertEqual(len(session._opening_overlay_trackers), 0)
-            self.assertEqual(len(session._opening_handle_trackers), 0)
+            self.assertEqual(len(session.overlay_tracker_state.opening_overlay_trackers), 0)
+            self.assertEqual(len(session.opening_transient_state.opening_handle_trackers), 0)
             return
-        self.assertGreater(len(session._opening_overlay_trackers), 0)
-        self.assertEqual(len(session._opening_handle_trackers), 3)
+        self.assertGreater(len(session.overlay_tracker_state.opening_overlay_trackers), 0)
+        self.assertEqual(len(session.opening_transient_state.opening_handle_trackers), 3)
 
     def _get_space_overlap_volume(self, first_space, second_space):
         try:

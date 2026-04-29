@@ -406,7 +406,7 @@ class TestBimPlanProviderSelectionGui(ArchWallGuiTestCase):
         ):
             self.assertTrue(session.providers.set_plan_provider_overlay_mode("electrical"))
             session.overlays.providers.sync_provider_overlays()
-            self.assertGreater(len(session._provider_overlay_trackers), 0)
+            self.assertGreater(len(session.overlay_tracker_state.provider_overlay_trackers), 0)
 
             session.selection.sync.set_gui_selection_object(marker)
             session.selection.refresh.refresh_primary_selected_plan_target()
@@ -415,8 +415,8 @@ class TestBimPlanProviderSelectionGui(ArchWallGuiTestCase):
             self.assertEqual(
                 ("provider", marker), session.selection.state.get_selected_plan_target()
             )
-            self.assertGreater(len(session._provider_selected_trackers), 0)
-            self.assertEqual([], session._provider_hover_trackers)
+            self.assertGreater(len(session.overlay_tracker_state.provider_selected_trackers), 0)
+            self.assertEqual([], session.overlay_tracker_state.provider_hover_trackers)
 
         session.shutdown(close_dialog=False)
         self.pump_gui_events()
@@ -482,16 +482,16 @@ class TestBimPlanProviderSelectionGui(ArchWallGuiTestCase):
             with patch.object(FreeCADGui.Snapper, "getPoint", return_value=None):
                 session.providers.activate_provider_handle_now(marker, 0)
                 self.assertEqual("Move Provider", session.current_tool)
-                self.assertIs(marker, session._edit_provider)
-                self.assertEqual(0, session._edit_provider_handle_index)
-                self.assertIsNotNone(session._edit_provider_handle)
+                self.assertIs(marker, session.interaction_state.edit_provider)
+                self.assertEqual(0, session.interaction_state.edit_provider_handle_index)
+                self.assertIsNotNone(session.interaction_state.edit_provider_handle)
                 session.providers.cancel_provider_handle_point_pick()
                 self.pump_gui_events()
 
             session.current_tool = "Move Provider"
-            session._edit_provider = marker
-            session._edit_provider_handle_index = 0
-            session._edit_provider_handle = handle
+            session.interaction_state.edit_provider = marker
+            session.interaction_state.edit_provider_handle_index = 0
+            session.interaction_state.edit_provider_handle = handle
             session.providers.finish_provider_handle_point_pick(FreeCAD.Vector(450, 650, 0))
             self.assertAlmostEqual(450.0, marker.Placement.Base.x, delta=1e-6)
             self.assertAlmostEqual(650.0, marker.Placement.Base.y, delta=1e-6)
@@ -577,9 +577,9 @@ class TestBimPlanProviderSelectionGui(ArchWallGuiTestCase):
             expected_point = session.providers.project_provider_point_to_host(pick_point, wall_b)
 
             session.current_tool = "Move Provider"
-            session._edit_provider = marker
-            session._edit_provider_handle_index = handle_index
-            session._edit_provider_handle = handle
+            session.interaction_state.edit_provider = marker
+            session.interaction_state.edit_provider_handle_index = handle_index
+            session.interaction_state.edit_provider_handle = handle
             session.providers.finish_provider_handle_point_pick(pick_point, obj=wall_b)
             self.pump_gui_events()
 
@@ -622,9 +622,9 @@ class TestBimPlanProviderSelectionGui(ArchWallGuiTestCase):
             self.assertEqual("move-fixture", handles[0].action_key)
 
             session.current_tool = "Move Provider"
-            session._edit_provider = marker
-            session._edit_provider_handle_index = 0
-            session._edit_provider_handle = handles[0]
+            session.interaction_state.edit_provider = marker
+            session.interaction_state.edit_provider_handle_index = 0
+            session.interaction_state.edit_provider_handle = handles[0]
             session.providers.finish_provider_handle_point_pick(FreeCAD.Vector(800, 900, 0))
             self.assertEqual(FreeCAD.Vector(800, 900, 0), provider.last_point)
             self.assertAlmostEqual(800.0, marker.Placement.Base.x, delta=1e-6)
@@ -682,9 +682,9 @@ class TestBimPlanProviderSelectionGui(ArchWallGuiTestCase):
             expected_point = session.providers.project_provider_point_to_host(pick_point, wall_b)
 
             session.current_tool = "Move Provider"
-            session._edit_provider = marker
-            session._edit_provider_handle_index = 0
-            session._edit_provider_handle = handles[0]
+            session.interaction_state.edit_provider = marker
+            session.interaction_state.edit_provider_handle_index = 0
+            session.interaction_state.edit_provider_handle = handles[0]
             session.providers.finish_provider_handle_point_pick(pick_point, obj=wall_b)
             self.pump_gui_events()
 

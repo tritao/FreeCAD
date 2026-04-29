@@ -874,10 +874,12 @@ class TestBimPlanCore(unittest.TestCase):
         calls = []
         session = SimpleNamespace(
             current_tool="Select",
-            _space_region_pick_boundaries=[],
-            _space_region_candidates=[],
-            _hovered_space_region_candidate=None,
-            _space_region_pick_seed_space=None,
+            space_region_pick_state=SimpleNamespace(
+                boundaries=[],
+                candidates=[],
+                hovered_candidate=None,
+                seed_space=None,
+            ),
             visibility=SimpleNamespace(
                 register_plan_object=lambda space: calls.append(("register", space))
             ),

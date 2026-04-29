@@ -167,7 +167,7 @@ class BimPlanEditGuiSymbolsMixin:
                 )
             },
         )
-        self.assertEqual(2, len(session._symbol_handle_trackers))
+        self.assertEqual(2, len(session.overlay_tracker_state.symbol_handle_trackers))
 
         session.shutdown(close_dialog=False)
         self.pump_gui_events()
@@ -305,7 +305,7 @@ class BimPlanEditGuiSymbolsMixin:
                 )
             },
         )
-        self.assertEqual(2, len(session._symbol_handle_trackers))
+        self.assertEqual(2, len(session.overlay_tracker_state.symbol_handle_trackers))
 
         session.shutdown(close_dialog=False)
         self.pump_gui_events()
@@ -397,10 +397,10 @@ class BimPlanEditGuiSymbolsMixin:
         }
 
         session.current_tool = "Move Symbol"
-        session._edit_symbol = link
-        session._edit_symbol_handle_role = "move"
-        session._edit_symbol_start_placement = link.Placement.copy()
-        session._edit_symbol_reference_point = handle_points["move"]
+        session.interaction_state.edit_symbol = link
+        session.interaction_state.edit_symbol_handle_role = "move"
+        session.interaction_state.edit_symbol_start_placement = link.Placement.copy()
+        session.interaction_state.edit_symbol_reference_point = handle_points["move"]
         session.symbols.finish_symbol_handle_point_pick(FreeCAD.Vector(2400, 1600, 0))
         self.pump_gui_events()
 
@@ -417,10 +417,10 @@ class BimPlanEditGuiSymbolsMixin:
         anchor = FreeCAD.Vector(link.Placement.Base)
 
         session.current_tool = "Rotate Symbol"
-        session._edit_symbol = link
-        session._edit_symbol_handle_role = "rotate"
-        session._edit_symbol_start_placement = link.Placement.copy()
-        session._edit_symbol_reference_point = handle_points["rotate"]
+        session.interaction_state.edit_symbol = link
+        session.interaction_state.edit_symbol_handle_role = "rotate"
+        session.interaction_state.edit_symbol_start_placement = link.Placement.copy()
+        session.interaction_state.edit_symbol_reference_point = handle_points["rotate"]
         session.symbols.finish_symbol_handle_point_pick(
             FreeCAD.Vector(anchor.x, anchor.y + 1000, 0)
         )
@@ -472,10 +472,10 @@ class BimPlanEditGuiSymbolsMixin:
 
         target_anchor = FreeCAD.Vector(3200, 2400, 0)
         session.current_tool = "Move Symbol"
-        session._edit_symbol = link
-        session._edit_symbol_handle_role = "move"
-        session._edit_symbol_start_placement = link.Placement.copy()
-        session._edit_symbol_reference_point = handle_points["move"]
+        session.interaction_state.edit_symbol = link
+        session.interaction_state.edit_symbol_handle_role = "move"
+        session.interaction_state.edit_symbol_start_placement = link.Placement.copy()
+        session.interaction_state.edit_symbol_reference_point = handle_points["move"]
         session.symbols.finish_symbol_handle_point_pick(target_anchor)
         self.pump_gui_events()
 
@@ -493,10 +493,10 @@ class BimPlanEditGuiSymbolsMixin:
         }
         anchor = link.Placement.multVec(equipment.PlanAnchor)
         session.current_tool = "Rotate Symbol"
-        session._edit_symbol = link
-        session._edit_symbol_handle_role = "rotate"
-        session._edit_symbol_start_placement = link.Placement.copy()
-        session._edit_symbol_reference_point = handle_points["rotate"]
+        session.interaction_state.edit_symbol = link
+        session.interaction_state.edit_symbol_handle_role = "rotate"
+        session.interaction_state.edit_symbol_start_placement = link.Placement.copy()
+        session.interaction_state.edit_symbol_reference_point = handle_points["rotate"]
         session.symbols.finish_symbol_handle_point_pick(
             FreeCAD.Vector(anchor.x + 1000, anchor.y, 0)
         )
@@ -545,10 +545,10 @@ class BimPlanEditGuiSymbolsMixin:
         )
 
         session.current_tool = "Rotate Symbol"
-        session._edit_symbol = link
-        session._edit_symbol_handle_role = "rotate"
-        session._edit_symbol_start_placement = link.Placement.copy()
-        session._edit_symbol_reference_point = handle_points["rotate"]
+        session.interaction_state.edit_symbol = link
+        session.interaction_state.edit_symbol_handle_role = "rotate"
+        session.interaction_state.edit_symbol_start_placement = link.Placement.copy()
+        session.interaction_state.edit_symbol_reference_point = handle_points["rotate"]
         with (
             patch.object(session.symbols, "symbol_rotation_snap_enabled", return_value=True),
             patch.object(
@@ -606,10 +606,10 @@ class BimPlanEditGuiSymbolsMixin:
         )
 
         session.current_tool = "Rotate Symbol"
-        session._edit_symbol = link
-        session._edit_symbol_handle_role = "rotate"
-        session._edit_symbol_start_placement = link.Placement.copy()
-        session._edit_symbol_reference_point = handle_points["rotate"]
+        session.interaction_state.edit_symbol = link
+        session.interaction_state.edit_symbol_handle_role = "rotate"
+        session.interaction_state.edit_symbol_start_placement = link.Placement.copy()
+        session.interaction_state.edit_symbol_reference_point = handle_points["rotate"]
         with (
             patch.object(session.symbols, "symbol_rotation_snap_enabled", return_value=True),
             patch.object(

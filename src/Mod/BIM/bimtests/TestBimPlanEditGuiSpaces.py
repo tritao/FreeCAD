@@ -32,7 +32,7 @@ class BimPlanEditGuiSpacesMixin:
         session.selection.refresh.refresh_primary_selected_plan_target()
 
         self._assert_selected_plan_target(session, "space", space)
-        self.assertGreater(len(session._space_overlay_trackers), 0)
+        self.assertGreater(len(session.overlay_tracker_state.space_overlay_trackers), 0)
         self.assertIn("Space: Bedroom", session.task_panel.status.text())
 
         session.shutdown(close_dialog=False)
@@ -57,7 +57,7 @@ class BimPlanEditGuiSpacesMixin:
         session.selection.refresh.refresh_primary_selected_plan_target()
 
         self._assert_selected_plan_target(session, "region", region)
-        self.assertGreater(len(session._region_overlay_trackers), 0)
+        self.assertGreater(len(session.overlay_tracker_state.region_overlay_trackers), 0)
         self.assertIn("Region: Kitchen Zone", session.task_panel.status.text())
         self.assertIs(session.view.getActiveObject("Arch"), region)
 
@@ -795,7 +795,7 @@ class BimPlanEditGuiSpacesMixin:
         self.pump_gui_events()
 
         self.assertEqual(session.current_tool, "Pick Space Region")
-        self.assertEqual(len(session._space_region_candidates), 2)
+        self.assertEqual(len(session.space_region_pick_state.candidates), 2)
 
         session.shutdown(close_dialog=False)
         self.pump_gui_events()
@@ -835,9 +835,9 @@ class BimPlanEditGuiSpacesMixin:
         self.pump_gui_events()
 
         self.assertEqual(session.current_tool, "Pick Space Region")
-        self.assertEqual(len(session._space_region_candidates), 2)
+        self.assertEqual(len(session.space_region_pick_state.candidates), 2)
 
-        candidate = min(session._space_region_candidates, key=lambda item: item["area"])
+        candidate = min(session.space_region_pick_state.candidates, key=lambda item: item["area"])
         self.assertTrue(session.spaces.activate_space_region_candidate(candidate))
         self.pump_gui_events()
 
@@ -1078,10 +1078,10 @@ class BimPlanEditGuiSpacesMixin:
         self.pump_gui_events()
 
         self.assertEqual(session.current_tool, "Pick Space Region")
-        self.assertEqual(len(session._space_region_candidates), 2)
+        self.assertEqual(len(session.space_region_pick_state.candidates), 2)
         self.assertIn("pick region", session.task_panel.status.text().lower())
 
-        candidate = session._space_region_candidates[0]
+        candidate = session.space_region_pick_state.candidates[0]
         screen_pos = session.view.getPointOnScreen(candidate["sample_point"])
         self.assertIs(session.spaces.pick_space_region_candidate(screen_pos), candidate)
 
@@ -1146,9 +1146,9 @@ class BimPlanEditGuiSpacesMixin:
         self.pump_gui_events()
 
         self.assertEqual(session.current_tool, "Pick Space Region")
-        self.assertEqual(len(session._space_region_candidates), 2)
+        self.assertEqual(len(session.space_region_pick_state.candidates), 2)
 
-        candidate = min(session._space_region_candidates, key=lambda item: item["area"])
+        candidate = min(session.space_region_pick_state.candidates, key=lambda item: item["area"])
         self.assertTrue(session.spaces.activate_space_region_candidate(candidate))
         self.pump_gui_events()
 
@@ -1301,10 +1301,10 @@ class BimPlanEditGuiSpacesMixin:
 
         self.assertEqual(session.current_tool, "Pick Space Region")
         self.assertIs(session.space_region_pick_state.edit_space, space)
-        self.assertEqual(len(session._space_region_candidates), 2)
+        self.assertEqual(len(session.space_region_pick_state.candidates), 2)
 
         candidate = min(
-            session._space_region_candidates,
+            session.space_region_pick_state.candidates,
             key=lambda item: float(item["sample_point"].x),
         )
         self.assertTrue(session.spaces.activate_space_region_candidate(candidate))
@@ -1457,7 +1457,7 @@ class BimPlanEditGuiSpacesMixin:
         self.pump_gui_events()
 
         self.assertEqual(session.current_tool, "Pick Space Region")
-        self.assertEqual(len(session._space_region_candidates), 2)
+        self.assertEqual(len(session.space_region_pick_state.candidates), 2)
 
         session.shutdown(close_dialog=False)
         self.pump_gui_events()
@@ -1569,7 +1569,7 @@ class BimPlanEditGuiSpacesMixin:
 
         self.assertEqual(session.current_tool, "Select")
         self.assertIs(session.selection.state.get_selected_target_for_kind("space"), created_space)
-        self.assertEqual(len(session._space_region_candidates), 0)
+        self.assertEqual(len(session.space_region_pick_state.candidates), 0)
         self.assertAlmostEqual(created_space.Area.getValueAs("m^2").Value, 12.0, places=3)
 
         session.shutdown(close_dialog=False)
@@ -1786,7 +1786,7 @@ class BimPlanEditGuiSpacesMixin:
         self.assertEqual(
             session.selection.state.get_secondary_selected_plan_targets(), [("wall", wall)]
         )
-        self.assertGreater(len(session._secondary_selection_trackers), 0)
+        self.assertGreater(len(session.overlay_tracker_state.secondary_selection_trackers), 0)
         self.assertIn("Boundary candidates: 1 wall", session.task_panel.status.text())
 
         self.assertTrue(session.spaces.add_boundaries_to_selected_space())
