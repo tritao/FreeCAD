@@ -696,19 +696,19 @@ class PlanEditControlsShellMixin:
         self.session.wall_create.activate_rect_wall_tool()
 
     def on_window_clicked(self):
-        self.session.lifecycle.activate_window_tool()
+        self.session.windows.activate_window_tool()
 
     def on_space_clicked(self):
-        self.session.lifecycle.activate_space_tool()
+        self.session.spaces.activate_space_tool()
 
     def on_region_clicked(self):
-        self.session.lifecycle.activate_plan_region_tool()
+        self.session.spaces.activate_plan_region_tool()
 
     def on_separator_clicked(self):
-        self.session.lifecycle.activate_space_separator_tool()
+        self.session.spaces.activate_space_separator_tool()
 
     def on_move_clicked(self):
-        self.session.lifecycle.activate_move_tool()
+        self.session.move_tool.activate_move_tool()
 
     def on_join_clicked(self):
         self.session.wall_relations.activate_join_tool()

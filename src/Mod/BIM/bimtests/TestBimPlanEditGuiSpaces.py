@@ -606,7 +606,7 @@ class BimPlanEditGuiSpacesMixin:
         self.pump_gui_events()
         session.selection.refresh.refresh_primary_selected_plan_target()
 
-        self.assertTrue(session.lifecycle.activate_space_tool())
+        self.assertTrue(session.spaces.activate_space_tool())
         self.pump_gui_events()
 
         created_spaces = [
@@ -647,7 +647,7 @@ class BimPlanEditGuiSpacesMixin:
         self.pump_gui_events()
         selection_refresh.refresh_primary_selected_plan_target()
 
-        self.assertTrue(session.lifecycle.activate_space_tool())
+        self.assertTrue(session.spaces.activate_space_tool())
         self.pump_gui_events()
 
         created_spaces = [obj for obj in self.document.Objects if Draft.getType(obj) == "Space"]
@@ -698,7 +698,7 @@ class BimPlanEditGuiSpacesMixin:
         self.assertIs(session.selection.state.get_selected_target_for_kind("space"), space)
 
         with patch.object(FreeCADGui.Snapper, "getPoint", return_value=None):
-            session.lifecycle.activate_plan_region_tool()
+            session.spaces.activate_plan_region_tool()
             self.assertEqual(session.current_tool, "Region")
             for point in (
                 FreeCAD.Vector(1200, 1200, 0),
@@ -741,7 +741,7 @@ class BimPlanEditGuiSpacesMixin:
 
         before = {obj.Name for obj in self.document.Objects}
 
-        session.lifecycle.activate_space_separator_tool()
+        session.spaces.activate_space_separator_tool()
         self.assertEqual(session.current_tool, "Separator")
 
         session.spaces.handle_space_separator_point(FreeCAD.Vector(1000, 500, 0))
@@ -791,7 +791,7 @@ class BimPlanEditGuiSpacesMixin:
         self.assertIsNotNone(request)
         self.assertIn(separator, [obj for obj, _subnames in request["boundaries"]])
 
-        self.assertTrue(session.lifecycle.activate_space_tool())
+        self.assertTrue(session.spaces.activate_space_tool())
         self.pump_gui_events()
 
         self.assertEqual(session.current_tool, "Pick Space Region")
@@ -831,7 +831,7 @@ class BimPlanEditGuiSpacesMixin:
         self.assertIs(request["region_seed_space"], space)
         self.assertIn(separator, [obj for obj, _subnames in request["boundaries"]])
 
-        self.assertTrue(session.lifecycle.activate_space_tool())
+        self.assertTrue(session.spaces.activate_space_tool())
         self.pump_gui_events()
 
         self.assertEqual(session.current_tool, "Pick Space Region")
@@ -1142,7 +1142,7 @@ class BimPlanEditGuiSpacesMixin:
         self.assertIsNone(selection_state.get_selected_target_for_kind("wall"))
         self.assertIn("Boundary candidates: 1 wall", session.task_panel.status.text())
 
-        self.assertTrue(session.lifecycle.activate_space_tool())
+        self.assertTrue(session.spaces.activate_space_tool())
         self.pump_gui_events()
 
         self.assertEqual(session.current_tool, "Pick Space Region")
@@ -1453,7 +1453,7 @@ class BimPlanEditGuiSpacesMixin:
         session.selection.refresh.refresh_primary_selected_plan_target()
 
         self.assertIn("Boundary candidates: 1 wall", session.task_panel.status.text())
-        self.assertTrue(session.lifecycle.activate_space_tool())
+        self.assertTrue(session.spaces.activate_space_tool())
         self.pump_gui_events()
 
         self.assertEqual(session.current_tool, "Pick Space Region")
@@ -1598,7 +1598,7 @@ class BimPlanEditGuiSpacesMixin:
             patch("FreeCAD.Console.PrintError") as print_error,
             patch("FreeCAD.Console.PrintWarning") as print_warning,
         ):
-            self.assertFalse(session.lifecycle.activate_space_tool())
+            self.assertFalse(session.spaces.activate_space_tool())
             self.pump_gui_events()
 
         created_spaces = [

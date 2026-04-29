@@ -42,6 +42,7 @@ from bimplan import task_panel as plan_task_panel
 from bimplan.selection.selection import PlanSelectionAPI
 from bimplan.tools.symbol_edit import PlanSymbolsAPI
 from bimplan.tools.opening_edit import PlanOpeningsAPI
+from bimplan.tools.move import PlanMoveAPI
 from bimplan.providers.runtime import PlanProvidersAPI
 from bimplan.tools.wall_create import PlanWallCreateAPI
 from bimplan.tools.wall_relations import PlanWallRelationsAPI
@@ -179,6 +180,7 @@ class PlanEditSession:
         self.openings = PlanOpeningsAPI(self)
         self.wall_relations = PlanWallRelationsAPI(self)
         self.wall_create = PlanWallCreateAPI(self)
+        self.move_tool = PlanMoveAPI(self)
         self.interaction = PlanInteractionAPI(self)
         self.input = plan_input.PlanInputAPI(self)
         self.lifecycle = plan_lifecycle.PlanLifecycleAPI(self)

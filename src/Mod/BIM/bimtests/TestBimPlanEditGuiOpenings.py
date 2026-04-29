@@ -165,7 +165,7 @@ class BimPlanEditGuiOpeningsMixin:
             self.assertTrue(session.windows.can_place_window())
 
             before = {obj.Name for obj in self.document.Objects}
-            self.assertTrue(session.lifecycle.activate_window_tool())
+            self.assertTrue(session.windows.activate_window_tool())
             self.assertEqual(session.current_tool, "Window")
             self.assertIs(session.creation_preview_state.window_host_wall, wall)
             self.assertIn("callback", captured)
@@ -240,7 +240,7 @@ class BimPlanEditGuiOpeningsMixin:
                     wall_a, sync_gui_selection=True
                 )
             )
-            self.assertTrue(session.lifecycle.activate_window_tool())
+            self.assertTrue(session.windows.activate_window_tool())
             self.assertIs(session.creation_preview_state.window_host_wall, wall_a)
 
             before = {obj.Name for obj in self.document.Objects}
