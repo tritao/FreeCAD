@@ -4,7 +4,6 @@
 
 from contextlib import contextmanager
 
-from . import state_refresh as plan_selection_state_refresh
 from . import target_kinds as plan_target_kinds
 from .service_common import (
     _SessionAPI,
@@ -49,8 +48,7 @@ def resolve_selected_target_for_gui_object(
     preserved_kind=None,
     preserved_target=None,
 ):
-    return plan_selection_state_refresh.resolve_selected_target_for_gui_object(
-        session,
+    return session.selection.refresh.resolve_selected_target_for_gui_object(
         selected,
         pending_target_ref=pending_target_ref,
         preserved_target_ref=preserved_target_ref,

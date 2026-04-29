@@ -111,6 +111,7 @@ from bimplan.selection import (
 from bimplan.selection import selection as plan_selection_module
 from bimplan.selection import gui_sync as plan_selection_gui_sync
 from bimplan.selection.service_interaction import PlanSelectionActivationService
+from bimplan.selection.service_primary import PlanSelectionRefreshService
 from bimplan.selection import target_kinds as plan_target_kinds
 from bimplan.tools.spaces import (
     start_space_region_pick,
@@ -301,6 +302,11 @@ def _make_selection_stub(
 
 def _attach_activation_service(session):
     session.selection.activation = PlanSelectionActivationService(session)
+    return session
+
+
+def _attach_refresh_service(session):
+    session.selection.refresh = PlanSelectionRefreshService(session)
     return session
 
 
@@ -2002,8 +2008,10 @@ class TestBimPlanCore(unittest.TestCase):
             Label="Nightstand002",
             Document=SimpleNamespace(Name="TestDoc"),
         )
-        session = SimpleNamespace(
-            selection=_make_selection_stub(valid=True),
+        session = _attach_refresh_service(
+            SimpleNamespace(
+                selection=_make_selection_stub(valid=True),
+            )
         )
 
         self.assertEqual(
@@ -2022,12 +2030,14 @@ class TestBimPlanCore(unittest.TestCase):
             Label="Nightstand002",
             Document=SimpleNamespace(Name="TestDoc"),
         )
-        session = SimpleNamespace(
-            selection=_make_selection_stub(valid=True),
+        session = _attach_refresh_service(
+            SimpleNamespace(
+                selection=_make_selection_stub(valid=True),
+            )
         )
 
         with patch(
-            "bimplan.selection.state_refresh.plan_selection_gui_sync.is_visible_provider_target_object",
+            "bimplan.selection.service_primary.plan_selection_gui_sync.is_visible_provider_target_object",
             return_value=True,
         ):
             self.assertEqual(
