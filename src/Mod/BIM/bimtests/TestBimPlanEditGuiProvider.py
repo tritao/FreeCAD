@@ -235,8 +235,8 @@ class BimPlanEditGuiProviderMixin:
 
         session = BimPlanSession.PlanEditSession()
         session.doc = _DeletedDocument()
-        session._overlay_refresh_queued = True
-        session._dirty_plan_visuals.add(plan_document_visuals.PLAN_VISUAL_ALL)
+        session.overlay_refresh_state.overlay_refresh_queued = True
+        session.overlay_refresh_state.dirty_plan_visuals.add(plan_document_visuals.PLAN_VISUAL_ALL)
 
         try:
             with patch.object(
@@ -246,8 +246,8 @@ class BimPlanEditGuiProviderMixin:
                 session.overlays.manager.flush_plan_overlay_visual_refresh()
 
             refresh_visuals.assert_not_called()
-            self.assertFalse(session._overlay_refresh_queued)
-            self.assertFalse(session._dirty_plan_visuals)
+            self.assertFalse(session.overlay_refresh_state.overlay_refresh_queued)
+            self.assertFalse(session.overlay_refresh_state.dirty_plan_visuals)
             self.assertIsNone(session.doc)
         finally:
             session.shutdown(close_dialog=False, teardown=True)

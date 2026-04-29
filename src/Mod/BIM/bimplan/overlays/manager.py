@@ -20,16 +20,21 @@ def _session_is_inactive(session):
     return not session.document_visuals.document_is_alive()
 
 
+def _overlay_refresh_state(session):
+    return session.overlay_refresh_state
+
+
 def queue_plan_overlay_visual_refresh(session, visuals, visual_all, visual_selected_space):
     if _session_is_inactive(session):
         return
+    refresh_state = _overlay_refresh_state(session)
     dirty = set(visuals) if visuals else {visual_all}
     if visual_all in dirty or visual_selected_space in dirty:
         from . import spaces as overlay_spaces
 
         overlay_spaces.invalidate_selected_space_overlay_cache(session)
-    session._dirty_plan_visuals.update(dirty)
-    if session._overlay_refresh_queued:
+    refresh_state.dirty_plan_visuals.update(dirty)
+    if refresh_state.overlay_refresh_queued:
         return
     try:
         from PySide import QtCore
@@ -37,15 +42,16 @@ def queue_plan_overlay_visual_refresh(session, visuals, visual_all, visual_selec
         dirty = consume_dirty_plan_visuals(session, plan_document_visuals.PLAN_VISUAL_ALL)
         refresh_plan_overlay_visuals(session, dirty)
         return
-    session._overlay_refresh_queued = True
+    refresh_state.overlay_refresh_queued = True
     QtCore.QTimer.singleShot(0, lambda: flush_plan_overlay_visual_refresh(session))
 
 
 def queue_plan_overlay_view_scale_refresh(session, visual_view_scale, delay_ms):
     if _session_is_inactive(session):
         return
-    session._dirty_plan_visuals.add(visual_view_scale)
-    if session._overlay_refresh_queued or session._view_scale_overlay_refresh_queued:
+    refresh_state = _overlay_refresh_state(session)
+    refresh_state.dirty_plan_visuals.add(visual_view_scale)
+    if refresh_state.overlay_refresh_queued or refresh_state.view_scale_overlay_refresh_queued:
         return
     try:
         from PySide import QtCore
@@ -58,15 +64,16 @@ def queue_plan_overlay_view_scale_refresh(session, visual_view_scale, delay_ms):
         if dirty:
             refresh_plan_overlay_visuals(session, dirty)
         return
-    session._view_scale_overlay_refresh_queued = True
+    refresh_state.view_scale_overlay_refresh_queued = True
     QtCore.QTimer.singleShot(
         max(0, int(delay_ms)), lambda: flush_view_scale_overlay_refresh(session)
     )
 
 
 def consume_dirty_plan_visuals(session, visual_all, default_all=True):
-    dirty = set(session._dirty_plan_visuals)
-    session._dirty_plan_visuals.clear()
+    refresh_state = _overlay_refresh_state(session)
+    dirty = set(refresh_state.dirty_plan_visuals)
+    refresh_state.dirty_plan_visuals.clear()
     if dirty:
         return dirty
     if default_all:
@@ -75,7 +82,7 @@ def consume_dirty_plan_visuals(session, visual_all, default_all=True):
 
 
 def flush_plan_overlay_visual_refresh(session):
-    session._overlay_refresh_queued = False
+    _overlay_refresh_state(session).overlay_refresh_queued = False
     if _session_is_inactive(session):
         consume_dirty_plan_visuals(
             session,
@@ -88,7 +95,7 @@ def flush_plan_overlay_visual_refresh(session):
 
 
 def flush_view_scale_overlay_refresh(session):
-    session._view_scale_overlay_refresh_queued = False
+    _overlay_refresh_state(session).view_scale_overlay_refresh_queued = False
     if _session_is_inactive(session):
         consume_dirty_plan_visuals(
             session,
@@ -96,7 +103,7 @@ def flush_view_scale_overlay_refresh(session):
             default_all=False,
         )
         return
-    if session._overlay_refresh_queued:
+    if _overlay_refresh_state(session).overlay_refresh_queued:
         return
     dirty = consume_dirty_plan_visuals(
         session,

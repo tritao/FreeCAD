@@ -533,18 +533,6 @@ _PLAN_EDIT_SESSION_STATE_PROPERTIES = (
         ),
     ),
     (
-        "_ensure_overlay_refresh_state",
-        (
-            ("_overlay_refresh_queued", "overlay_refresh_queued", _coerce_bool),
-            (
-                "_view_scale_overlay_refresh_queued",
-                "view_scale_overlay_refresh_queued",
-                _coerce_bool,
-            ),
-            ("_dirty_plan_visuals", "dirty_plan_visuals", _coerce_set),
-        ),
-    ),
-    (
         "_ensure_performance_state",
         (("_plan_edit_params", "plan_edit_params", _coerce_identity),),
     ),

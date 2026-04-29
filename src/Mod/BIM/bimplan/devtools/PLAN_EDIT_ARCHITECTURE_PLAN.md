@@ -509,6 +509,7 @@ Current progress:
 - Private provider overlay read compatibility aliases are removed; provider overlay mode, visibility, and render cache use `provider_overlay_read_state`.
 - Private provider runtime compatibility aliases are removed; provider caches and target collection depth use `provider_runtime_state`.
 - Private provider transient compatibility aliases are removed; provider selections and handles use `provider_transient_state`.
+- Private overlay refresh compatibility aliases are removed; queued overlay refreshes use `overlay_refresh_state`.
 
 Steps:
 
