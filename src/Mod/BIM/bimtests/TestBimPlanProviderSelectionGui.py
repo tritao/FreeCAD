@@ -449,7 +449,7 @@ class TestBimPlanProviderSelectionGui(ArchWallGuiTestCase):
             handles = session.providers.get_selected_provider_edit_handles(marker)
             self.assertEqual(1, len(handles))
             self.assertEqual("move", handles[0].key)
-            self.assertEqual(1, len(session._provider_handle_trackers))
+            self.assertEqual(1, len(session.provider_transient_state.provider_handle_trackers))
 
         session.shutdown(close_dialog=False)
         self.pump_gui_events()
@@ -534,7 +534,7 @@ class TestBimPlanProviderSelectionGui(ArchWallGuiTestCase):
 
             handles = session.providers.get_selected_provider_edit_handles(marker)
             self.assertEqual(["move", "rehost"], [handle.key for handle in handles])
-            self.assertEqual(2, len(session._provider_handle_trackers))
+            self.assertEqual(2, len(session.provider_transient_state.provider_handle_trackers))
 
         session.shutdown(close_dialog=False)
         self.pump_gui_events()
