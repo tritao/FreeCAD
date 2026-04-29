@@ -259,9 +259,9 @@ def start_symbol_handle_point_pick(session, symbol, handle_role):
                 guide_end=start_point,
             )
         session.task_panels.refresh_task_panel_status(reason="selection")
-        FreeCAD.activeDraftCommand = session
+        session.snap.set_active_draft_command()
         with session.performance.plan_perf_trace_span("symbol_handle_focus_suppression"):
-            session.lifecycle.set_draft_point_focus_suppressed(True)
+            session.snap.set_point_focus_suppressed(True)
         with session.performance.plan_perf_trace_span("symbol_handle_snapper_get_point"):
             FreeCADGui.Snapper.getPoint(
                 last=start_point,
@@ -320,7 +320,7 @@ def finish_symbol_handle_point_pick(session, point=None, obj=None):
     interaction_state.edit_symbol_handle_role = None
     interaction_state.edit_symbol_start_placement = None
     interaction_state.edit_symbol_reference_point = None
-    FreeCAD.activeDraftCommand = None
+    session.snap.clear_active_draft_command()
     session.symbols.clear_symbol_edit_preview()
 
     if point is None or not symbol or not handle_role:
@@ -368,8 +368,8 @@ def cancel_symbol_handle_point_pick(session):
     interaction_state.edit_symbol_handle_role = None
     interaction_state.edit_symbol_start_placement = None
     interaction_state.edit_symbol_reference_point = None
-    session.lifecycle.stop_snapper()
-    FreeCAD.activeDraftCommand = None
+    session.snap.stop_snapper()
+    session.snap.clear_active_draft_command()
     session.symbols.clear_symbol_edit_preview()
     session.current_tool = "Select"
     if symbol:

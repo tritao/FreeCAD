@@ -347,12 +347,12 @@ def activate_window_tool(session):
     session.selection.sync.set_gui_selection_object(wall)
     creation_preview_state.window_host_wall = wall
     session.current_tool = "Window"
-    FreeCAD.activeDraftCommand = session
+    session.snap.set_active_draft_command()
     try:
         FreeCADGui.Snapper.setSelectMode(False)
     except Exception:
         pass
-    session.lifecycle.set_draft_point_focus_suppressed(True)
+    session.snap.set_point_focus_suppressed(True)
     FreeCADGui.Snapper.getPoint(
         callback=lambda point=None, obj=None: handle_window_tool_point(
             session,
@@ -388,10 +388,10 @@ def clear_window_preview(session):
 def cancel_window_tool(session, refresh=True):
     if not has_active_window_tool(session):
         return False
-    session.lifecycle.stop_snapper()
+    session.snap.stop_snapper()
     clear_window_preview(session)
     session.creation_preview_state.window_host_wall = None
-    FreeCAD.activeDraftCommand = None
+    session.snap.clear_active_draft_command()
     session.current_tool = "Select"
     if refresh:
         session.task_panels.refresh_task_panel_status()

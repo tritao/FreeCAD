@@ -123,7 +123,7 @@ def activate_rect_wall_tool(session):
     preview_state.rect_wall_start = None
     preview_state.rect_wall_params = get_wall_defaults(session)
     session.current_tool = "Rect Wall"
-    FreeCAD.activeDraftCommand = session
+    session.snap.set_active_draft_command()
     FreeCADGui.Snapper.getPoint(
         callback=session.wall_create.handle_rect_wall_point,
         title=translate("BIM_PlanEdit", "First rectangle corner"),
@@ -161,11 +161,11 @@ def cancel_rect_wall_tool(session, refresh=True):
     preview_state = _creation_preview_state(session)
     if not session.wall_create.has_active_rect_wall_tool():
         return False
-    session.lifecycle.stop_snapper()
+    session.snap.stop_snapper()
     session.wall_create.clear_rect_wall_preview()
     preview_state.rect_wall_start = None
     preview_state.rect_wall_params = None
-    FreeCAD.activeDraftCommand = None
+    session.snap.clear_active_draft_command()
     session.current_tool = "Select"
     if refresh:
         session.task_panels.refresh_task_panel_status()

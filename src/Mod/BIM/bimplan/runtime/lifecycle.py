@@ -3,7 +3,6 @@
 """Shared lifecycle helpers for BIM Plan Edit."""
 
 import FreeCAD
-import FreeCADGui
 from bimplan.runtime import command_gate as plan_command_gate
 from bimplan.runtime import tools as plan_runtime_tools
 from bimplan.tools import spaces as plan_spaces
@@ -42,12 +41,6 @@ class PlanLifecycleAPI:
 
     def cancel_pending_edit(self):
         return cancel_pending_edit(self.session)
-
-    def stop_snapper(self):
-        return stop_snapper(self.session)
-
-    def set_draft_point_focus_suppressed(self, suppressed):
-        return set_draft_point_focus_suppressed(self.session, suppressed)
 
 
 def connect_teardown_signal(session, signal):
@@ -541,9 +534,9 @@ def cancel_pending_edit(session):
         _reset_pending_edit_state(session)
         session.wall_relations.clear_plan_relation_status()
         return
-    stop_snapper(session)
+    session.snap.stop_snapper()
     session.snap.pop_opening_move_snap_profile()
-    FreeCAD.activeDraftCommand = None
+    session.snap.clear_active_draft_command()
     _reset_pending_edit_state(session, clear_opening_edit=True)
     session.wall_relations.clear_plan_relation_status()
     session.overlays.walls.sync_wall_grips()
@@ -552,42 +545,3 @@ def cancel_pending_edit(session):
         kinds=plan_target_kinds.PENDING_EDIT_VISUAL_SYNC_KINDS,
         force=True,
     )
-
-
-def stop_snapper(session):
-    del session
-    snapper = getattr(FreeCADGui, "Snapper", None)
-    if not snapper:
-        return
-    toolbar = getattr(FreeCADGui, "draftToolBar", None)
-    _set_toolbar_point_focus_suppressed(toolbar, False)
-    try:
-        snapper.getPoint()
-        snapper.off()
-    except (AttributeError, ReferenceError, RuntimeError, TypeError):
-        pass
-
-
-def set_draft_point_focus_suppressed(session, suppressed):
-    del session
-    toolbar = getattr(FreeCADGui, "draftToolBar", None)
-    if not toolbar:
-        return
-    _set_toolbar_point_focus_suppressed(toolbar, bool(suppressed))
-
-
-def _set_toolbar_point_focus_suppressed(toolbar, suppressed):
-    if toolbar is None:
-        return
-    set_focus_suppressed = getattr(toolbar, "setPointFocusSuppressed", None)
-    if callable(set_focus_suppressed):
-        try:
-            set_focus_suppressed(bool(suppressed))
-        except (AttributeError, RuntimeError, TypeError):
-            pass
-        return
-    if getattr(toolbar, "suppress_point_focus", None) is not None:
-        try:
-            toolbar.suppress_point_focus = bool(suppressed)
-        except (AttributeError, RuntimeError, TypeError):
-            pass

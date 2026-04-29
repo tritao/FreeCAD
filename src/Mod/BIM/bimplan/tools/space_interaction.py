@@ -80,7 +80,7 @@ def _get_selected_space_for_activation(session):
 
 def _start_snap_tool(session, tool_name, callback, title, *, movecallback=None):
     session.current_tool = tool_name
-    FreeCAD.activeDraftCommand = session
+    session.snap.set_active_draft_command()
     kwargs = {
         "callback": callback,
         "title": title,
@@ -175,10 +175,10 @@ def activate_space_tool(session):
 def _cancel_snap_tool(session, *, is_active, clear_preview, reset_state, sync_kinds, refresh=True):
     if not is_active():
         return False
-    session.lifecycle.stop_snapper()
+    session.snap.stop_snapper()
     clear_preview()
     reset_state()
-    FreeCAD.activeDraftCommand = None
+    session.snap.clear_active_draft_command()
     session.current_tool = "Select"
     if refresh:
         session.task_panels.refresh_task_panel_status()
@@ -559,14 +559,14 @@ def _begin_space_text_position_pick(session, space):
     )
     session.overlays.spaces.sync_secondary_selected_overlays()
     session.task_panels.refresh_task_panel_status()
-    FreeCAD.activeDraftCommand = session
-    session.lifecycle.set_draft_point_focus_suppressed(True)
+    session.snap.set_active_draft_command()
+    session.snap.set_point_focus_suppressed(True)
 
 
 def _end_space_text_position_pick(session):
     reset_space_text_pick_state(session)
-    FreeCAD.activeDraftCommand = None
-    session.lifecycle.set_draft_point_focus_suppressed(False)
+    session.snap.clear_active_draft_command()
+    session.snap.set_point_focus_suppressed(False)
 
 
 def _apply_space_text_position(session, space, point):
@@ -606,7 +606,7 @@ def finish_space_text_position_pick(session, point=None, obj=None):
 def cancel_space_text_position_pick(session):
     space = session.interaction_state.edit_space or _get_selected_space_text_target(session)
     _end_space_text_position_pick(session)
-    session.lifecycle.stop_snapper()
+    session.snap.stop_snapper()
     session.current_tool = "Select"
     if space:
         session.selection.state.set_selected_plan_target("space", space, pending_restore=True)
