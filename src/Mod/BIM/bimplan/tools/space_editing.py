@@ -4,7 +4,7 @@
 
 import FreeCAD
 
-from bimplan.selection import target_kinds as plan_target_kinds
+from bimplan.selection import kinds as plan_target_kinds
 from bimplan.tools import space_boundaries as plan_space_boundaries
 
 translate = FreeCAD.Qt.translate

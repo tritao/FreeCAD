@@ -7,7 +7,7 @@ import FreeCAD
 from bimplan.picking import debug as plan_picking_debug
 from bimplan.providers import picking as plan_provider_picking
 from bimplan.selection import edit_nodes as plan_edit_nodes
-from bimplan.selection import target_kinds as plan_target_kinds
+from bimplan.selection import kinds as plan_target_kinds
 from bimplan.selection import targets as plan_targets
 
 

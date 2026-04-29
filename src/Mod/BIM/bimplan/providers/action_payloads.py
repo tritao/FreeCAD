@@ -10,7 +10,7 @@ import FreeCAD
 import FreeCADGui
 
 from bimplan.providers import payloads as plan_provider_payloads
-from bimplan.selection import target_kinds as plan_target_kinds
+from bimplan.selection import kinds as plan_target_kinds
 
 
 @dataclass(frozen=True)

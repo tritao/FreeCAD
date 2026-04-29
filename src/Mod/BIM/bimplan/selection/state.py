@@ -10,9 +10,9 @@ import FreeCADGui
 from bimplan.runtime import tools as plan_runtime_tools
 
 from . import gui_sync as plan_selection_gui_sync
-from . import target_dispatch as plan_target_dispatch
-from . import target_kinds as plan_target_kinds
-from .service_common import (
+from . import targets as plan_targets
+from . import kinds as plan_target_kinds
+from .common import (
     _SessionAPI,
     _clear_gui_preselection,
     _get_gui_preselection_object,
@@ -218,7 +218,7 @@ class PlanSelectionStateService(_SessionAPI):
         validate = getattr(self.session, "_is_valid_plan_target", None)
         if callable(validate):
             return bool(validate(kind, obj))
-        return plan_target_dispatch.validate_plan_target(self.session, kind, obj)
+        return plan_targets.validate_plan_target(self.session, kind, obj)
 
     def normalize_plan_target_list(self, targets):
         return list(self._iter_normalized_plan_targets(targets))
@@ -316,16 +316,16 @@ class PlanSelectionStateService(_SessionAPI):
             self.session.overlays.walls.sync_junction_node_overlays()
             self.session.overlays.openings.sync_selected_wall_opening_context_overlay()
             self.session.overlays.walls.sync_hovered_wall_opening_context_overlay()
-            plan_target_dispatch.sync_hovered_target_visuals(
+            plan_targets.sync_hovered_target_visuals(
                 self.session,
                 kinds=(plan_target_kinds.PLAN_TARGET_OPENING,),
             )
             if not preserve_hovered_symbol_overlay:
-                plan_target_dispatch.sync_hovered_target_visuals(
+                plan_targets.sync_hovered_target_visuals(
                     self.session,
                     kinds=(plan_target_kinds.PLAN_TARGET_SYMBOL,),
                 )
-            plan_target_dispatch.sync_hovered_target_visuals(
+            plan_targets.sync_hovered_target_visuals(
                 self.session,
                 kinds=(
                     plan_target_kinds.PLAN_TARGET_SPACE,
@@ -620,7 +620,7 @@ class PlanSelectionRefreshService(_SessionAPI):
     ):
         if include_wall_grips:
             self.session.overlays.walls.clear_wall_grips()
-        plan_target_dispatch.clear_selected_target_visuals(
+        plan_targets.clear_selected_target_visuals(
             self.session,
             kinds=kinds,
             clear_handle_kinds=clear_handle_kinds,
@@ -823,14 +823,14 @@ class PlanSelectionRefreshService(_SessionAPI):
                 "sync_hovered_wall_opening_context_overlay"
             ):
                 self.session.overlays.walls.sync_hovered_wall_opening_context_overlay()
-            plan_target_dispatch.sync_selected_target_visuals(
+            plan_targets.sync_selected_target_visuals(
                 self.session,
                 kinds=plan_target_kinds.PRIMARY_SELECTED_VISUAL_SYNC_KINDS,
                 previous_kind=previous_kind,
                 previous_obj=previous_obj,
                 trace_style="by_method",
             )
-            plan_target_dispatch.sync_hovered_target_visuals(
+            plan_targets.sync_hovered_target_visuals(
                 self.session,
                 kinds=(
                     plan_target_kinds.PLAN_TARGET_SYMBOL,
@@ -838,13 +838,13 @@ class PlanSelectionRefreshService(_SessionAPI):
                 ),
                 trace_style="by_method",
             )
-            plan_target_dispatch.sync_selected_target_visuals(
+            plan_targets.sync_selected_target_visuals(
                 self.session,
                 kinds=(plan_target_kinds.PLAN_TARGET_PROVIDER,),
                 force=True,
                 trace_style="by_method",
             )
-            plan_target_dispatch.sync_hovered_target_visuals(
+            plan_targets.sync_hovered_target_visuals(
                 self.session,
                 kinds=(
                     plan_target_kinds.PLAN_TARGET_OPENING,

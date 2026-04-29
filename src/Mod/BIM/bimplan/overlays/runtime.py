@@ -10,8 +10,8 @@ from bimplan.overlays import providers as provider_overlays
 from bimplan.overlays import spaces as space_overlays
 from bimplan.overlays import symbols as symbol_overlays
 from bimplan.overlays import walls as wall_overlays
-from bimplan.selection import target_dispatch as plan_target_dispatch
-from bimplan.selection import target_kinds as plan_target_kinds
+from bimplan.selection import targets as plan_targets
+from bimplan.selection import kinds as plan_target_kinds
 
 _PLAN_VIEW_SCALE_REFRESH_DELAY_MS = 40
 
@@ -33,9 +33,9 @@ def discard_runtime_references(session):
 def clear_begin_teardown_visuals(session):
     session.overlays.walls.clear_junction_node_overlays()
     session.overlays.walls.clear_hovered_wall_opening_context_overlay()
-    plan_target_dispatch.clear_hovered_target_visuals(session)
+    plan_targets.clear_hovered_target_visuals(session)
     session.overlays.walls.clear_wall_grips()
-    plan_target_dispatch.clear_selected_target_visuals(
+    plan_targets.clear_selected_target_visuals(
         session,
         clear_handle_kinds=(
             plan_target_kinds.PLAN_TARGET_PROVIDER,
@@ -57,7 +57,7 @@ def clear_begin_teardown_visuals(session):
 def clear_shutdown_visuals(session):
     session.overlays.walls.clear_junction_node_overlays()
     session.overlays.walls.clear_hovered_wall_opening_context_overlay()
-    plan_target_dispatch.clear_hovered_target_visuals(
+    plan_targets.clear_hovered_target_visuals(
         session,
         kinds=(
             plan_target_kinds.PLAN_TARGET_WALL,
@@ -67,7 +67,7 @@ def clear_shutdown_visuals(session):
         ),
     )
     session.overlays.walls.clear_wall_grips()
-    plan_target_dispatch.clear_selected_target_visuals(
+    plan_targets.clear_selected_target_visuals(
         session,
         clear_handle_kinds=(
             plan_target_kinds.PLAN_TARGET_OPENING,

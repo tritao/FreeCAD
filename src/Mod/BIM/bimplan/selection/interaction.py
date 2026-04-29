@@ -9,10 +9,9 @@ from bimplan.picking import hover as plan_hover_picking
 
 from . import edit_nodes as plan_edit_nodes
 from . import gui_sync as plan_selection_gui_sync
-from . import target_dispatch as plan_target_dispatch
-from . import target_kinds as plan_target_kinds
+from . import kinds as plan_target_kinds
 from . import targets as plan_targets
-from .service_common import _SessionAPI, get_plan_target_state_key
+from .common import _SessionAPI, get_plan_target_state_key
 
 
 @dataclass(frozen=True)
@@ -258,27 +257,27 @@ class PlanSelectionHoverService(_SessionAPI):
             self.session.task_panels.refresh_task_panel_status(reason="full")
 
     def set_hovered_opening(self, obj):
-        return plan_target_dispatch.set_hovered_target(
+        return plan_targets.set_hovered_target(
             self.session, plan_target_kinds.PLAN_TARGET_OPENING, obj
         )
 
     def set_hovered_symbol(self, obj):
-        return plan_target_dispatch.set_hovered_target(
+        return plan_targets.set_hovered_target(
             self.session, plan_target_kinds.PLAN_TARGET_SYMBOL, obj
         )
 
     def set_hovered_provider(self, obj):
-        return plan_target_dispatch.set_hovered_target(
+        return plan_targets.set_hovered_target(
             self.session, plan_target_kinds.PLAN_TARGET_PROVIDER, obj
         )
 
     def set_hovered_space(self, obj):
-        return plan_target_dispatch.set_hovered_target(
+        return plan_targets.set_hovered_target(
             self.session, plan_target_kinds.PLAN_TARGET_SPACE, obj
         )
 
     def set_hovered_region(self, obj):
-        return plan_target_dispatch.set_hovered_target(
+        return plan_targets.set_hovered_target(
             self.session, plan_target_kinds.PLAN_TARGET_REGION, obj
         )
 
@@ -305,7 +304,7 @@ class PlanSelectionActivationService(_SessionAPI):
         return _TARGET_ACTIVATION_BEHAVIORS.get(kind)
 
     def queue_restore_selected_plan_target(self, kind, obj):
-        plan_target_dispatch.queue_restore_selected_target(self.session, kind, obj)
+        plan_targets.queue_restore_selected_target(self.session, kind, obj)
 
     def select_plan_target_for_plan_edit(
         self,
@@ -316,7 +315,7 @@ class PlanSelectionActivationService(_SessionAPI):
         defer_gui_selection=False,
         defer_wall_grips=False,
     ):
-        if not plan_target_dispatch.validate_plan_target(self.session, kind, obj):
+        if not plan_targets.validate_plan_target(self.session, kind, obj):
             return False
         previous_kind, previous_obj = self.session.selection.state.get_selected_plan_target()
         self.session.current_tool = plan_runtime_tools.PlanTool.SELECT
@@ -340,7 +339,7 @@ class PlanSelectionActivationService(_SessionAPI):
         self.session.overlays.walls.apply_selected_wall_selection_feedback(
             defer_grips=kind == plan_target_kinds.PLAN_TARGET_WALL and defer_wall_grips
         )
-        plan_target_dispatch.sync_selected_target_visuals(
+        plan_targets.sync_selected_target_visuals(
             self.session,
             kinds=plan_target_kinds.CLEAR_PLAN_SELECTION_VISUAL_KINDS,
             previous_kind=previous_kind,
@@ -602,7 +601,7 @@ class PlanSelectionActivationService(_SessionAPI):
                 self.session.selection.state.set_selected_plan_target()
                 self.session.provider_transient_state.provider_selected_objects = []
             with self.session.performance.plan_perf_trace_span("clear_plan_selection_hover_state"):
-                plan_target_dispatch.clear_hovered_targets(self.session)
+                plan_targets.clear_hovered_targets(self.session)
             with self.session.performance.plan_perf_trace_span("clear_plan_selection_wall_grips"):
                 self.session.overlays.walls.clear_wall_grips()
                 self.session.overlays.walls.clear_selected_wall_overlay()
@@ -610,7 +609,7 @@ class PlanSelectionActivationService(_SessionAPI):
                 "clear_plan_selection_secondary_overlays"
             ):
                 self.session.overlays.spaces.sync_secondary_selected_overlays()
-            plan_target_dispatch.sync_selected_target_visuals(
+            plan_targets.sync_selected_target_visuals(
                 self.session,
                 kinds=plan_target_kinds.CLEAR_PLAN_SELECTION_VISUAL_KINDS,
                 force=True,
@@ -646,7 +645,7 @@ class PlanSelectionActivationService(_SessionAPI):
         else:
             self.session.provider_transient_state.provider_selected_objects = [target_ref.obj]
             self.session.selection.state.set_pending_selected_plan_target()
-        plan_target_dispatch.clear_hovered_targets(self.session)
+        plan_targets.clear_hovered_targets(self.session)
         self.session.selection.sync.set_gui_selection_object(target_ref.obj)
         self.session.selection.refresh.refresh_primary_selected_plan_target()
         self.session.input.claim_left_button_click(event_callback)
@@ -680,7 +679,7 @@ class PlanSelectionActivationService(_SessionAPI):
 
     def _apply_additive_selection_update(self, selection, next_kind, next_obj, event_callback=None):
         self.session.selection.state.set_pending_selected_plan_target(next_kind, next_obj)
-        plan_target_dispatch.clear_hovered_targets(self.session)
+        plan_targets.clear_hovered_targets(self.session)
         plan_selection_gui_sync.set_gui_selection(self.session, selection)
         self.session.selection.refresh.refresh_primary_selected_plan_target()
         self.session.input.claim_left_button_click(event_callback)

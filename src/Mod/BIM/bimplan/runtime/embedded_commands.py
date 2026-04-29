@@ -4,8 +4,8 @@
 
 from draftguitools import gui_base
 
-from bimplan.selection import target_dispatch as plan_target_dispatch
-from bimplan.selection import target_kinds as plan_target_kinds
+from bimplan.selection import targets as plan_targets
+from bimplan.selection import kinds as plan_target_kinds
 
 
 class PlanEmbeddedToolsAPI:
@@ -180,7 +180,7 @@ def on_command_finished(session, tool_name, command=None):
 def start(session, tool_name, command, host_class=None):
     interaction_state = session.interaction_state
     session.current_tool = tool_name
-    plan_target_dispatch.clear_hovered_targets(
+    plan_targets.clear_hovered_targets(
         session,
         kinds=plan_target_kinds.EMBEDDED_TOOL_CLEAR_HOVERED_KINDS,
     )

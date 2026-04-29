@@ -6,7 +6,7 @@ import ArchWindow
 import FreeCAD
 import FreeCADGui
 from bimplan.runtime import tools as plan_runtime_tools
-from bimplan.selection import target_kinds as plan_target_kinds
+from bimplan.selection import kinds as plan_target_kinds
 from bimplan.tools import hosted_openings as plan_hosted_openings
 
 translate = FreeCAD.Qt.translate
