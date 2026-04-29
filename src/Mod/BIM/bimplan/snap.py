@@ -2,6 +2,7 @@
 
 """Draft snap profile helpers for BIM Plan Edit."""
 
+import FreeCAD
 import FreeCADGui
 
 
@@ -63,6 +64,51 @@ def pop_opening_move_snap_profile(session):
     session.opening_transient_state.opening_move_snap_profile_pushed = False
 
 
+def set_active_draft_command(command):
+    FreeCAD.activeDraftCommand = command
+
+
+def clear_active_draft_command():
+    FreeCAD.activeDraftCommand = None
+
+
+def stop_snapper():
+    snapper = _get_snapper()
+    if not snapper:
+        return
+    toolbar = getattr(FreeCADGui, "draftToolBar", None)
+    _set_toolbar_point_focus_suppressed(toolbar, False)
+    try:
+        snapper.getPoint()
+        snapper.off()
+    except (AttributeError, ReferenceError, RuntimeError, TypeError):
+        pass
+
+
+def set_point_focus_suppressed(suppressed):
+    toolbar = getattr(FreeCADGui, "draftToolBar", None)
+    if not toolbar:
+        return
+    _set_toolbar_point_focus_suppressed(toolbar, bool(suppressed))
+
+
+def _set_toolbar_point_focus_suppressed(toolbar, suppressed):
+    if toolbar is None:
+        return
+    set_focus_suppressed = getattr(toolbar, "setPointFocusSuppressed", None)
+    if callable(set_focus_suppressed):
+        try:
+            set_focus_suppressed(bool(suppressed))
+        except (AttributeError, RuntimeError, TypeError):
+            pass
+        return
+    if getattr(toolbar, "suppress_point_focus", None) is not None:
+        try:
+            toolbar.suppress_point_focus = bool(suppressed)
+        except (AttributeError, RuntimeError, TypeError):
+            pass
+
+
 class PlanSnapAPI:
     """Owned session surface for Plan Edit snap-profile behavior."""
 
@@ -88,3 +134,15 @@ class PlanSnapAPI:
 
     def pop_opening_move_snap_profile(self):
         return pop_opening_move_snap_profile(self.session)
+
+    def set_active_draft_command(self):
+        return set_active_draft_command(self.session)
+
+    def clear_active_draft_command(self):
+        return clear_active_draft_command()
+
+    def stop_snapper(self):
+        return stop_snapper()
+
+    def set_point_focus_suppressed(self, suppressed):
+        return set_point_focus_suppressed(suppressed)

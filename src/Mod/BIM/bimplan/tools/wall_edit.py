@@ -242,7 +242,7 @@ def resume_wall_edit_point_pick(session):
         }.get(mode, translate("BIM_PlanEdit", "Pick wall point"))
         last = get_wall_edit_reference_point(session)
 
-        FreeCAD.activeDraftCommand = session
+        session.snap.set_active_draft_command()
         if getattr(FreeCADGui, "Snapper", None):
             try:
                 with session.performance.plan_perf_trace_span("wall_edit_snapper_set_select_mode"):
@@ -250,7 +250,7 @@ def resume_wall_edit_point_pick(session):
             except Exception:
                 pass
         with session.performance.plan_perf_trace_span("wall_edit_focus_suppression"):
-            session.lifecycle.set_draft_point_focus_suppressed(True)
+            session.snap.set_point_focus_suppressed(True)
         with session.performance.plan_perf_trace_span("wall_edit_snapper_get_point"):
             FreeCADGui.Snapper.getPoint(
                 callback=lambda point=None, obj=None: finish_wall_edit(
@@ -1459,7 +1459,7 @@ def start_wall_readout_edit(session, cycle=False):
     if state.wall_edit_length_edit_queued:
         return True
     state.wall_edit_length_edit_queued = True
-    session.lifecycle.stop_snapper()
+    session.snap.stop_snapper()
     try:
         from PySide import QtCore
     except ImportError:

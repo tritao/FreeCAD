@@ -73,12 +73,12 @@ def arm_provider_point_tool(session):
     snapper = getattr(FreeCADGui, "Snapper", None)
     if snapper is None:
         return False
-    FreeCAD.activeDraftCommand = session
+    session.snap.set_active_draft_command()
     try:
         snapper.setSelectMode(False)
     except Exception:
         pass
-    session.lifecycle.set_draft_point_focus_suppressed(True)
+    session.snap.set_point_focus_suppressed(True)
     try:
         snapper.getPoint(
             callback=lambda point=None, obj=None: handle_provider_point_tool_point(
@@ -91,7 +91,7 @@ def arm_provider_point_tool(session):
             noTracker=True,
         )
     except Exception:
-        session.lifecycle.set_draft_point_focus_suppressed(False)
+        session.snap.set_point_focus_suppressed(False)
         return False
     session.viewport.queue_focus_plan_view()
     return True
@@ -101,13 +101,13 @@ def cancel_provider_point_tool(session, refresh=True):
     if not has_active_provider_point_tool(session):
         session.overlays.providers.clear_provider_point_preview()
         return False
-    session.lifecycle.stop_snapper()
+    session.snap.stop_snapper()
     state = _provider_point_state(session)
     state.provider_point_tool = None
     state.provider_point_host_target = None
     state.provider_point_host_source = ""
     session.overlays.providers.clear_provider_point_preview()
-    FreeCAD.activeDraftCommand = None
+    session.snap.clear_active_draft_command()
     session.current_tool = plan_runtime_tools.PlanTool.SELECT
     if refresh:
         session.task_panels.refresh_task_panel_status()

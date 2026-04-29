@@ -259,11 +259,11 @@ def start_opening_handle_point_pick(session, opening, handle_index, handle):
         with session.performance.plan_perf_trace_span("start_opening_handle_preview"):
             queue_opening_move_initial_preview(session, opening, handle.point)
         session.task_panels.refresh_task_panel_status(reason="selection")
-        FreeCAD.activeDraftCommand = session
+        session.snap.set_active_draft_command()
         with session.performance.plan_perf_trace_span("opening_handle_push_snap_profile"):
             session.snap.push_opening_move_snap_profile()
         with session.performance.plan_perf_trace_span("opening_handle_focus_suppression"):
-            session.lifecycle.set_draft_point_focus_suppressed(True)
+            session.snap.set_point_focus_suppressed(True)
         with session.performance.plan_perf_trace_span("opening_handle_snapper_get_point"):
             FreeCADGui.Snapper.getPoint(
                 last=handle.point,
@@ -306,7 +306,7 @@ def finish_opening_handle_point_pick(session, point=None, obj=None):
     interaction_state.edit_opening = None
     interaction_state.edit_opening_handle_index = None
     session.snap.pop_opening_move_snap_profile()
-    FreeCAD.activeDraftCommand = None
+    session.snap.clear_active_draft_command()
     session.openings.clear_opening_move_preview()
     opening_transient_state.edit_opening_move_raw_point = None
 
@@ -355,9 +355,9 @@ def cancel_opening_handle_point_pick(session):
     opening = interaction_state.edit_opening
     interaction_state.edit_opening = None
     interaction_state.edit_opening_handle_index = None
-    session.lifecycle.stop_snapper()
+    session.snap.stop_snapper()
     session.snap.pop_opening_move_snap_profile()
-    FreeCAD.activeDraftCommand = None
+    session.snap.clear_active_draft_command()
     session.openings.clear_opening_move_preview()
     opening_transient_state.edit_opening_move_anchor = "center"
     opening_transient_state.edit_opening_move_raw_point = None

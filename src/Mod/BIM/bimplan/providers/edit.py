@@ -169,8 +169,8 @@ def start_provider_handle_point_pick(session, provider_obj, handle_index, handle
     session.overlays.providers.clear_selected_provider_overlay()
     session.overlays.providers.clear_selected_provider_handles()
     session.task_panels.refresh_task_panel_status()
-    FreeCAD.activeDraftCommand = session
-    session.lifecycle.set_draft_point_focus_suppressed(True)
+    session.snap.set_active_draft_command()
+    session.snap.set_point_focus_suppressed(True)
     FreeCADGui.Snapper.getPoint(
         last=start_point,
         callback=finish_provider_handle_point_pick,
@@ -192,7 +192,7 @@ def finish_provider_handle_point_pick(session, point=None, obj=None):
     interaction_state.edit_provider = None
     interaction_state.edit_provider_handle_index = None
     interaction_state.edit_provider_handle = None
-    FreeCAD.activeDraftCommand = None
+    session.snap.clear_active_draft_command()
 
     if point is None or provider_obj is None:
         session.current_tool = "Select"
@@ -274,8 +274,8 @@ def cancel_provider_handle_point_pick(session):
     interaction_state.edit_provider = None
     interaction_state.edit_provider_handle_index = None
     interaction_state.edit_provider_handle = None
-    session.lifecycle.stop_snapper()
-    FreeCAD.activeDraftCommand = None
+    session.snap.stop_snapper()
+    session.snap.clear_active_draft_command()
     session.current_tool = "Select"
     if provider_obj is not None:
         restore_selected_provider(session, provider_obj)
