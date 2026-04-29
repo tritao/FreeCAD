@@ -4,12 +4,12 @@
 
 import FreeCAD
 import FreeCADGui
+from bimplan.providers import action_payloads as plan_provider_action_payloads
+from bimplan.providers import builtin_edit as plan_provider_builtin_edit
 from bimplan.providers import payloads as plan_provider_payloads
-from bimplan.providers import PlanEditHandleSpec, PlanOverlayMarkerKind, PlanToolInteraction
-from bimplan.providers import point as plan_provider_point
+from bimplan.providers import PlanToolInteraction
 from bimplan.providers import runtime as plan_provider_runtime
 from bimplan.runtime import tools as plan_runtime_tools
-from bimplan.selection import target_kinds as plan_target_kinds
 
 translate = FreeCAD.Qt.translate
 
@@ -54,49 +54,26 @@ def get_selected_provider_edit_handles(session, provider_obj):
         handles.append(handle)
     if handles:
         return handles
-    return _get_builtin_provider_edit_handles(session, provider_obj, provider_target)
+    return plan_provider_builtin_edit.get_builtin_provider_edit_handles(
+        session,
+        provider_obj,
+        provider_target,
+    )
 
 
 def can_move_provider_target_by_placement(session, provider_obj):
-    if provider_obj is None or not plan_provider_runtime.is_plan_provider_target_object(
-        session, provider_obj
-    ):
-        return False
-    if _has_provider_coordinate_properties(provider_obj):
-        return True
-    placement = getattr(provider_obj, "Placement", None)
-    if placement is None:
-        return False
-    try:
-        local_placement = session.visibility.copy_placement(placement)
-        global_placement = session.visibility.get_plan_object_global_placement(provider_obj)
-    except Exception:
-        return False
-    try:
-        if local_placement.Base.sub(global_placement.Base).Length > 1e-6:
-            return False
-        local_axis = local_placement.Rotation.multVec(FreeCAD.Vector(1, 0, 0))
-        global_axis = global_placement.Rotation.multVec(FreeCAD.Vector(1, 0, 0))
-        if local_axis.sub(global_axis).Length > 1e-6:
-            return False
-    except Exception:
-        return False
-    return True
+    return plan_provider_builtin_edit.can_move_provider_target_by_placement(
+        session,
+        provider_obj,
+    )
 
 
 def can_rehost_provider_target(session, provider_obj, host_obj=None):
-    if provider_obj is None or not plan_provider_runtime.is_plan_provider_target_object(
-        session, provider_obj
-    ):
-        return False
-    try:
-        import Arch
-    except Exception:
-        return False
-    try:
-        return bool(Arch.canRehostObject(provider_obj, host_obj))
-    except Exception:
-        return False
+    return plan_provider_builtin_edit.can_rehost_provider_target(
+        session,
+        provider_obj,
+        host_obj=host_obj,
+    )
 
 
 def activate_provider_handle(session, provider_obj, handle_index):
@@ -153,7 +130,7 @@ def start_provider_handle_point_pick(session, provider_obj, handle_index, handle
     start_point = _get_handle_point_vector(handle)
     if start_point is None:
         return
-    session.current_tool = "Move Provider"
+    session.current_tool = plan_runtime_tools.PlanTool.MOVE_PROVIDER
     session.selection.hover.set_hovered_wall(None)
     session.selection.hover.set_hovered_opening(None)
     session.selection.hover.set_hovered_symbol(None)
@@ -194,23 +171,23 @@ def finish_provider_handle_point_pick(session, point=None, obj=None):
     session.snap.clear_active_draft_command()
 
     if point is None or provider_obj is None:
-        session.current_tool = "Select"
+        session.current_tool = plan_runtime_tools.PlanTool.SELECT
         restore_selected_provider(session, provider_obj)
         return
 
     if handle is None:
-        session.current_tool = "Select"
+        session.current_tool = plan_runtime_tools.PlanTool.SELECT
         restore_selected_provider(session, provider_obj)
         return
     target_point = _resolve_provider_handle_target_point(session, provider_obj, point)
     if target_point is None:
-        session.current_tool = "Select"
+        session.current_tool = plan_runtime_tools.PlanTool.SELECT
         restore_selected_provider(session, provider_obj)
         return
 
     action_key = str(getattr(handle, "action_key", "") or "").strip()
     provider_id = str(getattr(handle, "provider_id", "") or "").strip()
-    session.current_tool = "Select"
+    session.current_tool = plan_runtime_tools.PlanTool.SELECT
     payload = _build_provider_handle_payload(
         session,
         provider_obj,
@@ -275,7 +252,7 @@ def cancel_provider_handle_point_pick(session):
     interaction_state.edit_provider_handle = None
     session.snap.stop_snapper()
     session.snap.clear_active_draft_command()
-    session.current_tool = "Select"
+    session.current_tool = plan_runtime_tools.PlanTool.SELECT
     if provider_obj is not None:
         restore_selected_provider(session, provider_obj)
         return
@@ -284,7 +261,7 @@ def cancel_provider_handle_point_pick(session):
 
 
 def restore_selected_provider(session, provider_obj):
-    session.current_tool = "Select"
+    session.current_tool = plan_runtime_tools.PlanTool.SELECT
     if provider_obj is not None and plan_provider_runtime.is_plan_provider_target_object(
         session, provider_obj
     ):
@@ -301,56 +278,6 @@ def queue_restore_selected_provider(session, provider_obj):
         restore_selected_provider(session, provider_obj)
         return
     QtCore.QTimer.singleShot(0, lambda: restore_selected_provider(session, provider_obj))
-
-
-def _get_builtin_provider_edit_handles(session, provider_obj, provider_target):
-    handles = []
-    move_handle = _make_builtin_provider_move_handle(session, provider_obj, provider_target)
-    if move_handle is not None:
-        handles.append(move_handle)
-    rehost_handle = _make_builtin_provider_rehost_handle(session, provider_obj, provider_target)
-    if rehost_handle is not None:
-        handles.append(rehost_handle)
-    return handles
-
-
-def _make_builtin_provider_move_handle(session, provider_obj, provider_target):
-    if not can_move_provider_target_by_placement(session, provider_obj):
-        return None
-    point = _get_provider_move_point(session, provider_obj)
-    if point is None:
-        return None
-    return PlanEditHandleSpec(
-        key="move",
-        point=(point.x, point.y, point.z),
-        label=translate("BIM_PlanEdit", "Move"),
-        provider_id=str(getattr(provider_target, "provider_id", "") or "").strip(),
-        target_key=str(getattr(provider_target, "key", "") or "").strip(),
-        prompt=translate("BIM_PlanEdit", "Pick new integration position"),
-        role="move",
-        interaction=PlanToolInteraction.POINT,
-        marker_kind=PlanOverlayMarkerKind.DIAMOND,
-    )
-
-
-def _make_builtin_provider_rehost_handle(session, provider_obj, provider_target):
-    if not can_rehost_provider_target(session, provider_obj):
-        return None
-    point = _get_provider_rehost_point(session, provider_obj)
-    if point is None:
-        return None
-    return PlanEditHandleSpec(
-        key="rehost",
-        point=(point.x, point.y, point.z),
-        label=translate("BIM_PlanEdit", "Rehost"),
-        provider_id=str(getattr(provider_target, "provider_id", "") or "").strip(),
-        target_key=str(getattr(provider_target, "key", "") or "").strip(),
-        prompt=translate("BIM_PlanEdit", "Pick new host wall"),
-        transaction_label=translate("BIM_PlanEdit", "Rehost Provider"),
-        role="rehost",
-        interaction=PlanToolInteraction.POINT,
-        marker_kind=PlanOverlayMarkerKind.SQUARE,
-    )
 
 
 def _get_provider_handle_transaction_label(handle):
@@ -391,42 +318,11 @@ def _get_handle_point_vector(handle):
         return None
 
 
-def _get_provider_move_point(session, provider_obj):
-    coordinate_point = _get_provider_coordinate_point(provider_obj)
-    if coordinate_point is not None:
-        return coordinate_point
-    try:
-        placement = session.visibility.get_plan_object_global_placement(provider_obj)
-    except Exception:
-        placement = getattr(provider_obj, "Placement", None)
-    if placement is None:
-        return None
-    try:
-        return FreeCAD.Vector(placement.Base)
-    except Exception:
-        return None
-
-
-def _get_provider_rehost_point(session, provider_obj):
-    point = _get_provider_move_point(session, provider_obj)
-    if point is None:
-        return None
-    offset = 150.0
-    if session.viewport is not None:
-        try:
-            units_per_pixel = float(session.viewport.get_plan_view_units_per_pixel() or 0.0)
-        except Exception:
-            units_per_pixel = 0.0
-        if units_per_pixel > 0.0:
-            offset = max(75.0, units_per_pixel * 16.0)
-    return FreeCAD.Vector(point.x, point.y + offset, point.z)
-
-
 def _resolve_provider_handle_target_point(session, provider_obj, point):
     target_point = FreeCAD.Vector(point) if point is not None else None
     if target_point is None:
         return None
-    start_point = _get_provider_move_point(session, provider_obj)
+    start_point = plan_provider_builtin_edit.get_provider_move_point(session, provider_obj)
     if start_point is None:
         return target_point
     return FreeCAD.Vector(target_point.x, target_point.y, start_point.z)
@@ -438,43 +334,22 @@ def _build_provider_handle_payload(
     provider_target = plan_provider_runtime.get_plan_provider_target_for_object(
         session, provider_obj
     )
-    snap_info = plan_provider_point.get_provider_point_snap_info()
-    if not isinstance(snap_info, dict):
-        snap_info = {}
-    try:
-        snap_object = plan_provider_point.resolve_provider_point_snap_object(
-            session, snap_object, snap_info
-        )
-    except Exception:
-        pass
-    snap_target = plan_target_kinds.make_plan_target_ref()
-    if snap_object is not None:
-        try:
-            snap_target = session.selection.targets.get_plan_target_for_object(snap_object)
-        except Exception:
-            snap_target = plan_target_kinds.make_plan_target_ref()
-    snap_component = str(snap_info.get("Component", "") or "").strip()
-    snap_subname = str(snap_info.get("SubName", "") or snap_component).strip()
-    snap_document_name = str(snap_info.get("Document", "") or "").strip()
-    if not snap_document_name and snap_object is not None:
-        snap_document_name = str(getattr(getattr(snap_object, "Document", None), "Name", "") or "")
-    snap_object_name = str(snap_info.get("Object", "") or "").strip()
-    if not snap_object_name and snap_object is not None:
-        snap_object_name = str(getattr(snap_object, "Name", "") or "")
-    selected_target = session.selection.state.get_selected_plan_target()
-    selected_targets = session.selection.state.get_selected_plan_targets()
-    hovered_target = session.selection.hover.get_hovered_plan_target()
+    payload_context = plan_provider_action_payloads.build_provider_action_payload_context(
+        session,
+        snap_object=snap_object,
+        snap_info=plan_provider_action_payloads.get_provider_snap_info(),
+    )
     host_target, host_source = _get_provider_handle_payload_host_target(
         session,
         handle,
-        snap_target=snap_target,
-        selected_target=selected_target,
-        selected_targets=selected_targets,
-        hovered_target=hovered_target,
+        snap_target=payload_context.snap_target,
+        selected_target=payload_context.selected_target,
+        selected_targets=payload_context.selected_targets,
+        hovered_target=payload_context.hovered_target,
     )
     host_kind, host_obj = plan_provider_payloads.unpack_provider_host_target_ref(host_target)
     placement_point = (
-        plan_provider_point.project_provider_point_to_host(point, host_obj)
+        plan_provider_action_payloads.project_provider_point_to_host(point, host_obj)
         if host_kind == "wall" and point is not None
         else None
     )
@@ -487,20 +362,20 @@ def _build_provider_handle_payload(
         point=FreeCAD.Vector(point) if point is not None else None,
         placement_point=placement_point,
         raw_point=FreeCAD.Vector(raw_point) if raw_point is not None else None,
-        snap_info=snap_info,
-        snap_object=snap_object,
-        snap_target=snap_target,
-        snap_document_name=snap_document_name,
-        snap_object_name=snap_object_name,
-        snap_component=snap_component,
-        snap_subname=snap_subname,
+        snap_info=payload_context.snap_info,
+        snap_object=payload_context.snap_object,
+        snap_target=payload_context.snap_target,
+        snap_document_name=payload_context.snap_document_name,
+        snap_object_name=payload_context.snap_object_name,
+        snap_component=payload_context.snap_component,
+        snap_subname=payload_context.snap_subname,
         target_object=provider_obj,
         provider_target=provider_target,
         target_key=str(getattr(provider_target, "key", "") or "").strip(),
         target_provider_id=str(getattr(provider_target, "provider_id", "") or "").strip(),
-        selected_target=selected_target,
-        selected_targets=selected_targets,
-        hovered_target=hovered_target,
+        selected_target=payload_context.selected_target,
+        selected_targets=payload_context.selected_targets,
+        hovered_target=payload_context.hovered_target,
         host_target=host_target,
         host_source=host_source,
     )
@@ -517,107 +392,29 @@ def _get_provider_handle_payload_host_target(
 ):
     role = _get_provider_handle_role(handle)
     if role == "rehost":
-        snap_target_ref = plan_provider_point.normalize_provider_point_host_target(
-            session, snap_target
-        )
-        if snap_target_ref.obj is not None:
-            return snap_target_ref, "snap"
-        hovered_target_ref = plan_provider_point.normalize_provider_point_host_target(
-            session, hovered_target
-        )
-        if hovered_target_ref.obj is not None:
-            return hovered_target_ref, "hovered"
-        selected_walls = []
-        for target in selected_targets or ():
-            target_ref = plan_provider_point.normalize_provider_point_host_target(session, target)
-            if target_ref.obj is not None and target_ref.obj not in selected_walls:
-                selected_walls.append(target_ref.obj)
-        if len(selected_walls) == 1:
-            return (
-                plan_provider_payloads.make_provider_host_target_ref("wall", selected_walls[0]),
-                "selected",
-            )
-        selected_target_ref = plan_provider_point.normalize_provider_point_host_target(
+        return plan_provider_action_payloads.get_provider_rehost_host_target(
             session,
-            selected_target,
+            snap_target=snap_target,
+            selected_target=selected_target,
+            selected_targets=selected_targets,
+            hovered_target=hovered_target,
         )
-        if selected_target_ref.obj is not None:
-            return selected_target_ref, "selected"
-        return plan_provider_payloads.make_provider_host_target_ref(), ""
-    return plan_provider_point.get_provider_point_payload_host_target(
+    state = getattr(session, "provider_point_state", None)
+    return plan_provider_action_payloads.get_provider_point_host_target(
         session,
         snap_target=snap_target,
         selected_target=selected_target,
         selected_targets=selected_targets,
         hovered_target=hovered_target,
+        stored_target=getattr(state, "provider_point_host_target", None),
+        stored_source=getattr(state, "provider_point_host_source", ""),
     )
 
 
 def _apply_builtin_provider_handle_action(session, provider_obj, handle, payload):
-    role = _get_provider_handle_role(handle)
-    if role == "rehost":
-        return _apply_provider_rehost(session, provider_obj, payload)
-    return _apply_provider_placement_move(session, provider_obj, payload.get("point"))
-
-
-def _apply_provider_rehost(session, provider_obj, payload):
-    host_kind, host_obj = plan_provider_payloads.unpack_provider_host_target_ref(
-        payload.get("host_target")
-    )
-    if host_kind != "wall" or host_obj is None:
-        return False
-    try:
-        import Arch
-    except Exception:
-        return False
-    if not Arch.rehostObject(
-        provider_obj,
-        host_obj,
-        preserve_world_position=True,
-        raise_on_error=False,
-    ):
-        return False
-    placement_point = payload.get("placement_point")
-    if placement_point is not None and not _apply_provider_placement_move(
+    return plan_provider_builtin_edit.apply_builtin_provider_handle_action(
         session,
         provider_obj,
-        placement_point,
-    ):
-        return False
-    return True
-
-
-def _apply_provider_placement_move(session, provider_obj, point):
-    if point is None:
-        return False
-    if _has_provider_coordinate_properties(provider_obj):
-        provider_obj.X = float(point.x)
-        provider_obj.Y = float(point.y)
-        if getattr(provider_obj, "Z", None) is not None:
-            provider_obj.Z = float(point.z)
-        return True
-    placement = session.visibility.copy_placement(getattr(provider_obj, "Placement", None))
-    if placement is None:
-        return False
-    placement.Base = FreeCAD.Vector(float(point.x), float(point.y), float(placement.Base.z))
-    provider_obj.Placement = placement
-    return True
-
-
-def _has_provider_coordinate_properties(provider_obj):
-    return (
-        getattr(provider_obj, "X", None) is not None
-        and getattr(provider_obj, "Y", None) is not None
+        handle,
+        payload,
     )
-
-
-def _get_provider_coordinate_point(provider_obj):
-    if not _has_provider_coordinate_properties(provider_obj):
-        return None
-    try:
-        x_value = float(getattr(provider_obj, "X"))
-        y_value = float(getattr(provider_obj, "Y"))
-        z_value = float(getattr(provider_obj, "Z", 0.0) or 0.0)
-    except Exception:
-        return None
-    return FreeCAD.Vector(x_value, y_value, z_value)
