@@ -97,20 +97,6 @@ _PLAN_VIEW_LOCKED_ACTIONS = (
 _active_session = None
 
 
-def _make_selection_observer_delegate(method_name):
-    def _selection_observer_method(self, *args):
-        return getattr(self.selection, method_name)(*args)
-
-    return _selection_observer_method
-
-
-def _make_document_visuals_delegate(method_name):
-    def _document_visuals_method(self, *args):
-        return getattr(self.document_visuals, method_name)(*args)
-
-    return _document_visuals_method
-
-
 def get_active_session():
     return _active_session
 
@@ -354,31 +340,44 @@ class PlanEditSession:
     def defer_document_visual_updates(self):
         return plan_document_visuals.defer_document_visual_updates(self)
 
-    addSelection = _make_selection_observer_delegate("addSelection")
+    def addSelection(self, *args):
+        return self.selection.addSelection(*args)
 
-    removeSelection = _make_selection_observer_delegate("removeSelection")
+    def removeSelection(self, *args):
+        return self.selection.removeSelection(*args)
 
-    setSelection = _make_selection_observer_delegate("setSelection")
+    def setSelection(self, *args):
+        return self.selection.setSelection(*args)
 
-    clearSelection = _make_selection_observer_delegate("clearSelection")
+    def clearSelection(self, *args):
+        return self.selection.clearSelection(*args)
 
-    setPreselection = _make_selection_observer_delegate("setPreselection")
+    def setPreselection(self, *args):
+        return self.selection.setPreselection(*args)
 
-    removePreselection = _make_selection_observer_delegate("removePreselection")
+    def removePreselection(self, *args):
+        return self.selection.removePreselection(*args)
 
-    slotCreatedObject = _make_document_visuals_delegate("slot_created_object")
+    def slotCreatedObject(self, *args):
+        return self.document_visuals.slot_created_object(*args)
 
-    slotChangedObject = _make_document_visuals_delegate("slot_changed_object")
+    def slotChangedObject(self, *args):
+        return self.document_visuals.slot_changed_object(*args)
 
-    slotDeletedObject = _make_document_visuals_delegate("slot_deleted_object")
+    def slotDeletedObject(self, *args):
+        return self.document_visuals.slot_deleted_object(*args)
 
-    slotUndoDocument = _make_document_visuals_delegate("slot_undo_document")
+    def slotUndoDocument(self, *args):
+        return self.document_visuals.slot_undo_document(*args)
 
-    slotRedoDocument = _make_document_visuals_delegate("slot_redo_document")
+    def slotRedoDocument(self, *args):
+        return self.document_visuals.slot_redo_document(*args)
 
-    slotRecomputedDocument = _make_document_visuals_delegate("slot_recomputed_document")
+    def slotRecomputedDocument(self, *args):
+        return self.document_visuals.slot_recomputed_document(*args)
 
-    slotDeletedDocument = _make_document_visuals_delegate("slot_deleted_document")
+    def slotDeletedDocument(self, *args):
+        return self.document_visuals.slot_deleted_document(*args)
 
 
 plan_session_state.bind_session_state_accessors(PlanEditSession)
