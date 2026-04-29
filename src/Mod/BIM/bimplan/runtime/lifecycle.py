@@ -75,7 +75,7 @@ def disconnect_teardown_signals(session):
 
 def discard_runtime_references(session):
     session.viewport.discard_runtime_references()
-    session.selection.discard_runtime_references()
+    session.selection.state.discard_runtime_references()
     session.providers.discard_runtime_references()
     session.spaces.discard_runtime_references()
     session.wall_edit.discard_runtime_references()

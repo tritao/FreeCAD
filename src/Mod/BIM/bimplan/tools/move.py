@@ -43,7 +43,7 @@ def activate_move_tool(session):
     session.wall_edit.cancel_wall_edit()
     session.lifecycle.cancel_pending_edit()
     session.wall_relations.clear_plan_relation_status()
-    session.selection.clear_selected_visuals(
+    session.selection.refresh.clear_selected_visuals(
         kinds=_MOVE_TOOL_SELECTION_KINDS,
         include_wall_grips=True,
     )
