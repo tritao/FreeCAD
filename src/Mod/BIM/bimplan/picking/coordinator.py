@@ -11,8 +11,6 @@ from bimplan.providers import picking as plan_provider_picking
 from bimplan.selection import target_kinds as plan_target_kinds
 from bimplan.selection import targets as plan_targets
 
-PROVIDER_OVERLAY_PICK_RADIUS_PX = plan_provider_picking.PROVIDER_OVERLAY_PICK_RADIUS_PX
-
 
 @dataclass
 class PickStageCandidates:
@@ -81,7 +79,7 @@ def _should_prioritize_provider_targets_for_mode(session):
 def pick_provider_overlay_target_from_overlays(
     session,
     mouse_pos,
-    radius_px=PROVIDER_OVERLAY_PICK_RADIUS_PX,
+    radius_px=plan_provider_picking.PROVIDER_OVERLAY_PICK_RADIUS_PX,
 ):
     return plan_provider_picking.pick_provider_overlay_target_from_overlays(
         session,
@@ -211,7 +209,7 @@ def _resolve_provider_overlay_priority_target(
         provider_overlay_target = pick_provider_overlay_target_from_overlays(
             session,
             mouse_pos,
-            radius_px=PROVIDER_OVERLAY_PICK_RADIUS_PX,
+            radius_px=plan_provider_picking.PROVIDER_OVERLAY_PICK_RADIUS_PX,
         )
         if provider_overlay_target.kind == "provider" and provider_overlay_target.obj is not None:
             candidates.provider = provider_overlay_target
