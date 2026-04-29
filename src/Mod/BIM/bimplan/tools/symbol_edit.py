@@ -87,6 +87,9 @@ class PlanSymbolsAPI:
     def cancel_active_tool_for_shutdown(self):
         return self.cancel_active_tool_for_finish()
 
+    def cancel_active_tool_for_select(self):
+        return self.cancel_active_tool_for_finish()
+
     def restore_selected_symbol(self, symbol):
         return restore_selected_symbol(self.session, symbol)
 

@@ -35,6 +35,12 @@ class PlanEmbeddedToolsAPI:
     def cancel(self, tool_name=None):
         return cancel(self.session, tool_name=tool_name)
 
+    def cancel_for_select(self):
+        if not self.has_active():
+            return False
+        self.cancel()
+        return True
+
     def clear_state(self):
         return clear_state(self.session)
 

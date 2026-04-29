@@ -50,6 +50,12 @@ class PlanWallCreateAPI:
     def cancel_rect_wall_tool(self, refresh=True):
         return cancel_rect_wall_tool(self.session, refresh=refresh)
 
+    def cancel_for_select(self):
+        if not self.has_active_rect_wall_tool():
+            return False
+        self.cancel_rect_wall_tool()
+        return True
+
     def get_rect_wall_corners(self, point):
         return get_rect_wall_corners(self.session, point)
 

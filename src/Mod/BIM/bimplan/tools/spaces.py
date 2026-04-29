@@ -238,6 +238,14 @@ class PlanSpacesAPI(_SessionAPI):
         self.cancel_space_region_pick()
         return True
 
+    def cancel_secondary_tools_for_select(self):
+        canceled = False
+        if self.has_active_plan_region_tool():
+            canceled = self.cancel_plan_region_tool() or canceled
+        if self.has_active_space_separator_tool():
+            canceled = self.cancel_space_separator_tool() or canceled
+        return canceled
+
     def cancel_plan_region_tool(self, *args, **kwargs):
         return plan_space_interaction.cancel_plan_region_tool(self.session, *args, **kwargs)
 

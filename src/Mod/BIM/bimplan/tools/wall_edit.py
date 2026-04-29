@@ -1738,6 +1738,9 @@ class PlanWallEditAPI(_SessionAPI):
     def cancel_wall_edit(self, *args, **kwargs):
         return cancel_wall_edit(self.session, *args, **kwargs)
 
+    def cancel_for_select(self):
+        return self.cancel_wall_edit()
+
     def reset_pending_edit_state(self, *args, **kwargs):
         return reset_pending_edit_state(self.session, *args, **kwargs)
 

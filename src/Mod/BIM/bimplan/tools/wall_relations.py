@@ -52,6 +52,9 @@ class PlanWallRelationsAPI:
     def cancel_join_tool(self, refresh=True):
         return cancel_join_tool(self.session, refresh=refresh)
 
+    def cancel_for_select(self):
+        return self.cancel_join_tool()
+
     def get_plan_join_command(self):
         return get_plan_join_command(self.session)
 
