@@ -5,9 +5,35 @@
 import warnings
 
 import FreeCAD
-from bimplan import task_panel_view_model as plan_task_panel_view_model
+from bimplan.ui import task_panel_view_model as plan_task_panel_view_model
 
 translate = FreeCAD.Qt.translate
+
+_PENDING_DELETE_WIDGETS = []
+
+
+def _release_pending_delete_widget(widget):
+    try:
+        _PENDING_DELETE_WIDGETS.remove(widget)
+    except ValueError:
+        pass
+
+
+def _queue_widget_delete(widget):
+    if widget is None:
+        return
+    if widget not in _PENDING_DELETE_WIDGETS:
+        _PENDING_DELETE_WIDGETS.append(widget)
+    try:
+        widget.destroyed.connect(
+            lambda *_args, _widget=widget: _release_pending_delete_widget(_widget)
+        )
+    except (AttributeError, RuntimeError, TypeError):
+        pass
+    try:
+        widget.deleteLater()
+    except (AttributeError, RuntimeError, TypeError):
+        _release_pending_delete_widget(widget)
 
 
 class PlanEditControlsShellMixin:
@@ -319,10 +345,7 @@ class PlanEditControlsShellMixin:
                 form.setParent(None)
             except (AttributeError, RuntimeError, TypeError):
                 pass
-            try:
-                form.deleteLater()
-            except (AttributeError, RuntimeError, TypeError):
-                pass
+            _queue_widget_delete(form)
         self.form = None
         self.session = None
         self.status = None

@@ -28,6 +28,7 @@ import importlib
 
 import Arch
 import FreeCAD
+import FreeCADGui
 import Part
 from bimcommands import BimPlanSession
 from bimtests import TestArchBaseGui
@@ -82,6 +83,10 @@ class ArchWallGuiTestCase(TestArchBaseGui.TestArchBaseGui):
         """Restore wall preferences and stop any active Plan Edit session."""
         session = BimPlanSession.get_active_session()
         if session:
+            try:
+                FreeCADGui.Control.clearTaskWatcher()
+            except Exception:
+                pass
             session.shutdown(close_dialog=False, teardown=True)
         self.params.SetInt("WallBaseline", self.original_wall_base)
         super().tearDown()

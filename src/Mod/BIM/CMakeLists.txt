@@ -222,7 +222,6 @@ SET(bimplan_SRCS
     bimplan/overlays/runtime.py
     bimplan/overlays/spaces.py
     bimplan/overlays/symbols.py
-    bimplan/overlays/tracker_pool.py
     bimplan/overlays/walls.py
     bimplan/performance.py
     bimplan/picking/__init__.py
@@ -235,22 +234,23 @@ SET(bimplan_SRCS
     bimplan/picking/overlays.py
     bimplan/picking/service.py
     bimplan/providers/__init__.py
+    bimplan/providers/builtin.py
     bimplan/providers/edit.py
-    bimplan/providers/host_targets.py
     bimplan/providers/contracts.py
     bimplan/providers/payloads.py
+    bimplan/providers/picking.py
     bimplan/providers/point.py
     bimplan/providers/runtime.py
     bimplan/runtime/__init__.py
     bimplan/runtime/capabilities.py
     bimplan/runtime/command_gate.py
+    bimplan/runtime/embedded_commands.py
     bimplan/runtime/input.py
     bimplan/runtime/lifecycle.py
     bimplan/runtime/session.py
     bimplan/runtime/session_state.py
     bimplan/runtime/tools.py
     bimplan/runtime/view.py
-    bimplan/runtime/view_properties.py
     bimplan/selection/__init__.py
     bimplan/selection/activation.py
     bimplan/selection/edit_nodes.py
@@ -265,13 +265,12 @@ SET(bimplan_SRCS
     bimplan/selection/targets.py
     bimplan/semantics.py
     bimplan/snap.py
-    bimplan/status_text.py
     bimplan/storeys.py
-    bimplan/task_panel.py
-    bimplan/task_panel_view_model.py
     bimplan/tools/__init__.py
     bimplan/tools/hosted_openings.py
+    bimplan/tools/move.py
     bimplan/tools/opening_edit.py
+    bimplan/tools/select.py
     bimplan/tools/space_boundaries.py
     bimplan/tools/space_editing.py
     bimplan/tools/space_geometry.py
@@ -289,6 +288,9 @@ SET(bimplan_SRCS
     bimplan/ui/control_integrations.py
     bimplan/ui/control_shell.py
     bimplan/ui/controls.py
+    bimplan/ui/status_text.py
+    bimplan/ui/task_panel.py
+    bimplan/ui/task_panel_view_model.py
 )
 
 SET(BIM_templates

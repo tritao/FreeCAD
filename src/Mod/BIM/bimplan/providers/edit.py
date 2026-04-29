@@ -4,7 +4,6 @@
 
 import FreeCAD
 import FreeCADGui
-from bimplan.providers import host_targets as plan_host_targets
 from bimplan.providers import payloads as plan_provider_payloads
 from bimplan.providers import PlanEditHandleSpec, PlanOverlayMarkerKind, PlanToolInteraction
 from bimplan.providers import point as plan_provider_point
@@ -473,7 +472,7 @@ def _build_provider_handle_payload(
         selected_targets=selected_targets,
         hovered_target=hovered_target,
     )
-    host_kind, host_obj = plan_host_targets.unpack_provider_host_target_ref(host_target)
+    host_kind, host_obj = plan_provider_payloads.unpack_provider_host_target_ref(host_target)
     placement_point = (
         plan_provider_point.project_provider_point_to_host(point, host_obj)
         if host_kind == "wall" and point is not None
@@ -535,7 +534,7 @@ def _get_provider_handle_payload_host_target(
                 selected_walls.append(target_ref.obj)
         if len(selected_walls) == 1:
             return (
-                plan_host_targets.make_provider_host_target_ref("wall", selected_walls[0]),
+                plan_provider_payloads.make_provider_host_target_ref("wall", selected_walls[0]),
                 "selected",
             )
         selected_target_ref = plan_provider_point.normalize_provider_point_host_target(
@@ -544,7 +543,7 @@ def _get_provider_handle_payload_host_target(
         )
         if selected_target_ref.obj is not None:
             return selected_target_ref, "selected"
-        return plan_host_targets.make_provider_host_target_ref(), ""
+        return plan_provider_payloads.make_provider_host_target_ref(), ""
     return plan_provider_point.get_provider_point_payload_host_target(
         session,
         snap_target=snap_target,
@@ -562,7 +561,7 @@ def _apply_builtin_provider_handle_action(session, provider_obj, handle, payload
 
 
 def _apply_provider_rehost(session, provider_obj, payload):
-    host_kind, host_obj = plan_host_targets.unpack_provider_host_target_ref(
+    host_kind, host_obj = plan_provider_payloads.unpack_provider_host_target_ref(
         payload.get("host_target")
     )
     if host_kind != "wall" or host_obj is None:

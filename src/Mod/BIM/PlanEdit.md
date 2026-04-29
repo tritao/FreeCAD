@@ -134,7 +134,7 @@ The `bimplan/runtime/` package owns session-level coordination:
   - enter/exit behavior, tool switching, cancel flows, embedded-tool cleanup
 - `input.py`
   - viewport event routing and keyboard behavior
-- `view.py` and `view_properties.py`
+- `view.py`
   - viewer capture/restore, callbacks, projection helpers, view policy
 - `session_state.py`
   - mutable session state and interaction state wiring
@@ -206,7 +206,7 @@ Providers contribute declarative models such as:
 
 The registry lives in `providers/contracts.py`, the session-facing behavior in
 `providers/runtime.py`, and built-in BIM-owned providers in
-`providers/__init__.py`.
+`providers/builtin.py`.
 
 The important contract is:
 

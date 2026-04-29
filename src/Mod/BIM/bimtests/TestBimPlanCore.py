@@ -66,7 +66,7 @@ if "draftguitools.gui_base" not in sys.modules:
 from bimplan.providers import PlanProviderActionContext
 from bimplan.tools.space_interaction import activate_plan_region_tool, activate_space_separator_tool
 from bimplan.overlays import providers as provider_overlays
-from bimplan import task_panel as plan_task_panel_module
+from bimplan.ui import task_panel as plan_task_panel_module
 from bimplan.picking.coordinator import get_plan_target_at_position
 from bimplan.picking.hover import get_hovered_plan_target
 from bimplan.picking.overlays import (
@@ -122,7 +122,7 @@ from bimplan.selection.targets import get_plan_target_for_object, make_plan_targ
 from bimplan.transactions import PlanEditTransaction
 from bimplan.ui.controls import PlanEditControlsWidget
 from bimplan.ui import control_shell as plan_control_shell
-from bimplan.task_panel_view_model import (
+from bimplan.ui.task_panel_view_model import (
     ProviderOverlayLegendItem,
     build_action_context_view_model,
     build_integration_panel_view_model,
@@ -1099,8 +1099,10 @@ class TestBimPlanCore(unittest.TestCase):
         )
 
     def test_plan_provider_action_context_exposes_typed_target_payloads(self):
-        from bimplan.providers.host_targets import ProviderHostTargetRef
-        from bimplan.providers.payloads import ProviderPointActionPayload
+        from bimplan.providers.payloads import (
+            ProviderHostTargetRef,
+            ProviderPointActionPayload,
+        )
         from bimplan.selection.target_kinds import PlanTargetRef
 
         wall = object()

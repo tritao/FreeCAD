@@ -7,7 +7,6 @@ from __future__ import annotations
 import FreeCAD
 
 from bimplan.runtime import capabilities as runtime_capabilities
-from bimplan.runtime import view_properties as runtime_view_properties
 
 
 def _perf_count(session, name, delta=1):
@@ -31,19 +30,35 @@ def _get_callable(obj, method_name):
 
 
 def _has_view_object_property(view_object, property_name):
-    return runtime_view_properties.has_view_property(view_object, property_name)
+    return view_object is not None and hasattr(view_object, property_name)
 
 
 def _set_view_object_property(view_object, property_name, value):
-    return runtime_view_properties.set_view_property(view_object, property_name, value)
+    if not _has_view_object_property(view_object, property_name):
+        return False
+    return runtime_capabilities.set_attr_if_present(view_object, property_name, value)
 
 
 def _get_view_object_property(view_object, property_name):
-    return runtime_view_properties.get_view_property(view_object, property_name)
+    if not _has_view_object_property(view_object, property_name):
+        return None
+    return runtime_capabilities.get_attr(view_object, property_name, None)
 
 
 def _capture_view_object_state(view_object, property_names):
-    return runtime_view_properties.capture_view_properties(view_object, property_names)
+    state = {}
+    for property_name in property_names:
+        value = _get_view_object_property(view_object, property_name)
+        if value is not None:
+            state[property_name] = value
+    return state
+
+
+def _restore_view_object_properties(view_object, state):
+    applied = False
+    for property_name, value in dict(state or {}).items():
+        applied = _set_view_object_property(view_object, property_name, value) or applied
+    return applied
 
 
 def _get_global_placement_if_available(obj):
@@ -505,7 +520,7 @@ def restore_object_view_state(session):
         view_object = getattr(obj, "ViewObject", None)
         if not view_object:
             continue
-        runtime_view_properties.restore_view_properties(view_object, state)
+        _restore_view_object_properties(view_object, state)
 
 
 def get_supported_plan_visibility(session, obj, state):

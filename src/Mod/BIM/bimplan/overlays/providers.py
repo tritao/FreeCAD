@@ -3,13 +3,13 @@
 """Provider-owned overlay rendering for BIM Plan Edit."""
 
 import math
+from dataclasses import dataclass, field
 
 import FreeCAD
-from bimplan.providers import host_targets as plan_host_targets
+from bimplan.providers import payloads as plan_provider_payloads
 from bimplan.providers import PlanOverlayMarkerKind
 from bimplan.providers import runtime as plan_provider_runtime
 from . import manager as overlay_manager
-from . import tracker_pool as overlay_tracker_pool
 
 _PROVIDER_OVERLAY_POINT_PREFIX = "ProviderOverlayPoint"
 _PROVIDER_OVERLAY_PICK_TRACKER_SCALE = 0.14
@@ -23,6 +23,41 @@ _PROVIDER_POINT_PREVIEW_MARKER_SIZE = 180.0
 _PROVIDER_POINT_PREVIEW_HOSTED_COLOR = (0.12, 0.38, 0.95)
 _PROVIDER_POINT_PREVIEW_UNHOSTED_COLOR = (0.95, 0.52, 0.10)
 _PROVIDER_POINT_PREVIEW_HOST_COLOR = (0.10, 0.58, 0.38)
+
+
+@dataclass
+class _TrackerPool:
+    trackers: list = field(default_factory=list)
+    render_state: object = None
+    style_state: object = None
+
+
+def _finalize_tracker_pool(pool):
+    overlay_manager.finalize_trackers(pool.trackers)
+    pool.trackers = []
+    pool.render_state = None
+    pool.style_state = None
+
+
+def _ensure_line_tracker_specs(
+    DraftTrackers,
+    pool,
+    specs,
+    *,
+    create_tracker,
+    apply_tracker,
+):
+    style_state = tuple((spec["label"], spec.get("dotted", False)) for spec in specs)
+    if len(pool.trackers) != len(specs) or pool.style_state != style_state:
+        _finalize_tracker_pool(pool)
+        pool.style_state = style_state
+        for spec in specs:
+            pool.trackers.append(create_tracker(spec))
+
+    for tracker, spec in zip(pool.trackers, specs):
+        apply_tracker(tracker, spec)
+
+    return pool
 
 
 class PlanProviderOverlayService:
@@ -193,7 +228,7 @@ def clear_hovered_provider_overlay(session):
 def _get_selected_provider_overlay_pool(session):
     tracker_state = _provider_tracker_state(session)
     provider_state = _provider_transient_state(session)
-    return overlay_tracker_pool.TrackerPool(
+    return _TrackerPool(
         trackers=list(tracker_state.provider_selected_trackers),
         render_state=provider_state.selected_provider_overlay_render_state,
     )
@@ -208,7 +243,7 @@ def _store_selected_provider_overlay_pool(session, pool):
 
 def _get_provider_point_preview_pool(session):
     state = session.provider_point_state
-    return overlay_tracker_pool.TrackerPool(
+    return _TrackerPool(
         trackers=list(state.provider_point_preview_trackers),
         render_state=state.provider_point_preview_render_state,
         style_state=state.provider_point_preview_style_state,
@@ -262,8 +297,8 @@ def sync_selected_provider_overlay(session):
         if render_state == pool.render_state:
             _perf_count(session, "selected_provider_overlay_cache_hits")
             return
-        overlay_tracker_pool.finalize_tracker_pool(pool)
-        overlay_tracker_pool.ensure_line_tracker_specs(
+        _finalize_tracker_pool(pool)
+        _ensure_line_tracker_specs(
             DraftTrackers,
             pool,
             specs,
@@ -288,7 +323,7 @@ def sync_selected_provider_overlay(session):
 
 def clear_selected_provider_overlay(session):
     pool = _get_selected_provider_overlay_pool(session)
-    overlay_tracker_pool.finalize_tracker_pool(pool)
+    _finalize_tracker_pool(pool)
     _store_selected_provider_overlay_pool(session, pool)
 
 
@@ -422,7 +457,7 @@ def sync_provider_point_preview(session):
         _perf_count(session, "provider_point_preview_cache_hits")
         return
 
-    overlay_tracker_pool.ensure_line_tracker_specs(
+    _ensure_line_tracker_specs(
         DraftTrackers,
         pool,
         specs,
@@ -463,7 +498,7 @@ def clear_provider_point_preview(session):
 
 def _clear_provider_point_preview_trackers(session):
     pool = _get_provider_point_preview_pool(session)
-    overlay_tracker_pool.finalize_tracker_pool(pool)
+    _finalize_tracker_pool(pool)
     _store_provider_point_preview_pool(session, pool)
 
 
@@ -1048,7 +1083,7 @@ def _to_vector(point):
 
 
 def _normalize_host_target(target):
-    host_kind, host_obj = plan_host_targets.unpack_provider_host_target_ref(target)
+    host_kind, host_obj = plan_provider_payloads.unpack_provider_host_target_ref(target)
     if host_kind == "wall" and host_obj is not None:
         return host_kind, host_obj
     return (None, None)
