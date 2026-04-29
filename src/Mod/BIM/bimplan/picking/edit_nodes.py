@@ -4,7 +4,6 @@
 
 import FreeCAD
 
-from bimplan import selection as plan_selection
 from bimplan.picking import debug as plan_picking_debug
 from bimplan.providers import picking as plan_provider_picking
 from bimplan.selection import edit_nodes as plan_edit_nodes
@@ -18,7 +17,7 @@ def get_plan_target_from_edit_node(session, node):
     node_kind = plan_edit_nodes.get_edit_node_kind(node)
     if node_kind in ("provider_overlay_point", "provider_overlay_target"):
         target_ref = plan_provider_picking.get_provider_overlay_target_from_edit_node(session, node)
-        if plan_selection.is_valid_plan_target(session, target_ref.kind, target_ref.obj):
+        if session.selection.state.is_valid_plan_target(target_ref.kind, target_ref.obj):
             return plan_target_kinds.make_plan_target_ref(target_ref.kind, target_ref.obj)
         fallback_target_ref = plan_target_kinds.coerce_plan_target_ref(
             plan_targets.get_plan_target_for_object(session, target_ref.obj)
@@ -79,7 +78,7 @@ def _get_selected_handle_edit_node(session, mouse_pos):
             mouse_pos,
             "selected_symbol_handle",
             plan_edit_nodes.SymbolHandleEditNode(
-                plan_selection.get_selected_plan_target_object(session, "symbol"),
+                session.selection.state.get_selected_plan_target_object("symbol"),
                 symbol_handle_role,
             ),
         )
@@ -90,7 +89,7 @@ def _get_selected_handle_edit_node(session, mouse_pos):
             mouse_pos,
             "selected_opening_handle",
             plan_edit_nodes.OpeningHandleEditNode(
-                plan_selection.get_selected_plan_target_object(session, "opening"),
+                session.selection.state.get_selected_plan_target_object("opening"),
                 opening_handle_index,
             ),
         )
@@ -101,7 +100,7 @@ def _get_selected_handle_edit_node(session, mouse_pos):
             mouse_pos,
             "selected_provider_handle",
             plan_edit_nodes.ProviderHandleEditNode(
-                plan_selection.get_selected_plan_target_object(session, "provider"),
+                session.selection.state.get_selected_plan_target_object("provider"),
                 provider_handle_index,
             ),
         )
@@ -178,7 +177,7 @@ def _get_edit_node_from_picked_points(session, mouse_pos, picked_points):
 
 
 def pick_selected_opening_handle(session, mouse_pos, radius_px=10):
-    opening = plan_selection.get_selected_plan_target_object(session, "opening")
+    opening = session.selection.state.get_selected_plan_target_object("opening")
     if not session.openings.is_hosted_opening_object(opening) or not session.view:
         return None
     try:

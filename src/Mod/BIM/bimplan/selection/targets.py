@@ -9,6 +9,7 @@ import FreeCAD
 from bimplan.providers import runtime as plan_provider_runtime
 from bimplan.runtime import capabilities as runtime_capabilities
 from . import target_kinds as plan_target_kinds
+from .service_common import get_plan_target_state_key
 from bimplan.providers.runtime import resolve_plan_provider_target_display_fields
 
 
@@ -270,8 +271,6 @@ def get_plan_host_ref(session, obj):
 
 
 def make_plan_target_record(session, kind, obj, selected_keys=None, primary_key=None):
-    from . import selection as plan_selection_runtime
-
     if not kind or obj is None:
         return None
     provider_target = (
@@ -281,7 +280,7 @@ def make_plan_target_record(session, kind, obj, selected_keys=None, primary_key=
     )
     semantic_obj = session.visibility.get_plan_semantic_object(obj)
     doc = getattr(obj, "Document", None)
-    state_key = plan_selection_runtime.get_plan_target_state_key(kind, obj)
+    state_key = get_plan_target_state_key(kind, obj)
     fields = resolve_plan_provider_target_display_fields(
         session,
         semantic_obj,
@@ -306,23 +305,18 @@ def make_plan_target_record(session, kind, obj, selected_keys=None, primary_key=
 
 
 def get_plan_targets(session, selected_only=False):
-    from . import selection as plan_selection_runtime
-
     selected_targets = tuple(
         _coerce_plan_target_ref(target)
-        for target in plan_selection_runtime.get_selected_plan_targets(session)
+        for target in session.selection.state.get_selected_plan_targets()
     )
     selected_keys = {
-        plan_selection_runtime.get_plan_target_state_key(target.kind, target.obj)
-        for target in selected_targets
+        get_plan_target_state_key(target.kind, target.obj) for target in selected_targets
     }
     selected_keys.discard(None)
     primary_key = None
-    primary_target = _coerce_plan_target_ref(
-        plan_selection_runtime.get_selected_plan_target(session)
-    )
+    primary_target = _coerce_plan_target_ref(session.selection.state.get_selected_plan_target())
     if primary_target.kind and primary_target.obj:
-        primary_key = plan_selection_runtime.get_plan_target_state_key(
+        primary_key = get_plan_target_state_key(
             primary_target.kind,
             primary_target.obj,
         )
@@ -341,7 +335,7 @@ def get_plan_targets(session, selected_only=False):
                 target_obj = target.obj
                 if not target_kind or not target_obj:
                     continue
-                state_key = plan_selection_runtime.get_plan_target_state_key(
+                state_key = get_plan_target_state_key(
                     target_kind,
                     target_obj,
                 )
