@@ -1,0 +1,143 @@
+# SPDX-License-Identifier: LGPL-2.1-or-later
+
+"""Provider action execution helpers for BIM Plan Edit integrations."""
+
+import FreeCAD
+
+from .contracts import PlanEditContext
+from bimplan.transactions import PlanEditTransaction
+
+translate = FreeCAD.Qt.translate
+
+
+def _runtime():
+    from bimplan.providers import runtime as provider_runtime
+
+    return provider_runtime
+
+
+def _execute_plan_provider_action_callback(
+    execute_action,
+    action_key,
+    context,
+    action_context,
+    payload,
+):
+    if payload is None:
+        return execute_action(action_key, context, action_context)
+    return execute_action(action_key, context, action_context, payload)
+
+
+def _get_plan_provider_action_executor(session, provider_id):
+    provider_runtime = _runtime()
+    provider = provider_runtime._get_plan_provider_registry(session).get_provider(provider_id)
+    if provider is None:
+        return None
+    execute_action = getattr(provider, "execute_action", None)
+    if not callable(execute_action):
+        return None
+    return execute_action
+
+
+def _run_plan_provider_action(
+    session,
+    execute_action,
+    action_key,
+    transaction_label="",
+    payload=None,
+):
+    provider_runtime = _runtime()
+    context = provider_runtime._get_plan_edit_context_or_none(session)
+    if context is None:
+        return False
+    action_context = provider_runtime.get_plan_provider_action_context(session, payload=payload)
+    transaction_label = str(transaction_label or "").strip()
+    with provider_runtime._get_document_visual_update_scope(session):
+        if transaction_label:
+            with PlanEditTransaction(session.doc, transaction_label):
+                handled = provider_runtime._execute_plan_provider_action_callback(
+                    execute_action,
+                    action_key,
+                    context,
+                    action_context,
+                    payload,
+                )
+        else:
+            handled = provider_runtime._execute_plan_provider_action_callback(
+                execute_action,
+                action_key,
+                context,
+                action_context,
+                payload,
+            )
+        if handled is not False:
+            try:
+                if session.doc is not None:
+                    session.doc.recompute()
+            except Exception:
+                pass
+    return handled
+
+
+def _finalize_plan_provider_action(session):
+    session.selection.refresh.refresh_primary_selected_plan_target()
+    session.document_visuals.invalidate_document_dependent_plan_visuals()
+    session.task_panels.refresh_task_panel_status()
+    session.viewport.focus_plan_view()
+
+
+def execute_plan_provider_action(
+    session,
+    provider_id,
+    action_key,
+    transaction_label="",
+    payload=None,
+):
+    provider_runtime = _runtime()
+    if not session.document_visuals.document_is_alive():
+        return False
+    execute_action = provider_runtime._get_plan_provider_action_executor(session, provider_id)
+    if execute_action is None:
+        return False
+
+    try:
+        handled = provider_runtime._run_plan_provider_action(
+            session,
+            execute_action,
+            action_key,
+            transaction_label=transaction_label,
+            payload=payload,
+        )
+    except Exception as exc:
+        FreeCAD.Console.PrintError(
+            translate(
+                "BIM_PlanEdit",
+                "Plan Edit provider '{provider}' action '{action}' failed: {error}\n",
+            ).format(provider=provider_id, action=action_key, error=exc)
+        )
+        return False
+
+    if handled is False:
+        return False
+
+    provider_runtime._finalize_plan_provider_action(session)
+    return True
+
+
+def get_plan_provider_action_context(session, payload=None):
+    provider_runtime = _runtime()
+    action_context = provider_runtime._call_provider_method(
+        session,
+        "get_plan_provider_action_context",
+        payload=payload,
+        default=provider_runtime._MISSING,
+    )
+    if action_context is not provider_runtime._MISSING:
+        return action_context
+    doc = session.doc if session.document_visuals.document_is_alive() else None
+    return PlanEditContext.make_action_context(
+        session,
+        payload=payload,
+        document_name=session.visibility.safe_plan_object_name(doc),
+        current_tool=str(session.current_tool or ""),
+    )
