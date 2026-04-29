@@ -2,15 +2,50 @@
 
 """Interaction-facing BIM Plan Edit selection services."""
 
+from dataclasses import dataclass
+
 from bimplan.runtime import tools as plan_runtime_tools
 from bimplan.picking import hover as plan_hover_picking
 
-from . import activation as plan_selection_activation
 from . import edit_nodes as plan_edit_nodes
+from . import gui_sync as plan_selection_gui_sync
 from . import target_dispatch as plan_target_dispatch
 from . import target_kinds as plan_target_kinds
 from . import targets as plan_targets
 from .service_common import _SessionAPI, get_plan_target_state_key
+
+
+@dataclass(frozen=True)
+class TargetActivationBehavior:
+    select_method_name: str
+    clear_hovered_kinds: tuple[str, ...]
+    sync_gui_selection: bool = True
+    defer_gui_selection: bool = False
+    defer_wall_grips: bool = False
+
+
+_TARGET_ACTIVATION_BEHAVIORS = {
+    plan_target_kinds.PLAN_TARGET_OPENING: TargetActivationBehavior(
+        select_method_name="select_opening_for_plan_edit",
+        clear_hovered_kinds=plan_target_kinds.SEMANTIC_TARGET_CLEAR_HOVERED_KINDS,
+    ),
+    plan_target_kinds.PLAN_TARGET_SYMBOL: TargetActivationBehavior(
+        select_method_name="select_symbol_for_plan_edit",
+        clear_hovered_kinds=plan_target_kinds.SEMANTIC_TARGET_CLEAR_HOVERED_KINDS,
+    ),
+    plan_target_kinds.PLAN_TARGET_REGION: TargetActivationBehavior(
+        select_method_name="select_region_for_plan_edit",
+        clear_hovered_kinds=plan_target_kinds.SEMANTIC_TARGET_CLEAR_HOVERED_KINDS,
+    ),
+    plan_target_kinds.PLAN_TARGET_SPACE: TargetActivationBehavior(
+        select_method_name="select_space_for_plan_edit",
+        clear_hovered_kinds=plan_target_kinds.SPACE_TARGET_CLEAR_HOVERED_KINDS,
+    ),
+    plan_target_kinds.PLAN_TARGET_WALL: TargetActivationBehavior(
+        select_method_name="select_wall_for_plan_edit",
+        clear_hovered_kinds=plan_target_kinds.WALL_TARGET_CLEAR_HOVERED_KINDS,
+    ),
+}
 
 
 class PlanSelectionTargetService(_SessionAPI):
@@ -266,6 +301,9 @@ class PlanSelectionHoverService(_SessionAPI):
 
 
 class PlanSelectionActivationService(_SessionAPI):
+    def _get_target_activation_behavior(self, kind):
+        return _TARGET_ACTIVATION_BEHAVIORS.get(kind)
+
     def queue_restore_selected_plan_target(self, kind, obj):
         plan_target_dispatch.queue_restore_selected_target(self.session, kind, obj)
 
@@ -345,6 +383,34 @@ class PlanSelectionActivationService(_SessionAPI):
             plan_target_kinds.PLAN_TARGET_WALL, *args, **kwargs
         )
 
+    def _activate_configured_plan_target(
+        self,
+        kind,
+        mouse_pos,
+        event_callback=None,
+        resolved_target=None,
+        *,
+        defer_gui_selection=None,
+        defer_wall_grips=None,
+    ):
+        behavior = self._get_target_activation_behavior(kind)
+        if behavior is None:
+            return False
+        if defer_gui_selection is None:
+            defer_gui_selection = behavior.defer_gui_selection
+        if defer_wall_grips is None:
+            defer_wall_grips = behavior.defer_wall_grips
+        return self.activate_plan_target(
+            kind,
+            mouse_pos,
+            event_callback=event_callback,
+            sync_gui_selection=behavior.sync_gui_selection,
+            clear_hovered_kinds=behavior.clear_hovered_kinds,
+            resolved_target=resolved_target,
+            defer_gui_selection=defer_gui_selection,
+            defer_wall_grips=defer_wall_grips,
+        )
+
     def activate_plan_target_for_kind(
         self,
         kind,
@@ -355,8 +421,7 @@ class PlanSelectionActivationService(_SessionAPI):
         defer_gui_selection=None,
         defer_wall_grips=None,
     ):
-        return plan_selection_activation._activate_configured_plan_target(
-            self.session,
+        return self._activate_configured_plan_target(
             kind,
             mouse_pos,
             event_callback=event_callback,
@@ -392,9 +457,11 @@ class PlanSelectionActivationService(_SessionAPI):
                 )
             )
             target_obj = target_ref.obj if target_ref.kind == kind else None
-            behavior = plan_selection_activation._get_target_activation_behavior(kind)
-            if behavior is None or not behavior.select_target(
-                self.session,
+            behavior = self._get_target_activation_behavior(kind)
+            select_target = (
+                getattr(self, behavior.select_method_name, None) if behavior is not None else None
+            )
+            if select_target is None or not select_target(
                 target_obj,
                 queue_restore=True,
                 sync_gui_selection=sync_gui_selection,
@@ -451,11 +518,10 @@ class PlanSelectionActivationService(_SessionAPI):
                     semantic_target_source="hovered",
                     hovered_target=perf.plan_perf_describe_target(target_ref.kind, target_ref.obj),
                 )
-        if plan_selection_activation._get_target_activation_behavior(target_ref.kind) is None:
+        if self._get_target_activation_behavior(target_ref.kind) is None:
             return False
         if target_ref.kind == plan_target_kinds.PLAN_TARGET_WALL:
-            return plan_selection_activation._activate_configured_plan_target(
-                self.session,
+            return self._activate_configured_plan_target(
                 target_ref.kind,
                 mouse_pos,
                 event_callback=event_callback,
@@ -463,8 +529,7 @@ class PlanSelectionActivationService(_SessionAPI):
                 defer_gui_selection=True,
                 defer_wall_grips=True,
             )
-        return plan_selection_activation._activate_configured_plan_target(
-            self.session,
+        return self._activate_configured_plan_target(
             target_ref.kind,
             mouse_pos,
             event_callback=event_callback,
@@ -587,13 +652,45 @@ class PlanSelectionActivationService(_SessionAPI):
         self.session.input.claim_left_button_click(event_callback)
         return True
 
+    def _get_current_additive_gui_selection(self):
+        primary_kind, primary_obj = self.session.selection.state.get_selected_plan_target()
+        selection = plan_selection_gui_sync.get_gui_selection()
+        if primary_obj is not None and primary_obj not in selection:
+            selection = [primary_obj] + selection
+        return (
+            primary_kind,
+            primary_obj,
+            self.session.selection.sync.normalize_gui_object_selection(selection),
+        )
+
+    def _resolve_next_selected_target(
+        self, selection, primary_kind, primary_obj, fallback_target=None
+    ):
+        if primary_obj is not None and primary_obj in selection:
+            return (primary_kind, primary_obj)
+        if fallback_target is not None:
+            fallback_target_ref = plan_target_kinds.coerce_plan_target_ref(fallback_target)
+            if (
+                fallback_target_ref.kind
+                and fallback_target_ref.obj
+                and fallback_target_ref.obj in selection
+            ):
+                return (fallback_target_ref.kind, fallback_target_ref.obj)
+        return self.session.selection.state.get_first_plan_target_from_selection(selection)
+
+    def _apply_additive_selection_update(self, selection, next_kind, next_obj, event_callback=None):
+        self.session.selection.state.set_pending_selected_plan_target(next_kind, next_obj)
+        plan_target_dispatch.clear_hovered_targets(self.session)
+        plan_selection_gui_sync.set_gui_selection(self.session, selection)
+        self.session.selection.refresh.refresh_primary_selected_plan_target()
+        self.session.input.claim_left_button_click(event_callback)
+        return True
+
     def toggle_raw_plan_object_selection(self, obj, event_callback=None):
         if obj is None:
             return False
 
-        primary_kind, primary_obj, selection = (
-            plan_selection_activation._get_current_additive_gui_selection(self.session)
-        )
+        primary_kind, primary_obj, selection = self._get_current_additive_gui_selection()
         provider_selection = self.session.selection.sync.normalize_gui_object_selection(
             self.session.provider_transient_state.provider_selected_objects
         )
@@ -611,14 +708,12 @@ class PlanSelectionActivationService(_SessionAPI):
                 if self.session.selection.targets.get_plan_target_for_object(selected).kind
             ],
         )
-        next_kind, next_obj = plan_selection_activation._resolve_next_selected_target(
-            self.session,
+        next_kind, next_obj = self._resolve_next_selected_target(
             new_selection,
             primary_kind,
             primary_obj,
         )
-        return plan_selection_activation._apply_additive_selection_update(
-            self.session,
+        return self._apply_additive_selection_update(
             new_selection,
             next_kind,
             next_obj,
@@ -653,16 +748,13 @@ class PlanSelectionActivationService(_SessionAPI):
         if not target_ref.kind or not target_ref.obj:
             return False
 
-        primary_kind, primary_obj, selection = (
-            plan_selection_activation._get_current_additive_gui_selection(self.session)
-        )
+        primary_kind, primary_obj, selection = self._get_current_additive_gui_selection()
 
         was_selected = target_ref.obj in selection
         if was_selected:
             new_selection = [selected for selected in selection if selected != target_ref.obj]
             fallback_target = None if primary_obj == target_ref.obj else target_ref
-            next_kind, next_obj = plan_selection_activation._resolve_next_selected_target(
-                self.session,
+            next_kind, next_obj = self._resolve_next_selected_target(
                 new_selection,
                 primary_kind,
                 primary_obj,
@@ -671,16 +763,14 @@ class PlanSelectionActivationService(_SessionAPI):
         else:
             new_selection = list(selection)
             new_selection.append(target_ref.obj)
-            next_kind, next_obj = plan_selection_activation._resolve_next_selected_target(
-                self.session,
+            next_kind, next_obj = self._resolve_next_selected_target(
                 new_selection,
                 primary_kind,
                 primary_obj,
                 fallback_target=target_ref,
             )
 
-        return plan_selection_activation._apply_additive_selection_update(
-            self.session,
+        return self._apply_additive_selection_update(
             new_selection,
             next_kind,
             next_obj,

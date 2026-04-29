@@ -1011,8 +1011,9 @@ class TestBimPlanCore(unittest.TestCase):
         target = SimpleNamespace(Name="Opening001")
         session = _attach_activation_service(SimpleNamespace(selection=SimpleNamespace()))
 
-        with patch(
-            "bimplan.selection.activation.activate_plan_target",
+        with patch.object(
+            session.selection.activation,
+            "activate_plan_target",
             side_effect=lambda *args, **kwargs: calls.append((args, kwargs)) or True,
         ):
             self.assertTrue(
@@ -1022,7 +1023,7 @@ class TestBimPlanCore(unittest.TestCase):
         self.assertEqual(
             [
                 (
-                    (session, "opening", (100, 200)),
+                    ("opening", (100, 200)),
                     {
                         "event_callback": None,
                         "sync_gui_selection": True,
@@ -1047,8 +1048,9 @@ class TestBimPlanCore(unittest.TestCase):
             )
         )
 
-        with patch(
-            "bimplan.selection.activation.activate_plan_target",
+        with patch.object(
+            session.selection.activation,
+            "activate_plan_target",
             side_effect=lambda *args, **kwargs: calls.append((args, kwargs)) or True,
         ):
             self.assertTrue(activate_semantic_plan_target(session, (50, 60)))
@@ -1056,7 +1058,7 @@ class TestBimPlanCore(unittest.TestCase):
         self.assertEqual(
             [
                 (
-                    (session, "wall", (50, 60)),
+                    ("wall", (50, 60)),
                     {
                         "event_callback": None,
                         "sync_gui_selection": True,
@@ -1088,8 +1090,9 @@ class TestBimPlanCore(unittest.TestCase):
             )
         )
 
-        with patch(
-            "bimplan.selection.activation.activate_plan_target",
+        with patch.object(
+            session.selection.activation,
+            "activate_plan_target",
             side_effect=lambda *args, **kwargs: calls.append((args, kwargs)) or True,
         ):
             self.assertTrue(activate_semantic_plan_target(session, (50, 60)))
@@ -1097,7 +1100,7 @@ class TestBimPlanCore(unittest.TestCase):
         self.assertEqual(
             [
                 (
-                    (session, "wall", (50, 60)),
+                    ("wall", (50, 60)),
                     {
                         "event_callback": None,
                         "sync_gui_selection": True,
