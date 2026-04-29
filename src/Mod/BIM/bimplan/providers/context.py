@@ -63,10 +63,10 @@ class PlanEditContext:
         getter = runtime_capabilities.get_callable(self.session, "get_plan_semantic_records")
         if getter is not None:
             return tuple(getter(targets=self.get_selected_targets()) or ())
-        from . import runtime as plan_provider_runtime
+        from .runtime import get_plan_semantic_records
 
         return tuple(
-            plan_provider_runtime.get_plan_semantic_records(
+            get_plan_semantic_records(
                 self.session,
                 targets=self.get_selected_targets(),
             )

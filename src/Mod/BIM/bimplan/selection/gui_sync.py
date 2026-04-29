@@ -6,7 +6,10 @@ from contextlib import contextmanager
 
 import FreeCAD
 import FreeCADGui
-from bimplan.providers import runtime as plan_provider_runtime
+from bimplan.providers.targets import (
+    is_plan_provider_target_object,
+    is_plan_provider_target_visible_for_mode,
+)
 
 
 @contextmanager
@@ -196,10 +199,10 @@ def resolve_document_object(session, document_name, object_name):
 def is_visible_provider_target_object(session, obj):
     validate = getattr(session, "_is_valid_plan_target", None)
     if callable(validate) and validate("provider", obj):
-        return bool(plan_provider_runtime.is_plan_provider_target_visible_for_mode(session, obj))
-    if not plan_provider_runtime.is_plan_provider_target_object(session, obj):
+        return bool(is_plan_provider_target_visible_for_mode(session, obj))
+    if not is_plan_provider_target_object(session, obj):
         return False
-    return bool(plan_provider_runtime.is_plan_provider_target_visible_for_mode(session, obj))
+    return bool(is_plan_provider_target_visible_for_mode(session, obj))
 
 
 def should_filter_hidden_provider_preselection_for_object(session, obj):

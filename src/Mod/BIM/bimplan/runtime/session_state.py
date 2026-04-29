@@ -28,7 +28,7 @@ from dataclasses import dataclass, field
 
 import FreeCAD
 import FreeCADGui
-from bimplan.providers import runtime as plan_provider_runtime
+from bimplan.providers.overlay_state import PLAN_PROVIDER_OVERLAY_MODE_ARCHITECTURE
 from bimplan.runtime import tools as plan_runtime_tools
 
 
@@ -69,7 +69,7 @@ class PlanTaskPanelState:
 
 @dataclass
 class PlanProviderOverlayReadState:
-    mode: str = plan_provider_runtime.PLAN_PROVIDER_OVERLAY_MODE_ARCHITECTURE
+    mode: str = PLAN_PROVIDER_OVERLAY_MODE_ARCHITECTURE
     visibility: dict = field(default_factory=dict)
     render_state: object = None
 

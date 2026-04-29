@@ -8,7 +8,6 @@ import FreeCADGui
 from bimplan import document_visuals as plan_document_visuals
 from bimplan.providers import action_payloads as plan_provider_action_payloads
 from bimplan.providers import payloads as plan_provider_payloads
-from bimplan.providers import runtime as plan_provider_runtime
 from bimplan.runtime import tools as plan_runtime_tools
 
 translate = FreeCAD.Qt.translate
@@ -117,7 +116,7 @@ def cancel_provider_point_tool(session, refresh=True):
 def start_plan_provider_point_tool(session, tool):
     if tool is None:
         return False
-    if plan_provider_runtime.plan_provider_integrations_disabled(session):
+    if session.providers.plan_provider_integrations_disabled():
         return False
     session.spaces.cancel_space_region_pick(refresh=False)
     session.spaces.cancel_plan_region_tool(refresh=False)
