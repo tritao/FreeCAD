@@ -638,7 +638,7 @@ class BimPlanEditGuiProviderMixin:
         self.assertTrue(event._handled)
         selection = FreeCADGui.Selection.getSelection()
         self.assertIn(wall, selection)
-        self.assertIn(marker, session._provider_selected_objects)
+        self.assertIn(marker, session.provider_transient_state.provider_selected_objects)
         self.assertIn(marker, session.selection.get_selected_objects())
         self._assert_selected_plan_target(session, "wall", wall)
 
@@ -743,7 +743,7 @@ class BimPlanEditGuiProviderMixin:
             self.assertEqual(
                 ("provider", marker), session.selection.state.get_selected_plan_target()
             )
-            self.assertEqual([], session._provider_selected_objects)
+            self.assertEqual([], session.provider_transient_state.provider_selected_objects)
             self.assertIn(marker, FreeCADGui.Selection.getSelection())
 
         session.shutdown(close_dialog=False)

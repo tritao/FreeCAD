@@ -549,13 +549,6 @@ _PLAN_EDIT_SESSION_STATE_PROPERTIES = (
         (("_plan_edit_params", "plan_edit_params", _coerce_identity),),
     ),
     (
-        "_ensure_provider_transient_state",
-        (
-            ("_provider_handle_trackers", "provider_handle_trackers", _coerce_list),
-            ("_provider_selected_objects", "provider_selected_objects", _coerce_list),
-        ),
-    ),
-    (
         "_ensure_opening_transient_state",
         (
             ("_opening_handle_trackers", "opening_handle_trackers", _coerce_list),
