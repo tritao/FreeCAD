@@ -504,6 +504,7 @@ Current progress:
 - Unused private opening-transient compatibility aliases are removed; opening overlays/editing use `opening_transient_state`.
 - Unused private overlay-transient compatibility aliases are removed; opening and space overlays use `overlay_transient_state`.
 - Unused private creation-preview compatibility aliases are removed; creation tools use `creation_preview_state`.
+- Unused private symbol/space overlay tracker compatibility aliases are removed; overlays use `overlay_tracker_state`.
 
 Steps:
 
