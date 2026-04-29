@@ -2,101 +2,89 @@
 
 """Input event routing for BIM Plan Edit."""
 
-from bimplan.providers import edit as plan_provider_edit_tool
-from bimplan.providers import point as plan_provider_point_tool
-from bimplan.runtime import tools as plan_runtime_tools
-from bimplan.tools import join as plan_join_tool
-from bimplan.tools import opening_edit as plan_opening_tool
-from bimplan.tools import select as plan_select_tool
-from bimplan.tools import spaces as plan_spaces_tool
-from bimplan.tools import space_region_pick as plan_space_region_pick_tool
-from bimplan.tools import symbol_edit as plan_symbol_tool
-from bimplan.tools import wall_create as plan_wall_create_tool
-from bimplan.tools import wall_edit as plan_wall_edit_tool
-from bimplan.tools import window_create as plan_window_tool
+from bimplan.providers.edit import ProviderMoveTool
+from bimplan.providers.point import ProviderPointTool
+from bimplan.runtime.tools import PlanTool, coerce_plan_tool
+from bimplan.tools.opening_edit import OpeningMoveTool
+from bimplan.tools.select import SelectTool
+from bimplan.tools.space_regions import PickSpaceRegionTool
+from bimplan.tools.spaces import RegionTool, SpaceSeparatorTool, SpaceTextTool
+from bimplan.tools.symbol_edit import SymbolEditTool
+from bimplan.tools.wall_create import RectWallTool
+from bimplan.tools.wall_edit import WallEditTool
+from bimplan.tools.wall_relations import JoinTool
+from bimplan.tools.window_create import WindowTool
 
-_LEFT_MOUSE_DOWN_TOOL_HANDLERS = {
-    plan_runtime_tools.PlanTool.JOIN: plan_join_tool.JoinTool,
-    plan_runtime_tools.PlanTool.PICK_SPACE_REGION: (
-        plan_space_region_pick_tool.PickSpaceRegionTool
-    ),
-    plan_runtime_tools.PlanTool.SELECT: plan_select_tool.SelectTool,
+_TOOL_HANDLERS = {
+    PlanTool.JOIN: JoinTool,
+    PlanTool.MOVE_OPENING: OpeningMoveTool,
+    PlanTool.MOVE_PROVIDER: ProviderMoveTool,
+    PlanTool.MOVE_SYMBOL: SymbolEditTool,
+    PlanTool.PICK_SPACE_REGION: PickSpaceRegionTool,
+    PlanTool.PROVIDER_POINT: ProviderPointTool,
+    PlanTool.RECT_WALL: RectWallTool,
+    PlanTool.REGION: RegionTool,
+    PlanTool.ROTATE_SYMBOL: SymbolEditTool,
+    PlanTool.SEPARATOR: SpaceSeparatorTool,
+    PlanTool.SET_SPACE_TEXT: SpaceTextTool,
+    PlanTool.SELECT: SelectTool,
+    PlanTool.WINDOW: WindowTool,
 }
 
-_MOUSE_MOVE_TOOL_HANDLERS = {
-    plan_runtime_tools.PlanTool.JOIN: plan_join_tool.JoinTool,
-    plan_runtime_tools.PlanTool.PICK_SPACE_REGION: (
-        plan_space_region_pick_tool.PickSpaceRegionTool
-    ),
-    plan_runtime_tools.PlanTool.SELECT: plan_select_tool.SelectTool,
-}
-
-_MOUSE_MOVE_RECORD_HOVER_AFTER_TOOLS = frozenset(
+_LEFT_MOUSE_DOWN_TOOLS = frozenset(
     (
-        plan_runtime_tools.PlanTool.JOIN,
-        plan_runtime_tools.PlanTool.SELECT,
+        PlanTool.JOIN,
+        PlanTool.PICK_SPACE_REGION,
+        PlanTool.SELECT,
     )
 )
 
-_KEY_TOOL_HANDLERS = {
-    plan_runtime_tools.PlanTool.JOIN: plan_join_tool.JoinTool,
-    plan_runtime_tools.PlanTool.MOVE_OPENING: plan_opening_tool.OpeningMoveTool,
-    plan_runtime_tools.PlanTool.MOVE_PROVIDER: plan_provider_edit_tool.ProviderMoveTool,
-    plan_runtime_tools.PlanTool.MOVE_SYMBOL: plan_symbol_tool.SymbolEditTool,
-    plan_runtime_tools.PlanTool.PICK_SPACE_REGION: (
-        plan_space_region_pick_tool.PickSpaceRegionTool
-    ),
-    plan_runtime_tools.PlanTool.PROVIDER_POINT: plan_provider_point_tool.ProviderPointTool,
-    plan_runtime_tools.PlanTool.RECT_WALL: plan_wall_create_tool.RectWallTool,
-    plan_runtime_tools.PlanTool.REGION: plan_spaces_tool.RegionTool,
-    plan_runtime_tools.PlanTool.ROTATE_SYMBOL: plan_symbol_tool.SymbolEditTool,
-    plan_runtime_tools.PlanTool.SEPARATOR: plan_spaces_tool.SpaceSeparatorTool,
-    plan_runtime_tools.PlanTool.SET_SPACE_TEXT: plan_spaces_tool.SpaceTextTool,
-    plan_runtime_tools.PlanTool.WINDOW: plan_window_tool.WindowTool,
+_MOUSE_MOVE_TOOLS = _LEFT_MOUSE_DOWN_TOOLS
+
+_MOUSE_MOVE_RECORD_HOVER_AFTER_TOOLS = frozenset(
+    (
+        PlanTool.JOIN,
+        PlanTool.SELECT,
+    )
+)
+
+_ESCAPE_TOOL_HANDLERS = {
+    PlanTool.MOVE_PROVIDER: ProviderMoveTool,
+    PlanTool.MOVE_SYMBOL: SymbolEditTool,
+    PlanTool.ROTATE_SYMBOL: SymbolEditTool,
+    PlanTool.SET_SPACE_TEXT: SpaceTextTool,
 }
 
-
-def _current_tool_is(*tools):
-    tool_set = frozenset(tools)
-    return lambda session: _coerce_current_tool(session) in tool_set
-
-
-_ESCAPE_CANCEL_HANDLERS = (
-    (
-        _current_tool_is(plan_runtime_tools.PlanTool.MOVE_PROVIDER),
-        plan_provider_edit_tool.ProviderMoveTool,
-    ),
-    (
-        _current_tool_is(
-            plan_runtime_tools.PlanTool.MOVE_SYMBOL,
-            plan_runtime_tools.PlanTool.ROTATE_SYMBOL,
-        ),
-        plan_symbol_tool.SymbolEditTool,
-    ),
-    (
-        _current_tool_is(plan_runtime_tools.PlanTool.SET_SPACE_TEXT),
-        plan_spaces_tool.SpaceTextTool,
-    ),
+_ESCAPE_ACTIVE_TOOL_FALLBACKS = (
     (
         lambda session: session.providers.has_active_provider_point_tool(),
-        plan_provider_point_tool.ProviderPointTool,
+        ProviderPointTool,
     ),
     (
         lambda session: session.windows.has_active_window_tool(),
-        plan_window_tool.WindowTool,
+        WindowTool,
     ),
     (
         lambda session: session.wall_create.has_active_rect_wall_tool(),
-        plan_wall_create_tool.RectWallTool,
+        RectWallTool,
     ),
     (
         lambda session: session.spaces.has_active_plan_region_tool(),
-        plan_spaces_tool.RegionTool,
+        RegionTool,
     ),
     (
         lambda session: session.spaces.has_active_space_separator_tool(),
-        plan_spaces_tool.SpaceSeparatorTool,
+        SpaceSeparatorTool,
     ),
+)
+
+_HOVER_CLEARERS = (
+    "set_hovered_wall",
+    "set_hovered_opening",
+    "set_hovered_symbol",
+    "set_hovered_provider",
+    "set_hovered_space",
+    "set_hovered_region",
 )
 
 
@@ -137,14 +125,21 @@ def _get_event_handled_setter(event_callback):
 
 
 def _coerce_current_tool(session):
-    return plan_runtime_tools.coerce_plan_tool(session.current_tool)
+    return coerce_plan_tool(session.current_tool)
 
 
-def _get_current_tool_handler(session, registry):
-    handler_class = registry.get(_coerce_current_tool(session))
+def _get_tool_handler(session, tool=None):
+    handler_class = _TOOL_HANDLERS.get(tool or _coerce_current_tool(session))
     if handler_class is None:
         return None
     return handler_class(session)
+
+
+def _get_current_tool_handler(session, supported_tools):
+    current_tool = _coerce_current_tool(session)
+    if current_tool not in supported_tools:
+        return None
+    return _get_tool_handler(session, current_tool)
 
 
 def set_event_handled(session, event_callback):
@@ -174,6 +169,16 @@ def _get_mouse_event_position(event):
         return None
 
 
+def _describe_plan_target(session, target):
+    return session.performance.plan_perf_describe_target(target.kind, target.obj)
+
+
+def _clear_hovered_targets(session):
+    hover = session.selection.hover
+    for method_name in _HOVER_CLEARERS:
+        getattr(hover, method_name)(None)
+
+
 def _handle_left_mouse_button_release(session, event_callback):
     if not session.input_event_state.consume_left_button_release:
         return False
@@ -184,7 +189,7 @@ def _handle_left_mouse_button_release(session, event_callback):
 
 def _handle_left_mouse_button_down(session, mouse_pos, event_callback):
     session.input_event_state.consume_left_button_release = False
-    handler = _get_current_tool_handler(session, _LEFT_MOUSE_DOWN_TOOL_HANDLERS)
+    handler = _get_current_tool_handler(session, _LEFT_MOUSE_DOWN_TOOLS)
     if handler is None:
         return
     handler.on_left_mouse_down(mouse_pos, event_callback)
@@ -193,9 +198,7 @@ def _handle_left_mouse_button_down(session, mouse_pos, event_callback):
 def _record_hovered_after(session):
     hovered_after = session.selection.hover.get_hovered_plan_target()
     session.performance.plan_perf_set_fields(
-        hovered_after=session.performance.plan_perf_describe_target(
-            hovered_after.kind, hovered_after.obj
-        ),
+        hovered_after=_describe_plan_target(session, hovered_after),
     )
 
 
@@ -210,14 +213,13 @@ def on_mouse_pressed(session, event_callback):
     event = event_callback.getEvent()
     mouse_pos = _get_mouse_event_position(event)
     selected_before = session.selection.state.get_selected_plan_target()
+    selected_before_description = _describe_plan_target(session, selected_before)
     with session.performance.plan_perf_trace_event(
         "mouse_pressed",
         button=str(event.getButton()),
         state=str(event.getState()),
         mouse_pos=mouse_pos,
-        selected_before=session.performance.plan_perf_describe_target(
-            selected_before.kind, selected_before.obj
-        ),
+        selected_before=selected_before_description,
     ):
         if event.getButton() != coin.SoMouseButtonEvent.BUTTON1:
             return
@@ -226,9 +228,7 @@ def on_mouse_pressed(session, event_callback):
             button=str(event.getButton()),
             state=str(event.getState()),
             mouse_pos=mouse_pos,
-            selected_before=session.performance.plan_perf_describe_target(
-                selected_before.kind, selected_before.obj
-            ),
+            selected_before=selected_before_description,
         ):
             try:
                 if event.getState() == coin.SoMouseButtonEvent.UP:
@@ -243,31 +243,22 @@ def on_mouse_pressed(session, event_callback):
                 selected_after = session.selection.state.get_selected_plan_target()
                 session.performance.plan_perf_set_fields(
                     handled=bool(getattr(event_callback, "_handled", False)),
-                    selected_after=session.performance.plan_perf_describe_target(
-                        selected_after.kind, selected_after.obj
-                    ),
+                    selected_after=_describe_plan_target(session, selected_after),
                 )
 
 
 def on_mouse_moved(session, event_callback):
     if session.lifecycle_state.tearing_down:
         return
-    event = event_callback.getEvent()
-    try:
-        pos = event.getPosition().getValue()
-        mouse_pos = (pos[0], pos[1])
-    except Exception:
-        mouse_pos = None
+    mouse_pos = _get_mouse_event_position(event_callback.getEvent())
     hovered_before = session.selection.hover.get_hovered_plan_target()
     with session.performance.plan_perf_trace_event(
         "mouse_moved",
         mouse_pos=mouse_pos,
-        hovered_before=session.performance.plan_perf_describe_target(
-            hovered_before.kind, hovered_before.obj
-        ),
+        hovered_before=_describe_plan_target(session, hovered_before),
     ):
         current_tool = _coerce_current_tool(session)
-        handler = _get_current_tool_handler(session, _MOUSE_MOVE_TOOL_HANDLERS)
+        handler = _get_current_tool_handler(session, _MOUSE_MOVE_TOOLS)
         if handler is not None:
             if (
                 handler.on_mouse_move(mouse_pos, event_callback)
@@ -275,13 +266,7 @@ def on_mouse_moved(session, event_callback):
             ):
                 _record_hovered_after(session)
             return
-        session.selection.hover.set_hovered_wall(None)
-        session.selection.hover.set_hovered_opening(None)
-        session.selection.hover.set_hovered_symbol(None)
-        session.selection.hover.set_hovered_provider(None)
-        session.selection.hover.set_hovered_space(None)
-        session.selection.hover.set_hovered_region(None)
-        return
+        _clear_hovered_targets(session)
 
 
 def on_mouse_wheel(session, event_callback):
@@ -299,12 +284,19 @@ def on_mouse_wheel(session, event_callback):
 
 
 def _handle_direct_tool_key_press(session, key, event_callback, coin):
-    handler = _get_current_tool_handler(session, _KEY_TOOL_HANDLERS)
+    handler = _get_tool_handler(session)
     return bool(handler and handler.on_key(key, event_callback, coin))
 
 
+def _handle_global_key_press(session, key, event_callback, coin):
+    return WallEditTool(session).on_key(key, event_callback, coin)
+
+
 def _handle_escape_cancels(session):
-    for predicate, handler_class in _ESCAPE_CANCEL_HANDLERS:
+    handler_class = _ESCAPE_TOOL_HANDLERS.get(_coerce_current_tool(session))
+    if handler_class is not None:
+        return handler_class(session).cancel()
+    for predicate, handler_class in _ESCAPE_ACTIVE_TOOL_FALLBACKS:
         if predicate(session):
             handler_class(session).cancel()
             return True
@@ -322,7 +314,7 @@ def on_key_pressed(session, event_callback):
     key = event.getKey()
     if _handle_direct_tool_key_press(session, key, event_callback, coin):
         return
-    if plan_wall_edit_tool.WallEditTool(session).on_key(key, event_callback, coin):
+    if _handle_global_key_press(session, key, event_callback, coin):
         return
     if key != coin.SoKeyboardEvent.ESCAPE:
         return

@@ -239,9 +239,8 @@ class BimPlanEditGuiProviderMixin:
         session.overlay_refresh_state.dirty_plan_visuals.add(plan_document_visuals.PLAN_VISUAL_ALL)
 
         try:
-            with patch.object(
-                session.overlays.manager,
-                "refresh_plan_overlay_visuals",
+            with patch(
+                "bimplan.overlays.manager.refresh_plan_overlay_visuals",
             ) as refresh_visuals:
                 session.overlays.manager.flush_plan_overlay_visual_refresh()
 
