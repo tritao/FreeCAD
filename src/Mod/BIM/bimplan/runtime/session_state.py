@@ -501,19 +501,7 @@ _PLAN_EDIT_SESSION_STATE_PROPERTIES = (
             ("_edit_endpoint", "edit_endpoint", _coerce_identity),
             ("_edit_endpoints", "edit_endpoints", _coerce_identity),
             ("_wall_edit_opening_clearances", "wall_edit_opening_clearances", _coerce_dict),
-            (
-                "_wall_edit_opening_clearances_queued",
-                "wall_edit_opening_clearances_queued",
-                _coerce_bool,
-            ),
-            (
-                "_wall_edit_task_panel_refresh_queued",
-                "wall_edit_task_panel_refresh_queued",
-                _coerce_bool,
-            ),
             ("_preview_points", "preview_points", _coerce_identity),
-            ("_preview_line_tracker", "preview_line_tracker", _coerce_identity),
-            ("_preview_footprint_trackers", "preview_footprint_trackers", _coerce_list),
             ("_preview_grip_trackers", "preview_grip_trackers", _coerce_list),
             ("_wall_edit_readout_trackers", "wall_edit_readout_trackers", _coerce_list),
             (
@@ -526,9 +514,6 @@ _PLAN_EDIT_SESSION_STATE_PROPERTIES = (
                 "wall_edit_active_readout_tracker",
                 _coerce_identity,
             ),
-            ("_wall_edit_active_readout_mode", "wall_edit_active_readout_mode", _coerce_identity),
-            ("_wall_edit_length_edit_queued", "wall_edit_length_edit_queued", _coerce_bool),
-            ("_edit_wall_visibility", "edit_wall_visibility", _coerce_identity),
         ),
     ),
     (
