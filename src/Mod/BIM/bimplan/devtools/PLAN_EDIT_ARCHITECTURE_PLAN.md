@@ -537,6 +537,8 @@ Current progress:
 - Private wall join-type state is removed; wall relation mode uses `wall_relation_state.join_type`.
 - FreeCAD selection/document observer methods on `PlanEditSession` are explicit adapter methods,
   not generated delegates.
+- Provider contribution APIs are explicit module functions backed by one shared collector,
+  not generated from a contribution-surface list.
 
 Steps:
 
