@@ -736,9 +736,6 @@ class TestBimPlanCore(unittest.TestCase):
         calls = []
         session = SimpleNamespace(
             current_tool="Select",
-            _cancel_rect_wall_tool=lambda refresh=False: None,
-            _cancel_provider_point_tool=lambda refresh=False: None,
-            _clear_plan_relation_status=lambda: None,
             _set_selected_plan_target=lambda *args, **kwargs: None,
             _clear_hovered_plan_targets=lambda *args, **kwargs: None,
             task_panels=SimpleNamespace(refresh_task_panel_status=lambda *args, **kwargs: None),
@@ -778,9 +775,6 @@ class TestBimPlanCore(unittest.TestCase):
         calls = []
         session = SimpleNamespace(
             current_tool="Select",
-            _cancel_rect_wall_tool=lambda refresh=False: None,
-            _cancel_provider_point_tool=lambda refresh=False: None,
-            _clear_plan_relation_status=lambda: None,
             _set_selected_plan_target=lambda *args, **kwargs: None,
             _get_wall_defaults=lambda: {"height": 2500},
             task_panels=SimpleNamespace(refresh_task_panel_status=lambda *args, **kwargs: None),
