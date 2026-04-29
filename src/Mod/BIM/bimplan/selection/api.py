@@ -5,16 +5,10 @@
 from contextlib import contextmanager
 
 from .common import _SessionAPI
-from .interaction import (
-    PlanSelectionActivationService,
-    PlanSelectionHoverService,
-    PlanSelectionTargetService,
-)
-from .state import (
-    PlanSelectionRefreshService,
-    PlanSelectionStateService,
-    PlanSelectionSyncService,
-)
+from .gui_sync import PlanSelectionSyncService
+from .interaction import PlanSelectionActivationService, PlanSelectionHoverService
+from .state import PlanSelectionRefreshService, PlanSelectionStateService
+from .targets import PlanSelectionTargetService
 
 
 class PlanSelectionAPI(_SessionAPI):

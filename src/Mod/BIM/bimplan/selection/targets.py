@@ -14,7 +14,7 @@ from bimplan.providers.targets import (
 )
 from bimplan.runtime import capabilities as runtime_capabilities
 from . import kinds as plan_target_kinds
-from .common import get_plan_target_state_key
+from .common import _SessionAPI, get_plan_target_state_key
 
 
 @dataclass(frozen=True)
@@ -906,3 +906,62 @@ def set_hovered_target(session, kind, obj):
     policy.set_hovered(session, obj)
     _call_sync_specs(session, policy.hover_set_sync)
     return True
+
+
+class PlanSelectionTargetService(_SessionAPI):
+    normalize_plan_requirement_tags = staticmethod(normalize_plan_requirement_tags)
+
+    def get_plan_target_kind_for_object(self, obj):
+        return get_plan_target_kind_for_object(self.session, obj)
+
+    def get_plan_target_for_object(self, obj, parent_obj=None):
+        return get_plan_target_for_object(self.session, obj, parent_obj)
+
+    def is_plan_selectable_wall(self, obj):
+        return is_plan_selectable_wall(self.session, obj)
+
+    def is_plan_space_object(self, obj):
+        return is_plan_space_object(self.session, obj)
+
+    def is_plan_custom_pick_only_object(self, obj):
+        if not obj:
+            return False
+        obj = _get_plan_semantic_object(self.session, obj)
+        return (
+            _call_component_method(
+                self.session,
+                "openings",
+                "is_hosted_opening_object",
+                obj,
+                default=False,
+            )
+            or self.is_plan_space_object(obj)
+            or self.is_plan_region_object(obj)
+        )
+
+    def is_plan_space_separator_object(self, obj):
+        return is_plan_space_separator_object(self.session, obj)
+
+    def is_plan_region_object(self, obj):
+        return is_plan_region_object(self.session, obj)
+
+    def get_plan_host_ref(self, obj):
+        return get_plan_host_ref(self.session, obj)
+
+    def make_plan_target_record(self, kind, obj, selected_keys=None, primary_key=None):
+        return make_plan_target_record(
+            self.session,
+            kind,
+            obj,
+            selected_keys=selected_keys,
+            primary_key=primary_key,
+        )
+
+    def get_plan_targets(self, selected_only=False):
+        return get_plan_targets(self.session, selected_only=selected_only)
+
+    def resolve_plan_target_object(self, target):
+        return resolve_plan_target_object(self.session, target)
+
+    def resolve_plan_semantic_object(self, target):
+        return resolve_plan_semantic_object(self.session, target)
