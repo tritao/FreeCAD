@@ -336,7 +336,7 @@ def get_selected_provider_handle_specs(session, provider_obj):
     marker_size = session.viewport.scaled_marker_size(params.get_param_view("MarkerSize"))
     specs = []
     for idx, handle in enumerate(
-        session.providers.get_selected_provider_edit_handles(provider_obj)
+        session.providers.editing.get_selected_provider_edit_handles(provider_obj)
     ):
         point = _to_vector(getattr(handle, "point", None))
         if point is None:

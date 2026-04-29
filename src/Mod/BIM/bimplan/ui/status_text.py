@@ -555,7 +555,7 @@ def _get_select_input_hint_specs(session, ui):
         primary_hint = translate("BIM_PlanEdit", "%1 select space boundary target")
     elif selected_kind == "provider":
         provider_handles = tuple(
-            session.providers.get_selected_provider_edit_handles(selected_obj) or ()
+            session.providers.editing.get_selected_provider_edit_handles(selected_obj) or ()
         )
         primary_hint = translate(
             "BIM_PlanEdit",
