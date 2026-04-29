@@ -257,14 +257,12 @@ SET(bimplan_SRCS
     bimplan/runtime/tools.py
     bimplan/runtime/view.py
     bimplan/selection/__init__.py
-    bimplan/selection/activation.py
     bimplan/selection/edit_nodes.py
     bimplan/selection/gui_sync.py
     bimplan/selection/selection.py
     bimplan/selection/service_common.py
     bimplan/selection/service_interaction.py
     bimplan/selection/service_primary.py
-    bimplan/selection/state_refresh.py
     bimplan/selection/target_dispatch.py
     bimplan/selection/target_kinds.py
     bimplan/selection/targets.py
