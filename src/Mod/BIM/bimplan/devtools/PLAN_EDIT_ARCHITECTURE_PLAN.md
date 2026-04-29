@@ -532,10 +532,10 @@ Current progress:
 
 Steps:
 
-1. Audit remaining state-backed compatibility properties.
-2. Remove aliases by ownership group.
-3. Update tests to use typed state builders.
-4. Keep temporary compatibility only for real external entrypoints.
+1. Audit remaining state-backed compatibility properties. Done.
+2. Remove aliases by ownership group. Done.
+3. Update tests to use typed state builders. Done.
+4. Keep temporary compatibility only for real external entrypoints. Done.
 
 Validation:
 
@@ -611,3 +611,27 @@ The architecture is in good shape when:
 - provider work is cached and out of ordinary hover/selection paths.
 - the main Plan Edit workflow suites stay green.
 - perf traces show no obvious provider or task-panel rebuilds on ordinary wall selection.
+
+Current completion status:
+
+- `PlanEditSession` now acts as the composition root for grouped services instead
+  of exposing owned feature behavior through generated forwarding lists.
+- Internal Plan Edit code no longer depends on flat `session.selection.*` or
+  `session.overlays.*` compatibility APIs.
+- Picking is owned by `session.picking`, with provider-specific picking under
+  `providers/picking.py` and explicit click/hover/edit-node entrypoints.
+- `document_visuals` coordinates observer lifecycle, deferral, and flush ordering
+  while target-specific refresh behavior lives on owner services.
+- State-backed private compatibility aliases have been removed; owned code and
+  tests use typed state groups.
+- Provider session fallback hooks have been removed; runtime overrides and test
+  fakes now belong on `session.providers`.
+- `cruft_report.py --check-no-private-session-reads` passes.
+- `cruft_report.py --max-forwarder-surfaces 0` passes.
+- The maintained Plan Edit core, wall, opening, space, symbol, provider, and
+  provider-selection suites pass in the headless runner. The full combined GUI
+  run can still hit a Qt/Shiboken teardown crash in the wall suite; the same wall
+  suite passes when rerun by itself.
+- Perf trace support remains available through `bimplan.benchmark`; provider
+  refresh behavior is covered by targeted tests such as ordinary wall selection
+  skipping provider refresh and the provider integration performance switch.
