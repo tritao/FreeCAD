@@ -125,7 +125,7 @@ class _PlanEditViewportStatusChip:
                 return QtGui.QFrame.eventFilter(self, watched, event)
 
             def close_chip(self):
-                from bimplan.ui.control_shell import _queue_widget_delete
+                from bimplan.ui import qt_lifetime as plan_qt_lifetime
 
                 host = self.host_widget
                 if host is not None:
@@ -134,12 +134,8 @@ class _PlanEditViewportStatusChip:
                     except Exception:
                         pass
                 self.host_widget = None
-                self.hide()
-                try:
-                    self.setParent(None)
-                except Exception:
-                    pass
-                _queue_widget_delete(self)
+                plan_qt_lifetime.detach_widget(self)
+                plan_qt_lifetime.delete_later(self)
 
         return _Chip(session, host_widget)
 

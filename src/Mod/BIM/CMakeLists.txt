@@ -288,6 +288,7 @@ SET(bimplan_SRCS
     bimplan/ui/control_integrations.py
     bimplan/ui/control_shell.py
     bimplan/ui/controls.py
+    bimplan/ui/qt_lifetime.py
     bimplan/ui/status_text.py
     bimplan/ui/task_panel.py
     bimplan/ui/task_panel_view_model.py
