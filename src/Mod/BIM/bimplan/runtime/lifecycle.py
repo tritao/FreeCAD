@@ -7,7 +7,6 @@ import FreeCADGui
 from bimplan.runtime import command_gate as plan_command_gate
 from bimplan.runtime import tools as plan_runtime_tools
 from bimplan.tools import spaces as plan_spaces
-from bimplan.tools import window_create as plan_window_create
 from bimplan.selection import target_dispatch as plan_target_dispatch
 from bimplan.selection import target_kinds as plan_target_kinds
 from bimplan.runtime.embedded_commands import _PlanEditCommandHost, _PlanEditWallHost
@@ -293,25 +292,6 @@ def _clear_space_region_pick_state(session):
     plan_spaces.reset_space_region_pick_state(session, clear_overlays=False)
 
 
-_WINDOW_TOOL_SELECTION_KINDS = (
-    plan_target_kinds.PLAN_TARGET_WALL,
-    plan_target_kinds.PLAN_TARGET_OPENING,
-    plan_target_kinds.PLAN_TARGET_SYMBOL,
-    plan_target_kinds.PLAN_TARGET_SPACE,
-    plan_target_kinds.PLAN_TARGET_REGION,
-)
-
-_PLAN_REGION_TOOL_SELECTION_KINDS = (
-    plan_target_kinds.PLAN_TARGET_WALL,
-    plan_target_kinds.PLAN_TARGET_REGION,
-    plan_target_kinds.PLAN_TARGET_SPACE,
-)
-
-_SPACE_SEPARATOR_TOOL_SELECTION_KINDS = (
-    plan_target_kinds.PLAN_TARGET_WALL,
-    plan_target_kinds.PLAN_TARGET_SPACE,
-)
-
 _MOVE_TOOL_SELECTION_KINDS = (plan_target_kinds.PLAN_TARGET_WALL,)
 
 
@@ -463,53 +443,6 @@ def _cleanup_shutdown(session, *, teardown=False):
     detach_runtime_observers(session)
 
 
-def _get_selected_space_for_activation(session):
-    return session.selection.state.get_selected_plan_target_object(
-        plan_target_kinds.PLAN_TARGET_SPACE
-    )
-
-
-def _prepare_plan_region_tool(session, parent_space):
-    plan_spaces.prepare_plan_region_tool_state(session, parent_space=parent_space)
-
-
-def _start_snap_tool(session, tool_name, callback, title, *, movecallback=None):
-    session.current_tool = tool_name
-    FreeCAD.activeDraftCommand = session
-    kwargs = {
-        "callback": callback,
-        "title": title,
-    }
-    if movecallback is not None:
-        kwargs["movecallback"] = movecallback
-    FreeCADGui.Snapper.getPoint(**kwargs)
-    session.task_panels.refresh_task_panel_status()
-
-
-def _start_plan_region_tool(session):
-    return _start_snap_tool(
-        session,
-        plan_runtime_tools.PlanTool.REGION,
-        session.spaces.handle_plan_region_point,
-        translate("BIM_PlanEdit", "First region point"),
-        movecallback=session.spaces.update_plan_region_preview,
-    )
-
-
-def _prepare_space_separator_tool(session):
-    defaults = session.wall_create.get_wall_defaults() or {}
-    plan_spaces.prepare_space_separator_tool_state(session, height=defaults["height"])
-
-
-def _start_space_separator_tool(session):
-    return _start_snap_tool(
-        session,
-        plan_runtime_tools.PlanTool.SEPARATOR,
-        session.spaces.handle_space_separator_point,
-        translate("BIM_PlanEdit", "Separator start point"),
-    )
-
-
 def _start_move_tool(session):
     from draftguitools import gui_move
 
@@ -629,91 +562,19 @@ def activate_select_tool(session):
 
 
 def activate_window_tool(session):
-    session.spaces.cancel_space_region_pick(refresh=False)
-    session.spaces.cancel_plan_region_tool(refresh=False)
-    session.wall_create.cancel_rect_wall_tool(refresh=False)
-    session.spaces.cancel_space_separator_tool(refresh=False)
-    session.providers.cancel_provider_point_tool(refresh=False)
-    if has_active_embedded_tool(session):
-        cancel_embedded_tool(session)
-    session.wall_edit.cancel_wall_edit()
-    cancel_pending_edit(session)
-    session.wall_relations.clear_plan_relation_status()
-    clear_selection_visuals(
-        session,
-        kinds=_WINDOW_TOOL_SELECTION_KINDS,
-        clear_handle_kinds=(plan_target_kinds.PLAN_TARGET_OPENING,),
-        include_wall_grips=True,
-        include_selected_wall_opening_context=True,
-        include_secondary_selection=True,
-    )
-    session.windows.clear_window_preview()
-    return plan_window_create.activate_window_tool(session)
+    return session.windows.activate_window_tool()
 
 
 def activate_plan_region_tool(session):
-    parent_space = _get_selected_space_for_activation(session)
-    session.spaces.cancel_space_region_pick(refresh=False)
-    session.wall_create.cancel_rect_wall_tool(refresh=False)
-    session.windows.cancel_window_tool(refresh=False)
-    session.spaces.cancel_space_separator_tool(refresh=False)
-    session.providers.cancel_provider_point_tool(refresh=False)
-    if has_active_embedded_tool(session):
-        cancel_embedded_tool(session)
-    session.wall_edit.cancel_wall_edit()
-    cancel_pending_edit(session)
-    session.wall_relations.clear_plan_relation_status()
-    session.selection.state.set_selected_plan_target()
-    session.selection.hover.clear_hovered_plan_targets()
-    clear_selection_visuals(
-        session,
-        kinds=_PLAN_REGION_TOOL_SELECTION_KINDS,
-        include_wall_grips=True,
-        include_selected_wall_opening_context=True,
-        include_secondary_selection=True,
-    )
-    _prepare_plan_region_tool(session, parent_space)
-    return _start_plan_region_tool(session)
+    return session.spaces.activate_plan_region_tool()
 
 
 def activate_space_separator_tool(session):
-    session.spaces.cancel_space_region_pick(refresh=False)
-    session.spaces.cancel_plan_region_tool(refresh=False)
-    session.wall_create.cancel_rect_wall_tool(refresh=False)
-    session.windows.cancel_window_tool(refresh=False)
-    session.providers.cancel_provider_point_tool(refresh=False)
-    if has_active_embedded_tool(session):
-        cancel_embedded_tool(session)
-    session.wall_edit.cancel_wall_edit()
-    cancel_pending_edit(session)
-    session.wall_relations.clear_plan_relation_status()
-    session.selection.state.set_selected_plan_target()
-    clear_selection_visuals(
-        session,
-        kinds=_SPACE_SEPARATOR_TOOL_SELECTION_KINDS,
-        include_wall_grips=True,
-        include_selected_wall_opening_context=True,
-        include_secondary_selection=True,
-    )
-    _prepare_space_separator_tool(session)
-    return _start_space_separator_tool(session)
+    return session.spaces.activate_space_separator_tool()
 
 
 def activate_space_tool(session):
-    session.spaces.cancel_space_region_pick(refresh=False)
-    session.spaces.cancel_plan_region_tool(refresh=False)
-    if session.current_tool == plan_runtime_tools.PlanTool.SET_SPACE_TEXT:
-        session.spaces.cancel_space_text_position_pick()
-    session.wall_create.cancel_rect_wall_tool(refresh=False)
-    session.windows.cancel_window_tool(refresh=False)
-    session.spaces.cancel_space_separator_tool(refresh=False)
-    session.providers.cancel_provider_point_tool(refresh=False)
-    if has_active_embedded_tool(session):
-        cancel_embedded_tool(session)
-    session.wall_edit.cancel_wall_edit(refresh=False)
-    cancel_pending_edit(session)
-    session.wall_relations.clear_plan_relation_status()
-    return session.spaces.create_space_from_current_selection()
+    return session.spaces.activate_space_tool()
 
 
 def activate_move_tool(session):
