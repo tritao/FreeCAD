@@ -204,6 +204,12 @@ class PlanProvidersAPI:
 
         return point.cancel_provider_point_tool(self.session, refresh=refresh)
 
+    def cancel_for_select(self):
+        if not self.has_active_provider_point_tool():
+            return False
+        self.cancel_provider_point_tool()
+        return True
+
     def start_plan_provider_point_tool(self, tool):
         from bimplan.providers import point
 

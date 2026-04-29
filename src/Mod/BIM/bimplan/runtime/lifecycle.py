@@ -217,25 +217,18 @@ def shutdown(session, close_dialog=True, teardown=False):
 
 
 def activate_select_tool(session):
-    if session.symbols.cancel_active_tool_for_finish():
+    if session.symbols.cancel_active_tool_for_select():
         return
     if session.spaces.cancel_active_tool_for_select():
         return
-    if session.providers.has_active_provider_point_tool():
-        session.providers.cancel_provider_point_tool()
+    if session.providers.cancel_for_select():
         return
-    if session.embedded_tools.has_active():
-        session.embedded_tools.cancel()
-    if session.wall_create.has_active_rect_wall_tool():
-        session.wall_create.cancel_rect_wall_tool()
-    if session.windows.has_active_window_tool():
-        session.windows.cancel_window_tool()
-    if session.spaces.has_active_plan_region_tool():
-        session.spaces.cancel_plan_region_tool()
-    if session.spaces.has_active_space_separator_tool():
-        session.spaces.cancel_space_separator_tool()
-    session.wall_edit.cancel_wall_edit()
-    session.wall_relations.cancel_join_tool()
+    session.embedded_tools.cancel_for_select()
+    session.wall_create.cancel_for_select()
+    session.windows.cancel_for_select()
+    session.spaces.cancel_secondary_tools_for_select()
+    session.wall_edit.cancel_for_select()
+    session.wall_relations.cancel_for_select()
 
 
 def _reset_pending_edit_state(session, *, clear_opening_edit=False):
