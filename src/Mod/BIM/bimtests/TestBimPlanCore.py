@@ -73,7 +73,7 @@ from bimplan.selection.overlay_picking import (
     pick_plan_opening_target_from_overlays,
     pick_plan_symbol_target_from_overlays,
 )
-from bimplan.selection.provider_overlay_picking import (
+from bimplan.providers.picking import (
     get_provider_overlay_target_from_edit_node,
     pick_provider_overlay_target_from_objects_info,
     pick_provider_overlay_target_from_overlays,
@@ -1316,7 +1316,7 @@ class TestBimPlanCore(unittest.TestCase):
         )
 
         with patch(
-            "bimplan.selection.provider_overlay_picking.plan_targets.get_plan_target_for_object",
+            "bimplan.providers.picking.plan_targets.get_plan_target_for_object",
             return_value=(None, None),
         ):
             self.assertEqual(

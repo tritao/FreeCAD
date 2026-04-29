@@ -8,7 +8,7 @@ from bimplan.selection import edit_node_picking as plan_edit_node_picking
 from bimplan.selection import hover_picking as plan_hover_picking
 from bimplan.selection import overlay_picking as plan_overlay_picking
 from bimplan.selection import picking_geometry as plan_picking_geometry
-from bimplan.selection import provider_overlay_picking as plan_provider_overlay_picking
+from bimplan.providers import picking as plan_provider_picking
 
 
 class PlanPickingAPI:
@@ -45,7 +45,7 @@ class PlanPickingAPI:
         return plan_edit_node_picking.get_plan_target_from_edit_node(self.session, node)
 
     def get_provider_overlay_target_from_edit_node(self, node):
-        return plan_provider_overlay_picking.get_provider_overlay_target_from_edit_node(
+        return plan_provider_picking.get_provider_overlay_target_from_edit_node(
             self.session,
             node,
         )
@@ -87,16 +87,16 @@ class PlanPickingAPI:
     def pick_provider_overlay_target_from_overlays(
         self,
         mouse_pos,
-        radius_px=plan_provider_overlay_picking.PROVIDER_OVERLAY_PICK_RADIUS_PX,
+        radius_px=plan_provider_picking.PROVIDER_OVERLAY_PICK_RADIUS_PX,
     ):
-        return plan_provider_overlay_picking.pick_provider_overlay_target_from_overlays(
+        return plan_provider_picking.pick_provider_overlay_target_from_overlays(
             self.session,
             mouse_pos,
             radius_px=radius_px,
         )
 
     def pick_provider_overlay_target_from_objects_info(self, mouse_pos):
-        return plan_provider_overlay_picking.pick_provider_overlay_target_from_objects_info(
+        return plan_provider_picking.pick_provider_overlay_target_from_objects_info(
             self.session,
             mouse_pos,
         )

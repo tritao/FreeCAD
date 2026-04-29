@@ -7,11 +7,11 @@ from dataclasses import dataclass, field
 from bimplan.selection import area_picking as plan_area_picking
 from bimplan.selection import overlay_picking as plan_overlay_picking
 from bimplan.selection import picking_debug as plan_picking_debug
-from bimplan.selection import provider_overlay_picking as plan_provider_overlay_picking
+from bimplan.providers import picking as plan_provider_picking
 from bimplan.selection import target_kinds as plan_target_kinds
 from bimplan.selection import targets as plan_targets
 
-PROVIDER_OVERLAY_PICK_RADIUS_PX = plan_provider_overlay_picking.PROVIDER_OVERLAY_PICK_RADIUS_PX
+PROVIDER_OVERLAY_PICK_RADIUS_PX = plan_provider_picking.PROVIDER_OVERLAY_PICK_RADIUS_PX
 
 
 @dataclass
@@ -71,11 +71,11 @@ def _perf_trace_span(session, name, **fields):
 
 
 def _get_plan_provider_overlay_pick_mode(session):
-    return plan_provider_overlay_picking.get_plan_provider_overlay_pick_mode(session)
+    return plan_provider_picking.get_plan_provider_overlay_pick_mode(session)
 
 
 def _should_prioritize_provider_targets_for_mode(session):
-    return plan_provider_overlay_picking.should_prioritize_provider_targets_for_mode(session)
+    return plan_provider_picking.should_prioritize_provider_targets_for_mode(session)
 
 
 def pick_provider_overlay_target_from_overlays(
@@ -83,7 +83,7 @@ def pick_provider_overlay_target_from_overlays(
     mouse_pos,
     radius_px=PROVIDER_OVERLAY_PICK_RADIUS_PX,
 ):
-    return plan_provider_overlay_picking.pick_provider_overlay_target_from_overlays(
+    return plan_provider_picking.pick_provider_overlay_target_from_overlays(
         session,
         mouse_pos,
         radius_px=radius_px,
@@ -156,7 +156,7 @@ def _collect_pick_candidates_from_objects_info(session, infos):
         obj_name = info.get("Object")
         if not doc_name or not obj_name:
             continue
-        obj = plan_provider_overlay_picking.resolve_document_object(session, doc_name, obj_name)
+        obj = plan_provider_picking.resolve_document_object(session, doc_name, obj_name)
         if obj is None:
             continue
         parent_obj = info.get("ParentObject")
