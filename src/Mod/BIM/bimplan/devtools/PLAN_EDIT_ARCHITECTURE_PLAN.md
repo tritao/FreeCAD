@@ -541,6 +541,8 @@ Current progress:
   not generated from a contribution-surface list.
 - Lifecycle activation resolves explicit service paths only; private action-name fallbacks
   are removed from production code and tests.
+- Selection target service delegates to the canonical target helpers, and private target
+  predicate fallback hooks are removed.
 
 Steps:
 

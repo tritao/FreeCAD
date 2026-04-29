@@ -145,9 +145,6 @@ def get_plan_pick_target_for_object(session, obj, parent_obj=None):
 def is_plan_selectable_wall(session, obj):
     if not obj:
         return False
-    legacy = runtime_capabilities.get_callable(session, "_is_plan_selectable_wall")
-    if legacy is not None:
-        return bool(legacy(obj))
     obj = _get_plan_semantic_object(session, obj)
     try:
         import Draft
@@ -160,9 +157,6 @@ def is_plan_selectable_wall(session, obj):
 def is_plan_space_object(session, obj):
     if not obj:
         return False
-    legacy = runtime_capabilities.get_callable(session, "_is_plan_space_object")
-    if legacy is not None:
-        return bool(legacy(obj))
     obj = _get_plan_semantic_object(session, obj)
     try:
         import Draft
@@ -200,9 +194,6 @@ def is_plan_space_separator_object(session, obj):
 def is_plan_region_object(session, obj):
     if not obj:
         return False
-    legacy = runtime_capabilities.get_callable(session, "_is_plan_region_object")
-    if legacy is not None:
-        return bool(legacy(obj))
     obj = _get_plan_semantic_object(session, obj)
     try:
         import Draft

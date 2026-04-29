@@ -17,104 +17,16 @@ class PlanSelectionTargetService(_SessionAPI):
     normalize_plan_requirement_tags = staticmethod(plan_targets.normalize_plan_requirement_tags)
 
     def get_plan_target_kind_for_object(self, obj):
-        if plan_targets._call_component_method(
-            self.session,
-            "openings",
-            "is_hosted_opening_object",
-            obj,
-            default=False,
-        ):
-            return plan_target_kinds.PLAN_TARGET_OPENING
-        if plan_targets._call_component_method(
-            self.session,
-            "visibility",
-            "is_plan_symbol_instance",
-            obj,
-            default=False,
-        ):
-            return plan_target_kinds.PLAN_TARGET_SYMBOL
-        if (
-            plan_targets._call_component_method(
-                self.session,
-                "providers",
-                "is_plan_provider_target_object",
-                obj,
-                default=False,
-            )
-            or plan_targets._call_component_method(
-                self.session,
-                "providers",
-                "get_plan_provider_target_for_object",
-                obj,
-                default=None,
-            )
-            or plan_targets.plan_provider_runtime.is_plan_provider_target_object(self.session, obj)
-        ):
-            return plan_target_kinds.PLAN_TARGET_PROVIDER
-        if self.is_plan_region_object(obj):
-            return plan_target_kinds.PLAN_TARGET_REGION
-        if self.is_plan_selectable_wall(obj):
-            return plan_target_kinds.PLAN_TARGET_WALL
-        if self.is_plan_space_object(obj):
-            return plan_target_kinds.PLAN_TARGET_SPACE
-        return None
+        return plan_targets.get_plan_target_kind_for_object(self.session, obj)
 
     def get_plan_target_for_object(self, obj, parent_obj=None):
-        seen = set()
-        for candidate in (obj, parent_obj):
-            if not candidate:
-                continue
-            name = getattr(candidate, "Name", None)
-            if name and name in seen:
-                continue
-            if name:
-                seen.add(name)
-            target_kind = self.get_plan_target_kind_for_object(candidate)
-            if target_kind:
-                return plan_target_kinds.make_plan_target_ref(target_kind, candidate)
-
-        semantic_obj = plan_targets._get_plan_semantic_object(self.session, obj)
-        semantic_name = getattr(semantic_obj, "Name", None)
-        if semantic_obj and semantic_name not in seen:
-            target_kind = self.get_plan_target_kind_for_object(semantic_obj)
-            if target_kind:
-                return plan_target_kinds.make_plan_target_ref(target_kind, semantic_obj)
-
-        return plan_target_kinds.make_plan_target_ref()
+        return plan_targets.get_plan_target_for_object(self.session, obj, parent_obj)
 
     def is_plan_selectable_wall(self, obj):
-        if not obj:
-            return False
-        legacy = plan_targets.runtime_capabilities.get_callable(
-            self.session, "_is_plan_selectable_wall"
-        )
-        if legacy is not None:
-            return bool(legacy(obj))
-        obj = plan_targets._get_plan_semantic_object(self.session, obj)
-        try:
-            import Draft
-
-            return Draft.getType(obj) == "Wall"
-        except Exception:
-            return False
+        return plan_targets.is_plan_selectable_wall(self.session, obj)
 
     def is_plan_space_object(self, obj):
-        if not obj:
-            return False
-        legacy = plan_targets.runtime_capabilities.get_callable(
-            self.session, "_is_plan_space_object"
-        )
-        if legacy is not None:
-            return bool(legacy(obj))
-        obj = plan_targets._get_plan_semantic_object(self.session, obj)
-        try:
-            import Draft
-
-            if Draft.getType(obj) == "Space":
-                return True
-        except Exception:
-            pass
-        return getattr(obj, "IfcType", "") == "Space"
+        return plan_targets.is_plan_space_object(self.session, obj)
 
     def is_plan_custom_pick_only_object(self, obj):
         if not obj:
@@ -133,31 +45,10 @@ class PlanSelectionTargetService(_SessionAPI):
         )
 
     def is_plan_space_separator_object(self, obj):
-        if not obj:
-            return False
-        obj = plan_targets._get_plan_semantic_object(self.session, obj)
-        try:
-            import Draft
-
-            return Draft.getType(obj) == "SpaceSeparator"
-        except Exception:
-            return False
+        return plan_targets.is_plan_space_separator_object(self.session, obj)
 
     def is_plan_region_object(self, obj):
-        if not obj:
-            return False
-        legacy = plan_targets.runtime_capabilities.get_callable(
-            self.session, "_is_plan_region_object"
-        )
-        if legacy is not None:
-            return bool(legacy(obj))
-        obj = plan_targets._get_plan_semantic_object(self.session, obj)
-        try:
-            import Draft
-
-            return Draft.getType(obj) == "PlanRegion"
-        except Exception:
-            return False
+        return plan_targets.is_plan_region_object(self.session, obj)
 
     def get_plan_host_ref(self, obj):
         if obj is None:
