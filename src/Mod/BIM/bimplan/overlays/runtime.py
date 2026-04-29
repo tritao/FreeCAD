@@ -25,6 +25,63 @@ def _queue_plan_overlay_visual_refresh(session, *visuals):
     )
 
 
+def discard_runtime_references(session):
+    session.overlays.walls.discard_runtime_references()
+    session.overlays.spaces.discard_runtime_references()
+
+
+def clear_begin_teardown_visuals(session):
+    session.overlays.walls.clear_junction_node_overlays()
+    session.overlays.walls.clear_hovered_wall_opening_context_overlay()
+    plan_target_dispatch.clear_hovered_target_visuals(session)
+    session.overlays.walls.clear_wall_grips()
+    plan_target_dispatch.clear_selected_target_visuals(
+        session,
+        clear_handle_kinds=(
+            plan_target_kinds.PLAN_TARGET_PROVIDER,
+            plan_target_kinds.PLAN_TARGET_OPENING,
+            plan_target_kinds.PLAN_TARGET_SYMBOL,
+        ),
+    )
+    session.overlays.openings.clear_selected_wall_opening_context_overlay()
+    session.overlays.spaces.clear_secondary_selected_overlays()
+    session.overlays.providers.clear_provider_overlays()
+    session.overlays.providers.clear_provider_point_preview()
+    session.overlays.spaces.clear_space_region_pick_overlays()
+    session.overlays.openings.discard_opening_handle_tracker_pool()
+    session.openings.clear_opening_move_preview()
+    session.symbols.clear_symbol_edit_preview()
+    session.spaces.clear_plan_region_preview()
+
+
+def clear_shutdown_visuals(session):
+    session.overlays.walls.clear_junction_node_overlays()
+    session.overlays.walls.clear_hovered_wall_opening_context_overlay()
+    plan_target_dispatch.clear_hovered_target_visuals(
+        session,
+        kinds=(
+            plan_target_kinds.PLAN_TARGET_WALL,
+            plan_target_kinds.PLAN_TARGET_OPENING,
+            plan_target_kinds.PLAN_TARGET_SYMBOL,
+            plan_target_kinds.PLAN_TARGET_PROVIDER,
+        ),
+    )
+    session.overlays.walls.clear_wall_grips()
+    plan_target_dispatch.clear_selected_target_visuals(
+        session,
+        clear_handle_kinds=(
+            plan_target_kinds.PLAN_TARGET_OPENING,
+            plan_target_kinds.PLAN_TARGET_SYMBOL,
+        ),
+    )
+    session.overlays.openings.clear_selected_wall_opening_context_overlay()
+    session.overlays.providers.clear_provider_overlays()
+    session.overlays.providers.clear_provider_point_preview()
+    session.overlays.openings.discard_opening_handle_tracker_pool()
+    session.openings.clear_opening_move_preview()
+    session.symbols.clear_symbol_edit_preview()
+
+
 class _OverlayService:
     def __init__(self, session):
         self._session = session
@@ -322,125 +379,6 @@ class PlanOpeningOverlayService(_OverlayService):
         return opening_overlays.clear_selected_opening_handles(self.session, *args, **kwargs)
 
 
-class PlanSymbolOverlayService(_OverlayService):
-    def clear_symbol_edit_preview(self, *args, **kwargs):
-        return symbol_overlays.clear_symbol_edit_preview(self.session, *args, **kwargs)
-
-    def get_plan_symbol_instances(self, *args, **kwargs):
-        return symbol_overlays.get_plan_symbol_instances(self.session, *args, **kwargs)
-
-    def get_symbol_global_placement(self, *args, **kwargs):
-        return symbol_overlays.get_symbol_global_placement(self.session, *args, **kwargs)
-
-    def get_symbol_parent_global_placement(self, *args, **kwargs):
-        return symbol_overlays.get_symbol_parent_global_placement(self.session, *args, **kwargs)
-
-    def get_symbol_plan_proxy(self, *args, **kwargs):
-        return symbol_overlays.get_symbol_plan_proxy(self.session, *args, **kwargs)
-
-    def get_symbol_semantic_proxy(self, *args, **kwargs):
-        return symbol_overlays.get_symbol_semantic_proxy(self.session, *args, **kwargs)
-
-    def get_symbol_overlay_polylines(self, *args, **kwargs):
-        return symbol_overlays.get_symbol_overlay_polylines(self.session, *args, **kwargs)
-
-    def get_symbol_overlay_segments(self, *args, **kwargs):
-        return symbol_overlays.get_symbol_overlay_segments(self.session, *args, **kwargs)
-
-    def get_symbol_overlay_screen_polylines(self, *args, **kwargs):
-        return symbol_overlays.get_symbol_overlay_screen_polylines(self.session, *args, **kwargs)
-
-    def get_symbol_overlay_screen_bounds(self, *args, **kwargs):
-        return symbol_overlays.get_symbol_overlay_screen_bounds(self.session, *args, **kwargs)
-
-    def refresh_selected_symbol_visuals(self, *args, **kwargs):
-        return symbol_overlays.refresh_selected_symbol_visuals(self.session, *args, **kwargs)
-
-    def create_symbol_overlay_trackers(self, *args, **kwargs):
-        return symbol_overlays.create_symbol_overlay_trackers(self.session, *args, **kwargs)
-
-    def sync_hovered_symbol_overlay(self, *args, **kwargs):
-        return symbol_overlays.sync_hovered_symbol_overlay(self.session, *args, **kwargs)
-
-    def clear_hovered_symbol_overlay(self, *args, **kwargs):
-        return symbol_overlays.clear_hovered_symbol_overlay(self.session, *args, **kwargs)
-
-    def sync_selected_symbol_overlay(self, *args, **kwargs):
-        return symbol_overlays.sync_selected_symbol_overlay(self.session, *args, **kwargs)
-
-    def clear_selected_symbol_overlay(self, *args, **kwargs):
-        return symbol_overlays.clear_selected_symbol_overlay(self.session, *args, **kwargs)
-
-    def get_symbol_rotation_snap_increment_degrees(self, *args, **kwargs):
-        return symbol_overlays.get_symbol_rotation_snap_increment_degrees(
-            self.session, *args, **kwargs
-        )
-
-    def get_symbol_rotation_snap_step_radians(self, *args, **kwargs):
-        return symbol_overlays.get_symbol_rotation_snap_step_radians(self.session, *args, **kwargs)
-
-    def symbol_rotation_free_angle_override_active(self, *args, **kwargs):
-        return symbol_overlays.symbol_rotation_free_angle_override_active(
-            self.session, *args, **kwargs
-        )
-
-    def resolve_symbol_handle_target_point(self, *args, **kwargs):
-        return symbol_overlays.resolve_symbol_handle_target_point(self.session, *args, **kwargs)
-
-    def get_symbol_handle_radius(self, *args, **kwargs):
-        return symbol_overlays.get_symbol_handle_radius(self.session, *args, **kwargs)
-
-    def get_selected_symbol_handle_specs(self, *args, **kwargs):
-        return symbol_overlays.get_selected_symbol_handle_specs(self.session, *args, **kwargs)
-
-    def get_symbol_anchor_point(self, *args, **kwargs):
-        return symbol_overlays.get_symbol_anchor_point(self.session, *args, **kwargs)
-
-    def get_symbol_facing_vector(self, *args, **kwargs):
-        return symbol_overlays.get_symbol_facing_vector(self.session, *args, **kwargs)
-
-    def sync_selected_symbol_handles(self, *args, **kwargs):
-        return symbol_overlays.sync_selected_symbol_handles(self.session, *args, **kwargs)
-
-    def clear_selected_symbol_handles(self, *args, **kwargs):
-        return symbol_overlays.clear_selected_symbol_handles(self.session, *args, **kwargs)
-
-    def sync_symbol_edit_preview(self, *args, **kwargs):
-        return symbol_overlays.sync_symbol_edit_preview(self.session, *args, **kwargs)
-
-    def pick_selected_symbol_handle(self, *args, **kwargs):
-        return symbol_overlays.pick_selected_symbol_handle(self.session, *args, **kwargs)
-
-    def get_symbol_local_anchor(self, *args, **kwargs):
-        return symbol_overlays.get_symbol_local_anchor(self.session, *args, **kwargs)
-
-    def get_symbol_local_facing(self, *args, **kwargs):
-        return symbol_overlays.get_symbol_local_facing(self.session, *args, **kwargs)
-
-    def is_symbol_visual_dependency(self, symbol, obj):
-        return symbol_overlays.is_symbol_visual_dependency(self.session, symbol, obj)
-
-    def refresh_target_document_visual_dependency(self, symbol, obj, prop):
-        return symbol_overlays.refresh_target_document_visual_dependency(
-            self.session,
-            symbol,
-            obj,
-            prop,
-        )
-
-    def refresh_symbol_visual_footprint(self, symbol):
-        return symbol_overlays.refresh_symbol_visual_footprint(self.session, symbol)
-
-    def handle_document_visual_dependency_change(self, obj, prop):
-        return symbol_overlays.handle_document_visual_dependency_change(self.session, obj, prop)
-
-    def handle_deleted_visual_target(self, obj):
-        return symbol_overlays.handle_deleted_visual_target(self.session, obj)
-
-    def refresh_document_dependent_visuals(self):
-        return symbol_overlays.refresh_document_dependent_visuals(self.session)
-
-
 class PlanOverlaysAPI:
     """Owned session surface for BIM Plan Edit overlay behavior."""
 
@@ -452,7 +390,7 @@ class PlanOverlaysAPI:
         self.walls = PlanWallOverlayService(session)
         self.providers = PlanProviderOverlayService(session)
         self.openings = PlanOpeningOverlayService(session)
-        self.symbols = PlanSymbolOverlayService(session)
+        self.symbols = symbol_overlays.PlanSymbolOverlayService(session)
 
     @property
     def session(self):
@@ -462,60 +400,13 @@ class PlanOverlaysAPI:
         return _queue_plan_overlay_visual_refresh(self.session, *visuals)
 
     def discard_runtime_references(self):
-        self.walls.discard_runtime_references()
-        self.spaces.discard_runtime_references()
+        return discard_runtime_references(self.session)
 
     def clear_begin_teardown_visuals(self):
-        session = self.session
-        self.walls.clear_junction_node_overlays()
-        self.walls.clear_hovered_wall_opening_context_overlay()
-        plan_target_dispatch.clear_hovered_target_visuals(session)
-        self.walls.clear_wall_grips()
-        plan_target_dispatch.clear_selected_target_visuals(
-            session,
-            clear_handle_kinds=(
-                plan_target_kinds.PLAN_TARGET_PROVIDER,
-                plan_target_kinds.PLAN_TARGET_OPENING,
-                plan_target_kinds.PLAN_TARGET_SYMBOL,
-            ),
-        )
-        self.openings.clear_selected_wall_opening_context_overlay()
-        self.spaces.clear_secondary_selected_overlays()
-        self.providers.clear_provider_overlays()
-        self.providers.clear_provider_point_preview()
-        self.spaces.clear_space_region_pick_overlays()
-        self.openings.discard_opening_handle_tracker_pool()
-        session.openings.clear_opening_move_preview()
-        session.symbols.clear_symbol_edit_preview()
-        session.spaces.clear_plan_region_preview()
+        return clear_begin_teardown_visuals(self.session)
 
     def clear_shutdown_visuals(self):
-        session = self.session
-        self.walls.clear_junction_node_overlays()
-        self.walls.clear_hovered_wall_opening_context_overlay()
-        plan_target_dispatch.clear_hovered_target_visuals(
-            session,
-            kinds=(
-                plan_target_kinds.PLAN_TARGET_WALL,
-                plan_target_kinds.PLAN_TARGET_OPENING,
-                plan_target_kinds.PLAN_TARGET_SYMBOL,
-                plan_target_kinds.PLAN_TARGET_PROVIDER,
-            ),
-        )
-        self.walls.clear_wall_grips()
-        plan_target_dispatch.clear_selected_target_visuals(
-            session,
-            clear_handle_kinds=(
-                plan_target_kinds.PLAN_TARGET_OPENING,
-                plan_target_kinds.PLAN_TARGET_SYMBOL,
-            ),
-        )
-        self.openings.clear_selected_wall_opening_context_overlay()
-        self.providers.clear_provider_overlays()
-        self.providers.clear_provider_point_preview()
-        self.openings.discard_opening_handle_tracker_pool()
-        session.openings.clear_opening_move_preview()
-        session.symbols.clear_symbol_edit_preview()
+        return clear_shutdown_visuals(self.session)
 
     def queue_plan_overlay_view_scale_refresh(
         self,
