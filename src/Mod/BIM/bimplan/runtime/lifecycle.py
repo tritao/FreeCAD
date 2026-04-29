@@ -133,17 +133,8 @@ def disconnect_teardown_signals(session):
     lifecycle_state.teardown_signal_sources = []
 
 
-def discard_runtime_references(session):
+def _discard_view_runtime_references(session):
     viewport_state = session.viewport_state
-    provider_point_state = session.provider_point_state
-    provider_transient_state = session.provider_transient_state
-    selection_state = session.selection_state
-    space_region_pick_state = session.space_region_pick_state
-    wall_edit_state = session.wall_edit_state
-    plan_region_tool_state = session.plan_region_tool_state
-    interaction_state = session.interaction_state
-    overlay_tracker_state = session.overlay_tracker_state
-    creation_preview_state = session.creation_preview_state
     session.viewport.clear_viewport_status_chip()
     session.viewport.restore_preselection_state()
     session.doc = None
@@ -159,7 +150,24 @@ def discard_runtime_references(session):
     viewport_state.saved_camera_type = None
     viewport_state.working_plane = None
     viewport_state.interaction_plane = None
+
+
+def _discard_selection_runtime_references(session):
+    selection_state = session.selection_state
     session.selection.state.set_selected_plan_target_state()
+    selection_state.secondary_selected_plan_targets_state = []
+    session.hovered_wall = None
+    session.hovered_opening = None
+    session.hovered_symbol = None
+    session.hovered_provider = None
+    session.hovered_space = None
+    session.hovered_region = None
+    selection_state.pending_selected_plan_target = None
+
+
+def _discard_provider_runtime_references(session):
+    provider_point_state = session.provider_point_state
+    provider_transient_state = session.provider_transient_state
     provider_transient_state.provider_selected_objects = []
     provider_point_state.provider_point_host_target = None
     provider_point_state.provider_point_host_source = ""
@@ -170,19 +178,26 @@ def discard_runtime_references(session):
     provider_point_state.provider_point_preview_point = None
     provider_point_state.provider_point_preview_host_target = None
     provider_point_state.provider_point_preview_host_source = ""
-    selection_state.secondary_selected_plan_targets_state = []
-    session.hovered_wall = None
-    session.hovered_opening = None
-    session.hovered_symbol = None
-    session.hovered_provider = None
-    session.hovered_space = None
-    session.hovered_region = None
+    session.provider_runtime_state.target_collection_depth = 0
+
+
+def _discard_space_runtime_references(session):
+    space_region_pick_state = session.space_region_pick_state
+    plan_region_tool_state = session.plan_region_tool_state
+    interaction_state = session.interaction_state
     space_region_pick_state.boundaries = []
     space_region_pick_state.candidates = []
     space_region_pick_state.hovered_candidate = None
     space_region_pick_state.seed_space = None
-    selection_state.pending_selected_plan_target = None
-    session.provider_runtime_state.target_collection_depth = 0
+    plan_region_tool_state.points = []
+    plan_region_tool_state.preview_trackers = []
+    plan_region_tool_state.parent_space = None
+    interaction_state.edit_space = None
+
+
+def _discard_edit_runtime_references(session):
+    wall_edit_state = session.wall_edit_state
+    interaction_state = session.interaction_state
     wall_edit_state.edit_wall = None
     interaction_state.edit_opening = None
     interaction_state.edit_opening_handle_index = None
@@ -190,10 +205,6 @@ def discard_runtime_references(session):
     interaction_state.edit_symbol_handle_role = None
     interaction_state.edit_symbol_start_placement = None
     interaction_state.edit_symbol_reference_point = None
-    plan_region_tool_state.points = []
-    plan_region_tool_state.preview_trackers = []
-    plan_region_tool_state.parent_space = None
-    interaction_state.edit_space = None
     wall_edit_state.edit_endpoint = None
     wall_edit_state.edit_endpoints = None
     wall_edit_state.preview_points = None
@@ -205,14 +216,37 @@ def discard_runtime_references(session):
     wall_edit_state.wall_edit_active_readout_tracker = None
     wall_edit_state.wall_edit_active_readout_mode = None
     wall_edit_state.edit_wall_visibility = None
+
+
+def _discard_overlay_runtime_references(session):
+    overlay_tracker_state = session.overlay_tracker_state
     overlay_tracker_state.junction_node_trackers = []
     overlay_tracker_state.space_region_pick_trackers = []
+
+
+def _discard_creation_preview_runtime_references(session):
+    creation_preview_state = session.creation_preview_state
     creation_preview_state.rect_wall_start = None
     creation_preview_state.rect_wall_params = None
     creation_preview_state.rect_wall_preview_trackers = []
+
+
+def _discard_embedded_tool_runtime_references(session):
+    interaction_state = session.interaction_state
     interaction_state.embedded_host = None
     interaction_state.embedded_tool = None
     interaction_state.embedded_tool_name = None
+
+
+def discard_runtime_references(session):
+    _discard_view_runtime_references(session)
+    _discard_selection_runtime_references(session)
+    _discard_provider_runtime_references(session)
+    _discard_space_runtime_references(session)
+    _discard_edit_runtime_references(session)
+    _discard_overlay_runtime_references(session)
+    _discard_creation_preview_runtime_references(session)
+    _discard_embedded_tool_runtime_references(session)
 
 
 def clear_hover_visuals(
