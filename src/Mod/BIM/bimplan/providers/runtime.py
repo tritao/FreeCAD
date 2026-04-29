@@ -950,17 +950,15 @@ def normalize_plan_provider_overlay_mode(mode):
     return PLAN_PROVIDER_OVERLAY_MODE_ARCHITECTURE
 
 
+def _provider_overlay_read_state(session):
+    return session.provider_overlay_read_state
+
+
 def get_plan_provider_overlay_mode(session):
     external_mode = _call_provider_method(session, "get_plan_provider_overlay_mode", default=None)
     if external_mode is not None:
         return normalize_plan_provider_overlay_mode(external_mode)
-    state = getattr(session, "provider_overlay_read_state", None)
-    mode = (
-        getattr(state, "mode", PLAN_PROVIDER_OVERLAY_MODE_ARCHITECTURE)
-        if state is not None
-        else getattr(session, "_provider_overlay_mode", PLAN_PROVIDER_OVERLAY_MODE_ARCHITECTURE)
-    )
-    return normalize_plan_provider_overlay_mode(mode)
+    return normalize_plan_provider_overlay_mode(_provider_overlay_read_state(session).mode)
 
 
 def is_focused_provider_overlay_pick_mode(mode):
@@ -971,8 +969,9 @@ def set_plan_provider_overlay_mode(session, mode):
     normalized = normalize_plan_provider_overlay_mode(mode)
     if normalized == get_plan_provider_overlay_mode(session):
         return False
-    session._provider_overlay_mode = normalized
-    session._provider_overlay_state = None
+    overlay_state = _provider_overlay_read_state(session)
+    overlay_state.mode = normalized
+    overlay_state.render_state = None
     invalidate_plan_provider_document_cache(session)
     session.selection.refresh.clear_hidden_provider_preselection()
     session.overlays.queue_plan_overlay_visual_refresh(
@@ -998,13 +997,7 @@ def is_plan_provider_overlay_enabled(session, overlay):
     )
     if key is None:
         return True
-    state = getattr(session, "provider_overlay_read_state", None)
-    visibility = (
-        getattr(state, "visibility", {})
-        if state is not None
-        else getattr(session, "_provider_overlay_visibility", {})
-    )
-    return visibility.get(key, True)
+    return _provider_overlay_read_state(session).visibility.get(key, True)
 
 
 def is_plan_provider_overlay_visible_for_mode(session, overlay, mode=None):
@@ -1029,11 +1022,12 @@ def set_plan_provider_overlay_visible(session, provider_id, overlay_key, visible
     if key is None:
         return
     visible = bool(visible)
+    overlay_state = _provider_overlay_read_state(session)
     if visible:
-        session._provider_overlay_visibility.pop(key, None)
+        overlay_state.visibility.pop(key, None)
     else:
-        session._provider_overlay_visibility[key] = False
-    session._provider_overlay_state = None
+        overlay_state.visibility[key] = False
+    overlay_state.render_state = None
     invalidate_plan_provider_document_cache(session)
     session.overlays.queue_plan_overlay_visual_refresh(
         plan_document_visuals.PLAN_VISUAL_PROVIDER_OVERLAYS
@@ -1041,7 +1035,7 @@ def set_plan_provider_overlay_visible(session, provider_id, overlay_key, visible
 
 
 def queue_plan_provider_overlay_refresh(session):
-    session._provider_overlay_state = None
+    _provider_overlay_read_state(session).render_state = None
     invalidate_plan_provider_document_cache(session)
     session.overlays.queue_plan_overlay_visual_refresh(
         plan_document_visuals.PLAN_VISUAL_PROVIDER_OVERLAYS

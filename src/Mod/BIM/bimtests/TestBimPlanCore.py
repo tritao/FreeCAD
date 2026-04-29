@@ -196,6 +196,17 @@ def _make_provider_runtime_state_stub(**kwargs):
     )
 
 
+def _make_provider_overlay_read_state_stub(**kwargs):
+    return SimpleNamespace(
+        **{
+            "mode": "architecture",
+            "visibility": {},
+            "render_state": None,
+            **kwargs,
+        }
+    )
+
+
 def _make_provider_transient_state_stub(**kwargs):
     return SimpleNamespace(**{"provider_selected_objects": [], **kwargs})
 
@@ -496,6 +507,7 @@ class TestBimPlanCore(unittest.TestCase):
         session = SimpleNamespace(
             lifecycle_state=_make_lifecycle_state_stub(),
             provider_runtime_state=_make_provider_runtime_state_stub(refresh_cache={}),
+            provider_overlay_read_state=_make_provider_overlay_read_state_stub(),
             provider_transient_state=_make_provider_transient_state_stub(),
             performance=_make_perf_stub(
                 trace_span=lambda _name: nullcontext(),
@@ -1330,6 +1342,7 @@ class TestBimPlanCore(unittest.TestCase):
             current_tool="Select",
             hovered_provider=provider,
             doc=provider.Document,
+            provider_overlay_read_state=_make_provider_overlay_read_state_stub(),
             _plan_provider_refresh_cache_scope=lambda: nullcontext(),
             get_plan_provider_overlays=lambda: (
                 PlanOverlaySpec(
@@ -1404,6 +1417,7 @@ class TestBimPlanCore(unittest.TestCase):
         session = SimpleNamespace(
             doc=doc,
             view=_View(),
+            provider_overlay_read_state=_make_provider_overlay_read_state_stub(),
             get_plan_provider_overlays=lambda: (
                 PlanOverlaySpec(
                     key="fixture-status",
@@ -1437,6 +1451,7 @@ class TestBimPlanCore(unittest.TestCase):
         session = SimpleNamespace(
             doc=doc,
             view=_View(),
+            provider_overlay_read_state=_make_provider_overlay_read_state_stub(),
             get_plan_provider_overlays=lambda: (
                 PlanOverlaySpec(
                     key="fixture-status",
@@ -1484,6 +1499,7 @@ class TestBimPlanCore(unittest.TestCase):
         session = SimpleNamespace(
             doc=doc,
             view=_View(),
+            provider_overlay_read_state=_make_provider_overlay_read_state_stub(),
             get_plan_provider_overlays=lambda: (
                 PlanOverlaySpec(
                     key="fixture-status",
@@ -2347,8 +2363,8 @@ class TestBimPlanCore(unittest.TestCase):
                 document_cache={},
                 refresh_cache=None,
             ),
+            provider_overlay_read_state=_make_provider_overlay_read_state_stub(),
             provider_transient_state=_make_provider_transient_state_stub(),
-            _provider_overlay_mode="architecture",
             selection=SimpleNamespace(
                 state=SimpleNamespace(get_selected_plan_targets=lambda: tuple(selected_targets))
             ),
@@ -2391,8 +2407,8 @@ class TestBimPlanCore(unittest.TestCase):
                 document_cache={},
                 refresh_cache=None,
             ),
+            provider_overlay_read_state=_make_provider_overlay_read_state_stub(),
             provider_transient_state=_make_provider_transient_state_stub(),
-            _provider_overlay_mode="architecture",
             selection=SimpleNamespace(
                 state=SimpleNamespace(get_selected_plan_targets=lambda: tuple(selected_targets))
             ),
@@ -2430,8 +2446,8 @@ class TestBimPlanCore(unittest.TestCase):
                 document_cache={},
                 refresh_cache=None,
             ),
+            provider_overlay_read_state=_make_provider_overlay_read_state_stub(),
             provider_transient_state=_make_provider_transient_state_stub(),
-            _provider_overlay_mode="architecture",
             selection=SimpleNamespace(
                 state=SimpleNamespace(get_selected_plan_targets=lambda: tuple(selected_targets))
             ),
@@ -2466,8 +2482,8 @@ class TestBimPlanCore(unittest.TestCase):
                 document_cache={},
                 refresh_cache=None,
             ),
+            provider_overlay_read_state=_make_provider_overlay_read_state_stub(),
             provider_transient_state=_make_provider_transient_state_stub(),
-            _provider_overlay_mode="architecture",
             selection=SimpleNamespace(state=SimpleNamespace(get_selected_plan_targets=lambda: ())),
         )
         context = SimpleNamespace(
@@ -2516,8 +2532,8 @@ class TestBimPlanCore(unittest.TestCase):
                 document_cache={},
                 refresh_cache=None,
             ),
+            provider_overlay_read_state=_make_provider_overlay_read_state_stub(),
             provider_transient_state=_make_provider_transient_state_stub(),
-            _provider_overlay_mode="architecture",
             selection=SimpleNamespace(state=SimpleNamespace(get_selected_plan_targets=lambda: ())),
         )
         context = SimpleNamespace(

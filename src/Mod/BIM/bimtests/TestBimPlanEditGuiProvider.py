@@ -62,14 +62,15 @@ class BimPlanEditGuiProviderMixin:
             "test-plan-provider",
             "provider-preview",
         )
+        overlay_visibility = session.provider_overlay_read_state.visibility
         self.assertTrue(overlay_checkboxes[0].isChecked())
-        self.assertNotIn(overlay_key, session._provider_overlay_visibility)
+        self.assertNotIn(overlay_key, overlay_visibility)
         overlay_checkboxes[0].setChecked(False)
         self.pump_gui_events()
-        self.assertFalse(session._provider_overlay_visibility[overlay_key])
+        self.assertFalse(overlay_visibility[overlay_key])
         overlay_checkboxes[0].setChecked(True)
         self.pump_gui_events()
-        self.assertNotIn(overlay_key, session._provider_overlay_visibility)
+        self.assertNotIn(overlay_key, overlay_visibility)
 
         buttons = [
             widget

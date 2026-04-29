@@ -506,6 +506,7 @@ Current progress:
 - Unused private creation-preview compatibility aliases are removed; creation tools use `creation_preview_state`.
 - Unused private symbol/space overlay tracker compatibility aliases are removed; overlays use `overlay_tracker_state`.
 - Unused private wall-edit compatibility aliases are removed; wall editing uses `wall_edit_state`.
+- Private provider overlay read compatibility aliases are removed; provider overlay mode, visibility, and render cache use `provider_overlay_read_state`.
 
 Steps:
 
