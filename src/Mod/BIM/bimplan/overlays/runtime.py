@@ -10,6 +10,8 @@ from bimplan.overlays import providers as provider_overlays
 from bimplan.overlays import spaces as space_overlays
 from bimplan.overlays import symbols as symbol_overlays
 from bimplan.overlays import walls as wall_overlays
+from bimplan.selection import target_dispatch as plan_target_dispatch
+from bimplan.selection import target_kinds as plan_target_kinds
 
 _PLAN_VIEW_SCALE_REFRESH_DELAY_MS = 40
 
@@ -110,6 +112,9 @@ class PlanOverlayGeometryService(_OverlayService):
 
 
 class PlanSpaceOverlayService(_OverlayService):
+    def discard_runtime_references(self):
+        self.session.overlay_tracker_state.space_region_pick_trackers = []
+
     def sync_secondary_selected_overlays(self, *args, **kwargs):
         return space_overlays.sync_secondary_selected_overlays(self.session, *args, **kwargs)
 
@@ -157,6 +162,9 @@ class PlanSpaceOverlayService(_OverlayService):
 
 
 class PlanWallOverlayService(_OverlayService):
+    def discard_runtime_references(self):
+        self.session.overlay_tracker_state.junction_node_trackers = []
+
     def retarget_edit_tracker(self, *args, **kwargs):
         return wall_overlays.retarget_edit_tracker(self.session, *args, **kwargs)
 
@@ -410,73 +418,27 @@ class PlanSymbolOverlayService(_OverlayService):
         return symbol_overlays.get_symbol_local_facing(self.session, *args, **kwargs)
 
     def is_symbol_visual_dependency(self, symbol, obj):
-        if not self.session.visibility.is_plan_symbol_instance(symbol) or not obj:
-            return False
-        if obj == symbol:
-            return True
-        semantic_obj = self.session.visibility.get_plan_semantic_object(symbol)
-        if obj == semantic_obj:
-            return True
-        if obj == getattr(semantic_obj, "Base", None):
-            return True
-        return obj in (getattr(semantic_obj, "PlanSymbols", None) or [])
+        return symbol_overlays.is_symbol_visual_dependency(self.session, symbol, obj)
 
     def refresh_target_document_visual_dependency(self, symbol, obj, prop):
-        if not (
-            self.is_symbol_visual_dependency(symbol, obj)
-            and prop in plan_document_visuals.SYMBOL_VISUAL_PROPERTIES
-        ):
-            return False
-        plan_document_visuals.refresh_plan_object_footprint_display(self.session, symbol)
-        return True
+        return symbol_overlays.refresh_target_document_visual_dependency(
+            self.session,
+            symbol,
+            obj,
+            prop,
+        )
 
     def refresh_symbol_visual_footprint(self, symbol):
-        if symbol is None:
-            return False
-        plan_document_visuals.refresh_plan_object_footprint_display(self.session, symbol)
-        return True
+        return symbol_overlays.refresh_symbol_visual_footprint(self.session, symbol)
 
     def handle_document_visual_dependency_change(self, obj, prop):
-        selected_symbol = self.session.selection.state.get_selected_plan_target_object("symbol")
-        if self.refresh_target_document_visual_dependency(selected_symbol, obj, prop):
-            _queue_plan_overlay_visual_refresh(
-                self.session, plan_document_visuals.PLAN_VISUAL_SELECTED_SYMBOL
-            )
-            return True
-        hovered_symbol = self.session.hovered_symbol
-        if (
-            hovered_symbol
-            and not self.session.selection.state.is_selected_plan_target("symbol", hovered_symbol)
-            and self.refresh_target_document_visual_dependency(hovered_symbol, obj, prop)
-        ):
-            _queue_plan_overlay_visual_refresh(
-                self.session, plan_document_visuals.PLAN_VISUAL_HOVERED_SYMBOL
-            )
-            return True
-        return False
+        return symbol_overlays.handle_document_visual_dependency_change(self.session, obj, prop)
 
     def handle_deleted_visual_target(self, obj):
-        if obj == self.session.hovered_symbol:
-            self.session.hovered_symbol = None
-            self.clear_hovered_symbol_overlay()
-        if self.session.selection.refresh.clear_selected_plan_target_if_matches("symbol", obj):
-            self.refresh_selected_symbol_visuals()
-            return True
-        return False
+        return symbol_overlays.handle_deleted_visual_target(self.session, obj)
 
     def refresh_document_dependent_visuals(self):
-        visuals = []
-        selected_symbol = self.session.selection.state.get_selected_plan_target_object("symbol")
-        if self.refresh_symbol_visual_footprint(selected_symbol):
-            visuals.append(plan_document_visuals.PLAN_VISUAL_SELECTED_SYMBOL)
-        hovered_symbol = self.session.hovered_symbol
-        if (
-            hovered_symbol
-            and not self.session.selection.state.is_selected_plan_target("symbol", hovered_symbol)
-            and self.refresh_symbol_visual_footprint(hovered_symbol)
-        ):
-            visuals.append(plan_document_visuals.PLAN_VISUAL_HOVERED_SYMBOL)
-        return tuple(visuals)
+        return symbol_overlays.refresh_document_dependent_visuals(self.session)
 
 
 class PlanOverlaysAPI:
@@ -500,9 +462,60 @@ class PlanOverlaysAPI:
         return _queue_plan_overlay_visual_refresh(self.session, *visuals)
 
     def discard_runtime_references(self):
-        tracker_state = self.session.overlay_tracker_state
-        tracker_state.junction_node_trackers = []
-        tracker_state.space_region_pick_trackers = []
+        self.walls.discard_runtime_references()
+        self.spaces.discard_runtime_references()
+
+    def clear_begin_teardown_visuals(self):
+        session = self.session
+        self.walls.clear_junction_node_overlays()
+        self.walls.clear_hovered_wall_opening_context_overlay()
+        plan_target_dispatch.clear_hovered_target_visuals(session)
+        self.walls.clear_wall_grips()
+        plan_target_dispatch.clear_selected_target_visuals(
+            session,
+            clear_handle_kinds=(
+                plan_target_kinds.PLAN_TARGET_PROVIDER,
+                plan_target_kinds.PLAN_TARGET_OPENING,
+                plan_target_kinds.PLAN_TARGET_SYMBOL,
+            ),
+        )
+        self.openings.clear_selected_wall_opening_context_overlay()
+        self.spaces.clear_secondary_selected_overlays()
+        self.providers.clear_provider_overlays()
+        self.providers.clear_provider_point_preview()
+        self.spaces.clear_space_region_pick_overlays()
+        self.openings.discard_opening_handle_tracker_pool()
+        session.openings.clear_opening_move_preview()
+        session.symbols.clear_symbol_edit_preview()
+        session.spaces.clear_plan_region_preview()
+
+    def clear_shutdown_visuals(self):
+        session = self.session
+        self.walls.clear_junction_node_overlays()
+        self.walls.clear_hovered_wall_opening_context_overlay()
+        plan_target_dispatch.clear_hovered_target_visuals(
+            session,
+            kinds=(
+                plan_target_kinds.PLAN_TARGET_WALL,
+                plan_target_kinds.PLAN_TARGET_OPENING,
+                plan_target_kinds.PLAN_TARGET_SYMBOL,
+                plan_target_kinds.PLAN_TARGET_PROVIDER,
+            ),
+        )
+        self.walls.clear_wall_grips()
+        plan_target_dispatch.clear_selected_target_visuals(
+            session,
+            clear_handle_kinds=(
+                plan_target_kinds.PLAN_TARGET_OPENING,
+                plan_target_kinds.PLAN_TARGET_SYMBOL,
+            ),
+        )
+        self.openings.clear_selected_wall_opening_context_overlay()
+        self.providers.clear_provider_overlays()
+        self.providers.clear_provider_point_preview()
+        self.openings.discard_opening_handle_tracker_pool()
+        session.openings.clear_opening_move_preview()
+        session.symbols.clear_symbol_edit_preview()
 
     def queue_plan_overlay_view_scale_refresh(
         self,

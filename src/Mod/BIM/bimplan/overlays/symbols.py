@@ -6,6 +6,7 @@ import math
 
 import FreeCAD
 import FreeCADGui
+from bimplan import document_visuals as plan_document_visuals
 from . import manager as overlay_manager
 
 
@@ -242,6 +243,81 @@ def refresh_selected_symbol_visuals(session):
     sync_selected_symbol_overlay(session)
     sync_selected_symbol_handles(session)
     session.viewport.request_view_redraw()
+
+
+def is_symbol_visual_dependency(session, symbol, obj):
+    if not session.visibility.is_plan_symbol_instance(symbol) or not obj:
+        return False
+    if obj == symbol:
+        return True
+    semantic_obj = session.visibility.get_plan_semantic_object(symbol)
+    if obj == semantic_obj:
+        return True
+    if obj == getattr(semantic_obj, "Base", None):
+        return True
+    return obj in (getattr(semantic_obj, "PlanSymbols", None) or [])
+
+
+def refresh_target_document_visual_dependency(session, symbol, obj, prop):
+    if not (
+        is_symbol_visual_dependency(session, symbol, obj)
+        and prop in plan_document_visuals.SYMBOL_VISUAL_PROPERTIES
+    ):
+        return False
+    plan_document_visuals.refresh_plan_object_footprint_display(session, symbol)
+    return True
+
+
+def refresh_symbol_visual_footprint(session, symbol):
+    if symbol is None:
+        return False
+    plan_document_visuals.refresh_plan_object_footprint_display(session, symbol)
+    return True
+
+
+def handle_document_visual_dependency_change(session, obj, prop):
+    selected_symbol = session.selection.state.get_selected_plan_target_object("symbol")
+    if refresh_target_document_visual_dependency(session, selected_symbol, obj, prop):
+        session.overlays.queue_plan_overlay_visual_refresh(
+            plan_document_visuals.PLAN_VISUAL_SELECTED_SYMBOL
+        )
+        return True
+    hovered_symbol = session.hovered_symbol
+    if (
+        hovered_symbol
+        and not session.selection.state.is_selected_plan_target("symbol", hovered_symbol)
+        and refresh_target_document_visual_dependency(session, hovered_symbol, obj, prop)
+    ):
+        session.overlays.queue_plan_overlay_visual_refresh(
+            plan_document_visuals.PLAN_VISUAL_HOVERED_SYMBOL
+        )
+        return True
+    return False
+
+
+def handle_deleted_visual_target(session, obj):
+    if obj == session.hovered_symbol:
+        session.hovered_symbol = None
+        clear_hovered_symbol_overlay(session)
+    if session.selection.refresh.clear_selected_plan_target_if_matches("symbol", obj):
+        refresh_selected_symbol_visuals(session)
+        return True
+    return False
+
+
+def refresh_document_dependent_visuals(session):
+    visuals = []
+    selected_symbol = session.selection.state.get_selected_plan_target_object("symbol")
+    if refresh_symbol_visual_footprint(session, selected_symbol):
+        visuals.append(plan_document_visuals.PLAN_VISUAL_SELECTED_SYMBOL)
+    hovered_symbol = session.hovered_symbol
+    if (
+        hovered_symbol
+        and not session.selection.state.is_selected_plan_target("symbol", hovered_symbol)
+        and refresh_symbol_visual_footprint(session, hovered_symbol)
+    ):
+        visuals.append(plan_document_visuals.PLAN_VISUAL_HOVERED_SYMBOL)
+    return tuple(visuals)
 
 
 def create_symbol_overlay_trackers(session, symbol, color, width, tracker_store, placement=None):
