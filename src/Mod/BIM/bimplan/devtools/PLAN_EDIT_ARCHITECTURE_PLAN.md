@@ -416,7 +416,7 @@ Current progress:
 Steps:
 
 1. Introduce the owned `session.picking` service. Done.
-2. Move selected-handle picking into an owned picker module. Done in `selection/edit_node_picking.py`.
+2. Move selected-handle picking into an owned picker module. Done in `picking/edit_nodes.py`.
 3. Move provider overlay picking into an owned picker module. Done in `providers/picking.py`.
 4. Move opening and symbol picking into owned picker modules. Done in `picking/overlays.py`.
 5. Move region/space fallback picking into owned picker modules. Done in `picking/area.py`.
@@ -533,6 +533,7 @@ Current progress:
 - Private opening-transient compatibility aliases are removed; opening tests use `opening_transient_state`.
 - Private overlay-tracker compatibility aliases are removed; overlay tests use `overlay_tracker_state`.
 - Private Plan Edit params compatibility alias is removed; symbol snap settings use `performance_state.plan_edit_params`.
+- Private wall join-type state is removed; wall relation mode uses `wall_relation_state.join_type`.
 
 Steps:
 

@@ -135,6 +135,11 @@ class WallEditState:
 
 
 @dataclass
+class PlanWallRelationState:
+    join_type: str = "Miter"
+
+
+@dataclass
 class ProviderPointState:
     provider_point_tool: object = None
     provider_point_host_target: object = None
@@ -390,6 +395,7 @@ _PLAN_EDIT_SESSION_STATE_ENSURERS = (
     ("_ensure_lifecycle_state", "lifecycle_state", PlanLifecycleState),
     ("_ensure_selection_state", "selection_state", PlanSelectionState),
     ("_ensure_wall_edit_state", "wall_edit_state", WallEditState),
+    ("_ensure_wall_relation_state", "wall_relation_state", PlanWallRelationState),
     ("_ensure_provider_point_state", "provider_point_state", ProviderPointState),
     ("_ensure_space_region_pick_state", "space_region_pick_state", SpaceRegionPickState),
     ("_ensure_plan_region_tool_state", "plan_region_tool_state", PlanRegionToolState),
@@ -458,7 +464,6 @@ def initialize_session_state(session):
     session.task_panel = None
     initialize_session_read_state(session)
     session.current_tool = plan_runtime_tools.PlanTool.SELECT
-    session._plan_join_type = "Miter"
     session.storeys = []
     session.active_storey = None
     session.selection_sync_state.selection_observer_added = False
