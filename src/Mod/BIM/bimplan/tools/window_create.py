@@ -6,6 +6,7 @@ import ArchWindow
 import FreeCAD
 import FreeCADGui
 from bimplan.runtime import tools as plan_runtime_tools
+from bimplan.selection import target_kinds as plan_target_kinds
 from bimplan.tools import hosted_openings as plan_hosted_openings
 
 translate = FreeCAD.Qt.translate
@@ -31,6 +32,9 @@ class PlanWindowsAPI:
 
     def can_place_window(self):
         return can_place_window(self.session)
+
+    def activate_window_tool(self):
+        return activate_window_tool(self.session)
 
     def has_active_window_tool(self):
         return has_active_window_tool(self.session)
@@ -299,7 +303,38 @@ def get_window_host_wall(session):
     return None
 
 
+_WINDOW_TOOL_SELECTION_KINDS = (
+    plan_target_kinds.PLAN_TARGET_WALL,
+    plan_target_kinds.PLAN_TARGET_OPENING,
+    plan_target_kinds.PLAN_TARGET_SYMBOL,
+    plan_target_kinds.PLAN_TARGET_SPACE,
+    plan_target_kinds.PLAN_TARGET_REGION,
+)
+
+
 def activate_window_tool(session):
+    from bimplan.runtime import lifecycle as plan_lifecycle
+
+    session.spaces.cancel_space_region_pick(refresh=False)
+    session.spaces.cancel_plan_region_tool(refresh=False)
+    session.wall_create.cancel_rect_wall_tool(refresh=False)
+    session.spaces.cancel_space_separator_tool(refresh=False)
+    session.providers.cancel_provider_point_tool(refresh=False)
+    if session.lifecycle.has_active_embedded_tool():
+        session.lifecycle.cancel_embedded_tool()
+    session.wall_edit.cancel_wall_edit()
+    session.lifecycle.cancel_pending_edit()
+    session.wall_relations.clear_plan_relation_status()
+    plan_lifecycle.clear_selection_visuals(
+        session,
+        kinds=_WINDOW_TOOL_SELECTION_KINDS,
+        clear_handle_kinds=(plan_target_kinds.PLAN_TARGET_OPENING,),
+        include_wall_grips=True,
+        include_selected_wall_opening_context=True,
+        include_secondary_selection=True,
+    )
+    clear_window_preview(session)
+
     creation_preview_state = session.creation_preview_state
     wall = get_window_host_wall(session)
     if not wall:

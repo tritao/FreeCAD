@@ -183,6 +183,15 @@ class PlanSpacesAPI(_SessionAPI):
     def has_active_plan_region_tool(self, *args, **kwargs):
         return plan_space_interaction.has_active_plan_region_tool(self.session, *args, **kwargs)
 
+    def activate_plan_region_tool(self, *args, **kwargs):
+        return plan_space_interaction.activate_plan_region_tool(self.session, *args, **kwargs)
+
+    def activate_space_separator_tool(self, *args, **kwargs):
+        return plan_space_interaction.activate_space_separator_tool(self.session, *args, **kwargs)
+
+    def activate_space_tool(self, *args, **kwargs):
+        return plan_space_interaction.activate_space_tool(self.session, *args, **kwargs)
+
     def clear_plan_region_preview(self, *args, **kwargs):
         return plan_space_interaction.clear_plan_region_preview(self.session, *args, **kwargs)
 

@@ -65,7 +65,7 @@ if "draftguitools.gui_base" not in sys.modules:
 
 from bimplan.providers import PlanProviderActionContext
 from bimplan.runtime import view as plan_view_module
-from bimplan.runtime.lifecycle import activate_plan_region_tool, activate_space_separator_tool
+from bimplan.tools.space_interaction import activate_plan_region_tool, activate_space_separator_tool
 from bimplan.overlays import providers as provider_overlays
 from bimplan import task_panel as plan_task_panel_module
 from bimplan.picking.coordinator import get_plan_target_at_position
@@ -427,10 +427,7 @@ class TestBimPlanCore(unittest.TestCase):
             active_storey=None,
             performance=SimpleNamespace(plan_perf_trace_span=lambda _name: nullcontext()),
             storey=SimpleNamespace(get_storey_elevation=lambda _storey: 0.0),
-            viewport_state=SimpleNamespace(
-                interaction_plane=None,
-                plan_view_locked_actions={},
-            ),
+            viewport_state=SimpleNamespace(interaction_plane=None, plan_view_locked_actions={}),
         )
 
         with (
@@ -464,10 +461,7 @@ class TestBimPlanCore(unittest.TestCase):
             performance=SimpleNamespace(plan_perf_trace_span=lambda _name: nullcontext()),
             storey=SimpleNamespace(get_storey_elevation=lambda _storey: 0.0),
             viewport=SimpleNamespace(get_runtime_attr=lambda obj, name: getattr(obj, name, None)),
-            viewport_state=SimpleNamespace(
-                interaction_plane=None,
-                plan_view_locked_actions={},
-            ),
+            viewport_state=SimpleNamespace(interaction_plane=None, plan_view_locked_actions={}),
         )
 
         with (
@@ -845,11 +839,9 @@ class TestBimPlanCore(unittest.TestCase):
         )
 
         with patch(
-            "bimplan.lifecycle.plan_spaces.prepare_plan_region_tool_state"
-        ) as prepare, patch("bimplan.lifecycle.clear_selection_visuals"), patch(
-            "bimplan.lifecycle.cancel_pending_edit"
-        ), patch(
-            "bimplan.lifecycle._start_snap_tool", return_value=True
+            "bimplan.tools.space_interaction.prepare_plan_region_tool_state"
+        ) as prepare, patch("bimplan.runtime.lifecycle.clear_selection_visuals"), patch(
+            "bimplan.tools.space_interaction._start_snap_tool", return_value=True
         ):
             self.assertTrue(activate_plan_region_tool(session))
 
@@ -884,11 +876,9 @@ class TestBimPlanCore(unittest.TestCase):
         )
 
         with patch(
-            "bimplan.lifecycle.plan_spaces.prepare_space_separator_tool_state"
-        ) as prepare, patch("bimplan.lifecycle.clear_selection_visuals"), patch(
-            "bimplan.lifecycle.cancel_pending_edit"
-        ), patch(
-            "bimplan.lifecycle._start_snap_tool",
+            "bimplan.tools.space_interaction.prepare_space_separator_tool_state"
+        ) as prepare, patch("bimplan.runtime.lifecycle.clear_selection_visuals"), patch(
+            "bimplan.tools.space_interaction._start_snap_tool",
             return_value=True,
         ):
             self.assertTrue(activate_space_separator_tool(session))
