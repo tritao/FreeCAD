@@ -8,7 +8,10 @@ import math
 import FreeCAD
 
 from bimplan.providers import PlanOverlayMarkerKind
-from bimplan.providers import runtime as plan_provider_runtime
+from bimplan.providers.overlay_state import (
+    get_plan_provider_overlay_mode,
+    is_focused_provider_overlay_pick_mode,
+)
 from bimplan.selection import edit_nodes as plan_edit_nodes
 from bimplan.picking import debug as plan_picking_debug
 from bimplan.picking import geometry as plan_picking_geometry
@@ -108,14 +111,12 @@ def replace_provider_overlay_debug_candidate(debug_candidate, **changes):
 
 
 def get_plan_provider_overlay_pick_mode(session):
-    mode = str(plan_provider_runtime.get_plan_provider_overlay_mode(session) or "").strip().lower()
+    mode = str(get_plan_provider_overlay_mode(session) or "").strip().lower()
     return mode or "all"
 
 
 def should_prioritize_provider_targets_for_mode(session):
-    return plan_provider_runtime.is_focused_provider_overlay_pick_mode(
-        get_plan_provider_overlay_pick_mode(session)
-    )
+    return is_focused_provider_overlay_pick_mode(get_plan_provider_overlay_pick_mode(session))
 
 
 def pick_provider_overlay_target_from_overlays(
@@ -190,9 +191,9 @@ def pick_provider_overlay_target_from_overlays(
 def get_visible_provider_overlays(session):
     return tuple(
         overlay
-        for overlay in tuple(plan_provider_runtime.get_plan_provider_overlays(session) or ())
+        for overlay in tuple(session.providers.get_plan_provider_overlays() or ())
         if bool(getattr(overlay, "visible", True))
-        and plan_provider_runtime.is_plan_provider_overlay_visible(session, overlay)
+        and session.providers.is_plan_provider_overlay_visible(overlay)
     )
 
 
@@ -536,10 +537,10 @@ def iter_provider_overlay_targets_from_info(session, info, visible_targets):
 
 def iter_visible_provider_overlay_targets(session):
     yielded = []
-    for overlay in tuple(plan_provider_runtime.get_plan_provider_overlays(session) or ()):
+    for overlay in tuple(session.providers.get_plan_provider_overlays() or ()):
         if not bool(getattr(overlay, "visible", True)):
             continue
-        if not plan_provider_runtime.is_plan_provider_overlay_visible(session, overlay):
+        if not session.providers.is_plan_provider_overlay_visible(overlay):
             continue
         for target in tuple(getattr(overlay, "point_targets", ()) or ()):
             if not has_provider_overlay_target_identity(target):

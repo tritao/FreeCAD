@@ -2,7 +2,7 @@
 
 """Provider target lookup helpers for BIM Plan Edit integrations."""
 
-from dataclasses import replace
+from dataclasses import dataclass, replace
 
 import FreeCAD
 
@@ -15,6 +15,18 @@ def _runtime():
     from bimplan.providers import runtime as provider_runtime
 
     return provider_runtime
+
+
+@dataclass
+class _PlanProviderTargetDisplayFields:
+    label: str = ""
+    provider_id: str = ""
+    target_key: str = ""
+    category: str = ""
+    role: str = ""
+    semantic_document_name: str = ""
+    semantic_object_name: str = ""
+    semantic_label: str = ""
 
 
 def _get_external_provider_targets(session):
@@ -186,6 +198,63 @@ def format_plan_provider_target_help(session, obj) -> str:
         "BIM_PlanEdit",
         "Use the integration details and actions below for the selected object.",
     )
+
+
+def _get_provider_target_semantic_resolution(session, semantic_obj, provider_target):
+    semantic_resolved = None
+    if provider_target is not None:
+        semantic_resolved = session.selection.targets.resolve_plan_semantic_object(provider_target)
+        if semantic_resolved is not None:
+            semantic_obj = semantic_resolved
+    return semantic_obj, semantic_resolved
+
+
+def _build_provider_target_display_fields(semantic_obj, fallback_label):
+    semantic_doc = getattr(semantic_obj, "Document", None)
+    return _PlanProviderTargetDisplayFields(
+        label=str(fallback_label or ""),
+        semantic_document_name=str(getattr(semantic_doc, "Name", "") or ""),
+        semantic_object_name=str(getattr(semantic_obj, "Name", "") or ""),
+        semantic_label=str(getattr(semantic_obj, "Label", getattr(semantic_obj, "Name", "")) or ""),
+    )
+
+
+def _apply_provider_target_display_overrides(fields, provider_target, semantic_resolved):
+    provider_label = str(provider_target.label or "").strip()
+    if provider_label:
+        fields.label = provider_label
+    fields.provider_id = str(provider_target.provider_id or "").strip()
+    fields.target_key = str(provider_target.key or "").strip()
+    fields.category = str(provider_target.category or "").strip()
+    fields.role = str(provider_target.role or "").strip()
+    fields.semantic_document_name = str(
+        provider_target.semantic_document_name or fields.semantic_document_name
+    ).strip()
+    fields.semantic_object_name = str(
+        provider_target.semantic_object_name or fields.semantic_object_name
+    ).strip()
+    if semantic_resolved is not None:
+        fields.semantic_label = str(
+            getattr(semantic_resolved, "Label", getattr(semantic_resolved, "Name", "")) or ""
+        )
+
+
+def resolve_plan_provider_target_display_fields(
+    session,
+    semantic_obj,
+    provider_target: PlanProviderTargetSpec | None,
+    fallback_label,
+) -> _PlanProviderTargetDisplayFields:
+    semantic_obj, semantic_resolved = _get_provider_target_semantic_resolution(
+        session,
+        semantic_obj,
+        provider_target,
+    )
+    fields = _build_provider_target_display_fields(semantic_obj, fallback_label)
+    if provider_target is None:
+        return fields
+    _apply_provider_target_display_overrides(fields, provider_target, semantic_resolved)
+    return fields
 
 
 def _normalize_plan_provider_target_text(value: object) -> str:

@@ -10,7 +10,7 @@ from bimplan.providers.contracts import (
     PlanOverlayMarkerKind,
     PlanToolInteraction,
 )
-from bimplan.providers import runtime as plan_provider_runtime
+from bimplan.providers.targets import is_plan_provider_target_object
 
 translate = FreeCAD.Qt.translate
 
@@ -27,9 +27,7 @@ def get_builtin_provider_edit_handles(session, provider_obj, provider_target):
 
 
 def can_move_provider_target_by_placement(session, provider_obj):
-    if provider_obj is None or not plan_provider_runtime.is_plan_provider_target_object(
-        session, provider_obj
-    ):
+    if provider_obj is None or not is_plan_provider_target_object(session, provider_obj):
         return False
     if _has_provider_coordinate_properties(provider_obj):
         return True
@@ -54,9 +52,7 @@ def can_move_provider_target_by_placement(session, provider_obj):
 
 
 def can_rehost_provider_target(session, provider_obj, host_obj=None):
-    if provider_obj is None or not plan_provider_runtime.is_plan_provider_target_object(
-        session, provider_obj
-    ):
+    if provider_obj is None or not is_plan_provider_target_object(session, provider_obj):
         return False
     try:
         import Arch

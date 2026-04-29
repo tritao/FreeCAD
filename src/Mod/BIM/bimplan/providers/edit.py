@@ -5,10 +5,15 @@
 import FreeCAD
 import FreeCADGui
 from bimplan.providers import action_payloads as plan_provider_action_payloads
+from bimplan.providers.actions import execute_plan_provider_action
 from bimplan.providers import builtin_edit as plan_provider_builtin_edit
 from bimplan.providers import payloads as plan_provider_payloads
 from bimplan.providers import PlanToolInteraction
-from bimplan.providers import runtime as plan_provider_runtime
+from bimplan.providers.runtime import get_plan_provider_edit_handles
+from bimplan.providers.targets import (
+    get_plan_provider_target_for_object,
+    is_plan_provider_target_object,
+)
 from bimplan.runtime import tools as plan_runtime_tools
 
 translate = FreeCAD.Qt.translate
@@ -37,15 +42,13 @@ def get_selected_provider_edit_handles(session, provider_obj):
     editing_provider = session.interaction_state.edit_provider
     if provider_obj != selected_provider and provider_obj != editing_provider:
         return []
-    provider_target = plan_provider_runtime.get_plan_provider_target_for_object(
-        session, provider_obj
-    )
+    provider_target = get_plan_provider_target_for_object(session, provider_obj)
     if provider_target is None:
         return []
     provider_id = str(getattr(provider_target, "provider_id", "") or "").strip()
     target_key = str(getattr(provider_target, "key", "") or "").strip()
     handles = []
-    for handle in tuple(plan_provider_runtime.get_plan_provider_edit_handles(session) or ()):
+    for handle in tuple(get_plan_provider_edit_handles(session) or ()):
         if str(getattr(handle, "provider_id", "") or "").strip() != provider_id:
             continue
         handle_target_key = str(getattr(handle, "target_key", "") or "").strip()
@@ -111,7 +114,7 @@ def activate_provider_handle_now(session, provider_obj, handle_index):
     )
     handled = False
     if str(getattr(handle, "action_key", "") or "").strip():
-        handled = plan_provider_runtime.execute_plan_provider_action(
+        handled = execute_plan_provider_action(
             session,
             str(getattr(handle, "provider_id", "") or ""),
             str(getattr(handle, "action_key", "") or ""),
@@ -197,7 +200,7 @@ def finish_provider_handle_point_pick(session, point=None, obj=None):
         snap_object=obj,
     )
     if action_key and provider_id:
-        if plan_provider_runtime.execute_plan_provider_action(
+        if execute_plan_provider_action(
             session,
             provider_id,
             action_key,
@@ -262,9 +265,7 @@ def cancel_provider_handle_point_pick(session):
 
 def restore_selected_provider(session, provider_obj):
     session.current_tool = plan_runtime_tools.PlanTool.SELECT
-    if provider_obj is not None and plan_provider_runtime.is_plan_provider_target_object(
-        session, provider_obj
-    ):
+    if provider_obj is not None and is_plan_provider_target_object(session, provider_obj):
         session.selection.sync.set_gui_selection_object(provider_obj)
     else:
         session.selection.sync.set_gui_selection([])
@@ -331,9 +332,7 @@ def _resolve_provider_handle_target_point(session, provider_obj, point):
 def _build_provider_handle_payload(
     session, provider_obj, handle, *, point, raw_point, snap_object=None
 ):
-    provider_target = plan_provider_runtime.get_plan_provider_target_for_object(
-        session, provider_obj
-    )
+    provider_target = get_plan_provider_target_for_object(session, provider_obj)
     payload_context = plan_provider_action_payloads.build_provider_action_payload_context(
         session,
         snap_object=snap_object,

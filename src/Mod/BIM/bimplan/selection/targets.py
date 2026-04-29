@@ -7,11 +7,14 @@ from typing import Any, Callable
 
 import FreeCAD
 
-from bimplan.providers import runtime as plan_provider_runtime
+from bimplan.providers.targets import (
+    is_plan_provider_target_object,
+    is_plan_provider_target_visible_for_mode,
+    resolve_plan_provider_target_display_fields,
+)
 from bimplan.runtime import capabilities as runtime_capabilities
 from . import kinds as plan_target_kinds
 from .common import get_plan_target_state_key
-from bimplan.providers.runtime import resolve_plan_provider_target_display_fields
 
 
 @dataclass(frozen=True)
@@ -68,7 +71,7 @@ def get_plan_target_kind_for_object(session, obj):
         or _call_component_method(
             session, "providers", "get_plan_provider_target_for_object", obj, default=None
         )
-        or plan_provider_runtime.is_plan_provider_target_object(session, obj)
+        or is_plan_provider_target_object(session, obj)
     ):
         return plan_target_kinds.PLAN_TARGET_PROVIDER
     if is_plan_region_object(session, obj):
@@ -117,10 +120,7 @@ def get_plan_pick_target_for_object(session, obj, parent_obj=None):
         target_kind = get_plan_target_kind_for_object(session, candidate)
         if (
             target_kind == plan_target_kinds.PLAN_TARGET_PROVIDER
-            and not plan_provider_runtime.is_plan_provider_target_visible_for_mode(
-                session,
-                candidate,
-            )
+            and not is_plan_provider_target_visible_for_mode(session, candidate)
         ):
             continue
         if target_kind:
@@ -132,10 +132,7 @@ def get_plan_pick_target_for_object(session, obj, parent_obj=None):
         target_kind = get_plan_target_kind_for_object(session, semantic_obj)
         if (
             target_kind == plan_target_kinds.PLAN_TARGET_PROVIDER
-            and not plan_provider_runtime.is_plan_provider_target_visible_for_mode(
-                session,
-                semantic_obj,
-            )
+            and not is_plan_provider_target_visible_for_mode(session, semantic_obj)
         ):
             return plan_target_kinds.make_plan_target_ref()
         if target_kind:
@@ -492,9 +489,7 @@ def _validate_plan_selectable_wall(session, obj):
 
 
 def _validate_plan_provider_target_object(session, obj):
-    from bimplan.providers import runtime as plan_provider_runtime
-
-    return plan_provider_runtime.is_plan_provider_target_object(session, obj)
+    return is_plan_provider_target_object(session, obj)
 
 
 def _validate_plan_space_object(session, obj):

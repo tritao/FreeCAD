@@ -4,7 +4,7 @@
 
 import time
 
-from bimplan.providers import runtime as plan_provider_runtime
+from bimplan.providers.overlay_state import is_focused_provider_overlay_pick_mode
 from bimplan.selection import targets as plan_targets
 from bimplan.selection import kinds as plan_target_kinds
 
@@ -114,9 +114,7 @@ def update_hovered_plan_target(session, mouse_pos, force=False):
         return False
     session.performance.plan_perf_count("hover_pick_resolved")
     overlay_mode = session.providers.get_plan_provider_overlay_mode()
-    include_space_fallback = not plan_provider_runtime.is_focused_provider_overlay_pick_mode(
-        overlay_mode
-    )
+    include_space_fallback = not is_focused_provider_overlay_pick_mode(overlay_mode)
     with session.performance.plan_perf_trace_span("hover_pick_resolve"):
         target_ref = plan_target_kinds.coerce_plan_target_ref(
             session.picking.pick(
