@@ -112,8 +112,8 @@ def activate_join_tool(session):
     session.spaces.cancel_space_separator_tool(refresh=False)
     session.providers.cancel_provider_point_tool(refresh=False)
 
-    if session.lifecycle.has_active_embedded_tool():
-        session.lifecycle.cancel_embedded_tool()
+    if session.embedded_tools.has_active():
+        session.embedded_tools.cancel()
     session.wall_edit.cancel_wall_edit()
     session.lifecycle.cancel_pending_edit()
     clear_plan_relation_status(session)

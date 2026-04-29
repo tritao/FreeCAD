@@ -139,7 +139,7 @@ def cancel_wall_edit(session, restore=True, refresh=True):
 
 
 def cancel_wall_subtool(session):
-    session.lifecycle.cancel_embedded_tool("Wall")
+    session.embedded_tools.cancel("Wall")
 
 
 def _validate_wall_edit_start(session):

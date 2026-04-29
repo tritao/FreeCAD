@@ -9,7 +9,6 @@ from bimplan.runtime import tools as plan_runtime_tools
 from bimplan.tools import spaces as plan_spaces
 from bimplan.selection import target_dispatch as plan_target_dispatch
 from bimplan.selection import target_kinds as plan_target_kinds
-from bimplan.runtime.embedded_commands import _PlanEditCommandHost, _PlanEditWallHost
 
 translate = FreeCAD.Qt.translate
 
@@ -38,22 +37,8 @@ class PlanLifecycleAPI:
     def discard_runtime_references(self):
         return discard_runtime_references(self.session)
 
-    def on_embedded_command_started(self, tool_name, command=None):
-        return on_embedded_command_started(self.session, tool_name, command=command)
-
-    def on_embedded_command_finished(self, tool_name, command=None):
-        return on_embedded_command_finished(self.session, tool_name, command=command)
-
     def activate_select_tool(self):
         return activate_select_tool(self.session)
-
-    def start_embedded_tool(self, tool_name, command, host_class=None):
-        return start_embedded_tool(
-            self.session,
-            tool_name,
-            command,
-            host_class=host_class,
-        )
 
     def cancel_pending_edit(self):
         return cancel_pending_edit(self.session)
@@ -63,12 +48,6 @@ class PlanLifecycleAPI:
 
     def set_draft_point_focus_suppressed(self, suppressed):
         return set_draft_point_focus_suppressed(self.session, suppressed)
-
-    def has_active_embedded_tool(self):
-        return has_active_embedded_tool(self.session)
-
-    def cancel_embedded_tool(self, tool_name=None):
-        return cancel_embedded_tool(self.session, tool_name=tool_name)
 
 
 def connect_teardown_signal(session, signal):
@@ -328,8 +307,8 @@ def _cancel_finish_fallback(session):
     if session.providers.has_active_provider_point_tool():
         session.providers.cancel_provider_point_tool()
         return True
-    if has_active_embedded_tool(session):
-        cancel_embedded_tool(session)
+    if session.embedded_tools.has_active():
+        session.embedded_tools.cancel()
         return True
     if session.wall_create.has_active_rect_wall_tool():
         session.wall_create.cancel_rect_wall_tool()
@@ -367,7 +346,7 @@ def _cancel_current_tool_for_shutdown(session):
 def _cleanup_begin_teardown(session):
     session.viewport.clear_viewport_status_chip()
     session.status_text.clear_input_hints()
-    cancel_embedded_tool(session)
+    session.embedded_tools.cancel()
     session.wall_create.cancel_rect_wall_tool(refresh=False)
     session.windows.cancel_window_tool(refresh=False)
     session.spaces.cancel_plan_region_tool(refresh=False)
@@ -407,7 +386,7 @@ def _cleanup_begin_teardown(session):
 def _cleanup_shutdown(session, *, teardown=False):
     session.viewport.clear_viewport_status_chip()
     session.status_text.clear_input_hints()
-    cancel_embedded_tool(session)
+    session.embedded_tools.cancel()
     session.wall_create.cancel_rect_wall_tool(refresh=False)
     session.spaces.cancel_space_separator_tool(refresh=False)
     session.wall_edit.cancel_wall_edit(restore=not teardown, refresh=False)
@@ -504,31 +483,6 @@ def shutdown(session, close_dialog=True, teardown=False):
     return True
 
 
-def on_embedded_command_started(session, tool_name, command=None):
-    if session.lifecycle_state.tearing_down:
-        return
-    session.interaction_state.embedded_tool_name = tool_name
-    if command is not None:
-        session.interaction_state.embedded_tool = command
-    session.current_tool = tool_name
-    session.overlays.openings.sync_selected_wall_opening_context_overlay()
-    session.task_panels.refresh_task_panel_status()
-
-
-def on_embedded_command_finished(session, tool_name, command=None):
-    if session.lifecycle_state.tearing_down:
-        return
-    interaction_state = session.interaction_state
-    if command is None or interaction_state.embedded_tool is command:
-        interaction_state.embedded_host = None
-        interaction_state.embedded_tool = None
-        interaction_state.embedded_tool_name = None
-    if session.current_tool == tool_name:
-        session.current_tool = plan_runtime_tools.PlanTool.SELECT
-        session.overlays.openings.sync_selected_wall_opening_context_overlay()
-        session.task_panels.refresh_task_panel_status()
-
-
 def activate_select_tool(session):
     if session.current_tool in (
         plan_runtime_tools.PlanTool.MOVE_SYMBOL,
@@ -542,8 +496,8 @@ def activate_select_tool(session):
     if session.providers.has_active_provider_point_tool():
         session.providers.cancel_provider_point_tool()
         return
-    if has_active_embedded_tool(session):
-        cancel_embedded_tool(session)
+    if session.embedded_tools.has_active():
+        session.embedded_tools.cancel()
     if session.wall_create.has_active_rect_wall_tool():
         session.wall_create.cancel_rect_wall_tool()
     if session.windows.has_active_window_tool():
@@ -554,25 +508,6 @@ def activate_select_tool(session):
         session.spaces.cancel_space_separator_tool()
     session.wall_edit.cancel_wall_edit()
     session.wall_relations.cancel_join_tool()
-
-
-def start_embedded_tool(session, tool_name, command, host_class=None):
-    interaction_state = session.interaction_state
-    session.current_tool = tool_name
-    plan_target_dispatch.clear_hovered_targets(
-        session,
-        kinds=plan_target_kinds.EMBEDDED_TOOL_CLEAR_HOVERED_KINDS,
-    )
-    session.overlays.spaces.sync_secondary_selected_overlays()
-    session.task_panels.refresh_task_panel_status()
-    interaction_state.embedded_tool = command
-    interaction_state.embedded_tool_name = tool_name
-    host_class = _PlanEditCommandHost if host_class is None else host_class
-    if host_class is _PlanEditWallHost:
-        interaction_state.embedded_host = host_class(session, command)
-    else:
-        interaction_state.embedded_host = host_class(session, tool_name, command)
-    command.Activated(host=interaction_state.embedded_host)
 
 
 def _reset_pending_edit_state(session, *, clear_opening_edit=False):
@@ -619,28 +554,6 @@ def cancel_pending_edit(session):
     )
 
 
-def cancel_embedded_tool(session, tool_name=None):
-    interaction_state = session.interaction_state
-    if session.lifecycle_state.tearing_down or interaction_state.embedded_tool is None:
-        return
-    if tool_name is not None and interaction_state.embedded_tool_name != tool_name:
-        return
-    tool = interaction_state.embedded_tool
-    cancel_interactive = getattr(tool, "cancel_interactive", None)
-    if callable(cancel_interactive):
-        try:
-            cancel_interactive()
-            return
-        except (AttributeError, ReferenceError, RuntimeError, TypeError):
-            pass
-    finish = getattr(tool, "finish", None)
-    if callable(finish):
-        try:
-            finish(cont=False)
-        except (AttributeError, ReferenceError, RuntimeError, TypeError):
-            pass
-
-
 def stop_snapper(session):
     del session
     snapper = getattr(FreeCADGui, "Snapper", None)
@@ -678,7 +591,3 @@ def _set_toolbar_point_focus_suppressed(toolbar, suppressed):
             toolbar.suppress_point_focus = bool(suppressed)
         except (AttributeError, RuntimeError, TypeError):
             pass
-
-
-def has_active_embedded_tool(session):
-    return session.interaction_state.embedded_tool is not None

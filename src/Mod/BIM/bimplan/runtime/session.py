@@ -28,6 +28,7 @@ import FreeCAD
 import FreeCADGui
 from bimplan.runtime import command_gate as plan_command_gate
 from bimplan.document_visuals import PlanDocumentVisualsAPI
+from bimplan.runtime.embedded_commands import PlanEmbeddedToolsAPI
 from bimplan.runtime import input as plan_input
 from bimplan.runtime import lifecycle as plan_lifecycle
 from bimplan.runtime import tools as plan_runtime_tools
@@ -182,6 +183,7 @@ class PlanEditSession:
         self.wall_create = PlanWallCreateAPI(self)
         self.move_tool = PlanMoveAPI(self)
         self.interaction = PlanInteractionAPI(self)
+        self.embedded_tools = PlanEmbeddedToolsAPI(self)
         self.input = plan_input.PlanInputAPI(self)
         self.lifecycle = plan_lifecycle.PlanLifecycleAPI(self)
         self.symbols = PlanSymbolsAPI(self)

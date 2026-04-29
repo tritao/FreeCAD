@@ -1,8 +1,39 @@
 # SPDX-License-Identifier: LGPL-2.1-or-later
 
-"""Embedded Draft command hosts for BIM Plan Edit."""
+"""Embedded Draft command lifetime for BIM Plan Edit."""
 
 from draftguitools import gui_base
+
+from bimplan.selection import target_dispatch as plan_target_dispatch
+from bimplan.selection import target_kinds as plan_target_kinds
+
+
+class PlanEmbeddedToolsAPI:
+    """Owned session surface for embedded Draft-style command lifetime."""
+
+    __slots__ = ("_session",)
+
+    def __init__(self, session):
+        self._session = session
+
+    @property
+    def session(self):
+        return self._session
+
+    def on_command_started(self, tool_name, command=None):
+        return on_command_started(self.session, tool_name, command=command)
+
+    def on_command_finished(self, tool_name, command=None):
+        return on_command_finished(self.session, tool_name, command=command)
+
+    def start(self, tool_name, command, host_class=None):
+        return start(self.session, tool_name, command, host_class=host_class)
+
+    def has_active(self):
+        return has_active(self.session)
+
+    def cancel(self, tool_name=None):
+        return cancel(self.session, tool_name=tool_name)
 
 
 class _PlanEditWallHost(gui_base.DraftInteractionHost):
@@ -14,11 +45,11 @@ class _PlanEditWallHost(gui_base.DraftInteractionHost):
 
     def activate_command(self, command=None):
         super().activate_command(command)
-        self.session.lifecycle.on_embedded_command_started("Wall", command or self.command)
+        self.session.embedded_tools.on_command_started("Wall", command or self.command)
 
     def deactivate_command(self, command=None):
         super().deactivate_command(command)
-        self.session.lifecycle.on_embedded_command_finished("Wall", command or self.command)
+        self.session.embedded_tools.on_command_finished("Wall", command or self.command)
 
     def get_working_plane(self):
         return self.session.viewport.get_interaction_plane()
@@ -97,11 +128,83 @@ class _PlanEditCommandHost(gui_base.DraftInteractionHost):
 
     def activate_command(self, command=None):
         super().activate_command(command)
-        self.session.lifecycle.on_embedded_command_started(self.tool_name, command or self.command)
+        self.session.embedded_tools.on_command_started(self.tool_name, command or self.command)
 
     def deactivate_command(self, command=None):
         super().deactivate_command(command)
-        self.session.lifecycle.on_embedded_command_finished(self.tool_name, command or self.command)
+        self.session.embedded_tools.on_command_finished(self.tool_name, command or self.command)
 
     def continue_mode_enabled(self):
         return False
+
+
+def on_command_started(session, tool_name, command=None):
+    if session.lifecycle_state.tearing_down:
+        return
+    session.interaction_state.embedded_tool_name = tool_name
+    if command is not None:
+        session.interaction_state.embedded_tool = command
+    session.current_tool = tool_name
+    session.overlays.openings.sync_selected_wall_opening_context_overlay()
+    session.task_panels.refresh_task_panel_status()
+
+
+def on_command_finished(session, tool_name, command=None):
+    if session.lifecycle_state.tearing_down:
+        return
+    interaction_state = session.interaction_state
+    if command is None or interaction_state.embedded_tool is command:
+        interaction_state.embedded_host = None
+        interaction_state.embedded_tool = None
+        interaction_state.embedded_tool_name = None
+    if session.current_tool == tool_name:
+        from bimplan.runtime import tools as plan_runtime_tools
+
+        session.current_tool = plan_runtime_tools.PlanTool.SELECT
+        session.overlays.openings.sync_selected_wall_opening_context_overlay()
+        session.task_panels.refresh_task_panel_status()
+
+
+def start(session, tool_name, command, host_class=None):
+    interaction_state = session.interaction_state
+    session.current_tool = tool_name
+    plan_target_dispatch.clear_hovered_targets(
+        session,
+        kinds=plan_target_kinds.EMBEDDED_TOOL_CLEAR_HOVERED_KINDS,
+    )
+    session.overlays.spaces.sync_secondary_selected_overlays()
+    session.task_panels.refresh_task_panel_status()
+    interaction_state.embedded_tool = command
+    interaction_state.embedded_tool_name = tool_name
+    host_class = _PlanEditCommandHost if host_class is None else host_class
+    if host_class is _PlanEditWallHost:
+        interaction_state.embedded_host = host_class(session, command)
+    else:
+        interaction_state.embedded_host = host_class(session, tool_name, command)
+    command.Activated(host=interaction_state.embedded_host)
+
+
+def cancel(session, tool_name=None):
+    interaction_state = session.interaction_state
+    if session.lifecycle_state.tearing_down or interaction_state.embedded_tool is None:
+        return
+    if tool_name is not None and interaction_state.embedded_tool_name != tool_name:
+        return
+    tool = interaction_state.embedded_tool
+    cancel_interactive = getattr(tool, "cancel_interactive", None)
+    if callable(cancel_interactive):
+        try:
+            cancel_interactive()
+            return
+        except (AttributeError, ReferenceError, RuntimeError, TypeError):
+            pass
+    finish = getattr(tool, "finish", None)
+    if callable(finish):
+        try:
+            finish(cont=False)
+        except (AttributeError, ReferenceError, RuntimeError, TypeError):
+            pass
+
+
+def has_active(session):
+    return session.interaction_state.embedded_tool is not None

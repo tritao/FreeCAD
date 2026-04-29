@@ -95,7 +95,7 @@ def activate_wall_tool(session):
     session.overlays.spaces.clear_selected_space_overlay()
     session.overlays.spaces.clear_secondary_selected_overlays()
     session.selection.sync.set_gui_selection([])
-    session.lifecycle.start_embedded_tool(
+    session.embedded_tools.start(
         "Wall",
         BimWall.Arch_Wall(),
         host_class=_PlanEditWallHost,
@@ -109,7 +109,7 @@ def activate_rect_wall_tool(session):
     session.windows.cancel_window_tool(refresh=False)
     session.spaces.cancel_space_separator_tool(refresh=False)
     session.providers.cancel_provider_point_tool(refresh=False)
-    session.lifecycle.cancel_embedded_tool()
+    session.embedded_tools.cancel()
     session.wall_edit.cancel_wall_edit()
     session.lifecycle.cancel_pending_edit()
     session.wall_relations.clear_plan_relation_status()
