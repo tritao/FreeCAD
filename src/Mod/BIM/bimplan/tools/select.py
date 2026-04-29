@@ -78,7 +78,7 @@ def _activate_edit_node(session, node, event_callback):
         ):
             return False
     else:
-        edit_point = _get_legacy_edit_node_point(node)
+        edit_point = _get_ray_edit_node_point(node)
         if edit_point is None:
             return False
         obj, index = edit_point
@@ -93,7 +93,7 @@ def _activate_edit_node(session, node, event_callback):
     return True
 
 
-def _get_legacy_edit_node_point(node):
+def _get_ray_edit_node_point(node):
     (point,) = plan_edit_nodes.get_edit_node_payload(node)
     try:
         doc = FreeCAD.getDocument(str(point.documentName.getValue()))

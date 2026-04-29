@@ -543,6 +543,9 @@ Current progress:
   are removed from production code and tests.
 - Selection target service delegates to the canonical target helpers, and private target
   predicate fallback hooks are removed.
+- Provider snapshot collection is explicit and no longer uses a method-surface list.
+- Select-tool ray edit-node handling is named as the current adapter path, not legacy
+  compatibility.
 
 Steps:
 

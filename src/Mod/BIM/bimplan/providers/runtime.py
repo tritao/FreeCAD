@@ -485,13 +485,6 @@ class PlanProvidersAPI:
 
 
 @dataclass(frozen=True)
-class _PlanProviderSnapshotSurfaceSpec:
-    field_name: str
-    method_name: str
-    normalizer: object
-
-
-@dataclass(frozen=True)
 class PlanProviderSnapshot:
     """Normalized provider read model for the task-panel integration surfaces."""
 
@@ -792,21 +785,61 @@ def _normalize_provider_surface_contribution(session, normalizer, provider_id, c
     return normalizer(provider_id, contribution)
 
 
-def _collect_plan_provider_snapshot_surfaces(session, context, normalized_surfaces):
-    collected = {surface_spec.field_name: [] for surface_spec, _normalizer in normalized_surfaces}
-    for provider, provider_id in _iter_named_plan_providers(session):
-        for surface_spec, normalizer in normalized_surfaces:
-            contributions = _collect_provider_surface_contributions(
-                session,
-                provider,
-                provider_id,
-                context,
-                surface_spec.method_name,
-                normalizer,
-            )
-            if contributions:
-                collected[surface_spec.field_name].extend(contributions)
-    return collected
+def _set_cached_provider_snapshot_contributions(session, snapshot):
+    _set_cached_provider_contributions(session, "get_tools", snapshot.tools)
+    _set_cached_provider_contributions(session, "get_overlays", snapshot.overlays)
+    _set_cached_provider_contributions(session, "get_issues", snapshot.issues)
+    _set_cached_provider_contributions(session, "get_context_panels", snapshot.context_panels)
+    _set_cached_provider_contributions(
+        session, "get_inspector_sections", snapshot.inspector_sections
+    )
+
+
+def _set_document_cached_provider_snapshot_contributions(session, context, snapshot):
+    _set_document_cached_provider_contributions(session, context, "get_tools", snapshot.tools)
+    _set_document_cached_provider_contributions(session, context, "get_overlays", snapshot.overlays)
+    _set_document_cached_provider_contributions(session, context, "get_issues", snapshot.issues)
+    _set_document_cached_provider_contributions(
+        session, context, "get_context_panels", snapshot.context_panels
+    )
+    _set_document_cached_provider_contributions(
+        session, context, "get_inspector_sections", snapshot.inspector_sections
+    )
+
+
+def _collect_plan_provider_snapshot_from_providers(session, context):
+    return PlanProviderSnapshot(
+        tools=_collect_plan_provider_contributions_for_method(
+            session,
+            context,
+            "get_tools",
+            normalize_plan_provider_tool,
+        ),
+        overlays=_collect_plan_provider_contributions_for_method(
+            session,
+            context,
+            "get_overlays",
+            normalize_plan_provider_overlay,
+        ),
+        issues=_collect_plan_provider_contributions_for_method(
+            session,
+            context,
+            "get_issues",
+            normalize_plan_provider_issue,
+        ),
+        context_panels=_collect_plan_provider_contributions_for_method(
+            session,
+            context,
+            "get_context_panels",
+            normalize_plan_provider_context_panel,
+        ),
+        inspector_sections=_collect_plan_provider_contributions_for_method(
+            session,
+            context,
+            "get_inspector_sections",
+            normalize_plan_provider_section,
+        ),
+    )
 
 
 def collect_plan_provider_snapshot(session) -> PlanProviderSnapshot:
@@ -824,44 +857,14 @@ def collect_plan_provider_snapshot(session) -> PlanProviderSnapshot:
         cached_snapshot = _get_document_cached_provider_snapshot(session, context)
         if cached_snapshot is not None:
             _set_cached_provider_snapshot(session, cached_snapshot)
-            for surface_spec in _PLAN_PROVIDER_SNAPSHOT_SURFACES:
-                _set_cached_provider_contributions(
-                    session,
-                    surface_spec.method_name,
-                    getattr(cached_snapshot, surface_spec.field_name),
-                )
+            _set_cached_provider_snapshot_contributions(session, cached_snapshot)
             return cached_snapshot
-        normalized_surfaces = tuple(
-            (surface_spec, surface_spec.normalizer)
-            for surface_spec in _PLAN_PROVIDER_SNAPSHOT_SURFACES
-        )
-        collected = _collect_plan_provider_snapshot_surfaces(
-            session,
-            context,
-            normalized_surfaces,
-        )
 
-        snapshot = PlanProviderSnapshot(
-            tools=tuple(collected["tools"]),
-            overlays=tuple(collected["overlays"]),
-            issues=tuple(collected["issues"]),
-            context_panels=tuple(collected["context_panels"]),
-            inspector_sections=tuple(collected["inspector_sections"]),
-        )
+        snapshot = _collect_plan_provider_snapshot_from_providers(session, context)
         _set_cached_provider_snapshot(session, snapshot)
         _set_document_cached_provider_snapshot(session, context, snapshot)
-        for surface_spec in _PLAN_PROVIDER_SNAPSHOT_SURFACES:
-            _set_cached_provider_contributions(
-                session,
-                surface_spec.method_name,
-                getattr(snapshot, surface_spec.field_name),
-            )
-            _set_document_cached_provider_contributions(
-                session,
-                context,
-                surface_spec.method_name,
-                getattr(snapshot, surface_spec.field_name),
-            )
+        _set_cached_provider_snapshot_contributions(session, snapshot)
+        _set_document_cached_provider_snapshot_contributions(session, context, snapshot)
         return snapshot
 
 
@@ -1687,35 +1690,6 @@ def _coerce_plan_overlay_color(color):
     if len(values) < 3:
         return (0.2, 0.55, 0.85)
     return values[:3]
-
-
-_PLAN_PROVIDER_SNAPSHOT_SURFACES = (
-    _PlanProviderSnapshotSurfaceSpec(
-        field_name="tools",
-        method_name="get_tools",
-        normalizer=normalize_plan_provider_tool,
-    ),
-    _PlanProviderSnapshotSurfaceSpec(
-        field_name="overlays",
-        method_name="get_overlays",
-        normalizer=normalize_plan_provider_overlay,
-    ),
-    _PlanProviderSnapshotSurfaceSpec(
-        field_name="issues",
-        method_name="get_issues",
-        normalizer=normalize_plan_provider_issue,
-    ),
-    _PlanProviderSnapshotSurfaceSpec(
-        field_name="context_panels",
-        method_name="get_context_panels",
-        normalizer=normalize_plan_provider_context_panel,
-    ),
-    _PlanProviderSnapshotSurfaceSpec(
-        field_name="inspector_sections",
-        method_name="get_inspector_sections",
-        normalizer=normalize_plan_provider_section,
-    ),
-)
 
 
 def collect_plan_provider_contributions(session, method_name, normalizer):
