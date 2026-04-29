@@ -147,7 +147,7 @@ def activate_join_tool(session):
 
 
 def get_plan_join_type(session):
-    return session._plan_join_type
+    return session.wall_relation_state.join_type
 
 
 def get_plan_join_types(session):
@@ -169,7 +169,7 @@ def normalize_plan_join_type(session, join_type):
 
 
 def get_plan_join_type_label(session, join_type=None):
-    join_type = normalize_plan_join_type(session, join_type or session._plan_join_type)
+    join_type = normalize_plan_join_type(session, join_type or get_plan_join_type(session))
     return {
         "Miter": translate("BIM_PlanEdit", "Miter"),
         "Butt": translate("BIM_PlanEdit", "Butt"),
@@ -178,7 +178,7 @@ def get_plan_join_type_label(session, join_type=None):
 
 
 def get_plan_join_type_phrase(session, join_type=None):
-    join_type = normalize_plan_join_type(session, join_type or session._plan_join_type)
+    join_type = normalize_plan_join_type(session, join_type or get_plan_join_type(session))
     return {
         "Miter": translate("BIM_PlanEdit", "miter"),
         "Butt": translate("BIM_PlanEdit", "butt"),
@@ -194,11 +194,12 @@ def get_plan_join_action_text(session, join_type=None):
 
 def set_plan_join_type(session, join_type, refresh=True):
     join_type = normalize_plan_join_type(session, join_type)
-    if session._plan_join_type == join_type:
+    wall_relation_state = session.wall_relation_state
+    if wall_relation_state.join_type == join_type:
         if refresh:
             session.task_panels.refresh_task_panel_status()
         return False
-    session._plan_join_type = join_type
+    wall_relation_state.join_type = join_type
     if refresh:
         session.task_panels.refresh_task_panel_status()
     return True
@@ -206,7 +207,7 @@ def set_plan_join_type(session, join_type, refresh=True):
 
 def cycle_plan_join_type(session):
     try:
-        current_index = _PLAN_JOIN_TYPES.index(session._plan_join_type)
+        current_index = _PLAN_JOIN_TYPES.index(get_plan_join_type(session))
     except ValueError:
         current_index = 0
     next_join_type = _PLAN_JOIN_TYPES[(current_index + 1) % len(_PLAN_JOIN_TYPES)]
@@ -222,7 +223,7 @@ def get_plan_join_command(session):
         "Butt": BIM_Join_Butt,
         "Tee": BIM_Join_Tee,
     }.get(
-        normalize_plan_join_type(session, session._plan_join_type),
+        normalize_plan_join_type(session, get_plan_join_type(session)),
         BIM_Join_Miter,
     )()
 
@@ -284,7 +285,7 @@ def get_plan_join_mode_action_text(session, target_wall=None, joint=None):
     joint = joint or get_plan_candidate_joint(session, target_wall)
     if joint:
         current_type = normalize_plan_join_type(session, getattr(joint, "JointType", "Miter"))
-        if current_type == session._plan_join_type:
+        if current_type == get_plan_join_type(session):
             return translate(
                 "BIM_PlanEdit",
                 "Press Delete to unjoin this pair, or Tab to choose a different joint type",
