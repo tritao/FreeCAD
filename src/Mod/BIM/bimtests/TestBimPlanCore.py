@@ -289,6 +289,9 @@ def _make_selection_stub(
                 ("refresh-primary", args, kwargs)
             ),
         ),
+        clear_selected_visuals=lambda *args, **kwargs: calls.append(
+            ("clear-selected-visuals", args, kwargs)
+        ),
     )
 
 
@@ -764,9 +767,7 @@ class TestBimPlanCore(unittest.TestCase):
 
         with patch(
             "bimplan.tools.space_interaction.prepare_plan_region_tool_state"
-        ) as prepare, patch("bimplan.runtime.lifecycle.clear_selection_visuals"), patch(
-            "bimplan.tools.space_interaction._start_snap_tool", return_value=True
-        ):
+        ) as prepare, patch("bimplan.tools.space_interaction._start_snap_tool", return_value=True):
             self.assertTrue(activate_plan_region_tool(session))
 
         prepare.assert_called_once_with(session, parent_space=parent_space)
@@ -800,7 +801,7 @@ class TestBimPlanCore(unittest.TestCase):
 
         with patch(
             "bimplan.tools.space_interaction.prepare_space_separator_tool_state"
-        ) as prepare, patch("bimplan.runtime.lifecycle.clear_selection_visuals"), patch(
+        ) as prepare, patch(
             "bimplan.tools.space_interaction._start_snap_tool",
             return_value=True,
         ):

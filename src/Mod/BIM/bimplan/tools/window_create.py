@@ -313,8 +313,6 @@ _WINDOW_TOOL_SELECTION_KINDS = (
 
 
 def activate_window_tool(session):
-    from bimplan.runtime import lifecycle as plan_lifecycle
-
     session.spaces.cancel_space_region_pick(refresh=False)
     session.spaces.cancel_plan_region_tool(refresh=False)
     session.wall_create.cancel_rect_wall_tool(refresh=False)
@@ -325,8 +323,7 @@ def activate_window_tool(session):
     session.wall_edit.cancel_wall_edit()
     session.lifecycle.cancel_pending_edit()
     session.wall_relations.clear_plan_relation_status()
-    plan_lifecycle.clear_selection_visuals(
-        session,
+    session.selection.clear_selected_visuals(
         kinds=_WINDOW_TOOL_SELECTION_KINDS,
         clear_handle_kinds=(plan_target_kinds.PLAN_TARGET_OPENING,),
         include_wall_grips=True,
