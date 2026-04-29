@@ -35,6 +35,12 @@ class PlanEmbeddedToolsAPI:
     def cancel(self, tool_name=None):
         return cancel(self.session, tool_name=tool_name)
 
+    def clear_state(self):
+        return clear_state(self.session)
+
+    def discard_runtime_references(self):
+        return clear_state(self.session)
+
 
 class _PlanEditWallHost(gui_base.DraftInteractionHost):
     """Embedded Draft-style host for wall creation inside Plan Edit."""
@@ -208,3 +214,10 @@ def cancel(session, tool_name=None):
 
 def has_active(session):
     return session.interaction_state.embedded_tool is not None
+
+
+def clear_state(session):
+    interaction_state = session.interaction_state
+    interaction_state.embedded_host = None
+    interaction_state.embedded_tool = None
+    interaction_state.embedded_tool_name = None

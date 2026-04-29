@@ -45,6 +45,12 @@ class PlanWindowsAPI:
     def cancel_window_tool(self, refresh=True):
         return cancel_window_tool(self.session, refresh=refresh)
 
+    def cancel_active_tool_for_finish(self):
+        if self.session.current_tool != plan_runtime_tools.PlanTool.WINDOW:
+            return False
+        self.cancel_window_tool()
+        return True
+
     def project_window_point_to_host(self, point, wall=None):
         return project_window_point_to_host(self.session, point, wall=wall)
 

@@ -44,6 +44,9 @@ class PlanWallCreateAPI:
     def clear_rect_wall_preview(self):
         return clear_rect_wall_preview(self.session)
 
+    def discard_runtime_references(self):
+        return discard_runtime_references(self.session)
+
     def cancel_rect_wall_tool(self, refresh=True):
         return cancel_rect_wall_tool(self.session, refresh=refresh)
 
@@ -154,6 +157,13 @@ def has_active_rect_wall_tool(session):
 def clear_rect_wall_preview(session):
     preview_state = _creation_preview_state(session)
     session.overlays.manager.finalize_trackers(preview_state.rect_wall_preview_trackers)
+    preview_state.rect_wall_preview_trackers = []
+
+
+def discard_runtime_references(session):
+    preview_state = _creation_preview_state(session)
+    preview_state.rect_wall_start = None
+    preview_state.rect_wall_params = None
     preview_state.rect_wall_preview_trackers = []
 
 

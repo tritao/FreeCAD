@@ -369,6 +369,20 @@ def cancel_opening_handle_point_pick(session):
     session.task_panels.refresh_task_panel_status()
 
 
+def reset_pending_edit_state(session, *, clear_edit=False):
+    interaction_state = session.interaction_state
+    opening_transient_state = session.opening_transient_state
+    opening_transient_state.edit_opening_move_anchor = "center"
+    opening_transient_state.edit_opening_move_raw_point = None
+    if clear_edit:
+        interaction_state.edit_opening = None
+        interaction_state.edit_opening_handle_index = None
+
+
+def discard_runtime_references(session):
+    reset_pending_edit_state(session, clear_edit=True)
+
+
 def restore_selected_opening(session, opening):
     session.current_tool = "Select"
     if opening:
@@ -624,6 +638,24 @@ class PlanOpeningsAPI(_SessionAPI):
 
     def cancel_opening_handle_point_pick(self, *args, **kwargs):
         return cancel_opening_handle_point_pick(self.session, *args, **kwargs)
+
+    def cancel_active_tool_for_finish(self):
+        if self.session.current_tool != plan_runtime_tools.PlanTool.MOVE_OPENING:
+            return False
+        self.cancel_opening_handle_point_pick()
+        return True
+
+    def cancel_active_tool_for_teardown(self):
+        if self.session.current_tool != plan_runtime_tools.PlanTool.MOVE_OPENING:
+            return False
+        self.cancel_opening_handle_point_pick()
+        return True
+
+    def reset_pending_edit_state(self, *args, **kwargs):
+        return reset_pending_edit_state(self.session, *args, **kwargs)
+
+    def discard_runtime_references(self):
+        return discard_runtime_references(self.session)
 
     def restore_selected_opening(self, *args, **kwargs):
         return restore_selected_opening(self.session, *args, **kwargs)

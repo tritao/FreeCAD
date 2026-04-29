@@ -138,6 +138,19 @@ def clear_selected_plan_target_if_matches(session, kind, obj):
     return session.selection.state.clear_selected_plan_target_if_matches(kind, obj)
 
 
+def discard_runtime_references(session):
+    selection_state = session.selection_state
+    session.selection.state.set_selected_plan_target_state()
+    selection_state.secondary_selected_plan_targets_state = []
+    session.hovered_wall = None
+    session.hovered_opening = None
+    session.hovered_symbol = None
+    session.hovered_provider = None
+    session.hovered_space = None
+    session.hovered_region = None
+    selection_state.pending_selected_plan_target = None
+
+
 def is_valid_plan_target(session, kind, obj):
     return session.selection.state.is_valid_plan_target(kind, obj)
 
@@ -575,6 +588,9 @@ class PlanSelectionAPI(_SessionAPI):
 
     def clear_selected_visuals(self, *args, **kwargs):
         return clear_selected_visuals(self.session, *args, **kwargs)
+
+    def discard_runtime_references(self):
+        return discard_runtime_references(self.session)
 
     def setPreselection(self, doc, obj, sub):
         return self.sync.selection_observer_set_preselection(doc, obj, sub)

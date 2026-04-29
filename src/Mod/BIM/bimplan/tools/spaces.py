@@ -64,6 +64,19 @@ def reset_space_text_pick_state(session, *args, **kwargs):
     return plan_space_interaction.reset_space_text_pick_state(session, *args, **kwargs)
 
 
+def discard_runtime_references(session):
+    space_region_pick_state = session.space_region_pick_state
+    plan_region_tool_state = session.plan_region_tool_state
+    space_region_pick_state.boundaries = []
+    space_region_pick_state.candidates = []
+    space_region_pick_state.hovered_candidate = None
+    space_region_pick_state.seed_space = None
+    plan_region_tool_state.points = []
+    plan_region_tool_state.preview_trackers = []
+    plan_region_tool_state.parent_space = None
+    session.interaction_state.edit_space = None
+
+
 class RegionTool(plan_runtime_tools.PlanToolHandler):
     """Keyboard behavior for active plan-region drawing."""
 
@@ -194,6 +207,36 @@ class PlanSpacesAPI(_SessionAPI):
 
     def clear_plan_region_preview(self, *args, **kwargs):
         return plan_space_interaction.clear_plan_region_preview(self.session, *args, **kwargs)
+
+    def discard_runtime_references(self):
+        return discard_runtime_references(self.session)
+
+    def cancel_active_tool_for_finish(self):
+        if self.session.current_tool == plan_runtime_tools.PlanTool.PICK_SPACE_REGION:
+            self.cancel_space_region_pick()
+            return True
+        if self.session.current_tool == plan_runtime_tools.PlanTool.REGION:
+            self.cancel_plan_region_tool()
+            return True
+        if self.session.current_tool == plan_runtime_tools.PlanTool.SET_SPACE_TEXT:
+            self.cancel_space_text_position_pick()
+            return True
+        return False
+
+    def cancel_active_tool_for_teardown(self):
+        if self.session.current_tool == plan_runtime_tools.PlanTool.PICK_SPACE_REGION:
+            reset_space_region_pick_state(self.session, clear_overlays=False)
+            return True
+        if self.session.current_tool == plan_runtime_tools.PlanTool.SET_SPACE_TEXT:
+            reset_space_text_pick_state(self.session)
+            return True
+        return False
+
+    def cancel_active_tool_for_select(self):
+        if self.session.current_tool != plan_runtime_tools.PlanTool.PICK_SPACE_REGION:
+            return False
+        self.cancel_space_region_pick()
+        return True
 
     def cancel_plan_region_tool(self, *args, **kwargs):
         return plan_space_interaction.cancel_plan_region_tool(self.session, *args, **kwargs)

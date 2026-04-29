@@ -9,6 +9,7 @@ import FreeCAD
 
 from bimplan import document_visuals as plan_document_visuals
 from bimplan.providers import get_plan_edit_registry
+from bimplan.runtime import tools as plan_runtime_tools
 from .contracts import (
     PlanActionSpec,
     PlanContextDetailSpec,
@@ -150,6 +151,9 @@ class PlanProvidersAPI:
     def get_plan_provider_overlay_category(self, provider_id):
         del self
         return get_plan_provider_overlay_category(provider_id)
+
+    def discard_runtime_references(self):
+        return discard_runtime_references(self.session)
 
     def execute_plan_provider_action(
         self,
@@ -344,6 +348,18 @@ class PlanProvidersAPI:
         from bimplan.providers import edit
 
         return edit.cancel_provider_handle_point_pick(self.session)
+
+    def cancel_active_tool_for_finish(self):
+        if self.session.current_tool != plan_runtime_tools.PlanTool.MOVE_PROVIDER:
+            return False
+        self.cancel_provider_handle_point_pick()
+        return True
+
+    def cancel_active_tool_for_teardown(self):
+        if self.session.current_tool != plan_runtime_tools.PlanTool.MOVE_PROVIDER:
+            return False
+        self.cancel_provider_handle_point_pick()
+        return True
 
     def restore_selected_provider(self, provider_obj):
         from bimplan.providers import edit
@@ -541,6 +557,22 @@ def _get_provider_target_collection_depth(session):
 
 def _set_provider_target_collection_depth(session, depth):
     _get_provider_runtime_state(session).target_collection_depth = int(depth or 0)
+
+
+def discard_runtime_references(session):
+    provider_point_state = session.provider_point_state
+    provider_transient_state = session.provider_transient_state
+    provider_transient_state.provider_selected_objects = []
+    provider_point_state.provider_point_host_target = None
+    provider_point_state.provider_point_host_source = ""
+    provider_point_state.provider_point_preview_trackers = []
+    provider_point_state.provider_point_preview_render_state = None
+    provider_point_state.provider_point_preview_style_state = None
+    provider_point_state.provider_point_preview_source_point = None
+    provider_point_state.provider_point_preview_point = None
+    provider_point_state.provider_point_preview_host_target = None
+    provider_point_state.provider_point_preview_host_source = ""
+    session.provider_runtime_state.target_collection_depth = 0
 
 
 def invalidate_plan_provider_document_cache(session):

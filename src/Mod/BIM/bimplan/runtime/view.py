@@ -64,6 +64,9 @@ class PlanViewportAPI:
     def discard_stale_runtime_object(self, obj):
         return discard_stale_runtime_object(self.session, obj)
 
+    def discard_runtime_references(self):
+        return discard_runtime_references(self.session)
+
     def get_runtime_attr(self, obj, attr_name):
         return get_runtime_attr(self.session, obj, attr_name)
 
@@ -184,6 +187,25 @@ def discard_stale_runtime_object(session, obj):
         session.viewer = None
     elif obj is session.viewer:
         session.viewer = None
+
+
+def discard_runtime_references(session):
+    viewport_state = session.viewport_state
+    session.viewport.clear_viewport_status_chip()
+    session.viewport.restore_preselection_state()
+    session.doc = None
+    session.gui_doc = None
+    session.view = None
+    session.viewer = None
+    viewport_state.saved_navigation_style = None
+    viewport_state.saved_navigation_state = {}
+    viewport_state.saved_view_action_state = {}
+    viewport_state.saved_preselection_state = None
+    viewport_state.plan_preselection_forced = False
+    viewport_state.saved_camera = None
+    viewport_state.saved_camera_type = None
+    viewport_state.working_plane = None
+    viewport_state.interaction_plane = None
 
 
 def get_runtime_attr(session, obj, attr_name):
