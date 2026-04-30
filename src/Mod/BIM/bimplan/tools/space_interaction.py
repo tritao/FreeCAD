@@ -27,6 +27,11 @@ _SPACE_SEPARATOR_TOOL_SELECTION_KINDS = (
 )
 
 
+def _provider_point_api(session):
+    providers = getattr(session, "providers", None)
+    return getattr(providers, "point", providers)
+
+
 def _plan_region_tool_state(session):
     return session.plan_region_tool_state
 
@@ -97,7 +102,7 @@ def activate_plan_region_tool(session):
     session.wall_create.cancel_rect_wall_tool(refresh=False)
     session.windows.cancel_window_tool(refresh=False)
     session.spaces.cancel_space_separator_tool(refresh=False)
-    session.providers.cancel_provider_point_tool(refresh=False)
+    _provider_point_api(session).cancel_provider_point_tool(refresh=False)
     if session.embedded_tools.has_active():
         session.embedded_tools.cancel()
     session.wall_edit.cancel_wall_edit()
@@ -126,7 +131,7 @@ def activate_space_separator_tool(session):
     session.spaces.cancel_plan_region_tool(refresh=False)
     session.wall_create.cancel_rect_wall_tool(refresh=False)
     session.windows.cancel_window_tool(refresh=False)
-    session.providers.cancel_provider_point_tool(refresh=False)
+    _provider_point_api(session).cancel_provider_point_tool(refresh=False)
     if session.embedded_tools.has_active():
         session.embedded_tools.cancel()
     session.wall_edit.cancel_wall_edit()
@@ -157,7 +162,7 @@ def activate_space_tool(session):
     session.wall_create.cancel_rect_wall_tool(refresh=False)
     session.windows.cancel_window_tool(refresh=False)
     session.spaces.cancel_space_separator_tool(refresh=False)
-    session.providers.cancel_provider_point_tool(refresh=False)
+    _provider_point_api(session).cancel_provider_point_tool(refresh=False)
     if session.embedded_tools.has_active():
         session.embedded_tools.cancel()
     session.wall_edit.cancel_wall_edit(refresh=False)

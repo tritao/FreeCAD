@@ -14,6 +14,11 @@ from bimplan.selection import kinds as plan_target_kinds
 translate = FreeCAD.Qt.translate
 
 
+def _provider_point_api(session):
+    providers = getattr(session, "providers", None)
+    return getattr(providers, "point", providers)
+
+
 class PlanStatusTextAPI:
     """Owned session surface for Plan Edit status text and input hints."""
 
@@ -336,8 +341,8 @@ def _get_direct_tool_status_chip_text(
 ):
     if session.current_tool == plan_runtime_tools.PlanTool.PROVIDER_POINT:
         return (
-            _format_status_chip_title(session.providers.get_provider_point_tool_label()),
-            session.providers.get_provider_point_tool_prompt(),
+            _format_status_chip_title(_provider_point_api(session).get_provider_point_tool_label()),
+            _provider_point_api(session).get_provider_point_tool_prompt(),
         )
 
     if session.current_tool == plan_runtime_tools.PlanTool.MOVE_OPENING:
@@ -623,7 +628,7 @@ def _get_provider_point_input_hint_specs(session, ui):
     return (
         (
             translate("BIM_PlanEdit", "%1 place point for {tool}").format(
-                tool=session.providers.get_provider_point_tool_label()
+                tool=_provider_point_api(session).get_provider_point_tool_label()
             ),
             ui.MouseLeft,
         ),

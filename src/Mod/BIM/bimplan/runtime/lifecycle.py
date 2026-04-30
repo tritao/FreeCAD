@@ -10,6 +10,34 @@ from bimplan.selection import kinds as plan_target_kinds
 translate = FreeCAD.Qt.translate
 
 
+def _provider_point_api(session):
+    providers = getattr(session, "providers", None)
+    return getattr(providers, "point", providers)
+
+
+def _cancel_provider_point_tool(session, refresh=True):
+    cancel = getattr(_provider_point_api(session), "cancel_provider_point_tool", None)
+    if callable(cancel):
+        return bool(cancel(refresh=refresh))
+    return False
+
+
+def _has_active_provider_point_tool(session):
+    has_active = getattr(_provider_point_api(session), "has_active_provider_point_tool", None)
+    if callable(has_active):
+        return bool(has_active())
+    return False
+
+
+def _cancel_provider_point_for_select(session):
+    cancel_for_select = getattr(_provider_point_api(session), "cancel_for_select", None)
+    if callable(cancel_for_select):
+        return bool(cancel_for_select())
+    if not _has_active_provider_point_tool(session):
+        return False
+    return _cancel_provider_point_tool(session)
+
+
 class PlanLifecycleAPI:
     """Owned session surface for Plan Edit lifecycle helpers."""
 
@@ -103,8 +131,8 @@ def _cancel_current_tool_for_finish(session):
 
 
 def _cancel_finish_fallback(session):
-    if session.providers.has_active_provider_point_tool():
-        session.providers.cancel_provider_point_tool()
+    if _has_active_provider_point_tool(session):
+        _cancel_provider_point_tool(session)
         return True
     if session.embedded_tools.has_active():
         session.embedded_tools.cancel()
@@ -138,7 +166,7 @@ def _cleanup_begin_teardown(session):
     session.wall_create.cancel_rect_wall_tool(refresh=False)
     session.windows.cancel_window_tool(refresh=False)
     session.spaces.cancel_plan_region_tool(refresh=False)
-    session.providers.cancel_provider_point_tool(refresh=False)
+    _cancel_provider_point_tool(session, refresh=False)
     session.wall_edit.cancel_wall_edit(restore=False, refresh=False)
     cancel_pending_edit(session)
     _cancel_current_tool_for_begin_teardown(session)
@@ -221,7 +249,7 @@ def activate_select_tool(session):
         return
     if session.spaces.cancel_active_tool_for_select():
         return
-    if session.providers.cancel_for_select():
+    if _cancel_provider_point_for_select(session):
         return
     session.embedded_tools.cancel_for_select()
     session.wall_create.cancel_for_select()

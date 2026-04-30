@@ -18,6 +18,11 @@ DEFAULT_WINDOW_FRAME_THICKNESS = 60.0
 DEFAULT_WINDOW_GLASS_THICKNESS = 10.0
 
 
+def _provider_point_api(session):
+    providers = getattr(session, "providers", None)
+    return getattr(providers, "point", providers)
+
+
 class PlanWindowsAPI:
     """Owned session surface for Plan Edit window placement and editor reads."""
 
@@ -329,7 +334,7 @@ def activate_window_tool(session):
     session.spaces.cancel_plan_region_tool(refresh=False)
     session.wall_create.cancel_rect_wall_tool(refresh=False)
     session.spaces.cancel_space_separator_tool(refresh=False)
-    session.providers.cancel_provider_point_tool(refresh=False)
+    _provider_point_api(session).cancel_provider_point_tool(refresh=False)
     if session.embedded_tools.has_active():
         session.embedded_tools.cancel()
     session.wall_edit.cancel_wall_edit()

@@ -17,6 +17,11 @@ def _provider_runtime_api(session):
     return getattr(providers, "runtime", providers)
 
 
+def _provider_point_api(session):
+    providers = getattr(session, "providers", None)
+    return getattr(providers, "point", providers)
+
+
 def _run_queued_integration_panel_refresh(panel_ref, generation):
     panel = panel_ref()
     if panel is not None:
@@ -1364,7 +1369,7 @@ class PlanEditIntegrationPanelMixin:
             getattr(action, "interaction", PlanToolInteraction.IMMEDIATE)
             == PlanToolInteraction.POINT
         ):
-            self.session.providers.start_plan_provider_point_tool(action)
+            _provider_point_api(self.session).start_plan_provider_point_tool(action)
             return
         _provider_runtime_api(self.session).execute_plan_provider_action(
             getattr(action, "provider_id", ""),

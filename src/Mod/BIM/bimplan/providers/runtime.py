@@ -244,60 +244,16 @@ class PlanProvidersAPI:
         self._session = session
         from bimplan.providers.edit import PlanProviderEditingAPI
         from bimplan.providers.picking import PlanProviderPickingAPI
+        from bimplan.providers.point import PlanProviderPointAPI
 
         self.runtime = PlanProviderRuntimeAPI(session)
         self.editing = PlanProviderEditingAPI(session)
         self.picking = PlanProviderPickingAPI(session)
+        self.point = PlanProviderPointAPI(session)
 
     @property
     def session(self):
         return self._session
-
-    def get_provider_point_tool_label(self):
-        from bimplan.providers import point
-
-        return point.get_provider_point_tool_label(self.session)
-
-    def get_provider_point_tool_prompt(self):
-        from bimplan.providers import point
-
-        return point.get_provider_point_tool_prompt(self.session)
-
-    def has_active_provider_point_tool(self):
-        from bimplan.providers import point
-
-        return point.has_active_provider_point_tool(self.session)
-
-    def cancel_provider_point_tool(self, refresh=True):
-        from bimplan.providers import point
-
-        return point.cancel_provider_point_tool(self.session, refresh=refresh)
-
-    def cancel_for_select(self):
-        if not self.has_active_provider_point_tool():
-            return False
-        self.cancel_provider_point_tool()
-        return True
-
-    def start_plan_provider_point_tool(self, tool):
-        from bimplan.providers import point
-
-        return point.start_plan_provider_point_tool(self.session, tool)
-
-    def handle_provider_point_tool_point(self, point=None, obj=None):
-        from bimplan.providers import point as provider_point
-
-        return provider_point.handle_provider_point_tool_point(
-            self.session,
-            point=point,
-            obj=obj,
-        )
-
-    def project_provider_point_to_host(self, point, host_wall):
-        del self
-        from bimplan.providers import point as provider_point
-
-        return provider_point.project_provider_point_to_host(point, host_wall)
 
     def cancel_active_tool_for_finish(self):
         if self.session.current_tool != plan_runtime_tools.PlanTool.MOVE_PROVIDER:
