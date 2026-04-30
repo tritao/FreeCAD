@@ -2,6 +2,8 @@
 
 """Opening and window GUI tests."""
 
+from bimplan.tools import opening_edit as plan_opening_edit_module
+
 from .TestBimPlanEditGuiBase import *  # noqa: F401,F403
 from .TestBimPlanEditGuiBase import BimPlanEditGuiBase
 
@@ -1800,6 +1802,70 @@ class BimPlanEditGuiOpeningsMixin:
         self.assertEqual(session.current_tool, "Move Opening")
         self.assertIs(session.interaction_state.edit_opening, door_b)
         self._assert_selected_plan_target(session, "opening", door_b)
+
+    def test_plan_edit_stale_opening_initial_preview_does_not_override_newer_edit(self):
+        """A queued opening preview must not repaint an older opening into a newer move session."""
+
+        wall = Arch.makeWall(length=4000, width=200, height=2500)
+        self.document.recompute()
+
+        door_a = self._make_hosted_door(wall, name="PreviewDoorA")
+        door_b = self._make_hosted_door(wall, name="PreviewDoorB")
+        door_b.Placement.Base = FreeCAD.Vector(1800, 0, 0)
+        self.document.recompute()
+
+        session = BimPlanSession.start_session()
+        self.assertIsNotNone(session)
+        self.pump_gui_events()
+
+        def _start_opening_move(opening):
+            self.assertTrue(
+                session.selection.activation.select_opening_for_plan_edit(
+                    opening,
+                    sync_gui_selection=True,
+                )
+            )
+            handle = session.openings.get_selected_opening_edit_handles(opening)[0]
+            with (
+                patch.object(FreeCADGui.Snapper, "getPoint", return_value=None),
+                patch.object(FreeCADGui.Snapper, "setSelectMode", return_value=None),
+                patch.object(session.viewport, "queue_focus_plan_view", return_value=None),
+            ):
+                session.openings.start_opening_handle_point_pick(opening, 0, handle)
+            self.assertEqual("Move Opening", session.current_tool)
+            self.assertIs(session.interaction_state.edit_opening, opening)
+            return handle.point, session.opening_transient_state.opening_edit_generation
+
+        point_a, generation_a = _start_opening_move(door_a)
+        session.openings.cancel_opening_handle_point_pick()
+        self.pump_gui_events()
+
+        point_b, generation_b = _start_opening_move(door_b)
+
+        with patch.object(
+            session.openings,
+            "sync_opening_move_preview",
+            wraps=session.openings.sync_opening_move_preview,
+        ) as sync_preview:
+            plan_opening_edit_module._run_queued_opening_move_initial_preview(
+                session,
+                door_a,
+                point_a,
+                generation_a,
+            )
+            sync_preview.assert_not_called()
+
+            self.assertEqual("Move Opening", session.current_tool)
+            self.assertIs(session.interaction_state.edit_opening, door_b)
+            self._assert_selected_plan_target(session, "opening", door_b)
+
+            plan_opening_edit_module._run_queued_opening_move_initial_preview(
+                session,
+                door_b,
+                point_b,
+                generation_b,
+            )
+            sync_preview.assert_called_once()
 
     def test_plan_edit_hovered_opening_replaces_selected_wall_context_overlay(self):
         """Hovered openings should not be hidden by selected-wall context overlays."""

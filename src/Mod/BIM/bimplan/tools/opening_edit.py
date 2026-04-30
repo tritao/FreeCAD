@@ -6,6 +6,7 @@ import FreeCAD
 import FreeCADGui
 from bimplan.runtime import capabilities as runtime_capabilities
 from bimplan.runtime import tools as plan_runtime_tools
+from bimplan.transactions import PlanEditTransaction
 
 translate = FreeCAD.Qt.translate
 
@@ -196,17 +197,41 @@ def refresh_opening_move_preview_from_raw_point(session):
     session.openings.sync_opening_move_preview(opening, point)
 
 
+def _run_queued_opening_move_initial_preview(session, opening, point, preview_generation):
+    if session.lifecycle_state.tearing_down or session.lifecycle_state.finishing:
+        return
+    if session.opening_transient_state.opening_edit_generation != preview_generation:
+        return
+    if session.current_tool != "Move Opening":
+        return
+    if session.interaction_state.edit_opening is not opening:
+        return
+    with session.performance.plan_perf_trace_event("queued_opening_move_initial_preview"):
+        session.openings.sync_opening_move_preview(opening, point)
+
+
 def queue_opening_move_initial_preview(session, opening, point):
-    def run_preview():
-        with session.performance.plan_perf_trace_event("queued_opening_move_initial_preview"):
-            session.openings.sync_opening_move_preview(opening, point)
+    preview_generation = session.opening_transient_state.opening_edit_generation
 
     try:
         from PySide import QtCore
     except ImportError:
-        run_preview()
+        _run_queued_opening_move_initial_preview(
+            session,
+            opening,
+            point,
+            preview_generation,
+        )
         return
-    QtCore.QTimer.singleShot(0, run_preview)
+    QtCore.QTimer.singleShot(
+        0,
+        lambda: _run_queued_opening_move_initial_preview(
+            session,
+            opening,
+            point,
+            preview_generation,
+        ),
+    )
 
 
 def activate_opening_handle(session, opening, handle_index):
@@ -333,18 +358,12 @@ def finish_opening_handle_point_pick(session, point=None, obj=None):
     handle = handles[handle_index]
     point = session.openings.project_opening_handle_point(opening, handle, point)
 
-    try:
-        session.doc.openTransaction(handle.transaction or translate("BIM_PlanEdit", "Edit Opening"))
-        moved = session.openings.execute_opening_handle(opening, handle_index, point)
-        if not moved:
-            raise RuntimeError("Unable to execute opening handle")
-        session.doc.commitTransaction()
-        session.doc.recompute()
-    except Exception:
-        try:
-            session.doc.abortTransaction()
-        except (ReferenceError, RuntimeError):
-            pass
+    transaction_name = handle.transaction or translate("BIM_PlanEdit", "Edit Opening")
+    if not _run_opening_handle_transaction(
+        session,
+        transaction_name,
+        lambda: _execute_opening_move_handle(session, opening, handle_index, point),
+    ):
         opening_transient_state.edit_opening_move_anchor = "center"
         session.openings.restore_selected_opening(opening)
         return
@@ -434,19 +453,48 @@ def queue_restore_selected_opening(session, opening):
     )
 
 
-def execute_selected_opening_handle(session, opening, handle_index, handle):
+def _warn_post_commit_recompute_failure(action_label, exc):
+    message = str(exc or "").strip() or type(exc).__name__
+    FreeCAD.Console.PrintWarning(
+        translate(
+            "BIM_PlanEdit",
+            "Completed {action}, but follow-up recompute failed: {error}\n",
+        ).format(action=action_label, error=message)
+    )
+
+
+def _run_opening_handle_transaction(session, transaction_name, callback):
     try:
-        session.doc.openTransaction(handle.transaction or translate("BIM_PlanEdit", "Edit Opening"))
-        executed = session.openings.execute_opening_handle(opening, handle_index)
-        if not executed:
-            raise RuntimeError("Unable to execute opening handle")
-        session.doc.commitTransaction()
-        session.doc.recompute()
+        with PlanEditTransaction(session.doc, transaction_name):
+            callback()
     except Exception:
-        try:
-            session.doc.abortTransaction()
-        except (ReferenceError, RuntimeError):
-            pass
+        return False
+    try:
+        session.doc.recompute()
+    except Exception as exc:
+        _warn_post_commit_recompute_failure(transaction_name, exc)
+    return True
+
+
+def _execute_opening_move_handle(session, opening, handle_index, point):
+    moved = session.openings.execute_opening_handle(opening, handle_index, point)
+    if not moved:
+        raise RuntimeError("Unable to execute opening handle")
+
+
+def _execute_opening_action_handle(session, opening, handle_index):
+    executed = session.openings.execute_opening_handle(opening, handle_index)
+    if not executed:
+        raise RuntimeError("Unable to execute opening handle")
+
+
+def execute_selected_opening_handle(session, opening, handle_index, handle):
+    transaction_name = handle.transaction or translate("BIM_PlanEdit", "Edit Opening")
+    if not _run_opening_handle_transaction(
+        session,
+        transaction_name,
+        lambda: _execute_opening_action_handle(session, opening, handle_index),
+    ):
         return
     session.selection.state.set_selected_plan_target("opening", opening, pending_restore=True)
     session.overlays.openings.sync_selected_opening_overlay()
