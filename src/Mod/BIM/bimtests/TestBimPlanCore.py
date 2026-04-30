@@ -113,6 +113,8 @@ from bimplan.selection.state import PlanSelectionRefreshService
 from bimplan.selection import kinds as plan_target_kinds
 from bimplan.tools import opening_edit as plan_opening_edit_module
 from bimplan.tools import spaces as plan_spaces_module
+from bimplan.tools import wall_edit as plan_wall_edit_module
+from bimplan.tools import wall_relations as plan_wall_relations_module
 from bimplan.tools import window_create as plan_window_create_module
 from bimplan.tools.spaces import (
     start_space_region_pick,
@@ -364,6 +366,19 @@ class _DummyDoc:
 
     def recompute(self):
         self.events.append(("recompute", None))
+
+
+class _FailingRecomputeDoc(_DummyDoc):
+    def __init__(self, fail_on_call):
+        super().__init__()
+        self.fail_on_call = int(fail_on_call)
+        self.recompute_calls = 0
+
+    def recompute(self):
+        self.recompute_calls += 1
+        self.events.append(("recompute", self.recompute_calls))
+        if self.recompute_calls == self.fail_on_call:
+            raise RuntimeError("recompute failed")
 
 
 class _DummyProvider(PlanEditProvider):
@@ -2790,6 +2805,180 @@ class TestBimPlanCore(unittest.TestCase):
         self.assertEqual(
             [("open", "Apply Plan Edit Change"), ("abort", None)],
             doc.events,
+        )
+
+    def test_plan_edit_wall_edit_transaction_skips_abort_after_committed_recompute_failure(self):
+        doc = _FailingRecomputeDoc(fail_on_call=2)
+        wall = object()
+        new_points = (object(), object())
+        session = SimpleNamespace(
+            doc=doc,
+            openings=SimpleNamespace(resolve_wall_hosted_opening_layout=lambda _wall: True),
+            lifecycle=SimpleNamespace(
+                cancel_pending_edit=lambda **kwargs: doc.events.append(
+                    ("cancel_pending_edit", kwargs)
+                )
+            ),
+            wall_relations=SimpleNamespace(
+                restore_selected_wall_relation_status=lambda: doc.events.append(
+                    ("restore_relation_status", None)
+                )
+            ),
+            task_panels=SimpleNamespace(
+                refresh_task_panel_status=lambda *args, **kwargs: doc.events.append(
+                    ("refresh_task_panel_status", kwargs)
+                )
+            ),
+            current_tool="Stretch End",
+        )
+        proxy = SimpleNamespace(
+            set_from_endpoints=lambda _wall, points: doc.events.append(
+                ("set_from_endpoints", tuple(points))
+            )
+        )
+
+        with patch.object(plan_wall_edit_module.FreeCAD.Console, "PrintWarning"):
+            success = plan_wall_edit_module._apply_wall_edit_transaction(
+                session,
+                wall,
+                proxy,
+                new_points,
+                "Stretch Wall Endpoint",
+            )
+
+        self.assertTrue(success)
+        self.assertEqual(
+            [
+                ("open", "Stretch Wall Endpoint"),
+                ("set_from_endpoints", new_points),
+                ("recompute", 1),
+                ("commit", None),
+                ("recompute", 2),
+            ],
+            doc.events,
+        )
+
+    def test_plan_edit_wall_relation_transaction_skips_abort_after_committed_recompute_failure(
+        self,
+    ):
+        doc = _FailingRecomputeDoc(fail_on_call=1)
+
+        with patch.object(plan_wall_relations_module.FreeCAD.Console, "PrintWarning"):
+            success, result = plan_wall_relations_module._commit_wall_relation_change(
+                doc,
+                "Join walls",
+                lambda: doc.events.append(("mutate", None)) or "relation",
+            )
+
+        self.assertTrue(success)
+        self.assertEqual("relation", result)
+        self.assertEqual(
+            [
+                ("open", "Join walls"),
+                ("mutate", None),
+                ("commit", None),
+                ("recompute", 1),
+            ],
+            doc.events,
+        )
+
+    def test_plan_edit_find_reusable_junction_requires_exact_wall_set(self):
+        wall_a = SimpleNamespace(Name="WallA")
+        wall_b = SimpleNamespace(Name="WallB")
+        wall_c = SimpleNamespace(Name="WallC")
+        wall_d = SimpleNamespace(Name="WallD")
+        relation = SimpleNamespace(
+            Proxy=SimpleNamespace(Type="WallJunction"),
+            Walls=[wall_a, wall_b, wall_c, wall_d],
+        )
+
+        self.assertIsNone(
+            plan_wall_relations_module.find_reusable_plan_junction(
+                [relation],
+                [wall_a, wall_b, wall_c],
+            )
+        )
+        self.assertIs(
+            relation,
+            plan_wall_relations_module.find_reusable_plan_junction(
+                [relation],
+                [wall_d, wall_c, wall_b, wall_a],
+            ),
+        )
+
+    def test_plan_edit_cancel_wall_edit_restores_selected_wall_relation_status(self):
+        calls = []
+        session = SimpleNamespace(
+            wall_edit_state=SimpleNamespace(wall_edit_modal_active=True, edit_wall=object()),
+            interaction_state=SimpleNamespace(embedded_tool_name=None),
+            embedded_tools=SimpleNamespace(
+                cancel=lambda name: calls.append(("embedded_cancel", name))
+            ),
+            lifecycle=SimpleNamespace(
+                cancel_pending_edit=lambda **kwargs: calls.append(("cancel_pending_edit", kwargs))
+            ),
+            wall_relations=SimpleNamespace(
+                restore_selected_wall_relation_status=lambda: calls.append(
+                    "restore_relation_status"
+                )
+            ),
+            overlays=SimpleNamespace(
+                openings=SimpleNamespace(
+                    sync_selected_wall_opening_context_overlay=lambda: calls.append(
+                        "sync_opening_context"
+                    )
+                )
+            ),
+            task_panels=SimpleNamespace(
+                refresh_task_panel_status=lambda *args, **kwargs: calls.append(
+                    ("refresh_task_panel_status", kwargs)
+                )
+            ),
+            current_tool="Move Wall",
+        )
+
+        self.assertTrue(plan_wall_edit_module.cancel_wall_edit(session))
+        self.assertEqual("Select", session.current_tool)
+        self.assertEqual(
+            [
+                ("embedded_cancel", "Wall"),
+                ("cancel_pending_edit", {"restore_wall_visibility": True}),
+                "restore_relation_status",
+                "sync_opening_context",
+                ("refresh_task_panel_status", {}),
+            ],
+            calls,
+        )
+
+    def test_plan_edit_cancel_wall_edit_point_pick_restores_selected_wall_relation_status(self):
+        calls = []
+        session = SimpleNamespace(
+            lifecycle=SimpleNamespace(
+                cancel_pending_edit=lambda: calls.append("cancel_pending_edit")
+            ),
+            wall_relations=SimpleNamespace(
+                restore_selected_wall_relation_status=lambda: calls.append(
+                    "restore_relation_status"
+                )
+            ),
+            task_panels=SimpleNamespace(
+                refresh_task_panel_status=lambda *args, **kwargs: calls.append(
+                    ("refresh_task_panel_status", kwargs)
+                )
+            ),
+            current_tool="Stretch End",
+        )
+
+        plan_wall_edit_module.cancel_wall_edit_point_pick(session)
+
+        self.assertEqual("Select", session.current_tool)
+        self.assertEqual(
+            [
+                "cancel_pending_edit",
+                "restore_relation_status",
+                ("refresh_task_panel_status", {}),
+            ],
+            calls,
         )
 
     def test_plan_edit_session_constructor_does_not_connect_teardown_signals(self):

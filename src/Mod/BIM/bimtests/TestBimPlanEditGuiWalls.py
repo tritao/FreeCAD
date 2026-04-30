@@ -1885,6 +1885,59 @@ class BimPlanEditGuiWallsMixin:
         self.assertEqual(session.current_tool, "Move Wall")
         self._assert_selected_plan_target(session, "wall", wall)
 
+    def test_plan_edit_wall_stretch_invalid_click_keeps_edit_active(self):
+        """A too-short stretch click should re-arm the edit instead of dropping back to Select."""
+
+        wall = Arch.makeWall(length=3000, width=200, height=2500)
+        self.document.recompute()
+
+        session = BimPlanSession.start_session()
+        self.assertIsNotNone(session)
+        self.pump_gui_events()
+
+        FreeCADGui.Selection.clearSelection()
+        FreeCADGui.Selection.addSelection(self.document.Name, wall.Name)
+        self.pump_gui_events()
+        session.selection.refresh.refresh_primary_selected_plan_target()
+
+        point_requests = []
+
+        def fake_get_point(**kwargs):
+            point_requests.append(kwargs)
+
+        original_start, original_end = wall.Proxy.calc_endpoints(wall)
+        invalid_end = FreeCAD.Vector(original_start).add(FreeCAD.Vector(5.0, 0.0, 0.0))
+        valid_end = FreeCAD.Vector(original_start).add(FreeCAD.Vector(1600.0, 0.0, 0.0))
+
+        with (
+            patch.object(FreeCADGui.Snapper, "getPoint", side_effect=fake_get_point),
+            patch.object(FreeCADGui.Snapper, "setSelectMode", return_value=None),
+            patch.object(FreeCAD.Console, "PrintWarning"),
+        ):
+            session.wall_edit.start_wall_grip_edit(1)
+            self.assertEqual(1, len(point_requests))
+
+            point_requests[0]["callback"](invalid_end, None)
+
+            self.assertEqual("Stretch End", session.current_tool)
+            self.assertIs(session.wall_edit_state.edit_wall, wall)
+            self._assert_selected_plan_target(session, "wall", wall)
+            self.assertEqual(2, len(point_requests))
+
+            after_invalid_start, after_invalid_end = wall.Proxy.calc_endpoints(wall)
+            self.assertLess(after_invalid_start.distanceToPoint(original_start), 1e-6)
+            self.assertLess(after_invalid_end.distanceToPoint(original_end), 1e-6)
+
+            point_requests[1]["callback"](valid_end, None)
+
+        self.pump_gui_events()
+
+        self.assertEqual("Select", session.current_tool)
+        updated_start, updated_end = wall.Proxy.calc_endpoints(wall)
+        self.assertLess(updated_start.distanceToPoint(original_start), 1e-6)
+        self.assertLess(updated_end.distanceToPoint(valid_end), 1e-6)
+        self._assert_selected_wall_visuals(session, wall)
+
     def test_plan_edit_clearing_wall_selection_removes_edit_nodes_from_scenegraph(self):
         """Clearing wall selection should not leave stale EditNode grips in the viewer scene graph."""
 
