@@ -4,6 +4,12 @@
 
 from contextlib import contextmanager
 
+
+def _provider_runtime_api(session):
+    providers = getattr(session, "providers", None)
+    return getattr(providers, "runtime", providers)
+
+
 _OPENING_VISUAL_PROPERTIES = {
     "Shape",
     "Placement",
@@ -351,7 +357,7 @@ def _update_view_object(view_object):
 
 
 def _invalidate_document_visual_dependency_caches(session):
-    session.providers.invalidate_plan_provider_document_cache()
+    _provider_runtime_api(session).invalidate_plan_provider_document_cache()
     _provider_overlay_state(session).render_state = None
     session.visibility.invalidate_plan_classification_cache()
     session.openings.invalidate_wall_hosted_openings_cache()
@@ -447,7 +453,7 @@ def invalidate_document_dependent_plan_visuals(session, recompute_opening_hosts=
         or not document_is_alive(session)
     ):
         return
-    session.providers.invalidate_plan_provider_document_cache()
+    _provider_runtime_api(session).invalidate_plan_provider_document_cache()
     session.visibility.invalidate_plan_classification_cache()
     session.openings.invalidate_wall_hosted_openings_cache()
     session.overlays.geometry.invalidate_plan_overlay_geometry_cache()

@@ -24,6 +24,11 @@ _PROVIDER_POINT_PREVIEW_UNHOSTED_COLOR = (0.95, 0.52, 0.10)
 _PROVIDER_POINT_PREVIEW_HOST_COLOR = (0.10, 0.58, 0.38)
 
 
+def _provider_runtime_api(session):
+    providers = getattr(session, "providers", None)
+    return getattr(providers, "runtime", providers)
+
+
 @dataclass
 class _TrackerPool:
     trackers: list = field(default_factory=list)
@@ -137,17 +142,18 @@ def sync_provider_overlays(session):
             or session.lifecycle_state.finishing
             or not session.document_visuals.document_is_alive()
             or session.current_tool not in ("Select", "Provider Point")
-            or session.providers.plan_provider_integrations_disabled()
+            or _provider_runtime_api(session).plan_provider_integrations_disabled()
         ):
             clear_provider_overlays(session)
             return
 
-        with session.providers.plan_provider_refresh_cache_scope():
+        provider_runtime = _provider_runtime_api(session)
+        with provider_runtime.plan_provider_refresh_cache_scope():
             overlays = tuple(
                 overlay
-                for overlay in session.providers.get_plan_provider_overlays()
+                for overlay in provider_runtime.get_plan_provider_overlays()
                 if bool(getattr(overlay, "visible", True))
-                and session.providers.is_plan_provider_overlay_visible(overlay)
+                and provider_runtime.is_plan_provider_overlay_visible(overlay)
             )
         render_state = (
             overlays,
@@ -186,7 +192,7 @@ def sync_hovered_provider_overlay(session):
         clear_hovered_provider_overlay(session)
         if session.current_tool != "Select":
             return
-        if session.providers.plan_provider_integrations_disabled():
+        if _provider_runtime_api(session).plan_provider_integrations_disabled():
             return
         provider_obj = getattr(session, "hovered_provider", None)
         if provider_obj is None:
@@ -353,7 +359,7 @@ def sync_selected_provider_handles(session):
         if session.current_tool != "Select":
             clear_selected_provider_handles(session)
             return
-        if not session.providers.is_plan_provider_target_object(provider_obj):
+        if not _provider_runtime_api(session).is_plan_provider_target_object(provider_obj):
             clear_selected_provider_handles(session)
             return
         specs = tuple(get_selected_provider_handle_specs(session, provider_obj))
@@ -405,7 +411,10 @@ def clear_selected_provider_handles(session):
 
 def pick_selected_provider_handle(session, mouse_pos, radius_px=10):
     provider_obj = session.selection.state.get_selected_plan_target_object("provider")
-    if not session.providers.is_plan_provider_target_object(provider_obj) or not session.view:
+    if (
+        not _provider_runtime_api(session).is_plan_provider_target_object(provider_obj)
+        or not session.view
+    ):
         return None
     try:
         cursor_x = int(mouse_pos[0])
@@ -860,12 +869,13 @@ def _get_hovered_provider_segment_specs(session):
 
 
 def _get_visible_provider_overlays(session):
-    with session.providers.plan_provider_refresh_cache_scope():
+    provider_runtime = _provider_runtime_api(session)
+    with provider_runtime.plan_provider_refresh_cache_scope():
         return tuple(
             overlay
-            for overlay in session.providers.get_plan_provider_overlays()
+            for overlay in provider_runtime.get_plan_provider_overlays()
             if bool(getattr(overlay, "visible", True))
-            and session.providers.is_plan_provider_overlay_visible(overlay)
+            and provider_runtime.is_plan_provider_overlay_visible(overlay)
         )
 
 

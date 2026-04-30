@@ -131,25 +131,19 @@ _PLAN_PROVIDER_SNAPSHOT_CACHE_KEY = ("provider_snapshot", "panel")
 _MISSING = object()
 
 
-class PlanProvidersAPI:
-    """Owned session surface for Plan Edit provider behavior."""
+class PlanProviderRuntimeAPI:
+    """Owned provider runtime surface for Plan Edit session services."""
 
-    __slots__ = ("_session", "__dict__")
+    __slots__ = ("_session",)
 
     def __init__(self, session):
         self._session = session
-        from bimplan.providers.edit import PlanProviderEditingAPI
-        from bimplan.providers.picking import PlanProviderPickingAPI
-
-        self.editing = PlanProviderEditingAPI(session)
-        self.picking = PlanProviderPickingAPI(session)
 
     @property
     def session(self):
         return self._session
 
     def get_plan_provider_registry(self):
-        del self
         return get_plan_edit_registry()
 
     def get_plan_provider_overlay_category(self, provider_id):
@@ -177,6 +171,105 @@ class PlanProvidersAPI:
             return False
         return execute_plan_provider_action(
             session,
+            provider_id,
+            action_key,
+            transaction_label=transaction_label,
+            payload=payload,
+        )
+
+    def plan_provider_integrations_disabled(self):
+        return plan_provider_integrations_disabled(self.session)
+
+    def normalize_plan_provider_tool(self, provider_id, tool):
+        del self
+        return normalize_plan_provider_tool(provider_id, tool)
+
+    def get_plan_provider_display_name(self, provider_id):
+        return get_plan_provider_display_name(self.session, provider_id)
+
+    def get_plan_provider_tools(self):
+        return get_plan_provider_tools(self.session)
+
+    def get_plan_provider_snapshot(self):
+        return get_plan_provider_snapshot(self.session)
+
+    def get_plan_provider_overlays(self):
+        return get_plan_provider_overlays(self.session)
+
+    def get_plan_provider_overlay_mode(self):
+        return get_plan_provider_overlay_mode(self.session)
+
+    def set_plan_provider_overlay_mode(self, mode):
+        return set_plan_provider_overlay_mode(self.session, mode)
+
+    def get_plan_provider_targets(self):
+        return get_plan_provider_targets(self.session)
+
+    def get_plan_provider_target_for_object(self, obj):
+        return get_plan_provider_target_for_object(self.session, obj)
+
+    def is_plan_provider_target_object(self, obj):
+        return is_plan_provider_target_object(self.session, obj)
+
+    def is_plan_provider_overlay_enabled(self, overlay):
+        return is_plan_provider_overlay_enabled(self.session, overlay)
+
+    def is_plan_provider_overlay_visible(self, overlay):
+        return is_plan_provider_overlay_visible(self.session, overlay)
+
+    def set_plan_provider_overlay_visible(self, provider_id, overlay_key, visible):
+        return set_plan_provider_overlay_visible(
+            self.session,
+            provider_id,
+            overlay_key,
+            visible,
+        )
+
+    def queue_plan_provider_overlay_sync(self):
+        return queue_plan_provider_overlay_sync(self.session)
+
+    def plan_provider_refresh_cache_scope(self):
+        return plan_provider_refresh_cache_scope(self.session)
+
+    def invalidate_plan_provider_document_cache(self):
+        return invalidate_plan_provider_document_cache(self.session)
+
+
+class PlanProvidersAPI:
+    """Owned session surface for Plan Edit provider behavior."""
+
+    __slots__ = ("_session", "__dict__")
+
+    def __init__(self, session):
+        self._session = session
+        from bimplan.providers.edit import PlanProviderEditingAPI
+        from bimplan.providers.picking import PlanProviderPickingAPI
+
+        self.runtime = PlanProviderRuntimeAPI(session)
+        self.editing = PlanProviderEditingAPI(session)
+        self.picking = PlanProviderPickingAPI(session)
+
+    @property
+    def session(self):
+        return self._session
+
+    def get_plan_provider_registry(self):
+        return self.runtime.get_plan_provider_registry()
+
+    def get_plan_provider_overlay_category(self, provider_id):
+        return self.runtime.get_plan_provider_overlay_category(provider_id)
+
+    def discard_runtime_references(self):
+        return self.runtime.discard_runtime_references()
+
+    def execute_plan_provider_action(
+        self,
+        provider_id,
+        action_key,
+        transaction_label="",
+        payload=None,
+    ):
+        return self.runtime.execute_plan_provider_action(
             provider_id,
             action_key,
             transaction_label=transaction_label,
@@ -257,61 +350,55 @@ class PlanProvidersAPI:
         return True
 
     def plan_provider_integrations_disabled(self):
-        return plan_provider_integrations_disabled(self.session)
+        return self.runtime.plan_provider_integrations_disabled()
 
     def normalize_plan_provider_tool(self, provider_id, tool):
-        del self
-        return normalize_plan_provider_tool(provider_id, tool)
+        return self.runtime.normalize_plan_provider_tool(provider_id, tool)
 
     def get_plan_provider_display_name(self, provider_id):
-        return get_plan_provider_display_name(self.session, provider_id)
+        return self.runtime.get_plan_provider_display_name(provider_id)
 
     def get_plan_provider_tools(self):
-        return get_plan_provider_tools(self.session)
+        return self.runtime.get_plan_provider_tools()
 
     def get_plan_provider_snapshot(self):
-        return get_plan_provider_snapshot(self.session)
+        return self.runtime.get_plan_provider_snapshot()
 
     def get_plan_provider_overlays(self):
-        return get_plan_provider_overlays(self.session)
+        return self.runtime.get_plan_provider_overlays()
 
     def get_plan_provider_overlay_mode(self):
-        return get_plan_provider_overlay_mode(self.session)
+        return self.runtime.get_plan_provider_overlay_mode()
 
     def set_plan_provider_overlay_mode(self, mode):
-        return set_plan_provider_overlay_mode(self.session, mode)
+        return self.runtime.set_plan_provider_overlay_mode(mode)
 
     def get_plan_provider_targets(self):
-        return get_plan_provider_targets(self.session)
+        return self.runtime.get_plan_provider_targets()
 
     def get_plan_provider_target_for_object(self, obj):
-        return get_plan_provider_target_for_object(self.session, obj)
+        return self.runtime.get_plan_provider_target_for_object(obj)
 
     def is_plan_provider_target_object(self, obj):
-        return is_plan_provider_target_object(self.session, obj)
+        return self.runtime.is_plan_provider_target_object(obj)
 
     def is_plan_provider_overlay_enabled(self, overlay):
-        return is_plan_provider_overlay_enabled(self.session, overlay)
+        return self.runtime.is_plan_provider_overlay_enabled(overlay)
 
     def is_plan_provider_overlay_visible(self, overlay):
-        return is_plan_provider_overlay_visible(self.session, overlay)
+        return self.runtime.is_plan_provider_overlay_visible(overlay)
 
     def set_plan_provider_overlay_visible(self, provider_id, overlay_key, visible):
-        return set_plan_provider_overlay_visible(
-            self.session,
-            provider_id,
-            overlay_key,
-            visible,
-        )
+        return self.runtime.set_plan_provider_overlay_visible(provider_id, overlay_key, visible)
 
     def queue_plan_provider_overlay_sync(self):
-        return queue_plan_provider_overlay_sync(self.session)
+        return self.runtime.queue_plan_provider_overlay_sync()
 
     def plan_provider_refresh_cache_scope(self):
-        return plan_provider_refresh_cache_scope(self.session)
+        return self.runtime.plan_provider_refresh_cache_scope()
 
     def invalidate_plan_provider_document_cache(self):
-        return invalidate_plan_provider_document_cache(self.session)
+        return self.runtime.invalidate_plan_provider_document_cache()
 
 
 def _is_active_provider_session(session):

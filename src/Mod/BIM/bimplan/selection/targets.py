@@ -17,6 +17,11 @@ from . import kinds as plan_target_kinds
 from .common import _SessionAPI, get_plan_target_state_key
 
 
+def _provider_runtime_api(session):
+    providers = getattr(session, "providers", None)
+    return getattr(providers, "runtime", providers)
+
+
 @dataclass(frozen=True)
 class PlanTarget:
     kind: str
@@ -272,7 +277,7 @@ def make_plan_target_record(session, kind, obj, selected_keys=None, primary_key=
     if not kind or obj is None:
         return None
     provider_target = (
-        session.providers.get_plan_provider_target_for_object(obj)
+        _provider_runtime_api(session).get_plan_provider_target_for_object(obj)
         if kind == plan_target_kinds.PLAN_TARGET_PROVIDER
         else None
     )
@@ -325,7 +330,7 @@ def get_plan_targets(session, selected_only=False):
         source_targets = []
         seen = set()
         active_storey_name = getattr(session.active_storey, "Name", None)
-        provider_refresh_scope = session.providers.plan_provider_refresh_cache_scope()
+        provider_refresh_scope = _provider_runtime_api(session).plan_provider_refresh_cache_scope()
         with provider_refresh_scope:
             for obj in getattr(session.doc, "Objects", []) or []:
                 target = _coerce_plan_target_ref(get_plan_target_for_object(session, obj))
