@@ -2882,6 +2882,28 @@ class TestBimPlanCore(unittest.TestCase):
             doc.events,
         )
 
+    def test_plan_edit_opening_transaction_skips_abort_after_committed_recompute_failure(self):
+        doc = _FailingRecomputeDoc(fail_on_call=1)
+        session = SimpleNamespace(doc=doc)
+
+        with patch.object(plan_opening_edit_module.FreeCAD.Console, "PrintWarning"):
+            success = plan_opening_edit_module._run_opening_handle_transaction(
+                session,
+                "Edit Opening",
+                lambda: doc.events.append(("mutate", None)),
+            )
+
+        self.assertTrue(success)
+        self.assertEqual(
+            [
+                ("open", "Edit Opening"),
+                ("mutate", None),
+                ("commit", None),
+                ("recompute", 1),
+            ],
+            doc.events,
+        )
+
     def test_plan_edit_find_reusable_junction_requires_exact_wall_set(self):
         wall_a = SimpleNamespace(Name="WallA")
         wall_b = SimpleNamespace(Name="WallB")
