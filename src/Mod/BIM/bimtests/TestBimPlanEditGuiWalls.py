@@ -2114,6 +2114,76 @@ class BimPlanEditGuiWallsMixin:
         self.assertEqual(session.wall_edit_state.wall_edit_active_readout_tracker.mode, 2)
         self.assertTrue(session.wall_edit_state.wall_edit_active_readout_tracker.isInEdit())
 
+    def test_plan_edit_stale_wall_readout_cancel_does_not_resume_newer_edit(self):
+        """A queued readout-cancel callback must not replay into a newer wall edit."""
+
+        wall_a = Arch.makeWall(length=3000, width=200, height=2500)
+        wall_b = Arch.makeWall(length=2600, width=200, height=2500)
+        wall_b.Placement = FreeCAD.Placement(FreeCAD.Vector(4000, 0, 0), FreeCAD.Rotation())
+        self.document.recompute()
+
+        session = BimPlanSession.start_session()
+        self.assertIsNotNone(session)
+        self.pump_gui_events()
+
+        def _start_wall_move_edit(wall):
+            captured = {}
+
+            def fake_get_point(**kwargs):
+                captured.update(kwargs)
+
+            FreeCADGui.Selection.clearSelection()
+            FreeCADGui.Selection.addSelection(self.document.Name, wall.Name)
+            self.pump_gui_events()
+            session.selection.refresh.refresh_primary_selected_plan_target()
+
+            with (
+                patch.object(FreeCADGui.Snapper, "getPoint", side_effect=fake_get_point),
+                patch.object(FreeCADGui.Snapper, "setSelectMode", return_value=None),
+            ):
+                session.wall_edit.start_wall_grip_edit(2)
+
+            self.assertIs(session.wall_edit_state.edit_wall, wall)
+            self.assertEqual(session.current_tool, "Move Wall")
+            return captured
+
+        _start_wall_move_edit(wall_a)
+        self.assertTrue(session.wall_edit.start_wall_readout_edit())
+
+        queued_callbacks = []
+
+        def fake_single_shot(delay, callback):
+            self.assertEqual(delay, 0)
+            queued_callbacks.append(callback)
+
+        with patch("PySide.QtCore.QTimer.singleShot", side_effect=fake_single_shot):
+            session.wall_edit.schedule_wall_edit_readout_cancel()
+
+        self.assertEqual(len(queued_callbacks), 1)
+
+        session.wall_edit.cancel_wall_edit(refresh=False)
+        self.pump_gui_events()
+
+        _start_wall_move_edit(wall_b)
+        preview_before = [
+            (float(point.x), float(point.y), float(point.z))
+            for point in session.wall_edit_state.preview_points
+        ]
+
+        with patch("bimplan.tools.wall_edit.resume_wall_edit_point_pick") as resume_mock:
+            queued_callbacks[0]()
+
+        self.assertIs(session.wall_edit_state.edit_wall, wall_b)
+        self.assertEqual(session.current_tool, "Move Wall")
+        self.assertEqual(
+            [
+                (float(point.x), float(point.y), float(point.z))
+                for point in session.wall_edit_state.preview_points
+            ],
+            preview_before,
+        )
+        resume_mock.assert_not_called()
+
     def test_plan_edit_wall_move_tab_cycles_active_offset_axis(self):
         """Tab should cycle the active in-view move offset between X and Y."""
 

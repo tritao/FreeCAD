@@ -165,6 +165,7 @@ def _validate_wall_edit_start(session):
 
 def _set_wall_edit_start_state(session, wall, endpoints, mode):
     state = _wall_edit_state(session)
+    state.wall_edit_generation += 1
     session.wall_relations.clear_plan_relation_status()
     session.current_tool = "Move Wall" if mode == "Move" else f"Stretch {mode}"
     session.selection.hover.set_hovered_wall(None)
@@ -1584,6 +1585,14 @@ def on_wall_move_delta_canceled(session, mode, value):
 
 def schedule_wall_edit_readout_cancel(session):
     state = _wall_edit_state(session)
+    resume_token = (
+        state.wall_edit_generation,
+        state.edit_wall,
+        state.edit_endpoint,
+        state.wall_edit_active_readout_tracker,
+        state.wall_edit_active_readout_mode,
+        session.current_tool,
+    )
     preview_points = None
     if state.preview_points:
         preview_points = [FreeCAD.Vector(point) for point in state.preview_points]
@@ -1592,14 +1601,31 @@ def schedule_wall_edit_readout_cancel(session):
     try:
         from PySide import QtCore
     except ImportError:
-        finish_wall_edit_readout_canceled(session, preview_points)
+        finish_wall_edit_readout_canceled(session, preview_points, resume_token=resume_token)
         return
     QtCore.QTimer.singleShot(
-        0, lambda pts=preview_points: finish_wall_edit_readout_canceled(session, pts)
+        0,
+        lambda pts=preview_points, token=resume_token: finish_wall_edit_readout_canceled(
+            session,
+            pts,
+            resume_token=token,
+        ),
     )
 
 
-def finish_wall_edit_readout_canceled(session, preview_points):
+def finish_wall_edit_readout_canceled(session, preview_points, *, resume_token=None):
+    state = _wall_edit_state(session)
+    if resume_token is not None:
+        current_token = (
+            state.wall_edit_generation,
+            state.edit_wall,
+            state.edit_endpoint,
+            state.wall_edit_active_readout_tracker,
+            state.wall_edit_active_readout_mode,
+            session.current_tool,
+        )
+        if current_token != resume_token:
+            return
     if not is_wall_readout_edit_active(session):
         return
     if preview_points:
@@ -1692,6 +1718,7 @@ def _set_key_event_handled(event_callback):
 
 def reset_pending_edit_state(session):
     state = _wall_edit_state(session)
+    state.wall_edit_generation += 1
     state.wall_edit_modal_active = False
     session.wall_edit.restore_edit_wall_visibility()
     session.wall_edit.clear_wall_edit_preview()
