@@ -255,6 +255,7 @@ def start_opening_handle_point_pick(session, opening, handle_index, handle):
             session.overlays.spaces.sync_secondary_selected_overlays()
             interaction_state = session.interaction_state
             opening_transient_state = session.opening_transient_state
+            opening_transient_state.opening_edit_generation += 1
             interaction_state.edit_opening = opening
             interaction_state.edit_opening_handle_index = handle_index
             opening_transient_state.edit_opening_move_anchor = "center"
@@ -357,6 +358,7 @@ def finish_opening_handle_point_pick(session, point=None, obj=None):
 def cancel_opening_handle_point_pick(session):
     interaction_state = session.interaction_state
     opening_transient_state = session.opening_transient_state
+    opening_transient_state.opening_edit_generation += 1
     opening = interaction_state.edit_opening
     interaction_state.edit_opening = None
     interaction_state.edit_opening_handle_index = None
@@ -377,6 +379,7 @@ def cancel_opening_handle_point_pick(session):
 def reset_pending_edit_state(session, *, clear_edit=False):
     interaction_state = session.interaction_state
     opening_transient_state = session.opening_transient_state
+    opening_transient_state.opening_edit_generation += 1
     opening_transient_state.edit_opening_move_anchor = "center"
     opening_transient_state.edit_opening_move_raw_point = None
     if clear_edit:
@@ -405,13 +408,30 @@ def restore_selected_opening(session, opening):
     session.task_panels.refresh_task_panel_status()
 
 
+def _run_queued_restore_selected_opening(session, opening, restore_generation):
+    opening_transient_state = session.opening_transient_state
+    if session.lifecycle_state.tearing_down or session.lifecycle_state.finishing:
+        return
+    if opening_transient_state.opening_edit_generation != restore_generation:
+        return
+    session.openings.restore_selected_opening(opening)
+
+
 def queue_restore_selected_opening(session, opening):
+    restore_generation = session.opening_transient_state.opening_edit_generation
     try:
         from PySide import QtCore
     except ImportError:
-        session.openings.restore_selected_opening(opening)
+        _run_queued_restore_selected_opening(session, opening, restore_generation)
         return
-    QtCore.QTimer.singleShot(0, lambda: session.openings.restore_selected_opening(opening))
+    QtCore.QTimer.singleShot(
+        0,
+        lambda: _run_queued_restore_selected_opening(
+            session,
+            opening,
+            restore_generation,
+        ),
+    )
 
 
 def execute_selected_opening_handle(session, opening, handle_index, handle):

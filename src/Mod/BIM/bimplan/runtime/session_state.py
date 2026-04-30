@@ -272,6 +272,7 @@ class PlanProviderTransientState:
 
 @dataclass
 class PlanOpeningTransientState:
+    opening_edit_generation: int = 0
     opening_handle_trackers: list = field(default_factory=list)
     opening_handle_tracker_pool: list = field(default_factory=list)
     opening_handle_tracker_pool_queued: bool = False
