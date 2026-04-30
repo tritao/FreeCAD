@@ -113,6 +113,7 @@ class SymbolEditTool(plan_runtime_tools.PlanToolHandler):
 
 def discard_runtime_references(session):
     interaction_state = session.interaction_state
+    interaction_state.symbol_edit_generation += 1
     interaction_state.edit_symbol = None
     interaction_state.edit_symbol_handle_role = None
     interaction_state.edit_symbol_start_placement = None
@@ -269,6 +270,7 @@ def start_symbol_handle_point_pick(session, symbol, handle_role):
             session.selection.hover.set_hovered_symbol(None)
             session.overlays.spaces.sync_secondary_selected_overlays()
             interaction_state = session.interaction_state
+            interaction_state.symbol_edit_generation += 1
             interaction_state.edit_symbol = symbol
             interaction_state.edit_symbol_handle_role = handle_role
             interaction_state.edit_symbol_start_placement = session.visibility.copy_placement(
@@ -392,6 +394,7 @@ def finish_symbol_handle_point_pick(session, point=None, obj=None):
 
 def cancel_symbol_handle_point_pick(session):
     interaction_state = session.interaction_state
+    interaction_state.symbol_edit_generation += 1
     symbol = interaction_state.edit_symbol
     interaction_state.edit_symbol = None
     interaction_state.edit_symbol_handle_role = None
@@ -431,10 +434,27 @@ def restore_selected_symbol(session, symbol):
     session.task_panels.refresh_task_panel_status()
 
 
+def _run_queued_restore_selected_symbol(session, symbol, restore_generation):
+    interaction_state = session.interaction_state
+    if session.lifecycle_state.tearing_down or session.lifecycle_state.finishing:
+        return
+    if interaction_state.symbol_edit_generation != restore_generation:
+        return
+    session.symbols.restore_selected_symbol(symbol)
+
+
 def queue_restore_selected_symbol(session, symbol):
+    restore_generation = session.interaction_state.symbol_edit_generation
     try:
         from PySide import QtCore
     except ImportError:
-        session.symbols.restore_selected_symbol(symbol)
+        _run_queued_restore_selected_symbol(session, symbol, restore_generation)
         return
-    QtCore.QTimer.singleShot(0, lambda: session.symbols.restore_selected_symbol(symbol))
+    QtCore.QTimer.singleShot(
+        0,
+        lambda: _run_queued_restore_selected_symbol(
+            session,
+            symbol,
+            restore_generation,
+        ),
+    )

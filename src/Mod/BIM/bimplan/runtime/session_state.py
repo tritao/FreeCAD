@@ -81,6 +81,7 @@ class PlanInteractionState:
     embedded_tool_name: str | None = None
     edit_opening: object = None
     edit_opening_handle_index: object = None
+    symbol_edit_generation: int = 0
     edit_symbol: object = None
     edit_symbol_handle_role: object = None
     edit_symbol_start_placement: object = None

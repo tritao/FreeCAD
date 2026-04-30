@@ -435,6 +435,55 @@ class BimPlanEditGuiSymbolsMixin:
         session.shutdown(close_dialog=False)
         self.pump_gui_events()
 
+    def test_plan_edit_stale_symbol_restore_does_not_resume_newer_edit(self):
+        """A queued symbol restore must not override a newer symbol edit session."""
+
+        _level_a, _equipment_a, link = self._make_plan_symbol_link()
+        _level_b, equipment = self._make_direct_plan_symbol_equipment()
+
+        FreeCADGui.Selection.clearSelection()
+
+        session = BimPlanSession.start_session()
+        self.assertIsNotNone(session, "Plan Edit session should start in GUI tests.")
+        self.pump_gui_events()
+
+        session.document_visuals.refresh_plan_object_footprint_display(link)
+        session.document_visuals.refresh_plan_object_footprint_display(equipment)
+        self.pump_gui_events()
+
+        queued_callbacks = []
+
+        def fake_single_shot(delay, callback):
+            self.assertEqual(delay, 0)
+            queued_callbacks.append(callback)
+
+        with patch("PySide.QtCore.QTimer.singleShot", side_effect=fake_single_shot):
+            session.symbols.queue_restore_selected_symbol(link)
+
+        self.assertEqual(len(queued_callbacks), 1)
+
+        with (
+            patch.object(FreeCADGui.Snapper, "getPoint", return_value=None),
+            patch.object(FreeCADGui.Snapper, "setSelectMode", return_value=None),
+        ):
+            session.symbols.activate_symbol_handle_now(equipment, "move")
+
+        self.assertEqual(session.current_tool, "Move Symbol")
+        self.assertIs(session.interaction_state.edit_symbol, equipment)
+        self.assertIs(
+            equipment,
+            session.selection.state.get_selected_target_for_kind("symbol"),
+        )
+
+        queued_callbacks[0]()
+
+        self.assertEqual(session.current_tool, "Move Symbol")
+        self.assertIs(session.interaction_state.edit_symbol, equipment)
+        self.assertIs(
+            equipment,
+            session.selection.state.get_selected_target_for_kind("symbol"),
+        )
+
     def test_plan_edit_symbol_handles_honor_authored_anchor_and_facing(self):
         """Symbol handle positions and edits should use authored local plan metadata."""
 
