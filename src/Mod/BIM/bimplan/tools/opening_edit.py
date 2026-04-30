@@ -12,6 +12,11 @@ translate = FreeCAD.Qt.translate
 OPENING_MOVE_ANCHORS = ("center", "left", "right")
 
 
+def _overlay_runtime_api(session):
+    overlays = getattr(session, "overlays", None)
+    return getattr(overlays, "runtime", overlays)
+
+
 def _get_callable_attr(obj, attr_name):
     return runtime_capabilities.get_callable(obj, attr_name)
 
@@ -744,7 +749,7 @@ class PlanOpeningsAPI(_SessionAPI):
 
         selected_opening = self.session.selection.state.get_selected_plan_target_object("opening")
         if self.refresh_target_document_visual_dependency(selected_opening, obj, prop):
-            self.session.overlays.queue_plan_overlay_visual_refresh(
+            _overlay_runtime_api(self.session).queue_plan_overlay_visual_refresh(
                 plan_document_visuals.PLAN_VISUAL_SELECTED_OPENING,
                 plan_document_visuals.PLAN_VISUAL_HOVERED_OPENING,
             )
@@ -755,7 +760,7 @@ class PlanOpeningsAPI(_SessionAPI):
             and not self.session.selection.state.is_selected_plan_target("opening", hovered_opening)
             and self.refresh_target_document_visual_dependency(hovered_opening, obj, prop)
         ):
-            self.session.overlays.queue_plan_overlay_visual_refresh(
+            _overlay_runtime_api(self.session).queue_plan_overlay_visual_refresh(
                 plan_document_visuals.PLAN_VISUAL_HOVERED_OPENING
             )
             return True
@@ -770,14 +775,14 @@ class PlanOpeningsAPI(_SessionAPI):
         if hovered_wall and obj in self.get_wall_hosted_openings(hovered_wall):
             self.refresh_opening_footprint_display(obj)
             self.refresh_opening_host_footprint_displays(obj)
-            self.session.overlays.queue_plan_overlay_visual_refresh(
+            _overlay_runtime_api(self.session).queue_plan_overlay_visual_refresh(
                 plan_document_visuals.PLAN_VISUAL_HOVERED_WALL
             )
             return True
         if selected_wall and obj in self.get_wall_hosted_openings(selected_wall):
             self.refresh_opening_footprint_display(obj)
             self.refresh_opening_host_footprint_displays(obj)
-            self.session.overlays.queue_plan_overlay_visual_refresh(
+            _overlay_runtime_api(self.session).queue_plan_overlay_visual_refresh(
                 plan_document_visuals.PLAN_VISUAL_WALL_GRIPS
             )
             return True

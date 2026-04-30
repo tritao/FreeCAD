@@ -15,6 +15,12 @@ from bimplan.tools.wall_edit import WallEditTool
 from bimplan.tools.wall_relations import JoinTool
 from bimplan.tools.window_create import WindowTool
 
+
+def _overlay_runtime_api(session):
+    overlays = getattr(session, "overlays", None)
+    return getattr(overlays, "runtime", overlays)
+
+
 _TOOL_HANDLERS = {
     PlanTool.JOIN: JoinTool,
     PlanTool.MOVE_OPENING: OpeningMoveTool,
@@ -286,7 +292,7 @@ def on_mouse_wheel(session, event_callback):
     if event_type_name != "SoMouseWheelEvent":
         return
     with session.performance.plan_perf_trace_event("mouse_wheel", event_type=event_type_name):
-        session.overlays.queue_plan_overlay_view_scale_refresh()
+        _overlay_runtime_api(session).queue_plan_overlay_view_scale_refresh()
 
 
 def _handle_direct_tool_key_press(session, key, event_callback, coin):

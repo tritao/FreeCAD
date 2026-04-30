@@ -18,6 +18,11 @@ def _provider_runtime_api(session):
     return getattr(providers, "runtime", providers)
 
 
+def _overlay_runtime_api(session):
+    overlays = getattr(session, "overlays", None)
+    return getattr(overlays, "runtime", overlays)
+
+
 class PlanProviderPointAPI:
     """Owned provider point-tool surface for Plan Edit interaction code."""
 
@@ -166,7 +171,9 @@ def cancel_provider_point_tool(session, refresh=True):
     session.current_tool = plan_runtime_tools.PlanTool.SELECT
     if refresh:
         session.task_panels.refresh_task_panel_status()
-    session.overlays.queue_plan_overlay_visual_refresh(plan_document_visuals.PLAN_VISUAL_ALL)
+    _overlay_runtime_api(session).queue_plan_overlay_visual_refresh(
+        plan_document_visuals.PLAN_VISUAL_ALL
+    )
     return True
 
 
@@ -218,7 +225,9 @@ def start_plan_provider_point_tool(session, tool):
     state.provider_point_tool = tool
     session.current_tool = plan_runtime_tools.PlanTool.PROVIDER_POINT
     session.task_panels.refresh_task_panel_status()
-    session.overlays.queue_plan_overlay_visual_refresh(plan_document_visuals.PLAN_VISUAL_ALL)
+    _overlay_runtime_api(session).queue_plan_overlay_visual_refresh(
+        plan_document_visuals.PLAN_VISUAL_ALL
+    )
     if arm_provider_point_tool(session):
         return True
     state.provider_point_tool = None

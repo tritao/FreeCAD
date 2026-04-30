@@ -82,18 +82,13 @@ def clear_shutdown_visuals(session):
     session.symbols.clear_symbol_edit_preview()
 
 
-class PlanOverlaysAPI:
-    """Owned session surface for BIM Plan Edit overlay behavior."""
+class PlanOverlayRuntimeAPI:
+    """Owned overlay runtime surface for Plan Edit queueing and teardown."""
+
+    __slots__ = ("_session", "__dict__")
 
     def __init__(self, session):
         self._session = session
-        self.manager = overlay_manager.PlanOverlayManagerService(session)
-        self.geometry = overlay_geometry.PlanOverlayGeometryService(session)
-        self.spaces = space_overlays.PlanSpaceOverlayService(session)
-        self.walls = wall_overlays.PlanWallOverlayService(session)
-        self.providers = provider_overlays.PlanProviderOverlayService(session)
-        self.openings = opening_overlays.PlanOpeningOverlayService(session)
-        self.symbols = symbol_overlays.PlanSymbolOverlayService(session)
 
     @property
     def session(self):
@@ -127,3 +122,22 @@ class PlanOverlaysAPI:
             plan_document_visuals.PLAN_VISUAL_ALL,
             default_all=default_all,
         )
+
+
+class PlanOverlaysAPI:
+    """Owned session surface for BIM Plan Edit overlay behavior."""
+
+    def __init__(self, session):
+        self._session = session
+        self.runtime = PlanOverlayRuntimeAPI(session)
+        self.manager = overlay_manager.PlanOverlayManagerService(session)
+        self.geometry = overlay_geometry.PlanOverlayGeometryService(session)
+        self.spaces = space_overlays.PlanSpaceOverlayService(session)
+        self.walls = wall_overlays.PlanWallOverlayService(session)
+        self.providers = provider_overlays.PlanProviderOverlayService(session)
+        self.openings = opening_overlays.PlanOpeningOverlayService(session)
+        self.symbols = symbol_overlays.PlanSymbolOverlayService(session)
+
+    @property
+    def session(self):
+        return self._session

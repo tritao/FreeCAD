@@ -14,6 +14,11 @@ from bimplan.tools import space_geometry as plan_space_geometry
 translate = FreeCAD.Qt.translate
 
 
+def _overlay_runtime_api(session):
+    overlays = getattr(session, "overlays", None)
+    return getattr(overlays, "runtime", overlays)
+
+
 class PickSpaceRegionTool(plan_runtime_tools.PlanToolHandler):
     """Interactive picker for existing space/region candidates."""
 
@@ -495,7 +500,7 @@ def set_hovered_space_region_candidate(session, candidate, visual_key):
     if current_candidate is candidate:
         return
     _set_hovered_space_region_candidate_state(session, candidate)
-    session.overlays.queue_plan_overlay_visual_refresh(visual_key)
+    _overlay_runtime_api(session).queue_plan_overlay_visual_refresh(visual_key)
     session.task_panels.refresh_task_panel_status()
 
 

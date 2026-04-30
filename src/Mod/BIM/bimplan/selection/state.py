@@ -39,6 +39,11 @@ def _provider_runtime_api(session):
     return getattr(providers, "runtime", providers)
 
 
+def _overlay_runtime_api(session):
+    overlays = getattr(session, "overlays", None)
+    return getattr(overlays, "runtime", overlays)
+
+
 @dataclass(frozen=True)
 class SelectionRefreshResult:
     primary_target_ref: object = field(default_factory=plan_target_kinds.make_plan_target_ref)
@@ -714,7 +719,7 @@ class PlanSelectionRefreshService(_SessionAPI):
                 secondary_overlay_refresh = True
         if not secondary_overlay_refresh:
             return False
-        self.session.overlays.queue_plan_overlay_visual_refresh(
+        _overlay_runtime_api(self.session).queue_plan_overlay_visual_refresh(
             plan_document_visuals.PLAN_VISUAL_SECONDARY_SELECTION
         )
         return True
@@ -738,7 +743,7 @@ class PlanSelectionRefreshService(_SessionAPI):
             obj == self.session.hovered_wall
             and prop in plan_document_visuals.WALL_VISUAL_PROPERTIES
         ):
-            self.session.overlays.queue_plan_overlay_visual_refresh(
+            _overlay_runtime_api(self.session).queue_plan_overlay_visual_refresh(
                 plan_document_visuals.PLAN_VISUAL_HOVERED_WALL
             )
             return True

@@ -10,6 +10,11 @@ def _provider_runtime_api(session):
     return getattr(providers, "runtime", providers)
 
 
+def _overlay_runtime_api(session):
+    overlays = getattr(session, "overlays", None)
+    return getattr(overlays, "runtime", overlays)
+
+
 _OPENING_VISUAL_PROPERTIES = {
     "Shape",
     "Placement",
@@ -481,7 +486,7 @@ def invalidate_document_dependent_plan_visuals(session, recompute_opening_hosts=
         visual_args.append(_PLAN_VISUAL_SELECTED_PROVIDER)
     if secondary_targets:
         visual_args.append(_PLAN_VISUAL_SECONDARY_SELECTION)
-    session.overlays.queue_plan_overlay_visual_refresh(*visual_args)
+    _overlay_runtime_api(session).queue_plan_overlay_visual_refresh(*visual_args)
 
 
 def slot_undo_document(session, doc):

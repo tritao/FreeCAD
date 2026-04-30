@@ -15,6 +15,11 @@ def _provider_point_api(session):
     return getattr(providers, "point", providers)
 
 
+def _overlay_runtime_api(session):
+    overlays = getattr(session, "overlays", None)
+    return getattr(overlays, "runtime", overlays)
+
+
 def _cancel_provider_point_tool(session, refresh=True):
     cancel = getattr(_provider_point_api(session), "cancel_provider_point_tool", None)
     if callable(cancel):
@@ -109,7 +114,7 @@ def discard_runtime_references(session):
     session.wall_edit.discard_runtime_references()
     session.openings.discard_runtime_references()
     session.symbols.discard_runtime_references()
-    session.overlays.discard_runtime_references()
+    _overlay_runtime_api(session).discard_runtime_references()
     session.wall_create.discard_runtime_references()
     session.embedded_tools.discard_runtime_references()
 
@@ -170,7 +175,7 @@ def _cleanup_begin_teardown(session):
     session.wall_edit.cancel_wall_edit(restore=False, refresh=False)
     cancel_pending_edit(session)
     _cancel_current_tool_for_begin_teardown(session)
-    session.overlays.clear_begin_teardown_visuals()
+    _overlay_runtime_api(session).clear_begin_teardown_visuals()
     detach_runtime_observers(session)
 
 
@@ -183,7 +188,7 @@ def _cleanup_shutdown(session, *, teardown=False):
     session.wall_edit.cancel_wall_edit(restore=not teardown, refresh=False)
     cancel_pending_edit(session)
     _cancel_current_tool_for_shutdown(session)
-    session.overlays.clear_shutdown_visuals()
+    _overlay_runtime_api(session).clear_shutdown_visuals()
     detach_runtime_observers(session)
 
 

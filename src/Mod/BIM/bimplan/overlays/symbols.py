@@ -10,6 +10,11 @@ from bimplan import document_visuals as plan_document_visuals
 from . import manager as overlay_manager
 
 
+def _overlay_runtime_api(session):
+    overlays = getattr(session, "overlays", None)
+    return getattr(overlays, "runtime", overlays)
+
+
 def _perf_count(session, name, delta=1):
     return session.performance.plan_perf_count(name, delta=delta)
 
@@ -399,7 +404,7 @@ def refresh_symbol_visual_footprint(session, symbol):
 def handle_document_visual_dependency_change(session, obj, prop):
     selected_symbol = session.selection.state.get_selected_plan_target_object("symbol")
     if refresh_target_document_visual_dependency(session, selected_symbol, obj, prop):
-        session.overlays.queue_plan_overlay_visual_refresh(
+        _overlay_runtime_api(session).queue_plan_overlay_visual_refresh(
             plan_document_visuals.PLAN_VISUAL_SELECTED_SYMBOL
         )
         return True
@@ -409,7 +414,7 @@ def handle_document_visual_dependency_change(session, obj, prop):
         and not session.selection.state.is_selected_plan_target("symbol", hovered_symbol)
         and refresh_target_document_visual_dependency(session, hovered_symbol, obj, prop)
     ):
-        session.overlays.queue_plan_overlay_visual_refresh(
+        _overlay_runtime_api(session).queue_plan_overlay_visual_refresh(
             plan_document_visuals.PLAN_VISUAL_HOVERED_SYMBOL
         )
         return True
