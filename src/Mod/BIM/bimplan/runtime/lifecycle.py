@@ -127,7 +127,7 @@ def detach_runtime_observers(session):
 
 def _cancel_current_tool_for_finish(session):
     return (
-        session.providers.cancel_active_tool_for_finish()
+        _provider_point_api(session).cancel_active_tool_for_finish()
         or session.openings.cancel_active_tool_for_finish()
         or session.symbols.cancel_active_tool_for_finish()
         or session.spaces.cancel_active_tool_for_finish()
@@ -153,7 +153,7 @@ def _cancel_finish_fallback(session):
 
 def _cancel_current_tool_for_begin_teardown(session):
     return (
-        session.providers.cancel_active_tool_for_teardown()
+        _provider_point_api(session).cancel_active_tool_for_teardown()
         or session.openings.cancel_active_tool_for_teardown()
         or session.symbols.cancel_active_tool_for_teardown()
         or session.spaces.cancel_active_tool_for_teardown()

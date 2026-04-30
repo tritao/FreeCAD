@@ -7,7 +7,6 @@ from contextlib import contextmanager, nullcontext
 import FreeCAD
 
 from bimplan.providers import get_plan_edit_registry
-from bimplan.runtime import tools as plan_runtime_tools
 from .contracts import (
     PlanEditContext,
     PlanProviderTargetSpec,
@@ -254,18 +253,6 @@ class PlanProvidersAPI:
     @property
     def session(self):
         return self._session
-
-    def cancel_active_tool_for_finish(self):
-        if self.session.current_tool != plan_runtime_tools.PlanTool.MOVE_PROVIDER:
-            return False
-        self.editing.cancel_provider_handle_point_pick()
-        return True
-
-    def cancel_active_tool_for_teardown(self):
-        if self.session.current_tool != plan_runtime_tools.PlanTool.MOVE_PROVIDER:
-            return False
-        self.editing.cancel_provider_handle_point_pick()
-        return True
 
 
 def _is_active_provider_session(session):

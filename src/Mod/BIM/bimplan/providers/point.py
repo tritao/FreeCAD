@@ -56,6 +56,16 @@ class PlanProviderPointAPI:
         self.cancel_provider_point_tool()
         return True
 
+    def cancel_active_tool_for_finish(self):
+        if self.session.current_tool != plan_runtime_tools.PlanTool.MOVE_PROVIDER:
+            return False
+        return self._cancel_active_provider_move_tool()
+
+    def cancel_active_tool_for_teardown(self):
+        if self.session.current_tool != plan_runtime_tools.PlanTool.MOVE_PROVIDER:
+            return False
+        return self._cancel_active_provider_move_tool()
+
     def start_plan_provider_point_tool(self, tool):
         return start_plan_provider_point_tool(self.session, tool)
 
@@ -73,6 +83,10 @@ class PlanProviderPointAPI:
 
     def project_provider_point_to_host(self, point, host_wall):
         return project_provider_point_to_host(point, host_wall)
+
+    def _cancel_active_provider_move_tool(self):
+        self.session.providers.editing.cancel_provider_handle_point_pick()
+        return True
 
 
 class ProviderPointTool(plan_runtime_tools.PlanToolHandler):
