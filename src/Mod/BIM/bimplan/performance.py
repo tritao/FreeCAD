@@ -9,6 +9,11 @@ import tempfile
 import time
 
 
+def _provider_runtime_api(session):
+    providers = getattr(session, "providers", None)
+    return getattr(providers, "runtime", providers)
+
+
 def _performance_state(session):
     return session.performance_state
 
@@ -209,7 +214,9 @@ def plan_pick_debug_event(session, name, **fields):
     if scope:
         output["scope"] = scope
     try:
-        output["overlay_mode"] = str(session.providers.get_plan_provider_overlay_mode() or "")
+        output["overlay_mode"] = str(
+            _provider_runtime_api(session).get_plan_provider_overlay_mode() or ""
+        )
     except Exception:
         pass
     for key, value in fields.items():

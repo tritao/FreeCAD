@@ -26,6 +26,11 @@ _PROVIDER_OVERLAY_MARKER_TOLERANCE_BASE_PX = 4.5
 _PROVIDER_OVERLAY_MARKER_TOLERANCE_WIDTH_SCALE = 1.25
 
 
+def _provider_runtime_api(session):
+    providers = getattr(session, "providers", None)
+    return getattr(providers, "runtime", providers)
+
+
 class PlanProviderPickingAPI:
     """Owned provider picking surface for Plan Edit hit testing."""
 
@@ -222,11 +227,12 @@ def pick_provider_overlay_target_from_overlays(
 
 
 def get_visible_provider_overlays(session):
+    provider_runtime = _provider_runtime_api(session)
     return tuple(
         overlay
-        for overlay in tuple(session.providers.get_plan_provider_overlays() or ())
+        for overlay in tuple(provider_runtime.get_plan_provider_overlays() or ())
         if bool(getattr(overlay, "visible", True))
-        and session.providers.is_plan_provider_overlay_visible(overlay)
+        and provider_runtime.is_plan_provider_overlay_visible(overlay)
     )
 
 
@@ -570,10 +576,11 @@ def iter_provider_overlay_targets_from_info(session, info, visible_targets):
 
 def iter_visible_provider_overlay_targets(session):
     yielded = []
-    for overlay in tuple(session.providers.get_plan_provider_overlays() or ()):
+    provider_runtime = _provider_runtime_api(session)
+    for overlay in tuple(provider_runtime.get_plan_provider_overlays() or ()):
         if not bool(getattr(overlay, "visible", True)):
             continue
-        if not session.providers.is_plan_provider_overlay_visible(overlay):
+        if not provider_runtime.is_plan_provider_overlay_visible(overlay):
             continue
         for target in tuple(getattr(overlay, "point_targets", ()) or ()):
             if not has_provider_overlay_target_identity(target):

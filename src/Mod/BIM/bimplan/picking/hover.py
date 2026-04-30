@@ -11,6 +11,11 @@ from bimplan.selection import kinds as plan_target_kinds
 _HOVER_PICK_INTERVAL_MS = 80
 
 
+def _provider_runtime_api(session):
+    providers = getattr(session, "providers", None)
+    return getattr(providers, "runtime", providers)
+
+
 def get_hovered_plan_target(session):
     return plan_targets.get_hovered_target(session)
 
@@ -61,9 +66,10 @@ def prime_hover_pick_caches(session):
                     session.overlays.geometry.get_region_overlay_segments(obj)
 
         with session.performance.plan_perf_trace_span("prime_hover_pick_provider_contributions"):
-            with session.providers.plan_provider_refresh_cache_scope():
-                tuple(session.providers.get_plan_provider_overlays())
-                tuple(session.providers.get_plan_provider_targets())
+            provider_runtime = _provider_runtime_api(session)
+            with provider_runtime.plan_provider_refresh_cache_scope():
+                tuple(provider_runtime.get_plan_provider_overlays())
+                tuple(provider_runtime.get_plan_provider_targets())
 
 
 def should_skip_hover_pick(session, mouse_pos, force=False):
@@ -113,7 +119,7 @@ def update_hovered_plan_target(session, mouse_pos, force=False):
     if should_skip_hover_pick(session, mouse_pos, force=force):
         return False
     session.performance.plan_perf_count("hover_pick_resolved")
-    overlay_mode = session.providers.get_plan_provider_overlay_mode()
+    overlay_mode = _provider_runtime_api(session).get_plan_provider_overlay_mode()
     include_space_fallback = not is_focused_provider_overlay_pick_mode(overlay_mode)
     with session.performance.plan_perf_trace_span("hover_pick_resolve"):
         target_ref = plan_target_kinds.coerce_plan_target_ref(

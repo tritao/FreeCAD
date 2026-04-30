@@ -34,6 +34,11 @@ _WALL_GRIP_SYNC = "sync"
 _MISSING = object()
 
 
+def _provider_runtime_api(session):
+    providers = getattr(session, "providers", None)
+    return getattr(providers, "runtime", providers)
+
+
 @dataclass(frozen=True)
 class SelectionRefreshResult:
     primary_target_ref: object = field(default_factory=plan_target_kinds.make_plan_target_ref)
@@ -517,7 +522,9 @@ class PlanSelectionRefreshService(_SessionAPI):
     def _collect_selected_targets_from_gui_selection(self, selection, previous_kind, previous_obj):
         selected_targets = []
         resolution_state = self._get_gui_selection_resolution_state(previous_kind, previous_obj)
-        provider_refresh_scope = self.session.providers.plan_provider_refresh_cache_scope()
+        provider_refresh_scope = _provider_runtime_api(
+            self.session
+        ).plan_provider_refresh_cache_scope()
         with provider_refresh_scope:
             for selected in selection:
                 target_ref = self._resolve_gui_selection_target(selected, resolution_state)

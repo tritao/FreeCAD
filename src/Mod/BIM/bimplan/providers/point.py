@@ -13,6 +13,11 @@ from bimplan.runtime import tools as plan_runtime_tools
 translate = FreeCAD.Qt.translate
 
 
+def _provider_runtime_api(session):
+    providers = getattr(session, "providers", None)
+    return getattr(providers, "runtime", providers)
+
+
 class ProviderPointTool(plan_runtime_tools.PlanToolHandler):
     """Keyboard behavior for active provider point placement."""
 
@@ -116,7 +121,7 @@ def cancel_provider_point_tool(session, refresh=True):
 def start_plan_provider_point_tool(session, tool):
     if tool is None:
         return False
-    if session.providers.plan_provider_integrations_disabled():
+    if _provider_runtime_api(session).plan_provider_integrations_disabled():
         return False
     session.spaces.cancel_space_region_pick(refresh=False)
     session.spaces.cancel_plan_region_tool(refresh=False)

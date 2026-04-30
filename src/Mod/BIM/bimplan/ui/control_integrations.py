@@ -12,6 +12,11 @@ from bimplan.providers import PlanIssueSeverity, PlanToolInteraction
 translate = FreeCAD.Qt.translate
 
 
+def _provider_runtime_api(session):
+    providers = getattr(session, "providers", None)
+    return getattr(providers, "runtime", providers)
+
+
 def _run_queued_integration_panel_refresh(panel_ref, generation):
     panel = panel_ref()
     if panel is not None:
@@ -63,7 +68,7 @@ class PlanEditIntegrationPanelMixin:
         for mode_key, mode_text in self._get_provider_overlay_mode_options():
             self._integration_overlay_mode_combo.addItem(mode_text, mode_key)
         self._set_provider_overlay_mode_combo_value(
-            self.session.providers.get_plan_provider_overlay_mode()
+            _provider_runtime_api(self.session).get_plan_provider_overlay_mode()
         )
         self._integration_overlay_mode_combo.currentIndexChanged.connect(
             lambda index, current_combo=self._integration_overlay_mode_combo: (
@@ -1218,7 +1223,7 @@ class PlanEditIntegrationPanelMixin:
             self._integration_refresh_queued = False
             self._hide_integration_panel()
             return True
-        if self.session.providers.plan_provider_integrations_disabled():
+        if _provider_runtime_api(self.session).plan_provider_integrations_disabled():
             self.session.performance.plan_perf_count("integration_panel_disabled")
             self._integration_refresh_queued = False
             self._hide_integration_panel()
@@ -1226,8 +1231,9 @@ class PlanEditIntegrationPanelMixin:
         return False
 
     def _build_integration_panel_refresh_state(self):
-        with self.session.providers.plan_provider_refresh_cache_scope():
-            snapshot = self.session.providers.get_plan_provider_snapshot()
+        provider_runtime = _provider_runtime_api(self.session)
+        with provider_runtime.plan_provider_refresh_cache_scope():
+            snapshot = provider_runtime.get_plan_provider_snapshot()
             integration_vm = plan_task_panel_view_model.build_integration_panel_view_model(
                 self.session,
                 snapshot,
@@ -1235,7 +1241,7 @@ class PlanEditIntegrationPanelMixin:
         return snapshot, integration_vm
 
     def _queue_provider_overlay_refresh(self):
-        self.session.providers.queue_plan_provider_overlay_sync()
+        _provider_runtime_api(self.session).queue_plan_provider_overlay_sync()
 
     def _rebuild_integration_panel_content(self, snapshot, integration_vm):
         from PySide import QtGui
@@ -1364,4 +1370,4 @@ class PlanEditIntegrationPanelMixin:
         self.session.providers.set_plan_provider_overlay_visible(provider_id, overlay_key, visible)
 
     def on_provider_overlay_mode_changed(self, mode):
-        self.session.providers.set_plan_provider_overlay_mode(mode)
+        _provider_runtime_api(self.session).set_plan_provider_overlay_mode(mode)
