@@ -728,6 +728,47 @@ class BimPlanEditGuiSpacesMixin:
         session.shutdown(close_dialog=False)
         self.pump_gui_events()
 
+    def test_plan_edit_shutdown_cancels_active_region_tool(self):
+        level = Arch.makeFloor(name="Level 0")
+        base = self.document.addObject("Part::Box", "ShutdownRegionBase")
+        base.Length = 6000
+        base.Width = 4000
+        base.Height = 2500
+        space = Arch.makeSpace(base, name="Living Room")
+        level.addObject(space)
+        self.document.recompute()
+
+        FreeCADGui.Selection.clearSelection()
+        FreeCADGui.Selection.addSelection(level)
+
+        session = BimPlanSession.start_session()
+        self.assertIsNotNone(session)
+        self.pump_gui_events()
+
+        try:
+            session.selection.state.set_pending_selected_plan_target("space", space)
+            session.selection.sync.set_gui_selection([space])
+            session.selection.refresh.refresh_primary_selected_plan_target()
+
+            with patch.object(FreeCADGui.Snapper, "getPoint", return_value=None):
+                session.spaces.activate_plan_region_tool()
+
+            self.assertEqual("Region", session.current_tool)
+            self.assertIs(session.plan_region_tool_state.parent_space, space)
+
+            self.assertTrue(session.shutdown(close_dialog=False))
+            self.pump_gui_events()
+
+            self.assertEqual("Select", session.current_tool)
+            self.assertEqual([], session.plan_region_tool_state.points)
+            self.assertIsNone(session.plan_region_tool_state.parent_space)
+            self.assertIsNone(session.doc)
+            self.assertIsNone(BimPlanSession.get_active_session())
+        finally:
+            if BimPlanSession.get_active_session() is session:
+                session.shutdown(close_dialog=False)
+                self.pump_gui_events()
+
     def test_plan_edit_separator_tool_creates_space_separator_in_active_storey(self):
         """The Separator action should create a real space-separator object on the storey."""
 
