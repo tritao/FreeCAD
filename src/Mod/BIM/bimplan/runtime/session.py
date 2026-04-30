@@ -159,6 +159,9 @@ def start_session():
     _register_builtin_plan_edit_integrations()
     session = PlanEditSession()
     if session.enter():
+        from PySide import QtGui
+
+        session.lifecycle.connect_teardown_signals(QtGui)
         _active_session = session
         try:
             FreeCADGui.Control.showTaskView()

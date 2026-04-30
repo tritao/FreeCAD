@@ -204,6 +204,7 @@ def begin_teardown(session):
     if session.lifecycle_state.tearing_down:
         return
     session.lifecycle_state.tearing_down = True
+    disconnect_teardown_signals(session)
     plan_command_gate.uninstall(session)
     _cleanup_begin_teardown(session)
 
