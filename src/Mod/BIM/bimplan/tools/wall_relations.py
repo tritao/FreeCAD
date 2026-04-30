@@ -6,6 +6,7 @@ import FreeCAD
 import FreeCADGui
 
 from bimplan.runtime import tools as plan_runtime_tools
+from bimplan.transactions import PlanEditTransaction
 from bimplan.tools import select as plan_select_tool
 
 translate = FreeCAD.Qt.translate
@@ -162,6 +163,9 @@ class PlanWallRelationsAPI:
 
     def update_wall_relation_status(self, wall):
         return update_wall_relation_status(self.session, wall)
+
+    def restore_selected_wall_relation_status(self):
+        return restore_selected_wall_relation_status(self.session)
 
 
 def activate_join_tool(session):
@@ -376,6 +380,29 @@ def _refresh_join_mode_wall_context(session, source_wall):
     session.overlays.walls.sync_hovered_wall_opening_context_overlay()
 
 
+def _warn_post_commit_recompute_failure(action_label, exc):
+    message = str(exc or "").strip() or type(exc).__name__
+    FreeCAD.Console.PrintWarning(
+        translate(
+            "BIM_PlanEdit",
+            "Completed {action}, but follow-up recompute failed: {error}\n",
+        ).format(action=action_label, error=message)
+    )
+
+
+def _commit_wall_relation_change(doc, action_label, callback):
+    try:
+        with PlanEditTransaction(doc, action_label):
+            result = callback()
+    except Exception:
+        return False, None
+    try:
+        doc.recompute()
+    except Exception as exc:
+        _warn_post_commit_recompute_failure(action_label, exc)
+    return True, result
+
+
 def unjoin_plan_wall_pair(session, source_wall, target_wall):
     import ArchWallJoinUtils
 
@@ -391,16 +418,13 @@ def unjoin_plan_wall_pair(session, source_wall, target_wall):
     if not joint:
         return False
 
-    doc.openTransaction(translate("BIM_PlanEdit", "Unjoin walls"))
-    try:
-        doc.removeObject(joint.Name)
-        doc.commitTransaction()
-        doc.recompute()
-    except Exception:
-        try:
-            doc.abortTransaction()
-        except Exception:
-            pass
+    transaction_name = translate("BIM_PlanEdit", "Unjoin walls")
+    success, _result = _commit_wall_relation_change(
+        doc,
+        transaction_name,
+        lambda: doc.removeObject(joint.Name),
+    )
+    if not success:
         return False
 
     clear_plan_relation_status(session)
@@ -482,19 +506,17 @@ def find_plan_junction_promotion(session, source_wall, target_wall):
 
 def find_reusable_plan_junction(candidate_relations, walls):
     wall_names = {getattr(wall, "Name", "") for wall in walls if wall}
-    best_relation = None
-    best_overlap = 0
+    if not wall_names:
+        return None
     for relation in candidate_relations:
         if getattr(getattr(relation, "Proxy", None), "Type", None) != "WallJunction":
             continue
         relation_names = {
             getattr(wall, "Name", "") for wall in list(getattr(relation, "Walls", []) or []) if wall
         }
-        overlap = len(wall_names.intersection(relation_names))
-        if overlap > best_overlap:
-            best_relation = relation
-            best_overlap = overlap
-    return best_relation if best_overlap >= 2 else None
+        if relation_names == wall_names:
+            return relation
+    return None
 
 
 def apply_plan_wall_junction_promotion(session, doc, source_wall, target_wall):
@@ -536,6 +558,21 @@ def clear_plan_relation_status(session):
 
 def get_plan_relation_status_message(session):
     return str(session.task_panel_state.relation_status_message or "").strip()
+
+
+def restore_selected_wall_relation_status(session):
+    lifecycle_state = getattr(session, "lifecycle_state", None)
+    if lifecycle_state is not None and (
+        getattr(lifecycle_state, "tearing_down", False)
+        or getattr(lifecycle_state, "finishing", False)
+    ):
+        clear_plan_relation_status(session)
+        return
+    wall = session.selection.state.get_selected_plan_target_object("wall")
+    if session.selection.targets.is_plan_selectable_wall(wall):
+        update_wall_relation_status(session, wall)
+        return
+    clear_plan_relation_status(session)
 
 
 def collect_wall_relation_warnings(session, wall):
@@ -615,8 +652,10 @@ def apply_plan_wall_join(session, source_wall, target_wall):
     if doc is None:
         return False
 
-    doc.openTransaction(translate("BIM_PlanEdit", "Join walls"))
-    try:
+    transaction_name = translate("BIM_PlanEdit", "Join walls")
+
+    def _mutate():
+        nonlocal created
         relation = apply_plan_wall_junction_promotion(
             session,
             doc,
@@ -632,13 +671,10 @@ def apply_plan_wall_join(session, source_wall, target_wall):
                 raise RuntimeError("Unable to create wall joint")
             if not join_command._configure_joint(relation, source_wall, target_wall):
                 raise RuntimeError("Unable to configure wall joint")
-        doc.commitTransaction()
-        doc.recompute()
-    except Exception:
-        try:
-            doc.abortTransaction()
-        except Exception:
-            pass
+        return relation
+
+    success, relation = _commit_wall_relation_change(doc, transaction_name, _mutate)
+    if not success:
         return False
 
     if getattr(getattr(relation, "Proxy", None), "Type", None) == "WallJoint":

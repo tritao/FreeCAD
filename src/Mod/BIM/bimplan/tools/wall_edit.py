@@ -8,6 +8,7 @@ import FreeCAD
 import FreeCADGui
 from bimplan.runtime import capabilities as runtime_capabilities
 from bimplan.runtime import tools as plan_runtime_tools
+from bimplan.transactions import PlanEditTransaction
 
 translate = FreeCAD.Qt.translate
 
@@ -131,6 +132,7 @@ def cancel_wall_edit(session, restore=True, refresh=True):
 
     session.current_tool = "Select"
     session.lifecycle.cancel_pending_edit(restore_wall_visibility=restore)
+    session.wall_relations.restore_selected_wall_relation_status()
     session.overlays.openings.sync_selected_wall_opening_context_overlay()
     if refresh:
         session.task_panels.refresh_task_panel_status()
@@ -377,9 +379,20 @@ def finish_wall_edit(session, point=None, obj=None):
     endpoint = state.edit_endpoint
     new_points = compute_wall_edit_points(session, point)
 
-    if point is None or not wall or not endpoint or not new_points:
+    if point is None or not wall or not endpoint:
         session.current_tool = "Select"
         session.lifecycle.cancel_pending_edit()
+        session.wall_relations.restore_selected_wall_relation_status()
+        session.task_panels.refresh_task_panel_status()
+        return
+
+    if not new_points:
+        if endpoint in ("Start", "End") and state.edit_endpoints:
+            _resume_wall_edit_after_invalid_point(session)
+            return
+        session.current_tool = "Select"
+        session.lifecycle.cancel_pending_edit()
+        session.wall_relations.restore_selected_wall_relation_status()
         session.task_panels.refresh_task_panel_status()
         return
 
@@ -387,6 +400,7 @@ def finish_wall_edit(session, point=None, obj=None):
     if proxy is None:
         session.current_tool = "Select"
         session.lifecycle.cancel_pending_edit()
+        session.wall_relations.restore_selected_wall_relation_status()
         session.task_panels.refresh_task_panel_status()
         return
 
@@ -403,8 +417,19 @@ def _abort_wall_edit_commit(session, openings_fit=True, refresh=True):
         )
     session.current_tool = "Select"
     session.lifecycle.cancel_pending_edit()
+    session.wall_relations.restore_selected_wall_relation_status()
     if refresh:
         session.task_panels.refresh_task_panel_status()
+
+
+def _warn_post_commit_recompute_failure(session, transaction_name, exc):
+    message = str(exc or "").strip() or type(exc).__name__
+    FreeCAD.Console.PrintWarning(
+        translate(
+            "BIM_PlanEdit",
+            "Completed {action}, but follow-up recompute failed: {error}\n",
+        ).format(action=transaction_name, error=message)
+    )
 
 
 def _apply_wall_edit_transaction(session, wall, proxy, new_points, transaction_name):
@@ -417,23 +442,21 @@ def _apply_wall_edit_transaction(session, wall, proxy, new_points, transaction_n
     except Exception:
         pass
     try:
-        session.doc.openTransaction(transaction_name)
-        proxy.set_from_endpoints(wall, new_points)
-        with suppress_boundary_console:
-            session.doc.recompute()
-        openings_fit = session.openings.resolve_wall_hosted_opening_layout(wall)
-        if not openings_fit:
-            raise RuntimeError("Hosted openings no longer fit within resized wall")
-        session.doc.commitTransaction()
-        session.doc.recompute()
-        return True
+        with PlanEditTransaction(session.doc, transaction_name):
+            proxy.set_from_endpoints(wall, new_points)
+            with suppress_boundary_console:
+                session.doc.recompute()
+            openings_fit = session.openings.resolve_wall_hosted_opening_layout(wall)
+            if not openings_fit:
+                raise RuntimeError("Hosted openings no longer fit within resized wall")
     except Exception:
-        try:
-            session.doc.abortTransaction()
-        except Exception:
-            pass
         _abort_wall_edit_commit(session, openings_fit=openings_fit, refresh=False)
         return False
+    try:
+        session.doc.recompute()
+    except Exception as exc:
+        _warn_post_commit_recompute_failure(session, transaction_name, exc)
+    return True
 
 
 def _finalize_wall_edit_commit(session, wall):
@@ -1632,6 +1655,20 @@ def finish_wall_edit_readout_canceled(session, preview_points, *, resume_token=N
     resume_wall_edit_point_pick(session)
 
 
+def _resume_wall_edit_after_invalid_point(session):
+    state = _wall_edit_state(session)
+    preview_points = state.preview_points or state.edit_endpoints
+    if preview_points:
+        sync_wall_edit_preview(session, preview_points)
+    FreeCAD.Console.PrintWarning(
+        translate(
+            "BIM_PlanEdit",
+            "Pick a point that keeps the wall at least {length:g} mm long.\n",
+        ).format(length=_MIN_WALL_LENGTH)
+    )
+    resume_wall_edit_point_pick(session)
+
+
 def restore_edit_wall_visibility(session):
     state = _wall_edit_state(session)
     wall = state.edit_wall
@@ -1665,6 +1702,7 @@ def update_wall_edit_point_pick(session, point=None, snap_info=None):
 def cancel_wall_edit_point_pick(session):
     session.current_tool = "Select"
     session.lifecycle.cancel_pending_edit()
+    session.wall_relations.restore_selected_wall_relation_status()
     session.task_panels.refresh_task_panel_status()
 
 
