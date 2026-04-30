@@ -115,6 +115,7 @@ class PlanSelectionState:
 
 @dataclass
 class WallEditState:
+    wall_edit_generation: int = 0
     wall_edit_modal_active: bool = False
     edit_wall: object = None
     edit_endpoint: object = None
