@@ -169,37 +169,8 @@ def detach_aux_task_panel(session, panel):
     ]
 
 
-def detach_task_panel(session):
-    panel = session.task_panel
-    session.task_panel = None
-    if panel:
-        try:
-            mark_closed = getattr(panel, "mark_closed", None)
-            if callable(mark_closed):
-                mark_closed()
-        except Exception:
-            pass
-        try:
-            detach = getattr(panel, "detach", None)
-            if callable(detach):
-                detach()
-            else:
-                dispose = getattr(panel, "dispose", None)
-                if callable(dispose):
-                    dispose()
-        except Exception:
-            pass
-    return panel
-
-
-def on_panel_closed(session, panel):
-    if session.task_panel is panel:
-        session.task_panel = None
-        if not session.lifecycle_state.finishing:
-            session.shutdown(
-                close_dialog=False,
-                teardown=session.lifecycle_state.tearing_down,
-            )
+def _mark_task_panel_closed(panel):
+    if panel is None:
         return
     try:
         mark_closed = getattr(panel, "mark_closed", None)
@@ -207,6 +178,11 @@ def on_panel_closed(session, panel):
             mark_closed()
     except Exception:
         pass
+
+
+def _detach_or_dispose_task_panel(panel):
+    if panel is None:
+        return
     try:
         detach = getattr(panel, "detach", None)
         if callable(detach):
@@ -217,6 +193,29 @@ def on_panel_closed(session, panel):
                 dispose()
     except Exception:
         pass
+
+
+def detach_task_panel(session):
+    panel = session.task_panel
+    session.task_panel = None
+    if panel:
+        _mark_task_panel_closed(panel)
+        _detach_or_dispose_task_panel(panel)
+    return panel
+
+
+def on_panel_closed(session, panel):
+    if session.task_panel is panel:
+        _mark_task_panel_closed(panel)
+        session.task_panel = None
+        if not session.lifecycle_state.finishing:
+            session.shutdown(
+                close_dialog=False,
+                teardown=session.lifecycle_state.tearing_down,
+            )
+        return
+    _mark_task_panel_closed(panel)
+    _detach_or_dispose_task_panel(panel)
 
 
 def _normalize_task_panel_refresh_reason(reason=None):
