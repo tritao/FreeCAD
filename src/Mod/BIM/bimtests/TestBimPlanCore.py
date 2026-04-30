@@ -2285,6 +2285,40 @@ class TestBimPlanCore(unittest.TestCase):
             panel_calls,
         )
 
+    def test_task_panel_close_marks_active_panel_closed_before_shutdown(self):
+        calls = []
+        panel = SimpleNamespace(mark_closed=lambda: calls.append("mark_closed"))
+        session = SimpleNamespace(
+            task_panel=panel,
+            lifecycle_state=SimpleNamespace(finishing=False, tearing_down=True),
+            shutdown=lambda **kwargs: calls.append(("shutdown", kwargs)),
+        )
+
+        plan_task_panel_module.on_panel_closed(session, panel)
+
+        self.assertIsNone(session.task_panel)
+        self.assertEqual(
+            [
+                "mark_closed",
+                ("shutdown", {"close_dialog": False, "teardown": True}),
+            ],
+            calls,
+        )
+
+    def test_task_panel_close_skips_shutdown_while_finishing(self):
+        calls = []
+        panel = SimpleNamespace(mark_closed=lambda: calls.append("mark_closed"))
+        session = SimpleNamespace(
+            task_panel=panel,
+            lifecycle_state=SimpleNamespace(finishing=True, tearing_down=False),
+            shutdown=lambda **kwargs: calls.append(("shutdown", kwargs)),
+        )
+
+        plan_task_panel_module.on_panel_closed(session, panel)
+
+        self.assertIsNone(session.task_panel)
+        self.assertEqual(["mark_closed"], calls)
+
     def test_selection_observer_clear_skips_synthetic_gui_selection_sync(self):
         session = SimpleNamespace(
             lifecycle_state=SimpleNamespace(
