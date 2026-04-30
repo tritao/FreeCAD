@@ -351,6 +351,62 @@ class BimPlanEditGuiProviderMixin:
         session.shutdown(close_dialog=False)
         self.pump_gui_events()
 
+    def test_plan_edit_shutdown_cancels_active_provider_point_tool(self):
+        wall = Arch.makeWall(length=3000, width=200, height=2500)
+        self.document.recompute()
+
+        session = BimPlanSession.start_session()
+        self.assertIsNotNone(session)
+        self.pump_gui_events()
+
+        tool = PlanToolSpec(
+            key="shutdown-test-marker",
+            label="Shutdown Test Marker",
+            tooltip="Click in plan to place a test marker.",
+            transaction_label="Place Shutdown Test Marker",
+            provider_id="test-plan-provider",
+            interaction=PlanToolInteraction.POINT,
+            prompt="Click a plan point to place a test marker.",
+        )
+        selected_target = plan_target_kinds.make_plan_target_ref("wall", wall)
+
+        try:
+            with (
+                patch.object(FreeCADGui.Snapper, "getPoint", return_value=None),
+                patch.object(
+                    session.selection.state,
+                    "get_selected_plan_target",
+                    return_value=selected_target,
+                ),
+                patch.object(
+                    session.selection.state,
+                    "get_selected_plan_targets",
+                    return_value=(selected_target,),
+                ),
+                patch.object(
+                    session.selection.hover,
+                    "get_hovered_plan_target",
+                    return_value=selected_target,
+                ),
+            ):
+                self.assertTrue(session.providers.point.start_plan_provider_point_tool(tool))
+
+            self.assertEqual("Provider Point", session.current_tool)
+            self.assertIs(session.provider_point_state.provider_point_tool, tool)
+
+            self.assertTrue(session.shutdown(close_dialog=False))
+            self.pump_gui_events()
+
+            self.assertEqual("Select", session.current_tool)
+            self.assertIsNone(session.provider_point_state.provider_point_tool)
+            self.assertIsNone(session.provider_point_state.provider_point_host_target)
+            self.assertIsNone(session.doc)
+            self.assertIsNone(BimPlanSession.get_active_session())
+        finally:
+            if BimPlanSession.get_active_session() is session:
+                session.shutdown(close_dialog=False)
+                self.pump_gui_events()
+
     def test_plan_edit_provider_point_tool_uses_selected_wall_host_context(self):
         wall = Arch.makeWall(length=3000, width=200, height=2500)
         self.document.recompute()

@@ -272,6 +272,46 @@ class BimPlanEditGuiOpeningsMixin:
         self.assertAlmostEqual(abs(sketch_x_axis.x), 0.0, delta=1e-6)
         self.assertAlmostEqual(abs(sketch_x_axis.y), 1.0, delta=1e-6)
 
+    def test_plan_edit_shutdown_cancels_active_window_tool(self):
+        level = Arch.makeFloor(name="Level 0")
+        wall = Arch.makeWall(length=3000, width=200, height=2500)
+        level.addObject(wall)
+        self.document.recompute()
+
+        FreeCADGui.Selection.clearSelection()
+        FreeCADGui.Selection.addSelection(level)
+
+        session = BimPlanSession.start_session()
+        self.assertIsNotNone(session)
+        self.pump_gui_events()
+
+        try:
+            with (
+                patch.object(FreeCADGui.Snapper, "getPoint", return_value=None),
+                patch.object(FreeCADGui.Snapper, "setSelectMode", return_value=None),
+            ):
+                self.assertTrue(
+                    session.selection.activation.select_wall_for_plan_edit(
+                        wall, sync_gui_selection=True
+                    )
+                )
+                self.assertTrue(session.windows.activate_window_tool())
+
+            self.assertEqual("Window", session.current_tool)
+            self.assertIs(session.creation_preview_state.window_host_wall, wall)
+
+            self.assertTrue(session.shutdown(close_dialog=False))
+            self.pump_gui_events()
+
+            self.assertEqual("Select", session.current_tool)
+            self.assertIsNone(session.creation_preview_state.window_host_wall)
+            self.assertIsNone(session.doc)
+            self.assertIsNone(BimPlanSession.get_active_session())
+        finally:
+            if BimPlanSession.get_active_session() is session:
+                session.shutdown(close_dialog=False)
+                self.pump_gui_events()
+
     def test_plan_edit_selected_window_status_uses_window_label(self):
         """Hosted windows should be labelled as windows, not generic openings."""
 
@@ -1572,6 +1612,60 @@ class BimPlanEditGuiOpeningsMixin:
         self.assertEqual(hints[0].message, "%1 place opening")
         self.assertEqual(hints[1].message, "%1 cycle move anchor")
         self.assertEqual(hints[2].message, "%1 cancel")
+
+    def test_plan_edit_shutdown_cancels_active_opening_move(self):
+        level = Arch.makeFloor(name="Level 0")
+        wall = Arch.makeWall(length=3000, width=200, height=2500)
+        level.addObject(wall)
+        self.document.recompute()
+
+        door = self._make_hosted_door(wall, name="ShutdownOpeningMoveDoor")
+
+        FreeCADGui.Selection.clearSelection()
+        FreeCADGui.Selection.addSelection(level)
+
+        session = BimPlanSession.start_session()
+        self.assertIsNotNone(session)
+        self.pump_gui_events()
+
+        FreeCADGui.Selection.clearSelection()
+        FreeCADGui.Selection.addSelection(self.document.Name, door.Name)
+        self.pump_gui_events()
+        session.selection.refresh.refresh_primary_selected_plan_target()
+
+        handle = session.openings.get_selected_opening_edit_handles(door)[0]
+        pushed_modes = []
+
+        try:
+            with (
+                patch.object(FreeCADGui.Snapper, "getPoint", return_value=None),
+                patch.object(FreeCADGui.Snapper, "setSelectMode", return_value=None),
+                patch.object(
+                    FreeCADGui.Snapper,
+                    "push_snap_modes",
+                    side_effect=lambda modes: pushed_modes.append(set(modes)),
+                ),
+            ):
+                session.openings.start_opening_handle_point_pick(door, 0, handle)
+                self.assertEqual("Move Opening", session.current_tool)
+                self.assertIs(session.interaction_state.edit_opening, door)
+
+                self.assertTrue(session.shutdown(close_dialog=False))
+                self.pump_gui_events()
+
+            self.assertEqual([set(BimPlanSession._OPENING_MOVE_SNAP_SET)], pushed_modes)
+            self.assertEqual("Select", session.current_tool)
+            self.assertIsNone(session.interaction_state.edit_opening)
+            self.assertIsNone(session.interaction_state.edit_opening_handle_index)
+            self.assertIsNone(session.opening_transient_state.edit_opening_move_raw_point)
+            self.assertFalse(session.opening_transient_state.opening_move_snap_profile_pushed)
+            self.assertEqual("center", session.opening_transient_state.edit_opening_move_anchor)
+            self.assertIsNone(session.doc)
+            self.assertIsNone(BimPlanSession.get_active_session())
+        finally:
+            if BimPlanSession.get_active_session() is session:
+                session.shutdown(close_dialog=False)
+                self.pump_gui_events()
 
     def test_plan_edit_opening_move_preview_offsets_readout_outside_host_wall(self):
         """Opening move preview readout should sit outside the host wall footprint."""
