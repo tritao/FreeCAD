@@ -86,6 +86,7 @@ class PlanInteractionState:
     edit_symbol_handle_role: object = None
     edit_symbol_start_placement: object = None
     edit_symbol_reference_point: object = None
+    provider_edit_generation: int = 0
     edit_provider: object = None
     edit_provider_handle_index: object = None
     edit_provider_handle: object = None

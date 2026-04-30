@@ -62,6 +62,12 @@ class PlanProviderEditingAPI:
     def cancel_provider_handle_point_pick(self):
         return cancel_provider_handle_point_pick(self.session)
 
+    def restore_selected_provider(self, provider_obj):
+        return restore_selected_provider(self.session, provider_obj)
+
+    def queue_restore_selected_provider(self, provider_obj):
+        return queue_restore_selected_provider(self.session, provider_obj)
+
 
 def get_selected_provider_edit_handles(session, provider_obj):
     if provider_obj is None:
@@ -170,6 +176,7 @@ def start_provider_handle_point_pick(session, provider_obj, handle_index, handle
     session.selection.hover.set_hovered_region(None)
     session.overlays.spaces.sync_secondary_selected_overlays()
     interaction_state = session.interaction_state
+    interaction_state.provider_edit_generation += 1
     interaction_state.edit_provider = provider_obj
     interaction_state.edit_provider_handle_index = handle_index
     interaction_state.edit_provider_handle = handle
@@ -277,6 +284,7 @@ def finish_provider_handle_point_pick(session, point=None, obj=None):
 
 def cancel_provider_handle_point_pick(session):
     interaction_state = session.interaction_state
+    interaction_state.provider_edit_generation += 1
     provider_obj = interaction_state.edit_provider
     interaction_state.edit_provider = None
     interaction_state.edit_provider_handle_index = None
@@ -300,13 +308,30 @@ def restore_selected_provider(session, provider_obj):
     session.selection.refresh.refresh_primary_selected_plan_target()
 
 
+def _run_queued_restore_selected_provider(session, provider_obj, restore_generation):
+    interaction_state = session.interaction_state
+    if session.lifecycle_state.tearing_down or session.lifecycle_state.finishing:
+        return
+    if interaction_state.provider_edit_generation != restore_generation:
+        return
+    restore_selected_provider(session, provider_obj)
+
+
 def queue_restore_selected_provider(session, provider_obj):
+    restore_generation = session.interaction_state.provider_edit_generation
     try:
         from PySide import QtCore
     except ImportError:
-        restore_selected_provider(session, provider_obj)
+        _run_queued_restore_selected_provider(session, provider_obj, restore_generation)
         return
-    QtCore.QTimer.singleShot(0, lambda: restore_selected_provider(session, provider_obj))
+    QtCore.QTimer.singleShot(
+        0,
+        lambda: _run_queued_restore_selected_provider(
+            session,
+            provider_obj,
+            restore_generation,
+        ),
+    )
 
 
 def _get_provider_handle_transaction_label(handle):

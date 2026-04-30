@@ -503,6 +503,72 @@ class TestBimPlanProviderSelectionGui(ArchWallGuiTestCase):
         session.shutdown(close_dialog=False)
         self.pump_gui_events()
 
+    def test_plan_edit_stale_provider_restore_does_not_resume_newer_edit(self):
+        """A queued provider restore must not override a newer provider handle edit."""
+
+        marker_a = Draft.makePoint(FreeCAD.Vector(100, 200, 0))
+        marker_a.Label = "Electrical Marker A"
+        marker_b = Draft.makePoint(FreeCAD.Vector(400, 500, 0))
+        marker_b.Label = "Electrical Marker B"
+        self.document.recompute()
+        FreeCADGui.Selection.clearSelection()
+
+        session = BimPlanSession.start_session()
+        self.assertIsNotNone(session)
+        self.pump_gui_events()
+
+        queued_callbacks = []
+
+        def fake_single_shot(delay, callback):
+            self.assertEqual(delay, 0)
+            queued_callbacks.append(callback)
+
+        with (
+            patch(
+                "bimplan.providers.runtime.get_plan_provider_targets",
+                return_value=(
+                    self._make_provider_target_spec(marker_a),
+                    self._make_provider_target_spec(marker_b),
+                ),
+            ),
+        ):
+            self.assertTrue(session.providers.runtime.set_plan_provider_overlay_mode("electrical"))
+            with patch("PySide.QtCore.QTimer.singleShot", side_effect=fake_single_shot):
+                session.providers.editing.queue_restore_selected_provider(marker_a)
+
+        self.assertEqual(1, len(queued_callbacks))
+
+        with patch(
+            "bimplan.providers.runtime.get_plan_provider_targets",
+            return_value=(
+                self._make_provider_target_spec(marker_a),
+                self._make_provider_target_spec(marker_b),
+            ),
+        ):
+            session.selection.sync.set_gui_selection_object(marker_b)
+            session.selection.refresh.refresh_primary_selected_plan_target()
+            self.pump_gui_events()
+
+            with patch.object(FreeCADGui.Snapper, "getPoint", return_value=None):
+                session.providers.editing.activate_provider_handle_now(marker_b, 0)
+
+            self.assertEqual("Move Provider", session.current_tool)
+            self.assertIs(marker_b, session.interaction_state.edit_provider)
+            self.assertEqual(
+                ("provider", marker_b), session.selection.state.get_selected_plan_target()
+            )
+
+            queued_callbacks[0]()
+
+            self.assertEqual("Move Provider", session.current_tool)
+            self.assertIs(marker_b, session.interaction_state.edit_provider)
+            self.assertEqual(
+                ("provider", marker_b), session.selection.state.get_selected_plan_target()
+            )
+
+        session.shutdown(close_dialog=False)
+        self.pump_gui_events()
+
     def test_plan_edit_selected_provider_target_shows_builtin_rehost_handle(self):
         """Hostable provider targets should expose a built-in rehost handle."""
 

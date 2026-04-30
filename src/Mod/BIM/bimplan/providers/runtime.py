@@ -290,8 +290,13 @@ def _set_provider_target_collection_depth(session, depth):
 
 
 def discard_runtime_references(session):
+    interaction_state = session.interaction_state
     provider_point_state = session.provider_point_state
     provider_transient_state = session.provider_transient_state
+    interaction_state.provider_edit_generation += 1
+    interaction_state.edit_provider = None
+    interaction_state.edit_provider_handle_index = None
+    interaction_state.edit_provider_handle = None
     provider_transient_state.provider_selected_objects = []
     provider_point_state.provider_point_host_target = None
     provider_point_state.provider_point_host_source = ""
