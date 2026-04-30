@@ -1665,6 +1665,48 @@ class BimPlanEditGuiOpeningsMixin:
             self._assert_selected_plan_target(session, "opening", door)
             self.assertNotEqual(original_parts, list(door.WindowParts))
 
+    def test_plan_edit_stale_opening_restore_does_not_resume_newer_edit(self):
+        """A queued opening restore must not override a newer opening edit session."""
+
+        wall = Arch.makeWall(length=4000, width=200, height=2500)
+        self.document.recompute()
+
+        door_a = self._make_hosted_door(wall, name="RestoreDoorA")
+        door_b = self._make_hosted_door(wall, name="RestoreDoorB")
+        door_b.Placement.Base = FreeCAD.Vector(1800, 0, 0)
+        self.document.recompute()
+
+        session = BimPlanSession.start_session()
+        self.assertIsNotNone(session)
+        self.pump_gui_events()
+
+        queued_callbacks = []
+
+        def fake_single_shot(delay, callback):
+            self.assertEqual(delay, 0)
+            queued_callbacks.append(callback)
+
+        with patch("PySide.QtCore.QTimer.singleShot", side_effect=fake_single_shot):
+            session.openings.queue_restore_selected_opening(door_a)
+
+        self.assertEqual(len(queued_callbacks), 1)
+
+        with (
+            patch.object(FreeCADGui.Snapper, "getPoint", return_value=None),
+            patch.object(FreeCADGui.Snapper, "setSelectMode", return_value=None),
+        ):
+            session.openings.activate_opening_handle_now(door_b, 0)
+
+        self.assertEqual(session.current_tool, "Move Opening")
+        self.assertIs(session.interaction_state.edit_opening, door_b)
+        self._assert_selected_plan_target(session, "opening", door_b)
+
+        queued_callbacks[0]()
+
+        self.assertEqual(session.current_tool, "Move Opening")
+        self.assertIs(session.interaction_state.edit_opening, door_b)
+        self._assert_selected_plan_target(session, "opening", door_b)
+
     def test_plan_edit_hovered_opening_replaces_selected_wall_context_overlay(self):
         """Hovered openings should not be hidden by selected-wall context overlays."""
 
