@@ -66,6 +66,13 @@ class PlanProviderPointAPI:
             return False
         return self._cancel_active_provider_move_tool()
 
+    def cancel_active_tool_for_shutdown(self):
+        if self.session.current_tool == plan_runtime_tools.PlanTool.MOVE_PROVIDER:
+            return self._cancel_active_provider_move_tool()
+        if self.session.current_tool != plan_runtime_tools.PlanTool.PROVIDER_POINT:
+            return False
+        return bool(cancel_provider_point_tool(self.session, refresh=False))
+
     def start_plan_provider_point_tool(self, tool):
         return start_plan_provider_point_tool(self.session, tool)
 

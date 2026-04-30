@@ -56,6 +56,12 @@ class PlanWindowsAPI:
         self.cancel_window_tool()
         return True
 
+    def cancel_active_tool_for_shutdown(self):
+        if self.session.current_tool != plan_runtime_tools.PlanTool.WINDOW:
+            return False
+        self.cancel_window_tool(refresh=False)
+        return True
+
     def cancel_for_select(self):
         if not self.has_active_window_tool():
             return False

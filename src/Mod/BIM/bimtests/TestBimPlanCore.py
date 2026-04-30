@@ -102,13 +102,18 @@ from bimplan.providers import (
     PlanProviderTargetSpec,
     PlanToolSpec,
 )
+from bimplan.providers import point as plan_provider_point_module
 from bimplan.providers import PlanEditRegistry
 from bimplan.runtime import lifecycle as plan_lifecycle_module
 from bimplan.runtime import session as plan_session_module
+from bimplan.runtime import tools as plan_runtime_tools
 from bimplan.selection import gui_sync as plan_selection_gui_sync
 from bimplan.selection.interaction import PlanSelectionActivationService
 from bimplan.selection.state import PlanSelectionRefreshService
 from bimplan.selection import kinds as plan_target_kinds
+from bimplan.tools import opening_edit as plan_opening_edit_module
+from bimplan.tools import spaces as plan_spaces_module
+from bimplan.tools import window_create as plan_window_create_module
 from bimplan.tools.spaces import (
     start_space_region_pick,
     create_space_from_current_selection,
@@ -2861,3 +2866,138 @@ class TestBimPlanCore(unittest.TestCase):
 
         self.assertTrue(session.lifecycle_state.tearing_down)
         self.assertEqual(["disconnect", "uninstall", "cleanup"], calls)
+
+    def test_plan_edit_cleanup_shutdown_uses_owned_modal_shutdown_hooks(self):
+        calls = []
+        session = SimpleNamespace(
+            viewport=SimpleNamespace(clear_viewport_status_chip=lambda: calls.append("viewport")),
+            status_text=SimpleNamespace(clear_input_hints=lambda: calls.append("status")),
+            embedded_tools=SimpleNamespace(cancel=lambda: calls.append("embedded")),
+            wall_create=SimpleNamespace(
+                cancel_rect_wall_tool=lambda refresh=False: calls.append(("wall_create", refresh))
+            ),
+            spaces=SimpleNamespace(
+                cancel_space_separator_tool=lambda refresh=False: calls.append(
+                    ("space_separator", refresh)
+                ),
+                cancel_active_tool_for_shutdown=lambda: calls.append("spaces_shutdown") or False,
+            ),
+            wall_edit=SimpleNamespace(
+                cancel_wall_edit=lambda restore=True, refresh=True: calls.append(
+                    ("wall_edit", restore, refresh)
+                )
+            ),
+            openings=SimpleNamespace(
+                cancel_active_tool_for_shutdown=lambda: calls.append("openings_shutdown") or False
+            ),
+            symbols=SimpleNamespace(
+                cancel_active_tool_for_shutdown=lambda: calls.append("symbols_shutdown") or False
+            ),
+            windows=SimpleNamespace(
+                cancel_active_tool_for_shutdown=lambda: calls.append("windows_shutdown") or False
+            ),
+            providers=SimpleNamespace(
+                point=SimpleNamespace(
+                    cancel_active_tool_for_shutdown=lambda: calls.append("provider_shutdown")
+                    or False
+                )
+            ),
+        )
+        overlay_runtime = SimpleNamespace(clear_shutdown_visuals=lambda: calls.append("overlay"))
+
+        with patch.object(
+            plan_lifecycle_module,
+            "cancel_pending_edit",
+            side_effect=lambda _session, restore_wall_visibility=True: calls.append(
+                ("pending_edit", restore_wall_visibility)
+            ),
+        ), patch.object(
+            plan_lifecycle_module,
+            "detach_runtime_observers",
+            side_effect=lambda _session: calls.append("detach"),
+        ), patch.object(
+            plan_lifecycle_module,
+            "_overlay_runtime_api",
+            return_value=overlay_runtime,
+        ):
+            plan_lifecycle_module._cleanup_shutdown(session, teardown=False)
+
+        self.assertEqual(
+            [
+                "viewport",
+                "status",
+                "embedded",
+                ("wall_create", False),
+                ("space_separator", False),
+                ("wall_edit", True, False),
+                ("pending_edit", True),
+                "provider_shutdown",
+                "openings_shutdown",
+                "symbols_shutdown",
+                "spaces_shutdown",
+                "windows_shutdown",
+                "overlay",
+                "detach",
+            ],
+            calls,
+        )
+
+    def test_plan_provider_point_shutdown_hook_cancels_point_tool_without_refresh(self):
+        calls = []
+        api = plan_provider_point_module.PlanProviderPointAPI(
+            SimpleNamespace(current_tool=plan_runtime_tools.PlanTool.PROVIDER_POINT)
+        )
+
+        with patch.object(
+            plan_provider_point_module,
+            "cancel_provider_point_tool",
+            side_effect=lambda _session, refresh=True: calls.append(refresh) or True,
+        ):
+            self.assertTrue(api.cancel_active_tool_for_shutdown())
+
+        self.assertEqual([False], calls)
+
+    def test_plan_opening_shutdown_hook_cancels_opening_move(self):
+        calls = []
+        api = plan_opening_edit_module.PlanOpeningsAPI(
+            SimpleNamespace(current_tool=plan_runtime_tools.PlanTool.MOVE_OPENING)
+        )
+
+        with patch.object(
+            plan_opening_edit_module,
+            "cancel_opening_handle_point_pick",
+            side_effect=lambda _session, *args, **kwargs: calls.append("cancel"),
+        ):
+            self.assertTrue(api.cancel_active_tool_for_shutdown())
+
+        self.assertEqual(["cancel"], calls)
+
+    def test_plan_spaces_shutdown_hook_cancels_region_pick_without_refresh(self):
+        calls = []
+        api = plan_spaces_module.PlanSpacesAPI(
+            SimpleNamespace(current_tool=plan_runtime_tools.PlanTool.PICK_SPACE_REGION)
+        )
+
+        with patch.object(
+            plan_spaces_module.plan_space_regions,
+            "cancel_space_region_pick",
+            side_effect=lambda _session, refresh=True: calls.append(refresh) or True,
+        ):
+            self.assertTrue(api.cancel_active_tool_for_shutdown())
+
+        self.assertEqual([False], calls)
+
+    def test_plan_window_shutdown_hook_cancels_window_tool_without_refresh(self):
+        calls = []
+        api = plan_window_create_module.PlanWindowsAPI(
+            SimpleNamespace(current_tool=plan_runtime_tools.PlanTool.WINDOW)
+        )
+
+        with patch.object(
+            plan_window_create_module,
+            "cancel_window_tool",
+            side_effect=lambda _session, refresh=True: calls.append(refresh) or True,
+        ):
+            self.assertTrue(api.cancel_active_tool_for_shutdown())
+
+        self.assertEqual([False], calls)

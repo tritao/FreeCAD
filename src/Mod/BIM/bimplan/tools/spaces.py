@@ -237,6 +237,18 @@ class PlanSpacesAPI(_SessionAPI):
             return True
         return False
 
+    def cancel_active_tool_for_shutdown(self):
+        if self.session.current_tool == plan_runtime_tools.PlanTool.PICK_SPACE_REGION:
+            self.cancel_space_region_pick(refresh=False)
+            return True
+        if self.session.current_tool == plan_runtime_tools.PlanTool.REGION:
+            self.cancel_plan_region_tool(refresh=False)
+            return True
+        if self.session.current_tool == plan_runtime_tools.PlanTool.SET_SPACE_TEXT:
+            self.cancel_space_text_position_pick()
+            return True
+        return False
+
     def cancel_active_tool_for_select(self):
         if self.session.current_tool != plan_runtime_tools.PlanTool.PICK_SPACE_REGION:
             return False
