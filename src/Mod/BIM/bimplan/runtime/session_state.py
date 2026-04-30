@@ -393,8 +393,6 @@ def initialize_session_read_state(session):
 
 def initialize_session_state(session):
     """Populate the runtime state owned by a PlanEditSession instance."""
-    from PySide import QtGui
-
     session.doc = FreeCAD.ActiveDocument
     session.gui_doc = FreeCADGui.ActiveDocument
     session.view = None
@@ -423,4 +421,3 @@ def initialize_session_state(session):
     session.provider_runtime_state.refresh_cache = None
     session.provider_runtime_state.document_cache = {}
     session.provider_runtime_state.target_collection_depth = 0
-    session.lifecycle.connect_teardown_signals(QtGui)

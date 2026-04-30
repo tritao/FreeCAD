@@ -103,6 +103,8 @@ from bimplan.providers import (
     PlanToolSpec,
 )
 from bimplan.providers import PlanEditRegistry
+from bimplan.runtime import lifecycle as plan_lifecycle_module
+from bimplan.runtime import session as plan_session_module
 from bimplan.selection import gui_sync as plan_selection_gui_sync
 from bimplan.selection.interaction import PlanSelectionActivationService
 from bimplan.selection.state import PlanSelectionRefreshService
@@ -2750,3 +2752,112 @@ class TestBimPlanCore(unittest.TestCase):
             [("open", "Apply Plan Edit Change"), ("abort", None)],
             doc.events,
         )
+
+    def test_plan_edit_session_constructor_does_not_connect_teardown_signals(self):
+        with patch.object(
+            plan_lifecycle_module, "connect_teardown_signals"
+        ) as connect_signals, patch.object(
+            plan_session_module.FreeCAD,
+            "ActiveDocument",
+            None,
+            create=True,
+        ), patch.object(
+            plan_session_module.FreeCADGui,
+            "ActiveDocument",
+            None,
+            create=True,
+        ):
+            plan_session_module.PlanEditSession()
+
+        connect_signals.assert_not_called()
+
+    def test_plan_edit_start_session_connects_teardown_signals_after_successful_enter(self):
+        connect_calls = []
+        show_task_view_calls = []
+        pyside_module = ModuleType("PySide")
+        qtgui_token = object()
+        pyside_module.QtGui = qtgui_token
+        fake_session = SimpleNamespace(
+            enter=lambda: True,
+            lifecycle=SimpleNamespace(
+                connect_teardown_signals=lambda QtGui: connect_calls.append(QtGui)
+            ),
+        )
+
+        with patch.dict(sys.modules, {"PySide": pyside_module}), patch.object(
+            plan_session_module, "_active_session", None
+        ), patch.object(
+            plan_session_module,
+            "PlanEditSession",
+            return_value=fake_session,
+        ), patch.object(
+            plan_session_module,
+            "_register_builtin_plan_edit_integrations",
+        ), patch.object(
+            plan_session_module,
+            "_refresh_contextual_task_watchers",
+        ), patch.object(
+            plan_session_module.FreeCADGui,
+            "Control",
+            SimpleNamespace(showTaskView=lambda: show_task_view_calls.append(True)),
+            create=True,
+        ):
+            self.assertIs(fake_session, plan_session_module.start_session())
+            self.assertIs(fake_session, plan_session_module.get_active_session())
+
+        self.assertEqual([qtgui_token], connect_calls)
+        self.assertEqual([True], show_task_view_calls)
+
+    def test_plan_edit_start_session_skips_teardown_signals_when_enter_fails(self):
+        connect_calls = []
+        show_task_view_calls = []
+        fake_session = SimpleNamespace(
+            enter=lambda: False,
+            lifecycle=SimpleNamespace(
+                connect_teardown_signals=lambda QtGui: connect_calls.append(QtGui)
+            ),
+        )
+
+        with patch.object(plan_session_module, "_active_session", None), patch.object(
+            plan_session_module,
+            "PlanEditSession",
+            return_value=fake_session,
+        ), patch.object(
+            plan_session_module,
+            "_register_builtin_plan_edit_integrations",
+        ), patch.object(
+            plan_session_module,
+            "_refresh_contextual_task_watchers",
+        ), patch.object(
+            plan_session_module.FreeCADGui,
+            "Control",
+            SimpleNamespace(showTaskView=lambda: show_task_view_calls.append(True)),
+            create=True,
+        ):
+            self.assertIsNone(plan_session_module.start_session())
+            self.assertIsNone(plan_session_module.get_active_session())
+
+        self.assertEqual([], connect_calls)
+        self.assertEqual([], show_task_view_calls)
+
+    def test_plan_edit_begin_teardown_disconnects_signals_before_cleanup(self):
+        calls = []
+        session = SimpleNamespace(lifecycle_state=SimpleNamespace(tearing_down=False))
+
+        with patch.object(
+            plan_lifecycle_module,
+            "disconnect_teardown_signals",
+            side_effect=lambda _session: calls.append("disconnect"),
+        ), patch.object(
+            plan_lifecycle_module.plan_command_gate,
+            "uninstall",
+            side_effect=lambda _session: calls.append("uninstall"),
+        ), patch.object(
+            plan_lifecycle_module,
+            "_cleanup_begin_teardown",
+            side_effect=lambda _session: calls.append("cleanup"),
+        ):
+            plan_lifecycle_module.begin_teardown(session)
+
+        self.assertTrue(session.lifecycle_state.tearing_down)
+        self.assertEqual(["disconnect", "uninstall", "cleanup"], calls)
