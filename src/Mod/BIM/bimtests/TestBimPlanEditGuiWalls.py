@@ -1784,6 +1784,63 @@ class BimPlanEditGuiWallsMixin:
         self._assert_selected_plan_target(session, "wall", wall)
         self.assertEqual(len(session.overlay_tracker_state.grip_trackers), 3)
 
+    def test_plan_edit_cancel_wall_edit_forwards_restore_flag_to_pending_edit_reset(self):
+        """Wall-edit cancel should forward restore=False into the pending-edit reset path."""
+
+        session = BimPlanSession.start_session()
+        self.assertIsNotNone(session)
+        self.pump_gui_events()
+
+        session.wall_edit_state.wall_edit_modal_active = True
+        session.wall_edit_state.edit_wall = object()
+
+        with patch("bimplan.runtime.lifecycle.cancel_pending_edit") as cancel_pending_edit:
+            self.assertTrue(session.wall_edit.cancel_wall_edit(restore=False, refresh=False))
+
+        cancel_pending_edit.assert_called_once_with(
+            session,
+            restore_wall_visibility=False,
+        )
+        self.assertEqual(session.current_tool, "Select")
+
+    def test_plan_edit_reset_pending_edit_state_restore_flag_controls_wall_visibility(self):
+        """Pending-edit reset should skip wall visibility restoration only when requested."""
+
+        session = BimPlanSession.start_session()
+        self.assertIsNotNone(session)
+        self.pump_gui_events()
+
+        state = session.wall_edit_state
+
+        with (
+            patch.object(
+                type(session.wall_edit), "restore_edit_wall_visibility"
+            ) as restore_visibility,
+            patch.object(type(session.wall_edit), "clear_wall_edit_preview"),
+        ):
+            state.wall_edit_modal_active = True
+            state.edit_wall = object()
+            state.edit_wall_visibility = False
+            session.wall_edit.reset_pending_edit_state(restore_wall_visibility=False)
+            restore_visibility.assert_not_called()
+            self.assertIsNone(state.edit_wall_visibility)
+            self.assertFalse(state.wall_edit_modal_active)
+            self.assertIsNone(state.edit_wall)
+
+        with (
+            patch.object(
+                type(session.wall_edit), "restore_edit_wall_visibility"
+            ) as restore_visibility,
+            patch.object(type(session.wall_edit), "clear_wall_edit_preview"),
+        ):
+            state.wall_edit_modal_active = True
+            state.edit_wall = object()
+            state.edit_wall_visibility = False
+            session.wall_edit.reset_pending_edit_state()
+            restore_visibility.assert_called_once_with()
+            self.assertFalse(state.wall_edit_modal_active)
+            self.assertIsNone(state.edit_wall)
+
     def test_plan_edit_wall_grip_activation_is_deferred(self):
         """Wall grip activation should defer point-pick start until after the click event unwinds."""
 

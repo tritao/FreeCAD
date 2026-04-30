@@ -70,8 +70,8 @@ class PlanLifecycleAPI:
     def activate_select_tool(self):
         return activate_select_tool(self.session)
 
-    def cancel_pending_edit(self):
-        return cancel_pending_edit(self.session)
+    def cancel_pending_edit(self, *args, **kwargs):
+        return cancel_pending_edit(self.session, *args, **kwargs)
 
 
 def connect_teardown_signal(session, signal):
@@ -173,7 +173,7 @@ def _cleanup_begin_teardown(session):
     session.spaces.cancel_plan_region_tool(refresh=False)
     _cancel_provider_point_tool(session, refresh=False)
     session.wall_edit.cancel_wall_edit(restore=False, refresh=False)
-    cancel_pending_edit(session)
+    cancel_pending_edit(session, restore_wall_visibility=False)
     _cancel_current_tool_for_begin_teardown(session)
     _overlay_runtime_api(session).clear_begin_teardown_visuals()
     detach_runtime_observers(session)
@@ -186,7 +186,7 @@ def _cleanup_shutdown(session, *, teardown=False):
     session.wall_create.cancel_rect_wall_tool(refresh=False)
     session.spaces.cancel_space_separator_tool(refresh=False)
     session.wall_edit.cancel_wall_edit(restore=not teardown, refresh=False)
-    cancel_pending_edit(session)
+    cancel_pending_edit(session, restore_wall_visibility=not teardown)
     _cancel_current_tool_for_shutdown(session)
     _overlay_runtime_api(session).clear_shutdown_visuals()
     detach_runtime_observers(session)
@@ -264,22 +264,34 @@ def activate_select_tool(session):
     session.wall_relations.cancel_for_select()
 
 
-def _reset_pending_edit_state(session, *, clear_opening_edit=False):
-    session.wall_edit.reset_pending_edit_state()
+def _reset_pending_edit_state(
+    session,
+    *,
+    clear_opening_edit=False,
+    restore_wall_visibility=True,
+):
+    session.wall_edit.reset_pending_edit_state(restore_wall_visibility=restore_wall_visibility)
     session.openings.reset_pending_edit_state(clear_edit=clear_opening_edit)
     session.embedded_tools.clear_state()
     session.lifecycle_state.ignore_selection_changes = False
 
 
-def cancel_pending_edit(session):
+def cancel_pending_edit(session, *, restore_wall_visibility=True):
     if session.lifecycle_state.tearing_down:
-        _reset_pending_edit_state(session)
+        _reset_pending_edit_state(
+            session,
+            restore_wall_visibility=restore_wall_visibility,
+        )
         session.wall_relations.clear_plan_relation_status()
         return
     session.snap.stop_snapper()
     session.snap.pop_opening_move_snap_profile()
     session.snap.clear_active_draft_command()
-    _reset_pending_edit_state(session, clear_opening_edit=True)
+    _reset_pending_edit_state(
+        session,
+        clear_opening_edit=True,
+        restore_wall_visibility=restore_wall_visibility,
+    )
     session.wall_relations.clear_plan_relation_status()
     session.overlays.walls.sync_wall_grips()
     plan_targets.sync_selected_target_visuals(
