@@ -365,6 +365,17 @@ def get_plan_join_mode_action_text(session, target_wall=None, joint=None):
     ).format(joint_type=get_plan_join_type_phrase(session))
 
 
+def _refresh_join_mode_wall_context(session, source_wall):
+    if not session.selection.targets.is_plan_selectable_wall(source_wall):
+        return
+    session.selection.state.set_selected_plan_target("wall", source_wall)
+    session.selection.sync.set_gui_selection_object(source_wall)
+    session.overlays.spaces.sync_secondary_selected_overlays()
+    session.overlays.walls.sync_junction_node_overlays()
+    session.overlays.walls.sync_hovered_wall_overlay()
+    session.overlays.walls.sync_hovered_wall_opening_context_overlay()
+
+
 def unjoin_plan_wall_pair(session, source_wall, target_wall):
     import ArchWallJoinUtils
 
@@ -393,6 +404,7 @@ def unjoin_plan_wall_pair(session, source_wall, target_wall):
         return False
 
     clear_plan_relation_status(session)
+    _refresh_join_mode_wall_context(session, source_wall)
     session.task_panels.refresh_task_panel_status()
     return True
 

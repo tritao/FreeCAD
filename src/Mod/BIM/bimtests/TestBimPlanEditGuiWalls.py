@@ -1021,6 +1021,10 @@ class BimPlanEditGuiWallsMixin:
         self.assertEqual(len(joints), 0)
         self.assertEqual(session.current_tool, "Join")
         self.assertIs(session.selection.state.get_selected_target_for_kind("wall"), source_wall)
+        self.assertEqual(
+            [obj.Name for obj in FreeCADGui.Selection.getSelection()],
+            [source_wall.Name],
+        )
         self.assertIs(session.hovered_wall, target_wall)
         self.assertFalse(session.task_panel.unjoin_button.isEnabled())
         _title, body = session.status_text.get_status_chip_text()
