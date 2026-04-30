@@ -18,6 +18,58 @@ def _provider_runtime_api(session):
     return getattr(providers, "runtime", providers)
 
 
+class PlanProviderPointAPI:
+    """Owned provider point-tool surface for Plan Edit interaction code."""
+
+    __slots__ = ("_session", "__dict__")
+
+    def __init__(self, session):
+        self._session = session
+
+    @property
+    def session(self):
+        return self._session
+
+    def has_active_provider_point_tool(self):
+        return has_active_provider_point_tool(self.session)
+
+    def get_provider_point_tool_label(self):
+        return get_provider_point_tool_label(self.session)
+
+    def get_provider_point_tool_prompt(self):
+        return get_provider_point_tool_prompt(self.session)
+
+    def arm_provider_point_tool(self):
+        return arm_provider_point_tool(self.session)
+
+    def cancel_provider_point_tool(self, refresh=True):
+        return cancel_provider_point_tool(self.session, refresh=refresh)
+
+    def cancel_for_select(self):
+        if not self.has_active_provider_point_tool():
+            return False
+        self.cancel_provider_point_tool()
+        return True
+
+    def start_plan_provider_point_tool(self, tool):
+        return start_plan_provider_point_tool(self.session, tool)
+
+    def handle_provider_point_tool_point(self, point=None, obj=None):
+        return handle_provider_point_tool_point(self.session, point=point, obj=obj)
+
+    def update_provider_point_tool_preview(self, point=None, obj=None):
+        return update_provider_point_tool_preview(self.session, point=point, obj=obj)
+
+    def get_provider_point_snap_info(self):
+        return get_provider_point_snap_info()
+
+    def resolve_provider_point_snap_object(self, snap_object, snap_info):
+        return resolve_provider_point_snap_object(self.session, snap_object, snap_info)
+
+    def project_provider_point_to_host(self, point, host_wall):
+        return project_provider_point_to_host(point, host_wall)
+
+
 class ProviderPointTool(plan_runtime_tools.PlanToolHandler):
     """Keyboard behavior for active provider point placement."""
 

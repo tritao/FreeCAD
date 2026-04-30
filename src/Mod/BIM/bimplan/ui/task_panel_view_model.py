@@ -104,15 +104,20 @@ class _TaskPanelProviderReads(_TaskPanelReadsBase):
         return self.session.providers
 
     @property
+    def provider_point(self):
+        providers = self.providers
+        return getattr(providers, "point", providers)
+
+    @property
     def provider_runtime(self):
         providers = self.providers
         return getattr(providers, "runtime", providers)
 
     def get_provider_point_tool_label(self):
-        return self.providers.get_provider_point_tool_label()
+        return self.provider_point.get_provider_point_tool_label()
 
     def get_provider_point_tool_prompt(self):
-        return self.providers.get_provider_point_tool_prompt()
+        return self.provider_point.get_provider_point_tool_prompt()
 
     def get_plan_provider_display_name(self, provider_id):
         return self.provider_runtime.get_plan_provider_display_name(provider_id)

@@ -10,6 +10,12 @@ from bimplan.tools import select as plan_select_tool
 
 translate = FreeCAD.Qt.translate
 
+
+def _provider_point_api(session):
+    providers = getattr(session, "providers", None)
+    return getattr(providers, "point", providers)
+
+
 _PLAN_JOIN_TYPES = ("Miter", "Butt", "Tee")
 
 
@@ -164,7 +170,7 @@ def activate_join_tool(session):
     session.wall_create.cancel_rect_wall_tool(refresh=False)
     session.windows.cancel_window_tool(refresh=False)
     session.spaces.cancel_space_separator_tool(refresh=False)
-    session.providers.cancel_provider_point_tool(refresh=False)
+    _provider_point_api(session).cancel_provider_point_tool(refresh=False)
 
     if session.embedded_tools.has_active():
         session.embedded_tools.cancel()

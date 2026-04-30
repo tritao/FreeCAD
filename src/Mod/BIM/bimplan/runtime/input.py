@@ -55,9 +55,15 @@ _ESCAPE_TOOL_HANDLERS = {
     PlanTool.SET_SPACE_TEXT: SpaceTextTool,
 }
 
+
+def _provider_point_api(session):
+    providers = getattr(session, "providers", None)
+    return getattr(providers, "point", providers)
+
+
 _ESCAPE_ACTIVE_TOOL_FALLBACKS = (
     (
-        lambda session: session.providers.has_active_provider_point_tool(),
+        lambda session: _provider_point_api(session).has_active_provider_point_tool(),
         ProviderPointTool,
     ),
     (

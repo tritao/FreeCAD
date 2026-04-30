@@ -312,13 +312,13 @@ class BimPlanEditGuiProviderMixin:
                 return_value=hovered_target,
             ),
         ):
-            self.assertTrue(session.providers.start_plan_provider_point_tool(tool))
+            self.assertTrue(session.providers.point.start_plan_provider_point_tool(tool))
             self.assertEqual("Provider Point", session.current_tool)
             raw_point = FreeCAD.Vector(120.0, 340.0, 999.0)
-            session.providers.handle_provider_point_tool_point(raw_point, wall)
+            session.providers.point.handle_provider_point_tool_point(raw_point, wall)
             self.assertEqual("Provider Point", session.current_tool)
             self.assertGreaterEqual(get_point.call_count, 2)
-            self.assertTrue(session.providers.cancel_provider_point_tool())
+            self.assertTrue(session.providers.point.cancel_provider_point_tool())
 
         self.assertEqual(1, len(captured))
         provider_id, action_key, transaction_label, payload = captured[0]
@@ -330,7 +330,7 @@ class BimPlanEditGuiProviderMixin:
         self.assertEqual(340.0, payload["point"].y)
         self.assertEqual(("wall", wall), payload["host_target"])
         self.assertEqual("selected", payload["host_source"])
-        expected_placement = session.providers.project_provider_point_to_host(
+        expected_placement = session.providers.point.project_provider_point_to_host(
             payload["point"], wall
         )
         self.assertIsNotNone(expected_placement)
@@ -385,16 +385,16 @@ class BimPlanEditGuiProviderMixin:
                     wall, sync_gui_selection=True
                 )
             )
-            self.assertTrue(session.providers.start_plan_provider_point_tool(tool))
+            self.assertTrue(session.providers.point.start_plan_provider_point_tool(tool))
             raw_point = FreeCAD.Vector(120.0, 340.0, 999.0)
-            session.providers.handle_provider_point_tool_point(raw_point, None)
-            self.assertTrue(session.providers.cancel_provider_point_tool())
+            session.providers.point.handle_provider_point_tool_point(raw_point, None)
+            self.assertTrue(session.providers.point.cancel_provider_point_tool())
 
         self.assertEqual(1, len(captured))
         payload = captured[0][3]
         self.assertEqual(("wall", wall), payload["host_target"])
         self.assertEqual("selected", payload["host_source"])
-        expected_placement = session.providers.project_provider_point_to_host(
+        expected_placement = session.providers.point.project_provider_point_to_host(
             payload["point"], wall
         )
         self.assertIsNotNone(expected_placement)
@@ -434,14 +434,16 @@ class BimPlanEditGuiProviderMixin:
                     wall, sync_gui_selection=True
                 )
             )
-            self.assertTrue(session.providers.start_plan_provider_point_tool(tool))
+            self.assertTrue(session.providers.point.start_plan_provider_point_tool(tool))
             self.assertIn("movecallback", captured)
 
             raw_point = FreeCAD.Vector(120.0, 340.0, 999.0)
             captured["movecallback"](raw_point, None)
 
             plan_point = session.viewport.project_plan_point(raw_point)
-            expected_placement = session.providers.project_provider_point_to_host(plan_point, wall)
+            expected_placement = session.providers.point.project_provider_point_to_host(
+                plan_point, wall
+            )
             self.assertIsNotNone(expected_placement)
             provider_point_state = session.provider_point_state
             self.assertEqual(
@@ -458,7 +460,7 @@ class BimPlanEditGuiProviderMixin:
             )
             self.assertGreater(len(provider_point_state.provider_point_preview_trackers), 2)
 
-            self.assertTrue(session.providers.cancel_provider_point_tool())
+            self.assertTrue(session.providers.point.cancel_provider_point_tool())
 
         provider_point_state = session.provider_point_state
         self.assertIsNone(provider_point_state.provider_point_preview_point)
@@ -499,7 +501,7 @@ class BimPlanEditGuiProviderMixin:
                 return_value=plan_target_kinds.make_plan_target_ref(),
             ),
         ):
-            self.assertTrue(session.providers.start_plan_provider_point_tool(tool))
+            self.assertTrue(session.providers.point.start_plan_provider_point_tool(tool))
             self.assertIn("movecallback", captured)
 
             raw_point = FreeCAD.Vector(120.0, 340.0, 999.0)
@@ -517,7 +519,7 @@ class BimPlanEditGuiProviderMixin:
             )
             self.assertEqual(2, len(provider_point_state.provider_point_preview_trackers))
 
-            self.assertTrue(session.providers.cancel_provider_point_tool())
+            self.assertTrue(session.providers.point.cancel_provider_point_tool())
 
         session.shutdown(close_dialog=False)
         self.pump_gui_events()
