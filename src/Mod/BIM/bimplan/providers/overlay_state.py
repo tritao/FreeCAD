@@ -11,6 +11,11 @@ def _runtime():
     return provider_runtime
 
 
+def _overlay_runtime_api(session):
+    overlays = getattr(session, "overlays", None)
+    return getattr(overlays, "runtime", overlays)
+
+
 PLAN_PROVIDER_OVERLAY_MODE_ALL = "all"
 PLAN_PROVIDER_OVERLAY_MODE_ARCHITECTURE = "architecture"
 PLAN_PROVIDER_OVERLAY_MODE_ELECTRICAL = "electrical"
@@ -62,7 +67,7 @@ def set_plan_provider_overlay_mode(session, mode):
     overlay_state.render_state = None
     provider_runtime.invalidate_plan_provider_document_cache(session)
     session.selection.refresh.clear_hidden_provider_preselection()
-    session.overlays.queue_plan_overlay_visual_refresh(
+    _overlay_runtime_api(session).queue_plan_overlay_visual_refresh(
         plan_document_visuals.PLAN_VISUAL_PROVIDER_OVERLAYS
     )
     session.task_panels.refresh_provider_overlay_mode_panels()
@@ -119,7 +124,7 @@ def set_plan_provider_overlay_visible(session, provider_id, overlay_key, visible
         overlay_state.visibility[key] = False
     overlay_state.render_state = None
     provider_runtime.invalidate_plan_provider_document_cache(session)
-    session.overlays.queue_plan_overlay_visual_refresh(
+    _overlay_runtime_api(session).queue_plan_overlay_visual_refresh(
         plan_document_visuals.PLAN_VISUAL_PROVIDER_OVERLAYS
     )
 
@@ -128,12 +133,12 @@ def queue_plan_provider_overlay_refresh(session):
     provider_runtime = _runtime()
     _provider_overlay_read_state(session).render_state = None
     provider_runtime.invalidate_plan_provider_document_cache(session)
-    session.overlays.queue_plan_overlay_visual_refresh(
+    _overlay_runtime_api(session).queue_plan_overlay_visual_refresh(
         plan_document_visuals.PLAN_VISUAL_PROVIDER_OVERLAYS
     )
 
 
 def queue_plan_provider_overlay_sync(session):
-    session.overlays.queue_plan_overlay_visual_refresh(
+    _overlay_runtime_api(session).queue_plan_overlay_visual_refresh(
         plan_document_visuals.PLAN_VISUAL_PROVIDER_OVERLAYS
     )

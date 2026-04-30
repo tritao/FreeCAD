@@ -13,6 +13,11 @@ from bimplan.tools import space_interaction as plan_space_interaction
 from bimplan.tools import space_regions as plan_space_regions
 
 
+def _overlay_runtime_api(session):
+    overlays = getattr(session, "overlays", None)
+    return getattr(overlays, "runtime", overlays)
+
+
 class _SessionAPI:
     __slots__ = ("_session",)
 
@@ -390,7 +395,7 @@ class PlanSpacesAPI(_SessionAPI):
 
         selected_region = self.session.selection.state.get_selected_plan_target_object("region")
         if self.refresh_target_document_visual_change("region", selected_region, obj, prop):
-            self.session.overlays.queue_plan_overlay_visual_refresh(
+            _overlay_runtime_api(self.session).queue_plan_overlay_visual_refresh(
                 plan_document_visuals.PLAN_VISUAL_SELECTED_REGION
             )
             self.session.task_panels.refresh_task_panel_status(reason="selection")
@@ -401,13 +406,13 @@ class PlanSpacesAPI(_SessionAPI):
             and not self.session.selection.state.is_selected_plan_target("region", hovered_region)
             and self.refresh_target_document_visual_change("region", hovered_region, obj, prop)
         ):
-            self.session.overlays.queue_plan_overlay_visual_refresh(
+            _overlay_runtime_api(self.session).queue_plan_overlay_visual_refresh(
                 plan_document_visuals.PLAN_VISUAL_HOVERED_REGION
             )
             return True
         selected_space = self.session.selection.state.get_selected_plan_target_object("space")
         if self.refresh_target_document_visual_change("space", selected_space, obj, prop):
-            self.session.overlays.queue_plan_overlay_visual_refresh(
+            _overlay_runtime_api(self.session).queue_plan_overlay_visual_refresh(
                 plan_document_visuals.PLAN_VISUAL_SELECTED_SPACE
             )
             self.session.task_panels.refresh_task_panel_status(reason="selection")
@@ -418,7 +423,7 @@ class PlanSpacesAPI(_SessionAPI):
             and not self.session.selection.state.is_selected_plan_target("space", hovered_space)
             and self.refresh_target_document_visual_change("space", hovered_space, obj, prop)
         ):
-            self.session.overlays.queue_plan_overlay_visual_refresh(
+            _overlay_runtime_api(self.session).queue_plan_overlay_visual_refresh(
                 plan_document_visuals.PLAN_VISUAL_HOVERED_SPACE
             )
             return True
