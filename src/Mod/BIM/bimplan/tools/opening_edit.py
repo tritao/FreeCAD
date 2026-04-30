@@ -676,6 +676,9 @@ class PlanOpeningsAPI(_SessionAPI):
         self.cancel_opening_handle_point_pick()
         return True
 
+    def cancel_active_tool_for_shutdown(self):
+        return self.cancel_active_tool_for_teardown()
+
     def reset_pending_edit_state(self, *args, **kwargs):
         return reset_pending_edit_state(self.session, *args, **kwargs)
 

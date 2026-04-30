@@ -161,7 +161,13 @@ def _cancel_current_tool_for_begin_teardown(session):
 
 
 def _cancel_current_tool_for_shutdown(session):
-    return session.symbols.cancel_active_tool_for_shutdown()
+    return (
+        _provider_point_api(session).cancel_active_tool_for_shutdown()
+        or session.openings.cancel_active_tool_for_shutdown()
+        or session.symbols.cancel_active_tool_for_shutdown()
+        or session.spaces.cancel_active_tool_for_shutdown()
+        or session.windows.cancel_active_tool_for_shutdown()
+    )
 
 
 def _cleanup_begin_teardown(session):
