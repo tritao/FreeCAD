@@ -1279,7 +1279,7 @@ class BimPlanEditGuiSpacesMixin:
         selection_refresh.refresh_primary_selected_plan_target()
         self.assertIs(selection_state.get_selected_target_for_kind("space"), space)
 
-        snapshot = session.providers.get_plan_provider_snapshot()
+        snapshot = session.providers.runtime.get_plan_provider_snapshot()
         conflict_issues = [
             issue
             for issue in tuple(getattr(snapshot, "issues", ()) or ())
@@ -1292,7 +1292,7 @@ class BimPlanEditGuiSpacesMixin:
         self.assertEqual(issue.actions[0].label, "Re-pick room region")
 
         self.assertTrue(
-            session.providers.execute_plan_provider_action(
+            session.providers.runtime.execute_plan_provider_action(
                 issue.provider_id,
                 issue.actions[0].key,
                 transaction_label=getattr(issue.actions[0], "transaction_label", ""),

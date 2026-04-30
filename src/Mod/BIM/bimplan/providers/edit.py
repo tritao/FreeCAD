@@ -38,7 +38,7 @@ class ProviderMoveTool(plan_runtime_tools.PlanToolHandler):
 class PlanProviderEditingAPI:
     """Owned provider edit surface for Plan Edit interaction code."""
 
-    __slots__ = ("_session",)
+    __slots__ = ("_session", "__dict__")
 
     def __init__(self, session):
         self._session = session

@@ -34,7 +34,7 @@ def _provider_runtime_api(session):
 class PlanProviderPickingAPI:
     """Owned provider picking surface for Plan Edit hit testing."""
 
-    __slots__ = ("_session",)
+    __slots__ = ("_session", "__dict__")
 
     def __init__(self, session):
         self._session = session

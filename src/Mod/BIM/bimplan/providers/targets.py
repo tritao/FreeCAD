@@ -135,7 +135,24 @@ def get_plan_provider_target_for_object(session, obj) -> PlanProviderTargetSpec 
     )
     if external_target is not provider_runtime._MISSING:
         return external_target
-    return provider_runtime._get_plan_provider_target_lookup(session).get(object_key)
+    targets_by_object = provider_runtime._get_plan_provider_target_lookup(session)
+    cached_target = targets_by_object.get(object_key)
+    if cached_target is not None:
+        return cached_target
+
+    default_document_name = provider_runtime._get_default_plan_provider_target_document_name(
+        session
+    )
+    for target in tuple(provider_runtime.get_plan_provider_targets(session) or ()):
+        target_key = provider_runtime._make_plan_provider_target_object_key(
+            target.document_name or default_document_name,
+            target.object_name,
+        )
+        if target_key != object_key:
+            continue
+        targets_by_object[object_key] = target
+        return target
+    return None
 
 
 def is_plan_provider_target_object(session, obj) -> bool:

@@ -198,7 +198,7 @@ def handle_provider_point_tool_point(session, point=None, obj=None):
         snap_object=obj,
         snap_info=snap_info,
     )
-    session.providers.execute_plan_provider_action(
+    _provider_runtime_api(session).execute_plan_provider_action(
         getattr(tool, "provider_id", ""),
         getattr(tool, "key", ""),
         transaction_label=getattr(tool, "transaction_label", ""),

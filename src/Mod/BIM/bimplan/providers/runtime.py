@@ -134,7 +134,7 @@ _MISSING = object()
 class PlanProviderRuntimeAPI:
     """Owned provider runtime surface for Plan Edit session services."""
 
-    __slots__ = ("_session",)
+    __slots__ = ("_session", "__dict__")
 
     def __init__(self, session):
         self._session = session
@@ -253,29 +253,6 @@ class PlanProvidersAPI:
     def session(self):
         return self._session
 
-    def get_plan_provider_registry(self):
-        return self.runtime.get_plan_provider_registry()
-
-    def get_plan_provider_overlay_category(self, provider_id):
-        return self.runtime.get_plan_provider_overlay_category(provider_id)
-
-    def discard_runtime_references(self):
-        return self.runtime.discard_runtime_references()
-
-    def execute_plan_provider_action(
-        self,
-        provider_id,
-        action_key,
-        transaction_label="",
-        payload=None,
-    ):
-        return self.runtime.execute_plan_provider_action(
-            provider_id,
-            action_key,
-            transaction_label=transaction_label,
-            payload=payload,
-        )
-
     def get_provider_point_tool_label(self):
         from bimplan.providers import point
 
@@ -322,83 +299,17 @@ class PlanProvidersAPI:
 
         return provider_point.project_provider_point_to_host(point, host_wall)
 
-    def get_selected_provider_edit_handles(self, provider_obj):
-        return self.editing.get_selected_provider_edit_handles(provider_obj)
-
-    def activate_provider_handle(self, provider_obj, handle_index):
-        return self.editing.activate_provider_handle(provider_obj, handle_index)
-
-    def activate_provider_handle_now(self, provider_obj, handle_index):
-        return self.editing.activate_provider_handle_now(provider_obj, handle_index)
-
-    def finish_provider_handle_point_pick(self, point=None, obj=None):
-        return self.editing.finish_provider_handle_point_pick(point=point, obj=obj)
-
-    def cancel_provider_handle_point_pick(self):
-        return self.editing.cancel_provider_handle_point_pick()
-
     def cancel_active_tool_for_finish(self):
         if self.session.current_tool != plan_runtime_tools.PlanTool.MOVE_PROVIDER:
             return False
-        self.cancel_provider_handle_point_pick()
+        self.editing.cancel_provider_handle_point_pick()
         return True
 
     def cancel_active_tool_for_teardown(self):
         if self.session.current_tool != plan_runtime_tools.PlanTool.MOVE_PROVIDER:
             return False
-        self.cancel_provider_handle_point_pick()
+        self.editing.cancel_provider_handle_point_pick()
         return True
-
-    def plan_provider_integrations_disabled(self):
-        return self.runtime.plan_provider_integrations_disabled()
-
-    def normalize_plan_provider_tool(self, provider_id, tool):
-        return self.runtime.normalize_plan_provider_tool(provider_id, tool)
-
-    def get_plan_provider_display_name(self, provider_id):
-        return self.runtime.get_plan_provider_display_name(provider_id)
-
-    def get_plan_provider_tools(self):
-        return self.runtime.get_plan_provider_tools()
-
-    def get_plan_provider_snapshot(self):
-        return self.runtime.get_plan_provider_snapshot()
-
-    def get_plan_provider_overlays(self):
-        return self.runtime.get_plan_provider_overlays()
-
-    def get_plan_provider_overlay_mode(self):
-        return self.runtime.get_plan_provider_overlay_mode()
-
-    def set_plan_provider_overlay_mode(self, mode):
-        return self.runtime.set_plan_provider_overlay_mode(mode)
-
-    def get_plan_provider_targets(self):
-        return self.runtime.get_plan_provider_targets()
-
-    def get_plan_provider_target_for_object(self, obj):
-        return self.runtime.get_plan_provider_target_for_object(obj)
-
-    def is_plan_provider_target_object(self, obj):
-        return self.runtime.is_plan_provider_target_object(obj)
-
-    def is_plan_provider_overlay_enabled(self, overlay):
-        return self.runtime.is_plan_provider_overlay_enabled(overlay)
-
-    def is_plan_provider_overlay_visible(self, overlay):
-        return self.runtime.is_plan_provider_overlay_visible(overlay)
-
-    def set_plan_provider_overlay_visible(self, provider_id, overlay_key, visible):
-        return self.runtime.set_plan_provider_overlay_visible(provider_id, overlay_key, visible)
-
-    def queue_plan_provider_overlay_sync(self):
-        return self.runtime.queue_plan_provider_overlay_sync()
-
-    def plan_provider_refresh_cache_scope(self):
-        return self.runtime.plan_provider_refresh_cache_scope()
-
-    def invalidate_plan_provider_document_cache(self):
-        return self.runtime.invalidate_plan_provider_document_cache()
 
 
 def _is_active_provider_session(session):
@@ -995,5 +906,8 @@ def get_plan_edit_context(session):
 
 
 PlanProvidersAPI.get_plan_provider_overlay_visibility_key = staticmethod(
+    get_plan_provider_overlay_visibility_key
+)
+PlanProviderRuntimeAPI.get_plan_provider_overlay_visibility_key = staticmethod(
     get_plan_provider_overlay_visibility_key
 )
