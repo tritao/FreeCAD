@@ -987,7 +987,7 @@ class BimPlanEditGuiOpeningsMixin:
 
         overlays = [
             overlay
-            for overlay in session.providers.get_plan_provider_overlays()
+            for overlay in session.providers.runtime.get_plan_provider_overlays()
             if getattr(overlay, "provider_id", "") == "bim-window"
         ]
         self.assertEqual(1, len(overlays))

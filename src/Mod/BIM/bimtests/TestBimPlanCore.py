@@ -495,7 +495,9 @@ class TestBimPlanCore(unittest.TestCase):
             collect_plan_provider_contributions(
                 session,
                 "get_tools",
-                session.providers.normalize_plan_provider_tool,
+                getattr(
+                    session.providers, "runtime", session.providers
+                ).normalize_plan_provider_tool,
             ),
         )
         self.assertEqual(1, provider.calls.count("get_tools"))

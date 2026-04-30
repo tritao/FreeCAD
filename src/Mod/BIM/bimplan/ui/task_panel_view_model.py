@@ -103,6 +103,11 @@ class _TaskPanelProviderReads(_TaskPanelReadsBase):
     def providers(self):
         return self.session.providers
 
+    @property
+    def provider_runtime(self):
+        providers = self.providers
+        return getattr(providers, "runtime", providers)
+
     def get_provider_point_tool_label(self):
         return self.providers.get_provider_point_tool_label()
 
@@ -110,16 +115,16 @@ class _TaskPanelProviderReads(_TaskPanelReadsBase):
         return self.providers.get_provider_point_tool_prompt()
 
     def get_plan_provider_display_name(self, provider_id):
-        return self.providers.get_plan_provider_display_name(provider_id)
+        return self.provider_runtime.get_plan_provider_display_name(provider_id)
 
     def get_plan_provider_overlay_category(self, overlay):
-        return self.providers.get_plan_provider_overlay_category(overlay)
+        return self.provider_runtime.get_plan_provider_overlay_category(overlay)
 
     def is_plan_provider_overlay_enabled(self, overlay):
-        return bool(self.providers.is_plan_provider_overlay_enabled(overlay))
+        return bool(self.provider_runtime.is_plan_provider_overlay_enabled(overlay))
 
     def get_plan_provider_overlay_mode(self):
-        return str(self.providers.get_plan_provider_overlay_mode() or "architecture")
+        return str(self.provider_runtime.get_plan_provider_overlay_mode() or "architecture")
 
 
 class _TaskPanelStatusReads(_TaskPanelReadsBase):

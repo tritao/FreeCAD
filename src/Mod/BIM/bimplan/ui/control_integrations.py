@@ -570,7 +570,9 @@ class PlanEditIntegrationPanelMixin:
         return block
 
     def _make_summary_section_block(self, QtGui, section):
-        provider_label = self.session.providers.get_plan_provider_display_name(section.provider_id)
+        provider_label = _provider_runtime_api(self.session).get_plan_provider_display_name(
+            section.provider_id
+        )
         parsed = self._parse_workflow_summary_body(getattr(section, "body", ""))
         if parsed is None:
             return self._make_integration_block(
@@ -651,7 +653,9 @@ class PlanEditIntegrationPanelMixin:
             issue_title = str(getattr(issue, "title", "") or "").strip()
             if issue_title:
                 return issue_title
-        provider_label = self.session.providers.get_plan_provider_display_name(issue.provider_id)
+        provider_label = _provider_runtime_api(self.session).get_plan_provider_display_name(
+            issue.provider_id
+        )
         return self._format_provider_issue_heading(
             provider_label,
             getattr(issue, "severity", ""),
@@ -704,7 +708,7 @@ class PlanEditIntegrationPanelMixin:
         seen = set()
         for issue in tuple(issues or ()):
             label = str(
-                self.session.providers.get_plan_provider_display_name(
+                _provider_runtime_api(self.session).get_plan_provider_display_name(
                     getattr(issue, "provider_id", "")
                 )
                 or ""
@@ -822,7 +826,9 @@ class PlanEditIntegrationPanelMixin:
         )
 
     def _format_provider_section_title(self, section):
-        provider_label = self.session.providers.get_plan_provider_display_name(section.provider_id)
+        provider_label = _provider_runtime_api(self.session).get_plan_provider_display_name(
+            section.provider_id
+        )
         title = str(getattr(section, "title", "") or "").strip()
         if not title:
             return provider_label
@@ -1360,14 +1366,18 @@ class PlanEditIntegrationPanelMixin:
         ):
             self.session.providers.start_plan_provider_point_tool(action)
             return
-        self.session.providers.execute_plan_provider_action(
+        _provider_runtime_api(self.session).execute_plan_provider_action(
             getattr(action, "provider_id", ""),
             getattr(action, "key", ""),
             transaction_label=getattr(action, "transaction_label", ""),
         )
 
     def on_provider_overlay_visibility_changed(self, provider_id, overlay_key, visible):
-        self.session.providers.set_plan_provider_overlay_visible(provider_id, overlay_key, visible)
+        _provider_runtime_api(self.session).set_plan_provider_overlay_visible(
+            provider_id,
+            overlay_key,
+            visible,
+        )
 
     def on_provider_overlay_mode_changed(self, mode):
         _provider_runtime_api(self.session).set_plan_provider_overlay_mode(mode)

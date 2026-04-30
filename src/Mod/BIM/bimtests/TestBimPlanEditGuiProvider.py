@@ -58,7 +58,7 @@ class BimPlanEditGuiProviderMixin:
             if "Provider Preview" in str(widget.text())
         ]
         self.assertEqual(1, len(overlay_checkboxes))
-        overlay_key = session.providers.get_plan_provider_overlay_visibility_key(
+        overlay_key = session.providers.runtime.get_plan_provider_overlay_visibility_key(
             "test-plan-provider",
             "provider-preview",
         )
@@ -121,7 +121,7 @@ class BimPlanEditGuiProviderMixin:
         panel.refresh_from_session()
         self.pump_gui_events()
 
-        self.assertEqual("architecture", session.providers.get_plan_provider_overlay_mode())
+        self.assertEqual("architecture", session.providers.runtime.get_plan_provider_overlay_mode())
 
         architecture_checkboxes = [
             widget
@@ -142,7 +142,7 @@ class BimPlanEditGuiProviderMixin:
         overlay_mode_combo.setCurrentIndex(overlay_mode_combo.findData("electrical"))
         self.pump_gui_events()
 
-        self.assertEqual("electrical", session.providers.get_plan_provider_overlay_mode())
+        self.assertEqual("electrical", session.providers.runtime.get_plan_provider_overlay_mode())
         electrical_checkboxes = [
             widget
             for widget in panel.integration_panel.findChildren(QtGui.QCheckBox)
@@ -159,7 +159,7 @@ class BimPlanEditGuiProviderMixin:
         overlay_mode_combo.setCurrentIndex(overlay_mode_combo.findData("all"))
         self.pump_gui_events()
 
-        self.assertEqual("all", session.providers.get_plan_provider_overlay_mode())
+        self.assertEqual("all", session.providers.runtime.get_plan_provider_overlay_mode())
         all_mode_checkboxes = [
             widget
             for widget in panel.integration_panel.findChildren(QtGui.QCheckBox)
@@ -201,7 +201,7 @@ class BimPlanEditGuiProviderMixin:
             self.assertEqual(0, provider.overlay_calls)
             self.assertTrue(panel.integration_panel.isHidden())
             self.assertFalse(
-                session.providers.execute_plan_provider_action(
+                session.providers.runtime.execute_plan_provider_action(
                     "test-plan-provider", "apply-provider-fix"
                 )
             )
@@ -224,7 +224,7 @@ class BimPlanEditGuiProviderMixin:
         session.doc = _DeletedDocument()
 
         try:
-            self.assertEqual((), session.providers.get_plan_provider_tools())
+            self.assertEqual((), session.providers.runtime.get_plan_provider_tools())
             self.assertIsNone(session.doc)
             self.assertEqual(0, provider.tool_calls)
         finally:
@@ -292,7 +292,7 @@ class BimPlanEditGuiProviderMixin:
                 create=True,
             ),
             patch.object(
-                session.providers,
+                session.providers.runtime,
                 "execute_plan_provider_action",
                 side_effect=_capture_action,
             ),
@@ -375,7 +375,9 @@ class BimPlanEditGuiProviderMixin:
             patch.object(FreeCADGui.Snapper, "getPoint"),
             patch.object(FreeCADGui.Snapper, "snapInfo", {}, create=True),
             patch.object(
-                session.providers, "execute_plan_provider_action", side_effect=_capture_action
+                session.providers.runtime,
+                "execute_plan_provider_action",
+                side_effect=_capture_action,
             ),
         ):
             self.assertTrue(
@@ -668,7 +670,7 @@ class BimPlanEditGuiProviderMixin:
             session.view = FakeView()
             with (
                 patch.object(
-                    session.providers,
+                    session.providers.runtime,
                     "get_plan_provider_overlays",
                     return_value=(
                         PlanOverlaySpec(
@@ -684,7 +686,7 @@ class BimPlanEditGuiProviderMixin:
                     ),
                 ),
                 patch.object(
-                    session.providers,
+                    session.providers.runtime,
                     "is_plan_provider_overlay_visible",
                     return_value=True,
                 ),
@@ -715,9 +717,8 @@ class BimPlanEditGuiProviderMixin:
         )
         event = self._make_fake_left_mouse_press()
 
-        with patch.object(
-            session.providers,
-            "get_plan_provider_targets",
+        with patch(
+            "bimplan.providers.runtime.get_plan_provider_targets",
             return_value=(
                 PlanProviderTargetSpec(
                     key="electrical-fixture:{}:{}".format(self.document.Name, marker.Name),
