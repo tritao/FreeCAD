@@ -466,8 +466,7 @@ def _finalize_wall_edit_commit(session, wall):
     session.lifecycle.cancel_pending_edit()
     session.selection.state.set_selected_plan_target("wall", wall, pending_restore=True)
     session.wall_relations.update_wall_relation_status(wall)
-    session.overlays.walls.sync_selected_wall_overlay()
-    session.overlays.walls.sync_wall_grips()
+    session.selection.refresh.restore_selected_wall_visuals()
     session.task_panels.refresh_task_panel_status()
 
 
