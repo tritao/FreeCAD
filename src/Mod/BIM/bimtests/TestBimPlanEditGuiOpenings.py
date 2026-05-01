@@ -274,6 +274,46 @@ class BimPlanEditGuiOpeningsMixin:
         self.assertAlmostEqual(abs(sketch_x_axis.x), 0.0, delta=1e-6)
         self.assertAlmostEqual(abs(sketch_x_axis.y), 1.0, delta=1e-6)
 
+    def test_plan_edit_cancel_window_tool_restores_selected_wall_visuals(self):
+        """Canceling the window tool should restore selected-wall visuals and hosted-opening context."""
+
+        wall = Arch.makeWall(length=3000, width=200, height=2500)
+        self.document.recompute()
+        self._make_hosted_door(wall, name="WindowCancelDoor")
+        self.document.recompute()
+
+        session = BimPlanSession.start_session()
+        self.assertIsNotNone(session)
+        self.pump_gui_events()
+
+        with (
+            patch.object(FreeCADGui.Snapper, "getPoint", return_value=None),
+            patch.object(FreeCADGui.Snapper, "setSelectMode", return_value=None),
+        ):
+            self.assertTrue(session.selection.activation.select_wall_for_plan_edit(wall))
+            self.assertGreater(
+                len(session.overlay_tracker_state.selected_wall_opening_context_trackers),
+                0,
+            )
+            self.assertTrue(session.windows.activate_window_tool())
+
+        self.assertEqual("Window", session.current_tool)
+        self.assertEqual(len(session.overlay_tracker_state.wall_overlay_trackers), 0)
+        self.assertEqual(len(session.overlay_tracker_state.grip_trackers), 0)
+        self.assertEqual(
+            len(session.overlay_tracker_state.selected_wall_opening_context_trackers),
+            0,
+        )
+
+        self.assertTrue(session.windows.cancel_window_tool())
+
+        self.assertEqual("Select", session.current_tool)
+        self._assert_selected_wall_visuals(session, wall)
+        self.assertGreater(
+            len(session.overlay_tracker_state.selected_wall_opening_context_trackers),
+            0,
+        )
+
     def test_plan_edit_shutdown_cancels_active_window_tool(self):
         level = Arch.makeFloor(name="Level 0")
         wall = Arch.makeWall(length=3000, width=200, height=2500)
