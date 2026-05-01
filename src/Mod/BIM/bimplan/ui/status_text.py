@@ -97,6 +97,18 @@ class PlanStatusTextAPI:
         del self
         return make_input_hint(label, value, interactive=interactive)
 
+    def get_integration_feedback_context_key(self):
+        return get_integration_feedback_context_key(self.session)
+
+    def get_integration_feedback_message(self):
+        return get_integration_feedback_message(self.session)
+
+    def set_integration_feedback_message(self, message):
+        return set_integration_feedback_message(self.session, message)
+
+    def clear_integration_feedback_message(self):
+        return clear_integration_feedback_message(self.session)
+
 
 def get_plan_selection_summary_text(session):
     if session.current_tool != plan_runtime_tools.PlanTool.SELECT:
@@ -327,6 +339,44 @@ def format_provider_selected_object_help(session):
     )
 
 
+def get_integration_feedback_context_key(session):
+    return (
+        str(session.current_tool or ""),
+        session.selection.state.get_selected_plan_target(),
+        get_provider_selected_objects(session),
+    )
+
+
+def clear_integration_feedback_message(session):
+    task_panel_state = session.task_panel_state
+    task_panel_state.integration_status_message = None
+    task_panel_state.integration_status_context_key = None
+
+
+def set_integration_feedback_message(session, message):
+    normalized = str(message or "").strip()
+    if not normalized:
+        clear_integration_feedback_message(session)
+        return ""
+    task_panel_state = session.task_panel_state
+    task_panel_state.integration_status_message = normalized
+    task_panel_state.integration_status_context_key = get_integration_feedback_context_key(session)
+    return normalized
+
+
+def get_integration_feedback_message(session):
+    task_panel_state = session.task_panel_state
+    message = str(task_panel_state.integration_status_message or "").strip()
+    if not message:
+        return ""
+    if task_panel_state.integration_status_context_key != get_integration_feedback_context_key(
+        session
+    ):
+        clear_integration_feedback_message(session)
+        return ""
+    return message
+
+
 def _format_status_chip_title(tool):
     return translate("BIM_PlanEdit", "Plan Edit · {tool}").format(tool=tool)
 
@@ -473,6 +523,9 @@ def _get_default_status_chip_action(
     relation_status_message = session.task_panel_state.relation_status_message
     if relation_status_message:
         action = relation_status_message
+    integration_feedback = get_integration_feedback_message(session)
+    if integration_feedback:
+        action = integration_feedback
     if not action:
         action = translate("BIM_PlanEdit", "Work directly in the viewport")
     return action

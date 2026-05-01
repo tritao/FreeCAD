@@ -22,6 +22,30 @@ def _provider_point_api(session):
     return getattr(providers, "point", providers)
 
 
+def _provider_action_label(action):
+    label = str(getattr(action, "label", "") or "").strip()
+    if label:
+        return label
+    key = str(getattr(action, "key", "") or "").strip()
+    if key:
+        return key
+    return translate("BIM_PlanEdit", "integration action")
+
+
+def _format_provider_action_failure_message(action):
+    return translate(
+        "BIM_PlanEdit",
+        "Could not run '{label}'. Review the integration context and try again.",
+    ).format(label=_provider_action_label(action))
+
+
+def _format_provider_point_tool_failure_message(action):
+    return translate(
+        "BIM_PlanEdit",
+        "Could not start '{label}'. Review the integration context and try again.",
+    ).format(label=_provider_action_label(action))
+
+
 def _run_queued_integration_panel_refresh(panel_ref, generation):
     panel = panel_ref()
     if panel is not None:
@@ -1365,17 +1389,27 @@ class PlanEditIntegrationPanelMixin:
     def on_provider_action_clicked(self, action):
         if action is None:
             return
+        self.session.status_text.clear_integration_feedback_message()
         if (
             getattr(action, "interaction", PlanToolInteraction.IMMEDIATE)
             == PlanToolInteraction.POINT
         ):
-            _provider_point_api(self.session).start_plan_provider_point_tool(action)
+            if not _provider_point_api(self.session).start_plan_provider_point_tool(action):
+                self.session.status_text.set_integration_feedback_message(
+                    _format_provider_point_tool_failure_message(action)
+                )
+                self.session.task_panels.refresh_task_panel_status()
             return
-        _provider_runtime_api(self.session).execute_plan_provider_action(
+        handled = _provider_runtime_api(self.session).execute_plan_provider_action(
             getattr(action, "provider_id", ""),
             getattr(action, "key", ""),
             transaction_label=getattr(action, "transaction_label", ""),
         )
+        if not handled:
+            self.session.status_text.set_integration_feedback_message(
+                _format_provider_action_failure_message(action)
+            )
+            self.session.task_panels.refresh_task_panel_status()
 
     def on_provider_overlay_visibility_changed(self, provider_id, overlay_key, visible):
         _provider_runtime_api(self.session).set_plan_provider_overlay_visible(

@@ -163,6 +163,13 @@ class _TaskPanelStatusReads(_TaskPanelReadsBase):
     def get_plan_selection_summary_text(self):
         return self.status_text.get_plan_selection_summary_text()
 
+    def get_integration_feedback_message(self):
+        reader = getattr(self.status_text, "get_integration_feedback_message", None)
+        if reader is None:
+            return ""
+        value = reader()
+        return str(value or "").strip()
+
 
 class _TaskPanelRelationReads(_TaskPanelReadsBase):
     __slots__ = ()
@@ -975,6 +982,9 @@ def _apply_status_text_view_suffixes(context, tool, selection_help):
     relation_status = context.wall_relations.get_plan_relation_status_message()
     if relation_status:
         selection_help = _append_status_help_line(selection_help, relation_status)
+    integration_feedback = context.status_text.get_integration_feedback_message()
+    if integration_feedback:
+        selection_help = _append_status_help_line(selection_help, integration_feedback)
     return selection_help
 
 
