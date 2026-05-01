@@ -493,24 +493,31 @@ class PlanEditControlsShellMixin:
         with self.session.performance.plan_perf_trace_span("refresh_task_panel_selection_widget"):
             if self.form is None or self.status is None or self.exit_button is None:
                 return
-            selected_kind, _selected_obj = self.session.selection.state.get_selected_plan_target()
-            if self.session.current_tool != "Select" or selected_kind != "wall":
-                self.refresh_from_session(defer_integrations=True)
-                return
-            self._set_status_text(
-                plan_task_panel_view_model.build_status_text_view_model(self.session).text
-            )
-            self._refresh_action_context()
-            if self._should_refresh_integration_panel_for_selection(selected_kind):
-                self._refresh_integration_panel(defer=True)
-            else:
-                self._reconcile_integration_panel_for_non_provider_wall_selection()
-            self._hide_space_editor()
-            self._hide_region_editor()
-            self._hide_window_editor()
-            self._apply_modal_interaction_state(
-                self.session.interaction.is_modal_plan_interaction_active()
-            )
+            self._set_widget_updates_enabled(self.form, False)
+            try:
+                selected_kind, _selected_obj = (
+                    self.session.selection.state.get_selected_plan_target()
+                )
+                if self.session.current_tool != "Select" or selected_kind != "wall":
+                    self.refresh_from_session(defer_integrations=True)
+                    return
+                self._set_status_text(
+                    plan_task_panel_view_model.build_status_text_view_model(self.session).text
+                )
+                self._refresh_action_context()
+                if self._should_refresh_integration_panel_for_selection(selected_kind):
+                    self._refresh_integration_panel(defer=True)
+                else:
+                    self._reconcile_integration_panel_for_non_provider_wall_selection()
+                self._hide_space_editor()
+                self._hide_region_editor()
+                self._hide_window_editor()
+                self._apply_modal_interaction_state(
+                    self.session.interaction.is_modal_plan_interaction_active()
+                )
+            finally:
+                self._set_widget_updates_enabled(self.form, True)
+                self._refresh_widget_geometry(self.form)
 
     def refresh_provider_overlay_mode_from_session(self):
         with self.session.performance.plan_perf_trace_span(

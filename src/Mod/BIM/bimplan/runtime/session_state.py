@@ -221,6 +221,7 @@ class PlanWallGripState:
 @dataclass
 class PlanViewportState:
     status_chip: object = None
+    status_chip_refresh_queued: bool = False
     render_manager: object = None
     plan_paper_rgb: object = None
     plan_view_locked_actions: object = None

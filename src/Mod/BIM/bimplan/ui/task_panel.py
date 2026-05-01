@@ -58,6 +58,8 @@ class _PlanEditViewportStatusChip:
                 super().__init__(parent_widget)
                 self.session = plan_session
                 self.host_widget = parent_widget
+                self._title_text = None
+                self._body_text = None
                 self.setObjectName("BIMPlanEditViewportStatusChip")
                 self.setAttribute(QtCore.Qt.WA_TransparentForMouseEvents, True)
                 self.setFocusPolicy(QtCore.Qt.NoFocus)
@@ -97,12 +99,21 @@ class _PlanEditViewportStatusChip:
                     pass
 
             def set_texts(self, title, body):
-                self.title_label.setText(title)
-                self.body_label.setText(body)
-                self.adjustSize()
-                self._reposition()
-                self.show()
-                self.raise_()
+                title = str(title or "")
+                body = str(body or "")
+                text_changed = title != self._title_text or body != self._body_text
+                if title != self._title_text:
+                    self.title_label.setText(title)
+                    self._title_text = title
+                if body != self._body_text:
+                    self.body_label.setText(body)
+                    self._body_text = body
+                if text_changed:
+                    self.adjustSize()
+                    self._reposition()
+                if not self.isVisible():
+                    self.show()
+                    self.raise_()
 
             def _reposition(self):
                 host = self.host_widget
@@ -251,13 +262,24 @@ def _refresh_task_panels(session, reason):
     if session.lifecycle_state.tearing_down or not session.document_visuals.document_is_alive():
         return
     if reason != TASK_PANEL_REFRESH_PROVIDER_OVERLAY_MODE:
-        session.selection.refresh.sanitize_plan_target_references()
-        session.status_text.update_input_hints()
-        session.viewport.refresh_viewport_status_chip()
+        with session.performance.plan_perf_trace_span("sanitize_plan_target_references"):
+            session.selection.refresh.sanitize_plan_target_references()
+        with session.performance.plan_perf_trace_span("update_input_hints"):
+            session.status_text.update_input_hints()
+        with session.performance.plan_perf_trace_span("refresh_viewport_status_chip"):
+            if reason == TASK_PANEL_REFRESH_SELECTION:
+                refresh = getattr(session.viewport, "schedule_viewport_status_chip_refresh", None)
+                if callable(refresh):
+                    refresh()
+                else:
+                    session.viewport.refresh_viewport_status_chip()
+            else:
+                session.viewport.refresh_viewport_status_chip()
     panel = session.task_panel
     if panel:
         try:
-            _refresh_task_panel_instance(panel, reason)
+            with session.performance.plan_perf_trace_span("refresh_primary_task_panel_instance"):
+                _refresh_task_panel_instance(panel, reason)
         except (AttributeError, RuntimeError):
             session.task_panels.on_panel_closed(panel)
     stale_panels = []
@@ -265,7 +287,8 @@ def _refresh_task_panels(session, reason):
         if extra_panel is panel:
             continue
         try:
-            _refresh_task_panel_instance(extra_panel, reason)
+            with session.performance.plan_perf_trace_span("refresh_aux_task_panel_instance"):
+                _refresh_task_panel_instance(extra_panel, reason)
         except (AttributeError, RuntimeError):
             stale_panels.append(extra_panel)
     for extra_panel in stale_panels:
