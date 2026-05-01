@@ -86,6 +86,7 @@
 #include "SoFCUnifiedSelection.h"
 #include "Application.h"
 #include "Document.h"
+#include "MDIView.h"
 #include "DocumentObserver.h"
 #include "MainWindow.h"
 #include "SoFCInteractiveElement.h"
@@ -294,7 +295,7 @@ std::size_t choosePrimaryPreferredPick(const std::vector<Candidate>& picked)
 
 bool canFinalizeSinglePick(const std::vector<Candidate>& picked)
 {
-    return !shouldExpandPickRadius(picked);
+    return !shouldExpandPickRadius(picked) && !shouldContinueForSelectionAffinity(picked);
 }
 
 bool shouldExpandPickRadius(const std::vector<Candidate>& picked)
@@ -347,6 +348,27 @@ std::optional<std::size_t> chooseAllowedFallbackPick(const std::vector<Candidate
     return preferred;
 }
 
+bool shouldContinueForSelectionAffinity(const std::vector<Candidate>& picked)
+{
+    bool foundSelectionAffinity = false;
+    bool foundSelectionGate = false;
+
+    for (const auto& info : picked) {
+        if (info.hasGate) {
+            foundSelectionGate = true;
+        }
+        if (!info.hasSelectionAffinity) {
+            continue;
+        }
+        foundSelectionAffinity = true;
+        if (info.selectionAffinity > 0) {
+            return false;
+        }
+    }
+
+    return foundSelectionAffinity && !foundSelectionGate;
+}
+
 std::size_t choosePreferredPick(const std::vector<Candidate>& picked)
 {
     if (picked.empty()) {
@@ -357,6 +379,41 @@ std::size_t choosePreferredPick(const std::vector<Candidate>& picked)
     if (!picked[preferred].passesGate) {
         if (auto fallback = chooseAllowedFallbackPick(picked)) {
             preferred = *fallback;
+        }
+    }
+
+    bool foundSelectionGate = false;
+    bool foundSelectionAffinity = false;
+    for (const auto& info : picked) {
+        foundSelectionGate = foundSelectionGate || info.hasGate;
+        foundSelectionAffinity = foundSelectionAffinity || info.hasSelectionAffinity;
+    }
+
+    if (!foundSelectionGate && foundSelectionAffinity) {
+        std::size_t affinityPreferred = picked.size();
+        int bestAffinity = picked[preferred].selectionAffinity;
+        for (std::size_t i = 0; i < picked.size(); ++i) {
+            if (picked[i].selectionAffinity > bestAffinity) {
+                affinityPreferred = i;
+                bestAffinity = picked[i].selectionAffinity;
+            }
+        }
+
+        if (affinityPreferred != picked.size()) {
+            preferred = affinityPreferred;
+            const void* preferredOwner = picked[preferred].owner;
+            for (std::size_t i = preferred + 1; i < picked.size(); ++i) {
+                const auto& info = picked[i];
+                if (info.owner != preferredOwner) {
+                    break;
+                }
+                if (!info.closeToFirst) {
+                    continue;
+                }
+                if (chooseHigherPriorityPick(info, picked[preferred])) {
+                    preferred = i;
+                }
+            }
         }
     }
 
@@ -549,6 +606,20 @@ bool SoFCUnifiedSelection::hasSelectionGate(const PickedInfo& info)
     return Selection().hasSelectionGate(obj->getDocument());
 }
 
+int SoFCUnifiedSelection::getSelectionAffinity(const PickedInfo& info, const Document* doc)
+{
+    if (!doc || !info.vpd) {
+        return 0;
+    }
+
+    auto* activeView = doc->getActiveView();
+    if (!activeView) {
+        return 0;
+    }
+
+    return info.vpd->getSelectionAffinity(activeView, info.element.c_str());
+}
+
 SelectionPickPolicy::Candidate SoFCUnifiedSelection::getPickCandidate(
     const PickedInfo& info,
     const Document* doc,
@@ -562,6 +633,9 @@ SelectionPickPolicy::Candidate SoFCUnifiedSelection::getPickCandidate(
     candidate.isAnnotation = doc && info.pp && isAnnotationPick(info.pp, doc);
     candidate.hasGate = hasSelectionGate(info);
     candidate.passesGate = passesSelectionGate(info);
+    candidate.hasSelectionAffinity = doc && doc->getActiveView()
+        && doc->getActiveView()->hasSelectionAffinity();
+    candidate.selectionAffinity = getSelectionAffinity(info, doc);
 
     if (firstPicked && info.pp && firstPicked->pp) {
         candidate.closeToFirst = info.pp->getPoint().equals(firstPicked->pp->getPoint(), 0.2F);
@@ -589,9 +663,9 @@ std::vector<SelectionPickPolicy::Candidate> SoFCUnifiedSelection::getPickCandida
     return candidates;
 }
 
-bool SoFCUnifiedSelection::canFinalizeSinglePick(const std::vector<PickedInfo>& picked)
+bool SoFCUnifiedSelection::canFinalizeSinglePick(const std::vector<PickedInfo>& picked) const
 {
-    return SelectionPickPolicy::canFinalizeSinglePick(getPickCandidates(picked, nullptr));
+    return SelectionPickPolicy::canFinalizeSinglePick(getPickCandidates(picked, this->pcDocument));
 }
 
 std::vector<SoFCUnifiedSelection::PickedInfo> SoFCUnifiedSelection::collectPickedList(

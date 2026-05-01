@@ -96,6 +96,7 @@
 #include "Placement.h"
 #include "SoFCDB.h"
 #include "Selection.h"
+#include "SelectionAffinity.h"
 #include "SelectionFilterPy.h"
 #include "SoQtOffscreenRendererPy.h"
 #include "SplitView3DInventor.h"
@@ -251,6 +252,7 @@ struct ApplicationP
     /// Active document
     Gui::Document* activeDocument {nullptr};
     std::vector<Gui::Document*> editDocuments;
+    std::vector<Application::SelectionAffinityProviderFactory> selectionAffinityProviderFactories;
 
     MacroManager* macroMngr;
     PreferencePackManager* prefPackManager;
@@ -1743,6 +1745,35 @@ Gui::ViewProvider* Application::getViewProvider(const App::DocumentObject* obj) 
 void Application::attachView(Gui::BaseView* pcView)
 {
     d->passive.push_back(pcView);
+}
+
+void Application::registerSelectionAffinityProviderFactory(SelectionAffinityProviderFactory factory)
+{
+    requireMainThread("Gui::Application::registerSelectionAffinityProviderFactory");
+
+    if (!factory) {
+        return;
+    }
+
+    d->selectionAffinityProviderFactories.push_back(factory);
+
+    for (const auto& [appDoc, guiDoc] : d->documents) {
+        (void)appDoc;
+        for (auto* view : guiDoc->getMDIViews(true)) {
+            view->addSelectionAffinityProvider(factory());
+        }
+    }
+}
+
+void Application::installSelectionAffinityProviders(Gui::MDIView& view) const
+{
+    requireMainThread("Gui::Application::installSelectionAffinityProviders");
+
+    for (const auto& factory : d->selectionAffinityProviderFactories) {
+        if (factory) {
+            view.addSelectionAffinityProvider(factory());
+        }
+    }
 }
 
 void Application::detachView(Gui::BaseView* pcView)

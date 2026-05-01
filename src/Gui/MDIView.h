@@ -23,7 +23,9 @@
 #pragma once
 
 #include <fastsignals/signal.h>
+#include <memory>
 #include <QMainWindow>
+#include <vector>
 #include <Gui/ActiveObjectList.h>
 #include <Gui/View.h>
 
@@ -36,6 +38,7 @@ namespace Gui
 {
 class Document;
 class MainWindow;
+class SelectionAffinityProvider;
 class ViewProvider;
 class ViewProviderDocumentObject;
 
@@ -163,6 +166,9 @@ public:
     {
         return ActiveObjects.getObjectWithExtension(extensionTypeId);
     }
+    void addSelectionAffinityProvider(std::unique_ptr<SelectionAffinityProvider>);
+    bool hasSelectionAffinity() const;
+    int getSelectionAffinity(const ViewProviderDocumentObject&, const char* subname = nullptr) const;
 
     /*!
      * \brief containsViewProvider
@@ -206,6 +212,7 @@ private:
     Qt::WindowStates wstate;
     // list of active objects of this view
     ActiveObjectList ActiveObjects;
+    std::vector<std::unique_ptr<SelectionAffinityProvider>> selectionAffinityProviders;
     using Connection = fastsignals::connection;
     Connection connectDelObject;  // remove active object upon delete.
 

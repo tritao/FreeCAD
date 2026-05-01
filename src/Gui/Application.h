@@ -24,6 +24,8 @@
 #pragma once
 
 #include <QPixmap>
+#include <functional>
+#include <memory>
 #include <map>
 #include <string>
 
@@ -48,6 +50,7 @@ class MDIView;
 class MainWindow;
 class MenuItem;
 class PreferencePackManager;
+class SelectionAffinityProvider;
 class ViewProvider;
 class ViewProviderDocumentObject;
 
@@ -58,6 +61,9 @@ class ViewProviderDocumentObject;
 class GuiExport Application
 {
 public:
+    using SelectionAffinityProviderFactory
+        = std::function<std::unique_ptr<SelectionAffinityProvider>()>;
+
     enum Status
     {
         UserInitiatedOpenDocument = 0
@@ -114,6 +120,8 @@ public:
     void updateActive();
     /// call update to all command actions
     void updateActions(bool delay = false);
+    void registerSelectionAffinityProviderFactory(SelectionAffinityProviderFactory);
+    void installSelectionAffinityProviders(Gui::MDIView&) const;
     //@}
 
     /** @name Signals of the Application */

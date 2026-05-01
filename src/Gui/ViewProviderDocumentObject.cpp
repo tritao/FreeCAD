@@ -807,3 +807,12 @@ std::string ViewProviderDocumentObject::getFullName() const
     }
     return std::string("?");
 }
+
+int ViewProviderDocumentObject::getSelectionAffinity(const Gui::MDIView* view, const char* subname) const
+{
+    if (!view || !pcObject) {
+        return 0;
+    }
+
+    return view->getSelectionAffinity(*this, subname);
+}

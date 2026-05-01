@@ -66,11 +66,14 @@ struct Candidate
     bool passesGate {false};
     // Used only when resolving a blocked-pick fallback.
     float cursorDistanceSquared {std::numeric_limits<float>::infinity()};
+    bool hasSelectionAffinity {false};
+    int selectionAffinity {0};
 };
 
 GuiExport bool canFinalizeSinglePick(const std::vector<Candidate>& picked);
 GuiExport bool shouldExpandPickRadius(const std::vector<Candidate>& picked);
 GuiExport std::optional<std::size_t> chooseAllowedFallbackPick(const std::vector<Candidate>& picked);
+GuiExport bool shouldContinueForSelectionAffinity(const std::vector<Candidate>& picked);
 GuiExport std::size_t choosePreferredPick(const std::vector<Candidate>& picked);
 
 }  // namespace SelectionPickPolicy
@@ -142,6 +145,7 @@ private:
 
     static bool passesSelectionGate(const PickedInfo&);
     static bool hasSelectionGate(const PickedInfo&);
+    static int getSelectionAffinity(const PickedInfo&, const Document*);
     static SelectionPickPolicy::Candidate getPickCandidate(
         const PickedInfo&,
         const Document*,
@@ -153,7 +157,7 @@ private:
         const Document*,
         const SbVec2f* cursorPosition = nullptr
     );
-    static bool canFinalizeSinglePick(const std::vector<PickedInfo>&);
+    bool canFinalizeSinglePick(const std::vector<PickedInfo>&) const;
 
     bool setPreselect(const PickedInfo&);
     bool setPreselect(

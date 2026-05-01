@@ -344,7 +344,9 @@ Gui::SelectionPickPolicy::Candidate pickCandidate(
     bool closeToFirst,
     bool hasGate,
     bool passesGate,
-    float cursorDistanceSquared = std::numeric_limits<float>::infinity()
+    float cursorDistanceSquared = std::numeric_limits<float>::infinity(),
+    bool hasSelectionAffinity = false,
+    int selectionAffinity = 0
 )
 {
     Gui::SelectionPickPolicy::Candidate candidate;
@@ -354,6 +356,8 @@ Gui::SelectionPickPolicy::Candidate pickCandidate(
     candidate.hasGate = hasGate;
     candidate.passesGate = passesGate;
     candidate.cursorDistanceSquared = cursorDistanceSquared;
+    candidate.hasSelectionAffinity = hasSelectionAffinity;
+    candidate.selectionAffinity = selectionAffinity;
     return candidate;
 }
 
@@ -686,6 +690,28 @@ TEST(SelectionPickPolicyTest, doesNotExpandPickRadiusWhenNoGateIsInstalled)
     EXPECT_FALSE(Gui::SelectionPickPolicy::shouldExpandPickRadius(candidates));
 }
 
+TEST(SelectionPickPolicyTest, continuesSinglePickWhenSelectionAffinityExistsButCurrentCandidatesMissIt)
+{
+    int owner {};
+    std::vector<Gui::SelectionPickPolicy::Candidate> candidates {
+        pickCandidate(&owner, 0, true, false, true, std::numeric_limits<float>::infinity(), true, 0),
+    };
+
+    EXPECT_TRUE(Gui::SelectionPickPolicy::shouldContinueForSelectionAffinity(candidates));
+    EXPECT_FALSE(Gui::SelectionPickPolicy::canFinalizeSinglePick(candidates));
+}
+
+TEST(SelectionPickPolicyTest, finalizesSinglePickWhenCurrentCandidatesMatchSelectionAffinity)
+{
+    int owner {};
+    std::vector<Gui::SelectionPickPolicy::Candidate> candidates {
+        pickCandidate(&owner, 0, true, false, true, std::numeric_limits<float>::infinity(), true, 1),
+    };
+
+    EXPECT_FALSE(Gui::SelectionPickPolicy::shouldContinueForSelectionAffinity(candidates));
+    EXPECT_TRUE(Gui::SelectionPickPolicy::canFinalizeSinglePick(candidates));
+}
+
 TEST(SelectionPickPolicyTest, continuesSinglePickWhenGateRejectedAllCurrentCandidates)
 {
     int owner {};
@@ -822,6 +848,18 @@ TEST(SelectionPickPolicyTest, choosesAllowedFallbackCandidateUsingRealPickedPoin
     ASSERT_TRUE(fallback.has_value());
     EXPECT_LT(nearerCandidate.cursorDistanceSquared, fartherCandidate.cursorDistanceSquared);
     EXPECT_EQ(*fallback, 2U);
+}
+
+TEST(SelectionPickPolicyTest, choosesHigherAffinityCandidateWhenNoGateIsInstalled)
+{
+    int firstOwner {};
+    int secondOwner {};
+    std::vector<Gui::SelectionPickPolicy::Candidate> candidates {
+        pickCandidate(&firstOwner, 1, true, false, true, std::numeric_limits<float>::infinity(), true, 0),
+        pickCandidate(&secondOwner, 1, true, false, true, std::numeric_limits<float>::infinity(), true, 1),
+    };
+
+    EXPECT_EQ(Gui::SelectionPickPolicy::choosePreferredPick(candidates), 1U);
 }
 
 TEST(SelectionPickPolicyTest, preservesPriorityChoiceWithinFirstOwner)

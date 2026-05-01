@@ -189,6 +189,7 @@ public:
     ) const;
 
     std::string getFullName() const override;
+    virtual int getSelectionAffinity(const Gui::MDIView*, const char* subname = nullptr) const;
 
     /** Allow this class to be used as an override for the original view provider of the given object
      *

@@ -1245,6 +1245,7 @@ SET(View_HPP_SRCS
     GraphvizView.h
     ImageView.h
     ActiveObjectList.h
+    SelectionAffinity.h
 )
 SET(View_SRCS
     ${View_CPP_SRCS}

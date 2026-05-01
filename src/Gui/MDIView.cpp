@@ -20,6 +20,8 @@
  *                                                                         *
  ***************************************************************************/
 
+#include <algorithm>
+
 #include <fastsignals/signal.h>
 #include <boost/core/ignore_unused.hpp>
 #include <QAction>
@@ -45,6 +47,7 @@
 #include "Document.h"
 #include "FileDialog.h"
 #include "MainWindow.h"
+#include "SelectionAffinity.h"
 #include "ViewProviderDocumentObject.h"
 
 
@@ -71,6 +74,10 @@ MDIView::MDIView(Gui::Document* pcDocument, QWidget* parent, Qt::WindowFlags wfl
         );
         assert(connectDelObject.connected());
         // NOLINTEND
+    }
+
+    if (Application::Instance) {
+        Application::Instance->installSelectionAffinityProviders(*this);
     }
 }
 
@@ -103,6 +110,40 @@ MDIView::~MDIView()
         Py_DECREF(pythonObject);
         pythonObject = nullptr;
     }
+}
+
+void MDIView::addSelectionAffinityProvider(std::unique_ptr<SelectionAffinityProvider> provider)
+{
+    if (!provider) {
+        return;
+    }
+
+    selectionAffinityProviders.push_back(std::move(provider));
+}
+
+bool MDIView::hasSelectionAffinity() const
+{
+    for (const auto& provider : selectionAffinityProviders) {
+        if (provider->hasSelectionAffinity(*this)) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+int MDIView::getSelectionAffinity(const ViewProviderDocumentObject& viewProvider, const char* subname) const
+{
+    int affinity = 0;
+    for (const auto& provider : selectionAffinityProviders) {
+        if (!provider->hasSelectionAffinity(*this)) {
+            continue;
+        }
+
+        affinity = std::max(affinity, provider->getSelectionAffinity(*this, viewProvider, subname));
+    }
+
+    return affinity;
 }
 
 void MDIView::deleteSelf()
