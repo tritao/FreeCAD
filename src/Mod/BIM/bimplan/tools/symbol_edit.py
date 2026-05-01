@@ -8,6 +8,7 @@ import FreeCAD
 import FreeCADGui
 from bimplan.overlays import symbols as symbol_overlays
 from bimplan.runtime import tools as plan_runtime_tools
+from bimplan.transactions import PlanEditTransaction
 
 translate = FreeCAD.Qt.translate
 
@@ -369,27 +370,45 @@ def finish_symbol_handle_point_pick(session, point=None, obj=None):
         session.symbols.restore_selected_symbol(symbol)
         return
 
-    try:
-        session.doc.openTransaction(
-            translate(
-                "BIM_PlanEdit",
-                "Move Symbol" if handle_role == "move" else "Rotate Symbol",
-            )
-        )
-        symbol.Placement = placement
-        session.doc.commitTransaction()
-        session.doc.recompute()
-    except Exception:
-        try:
-            session.doc.abortTransaction()
-        except (ReferenceError, RuntimeError):
-            pass
+    if not _run_symbol_handle_transaction(
+        session,
+        symbol,
+        placement,
+        handle_role,
+    ):
         session.current_tool = "Select"
         session.symbols.restore_selected_symbol(symbol)
         return
 
     session.current_tool = "Select"
     session.symbols.queue_restore_selected_symbol(symbol)
+
+
+def _warn_post_commit_recompute_failure(action_label, exc):
+    message = str(exc or "").strip() or type(exc).__name__
+    FreeCAD.Console.PrintWarning(
+        translate(
+            "BIM_PlanEdit",
+            "Completed {action}, but follow-up recompute failed: {error}\n",
+        ).format(action=action_label, error=message)
+    )
+
+
+def _run_symbol_handle_transaction(session, symbol, placement, handle_role):
+    action_label = translate(
+        "BIM_PlanEdit",
+        "Move Symbol" if handle_role == "move" else "Rotate Symbol",
+    )
+    try:
+        with PlanEditTransaction(session.doc, action_label):
+            symbol.Placement = placement
+    except Exception:
+        return False
+    try:
+        session.doc.recompute()
+    except Exception as exc:
+        _warn_post_commit_recompute_failure(action_label, exc)
+    return True
 
 
 def cancel_symbol_handle_point_pick(session):
