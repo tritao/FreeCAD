@@ -640,6 +640,16 @@ class PlanSelectionRefreshService(_SessionAPI):
         if include_secondary_selection:
             self.session.overlays.spaces.clear_secondary_selected_overlays()
 
+    def restore_selected_wall_visuals(self, *, defer_grips=False):
+        if not self.session.selection.state.is_selected_plan_target("wall"):
+            self.session.overlays.walls.clear_wall_grips()
+            self.session.overlays.walls.clear_selected_wall_overlay()
+            self.session.overlays.openings.clear_selected_wall_opening_context_overlay()
+            return False
+        self.session.overlays.walls.apply_selected_wall_selection_feedback(defer_grips=defer_grips)
+        self.session.overlays.openings.sync_selected_wall_opening_context_overlay()
+        return True
+
     def clear_hidden_provider_preselection(self):
         if self.session.lifecycle_state.tearing_down:
             return False

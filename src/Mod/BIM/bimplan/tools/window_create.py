@@ -415,9 +415,7 @@ def cancel_window_tool(session, refresh=True):
     session.snap.clear_active_draft_command()
     session.current_tool = "Select"
     if refresh:
-        if session.selection.state.is_selected_plan_target("wall"):
-            session.overlays.walls.apply_selected_wall_selection_feedback()
-            session.overlays.openings.sync_selected_wall_opening_context_overlay()
+        session.selection.refresh.restore_selected_wall_visuals()
         session.overlays.spaces.sync_secondary_selected_overlays()
         session.task_panels.refresh_task_panel_status(reason="selection")
     return True
