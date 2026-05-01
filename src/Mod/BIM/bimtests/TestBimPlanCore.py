@@ -4115,3 +4115,57 @@ class TestBimPlanCore(unittest.TestCase):
             self.assertTrue(api.cancel_active_tool_for_shutdown())
 
         self.assertEqual([False], calls)
+
+    def test_cancel_window_tool_restores_wall_visuals_via_selection_refresh(self):
+        calls = []
+        preview_trackers = [object()]
+        session = SimpleNamespace(
+            current_tool=plan_runtime_tools.PlanTool.WINDOW,
+            snap=SimpleNamespace(
+                stop_snapper=lambda: calls.append("stop-snapper"),
+                clear_active_draft_command=lambda: calls.append("clear-active-draft-command"),
+            ),
+            creation_preview_state=SimpleNamespace(
+                window_host_wall=object(),
+                window_preview_trackers=preview_trackers,
+            ),
+            overlays=SimpleNamespace(
+                manager=SimpleNamespace(
+                    finalize_trackers=lambda trackers: calls.append(("finalize-trackers", trackers))
+                ),
+                spaces=SimpleNamespace(
+                    sync_secondary_selected_overlays=lambda: calls.append(
+                        "sync-secondary-selected-overlays"
+                    )
+                ),
+            ),
+            selection=SimpleNamespace(
+                refresh=SimpleNamespace(
+                    restore_selected_wall_visuals=lambda *args, **kwargs: calls.append(
+                        ("restore-selected-wall-visuals", args, kwargs)
+                    )
+                )
+            ),
+            task_panels=SimpleNamespace(
+                refresh_task_panel_status=lambda *args, **kwargs: calls.append(
+                    ("refresh-task-panel-status", args, kwargs)
+                )
+            ),
+        )
+
+        self.assertTrue(plan_window_create_module.cancel_window_tool(session))
+
+        self.assertEqual("Select", session.current_tool)
+        self.assertIsNone(session.creation_preview_state.window_host_wall)
+        self.assertEqual([], session.creation_preview_state.window_preview_trackers)
+        self.assertEqual(
+            [
+                "stop-snapper",
+                ("finalize-trackers", preview_trackers),
+                "clear-active-draft-command",
+                ("restore-selected-wall-visuals", (), {}),
+                "sync-secondary-selected-overlays",
+                ("refresh-task-panel-status", (), {"reason": "selection"}),
+            ],
+            calls,
+        )
