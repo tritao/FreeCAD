@@ -97,11 +97,6 @@ def _wall_grip_runtime_state(session):
     return session.wall_grip_state
 
 
-def _get_proxy_method(proxy, method_name):
-    method = getattr(proxy, method_name, None)
-    return method if callable(method) else None
-
-
 def _set_selnode_value(selnode, attr_name, value):
     attr = getattr(selnode, attr_name, None)
     setter = getattr(attr, "setValue", None)
@@ -147,24 +142,8 @@ def sync_wall_grips(session):
                 return
 
         wall = session.selection.state.get_selected_plan_target_object("wall")
-        proxy = getattr(wall, "Proxy", None)
-        calc_endpoints = _get_proxy_method(proxy, "calc_endpoints")
-        if calc_endpoints is None:
-            clear_wall_grips(session)
-            return
-
-        with _perf_trace_span(session, "wall_grips_calc_endpoints"):
-            endpoints = calc_endpoints(wall)
-        if len(endpoints) != 2:
-            clear_wall_grips(session)
-            return
-
         with _perf_trace_span(session, "wall_grips_calc_positions"):
-            calc_edit_grip_positions = _get_proxy_method(proxy, "calc_edit_grip_positions")
-            if calc_edit_grip_positions is not None:
-                grip_positions = calc_edit_grip_positions(wall)
-            else:
-                grip_positions = endpoints + [(endpoints[0] + endpoints[1]) * 0.5]
+            grip_positions = overlay_geometry.get_wall_grip_positions(session, wall)
         if len(grip_positions) != 3:
             clear_wall_grips(session)
             return

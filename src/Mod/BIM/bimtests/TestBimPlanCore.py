@@ -5,7 +5,7 @@ import unittest
 import sys
 import weakref
 from types import ModuleType, SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 if "FreeCAD" not in sys.modules:
     try:
@@ -4375,13 +4375,27 @@ class TestBimPlanCore(unittest.TestCase):
                 plan_perf_trace_span=lambda *args, **kwargs: nullcontext(),
                 plan_perf_count=lambda *args, **kwargs: None,
             ),
+            overlay_cache_state=SimpleNamespace(
+                plan_overlay_geometry_cache={
+                    "wall": {},
+                    "opening": {},
+                    "space": {},
+                    "region": {},
+                }
+            ),
+            visibility=SimpleNamespace(
+                get_plan_semantic_object=lambda obj: obj,
+                get_document_object_key=lambda obj: ("Doc", getattr(obj, "Name", None)),
+            ),
             wall_edit=SimpleNamespace(is_selected_wall_endpoint_editable=lambda: True),
             viewport=SimpleNamespace(scaled_marker_size=lambda size: float(size)),
             selection=SimpleNamespace(
+                targets=SimpleNamespace(is_plan_selectable_wall=lambda obj: obj is wall),
                 state=SimpleNamespace(
                     get_selected_plan_target_object=lambda kind: wall if kind == "wall" else None
-                )
+                ),
             ),
+            openings=SimpleNamespace(is_hosted_opening_object=lambda _obj: False),
             overlay_tracker_state=SimpleNamespace(grip_trackers=list(old_trackers)),
             wall_grip_state=SimpleNamespace(
                 sync_queued=False,
@@ -4416,3 +4430,53 @@ class TestBimPlanCore(unittest.TestCase):
             ["Wall001", "Wall001", "Wall001"],
             [tracker.name for tracker in created_trackers],
         )
+
+    def test_get_wall_grip_positions_uses_overlay_geometry_cache(self):
+        wall = SimpleNamespace(
+            Name="Wall001",
+            Document=SimpleNamespace(Name="TestDoc"),
+            Proxy=SimpleNamespace(
+                calc_endpoints=Mock(
+                    return_value=[
+                        FreeCAD.Vector(0, 0, 0),
+                        FreeCAD.Vector(1000, 0, 0),
+                    ]
+                ),
+                calc_edit_grip_positions=Mock(
+                    return_value=[
+                        FreeCAD.Vector(0, 0, 0),
+                        FreeCAD.Vector(1000, 0, 0),
+                        FreeCAD.Vector(500, 0, 0),
+                    ]
+                ),
+            ),
+        )
+        session = SimpleNamespace(
+            performance=_make_perf_stub(),
+            overlay_cache_state=SimpleNamespace(
+                plan_overlay_geometry_cache={
+                    "wall": {},
+                    "opening": {},
+                    "space": {},
+                    "region": {},
+                }
+            ),
+            visibility=SimpleNamespace(
+                get_plan_semantic_object=lambda obj: obj,
+                get_document_object_key=lambda obj: ("Doc", getattr(obj, "Name", None)),
+            ),
+            selection=SimpleNamespace(
+                targets=SimpleNamespace(
+                    is_plan_selectable_wall=lambda obj: obj is wall,
+                    is_plan_space_object=lambda _obj: False,
+                    is_plan_region_object=lambda _obj: False,
+                )
+            ),
+            openings=SimpleNamespace(is_hosted_opening_object=lambda _obj: False),
+        )
+        first = plan_overlay_geometry_module.get_wall_grip_positions(session, wall)
+        second = plan_overlay_geometry_module.get_wall_grip_positions(session, wall)
+
+        self.assertEqual(first, second)
+        wall.Proxy.calc_endpoints.assert_called_once_with(wall)
+        wall.Proxy.calc_edit_grip_positions.assert_called_once_with(wall)
