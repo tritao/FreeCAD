@@ -319,6 +319,7 @@ class PlanOverlayTrackerState:
 class PlanOverlayCacheState:
     plan_overlay_geometry_cache: dict = field(
         default_factory=lambda: {
+            "wall": {},
             "opening": {},
             "space": {},
             "region": {},

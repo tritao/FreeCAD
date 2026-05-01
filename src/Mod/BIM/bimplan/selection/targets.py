@@ -838,6 +838,39 @@ def clear_selected_target_visuals(session, kinds=None, clear_handle_kinds=None):
             _call_methods(session, policy.selected_handle_clearers)
 
 
+def _clear_selected_target_kind_visuals(session, policy, *, trace_name=None):
+    if trace_name:
+        with session.performance.plan_perf_trace_span(trace_name):
+            _call_methods(session, policy.selected_visual_clearers)
+            _call_methods(session, policy.selected_handle_clearers)
+        return
+    _call_methods(session, policy.selected_visual_clearers)
+    _call_methods(session, policy.selected_handle_clearers)
+
+
+def _get_selected_target_visual_clear_trace_name(kind, trace_style=None, trace_prefix=None):
+    if trace_style == "by_method":
+        return "clear_selected_{}_visuals".format(kind)
+    if trace_style == "by_kind" and trace_prefix:
+        return "{}_{}_clear".format(trace_prefix, kind)
+    return None
+
+
+def _should_clear_selected_target_visuals_directly(
+    session,
+    kind,
+    *,
+    previous_kind=None,
+    previous_obj=None,
+    force=False,
+):
+    if force or session.current_tool != "Select":
+        return False
+    if session.selection.state.get_selected_plan_target_object(kind) is not None:
+        return False
+    return session.selection.state.selected_plan_target_changed(previous_kind, previous_obj, kind)
+
+
 def validate_plan_target(session, kind, obj):
     validate = _get_target_kind_policy(kind).validate
     if not validate:
@@ -868,6 +901,23 @@ def sync_selected_target_visuals(
     for kind in kinds or plan_target_kinds.PRIMARY_PLAN_TARGET_KINDS:
         policy = _get_target_kind_policy(kind)
         if not policy.selected_visual_sync:
+            continue
+        if _should_clear_selected_target_visuals_directly(
+            session,
+            kind,
+            previous_kind=previous_kind,
+            previous_obj=previous_obj,
+            force=force,
+        ):
+            _clear_selected_target_kind_visuals(
+                session,
+                policy,
+                trace_name=_get_selected_target_visual_clear_trace_name(
+                    kind,
+                    trace_style=trace_style,
+                    trace_prefix=trace_prefix,
+                ),
+            )
             continue
         if (
             not force
