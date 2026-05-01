@@ -25,6 +25,7 @@
 
 #include <cstddef>
 #include <list>
+#include <memory>
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
@@ -60,6 +61,7 @@ struct Candidate
 };
 
 GuiExport bool canFinalizeSinglePick(const std::vector<Candidate>& picked);
+GuiExport bool shouldExpandPickRadius(const std::vector<Candidate>& picked);
 GuiExport std::size_t choosePreferredPick(const std::vector<Candidate>& picked);
 
 }  // namespace SelectionPickPolicy
@@ -121,6 +123,7 @@ private:
     struct PickedInfo
     {
         const SoPickedPoint* pp {nullptr};
+        std::shared_ptr<const SoPickedPoint> ownedPoint;
         ViewProviderDocumentObject* vpd {nullptr};
         std::string element;
     };
@@ -135,6 +138,7 @@ private:
         const std::vector<PickedInfo>&
     );
     static bool canFinalizeSinglePick(const std::vector<PickedInfo>&);
+    static bool shouldExpandPickRadius(const std::vector<PickedInfo>&);
 
     bool setPreselect(const PickedInfo&);
     bool setPreselect(
@@ -148,6 +152,13 @@ private:
     );
     bool setSelection(const std::vector<PickedInfo>&, bool ctrlDown = false);
 
+    std::vector<PickedInfo> collectPickedList(
+        const SoPickedPointList& points,
+        const SoPath* actionPath,
+        bool singlePick,
+        bool copyPickedPoints = false
+    ) const;
+    std::vector<PickedInfo> getExpandedPickedList(SoHandleEventAction* action) const;
     std::vector<PickedInfo> getPickedList(SoHandleEventAction* action, bool singlePick) const;
 
     Gui::Document* pcDocument {nullptr};
