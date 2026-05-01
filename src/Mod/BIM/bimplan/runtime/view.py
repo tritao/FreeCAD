@@ -61,6 +61,14 @@ class PlanViewportAPI:
             _PlanEditViewportStatusChip,
         )
 
+    def schedule_viewport_status_chip_refresh(self):
+        from bimplan.ui.task_panel import _PlanEditViewportStatusChip
+
+        return schedule_viewport_status_chip_refresh(
+            self.session,
+            _PlanEditViewportStatusChip,
+        )
+
     def discard_stale_runtime_object(self, obj):
         return discard_stale_runtime_object(self.session, obj)
 
@@ -922,6 +930,7 @@ def ensure_viewport_status_chip(session, chip_factory):
 
 
 def refresh_viewport_status_chip(session, chip_factory):
+    session.viewport_state.status_chip_refresh_queued = False
     if session.lifecycle_state.tearing_down:
         return
     chip = ensure_viewport_status_chip(session, chip_factory)
@@ -936,6 +945,7 @@ def refresh_viewport_status_chip(session, chip_factory):
 
 def clear_viewport_status_chip(session):
     viewport_state = session.viewport_state
+    viewport_state.status_chip_refresh_queued = False
     chip = viewport_state.status_chip
     viewport_state.status_chip = None
     if chip is None:
@@ -944,6 +954,19 @@ def clear_viewport_status_chip(session):
         chip.close_chip()
     except Exception:
         pass
+
+
+def schedule_viewport_status_chip_refresh(session, chip_factory):
+    viewport_state = session.viewport_state
+    if viewport_state.status_chip_refresh_queued or session.lifecycle_state.tearing_down:
+        return
+    try:
+        from PySide import QtCore
+    except ImportError:
+        refresh_viewport_status_chip(session, chip_factory)
+        return
+    viewport_state.status_chip_refresh_queued = True
+    QtCore.QTimer.singleShot(0, lambda: refresh_viewport_status_chip(session, chip_factory))
 
 
 def request_view_redraw(session):
