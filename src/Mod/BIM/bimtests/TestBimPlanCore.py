@@ -84,6 +84,7 @@ from bimplan.providers.runtime import (
     normalize_plan_provider_overlay,
 )
 from bimplan.providers.runtime import PlanProviderSnapshot, collect_plan_provider_snapshot
+from bimplan.providers import actions as plan_provider_actions_module
 from bimplan.providers import runtime as plan_provider_runtime_module
 from bimplan.providers import (
     PlanActionSpec,
@@ -1252,6 +1253,137 @@ class TestBimPlanCore(unittest.TestCase):
         self.assertEqual({"key": "value"}, captured["payload"])
         self.assertEqual({"key": "value"}, captured["payload_from_commands"])
         self.assertIn(("recompute", None), doc.events)
+
+    def test_execute_plan_provider_action_warns_when_recompute_fails_after_commit(self):
+        from bimplan.providers.runtime import execute_plan_provider_action
+        from bimplan.providers import PlanEditRegistry
+
+        class _ActionProvider(PlanEditProvider):
+            provider_id = "action-provider"
+
+            def execute_action(self, action_key, context, commands, payload=None):
+                del action_key, context, commands, payload
+                doc.events.append(("mutate", None))
+                return True
+
+        registry = PlanEditRegistry()
+        provider = _ActionProvider()
+        registry.register_provider(provider)
+        doc = _FailingRecomputeDoc(fail_on_call=1)
+        plan_context = SimpleNamespace(name="plan-context")
+        action_context = PlanProviderActionContext(
+            _session=SimpleNamespace(doc=doc),
+            payload=None,
+            document_name="PlanDoc",
+            current_tool="Provider Point",
+        )
+        session = SimpleNamespace(
+            doc=doc,
+            lifecycle_state=SimpleNamespace(tearing_down=False, finishing=False),
+            viewport=SimpleNamespace(focus_plan_view=lambda: None),
+            selection=SimpleNamespace(
+                refresh=SimpleNamespace(refresh_primary_selected_plan_target=lambda: None)
+            ),
+            document_visuals=SimpleNamespace(
+                document_is_alive=lambda: True,
+                defer_document_visual_updates=lambda: nullcontext(),
+                invalidate_document_dependent_plan_visuals=lambda: None,
+            ),
+            task_panels=SimpleNamespace(refresh_task_panel_status=lambda *args, **kwargs: None),
+            providers=SimpleNamespace(
+                get_plan_provider_registry=lambda: registry,
+                get_plan_edit_context=lambda: plan_context,
+                get_plan_provider_action_context=lambda payload=None: action_context,
+            ),
+        )
+
+        with patch.object(plan_provider_actions_module.FreeCAD.Console, "PrintWarning"):
+            self.assertTrue(
+                execute_plan_provider_action(
+                    session,
+                    "action-provider",
+                    "do-work",
+                    transaction_label="Do Work",
+                )
+            )
+
+        self.assertEqual(
+            [
+                ("open", "Do Work"),
+                ("mutate", None),
+                ("commit", None),
+                ("recompute", 1),
+            ],
+            doc.events,
+        )
+
+    def test_execute_plan_provider_action_none_result_is_not_handled(self):
+        from bimplan.providers.runtime import execute_plan_provider_action
+        from bimplan.providers import PlanEditRegistry
+
+        captured = []
+
+        class _ActionProvider(PlanEditProvider):
+            provider_id = "action-provider"
+
+            def execute_action(self, action_key, context, commands, payload=None):
+                captured.append((action_key, context, commands, payload))
+                return None
+
+        registry = PlanEditRegistry()
+        provider = _ActionProvider()
+        registry.register_provider(provider)
+        doc = _DummyDoc()
+        plan_context = SimpleNamespace(name="plan-context")
+        action_context = PlanProviderActionContext(
+            _session=SimpleNamespace(doc=doc),
+            payload=None,
+            document_name="PlanDoc",
+            current_tool="Provider Point",
+        )
+        finalizer_calls = []
+        session = SimpleNamespace(
+            doc=doc,
+            lifecycle_state=SimpleNamespace(tearing_down=False, finishing=False),
+            viewport=SimpleNamespace(
+                focus_plan_view=lambda: finalizer_calls.append("focus-plan-view")
+            ),
+            selection=SimpleNamespace(
+                refresh=SimpleNamespace(
+                    refresh_primary_selected_plan_target=lambda: finalizer_calls.append(
+                        "refresh-selection"
+                    )
+                )
+            ),
+            document_visuals=SimpleNamespace(
+                document_is_alive=lambda: True,
+                defer_document_visual_updates=lambda: nullcontext(),
+                invalidate_document_dependent_plan_visuals=lambda: finalizer_calls.append(
+                    "invalidate-visuals"
+                ),
+            ),
+            task_panels=SimpleNamespace(
+                refresh_task_panel_status=lambda *args, **kwargs: finalizer_calls.append(
+                    "refresh-task-panel"
+                )
+            ),
+            providers=SimpleNamespace(
+                get_plan_provider_registry=lambda: registry,
+                get_plan_edit_context=lambda: plan_context,
+                get_plan_provider_action_context=lambda payload=None: action_context,
+            ),
+        )
+
+        self.assertFalse(
+            execute_plan_provider_action(
+                session,
+                "action-provider",
+                "do-work",
+            )
+        )
+        self.assertEqual([("do-work", plan_context, action_context, None)], captured)
+        self.assertEqual([], doc.events)
+        self.assertEqual([], finalizer_calls)
 
     def test_plan_overlay_spec_carries_normalized_point_targets(self):
         overlay = PlanOverlaySpec(

@@ -16,6 +16,20 @@ def _runtime():
     return provider_runtime
 
 
+def _warn_post_commit_recompute_failure(action_label, exc):
+    message = str(exc or "").strip() or type(exc).__name__
+    FreeCAD.Console.PrintWarning(
+        translate(
+            "BIM_PlanEdit",
+            "Completed {action}, but follow-up recompute failed: {error}\n",
+        ).format(action=action_label, error=message)
+    )
+
+
+def _provider_action_was_handled(result):
+    return bool(result)
+
+
 def _execute_plan_provider_action_callback(
     execute_action,
     action_key,
@@ -70,16 +84,30 @@ def _run_plan_provider_action(
                 action_context,
                 payload,
             )
-        if handled is not False:
+        if _provider_action_was_handled(handled):
             try:
                 if session.doc is not None:
                     session.doc.recompute()
-            except Exception:
-                pass
+            except Exception as exc:
+                _warn_post_commit_recompute_failure(
+                    transaction_label
+                    or translate("BIM_PlanEdit", "provider action '{action}'").format(
+                        action=action_key
+                    ),
+                    exc,
+                )
     return handled
 
 
 def _finalize_plan_provider_action(session):
+    lifecycle_state = getattr(session, "lifecycle_state", None)
+    if lifecycle_state is not None and (
+        getattr(lifecycle_state, "tearing_down", False)
+        or getattr(lifecycle_state, "finishing", False)
+    ):
+        return
+    if not session.document_visuals.document_is_alive():
+        return
     session.selection.refresh.refresh_primary_selected_plan_target()
     session.document_visuals.invalidate_document_dependent_plan_visuals()
     session.task_panels.refresh_task_panel_status()
@@ -117,7 +145,7 @@ def execute_plan_provider_action(
         )
         return False
 
-    if handled is False:
+    if not _provider_action_was_handled(handled):
         return False
 
     provider_runtime._finalize_plan_provider_action(session)
