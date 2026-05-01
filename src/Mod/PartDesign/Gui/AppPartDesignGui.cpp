@@ -26,13 +26,21 @@
 #include <CXX/Extensions.hxx>
 #include <CXX/Objects.hxx>
 
+#include <memory>
+
 #include <Base/Console.h>
 #include <Base/Interpreter.h>
 #include <Base/PyObjectBase.h>
+#include <Gui/ActiveObjectList.h>
 #include <Gui/Application.h>
 #include <Gui/Language/Translator.h>
+#include <Gui/MDIView.h>
+#include <Gui/SelectionAffinity.h>
+#include <Gui/ViewProviderDocumentObject.h>
+#include <Mod/PartDesign/App/Body.h>
 
 #include "Workbench.h"
+#include "Utils.h"
 #include "ViewProviderBase.h"
 #include "ViewProviderBody.h"
 #include "ViewProviderBoolean.h"
@@ -76,6 +84,54 @@ void loadPartDesignResource()
     Q_INIT_RESOURCE(PartDesign_translation);
     Gui::Translator::instance()->refresh();
 }
+
+namespace
+{
+
+class ActiveBodySelectionAffinityProvider: public Gui::SelectionAffinityProvider
+{
+public:
+    bool hasSelectionAffinity(const Gui::MDIView& view) const override
+    {
+        return view.getActiveObject<PartDesign::Body*>(PDBODYKEY);
+    }
+
+    int getSelectionAffinity(
+        const Gui::MDIView& view,
+        const Gui::ViewProviderDocumentObject& viewProvider,
+        const char* subname
+    ) const override
+    {
+        (void)subname;
+
+        auto* activeBody = view.getActiveObject<PartDesign::Body*>(PDBODYKEY);
+        auto* obj = viewProvider.getObject();
+        if (!activeBody || !obj) {
+            return 0;
+        }
+        if (obj == activeBody) {
+            return 1;
+        }
+
+        auto* body = PartDesignGui::getBodyFor(obj, false, false, false);
+        return body == activeBody ? 1 : 0;
+    }
+};
+
+void registerSelectionAffinityProvider()
+{
+    static bool registered = false;
+    if (registered) {
+        return;
+    }
+
+    Gui::Application::Instance->registerSelectionAffinityProviderFactory([]() {
+        return std::make_unique<ActiveBodySelectionAffinityProvider>();
+    });
+    registered = true;
+}
+
+}  // namespace
 
 namespace PartDesignGui
 {
@@ -165,6 +221,8 @@ PyMOD_INIT_FUNC(PartDesignGui)
 
     // add resources and reloads the translators
     loadPartDesignResource();
+
+    registerSelectionAffinityProvider();
 
     PyMOD_Return(mod);
 }
