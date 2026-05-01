@@ -7,6 +7,7 @@ import FreeCAD
 from bimplan import document_visuals as plan_document_visuals
 from bimplan.runtime import tools as plan_runtime_tools
 from bimplan.selection import kinds as plan_target_kinds
+from bimplan.transactions import PlanEditTransaction
 from bimplan.tools import space_boundaries as plan_space_boundaries
 from bimplan.tools import space_editing as plan_space_editing
 from bimplan.tools import space_geometry as plan_space_geometry
@@ -210,24 +211,19 @@ def _create_space_in_transaction(
     space = None
     reported_failure = False
     try:
-        session.doc.openTransaction(translate("BIM_PlanEdit", "Create Space"))
-        space = create_space()
-        if not space:
-            raise RuntimeError("Unable to create space")
-        if keep_boundaries and boundaries:
-            ArchSpace.setBoundaryLinks(space, boundaries)
-        session.visibility.add_object_to_active_storey(space)
-        session.doc.recompute()
-        geometry_valid = bool(session.spaces.space_has_valid_geometry(space))
-        if not geometry_valid:
-            reported_failure = bool(session.spaces.report_space_creation_failure(space))
-            raise RuntimeError("Unable to create space")
-        session.doc.commitTransaction()
+        with PlanEditTransaction(session.doc, translate("BIM_PlanEdit", "Create Space")):
+            space = create_space()
+            if not space:
+                raise RuntimeError("Unable to create space")
+            if keep_boundaries and boundaries:
+                ArchSpace.setBoundaryLinks(space, boundaries)
+            session.visibility.add_object_to_active_storey(space)
+            session.doc.recompute()
+            geometry_valid = bool(session.spaces.space_has_valid_geometry(space))
+            if not geometry_valid:
+                reported_failure = bool(session.spaces.report_space_creation_failure(space))
+                raise RuntimeError("Unable to create space")
     except Exception:
-        try:
-            session.doc.abortTransaction()
-        except Exception:
-            pass
         if not reported_failure:
             FreeCAD.Console.PrintError(
                 translate("BIM_PlanEdit", "Failed to create the selected space.\n")
@@ -253,23 +249,18 @@ def _reassign_space_in_transaction(
     boundaries = list(boundaries or session.spaces.get_space_boundary_entries(space))
     reported_failure = False
     try:
-        session.doc.openTransaction(translate("BIM_PlanEdit", "Reassign Space Region"))
-        if boundaries:
-            ArchSpace.setBoundaryLinks(space, boundaries)
-        ArchSpace.setBoundaryRegionReferencePoint(space, sample_point)
-        space.touch()
-        session.doc.recompute()
-        geometry_valid = bool(session.spaces.space_has_valid_geometry(space))
-        status = str(getattr(space, "BoundaryStatus", "") or "").strip()
-        if not geometry_valid or status == "Conflict":
-            reported_failure = _report_space_reassignment_failure(space)
-            raise RuntimeError("Unable to reassign space region")
-        session.doc.commitTransaction()
+        with PlanEditTransaction(session.doc, translate("BIM_PlanEdit", "Reassign Space Region")):
+            if boundaries:
+                ArchSpace.setBoundaryLinks(space, boundaries)
+            ArchSpace.setBoundaryRegionReferencePoint(space, sample_point)
+            space.touch()
+            session.doc.recompute()
+            geometry_valid = bool(session.spaces.space_has_valid_geometry(space))
+            status = str(getattr(space, "BoundaryStatus", "") or "").strip()
+            if not geometry_valid or status == "Conflict":
+                reported_failure = _report_space_reassignment_failure(space)
+                raise RuntimeError("Unable to reassign space region")
     except Exception:
-        try:
-            session.doc.abortTransaction()
-        except Exception:
-            pass
         if not reported_failure:
             FreeCAD.Console.PrintError(
                 translate("BIM_PlanEdit", "Failed to reassign the selected space.\n")

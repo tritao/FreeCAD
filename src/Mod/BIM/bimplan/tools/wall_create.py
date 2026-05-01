@@ -7,6 +7,7 @@ import FreeCADGui
 
 from bimplan.runtime import tools as plan_runtime_tools
 from bimplan.runtime.embedded_commands import _PlanEditWallHost
+from bimplan.transactions import PlanEditTransaction
 
 translate = FreeCAD.Qt.translate
 
@@ -20,6 +21,29 @@ def _provider_point_api(session):
 
 def _creation_preview_state(session):
     return session.creation_preview_state
+
+
+def _warn_post_commit_recompute_failure(action_label, exc):
+    message = str(exc or "").strip() or type(exc).__name__
+    FreeCAD.Console.PrintWarning(
+        translate(
+            "BIM_PlanEdit",
+            "Completed {action}, but follow-up recompute failed: {error}\n",
+        ).format(action=action_label, error=message)
+    )
+
+
+def _run_rect_wall_transaction(session, action_label, callback):
+    try:
+        with PlanEditTransaction(session.doc, action_label):
+            result = callback()
+    except Exception:
+        raise
+    try:
+        session.doc.recompute()
+    except Exception as exc:
+        _warn_post_commit_recompute_failure(action_label, exc)
+    return result
 
 
 class PlanWallCreateAPI:
@@ -258,28 +282,26 @@ def create_rect_wall_run(session, corners):
     from bimcommands import BimWall
 
     preview_state = _creation_preview_state(session)
+    action_label = translate("BIM_PlanEdit", "Create Rectangular Wall Run")
 
-    walls = []
-    session.doc.openTransaction(translate("BIM_PlanEdit", "Create Rectangular Wall Run"))
-    try:
-        walls = BimWall.create_wall_run_from_points(
-            corners,
-            width=preview_state.rect_wall_params["width"],
-            height=preview_state.rect_wall_params["height"],
-            align=preview_state.rect_wall_params["align"],
-            offset=preview_state.rect_wall_params["offset"],
-            closed=True,
-            on_created=session.visibility.register_plan_object,
-        )
-        BimWall.autojoin_wall_run(walls, closed=True)
-        session.doc.commitTransaction()
-        session.doc.recompute()
-    except Exception:
-        try:
-            session.doc.abortTransaction()
-        except Exception:
-            pass
-        raise
+    return _run_rect_wall_transaction(
+        session,
+        action_label,
+        lambda: _create_rect_wall_run_walls(session, BimWall, corners, preview_state),
+    )
+
+
+def _create_rect_wall_run_walls(session, bim_wall, corners, preview_state):
+    walls = bim_wall.create_wall_run_from_points(
+        corners,
+        width=preview_state.rect_wall_params["width"],
+        height=preview_state.rect_wall_params["height"],
+        align=preview_state.rect_wall_params["align"],
+        offset=preview_state.rect_wall_params["offset"],
+        closed=True,
+        on_created=session.visibility.register_plan_object,
+    )
+    bim_wall.autojoin_wall_run(walls, closed=True)
     return walls
 
 

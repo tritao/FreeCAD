@@ -5,22 +5,37 @@
 import FreeCAD
 
 from bimplan.selection import kinds as plan_target_kinds
+from bimplan.transactions import PlanEditTransaction
 from bimplan.tools import space_boundaries as plan_space_boundaries
 
 translate = FreeCAD.Qt.translate
 
 
-def _apply_space_edit(session, title, apply_change):
+def _warn_post_commit_recompute_failure(action_label, exc):
+    message = str(exc or "").strip() or type(exc).__name__
+    FreeCAD.Console.PrintWarning(
+        translate(
+            "BIM_PlanEdit",
+            "Completed {action}, but follow-up recompute failed: {error}\n",
+        ).format(action=action_label, error=message)
+    )
+
+
+def _run_space_edit_transaction(session, title, apply_change):
     try:
-        session.doc.openTransaction(title)
-        apply_change()
-        session.doc.commitTransaction()
-        session.doc.recompute()
+        with PlanEditTransaction(session.doc, title):
+            apply_change()
     except Exception:
-        try:
-            session.doc.abortTransaction()
-        except Exception:
-            pass
+        return False
+    try:
+        session.doc.recompute()
+    except Exception as exc:
+        _warn_post_commit_recompute_failure(title, exc)
+    return True
+
+
+def _apply_space_edit(session, title, apply_change):
+    if not _run_space_edit_transaction(session, title, apply_change):
         return False
     session.task_panels.refresh_task_panel_status()
     return True
@@ -136,16 +151,11 @@ def set_space_boundaries(session, space, boundaries):
     import ArchSpace
 
     boundaries = ArchSpace.normalizeBoundaryLinks(boundaries)
-    try:
-        session.doc.openTransaction(translate("BIM_PlanEdit", "Edit Space Boundaries"))
-        ArchSpace.setBoundaryLinks(space, boundaries)
-        session.doc.commitTransaction()
-        session.doc.recompute()
-    except Exception:
-        try:
-            session.doc.abortTransaction()
-        except Exception:
-            pass
+    if not _run_space_edit_transaction(
+        session,
+        translate("BIM_PlanEdit", "Edit Space Boundaries"),
+        lambda: ArchSpace.setBoundaryLinks(space, boundaries),
+    ):
         return False
     refresh_selected_space_visuals(session)
     session.task_panels.refresh_task_panel_status()

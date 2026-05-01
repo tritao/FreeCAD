@@ -114,8 +114,11 @@ from bimplan.selection.interaction import PlanSelectionActivationService
 from bimplan.selection.state import PlanSelectionRefreshService
 from bimplan.selection import kinds as plan_target_kinds
 from bimplan.tools import opening_edit as plan_opening_edit_module
+from bimplan.tools import space_editing as plan_space_editing_module
 from bimplan.tools import space_interaction as plan_space_interaction_module
 from bimplan.tools import spaces as plan_spaces_module
+from bimplan.tools import symbol_edit as plan_symbol_edit_module
+from bimplan.tools import wall_create as plan_wall_create_module
 from bimplan.tools import wall_edit as plan_wall_edit_module
 from bimplan.tools import wall_relations as plan_wall_relations_module
 from bimplan.tools import window_create as plan_window_create_module
@@ -2965,6 +2968,81 @@ class TestBimPlanCore(unittest.TestCase):
         self.assertEqual(
             [
                 ("open", "Set Space Text Position"),
+                ("commit", None),
+                ("recompute", 1),
+            ],
+            doc.events,
+        )
+
+    def test_plan_edit_space_edit_transaction_skips_abort_after_committed_recompute_failure(
+        self,
+    ):
+        doc = _FailingRecomputeDoc(fail_on_call=1)
+        session = SimpleNamespace(doc=doc)
+
+        with patch.object(plan_space_editing_module.FreeCAD.Console, "PrintWarning"):
+            success = plan_space_editing_module._run_space_edit_transaction(
+                session,
+                "Edit Space Boundaries",
+                lambda: doc.events.append(("mutate", None)),
+            )
+
+        self.assertTrue(success)
+        self.assertEqual(
+            [
+                ("open", "Edit Space Boundaries"),
+                ("mutate", None),
+                ("commit", None),
+                ("recompute", 1),
+            ],
+            doc.events,
+        )
+
+    def test_plan_edit_symbol_handle_transaction_skips_abort_after_committed_recompute_failure(
+        self,
+    ):
+        doc = _FailingRecomputeDoc(fail_on_call=1)
+        session = SimpleNamespace(doc=doc)
+        symbol = SimpleNamespace(Placement=None)
+        placement = object()
+
+        with patch.object(plan_symbol_edit_module.FreeCAD.Console, "PrintWarning"):
+            success = plan_symbol_edit_module._run_symbol_handle_transaction(
+                session,
+                symbol,
+                placement,
+                "move",
+            )
+
+        self.assertTrue(success)
+        self.assertIs(placement, symbol.Placement)
+        self.assertEqual(
+            [
+                ("open", "Move Symbol"),
+                ("commit", None),
+                ("recompute", 1),
+            ],
+            doc.events,
+        )
+
+    def test_plan_edit_rect_wall_transaction_skips_abort_after_committed_recompute_failure(
+        self,
+    ):
+        doc = _FailingRecomputeDoc(fail_on_call=1)
+        session = SimpleNamespace(doc=doc)
+
+        with patch.object(plan_wall_create_module.FreeCAD.Console, "PrintWarning"):
+            result = plan_wall_create_module._run_rect_wall_transaction(
+                session,
+                "Create Rectangular Wall Run",
+                lambda: doc.events.append(("mutate", None)) or ["wall"],
+            )
+
+        self.assertEqual(["wall"], result)
+        self.assertEqual(
+            [
+                ("open", "Create Rectangular Wall Run"),
+                ("mutate", None),
                 ("commit", None),
                 ("recompute", 1),
             ],
