@@ -424,9 +424,6 @@ class PlanEditEditorPanelsMixin:
                 self.space_editor.setVisible(False)
             except Exception:
                 pass
-        self._space_editor_label_state = None
-        self._space_editor_combo_state = None
-        self._space_editor_boundary_state = None
 
     def _hide_region_editor(self):
         if self.region_editor is None:

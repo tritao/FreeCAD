@@ -2544,6 +2544,43 @@ class TestBimPlanCore(unittest.TestCase):
         self.assertEqual([True], cancel_calls)
         self.assertEqual([True], hide_calls)
 
+    def test_hiding_space_editor_preserves_cached_refresh_state(self):
+        class _Editor:
+            def __init__(self):
+                self.visible = True
+
+            def setVisible(self, visible):
+                self.visible = bool(visible)
+
+        widget = object.__new__(PlanEditControlsWidget)
+        widget.space_editor = _Editor()
+        widget._space_editor_label_state = (("PlanDoc", "Space001"), "Room A")
+        widget._space_editor_combo_state = (
+            ("PlanDoc", "Space001"),
+            ("Room", "Office"),
+            "Room",
+        )
+        widget._space_editor_boundary_state = (
+            ("PlanDoc", "Space001"),
+            ((("PlanDoc", "Wall001"), ("Face1",)),),
+        )
+
+        widget._hide_space_editor()
+
+        self.assertFalse(widget.space_editor.visible)
+        self.assertEqual((("PlanDoc", "Space001"), "Room A"), widget._space_editor_label_state)
+        self.assertEqual(
+            (("PlanDoc", "Space001"), ("Room", "Office"), "Room"),
+            widget._space_editor_combo_state,
+        )
+        self.assertEqual(
+            (
+                ("PlanDoc", "Space001"),
+                ((("PlanDoc", "Wall001"), ("Face1",)),),
+            ),
+            widget._space_editor_boundary_state,
+        )
+
     def test_task_panel_status_refresh_dispatches_explicit_selection_reason(self):
         panel_calls = []
         lifecycle_calls = []
