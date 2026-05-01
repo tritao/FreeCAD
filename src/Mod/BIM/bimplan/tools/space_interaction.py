@@ -8,6 +8,7 @@ import FreeCADGui
 from bimplan.runtime import tools as plan_runtime_tools
 from bimplan.selection import targets as plan_targets
 from bimplan.selection import kinds as plan_target_kinds
+from bimplan.transactions import PlanEditTransaction
 from bimplan.tools import space_boundaries as plan_space_boundaries
 from bimplan.tools import space_editing as plan_space_editing
 
@@ -294,9 +295,7 @@ def update_plan_region_preview(session, point, info):
 def create_plan_region(session, points):
     import Arch
 
-    region = None
-    session.doc.openTransaction(translate("BIM_PlanEdit", "Create Plan Region"))
-    try:
+    with PlanEditTransaction(session.doc, translate("BIM_PlanEdit", "Create Plan Region")):
         region = Arch.makePlanRegion(
             points=points,
             parent_space=get_plan_region_parent_space(session),
@@ -307,13 +306,6 @@ def create_plan_region(session, points):
         session.doc.recompute()
         if not session.overlays.geometry.get_region_footprint_faces(region):
             raise RuntimeError("Plan region has no valid footprint")
-        session.doc.commitTransaction()
-    except Exception:
-        try:
-            session.doc.abortTransaction()
-        except Exception:
-            pass
-        raise
     return region
 
 
@@ -467,9 +459,7 @@ def _finish_space_separator(session, separator):
 def create_space_separator(session, start, end):
     import Arch
 
-    separator = None
-    session.doc.openTransaction(translate("BIM_PlanEdit", "Create Space Separator"))
-    try:
+    with PlanEditTransaction(session.doc, translate("BIM_PlanEdit", "Create Space Separator")):
         separator = Arch.makeSpaceSeparator(
             start=start,
             end=end,
@@ -479,13 +469,6 @@ def create_space_separator(session, start, end):
             raise RuntimeError("Unable to create space separator")
         session.visibility.add_object_to_active_storey(separator)
         session.doc.recompute()
-        session.doc.commitTransaction()
-    except Exception:
-        try:
-            session.doc.abortTransaction()
-        except Exception:
-            pass
-        raise
     return separator
 
 
@@ -568,20 +551,42 @@ def _end_space_text_position_pick(session):
     session.snap.set_point_focus_suppressed(False)
 
 
+def _warn_post_commit_recompute_failure(action_label, exc):
+    message = str(exc or "").strip() or type(exc).__name__
+    FreeCAD.Console.PrintWarning(
+        translate(
+            "BIM_PlanEdit",
+            "Completed {action}, but follow-up recompute failed: {error}\n",
+        ).format(action=action_label, error=message)
+    )
+
+
+def _run_space_text_position_transaction(session, callback):
+    action_label = translate("BIM_PlanEdit", "Set Space Text Position")
+    try:
+        with PlanEditTransaction(session.doc, action_label):
+            callback()
+    except Exception:
+        return False
+    try:
+        session.doc.recompute()
+    except Exception as exc:
+        _warn_post_commit_recompute_failure(action_label, exc)
+    return True
+
+
 def _apply_space_text_position(session, space, point):
     point = session.viewport.project_plan_point(point)
-    try:
-        session.doc.openTransaction(translate("BIM_PlanEdit", "Set Space Text Position"))
-        space.ViewObject.TextPosition = space.Placement.inverse().multVec(point)
-        session.doc.commitTransaction()
-        session.doc.recompute()
-    except Exception:
-        try:
-            session.doc.abortTransaction()
-        except Exception:
-            pass
+    if point is None:
         return False
-    return True
+    return _run_space_text_position_transaction(
+        session,
+        lambda: setattr(
+            space.ViewObject,
+            "TextPosition",
+            space.Placement.inverse().multVec(point),
+        ),
+    )
 
 
 def finish_space_text_position_pick(session, point=None, obj=None):
