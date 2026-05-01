@@ -43,6 +43,9 @@ class PlanOverlayGeometryService:
     def get_wall_overlay_segments(self, *args, **kwargs):
         return get_wall_overlay_segments(self.session, *args, **kwargs)
 
+    def get_wall_grip_positions(self, *args, **kwargs):
+        return get_wall_grip_positions(self.session, *args, **kwargs)
+
     def get_space_footprint_faces(self, *args, **kwargs):
         return get_space_footprint_faces(self.session, *args, **kwargs)
 
@@ -172,6 +175,8 @@ def get_cached_plan_overlay_geometry(session, kind, obj, field_name, compute):
         }
     elif field_name.endswith("overlay_segments"):
         value = tuple(value or ())
+    elif field_name == "grip_positions":
+        value = tuple(value or ())
     entry[field_name] = value
     return value
 
@@ -274,6 +279,38 @@ def get_wall_overlay_segments(session, wall):
         lambda wall_obj: build_overlay_segments_from_polylines(
             get_wall_overlay_polylines(session, wall_obj)
         ),
+    )
+
+
+def get_wall_grip_positions(session, wall):
+    if not session.selection.targets.is_plan_selectable_wall(wall):
+        return ()
+
+    def compute(wall_obj):
+        proxy = getattr(wall_obj, "Proxy", None)
+        calc_endpoints = _get_proxy_method(proxy, "calc_endpoints")
+        if calc_endpoints is None:
+            return ()
+        try:
+            endpoints = tuple(calc_endpoints(wall_obj) or ())
+        except Exception:
+            return ()
+        if len(endpoints) != 2:
+            return ()
+        calc_edit_grip_positions = _get_proxy_method(proxy, "calc_edit_grip_positions")
+        if calc_edit_grip_positions is not None:
+            try:
+                return tuple(calc_edit_grip_positions(wall_obj) or ())
+            except Exception:
+                return ()
+        return endpoints + ((endpoints[0] + endpoints[1]) * 0.5,)
+
+    return get_cached_plan_overlay_geometry(
+        session,
+        "wall",
+        wall,
+        "grip_positions",
+        compute,
     )
 
 
