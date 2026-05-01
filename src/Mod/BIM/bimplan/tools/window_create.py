@@ -367,6 +367,7 @@ def activate_window_tool(session):
     session.selection.sync.set_gui_selection_object(wall)
     creation_preview_state.window_host_wall = wall
     session.current_tool = "Window"
+    session.overlays.openings.clear_selected_wall_opening_context_overlay()
     session.snap.set_active_draft_command()
     try:
         FreeCADGui.Snapper.setSelectMode(False)
@@ -414,7 +415,11 @@ def cancel_window_tool(session, refresh=True):
     session.snap.clear_active_draft_command()
     session.current_tool = "Select"
     if refresh:
-        session.task_panels.refresh_task_panel_status()
+        if session.selection.state.is_selected_plan_target("wall"):
+            session.overlays.walls.apply_selected_wall_selection_feedback()
+            session.overlays.openings.sync_selected_wall_opening_context_overlay()
+        session.overlays.spaces.sync_secondary_selected_overlays()
+        session.task_panels.refresh_task_panel_status(reason="selection")
     return True
 
 
