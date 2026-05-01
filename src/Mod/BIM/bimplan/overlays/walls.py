@@ -210,6 +210,10 @@ def sync_wall_grips(session):
                 clear_wall_grips(session)
 
         grip_start, grip_end, midpoint = grip_positions
+        if tracker_state.grip_trackers:
+            overlay_manager.finalize_trackers(tracker_state.grip_trackers)
+            tracker_state.grip_trackers = []
+            grip_state.state = None
         with _perf_trace_span(session, "wall_grips_create_trackers"):
             tracker_state.grip_trackers = [
                 DraftTrackers.editTracker(pos=grip_start, name=wall.Name, idx=0),

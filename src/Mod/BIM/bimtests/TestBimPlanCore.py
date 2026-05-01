@@ -64,6 +64,7 @@ if "draftguitools.gui_base" not in sys.modules:
     draftguitools_module.gui_base = gui_base_module
 
 from bimplan.providers import PlanProviderActionContext
+from bimplan.overlays import walls as plan_wall_overlay_module
 from bimplan.tools.space_interaction import activate_plan_region_tool, activate_space_separator_tool
 from bimplan.overlays import providers as provider_overlays
 from bimplan.ui import task_panel as plan_task_panel_module
@@ -4168,4 +4169,96 @@ class TestBimPlanCore(unittest.TestCase):
                 ("refresh-task-panel-status", (), {"reason": "selection"}),
             ],
             calls,
+        )
+
+    def test_sync_wall_grips_finalizes_old_trackers_before_replacement(self):
+        old_trackers = [object(), object(), object()]
+        created_trackers = []
+        finalize_calls = []
+
+        class _FakeGripTracker:
+            def __init__(self, pos=None, name=None, idx=None, marker=None):
+                self.pos = pos
+                self.name = name
+                self.idx = idx
+                self.marker = marker
+                self.Visible = False
+
+            def set(self, pos):
+                self.pos = pos
+
+            def on(self):
+                self.Visible = True
+
+        fake_gui_trackers = ModuleType("draftguitools.gui_trackers")
+
+        def _make_edit_tracker(*args, **kwargs):
+            tracker = _FakeGripTracker(*args, **kwargs)
+            created_trackers.append(tracker)
+            return tracker
+
+        fake_gui_trackers.editTracker = _make_edit_tracker
+
+        fake_params = ModuleType("draftutils.params")
+        fake_params.get_param_view = lambda _name: 9
+        fake_draftutils = ModuleType("draftutils")
+        fake_draftutils.params = fake_params
+        fake_draftguitools = ModuleType("draftguitools")
+        fake_draftguitools.gui_trackers = fake_gui_trackers
+
+        wall = SimpleNamespace(
+            Name="Wall001",
+            Document=SimpleNamespace(Name="TestDoc"),
+            Proxy=SimpleNamespace(
+                calc_endpoints=lambda _wall: [
+                    FreeCAD.Vector(0, 0, 0),
+                    FreeCAD.Vector(1000, 0, 0),
+                ]
+            ),
+        )
+        session = SimpleNamespace(
+            performance=SimpleNamespace(
+                plan_perf_trace_span=lambda *args, **kwargs: nullcontext(),
+                plan_perf_count=lambda *args, **kwargs: None,
+            ),
+            wall_edit=SimpleNamespace(is_selected_wall_endpoint_editable=lambda: True),
+            viewport=SimpleNamespace(scaled_marker_size=lambda size: float(size)),
+            selection=SimpleNamespace(
+                state=SimpleNamespace(
+                    get_selected_plan_target_object=lambda kind: wall if kind == "wall" else None
+                )
+            ),
+            overlay_tracker_state=SimpleNamespace(grip_trackers=list(old_trackers)),
+            wall_grip_state=SimpleNamespace(
+                sync_queued=False,
+                sync_generation=0,
+                state=("old-marker-size", "old-midpoint-marker"),
+            ),
+        )
+
+        with (
+            patch.object(sys.modules["FreeCADGui"], "getMarkerIndex", return_value=77, create=True),
+            patch.object(
+                plan_wall_overlay_module.overlay_manager,
+                "finalize_trackers",
+                side_effect=lambda trackers: finalize_calls.append(list(trackers)),
+            ),
+            patch.dict(
+                sys.modules,
+                {
+                    "draftguitools": fake_draftguitools,
+                    "draftguitools.gui_trackers": fake_gui_trackers,
+                    "draftutils": fake_draftutils,
+                    "draftutils.params": fake_params,
+                },
+            ),
+        ):
+            plan_wall_overlay_module.sync_wall_grips(session)
+
+        self.assertEqual([old_trackers], finalize_calls)
+        self.assertEqual(3, len(session.overlay_tracker_state.grip_trackers))
+        self.assertEqual(created_trackers, session.overlay_tracker_state.grip_trackers)
+        self.assertEqual(
+            ["Wall001", "Wall001", "Wall001"],
+            [tracker.name for tracker in created_trackers],
         )
