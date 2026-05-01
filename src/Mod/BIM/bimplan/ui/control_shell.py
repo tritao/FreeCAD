@@ -504,7 +504,7 @@ class PlanEditControlsShellMixin:
             if self._should_refresh_integration_panel_for_selection(selected_kind):
                 self._refresh_integration_panel(defer=True)
             else:
-                self._cancel_queued_integration_panel_refresh()
+                self._reconcile_integration_panel_for_non_provider_wall_selection()
             self._hide_space_editor()
             self._hide_region_editor()
             self._hide_window_editor()

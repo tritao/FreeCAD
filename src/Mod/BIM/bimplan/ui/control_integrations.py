@@ -57,6 +57,21 @@ class PlanEditIntegrationPanelMixin:
         self._integration_refresh_queued = False
         self._integration_refresh_generation += 1
 
+    def _integration_panel_state_is_selection_bound(self):
+        state = getattr(self, "_integration_panel_state", None)
+        if state is None:
+            return False
+        return bool(
+            tuple(getattr(state, "issues", ()) or ())
+            or tuple(getattr(state, "context_panels", ()) or ())
+            or tuple(getattr(state, "inspector_sections", ()) or ())
+        )
+
+    def _reconcile_integration_panel_for_non_provider_wall_selection(self):
+        self._cancel_queued_integration_panel_refresh()
+        if self._integration_panel_state_is_selection_bound():
+            self._hide_integration_panel()
+
     def _should_refresh_integration_panel_for_selection(self, selected_kind):
         if str(selected_kind or "") == "provider":
             return True

@@ -2466,6 +2466,7 @@ class TestBimPlanCore(unittest.TestCase):
 
         refresh_calls = []
         cancel_calls = []
+        hide_calls = []
 
         widget.session = SimpleNamespace(
             current_tool="Select",
@@ -2480,6 +2481,7 @@ class TestBimPlanCore(unittest.TestCase):
         widget._refresh_action_context = lambda: None
         widget._refresh_integration_panel = lambda defer=False: refresh_calls.append(bool(defer))
         widget._cancel_queued_integration_panel_refresh = lambda: cancel_calls.append(True)
+        widget._hide_integration_panel = lambda: hide_calls.append(True)
         widget._hide_space_editor = lambda: None
         widget._hide_region_editor = lambda: None
         widget._hide_window_editor = lambda: None
@@ -2494,6 +2496,7 @@ class TestBimPlanCore(unittest.TestCase):
 
         self.assertEqual([], refresh_calls)
         self.assertEqual([True], cancel_calls)
+        self.assertEqual([], hide_calls)
 
     def test_selection_refresh_skips_dynamic_integration_panel_for_wall_selection(self):
         widget = object.__new__(PlanEditControlsWidget)
@@ -2508,6 +2511,7 @@ class TestBimPlanCore(unittest.TestCase):
 
         refresh_calls = []
         cancel_calls = []
+        hide_calls = []
 
         widget.session = SimpleNamespace(
             current_tool="Select",
@@ -2522,6 +2526,7 @@ class TestBimPlanCore(unittest.TestCase):
         widget._refresh_action_context = lambda: None
         widget._refresh_integration_panel = lambda defer=False: refresh_calls.append(bool(defer))
         widget._cancel_queued_integration_panel_refresh = lambda: cancel_calls.append(True)
+        widget._hide_integration_panel = lambda: hide_calls.append(True)
         widget._hide_space_editor = lambda: None
         widget._hide_region_editor = lambda: None
         widget._hide_window_editor = lambda: None
@@ -2536,6 +2541,7 @@ class TestBimPlanCore(unittest.TestCase):
 
         self.assertEqual([], refresh_calls)
         self.assertEqual([True], cancel_calls)
+        self.assertEqual([True], hide_calls)
 
     def test_task_panel_status_refresh_dispatches_explicit_selection_reason(self):
         panel_calls = []

@@ -627,6 +627,51 @@ class BimPlanEditGuiProviderMixin:
         session.shutdown(close_dialog=False)
         self.pump_gui_events()
 
+    def test_plan_edit_wall_selection_hides_stale_provider_context_panel(self):
+        """Wall selection should clear a stale selection-bound provider panel without refreshing providers."""
+
+        registry = get_plan_edit_registry()
+        registry.clear()
+        self.addCleanup(registry.clear)
+
+        provider = _TestPlanProvider()
+        registry.register_provider(provider)
+
+        wall = Arch.makeWall(length=3000, width=200, height=2500)
+        self.document.recompute()
+
+        session = BimPlanSession.start_session()
+        self.assertIsNotNone(session)
+        self.pump_gui_events()
+
+        panel = session.task_panel
+        self.assertIsNotNone(panel)
+        panel.refresh_from_session()
+        self.pump_gui_events()
+
+        self.assertFalse(panel.integration_panel.isHidden())
+
+        provider.issue_calls = 0
+        provider.section_calls = 0
+        provider.tool_calls = 0
+        provider.overlay_calls = 0
+
+        session.selection.hover.set_hovered_wall(wall)
+        with patch.object(session.picking, "pick_edit_node", return_value=None):
+            press = self._make_fake_left_mouse_press(250, 250)
+            session.input.on_mouse_pressed(press)
+
+        self.assertTrue(press._handled)
+        self._assert_selected_plan_target(session, "wall", wall)
+        self.assertTrue(panel.integration_panel.isHidden())
+        self.assertEqual(0, provider.issue_calls)
+        self.assertEqual(0, provider.section_calls)
+        self.assertEqual(0, provider.tool_calls)
+        self.assertEqual(0, provider.overlay_calls)
+
+        session.shutdown(close_dialog=False)
+        self.pump_gui_events()
+
     def test_plan_edit_provider_overlay_point_selects_target_object(self):
         marker = Draft.makePoint(FreeCAD.Vector(100, 200, 0))
         marker.Label = "Electrical Marker"
