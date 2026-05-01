@@ -3778,6 +3778,77 @@ class TestBimPlanCore(unittest.TestCase):
         self.assertIn(("set-gui", provider_obj), calls)
         self.assertIn(("start-handle", provider_obj, 0, handle), calls)
 
+    def test_plan_edit_provider_handle_failure_sets_generic_feedback_message(self):
+        provider_obj = SimpleNamespace(Name="Marker001", Label="Marker 001")
+        handle = SimpleNamespace(
+            interaction=PlanToolInteraction.IMMEDIATE,
+            label="Sync Fixture",
+            key="sync-fixture",
+            provider_id="test-provider",
+            action_key="sync-fixture",
+            transaction_label="Sync Fixture",
+        )
+        refresh_calls = []
+        session = SimpleNamespace(
+            lifecycle_state=SimpleNamespace(tearing_down=False),
+            current_tool=plan_runtime_tools.PlanTool.SELECT,
+            selection=SimpleNamespace(
+                state=SimpleNamespace(
+                    get_selected_plan_target=lambda: ("provider", provider_obj),
+                    set_selected_plan_target=lambda *args, **kwargs: None,
+                ),
+                sync=SimpleNamespace(
+                    normalize_gui_object_selection=lambda objects: tuple(objects or ()),
+                    set_gui_selection_object=lambda _obj: None,
+                    set_gui_selection=lambda _objects: None,
+                ),
+                refresh=SimpleNamespace(
+                    refresh_primary_selected_plan_target=lambda *args, **kwargs: refresh_calls.append(
+                        ("refresh-primary", args, kwargs)
+                    )
+                ),
+            ),
+            provider_transient_state=SimpleNamespace(provider_selected_objects=[]),
+            task_panel_state=SimpleNamespace(
+                integration_status_message=None,
+                integration_status_context_key=None,
+            ),
+            task_panels=SimpleNamespace(
+                refresh_task_panel_status=lambda *args, **kwargs: refresh_calls.append(
+                    ("refresh-task-panel", args, kwargs)
+                )
+            ),
+            overlays=SimpleNamespace(
+                walls=SimpleNamespace(clear_wall_grips=lambda: None),
+            ),
+        )
+        session.status_text = plan_status_text_module.PlanStatusTextAPI(session)
+
+        with patch.object(
+            plan_provider_edit_module,
+            "get_selected_provider_edit_handles",
+            return_value=[handle],
+        ), patch.object(
+            plan_provider_edit_module,
+            "_build_provider_handle_payload",
+            return_value={},
+        ), patch.object(
+            plan_provider_edit_module,
+            "execute_plan_provider_action",
+            return_value=False,
+        ), patch.object(
+            plan_provider_edit_module,
+            "is_plan_provider_target_object",
+            return_value=True,
+        ):
+            plan_provider_edit_module.activate_provider_handle_now(session, provider_obj, 0)
+
+        self.assertEqual(
+            "Could not run 'Sync Fixture'. Review the integration context and try again.",
+            session.task_panel_state.integration_status_message,
+        )
+        self.assertIn(("refresh-task-panel", (), {}), refresh_calls)
+
     def test_provider_action_click_failure_sets_integration_feedback_message(self):
         class _DummyPanel(plan_control_integrations_module.PlanEditIntegrationPanelMixin):
             pass
@@ -3923,6 +3994,73 @@ class TestBimPlanCore(unittest.TestCase):
 
         self.assertEqual(
             "Could not start 'Place Fixture'. Review the integration context and try again.",
+            session.task_panel_state.integration_status_message,
+        )
+        self.assertEqual([((), {})], refresh_calls)
+
+    def test_provider_point_tool_failure_sets_generic_feedback_message(self):
+        wall = SimpleNamespace(Name="Wall001", Label="Wall 001")
+        tool = SimpleNamespace(
+            provider_id="test-provider",
+            key="place-fixture",
+            label="Place Fixture",
+            transaction_label="Place Fixture",
+        )
+        refresh_calls = []
+        session = SimpleNamespace(
+            current_tool=plan_runtime_tools.PlanTool.PROVIDER_POINT,
+            provider_point_state=SimpleNamespace(
+                provider_point_tool=tool,
+                provider_point_host_target=None,
+                provider_point_host_source="",
+            ),
+            selection=SimpleNamespace(
+                state=SimpleNamespace(get_selected_plan_target=lambda: ("wall", wall)),
+                sync=SimpleNamespace(
+                    normalize_gui_object_selection=lambda objects: tuple(objects or ())
+                ),
+            ),
+            provider_transient_state=SimpleNamespace(provider_selected_objects=[]),
+            task_panel_state=SimpleNamespace(
+                integration_status_message=None,
+                integration_status_context_key=None,
+            ),
+            task_panels=SimpleNamespace(
+                refresh_task_panel_status=lambda *args, **kwargs: refresh_calls.append(
+                    (args, kwargs)
+                )
+            ),
+            viewport=SimpleNamespace(project_plan_point=lambda point: point),
+            overlays=SimpleNamespace(
+                providers=SimpleNamespace(clear_provider_point_preview=lambda: None)
+            ),
+            providers=SimpleNamespace(
+                runtime=SimpleNamespace(execute_plan_provider_action=lambda *args, **kwargs: False)
+            ),
+        )
+        session.status_text = plan_status_text_module.PlanStatusTextAPI(session)
+
+        with patch.object(
+            plan_provider_point_module,
+            "get_provider_point_snap_info",
+            return_value={},
+        ), patch.object(
+            plan_provider_point_module,
+            "build_provider_point_tool_payload",
+            return_value={},
+        ), patch.object(
+            plan_provider_point_module,
+            "arm_provider_point_tool",
+            return_value=True,
+        ):
+            plan_provider_point_module.handle_provider_point_tool_point(
+                session,
+                point=(10.0, 20.0, 0.0),
+                obj=None,
+            )
+
+        self.assertEqual(
+            "Could not run 'Place Fixture'. Review the integration context and try again.",
             session.task_panel_state.integration_status_message,
         )
         self.assertEqual([((), {})], refresh_calls)
