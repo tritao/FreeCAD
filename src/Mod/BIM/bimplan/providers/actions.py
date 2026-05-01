@@ -4,10 +4,16 @@
 
 import FreeCAD
 
-from .contracts import PlanEditContext
+from .contracts import PlanActionResult, PlanEditContext
 from bimplan.transactions import PlanEditTransaction
 
 translate = FreeCAD.Qt.translate
+
+
+class _UnhandledProviderAction(Exception):
+    def __init__(self, result):
+        super().__init__()
+        self.result = result
 
 
 def _runtime():
@@ -26,8 +32,37 @@ def _warn_post_commit_recompute_failure(action_label, exc):
     )
 
 
+def _coerce_provider_action_result(result):
+    if isinstance(result, PlanActionResult):
+        return bool(result.handled), str(result.message or "").strip()
+    return bool(result), ""
+
+
 def _provider_action_was_handled(result):
-    return bool(result)
+    handled, _message = _coerce_provider_action_result(result)
+    return handled
+
+
+def _clear_provider_action_feedback_message(session):
+    status_text = getattr(session, "status_text", None)
+    clear_feedback = getattr(status_text, "clear_integration_feedback_message", None)
+    if callable(clear_feedback):
+        clear_feedback()
+
+
+def _set_provider_action_feedback_message(session, message):
+    normalized = str(message or "").strip()
+    if not normalized:
+        return ""
+    status_text = getattr(session, "status_text", None)
+    set_feedback = getattr(status_text, "set_integration_feedback_message", None)
+    if callable(set_feedback):
+        normalized = str(set_feedback(normalized) or normalized)
+    task_panels = getattr(session, "task_panels", None)
+    refresh_status = getattr(task_panels, "refresh_task_panel_status", None)
+    if callable(refresh_status):
+        refresh_status()
+    return normalized
 
 
 def _execute_plan_provider_action_callback(
@@ -67,8 +102,19 @@ def _run_plan_provider_action(
     action_context = provider_runtime.get_plan_provider_action_context(session, payload=payload)
     transaction_label = str(transaction_label or "").strip()
     with provider_runtime._get_document_visual_update_scope(session):
-        if transaction_label:
-            with PlanEditTransaction(session.doc, transaction_label):
+        try:
+            if transaction_label:
+                with PlanEditTransaction(session.doc, transaction_label):
+                    handled = provider_runtime._execute_plan_provider_action_callback(
+                        execute_action,
+                        action_key,
+                        context,
+                        action_context,
+                        payload,
+                    )
+                    if not _provider_action_was_handled(handled):
+                        raise _UnhandledProviderAction(handled)
+            else:
                 handled = provider_runtime._execute_plan_provider_action_callback(
                     execute_action,
                     action_key,
@@ -76,14 +122,8 @@ def _run_plan_provider_action(
                     action_context,
                     payload,
                 )
-        else:
-            handled = provider_runtime._execute_plan_provider_action_callback(
-                execute_action,
-                action_key,
-                context,
-                action_context,
-                payload,
-            )
+        except _UnhandledProviderAction as exc:
+            handled = exc.result
         if _provider_action_was_handled(handled):
             try:
                 if session.doc is not None:
@@ -145,9 +185,13 @@ def execute_plan_provider_action(
         )
         return False
 
-    if not _provider_action_was_handled(handled):
+    handled, failure_message = _coerce_provider_action_result(handled)
+    if not handled:
+        if failure_message:
+            _set_provider_action_feedback_message(session, failure_message)
         return False
 
+    _clear_provider_action_feedback_message(session)
     provider_runtime._finalize_plan_provider_action(session)
     return True
 

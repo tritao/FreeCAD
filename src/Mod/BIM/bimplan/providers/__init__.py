@@ -3,6 +3,7 @@
 """Provider-facing models for BIM Plan Edit integrations."""
 
 from .contracts import (
+    PlanActionResult,
     PlanActionSpec,
     PlanContextDetailSpec,
     PlanContextPanelSpec,

@@ -76,6 +76,23 @@ class PlanActionSpec:
 
 
 @dataclass(frozen=True)
+class PlanActionResult:
+    handled: bool = False
+    message: str = ""
+
+    def __bool__(self) -> bool:
+        return bool(self.handled)
+
+    @classmethod
+    def success(cls, message: str = "") -> "PlanActionResult":
+        return cls(handled=True, message=message)
+
+    @classmethod
+    def failure(cls, message: str = "") -> "PlanActionResult":
+        return cls(handled=False, message=message)
+
+
+@dataclass(frozen=True)
 class PlanToolSpec:
     key: str
     label: str

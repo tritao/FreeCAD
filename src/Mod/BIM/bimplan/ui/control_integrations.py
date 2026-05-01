@@ -1395,17 +1395,18 @@ class PlanEditIntegrationPanelMixin:
             == PlanToolInteraction.POINT
         ):
             if not _provider_point_api(self.session).start_plan_provider_point_tool(action):
-                self.session.status_text.set_integration_feedback_message(
-                    _format_provider_point_tool_failure_message(action)
-                )
-                self.session.task_panels.refresh_task_panel_status()
+                if not self.session.status_text.get_integration_feedback_message():
+                    self.session.status_text.set_integration_feedback_message(
+                        _format_provider_point_tool_failure_message(action)
+                    )
+                    self.session.task_panels.refresh_task_panel_status()
             return
         handled = _provider_runtime_api(self.session).execute_plan_provider_action(
             getattr(action, "provider_id", ""),
             getattr(action, "key", ""),
             transaction_label=getattr(action, "transaction_label", ""),
         )
-        if not handled:
+        if not handled and not self.session.status_text.get_integration_feedback_message():
             self.session.status_text.set_integration_feedback_message(
                 _format_provider_action_failure_message(action)
             )

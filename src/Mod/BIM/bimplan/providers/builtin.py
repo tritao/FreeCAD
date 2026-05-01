@@ -5,8 +5,10 @@
 from __future__ import annotations
 
 import FreeCAD
+from types import SimpleNamespace
 
 from .contracts import (
+    PlanActionResult,
     PlanActionSpec,
     PlanContextPanelState,
     PlanEditProvider,
@@ -20,6 +22,8 @@ from .contracts import (
 )
 from bimplan.runtime import capabilities as runtime_capabilities
 
+translate = FreeCAD.Qt.translate
+
 _PROVIDER_ID = "bim-window"
 _RECOMPUTE_HOST_ACTION_KEY = "bim_window_recompute_host"
 _SELECT_HOST_ACTION_KEY = "bim_window_select_host"
@@ -27,6 +31,10 @@ _CENTER_ON_HOST_ACTION_KEY = "bim_window_center_on_host"
 _WINDOW_OVERLAY_COLOR = (0.12, 0.38, 0.95)
 _SPACE_PROVIDER_ID = "bim-space"
 _REPICK_SPACE_REGION_ACTION_KEY = "bim_space_repick_region"
+
+
+def _action_failure(message):
+    return PlanActionResult.failure(str(message or "").strip())
 
 
 class BIMWindowPlanEditProvider(PlanEditProvider):
@@ -178,12 +186,24 @@ class BIMWindowPlanEditProvider(PlanEditProvider):
         normalized_key = _normalize_text(action_key)
         window = _resolve_selected_window(context)
         if window is None:
-            return False
+            return _action_failure(
+                translate(
+                    "BIM_PlanEdit",
+                    "Select a window to use this integration action.",
+                )
+            )
         host = _get_window_host_wall(context, window)
 
         if normalized_key == _RECOMPUTE_HOST_ACTION_KEY:
             return _recompute_window_host(commands, window)
         if normalized_key == _SELECT_HOST_ACTION_KEY:
+            if host is None:
+                return _action_failure(
+                    translate(
+                        "BIM_PlanEdit",
+                        "The selected window has no selectable host wall.",
+                    )
+                )
             return _select_window_host(commands, host)
         if normalized_key == _CENTER_ON_HOST_ACTION_KEY:
             return _center_window_on_host(context, commands, window, host)
@@ -235,7 +255,12 @@ class BIMSpacePlanEditProvider(PlanEditProvider):
             return False
         space = _resolve_selected_space(context)
         if space is None:
-            return False
+            return _action_failure(
+                translate(
+                    "BIM_PlanEdit",
+                    "Select a space to re-pick its room region.",
+                )
+            )
         return _start_space_region_reassignment(commands, space)
 
 
@@ -708,14 +733,36 @@ def _select_window_host(commands, host):
 
 
 def _center_window_on_host(context, commands, window, host):
-    if window is None or host is None:
-        return False
+    if window is None:
+        return _action_failure(
+            translate(
+                "BIM_PlanEdit",
+                "Select a window to use this integration action.",
+            )
+        )
+    if host is None:
+        return _action_failure(
+            translate(
+                "BIM_PlanEdit",
+                "The selected window has no selectable host wall.",
+            )
+        )
     wall_context = _get_wall_axis_context(host)
     if wall_context is None:
-        return False
+        return _action_failure(
+            translate(
+                "BIM_PlanEdit",
+                "The selected window host wall could not be resolved in plan.",
+            )
+        )
     proxy = _get_opening_plan_proxy(context, window, "move_along_host")
     if proxy is None:
-        return False
+        return _action_failure(
+            translate(
+                "BIM_PlanEdit",
+                "The selected window cannot be moved along its host wall in Plan Edit.",
+            )
+        )
     current = _get_window_center(context, window)
     target = wall_context["start"].add(
         FreeCAD.Vector(wall_context["axis"]).multiply(wall_context["length"] * 0.5)
@@ -726,7 +773,12 @@ def _center_window_on_host(context, commands, window, host):
     except Exception:
         moved = False
     if not moved:
-        return False
+        return _action_failure(
+            translate(
+                "BIM_PlanEdit",
+                "The selected window could not be centered on its host wall.",
+            )
+        )
     _refresh_window_visuals(commands, window)
     return True
 
@@ -785,6 +837,59 @@ def _get_space_region_reassignment_report(context, space):
 
 def _start_space_region_reassignment(commands, space):
     session = getattr(commands, "_session", None)
-    if session is None or space is None:
-        return False
-    return bool(session.spaces.start_space_region_reassignment(space))
+    if space is None:
+        return _action_failure(
+            translate(
+                "BIM_PlanEdit",
+                "Select a space to re-pick its room region.",
+            )
+        )
+    if session is None:
+        return _action_failure(
+            translate(
+                "BIM_PlanEdit",
+                "Space region re-pick is unavailable right now.",
+            )
+        )
+    boundaries = list(session.spaces.get_space_boundary_entries(space) or [])
+    if not boundaries:
+        return _action_failure(
+            translate(
+                "BIM_PlanEdit",
+                "The selected space has no editable boundary links.",
+            )
+        )
+    report = _get_space_region_reassignment_report(
+        SimpleNamespace(session=session),
+        space,
+    )
+    candidate_count = int(report.get("candidate_count", 0) or 0)
+    if candidate_count <= 0:
+        message = str(report.get("message") or "").strip()
+        if message:
+            return _action_failure(message)
+        if int(report.get("skipped_claimed_candidate_count", 0) or 0):
+            return _action_failure(
+                translate(
+                    "BIM_PlanEdit",
+                    "All enclosed room regions are already assigned to spaces.",
+                )
+            )
+        return _action_failure(
+            translate(
+                "BIM_PlanEdit",
+                "No alternative room regions are available for the selected space.",
+            )
+        )
+    if session.spaces.start_space_region_reassignment(
+        space,
+        boundaries=boundaries,
+        report=report,
+    ):
+        return True
+    return _action_failure(
+        translate(
+            "BIM_PlanEdit",
+            "Could not start room-region re-pick for the selected space.",
+        )
+    )

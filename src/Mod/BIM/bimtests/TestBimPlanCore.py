@@ -87,6 +87,7 @@ from bimplan.providers.runtime import PlanProviderSnapshot, collect_plan_provide
 from bimplan.providers import actions as plan_provider_actions_module
 from bimplan.providers import runtime as plan_provider_runtime_module
 from bimplan.providers import (
+    PlanActionResult,
     PlanActionSpec,
     PlanContextPanelSpec,
     PlanContextPanelState,
@@ -105,6 +106,7 @@ from bimplan.providers import (
     PlanToolSpec,
 )
 from bimplan.providers import edit as plan_provider_edit_module
+from bimplan.providers import builtin as plan_provider_builtin_module
 from bimplan.providers import point as plan_provider_point_module
 from bimplan.providers import PlanEditRegistry
 from bimplan.runtime import lifecycle as plan_lifecycle_module
@@ -1448,6 +1450,113 @@ class TestBimPlanCore(unittest.TestCase):
         self.assertEqual([("do-work", plan_context, action_context, None)], captured)
         self.assertEqual([], doc.events)
         self.assertEqual([], finalizer_calls)
+
+    def test_execute_plan_provider_action_failure_result_sets_feedback_message(self):
+        from bimplan.providers.runtime import execute_plan_provider_action
+        from bimplan.providers import PlanEditRegistry
+
+        class _ActionProvider(PlanEditProvider):
+            provider_id = "action-provider"
+
+            def execute_action(self, action_key, context, commands, payload=None):
+                del action_key, context, commands, payload
+                return PlanActionResult.failure("The selected fixture needs a host wall.")
+
+        registry = PlanEditRegistry()
+        registry.register_provider(_ActionProvider())
+        doc = _DummyDoc()
+        marker = SimpleNamespace(Name="Marker001", Label="Marker 001")
+        plan_context = SimpleNamespace(name="plan-context")
+        action_context = PlanProviderActionContext(
+            _session=SimpleNamespace(doc=doc),
+            payload=None,
+            document_name="PlanDoc",
+            current_tool="Select",
+        )
+        feedback_calls = []
+        session = SimpleNamespace(
+            doc=doc,
+            current_tool="Select",
+            lifecycle_state=SimpleNamespace(tearing_down=False, finishing=False),
+            selection=SimpleNamespace(
+                state=SimpleNamespace(get_selected_plan_target=lambda: ("provider", marker)),
+                sync=SimpleNamespace(
+                    normalize_gui_object_selection=lambda objects: tuple(objects or ())
+                ),
+                refresh=SimpleNamespace(
+                    refresh_primary_selected_plan_target=lambda: feedback_calls.append(
+                        "refresh-selection"
+                    )
+                ),
+            ),
+            provider_transient_state=SimpleNamespace(provider_selected_objects=[]),
+            task_panel_state=SimpleNamespace(
+                integration_status_message=None,
+                integration_status_context_key=None,
+            ),
+            viewport=SimpleNamespace(
+                focus_plan_view=lambda: feedback_calls.append("focus-plan-view")
+            ),
+            document_visuals=SimpleNamespace(
+                document_is_alive=lambda: True,
+                defer_document_visual_updates=lambda: nullcontext(),
+                invalidate_document_dependent_plan_visuals=lambda: feedback_calls.append(
+                    "invalidate-visuals"
+                ),
+            ),
+            task_panels=SimpleNamespace(
+                refresh_task_panel_status=lambda *args, **kwargs: feedback_calls.append(
+                    "refresh-task-panel"
+                )
+            ),
+            providers=SimpleNamespace(
+                get_plan_provider_registry=lambda: registry,
+                get_plan_edit_context=lambda: plan_context,
+                get_plan_provider_action_context=lambda payload=None: action_context,
+            ),
+        )
+        session.status_text = plan_status_text_module.PlanStatusTextAPI(session)
+
+        self.assertFalse(
+            execute_plan_provider_action(
+                session,
+                "action-provider",
+                "do-work",
+                transaction_label="Do Work",
+            )
+        )
+        self.assertEqual(
+            [
+                ("open", "Do Work"),
+                ("abort", None),
+            ],
+            doc.events,
+        )
+        self.assertEqual(
+            "The selected fixture needs a host wall.",
+            session.task_panel_state.integration_status_message,
+        )
+        self.assertEqual(["refresh-task-panel"], feedback_calls)
+
+    def test_builtin_window_provider_action_returns_failure_result_without_window(self):
+        provider = plan_provider_builtin_module.BIMWindowPlanEditProvider()
+
+        result = provider.execute_action(
+            "bim_window_select_host",
+            SimpleNamespace(
+                get_primary_target=lambda: None,
+                get_selected_targets=lambda: (),
+                get_selected_objects=lambda: (),
+            ),
+            SimpleNamespace(),
+        )
+
+        self.assertIsInstance(result, PlanActionResult)
+        self.assertFalse(result.handled)
+        self.assertEqual(
+            "Select a window to use this integration action.",
+            result.message,
+        )
 
     def test_plan_overlay_spec_carries_normalized_point_targets(self):
         overlay = PlanOverlaySpec(
@@ -3712,6 +3821,62 @@ class TestBimPlanCore(unittest.TestCase):
 
         self.assertEqual(
             "Could not run 'Sync Fixture'. Review the integration context and try again.",
+            session.task_panel_state.integration_status_message,
+        )
+        self.assertEqual([((), {})], refresh_calls)
+
+    def test_provider_action_click_preserves_provider_feedback_message(self):
+        class _DummyPanel(plan_control_integrations_module.PlanEditIntegrationPanelMixin):
+            pass
+
+        marker = SimpleNamespace(Name="Marker001", Label="Marker 001")
+        refresh_calls = []
+
+        def _execute_action(*args, **kwargs):
+            del args, kwargs
+            session.status_text.set_integration_feedback_message(
+                "The selected fixture needs a host wall."
+            )
+            session.task_panels.refresh_task_panel_status()
+            return False
+
+        session = SimpleNamespace(
+            current_tool="Select",
+            selection=SimpleNamespace(
+                state=SimpleNamespace(get_selected_plan_target=lambda: ("provider", marker)),
+                sync=SimpleNamespace(
+                    normalize_gui_object_selection=lambda objects: tuple(objects or ())
+                ),
+            ),
+            provider_transient_state=SimpleNamespace(provider_selected_objects=[]),
+            task_panel_state=SimpleNamespace(
+                integration_status_message=None,
+                integration_status_context_key=None,
+            ),
+            task_panels=SimpleNamespace(
+                refresh_task_panel_status=lambda *args, **kwargs: refresh_calls.append(
+                    (args, kwargs)
+                )
+            ),
+            providers=SimpleNamespace(
+                runtime=SimpleNamespace(execute_plan_provider_action=_execute_action)
+            ),
+        )
+        session.status_text = plan_status_text_module.PlanStatusTextAPI(session)
+        panel = _DummyPanel()
+        panel.session = session
+        action = SimpleNamespace(
+            interaction=PlanToolInteraction.IMMEDIATE,
+            provider_id="test-provider",
+            key="sync-fixture",
+            label="Sync Fixture",
+            transaction_label="Sync Fixture",
+        )
+
+        panel.on_provider_action_clicked(action)
+
+        self.assertEqual(
+            "The selected fixture needs a host wall.",
             session.task_panel_state.integration_status_message,
         )
         self.assertEqual([((), {})], refresh_calls)
