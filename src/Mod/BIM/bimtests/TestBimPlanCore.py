@@ -114,6 +114,7 @@ from bimplan.selection.interaction import PlanSelectionActivationService
 from bimplan.selection.state import PlanSelectionRefreshService
 from bimplan.selection import kinds as plan_target_kinds
 from bimplan.tools import opening_edit as plan_opening_edit_module
+from bimplan.tools import space_interaction as plan_space_interaction_module
 from bimplan.tools import spaces as plan_spaces_module
 from bimplan.tools import wall_edit as plan_wall_edit_module
 from bimplan.tools import wall_relations as plan_wall_relations_module
@@ -2928,6 +2929,42 @@ class TestBimPlanCore(unittest.TestCase):
             [
                 ("open", "Move Provider"),
                 ("mutate", None),
+                ("commit", None),
+                ("recompute", 1),
+            ],
+            doc.events,
+        )
+
+    def test_plan_edit_space_text_position_skips_abort_after_committed_recompute_failure(self):
+        doc = _FailingRecomputeDoc(fail_on_call=1)
+        point = sys.modules["FreeCAD"].Vector(120.0, 340.0, 0.0)
+
+        class _FakePlacementInverse:
+            def multVec(self, value):
+                return value
+
+        space = SimpleNamespace(
+            ViewObject=SimpleNamespace(TextPosition=None),
+            Placement=SimpleNamespace(inverse=lambda: _FakePlacementInverse()),
+        )
+        session = SimpleNamespace(
+            doc=doc,
+            viewport=SimpleNamespace(project_plan_point=lambda value: value),
+        )
+
+        with patch.object(plan_space_interaction_module.FreeCAD.Console, "PrintWarning"):
+            success = plan_space_interaction_module._apply_space_text_position(
+                session,
+                space,
+                point,
+            )
+
+        self.assertTrue(success)
+        self.assertEqual(120.0, space.ViewObject.TextPosition.x)
+        self.assertEqual(340.0, space.ViewObject.TextPosition.y)
+        self.assertEqual(
+            [
+                ("open", "Set Space Text Position"),
                 ("commit", None),
                 ("recompute", 1),
             ],
