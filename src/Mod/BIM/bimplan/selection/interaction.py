@@ -264,9 +264,14 @@ class PlanSelectionActivationService(_SessionAPI):
             select_target = (
                 getattr(self, behavior.select_method_name, None) if behavior is not None else None
             )
+            queue_restore = not (
+                kind == plan_target_kinds.PLAN_TARGET_SPACE
+                and sync_gui_selection
+                and not defer_gui_selection
+            )
             if select_target is None or not select_target(
                 target_obj,
-                queue_restore=True,
+                queue_restore=queue_restore,
                 sync_gui_selection=sync_gui_selection,
                 defer_gui_selection=defer_gui_selection,
                 defer_wall_grips=defer_wall_grips,

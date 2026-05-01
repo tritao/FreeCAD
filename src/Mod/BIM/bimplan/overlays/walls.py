@@ -313,9 +313,7 @@ def sync_selected_wall_overlay(session):
             return
         width = session.viewport.scaled_line_width(4)
         color = (0.12, 0.38, 0.95)
-        segments = overlay_geometry.build_overlay_segments_from_polylines(
-            overlay_geometry.get_wall_overlay_polylines(session, wall)
-        )
+        segments = overlay_geometry.get_wall_overlay_segments(session, wall)
         _perf_count(session, "selected_wall_overlay_segments", len(segments))
         try:
             import draftguitools.gui_trackers as DraftTrackers

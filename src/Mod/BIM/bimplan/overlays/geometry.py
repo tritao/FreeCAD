@@ -40,6 +40,9 @@ class PlanOverlayGeometryService:
     def get_wall_overlay_polylines(self, *args, **kwargs):
         return get_wall_overlay_polylines(self.session, *args, **kwargs)
 
+    def get_wall_overlay_segments(self, *args, **kwargs):
+        return get_wall_overlay_segments(self.session, *args, **kwargs)
+
     def get_space_footprint_faces(self, *args, **kwargs):
         return get_space_footprint_faces(self.session, *args, **kwargs)
 
@@ -80,6 +83,8 @@ def _perf_count(session, name, delta=1):
 
 def get_plan_overlay_geometry_kinds_for_object(session, obj):
     semantic_obj = session.visibility.get_plan_semantic_object(obj)
+    if session.selection.targets.is_plan_selectable_wall(semantic_obj):
+        return ("wall",)
     if session.openings.is_hosted_opening_object(semantic_obj):
         return ("opening",)
     if session.selection.targets.is_plan_space_object(semantic_obj):
@@ -256,6 +261,20 @@ def get_wall_overlay_polylines(session, wall):
     if not faces:
         return []
     return get_footprint_overlay_polylines(faces)
+
+
+def get_wall_overlay_segments(session, wall):
+    if not session.selection.targets.is_plan_selectable_wall(wall):
+        return ()
+    return get_cached_plan_overlay_geometry(
+        session,
+        "wall",
+        wall,
+        "overlay_segments",
+        lambda wall_obj: build_overlay_segments_from_polylines(
+            get_wall_overlay_polylines(session, wall_obj)
+        ),
+    )
 
 
 def get_space_footprint_faces(session, space):

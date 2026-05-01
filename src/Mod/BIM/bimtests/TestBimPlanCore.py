@@ -64,6 +64,7 @@ if "draftguitools.gui_base" not in sys.modules:
     draftguitools_module.gui_base = gui_base_module
 
 from bimplan.providers import PlanProviderActionContext
+from bimplan.overlays import geometry as plan_overlay_geometry_module
 from bimplan.overlays import walls as plan_wall_overlay_module
 from bimplan.tools.space_interaction import activate_plan_region_tool, activate_space_separator_tool
 from bimplan.overlays import providers as provider_overlays
@@ -114,6 +115,7 @@ from bimplan.runtime import lifecycle as plan_lifecycle_module
 from bimplan.runtime import session as plan_session_module
 from bimplan.runtime import tools as plan_runtime_tools
 from bimplan.selection import gui_sync as plan_selection_gui_sync
+from bimplan.selection import targets as plan_selection_targets_module
 from bimplan.selection.interaction import PlanSelectionActivationService
 from bimplan.selection.state import PlanSelectionRefreshService
 from bimplan.selection import kinds as plan_target_kinds
@@ -256,10 +258,18 @@ def _make_selection_state_stub(
             return None
         return selected_ref.obj
 
+    def selected_plan_target_changed(previous_kind, previous_obj, kind=None):
+        if kind is None:
+            return previous_kind != selected_ref.kind or previous_obj != selected_ref.obj
+        previous_target = previous_obj if previous_kind == kind else None
+        current_target = get_selected_plan_target_object(kind)
+        return previous_target != current_target
+
     return SimpleNamespace(
         get_selected_plan_target=lambda: selected_ref,
         get_selected_plan_targets=lambda: selected_target_refs,
         get_selected_plan_target_object=get_selected_plan_target_object,
+        selected_plan_target_changed=selected_plan_target_changed,
         set_selected_plan_target=lambda *args, **kwargs: calls.append(
             ("set-selected", args, kwargs)
         ),
@@ -1136,6 +1146,113 @@ class TestBimPlanCore(unittest.TestCase):
             ],
             calls,
         )
+
+    def test_activate_space_target_skips_queued_restore_when_gui_selection_syncs_immediately(self):
+        calls = []
+        target = SimpleNamespace(Name="Space001")
+        session = _attach_activation_service(
+            SimpleNamespace(
+                selection=_make_selection_stub(),
+                performance=_make_perf_stub(),
+                input=SimpleNamespace(claim_left_button_click=lambda _event_callback=None: None),
+            )
+        )
+
+        with patch.object(
+            session.selection.activation,
+            "select_space_for_plan_edit",
+            side_effect=lambda *args, **kwargs: calls.append((args, kwargs)) or True,
+        ):
+            self.assertTrue(
+                session.selection.activation.activate_space_target(
+                    (100, 200), resolved_target=("space", target)
+                )
+            )
+
+        self.assertEqual(
+            [
+                (
+                    (target,),
+                    {
+                        "queue_restore": False,
+                        "sync_gui_selection": True,
+                        "defer_gui_selection": False,
+                        "defer_wall_grips": False,
+                    },
+                )
+            ],
+            calls,
+        )
+
+    def test_sync_selected_target_visuals_clears_deselected_space_directly(self):
+        space = SimpleNamespace(Name="Space001")
+        wall = SimpleNamespace(Name="Wall001")
+        clear_calls = []
+        sync_calls = []
+        session = SimpleNamespace(
+            current_tool="Select",
+            performance=_make_perf_stub(),
+            selection=_make_selection_stub(("wall", wall)),
+            overlays=SimpleNamespace(
+                spaces=SimpleNamespace(
+                    clear_selected_space_overlay=lambda: clear_calls.append("clear"),
+                    sync_selected_space_overlay=lambda: sync_calls.append("sync"),
+                )
+            ),
+        )
+
+        plan_selection_targets_module.sync_selected_target_visuals(
+            session,
+            kinds=(plan_target_kinds.PLAN_TARGET_SPACE,),
+            previous_kind=plan_target_kinds.PLAN_TARGET_SPACE,
+            previous_obj=space,
+            trace_style="by_method",
+        )
+
+        self.assertEqual(["clear"], clear_calls)
+        self.assertEqual([], sync_calls)
+
+    def test_get_wall_overlay_segments_uses_overlay_geometry_cache(self):
+        wall = SimpleNamespace(
+            Name="Wall001",
+            Proxy=SimpleNamespace(getFootprint=lambda _obj: ("face",)),
+        )
+        counts = []
+        session = SimpleNamespace(
+            performance=_make_perf_stub(count=lambda name, delta=1: counts.append((name, delta))),
+            overlay_cache_state=SimpleNamespace(
+                plan_overlay_geometry_cache={
+                    "wall": {},
+                    "opening": {},
+                    "space": {},
+                    "region": {},
+                }
+            ),
+            visibility=SimpleNamespace(
+                get_plan_semantic_object=lambda obj: obj,
+                get_document_object_key=lambda obj: ("Doc", getattr(obj, "Name", None)),
+            ),
+            selection=SimpleNamespace(
+                targets=SimpleNamespace(
+                    is_plan_selectable_wall=lambda obj: obj is wall,
+                    is_plan_space_object=lambda _obj: False,
+                    is_plan_region_object=lambda _obj: False,
+                )
+            ),
+            openings=SimpleNamespace(is_hosted_opening_object=lambda _obj: False),
+        )
+
+        with patch.object(
+            plan_overlay_geometry_module.ArchPlanGeometry,
+            "get_face_wire_polylines",
+            side_effect=lambda _faces: (((0, 0), (1, 0), (1, 1)),),
+        ) as polylines:
+            first = plan_overlay_geometry_module.get_wall_overlay_segments(session, wall)
+            second = plan_overlay_geometry_module.get_wall_overlay_segments(session, wall)
+
+        self.assertEqual(first, second)
+        self.assertEqual(1, polylines.call_count)
+        self.assertIn(("wall_overlay_segments_cache_hits", 1), counts)
 
     def test_activate_semantic_plan_target_uses_wall_behavior_overrides(self):
         calls = []
