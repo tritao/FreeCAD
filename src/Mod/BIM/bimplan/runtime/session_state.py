@@ -64,6 +64,8 @@ class PlanInteractionAPI:
 @dataclass
 class PlanTaskPanelState:
     relation_status_message: str | None = None
+    integration_status_message: str | None = None
+    integration_status_context_key: object = None
     aux_task_panels: list = field(default_factory=list)
 
 

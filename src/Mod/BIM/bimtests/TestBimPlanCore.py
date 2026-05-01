@@ -134,6 +134,8 @@ from bimplan.selection.targets import get_plan_target_for_object, make_plan_targ
 from bimplan.transactions import PlanEditTransaction
 from bimplan.ui.controls import PlanEditControlsWidget
 from bimplan.ui import control_shell as plan_control_shell
+from bimplan.ui import control_integrations as plan_control_integrations_module
+from bimplan.ui import status_text as plan_status_text_module
 from bimplan.ui.task_panel_view_model import (
     ProviderOverlayLegendItem,
     build_action_context_view_model,
@@ -720,6 +722,68 @@ class TestBimPlanCore(unittest.TestCase):
         self.assertIn("Use wall grips in the viewport", view_model.text)
         self.assertIn("Ctrl-click adds or removes targets", view_model.text)
         self.assertIn("Relation status", view_model.text)
+
+    def test_build_status_text_view_model_appends_integration_feedback(self):
+        wall = SimpleNamespace(Name="Wall001", Label="Wall 001")
+        selection = _make_selection_stub(("wall", wall))
+        status_text = SimpleNamespace(
+            format_plan_target_selection_state=lambda kind, obj: f"{kind}:{obj.Label}",
+            format_provider_selected_object_state=lambda: "",
+            get_plan_selection_summary_text=lambda: "",
+            get_integration_feedback_message=lambda: "Could not run 'Sync fixture'.",
+        )
+        wall_edit = SimpleNamespace(is_selected_wall_endpoint_editable=lambda: True)
+        wall_relations = SimpleNamespace(get_plan_relation_status_message=lambda: "")
+        session = SimpleNamespace(
+            current_tool="Select",
+            selection=selection,
+            status_text=status_text,
+            wall_edit=wall_edit,
+            wall_relations=wall_relations,
+        )
+
+        view_model = build_status_text_view_model(session)
+
+        self.assertIn("wall:Wall 001", view_model.text)
+        self.assertIn("Could not run 'Sync fixture'.", view_model.text)
+
+    def test_integration_feedback_message_clears_when_context_changes(self):
+        marker_a = SimpleNamespace(Name="MarkerA", Label="Marker A")
+        marker_b = SimpleNamespace(Name="MarkerB", Label="Marker B")
+        session = SimpleNamespace(
+            current_tool="Select",
+            selection=SimpleNamespace(
+                state=SimpleNamespace(
+                    get_selected_plan_target=lambda: ("provider", marker_a),
+                ),
+                sync=SimpleNamespace(
+                    normalize_gui_object_selection=lambda objects: tuple(objects or ())
+                ),
+            ),
+            provider_transient_state=SimpleNamespace(provider_selected_objects=[]),
+            task_panel_state=SimpleNamespace(
+                integration_status_message=None,
+                integration_status_context_key=None,
+            ),
+        )
+
+        self.assertEqual(
+            "Could not run 'Sync fixture'.",
+            plan_status_text_module.set_integration_feedback_message(
+                session,
+                "Could not run 'Sync fixture'.",
+            ),
+        )
+        self.assertEqual(
+            "Could not run 'Sync fixture'.",
+            plan_status_text_module.get_integration_feedback_message(session),
+        )
+
+        session.selection.state.get_selected_plan_target = lambda: ("provider", marker_b)
+
+        self.assertEqual("", plan_status_text_module.get_integration_feedback_message(session))
+        self.assertIsNone(session.task_panel_state.integration_status_message)
+        self.assertIsNone(session.task_panel_state.integration_status_context_key)
 
     def test_build_space_and_region_editor_view_models_follow_selection(self):
         space = SimpleNamespace(Name="Space001")
@@ -3604,6 +3668,99 @@ class TestBimPlanCore(unittest.TestCase):
         self.assertEqual(("cancel-point", False), calls[0])
         self.assertIn(("set-gui", provider_obj), calls)
         self.assertIn(("start-handle", provider_obj, 0, handle), calls)
+
+    def test_provider_action_click_failure_sets_integration_feedback_message(self):
+        class _DummyPanel(plan_control_integrations_module.PlanEditIntegrationPanelMixin):
+            pass
+
+        marker = SimpleNamespace(Name="Marker001", Label="Marker 001")
+        refresh_calls = []
+        session = SimpleNamespace(
+            current_tool="Select",
+            selection=SimpleNamespace(
+                state=SimpleNamespace(get_selected_plan_target=lambda: ("provider", marker)),
+                sync=SimpleNamespace(
+                    normalize_gui_object_selection=lambda objects: tuple(objects or ())
+                ),
+            ),
+            provider_transient_state=SimpleNamespace(provider_selected_objects=[]),
+            task_panel_state=SimpleNamespace(
+                integration_status_message=None,
+                integration_status_context_key=None,
+            ),
+            task_panels=SimpleNamespace(
+                refresh_task_panel_status=lambda *args, **kwargs: refresh_calls.append(
+                    (args, kwargs)
+                )
+            ),
+            providers=SimpleNamespace(
+                runtime=SimpleNamespace(execute_plan_provider_action=lambda *args, **kwargs: False)
+            ),
+        )
+        session.status_text = plan_status_text_module.PlanStatusTextAPI(session)
+        panel = _DummyPanel()
+        panel.session = session
+        action = SimpleNamespace(
+            interaction=PlanToolInteraction.IMMEDIATE,
+            provider_id="test-provider",
+            key="sync-fixture",
+            label="Sync Fixture",
+            transaction_label="Sync Fixture",
+        )
+
+        panel.on_provider_action_clicked(action)
+
+        self.assertEqual(
+            "Could not run 'Sync Fixture'. Review the integration context and try again.",
+            session.task_panel_state.integration_status_message,
+        )
+        self.assertEqual([((), {})], refresh_calls)
+
+    def test_provider_point_action_click_failure_sets_integration_feedback_message(self):
+        class _DummyPanel(plan_control_integrations_module.PlanEditIntegrationPanelMixin):
+            pass
+
+        wall = SimpleNamespace(Name="Wall001", Label="Wall 001")
+        refresh_calls = []
+        session = SimpleNamespace(
+            current_tool="Select",
+            selection=SimpleNamespace(
+                state=SimpleNamespace(get_selected_plan_target=lambda: ("wall", wall)),
+                sync=SimpleNamespace(
+                    normalize_gui_object_selection=lambda objects: tuple(objects or ())
+                ),
+            ),
+            provider_transient_state=SimpleNamespace(provider_selected_objects=[]),
+            task_panel_state=SimpleNamespace(
+                integration_status_message=None,
+                integration_status_context_key=None,
+            ),
+            task_panels=SimpleNamespace(
+                refresh_task_panel_status=lambda *args, **kwargs: refresh_calls.append(
+                    (args, kwargs)
+                )
+            ),
+            providers=SimpleNamespace(
+                point=SimpleNamespace(start_plan_provider_point_tool=lambda action: False)
+            ),
+        )
+        session.status_text = plan_status_text_module.PlanStatusTextAPI(session)
+        panel = _DummyPanel()
+        panel.session = session
+        action = SimpleNamespace(
+            interaction=PlanToolInteraction.POINT,
+            provider_id="test-provider",
+            key="place-fixture",
+            label="Place Fixture",
+        )
+
+        panel.on_provider_action_clicked(action)
+
+        self.assertEqual(
+            "Could not start 'Place Fixture'. Review the integration context and try again.",
+            session.task_panel_state.integration_status_message,
+        )
+        self.assertEqual([((), {})], refresh_calls)
 
     def test_plan_opening_shutdown_hook_cancels_opening_move(self):
         calls = []
