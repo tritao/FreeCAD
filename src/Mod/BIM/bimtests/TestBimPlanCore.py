@@ -100,8 +100,10 @@ from bimplan.providers import (
     PlanOverlayTargetSpec,
     PlanOverlayTargetKind,
     PlanProviderTargetSpec,
+    PlanToolInteraction,
     PlanToolSpec,
 )
+from bimplan.providers import edit as plan_provider_edit_module
 from bimplan.providers import point as plan_provider_point_module
 from bimplan.providers import PlanEditRegistry
 from bimplan.runtime import lifecycle as plan_lifecycle_module
@@ -2904,6 +2906,34 @@ class TestBimPlanCore(unittest.TestCase):
             doc.events,
         )
 
+    def test_plan_edit_provider_handle_transaction_skips_abort_after_committed_recompute_failure(
+        self,
+    ):
+        doc = _FailingRecomputeDoc(fail_on_call=1)
+        session = SimpleNamespace(
+            doc=doc,
+            document_visuals=SimpleNamespace(defer_document_visual_updates=lambda: nullcontext()),
+        )
+        handle = SimpleNamespace(transaction_label="Move Provider")
+
+        with patch.object(plan_provider_edit_module.FreeCAD.Console, "PrintWarning"):
+            success = plan_provider_edit_module._run_provider_handle_transaction(
+                session,
+                handle,
+                lambda: doc.events.append(("mutate", None)),
+            )
+
+        self.assertTrue(success)
+        self.assertEqual(
+            [
+                ("open", "Move Provider"),
+                ("mutate", None),
+                ("commit", None),
+                ("recompute", 1),
+            ],
+            doc.events,
+        )
+
     def test_plan_edit_find_reusable_junction_requires_exact_wall_set(self):
         wall_a = SimpleNamespace(Name="WallA")
         wall_b = SimpleNamespace(Name="WallB")
@@ -3201,6 +3231,132 @@ class TestBimPlanCore(unittest.TestCase):
             self.assertTrue(api.cancel_active_tool_for_shutdown())
 
         self.assertEqual([False], calls)
+
+    def test_plan_edit_provider_point_start_cancels_active_provider_move_first(self):
+        calls = []
+        session = SimpleNamespace(
+            current_tool=plan_runtime_tools.PlanTool.MOVE_PROVIDER,
+            providers=SimpleNamespace(
+                editing=SimpleNamespace(
+                    cancel_provider_handle_point_pick=lambda: calls.append("cancel-move")
+                )
+            ),
+            spaces=SimpleNamespace(
+                cancel_space_region_pick=lambda refresh=False: calls.append(
+                    ("cancel-space-region", refresh)
+                ),
+                cancel_plan_region_tool=lambda refresh=False: calls.append(
+                    ("cancel-plan-region", refresh)
+                ),
+                cancel_space_separator_tool=lambda refresh=False: calls.append(
+                    ("cancel-space-separator", refresh)
+                ),
+            ),
+            wall_create=SimpleNamespace(
+                cancel_rect_wall_tool=lambda refresh=False: calls.append(
+                    ("cancel-wall-create", refresh)
+                )
+            ),
+            embedded_tools=SimpleNamespace(has_active=lambda: False, cancel=lambda: None),
+            wall_edit=SimpleNamespace(cancel_wall_edit=lambda refresh=False: None),
+            lifecycle=SimpleNamespace(cancel_pending_edit=lambda: None),
+            wall_relations=SimpleNamespace(clear_plan_relation_status=lambda: None),
+            selection=SimpleNamespace(
+                hover=SimpleNamespace(
+                    set_hovered_wall=lambda _value: None,
+                    set_hovered_opening=lambda _value: None,
+                    set_hovered_symbol=lambda _value: None,
+                    set_hovered_provider=lambda _value: None,
+                    set_hovered_space=lambda _value: None,
+                    set_hovered_region=lambda _value: None,
+                )
+            ),
+            overlays=SimpleNamespace(
+                walls=SimpleNamespace(
+                    clear_wall_grips=lambda: None,
+                    clear_selected_wall_overlay=lambda: None,
+                ),
+                openings=SimpleNamespace(
+                    clear_selected_wall_opening_context_overlay=lambda: None,
+                    clear_selected_opening_handles=lambda: None,
+                ),
+                symbols=SimpleNamespace(clear_selected_symbol_handles=lambda: None),
+                providers=SimpleNamespace(clear_provider_point_preview=lambda: None),
+                runtime=SimpleNamespace(queue_plan_overlay_visual_refresh=lambda _visuals: None),
+            ),
+            provider_point_state=SimpleNamespace(
+                provider_point_tool=None,
+                provider_point_host_target=None,
+                provider_point_host_source="",
+            ),
+            task_panels=SimpleNamespace(refresh_task_panel_status=lambda: None),
+        )
+        tool = SimpleNamespace(default_host_target=())
+
+        with patch.object(
+            plan_provider_point_module,
+            "_provider_runtime_api",
+            return_value=SimpleNamespace(plan_provider_integrations_disabled=lambda: False),
+        ), patch.object(
+            plan_provider_point_module,
+            "get_provider_point_context_host_state",
+            return_value=((None, None), ""),
+        ), patch.object(
+            plan_provider_point_module,
+            "arm_provider_point_tool",
+            return_value=True,
+        ):
+            self.assertTrue(
+                plan_provider_point_module.start_plan_provider_point_tool(session, tool)
+            )
+
+        self.assertEqual("cancel-move", calls[0])
+        self.assertEqual(plan_runtime_tools.PlanTool.PROVIDER_POINT, session.current_tool)
+        self.assertIs(tool, session.provider_point_state.provider_point_tool)
+
+    def test_plan_edit_provider_handle_activation_cancels_active_point_tool_first(self):
+        calls = []
+        provider_obj = object()
+        handle = SimpleNamespace(interaction=PlanToolInteraction.POINT)
+        session = SimpleNamespace(
+            lifecycle_state=SimpleNamespace(tearing_down=False),
+            current_tool=plan_runtime_tools.PlanTool.PROVIDER_POINT,
+            providers=SimpleNamespace(
+                point=SimpleNamespace(
+                    cancel_provider_point_tool=lambda refresh=False: calls.append(
+                        ("cancel-point", refresh)
+                    )
+                )
+            ),
+            selection=SimpleNamespace(
+                state=SimpleNamespace(
+                    set_selected_plan_target=lambda *args: calls.append(("set-target", args))
+                ),
+                sync=SimpleNamespace(
+                    set_gui_selection_object=lambda obj: calls.append(("set-gui", obj))
+                ),
+            ),
+            overlays=SimpleNamespace(
+                walls=SimpleNamespace(clear_wall_grips=lambda: calls.append("clear-grips"))
+            ),
+        )
+
+        with patch.object(
+            plan_provider_edit_module,
+            "get_selected_provider_edit_handles",
+            return_value=[handle],
+        ), patch.object(
+            plan_provider_edit_module,
+            "start_provider_handle_point_pick",
+            side_effect=lambda _session, _provider_obj, _index, _handle: calls.append(
+                ("start-handle", _provider_obj, _index, _handle)
+            ),
+        ):
+            plan_provider_edit_module.activate_provider_handle_now(session, provider_obj, 0)
+
+        self.assertEqual(("cancel-point", False), calls[0])
+        self.assertIn(("set-gui", provider_obj), calls)
+        self.assertIn(("start-handle", provider_obj, 0, handle), calls)
 
     def test_plan_opening_shutdown_hook_cancels_opening_move(self):
         calls = []

@@ -15,6 +15,7 @@ from bimplan.providers.targets import (
     is_plan_provider_target_object,
 )
 from bimplan.runtime import tools as plan_runtime_tools
+from bimplan.transactions import PlanEditTransaction
 
 translate = FreeCAD.Qt.translate
 
@@ -132,6 +133,7 @@ def activate_provider_handle_now(session, provider_obj, handle_index):
     handles = get_selected_provider_edit_handles(session, provider_obj)
     if handle_index < 0 or handle_index >= len(handles):
         return
+    _cancel_active_provider_point_tool(session)
     handle = handles[handle_index]
     session.selection.state.set_selected_plan_target("provider", provider_obj)
     session.selection.sync.set_gui_selection_object(provider_obj)
@@ -253,29 +255,16 @@ def finish_provider_handle_point_pick(session, point=None, obj=None):
         restore_selected_provider(session, provider_obj)
         return
 
-    try:
-        with session.document_visuals.defer_document_visual_updates():
-            session.doc.openTransaction(_get_provider_handle_transaction_label(handle))
-            if not _apply_builtin_provider_handle_action(
-                session,
-                provider_obj,
-                handle,
-                payload,
-            ):
-                raise RuntimeError("Unable to move provider target")
-            session.doc.commitTransaction()
-            session.doc.recompute()
-    except Exception as exc:
-        try:
-            session.doc.abortTransaction()
-        except Exception:
-            pass
-        FreeCAD.Console.PrintError(
-            translate(
-                "BIM_PlanEdit",
-                "Plan Edit could not move the selected integration target: {error}\n",
-            ).format(error=exc)
-        )
+    if not _run_provider_handle_transaction(
+        session,
+        handle,
+        lambda: _apply_builtin_provider_handle_action(
+            session,
+            provider_obj,
+            handle,
+            payload,
+        ),
+    ):
         restore_selected_provider(session, provider_obj)
         return
 
@@ -332,6 +321,50 @@ def queue_restore_selected_provider(session, provider_obj):
             restore_generation,
         ),
     )
+
+
+def _cancel_active_provider_point_tool(session):
+    if session.current_tool != plan_runtime_tools.PlanTool.PROVIDER_POINT:
+        return False
+    providers = getattr(session, "providers", None)
+    point_api = getattr(providers, "point", providers)
+    cancel = getattr(point_api, "cancel_provider_point_tool", None)
+    if not callable(cancel):
+        return False
+    cancel(refresh=False)
+    return True
+
+
+def _warn_post_commit_recompute_failure(action_label, exc):
+    message = str(exc or "").strip() or type(exc).__name__
+    FreeCAD.Console.PrintWarning(
+        translate(
+            "BIM_PlanEdit",
+            "Completed {action}, but follow-up recompute failed: {error}\n",
+        ).format(action=action_label, error=message)
+    )
+
+
+def _run_provider_handle_transaction(session, handle, callback):
+    action_label = _get_provider_handle_transaction_label(handle)
+    try:
+        with session.document_visuals.defer_document_visual_updates():
+            with PlanEditTransaction(session.doc, action_label):
+                if callback() is False:
+                    raise RuntimeError("Unable to move provider target")
+    except Exception as exc:
+        FreeCAD.Console.PrintError(
+            translate(
+                "BIM_PlanEdit",
+                "Plan Edit could not move the selected integration target: {error}\n",
+            ).format(error=exc)
+        )
+        return False
+    try:
+        session.doc.recompute()
+    except Exception as exc:
+        _warn_post_commit_recompute_failure(action_label, exc)
+    return True
 
 
 def _get_provider_handle_transaction_label(handle):

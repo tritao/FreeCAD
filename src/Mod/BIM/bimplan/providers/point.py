@@ -18,6 +18,11 @@ def _provider_runtime_api(session):
     return getattr(providers, "runtime", providers)
 
 
+def _provider_editing_api(session):
+    providers = getattr(session, "providers", None)
+    return getattr(providers, "editing", providers)
+
+
 def _overlay_runtime_api(session):
     overlays = getattr(session, "overlays", None)
     return getattr(overlays, "runtime", overlays)
@@ -203,6 +208,8 @@ def start_plan_provider_point_tool(session, tool):
         return False
     if _provider_runtime_api(session).plan_provider_integrations_disabled():
         return False
+    if session.current_tool == plan_runtime_tools.PlanTool.MOVE_PROVIDER:
+        _provider_editing_api(session).cancel_provider_handle_point_pick()
     session.spaces.cancel_space_region_pick(refresh=False)
     session.spaces.cancel_plan_region_tool(refresh=False)
     session.wall_create.cancel_rect_wall_tool(refresh=False)
