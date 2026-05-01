@@ -5,7 +5,10 @@
 import FreeCAD
 import FreeCADGui
 from bimplan.providers import action_payloads as plan_provider_action_payloads
-from bimplan.providers.actions import execute_plan_provider_action
+from bimplan.providers.actions import (
+    _ensure_provider_action_feedback_message,
+    execute_plan_provider_action,
+)
 from bimplan.providers import builtin_edit as plan_provider_builtin_edit
 from bimplan.providers import payloads as plan_provider_payloads
 from bimplan.providers import PlanToolInteraction
@@ -160,6 +163,11 @@ def activate_provider_handle_now(session, provider_obj, handle_index):
     if handled:
         queue_restore_selected_provider(session, provider_obj)
         return
+    if str(getattr(handle, "action_key", "") or "").strip():
+        _ensure_provider_action_feedback_message(
+            session,
+            _format_provider_handle_failure_message(handle),
+        )
     restore_selected_provider(session, provider_obj)
 
 
@@ -246,6 +254,10 @@ def finish_provider_handle_point_pick(session, point=None, obj=None):
         ):
             queue_restore_selected_provider(session, provider_obj)
             return
+        _ensure_provider_action_feedback_message(
+            session,
+            _format_provider_handle_failure_message(handle),
+        )
         FreeCAD.Console.PrintWarning(
             translate(
                 "BIM_PlanEdit",
@@ -387,6 +399,23 @@ def _get_provider_handle_prompt(handle):
     if role == "rehost":
         return translate("BIM_PlanEdit", "Pick new host wall")
     return translate("BIM_PlanEdit", "Pick integration target point")
+
+
+def _get_provider_handle_label(handle):
+    label = str(getattr(handle, "label", "") or "").strip()
+    if label:
+        return label
+    key = str(getattr(handle, "key", "") or "").strip()
+    if key:
+        return key
+    return translate("BIM_PlanEdit", "integration handle")
+
+
+def _format_provider_handle_failure_message(handle):
+    return translate(
+        "BIM_PlanEdit",
+        "Could not run '{label}'. Review the integration context and try again.",
+    ).format(label=_get_provider_handle_label(handle))
 
 
 def _get_provider_handle_role(handle):

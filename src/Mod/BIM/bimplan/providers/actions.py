@@ -43,6 +43,14 @@ def _provider_action_was_handled(result):
     return handled
 
 
+def _get_provider_action_feedback_message(session):
+    status_text = getattr(session, "status_text", None)
+    get_feedback = getattr(status_text, "get_integration_feedback_message", None)
+    if not callable(get_feedback):
+        return ""
+    return str(get_feedback() or "").strip()
+
+
 def _clear_provider_action_feedback_message(session):
     status_text = getattr(session, "status_text", None)
     clear_feedback = getattr(status_text, "clear_integration_feedback_message", None)
@@ -63,6 +71,13 @@ def _set_provider_action_feedback_message(session, message):
     if callable(refresh_status):
         refresh_status()
     return normalized
+
+
+def _ensure_provider_action_feedback_message(session, message):
+    existing = _get_provider_action_feedback_message(session)
+    if existing:
+        return existing
+    return _set_provider_action_feedback_message(session, message)
 
 
 def _execute_plan_provider_action_callback(

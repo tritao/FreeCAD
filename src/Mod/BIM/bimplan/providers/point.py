@@ -7,6 +7,7 @@ import FreeCADGui
 
 from bimplan import document_visuals as plan_document_visuals
 from bimplan.providers import action_payloads as plan_provider_action_payloads
+from bimplan.providers.actions import _ensure_provider_action_feedback_message
 from bimplan.providers import payloads as plan_provider_payloads
 from bimplan.runtime import tools as plan_runtime_tools
 
@@ -153,6 +154,13 @@ def get_provider_point_tool_prompt(session):
     )
 
 
+def _format_provider_point_tool_execution_failure_message(session):
+    return translate(
+        "BIM_PlanEdit",
+        "Could not run '{label}'. Review the integration context and try again.",
+    ).format(label=get_provider_point_tool_label(session))
+
+
 def arm_provider_point_tool(session):
     if not has_active_provider_point_tool(session):
         return False
@@ -287,12 +295,17 @@ def handle_provider_point_tool_point(session, point=None, obj=None):
         snap_object=obj,
         snap_info=snap_info,
     )
-    _provider_runtime_api(session).execute_plan_provider_action(
+    handled = _provider_runtime_api(session).execute_plan_provider_action(
         getattr(tool, "provider_id", ""),
         getattr(tool, "key", ""),
         transaction_label=getattr(tool, "transaction_label", ""),
         payload=payload,
     )
+    if not handled:
+        _ensure_provider_action_feedback_message(
+            session,
+            _format_provider_point_tool_execution_failure_message(session),
+        )
     session.overlays.providers.clear_provider_point_preview()
     if has_active_provider_point_tool(session):
         arm_provider_point_tool(session)
