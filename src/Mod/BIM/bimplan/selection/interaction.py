@@ -303,8 +303,9 @@ class PlanSelectionActivationService(_SessionAPI):
 
         target_ref = self.session.selection.hover.get_hovered_plan_target()
         hover_pick_dirty = bool(self.session.hover_pick_state.dirty)
+        hovered_behavior = self._get_target_activation_behavior(target_ref.kind)
         reuse_hovered_target = (
-            target_ref.kind == plan_target_kinds.PLAN_TARGET_WALL
+            hovered_behavior is not None
             and target_ref.obj is not None
             and not hover_pick_dirty
             and _hover_pick_matches_mouse()

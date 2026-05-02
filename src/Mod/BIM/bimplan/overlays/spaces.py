@@ -329,15 +329,21 @@ def sync_selected_space_overlay(session):
             overlay_state.selected_space_overlay_geometry_key = geometry_key
             overlay_state.selected_space_overlay_segments = segments
         _perf_count(session, "selected_space_overlay_segments", len(segments))
-        tracker_state.space_overlay_trackers, _, _ = overlay_manager.sync_segment_overlay_trackers(
+        (
+            tracker_state.space_overlay_trackers,
+            tracker_state.space_hover_trackers,
+            _,
+        ) = overlay_manager.sync_segment_overlay_trackers(
             session,
             DraftTrackers,
             trackers=tracker_state.space_overlay_trackers,
+            hover_trackers=tracker_state.space_hover_trackers,
             segments=segments,
             label="selected-space-overlay:{}".format(getattr(space, "Name", "unknown")),
             color=color,
             width=width,
             clear_fn=lambda: clear_selected_space_overlay(session),
+            transfer_perf_key="selected_space_overlay_tracker_transfers",
         )
         overlay_state.selected_space_overlay_geometry_key = geometry_key
         overlay_state.selected_space_overlay_segments = segments
