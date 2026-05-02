@@ -67,10 +67,13 @@ class PlanEditIntegrationPanelMixin:
             or tuple(getattr(state, "inspector_sections", ()) or ())
         )
 
-    def _reconcile_integration_panel_for_non_provider_wall_selection(self):
+    def _reconcile_integration_panel_for_non_provider_selection(self):
         self._cancel_queued_integration_panel_refresh()
         if self._integration_panel_state_is_selection_bound():
             self._hide_integration_panel()
+
+    def _reconcile_integration_panel_for_non_provider_wall_selection(self):
+        self._reconcile_integration_panel_for_non_provider_selection()
 
     def _should_refresh_integration_panel_for_selection(self, selected_kind):
         if str(selected_kind or "") == "provider":
