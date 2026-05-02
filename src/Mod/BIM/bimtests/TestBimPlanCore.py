@@ -65,6 +65,8 @@ if "draftguitools.gui_base" not in sys.modules:
 
 from bimplan.providers import PlanProviderActionContext
 from bimplan.overlays import geometry as plan_overlay_geometry_module
+from bimplan.overlays import manager as plan_overlay_manager_module
+from bimplan.overlays import spaces as plan_space_overlay_module
 from bimplan.overlays import walls as plan_wall_overlay_module
 from bimplan.tools.space_interaction import activate_plan_region_tool, activate_space_separator_tool
 from bimplan.overlays import providers as provider_overlays
@@ -1255,6 +1257,138 @@ class TestBimPlanCore(unittest.TestCase):
         self.assertEqual(1, polylines.call_count)
         self.assertIn(("wall_overlay_segments_cache_hits", 1), counts)
 
+    def test_sync_segment_overlay_trackers_transfer_finalizes_displaced_trackers(self):
+        finalize_calls = []
+
+        class _Tracker:
+            def __init__(self, name):
+                self.name = name
+                self.colors = []
+                self.starts = []
+                self.ends = []
+                self.on_calls = 0
+
+            def setColor(self, color):
+                self.colors.append(color)
+
+            def p1(self, point):
+                self.starts.append(point)
+
+            def p2(self, point):
+                self.ends.append(point)
+
+            def on(self):
+                self.on_calls += 1
+
+        selected_tracker = _Tracker("selected")
+        hover_trackers = [_Tracker("hover-a"), _Tracker("hover-b")]
+        segments = (
+            (FreeCAD.Vector(0, 0, 0), FreeCAD.Vector(1000, 0, 0)),
+            (FreeCAD.Vector(1000, 0, 0), FreeCAD.Vector(1000, 1000, 0)),
+        )
+        session = SimpleNamespace(
+            performance=_make_perf_stub(),
+            lifecycle_state=SimpleNamespace(tearing_down=False, finishing=False),
+            document_visuals=SimpleNamespace(document_is_alive=lambda: True),
+        )
+
+        with patch.object(
+            plan_overlay_manager_module,
+            "finalize_trackers",
+            side_effect=lambda trackers: finalize_calls.append(list(trackers)),
+        ):
+            trackers, remaining_hover, transferred = (
+                plan_overlay_manager_module.sync_segment_overlay_trackers(
+                    session,
+                    SimpleNamespace(lineTracker=lambda **_kwargs: None),
+                    trackers=[selected_tracker],
+                    hover_trackers=list(hover_trackers),
+                    segments=segments,
+                    label="space-overlay:Space001",
+                    color=(0.12, 0.38, 0.95),
+                    width=3.0,
+                    clear_fn=lambda: self.fail("clear_fn should not run during transfer"),
+                    transfer_perf_key="selected_space_overlay_tracker_transfers",
+                )
+            )
+
+        self.assertTrue(transferred)
+        self.assertEqual(hover_trackers, trackers)
+        self.assertEqual([], remaining_hover)
+        self.assertEqual([[selected_tracker]], finalize_calls)
+        for tracker, (start, end) in zip(trackers, segments):
+            self.assertEqual([(0.12, 0.38, 0.95)], tracker.colors)
+            self.assertEqual([], tracker.starts)
+            self.assertEqual([], tracker.ends)
+            self.assertEqual(0, tracker.on_calls)
+
+    def test_sync_selected_space_overlay_transfers_hover_trackers(self):
+        space = SimpleNamespace(Name="Space001")
+        hover_trackers = [object(), object()]
+        selected_trackers = [object()]
+        sync_calls = []
+        fake_gui_trackers = ModuleType("draftguitools.gui_trackers")
+        session = SimpleNamespace(
+            current_tool="Select",
+            performance=_make_perf_stub(),
+            overlay_tracker_state=SimpleNamespace(
+                space_overlay_trackers=list(selected_trackers),
+                space_hover_trackers=list(hover_trackers),
+            ),
+            overlay_transient_state=SimpleNamespace(
+                selected_space_overlay_dirty=True,
+                selected_space_overlay_geometry_key=None,
+                selected_space_overlay_segments=(),
+                selected_space_overlay_render_state=None,
+            ),
+            selection=SimpleNamespace(
+                state=SimpleNamespace(
+                    get_selected_plan_target_object=lambda kind: space if kind == "space" else None
+                ),
+                targets=SimpleNamespace(is_plan_space_object=lambda obj: obj is space),
+            ),
+            viewport=SimpleNamespace(scaled_line_width=lambda width: float(width)),
+            visibility=SimpleNamespace(
+                get_document_object_key=lambda obj: ("Doc", getattr(obj, "Name", None))
+            ),
+        )
+
+        with (
+            patch.object(
+                plan_space_overlay_module.overlay_geometry,
+                "get_space_overlay_segments",
+                return_value=(
+                    (FreeCAD.Vector(0, 0, 0), FreeCAD.Vector(1000, 0, 0)),
+                    (FreeCAD.Vector(1000, 0, 0), FreeCAD.Vector(1000, 1000, 0)),
+                ),
+            ),
+            patch.object(
+                plan_space_overlay_module.overlay_manager,
+                "sync_segment_overlay_trackers",
+                side_effect=lambda *args, **kwargs: (
+                    sync_calls.append(kwargs) or (list(hover_trackers), [], True)
+                ),
+            ),
+            patch.dict(
+                sys.modules,
+                {
+                    "draftguitools.gui_trackers": fake_gui_trackers,
+                },
+            ),
+        ):
+            plan_space_overlay_module.sync_selected_space_overlay(session)
+
+        self.assertEqual(
+            [list(hover_trackers)], [session.overlay_tracker_state.space_overlay_trackers]
+        )
+        self.assertEqual([], session.overlay_tracker_state.space_hover_trackers)
+        self.assertEqual(list(hover_trackers), sync_calls[0]["hover_trackers"])
+        self.assertFalse(session.overlay_transient_state.selected_space_overlay_dirty)
+        self.assertEqual(
+            (("Doc", "Space001"), 3.0, (0.12, 0.38, 0.95)),
+            session.overlay_transient_state.selected_space_overlay_render_state,
+        )
+
     def test_activate_semantic_plan_target_uses_wall_behavior_overrides(self):
         calls = []
         target = SimpleNamespace(Name="Wall001")
@@ -1284,6 +1418,41 @@ class TestBimPlanCore(unittest.TestCase):
                         "resolved_target": _make_plan_target_ref("wall", target),
                         "defer_gui_selection": True,
                         "defer_wall_grips": True,
+                    },
+                )
+            ],
+            calls,
+        )
+
+    def test_activate_semantic_plan_target_reuses_hovered_space_target(self):
+        calls = []
+        target = SimpleNamespace(Name="Space001")
+        session = _attach_activation_service(
+            SimpleNamespace(
+                selection=_make_selection_stub(hovered_target=("space", target)),
+                hover_pick_state=_make_hover_pick_state_stub(last_mouse_pos=(50.0, 60.0)),
+                performance=_make_perf_stub(),
+            )
+        )
+
+        with patch.object(
+            session.selection.activation,
+            "activate_plan_target",
+            side_effect=lambda *args, **kwargs: calls.append((args, kwargs)) or True,
+        ):
+            self.assertTrue(session.selection.activation.activate_semantic_plan_target((50, 60)))
+
+        self.assertEqual(
+            [
+                (
+                    ("space", (50, 60)),
+                    {
+                        "event_callback": None,
+                        "sync_gui_selection": True,
+                        "clear_hovered_kinds": ("wall", "opening", "symbol", "region"),
+                        "resolved_target": _make_plan_target_ref("space", target),
+                        "defer_gui_selection": False,
+                        "defer_wall_grips": False,
                     },
                 )
             ],

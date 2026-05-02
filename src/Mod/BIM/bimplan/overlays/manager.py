@@ -517,6 +517,7 @@ def sync_segment_overlay_trackers(
     transfer_perf_key="",
 ):
     transferred = False
+    displaced_trackers = []
     current_trackers = trackers if trackers is not None else []
     current_hover_trackers = hover_trackers if hover_trackers is not None else None
     if len(current_trackers) != len(segments):
@@ -526,6 +527,17 @@ def sync_segment_overlay_trackers(
             and current_hover_trackers is not None
             and len(current_hover_trackers) == len(segments)
         ):
+            current_trackers = current_hover_trackers
+            current_hover_trackers = []
+            transferred = True
+            if transfer_perf_key:
+                _perf_count(session, transfer_perf_key)
+        elif (
+            hover_trackers is not None
+            and current_hover_trackers is not None
+            and len(current_hover_trackers) == len(segments)
+        ):
+            displaced_trackers = list(current_trackers)
             current_trackers = current_hover_trackers
             current_hover_trackers = []
             transferred = True
@@ -543,6 +555,8 @@ def sync_segment_overlay_trackers(
                     ontop=True,
                 )
                 current_trackers.append(tracker)
+    if displaced_trackers:
+        finalize_trackers(displaced_trackers)
     for tracker, (start, end) in zip(current_trackers, segments):
         set_plan_line_tracker_width(tracker, width)
         tracker.setColor(color)
