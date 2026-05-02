@@ -368,7 +368,8 @@ class PlanEditControlsShellMixin:
         self._space_type_completer = None
         self._space_type_options_cache = None
         self._space_editor_label_state = None
-        self._space_editor_combo_state = None
+        self._space_editor_combo_options_state = None
+        self._space_editor_combo_selection_state = None
         self._space_editor_boundary_state = None
         self._status_text_state = None
         self._modal_interaction_state = None

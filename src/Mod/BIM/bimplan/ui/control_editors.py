@@ -471,12 +471,20 @@ class PlanEditEditorPanelsMixin:
                 current_type = getattr(space, "SpaceType", "")
                 options = self._get_cached_space_type_options(space, current_type)
                 if self.space_type_combo is not None:
-                    combo_state = (space_key, options, str(current_type or ""))
-                    if combo_state != self._space_editor_combo_state:
+                    options_state = options
+                    if options_state != self._space_editor_combo_options_state:
                         self.session.performance.plan_perf_count("space_type_options", len(options))
                         self.space_type_combo.blockSignals(True)
                         try:
                             self._set_space_type_combo_options(options)
+                        finally:
+                            self.space_type_combo.blockSignals(False)
+                        self._space_editor_combo_options_state = options_state
+                        self._space_editor_combo_selection_state = None
+                    combo_selection_state = (space_key, str(current_type or ""))
+                    if combo_selection_state != self._space_editor_combo_selection_state:
+                        self.space_type_combo.blockSignals(True)
+                        try:
                             current_index = self._find_space_type_combo_index(current_type)
                             if current_index >= 0:
                                 self.space_type_combo.setCurrentIndex(current_index)
@@ -486,7 +494,7 @@ class PlanEditEditorPanelsMixin:
                                     line_edit.setText(current_type)
                         finally:
                             self.space_type_combo.blockSignals(False)
-                        self._space_editor_combo_state = combo_state
+                        self._space_editor_combo_selection_state = combo_selection_state
 
                 if self.space_boundary_list is not None:
                     boundary_state = (space_key, self._get_space_boundary_signature(space))

@@ -138,6 +138,7 @@ from bimplan.tools.spaces import (
 from bimplan.selection.targets import get_plan_target_for_object, make_plan_target_record
 from bimplan.transactions import PlanEditTransaction
 from bimplan.ui.controls import PlanEditControlsWidget
+from bimplan.ui import control_editors as plan_control_editors
 from bimplan.ui import control_shell as plan_control_shell
 from bimplan.ui import control_integrations as plan_control_integrations_module
 from bimplan.ui import status_text as plan_status_text_module
@@ -2672,11 +2673,8 @@ class TestBimPlanCore(unittest.TestCase):
         widget = object.__new__(PlanEditControlsWidget)
         widget.space_editor = _Editor()
         widget._space_editor_label_state = (("PlanDoc", "Space001"), "Room A")
-        widget._space_editor_combo_state = (
-            ("PlanDoc", "Space001"),
-            ("Room", "Office"),
-            "Room",
-        )
+        widget._space_editor_combo_options_state = ("Room", "Office")
+        widget._space_editor_combo_selection_state = (("PlanDoc", "Space001"), "Room")
         widget._space_editor_boundary_state = (
             ("PlanDoc", "Space001"),
             ((("PlanDoc", "Wall001"), ("Face1",)),),
@@ -2686,9 +2684,9 @@ class TestBimPlanCore(unittest.TestCase):
 
         self.assertFalse(widget.space_editor.visible)
         self.assertEqual((("PlanDoc", "Space001"), "Room A"), widget._space_editor_label_state)
+        self.assertEqual(("Room", "Office"), widget._space_editor_combo_options_state)
         self.assertEqual(
-            (("PlanDoc", "Space001"), ("Room", "Office"), "Room"),
-            widget._space_editor_combo_state,
+            (("PlanDoc", "Space001"), "Room"), widget._space_editor_combo_selection_state
         )
         self.assertEqual(
             (
@@ -2697,6 +2695,79 @@ class TestBimPlanCore(unittest.TestCase):
             ),
             widget._space_editor_boundary_state,
         )
+
+    def test_space_editor_reuses_type_combo_items_when_switching_spaces(self):
+        class _Editor:
+            def setVisible(self, visible):
+                self.visible = bool(visible)
+
+        class _Combo:
+            def __init__(self):
+                self.blocked = []
+                self.indices = []
+
+            def blockSignals(self, blocked):
+                self.blocked.append(bool(blocked))
+
+            def setCurrentIndex(self, index):
+                self.indices.append(int(index))
+
+            def lineEdit(self):
+                return None
+
+        widget = object.__new__(PlanEditControlsWidget)
+        widget.space_editor = _Editor()
+        widget.space_label_edit = None
+        widget.space_boundary_list = None
+        widget.space_type_combo = _Combo()
+        widget._refreshing_space_editor = False
+        widget._space_type_options_cache = ("Room", "Office")
+        widget._space_editor_label_state = None
+        widget._space_editor_combo_options_state = None
+        widget._space_editor_combo_selection_state = None
+        widget._space_editor_boundary_state = None
+
+        perf_counts = []
+        widget.session = SimpleNamespace(
+            performance=_make_perf_stub(
+                count=lambda name, delta=1: perf_counts.append((name, delta))
+            )
+        )
+
+        set_option_calls = []
+        widget._set_space_type_combo_options = lambda options: set_option_calls.append(
+            tuple(options)
+        )
+        widget._find_space_type_combo_index = lambda value: 0 if str(value or "") == "Room" else -1
+
+        space_a = SimpleNamespace(
+            Document=SimpleNamespace(Name="PlanDoc"),
+            Name="Space001",
+            Label="Room A",
+            SpaceType="Room",
+        )
+        space_b = SimpleNamespace(
+            Document=SimpleNamespace(Name="PlanDoc"),
+            Name="Space002",
+            Label="Room B",
+            SpaceType="Room",
+        )
+
+        with patch.object(
+            plan_control_editors.plan_task_panel_view_model,
+            "build_space_editor_view_model",
+            side_effect=(
+                SimpleNamespace(show_editor=True, space=space_a),
+                SimpleNamespace(show_editor=True, space=space_b),
+            ),
+        ):
+            widget._refresh_space_editor()
+            widget._refresh_space_editor()
+
+        self.assertEqual([("Room", "Office")], set_option_calls)
+        self.assertEqual([("space_type_options", 2)], perf_counts)
+        self.assertEqual([True, False, True, False, True, False], widget.space_type_combo.blocked)
+        self.assertEqual([0, 0], widget.space_type_combo.indices)
 
     def test_task_panel_status_refresh_dispatches_explicit_selection_reason(self):
         panel_calls = []
