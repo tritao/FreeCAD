@@ -2662,6 +2662,67 @@ class TestBimPlanCore(unittest.TestCase):
         self.assertEqual([True], cancel_calls)
         self.assertEqual([True], hide_calls)
 
+    def test_selection_refresh_uses_space_fast_path(self):
+        widget = object.__new__(PlanEditControlsWidget)
+        widget.form = object()
+        widget.status = object()
+        widget.exit_button = object()
+        widget._integration_refresh_queued = False
+        widget._integration_refresh_generation = 0
+        widget._integration_panel_state = PlanProviderSnapshot(
+            context_panels=(SimpleNamespace(state="single_object"),),
+        )
+
+        calls = []
+        widget.session = SimpleNamespace(
+            current_tool="Select",
+            performance=SimpleNamespace(
+                plan_perf_trace_span=lambda *_args, **_kwargs: nullcontext()
+            ),
+            selection=_make_selection_stub(("space", object())),
+            interaction=SimpleNamespace(is_modal_plan_interaction_active=lambda: False),
+            status_text=SimpleNamespace(get_provider_selected_objects=lambda: ()),
+        )
+        widget._set_status_text = lambda _text: calls.append("status-text")
+        widget._refresh_action_context = lambda: calls.append("action-context")
+        widget._refresh_integration_panel = lambda defer=False: calls.append(
+            ("integration-refresh", bool(defer))
+        )
+        widget._cancel_queued_integration_panel_refresh = lambda: calls.append(
+            "cancel-integration-refresh"
+        )
+        widget._hide_integration_panel = lambda: calls.append("hide-integration-panel")
+        widget._refresh_space_editor = lambda: calls.append("refresh-space-editor")
+        widget._hide_region_editor = lambda: calls.append("hide-region-editor")
+        widget._hide_window_editor = lambda: calls.append("hide-window-editor")
+        widget._refresh_region_editor = lambda: calls.append("refresh-region-editor")
+        widget._refresh_window_editor = lambda: calls.append("refresh-window-editor")
+        widget._sync_join_type_combo_from_session = lambda: calls.append("sync-join-type")
+        widget._apply_modal_interaction_state = lambda _active: calls.append("apply-modal")
+        widget._set_widget_updates_enabled = lambda _widget, _enabled: None
+        widget._refresh_widget_geometry = lambda _widget: None
+
+        with patch.object(
+            plan_control_shell.plan_task_panel_view_model,
+            "build_status_text_view_model",
+            return_value=SimpleNamespace(text="space"),
+        ):
+            widget.refresh_selection_from_session()
+
+        self.assertEqual(
+            [
+                "status-text",
+                "action-context",
+                "cancel-integration-refresh",
+                "hide-integration-panel",
+                "refresh-space-editor",
+                "hide-region-editor",
+                "hide-window-editor",
+                "apply-modal",
+            ],
+            calls,
+        )
+
     def test_hiding_space_editor_preserves_cached_refresh_state(self):
         class _Editor:
             def __init__(self):
