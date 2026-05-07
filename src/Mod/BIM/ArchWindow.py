@@ -328,6 +328,9 @@ class _Window(ArchComponent.Component):
 
     def onChanged(self, obj, prop):
 
+        if prop in ["Base", "CloneOf", "HoleDepth", "HoleWire", "Normal", "Subvolume"]:
+            self._clearSubvolumeCache()
+
         self.hideSubobjects(obj, prop)
         if not "Restore" in obj.State:
             if prop in [
@@ -364,6 +367,87 @@ class _Window(ArchComponent.Component):
                             obj.Base.setDatum(prop, val)
             else:
                 ArchComponent.Component.onChanged(self, obj, prop)
+
+    def _clearSubvolumeCache(self):
+        self._subvolume_cache_key = None
+        self._subvolume_cache_shape = None
+
+    def _resolve_subvolume_width(self, obj, orig=None, host=None):
+        """Return the effective opening depth used for host subtraction."""
+
+        width = 0
+        if hasattr(obj, "HoleDepth"):
+            if obj.HoleDepth.Value:
+                width = obj.HoleDepth.Value
+        if (not width) and orig and hasattr(orig, "HoleDepth"):
+            if orig.HoleDepth.Value:
+                width = orig.HoleDepth.Value
+        if not width:
+            if host and Draft.getType(host) == "Wall":
+                propSetUuid = host.Proxy.ArchSkPropSetPickedUuid
+                widths = []
+                if (
+                    hasattr(host, "ArchSketchData")
+                    and host.ArchSketchData
+                    and Draft.getType(host.Base) == "ArchSketch"
+                ):
+                    if hasattr(host.Base, "Proxy") and hasattr(host.Base.Proxy, "getWidths"):
+                        widths = host.Base.Proxy.getWidths(host.Base, propSetUuid=propSetUuid)
+                if not widths:
+                    if host.OverrideWidth:
+                        widths = host.OverrideWidth
+                    elif host.Width:
+                        widths = [host.Width.Value]
+
+                    if hasattr(host, "Material"):
+                        if host.Material and hasattr(host.Material, "Materials"):
+                            thicknesses = [abs(t) for t in host.Material.Thicknesses]
+                            widths.append(sum(thicknesses))
+
+                if widths:
+                    width = max(widths) + 100
+            elif obj.Base:
+                b = obj.Base.Shape.BoundBox
+                width = max(b.XLength, b.YLength, b.ZLength)
+        if not width:
+            width = 1.1112
+        return width
+
+    def _get_subvolume_cache_key(self, obj, base, width, orig=None):
+        """Build a cache key for the local subtraction solid."""
+
+        normal = getattr(obj, "Normal", None)
+        if normal:
+            normal_sig = (
+                round(normal.x, 6),
+                round(normal.y, 6),
+                round(normal.z, 6),
+            )
+        else:
+            normal_sig = None
+
+        base_placement_sig = None
+        if hasattr(base, "Placement"):
+            base_placement_sig = (
+                round(base.Placement.Base.x, 6),
+                round(base.Placement.Base.y, 6),
+                round(base.Placement.Base.z, 6),
+                round(base.Placement.Rotation.Q[0], 6),
+                round(base.Placement.Rotation.Q[1], 6),
+                round(base.Placement.Rotation.Q[2], 6),
+                round(base.Placement.Rotation.Q[3], 6),
+            )
+
+        hole_wire = getattr(obj, "HoleWire", 0)
+        if (not hole_wire) and orig:
+            hole_wire = getattr(orig, "HoleWire", 0)
+        return (
+            base.Shape.hashCode(),
+            base_placement_sig,
+            hole_wire,
+            round(width, 6),
+            normal_sig,
+        )
 
     def buildShapes(self, obj):
 
@@ -762,68 +846,7 @@ class _Window(ArchComponent.Component):
                         sh.Placement = pl
                         return sh
 
-        # getting extrusion depth
-        width = 0
-        if hasattr(
-            obj, "HoleDepth"
-        ):  # if this is a clone, the original's HoleDepth is overridden if HoleDepth is set in the clone  # TODO To support Links
-            if obj.HoleDepth.Value:
-                width = obj.HoleDepth.Value
-        if not width:
-            if orig and hasattr(orig, "HoleDepth"):
-                if orig.HoleDepth.Value:
-                    width = orig.HoleDepth.Value
-        if not width:
-            if host and Draft.getType(host) == "Wall":
-                # TODO More robust approach :  With ArchSketch, on which wall segment an ArchObject is attached to is declared by user and saved.
-                #      The extrusion of each wall segment could be done per segment, and punch hole in the exact wall segment before fusing them all. No need to care about each wall segment thickness.
-                # TODO Consider to turn below codes to getWidths/getSortedWidths() in ArchWall (below codes copied and modified from ArchWall)
-                propSetUuid = host.Proxy.ArchSkPropSetPickedUuid
-                widths = []  # [] or None are both False
-                if (
-                    hasattr(host, "ArchSketchData")
-                    and host.ArchSketchData
-                    and Draft.getType(host.Base) == "ArchSketch"
-                ):
-                    if hasattr(host.Base, "Proxy"):  # TODO Any need to test ?
-                        if hasattr(host.Base.Proxy, "getWidths"):
-                            # Return a list of Width corresponding to indexes
-                            # of sorted edges of Sketch.
-                            widths = host.Base.Proxy.getWidths(host.Base, propSetUuid=propSetUuid)
-                if not widths:
-                    if host.OverrideWidth:
-                        # TODO No need to test as in ArchWall if host.Base is Sketch and sortSketchWidth(), just need the max value
-                        widths = host.OverrideWidth
-                    elif host.Width:
-                        widths = [host.Width.Value]
-
-                    # TODO Below codes copied and adopted from ArchWall.py.
-                    #      Consider adding a variable to store the layer's
-                    #      thickness as deduced, so the figure there could be
-                    #      used directly without re-calculated here below.
-                    if hasattr(host, "Material"):
-                        if host.Material:
-                            if hasattr(host.Material, "Materials"):
-                                thicknesses = [abs(t) for t in host.Material.Thicknesses]
-                                totalThk = sum(thicknesses)
-                                # Append totalThk to widths, find max below
-                                widths.append(totalThk)
-
-                if widths:
-                    width = max(widths)
-                    # +100mm to ensure subtract is through at the moment
-                    width += 100
-            elif obj.Base:  # If host is not Wall
-                b = obj.Base.Shape.BoundBox
-                width = max(
-                    b.XLength, b.YLength, b.ZLength
-                )  # TODO Fix this, the width would be too much in many cases
-        if (
-            not width
-        ):  # TODO Should not happen, it means there is no Base (Sketch or another FC object) in Clone either
-            width = (
-                1.1112  # some weird value to have little chance to overlap with an existing face
-            )
+        width = self._resolve_subvolume_width(obj, orig=orig, host=host)
 
         # setup base
         if orig:
@@ -832,6 +855,17 @@ class _Window(ArchComponent.Component):
             )  # always use original's base; clone's base should not be used to supersede original's base
         else:
             base = obj.Base
+
+        cache_key = self._get_subvolume_cache_key(obj, base, width, orig=orig)
+        if cache_key == getattr(self, "_subvolume_cache_key", None):
+            cached_shape = getattr(self, "_subvolume_cache_shape", None)
+            if cached_shape and not cached_shape.isNull():
+                result = cached_shape.copy()
+                if plac:
+                    result.Placement = plac
+                else:
+                    result.Placement = obj.Placement
+                return result
 
         # finding which wire to use to drill the hole
         f = None
@@ -868,6 +902,8 @@ class _Window(ArchComponent.Component):
             v2 = v1.negative()
             v2 = Vector(v1).multiply(-2)
             f = f.extrude(v2)
+            self._subvolume_cache_key = cache_key
+            self._subvolume_cache_shape = f.copy()
             if plac:
                 f.Placement = plac
             else:
