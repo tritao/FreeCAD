@@ -2053,8 +2053,6 @@ class _ViewProviderWall(ArchComponent.ViewProviderComponent):
         """
 
         if prop in ["Placement", "Shape", "Material"]:
-            if obj.ViewObject.DisplayMode == "Footprint":
-                obj.ViewObject.Proxy.setDisplayMode("Footprint")
             if hasattr(obj, "Material"):
                 if obj.Material and obj.Shape:
                     if hasattr(obj.Material, "Materials"):

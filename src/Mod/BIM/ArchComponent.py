@@ -1728,7 +1728,9 @@ class ViewProviderComponent:
                             obj.ViewObject.DiffuseColor = obj.CloneOf.ViewObject.DiffuseColor
                             obj.ViewObject.update()
         if prop in ("Shape", "Placement"):
-            self.refreshFootprint(obj.ViewObject)
+            vobj = getattr(obj, "ViewObject", None)
+            if vobj and getattr(vobj, "DisplayMode", None) == "Footprint":
+                self.refreshFootprint(vobj)
         return
 
     def updateFootprint(self):
@@ -1873,6 +1875,8 @@ class ViewProviderComponent:
         of the display mode node.
 
         Add the HiRes and Footprint display modes (if provided by object).
+        Footprint geometry itself is built lazily when the display mode is
+        actually shown.
 
         Parameters
         ----------
@@ -1888,7 +1892,7 @@ class ViewProviderComponent:
         self.hiresgroup.addChild(self.meshcolor)
         self.hiresgroup.setName("HiRes")
         vobj.addDisplayMode(self.hiresgroup, "HiRes")
-        self.refreshFootprint(vobj)
+        self.ensureFootprintGroup(vobj)
         return
 
     def getDisplayModes(self, vobj):

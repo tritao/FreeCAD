@@ -1521,7 +1521,7 @@ class _ViewProviderStructure(ArchComponent.ViewProviderComponent):
         return sep
 
     def attach(self, vobj):
-        """Attach display modes and pre-register the slab footprint mask.
+        """Attach display modes and pre-register the slab footprint mode.
 
         The DisplayMode enumeration is initialized during attach, so the
         footprint mode must be registered here even if the structure starts as
@@ -1536,9 +1536,8 @@ class _ViewProviderStructure(ArchComponent.ViewProviderComponent):
         self.hiresgroup.addChild(self.meshcolor)
         self.hiresgroup.setName("HiRes")
         vobj.addDisplayMode(self.hiresgroup, "HiRes")
-        ArchComponent.ViewProviderComponent.ensureFootprintGroup(self, vobj)
         if self._is_slab(vobj):
-            self.refreshFootprint(vobj)
+            self.ensureFootprintGroup(vobj)
         else:
             self._drop_footprint_group(vobj)
 
@@ -1635,7 +1634,9 @@ class _ViewProviderStructure(ArchComponent.ViewProviderComponent):
                     IfcType = None
                 if IfcType == "Slab":
                     obj.ViewObject.NodeType = "Area"
-                    self.refreshFootprint(obj.ViewObject)
+                    self.ensureFootprintGroup(obj.ViewObject)
+                    if obj.ViewObject.DisplayMode == "Footprint":
+                        self.refreshFootprint(obj.ViewObject)
                     self._sync_display_mode_enums(obj.ViewObject)
                 else:
                     obj.ViewObject.NodeType = "Linear"
