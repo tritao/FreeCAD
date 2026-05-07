@@ -338,6 +338,64 @@ class TestArchWindow(TestArchBase.TestArchBase):
             f"ExpectedAfter: {expected_wall_vertical_area_after}",
         )
 
+    def test_hosted_window_resize_updates_wall_after_multiple_openings(self):
+        """Resizing an existing hosted window must invalidate cached wall cuts."""
+
+        wall = Arch.makeWall(
+            Draft.makeLine(FreeCAD.Vector(0, 0, 0), FreeCAD.Vector(4000, 0, 0)),
+            width=200,
+            height=2400,
+            name="ResizeHostWall",
+        )
+        self.document.recompute()
+        wall_volume_without_openings = wall.Shape.Volume
+
+        window_specs = [
+            ("ResizeWindowA", "ResizeSketchA", 700.0, 1000.0, 500.0),
+            ("ResizeWindowB", "ResizeSketchB", 600.0, 1000.0, 2200.0),
+        ]
+        windows = []
+
+        for win_name, sketch_name, width, height, x_start in window_specs:
+            sketch = self._create_sketch_with_named_constraints(sketch_name, width, height)
+            sketch.Placement.Rotation = FreeCAD.Rotation(FreeCAD.Vector(1, 0, 0), 90)
+            sketch.Placement.Base = FreeCAD.Vector(x_start, 0, 900.0)
+            self.document.recompute()
+
+            window = Arch.makeWindow(baseobj=sketch, name=win_name)
+            window.Width = width
+            window.Height = height
+            window.HoleDepth = 0
+            window.WindowParts = ["DefaultFrame", "Frame", "Wire0", "60", "0"]
+            Arch.addComponents(window, host=wall)
+            windows.append(window)
+
+        self.document.recompute()
+
+        initial_removed_volume = sum(
+            window.Width.Value * window.Height.Value * wall.Width.Value for window in windows
+        )
+        self.assertAlmostEqual(
+            wall_volume_without_openings - wall.Shape.Volume,
+            initial_removed_volume,
+            delta=1e-5,
+            msg="Initial hosted window cuts do not match the expected removed volume.",
+        )
+
+        windows[0].Width = 900.0
+        self.document.recompute()
+
+        updated_removed_volume = (
+            windows[0].Width.Value * windows[0].Height.Value * wall.Width.Value
+            + windows[1].Width.Value * windows[1].Height.Value * wall.Width.Value
+        )
+        self.assertAlmostEqual(
+            wall_volume_without_openings - wall.Shape.Volume,
+            updated_removed_volume,
+            delta=1e-5,
+            msg="Resizing an existing hosted window did not refresh the wall opening volume.",
+        )
+
     def test_clone_window(self):
         """Test cloning an Arch.Window object.
 

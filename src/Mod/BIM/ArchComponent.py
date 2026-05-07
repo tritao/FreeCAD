@@ -953,29 +953,6 @@ class Component(ArchIFC.IfcProduct):
         import Draft
         import Part
 
-        def _cut_shape(shape, tools):
-            """Cut one or more subtraction tools from a shape.
-
-            When multiple tools are provided, try a batched OCC cut first and
-            fall back to sequential cuts if OCC rejects the batched operation.
-            """
-
-            if not shape or not tools or (not shape.Solids):
-                return shape
-
-            cut_tools = tools[0] if len(tools) == 1 else tools
-            try:
-                if len(shape.Solids) > 1:
-                    return Part.makeCompound([sol.cut(cut_tools) for sol in shape.Solids])
-                return shape.cut(cut_tools)
-            except Part.OCCError:
-                if len(tools) == 1:
-                    raise
-                result = shape
-                for tool in tools:
-                    result = _cut_shape(result, [tool])
-                return result
-
         # print("Processing subshapes of ",obj.Label, " : ",obj.Additions)
 
         if placement:
@@ -1084,12 +1061,12 @@ class Component(ArchIFC.IfcProduct):
                             pending_window_subvolumes.append(subvolume)
                             continue
                         if pending_window_subvolumes:
-                            base = _cut_shape(base, pending_window_subvolumes)
+                            base = self._cutHostedWindowSubvolumes(base, pending_window_subvolumes)
                             pending_window_subvolumes = []
-                        base = _cut_shape(base, [subvolume])
+                        base = self._cutShape(base, [subvolume])
                 elif hasattr(o, "Shape"):
                     if pending_window_subvolumes:
-                        base = _cut_shape(base, pending_window_subvolumes)
+                        base = self._cutHostedWindowSubvolumes(base, pending_window_subvolumes)
                         pending_window_subvolumes = []
                     # no subvolume, we subtract the whole shape
                     if o.Shape:
@@ -1101,11 +1078,11 @@ class Component(ArchIFC.IfcProduct):
                                     # see https://forum.freecad.org/viewtopic.php?p=579754#p579754
                                     s.Placement = placement.multiply(s.Placement)
                                 try:
-                                    base = _cut_shape(base, [s])
+                                    base = self._cutShape(base, [s])
                                 except Part.OCCError:
                                     print("Arch: unable to cut object ", o.Name, " from ", obj.Name)
         if base and pending_window_subvolumes:
-            base = _cut_shape(base, pending_window_subvolumes)
+            base = self._cutHostedWindowSubvolumes(base, pending_window_subvolumes)
         return base
 
     def spread(self, obj, shape, placement=None):
@@ -1371,6 +1348,103 @@ class Component(ArchIFC.IfcProduct):
                 if obj in link.Hosts and not self._objectInInternalLinkgroup(link):
                     hosts.append(link)
         return hosts
+
+    def _getShapeSignature(self, shape):
+        """Return a coarse cache key for a shape.
+
+        Avoid TopoShape.hashCode() here: equal recomputes can still produce a
+        different OCC hash, which defeats incremental cut caching.
+        """
+
+        if not shape or shape.isNull():
+            return None
+
+        bbox = shape.BoundBox
+        center = bbox.Center
+        return (
+            len(shape.Solids),
+            len(shape.Shells),
+            len(shape.Faces),
+            len(shape.Edges),
+            len(shape.Vertexes),
+            round(shape.Area, 6),
+            round(shape.Volume, 6),
+            round(center.x, 6),
+            round(center.y, 6),
+            round(center.z, 6),
+            round(bbox.XMin, 6),
+            round(bbox.YMin, 6),
+            round(bbox.ZMin, 6),
+            round(bbox.XMax, 6),
+            round(bbox.YMax, 6),
+            round(bbox.ZMax, 6),
+        )
+
+    def _cutShape(self, shape, tools):
+        """Cut one or more subtraction tools from a shape."""
+
+        import Part
+
+        if not shape or not tools or (not shape.Solids):
+            return shape
+
+        cut_tools = tools[0] if len(tools) == 1 else tools
+        try:
+            if len(shape.Solids) > 1:
+                return Part.makeCompound([sol.cut(cut_tools) for sol in shape.Solids])
+            return shape.cut(cut_tools)
+        except Part.OCCError:
+            if len(tools) == 1:
+                raise
+            result = shape
+            for tool in tools:
+                result = self._cutShape(result, [tool])
+            return result
+
+    def _cutHostedWindowSubvolumes(self, base, subvolumes):
+        """Cut hosted windows, reusing the previous cumulative wall cut.
+
+        Wall editing commonly appends one hosted window at a time while the
+        wall base stays unchanged. Reuse the already-cut wall and apply only
+        the newly-added openings in that case.
+        """
+
+        if not base or not subvolumes or (not base.Solids):
+            return base
+
+        base_signature = self._getShapeSignature(base)
+        tool_signatures = tuple(self._getShapeSignature(tool) for tool in subvolumes)
+        cache = getattr(self, "_hostedWindowCutCache", None)
+
+        if cache and cache.get("base_signature") == base_signature:
+            cached_shape = cache.get("shape")
+            cached_signatures = cache.get("tool_signatures", ())
+            if (
+                cached_shape
+                and not cached_shape.isNull()
+                and len(tool_signatures) >= len(cached_signatures)
+                and tool_signatures[: len(cached_signatures)] == cached_signatures
+            ):
+                if len(tool_signatures) == len(cached_signatures):
+                    return cached_shape.copy()
+
+                result = self._cutShape(
+                    cached_shape.copy(), list(subvolumes[len(cached_signatures) :])
+                )
+                self._hostedWindowCutCache = {
+                    "base_signature": base_signature,
+                    "tool_signatures": tool_signatures,
+                    "shape": result.copy(),
+                }
+                return result
+
+        result = self._cutShape(base, list(subvolumes))
+        self._hostedWindowCutCache = {
+            "base_signature": base_signature,
+            "tool_signatures": tool_signatures,
+            "shape": result.copy(),
+        }
+        return result
 
     def ensureBase(self, obj):
         """Returns False if the object has a Base but of the wrong type.
