@@ -953,6 +953,29 @@ class Component(ArchIFC.IfcProduct):
         import Draft
         import Part
 
+        def _cut_shape(shape, tools):
+            """Cut one or more subtraction tools from a shape.
+
+            When multiple tools are provided, try a batched OCC cut first and
+            fall back to sequential cuts if OCC rejects the batched operation.
+            """
+
+            if not shape or not tools or (not shape.Solids):
+                return shape
+
+            cut_tools = tools[0] if len(tools) == 1 else tools
+            try:
+                if len(shape.Solids) > 1:
+                    return Part.makeCompound([sol.cut(cut_tools) for sol in shape.Solids])
+                return shape.cut(cut_tools)
+            except Part.OCCError:
+                if len(tools) == 1:
+                    raise
+                result = shape
+                for tool in tools:
+                    result = _cut_shape(result, [tool])
+                return result
+
         # print("Processing subshapes of ",obj.Label, " : ",obj.Additions)
 
         if placement:
@@ -1013,7 +1036,7 @@ class Component(ArchIFC.IfcProduct):
                             base = s
 
         # treat subtractions
-        subs = obj.Subtractions
+        subs = list(obj.Subtractions)
         for link in obj.InListRecursive:
             if hasattr(link, "Host"):
                 if (
@@ -1025,6 +1048,7 @@ class Component(ArchIFC.IfcProduct):
             elif hasattr(link, "Hosts"):
                 if obj in link.Hosts and not self._objectInInternalLinkgroup(link):
                     subs.append(link)
+        pending_window_subvolumes = []
         for o in subs:
             if base:
                 if base.isNull():
@@ -1032,14 +1056,14 @@ class Component(ArchIFC.IfcProduct):
 
             if base:
                 subvolume = None
-
-                if (Draft.getType(o.getLinkedObject()) == "Window") or (
+                linked_object = o.getLinkedObject() if hasattr(o, "getLinkedObject") else o
+                is_window = (Draft.getType(linked_object) == "Window") or (
                     Draft.isClone(o, "Window", True)
-                ):
+                )
+
+                if is_window:
                     # windows can be additions or subtractions, treated the same way
-                    subvolume = o.getLinkedObject().Proxy.getSubVolume(
-                        o, host=obj
-                    )  # pass host obj (mostly Wall)
+                    subvolume = linked_object.Proxy.getSubVolume(o, host=obj)
                 elif (Draft.getType(o) == "Roof") or (Draft.isClone(o, "Roof")):
                     # roofs define their own special subtraction volume
                     subvolume = o.Proxy.getSubVolume(o).copy()
@@ -1056,11 +1080,17 @@ class Component(ArchIFC.IfcProduct):
                         if placement:
                             # see https://forum.freecad.org/viewtopic.php?p=579754#p579754
                             subvolume.Placement = placement.multiply(subvolume.Placement)
-                        if len(base.Solids) > 1:
-                            base = Part.makeCompound([sol.cut(subvolume) for sol in base.Solids])
-                        else:
-                            base = base.cut(subvolume)
+                        if is_window:
+                            pending_window_subvolumes.append(subvolume)
+                            continue
+                        if pending_window_subvolumes:
+                            base = _cut_shape(base, pending_window_subvolumes)
+                            pending_window_subvolumes = []
+                        base = _cut_shape(base, [subvolume])
                 elif hasattr(o, "Shape"):
+                    if pending_window_subvolumes:
+                        base = _cut_shape(base, pending_window_subvolumes)
+                        pending_window_subvolumes = []
                     # no subvolume, we subtract the whole shape
                     if o.Shape:
                         if not o.Shape.isNull():
@@ -1071,14 +1101,11 @@ class Component(ArchIFC.IfcProduct):
                                     # see https://forum.freecad.org/viewtopic.php?p=579754#p579754
                                     s.Placement = placement.multiply(s.Placement)
                                 try:
-                                    if len(base.Solids) > 1:
-                                        base = Part.makeCompound(
-                                            [sol.cut(s) for sol in base.Solids]
-                                        )
-                                    else:
-                                        base = base.cut(s)
+                                    base = _cut_shape(base, [s])
                                 except Part.OCCError:
                                     print("Arch: unable to cut object ", o.Name, " from ", obj.Name)
+        if base and pending_window_subvolumes:
+            base = _cut_shape(base, pending_window_subvolumes)
         return base
 
     def spread(self, obj, shape, placement=None):
