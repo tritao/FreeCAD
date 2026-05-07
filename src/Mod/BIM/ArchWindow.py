@@ -372,6 +372,68 @@ class _Window(ArchComponent.Component):
         self._subvolume_cache_key = None
         self._subvolume_cache_shape = None
 
+    def _get_shape_signature(self, obj):
+        shape = getattr(obj, "Shape", None)
+        if not shape or shape.isNull():
+            return None
+        placement = getattr(obj, "Placement", None)
+        placement_sig = None
+        if placement:
+            placement_sig = (
+                round(placement.Base.x, 6),
+                round(placement.Base.y, 6),
+                round(placement.Base.z, 6),
+                round(placement.Rotation.Q[0], 6),
+                round(placement.Rotation.Q[1], 6),
+                round(placement.Rotation.Q[2], 6),
+                round(placement.Rotation.Q[3], 6),
+            )
+        return (shape.hashCode(), placement_sig)
+
+    def _get_objects_signature(self, objects):
+        signature = []
+        for linked in objects:
+            signature.append(
+                (
+                    getattr(linked, "Name", None),
+                    self._get_shape_signature(linked),
+                )
+            )
+        return tuple(signature)
+
+    def _get_execute_cache_key(self, obj):
+        normal = getattr(obj, "Normal", None)
+        if normal:
+            normal_sig = (round(normal.x, 6), round(normal.y, 6), round(normal.z, 6))
+        else:
+            normal_sig = None
+
+        clone = getattr(obj, "CloneOf", None)
+        return (
+            self._get_shape_signature(getattr(obj, "Base", None)),
+            tuple(getattr(obj, "WindowParts", [])),
+            round(getattr(obj.Width, "Value", 0.0), 6),
+            round(getattr(obj.Height, "Value", 0.0), 6),
+            round(getattr(obj.Frame, "Value", 0.0), 6) if hasattr(obj, "Frame") else None,
+            round(getattr(obj.Offset, "Value", 0.0), 6) if hasattr(obj, "Offset") else None,
+            round(getattr(obj.HoleDepth, "Value", 0.0), 6) if hasattr(obj, "HoleDepth") else None,
+            normal_sig,
+            getattr(obj, "AutoNormalReversed", None),
+            (
+                round(getattr(obj.LouvreWidth, "Value", 0.0), 6)
+                if hasattr(obj, "LouvreWidth")
+                else None
+            ),
+            (
+                round(getattr(obj.LouvreSpacing, "Value", 0.0), 6)
+                if hasattr(obj, "LouvreSpacing")
+                else None
+            ),
+            self._get_shape_signature(clone),
+            self._get_objects_signature(getattr(obj, "Additions", [])),
+            self._get_objects_signature(getattr(obj, "Subtractions", [])),
+        )
+
     def _resolve_subvolume_width(self, obj, orig=None, host=None):
         """Return the effective opening depth used for host subtraction."""
 
@@ -734,6 +796,15 @@ class _Window(ArchComponent.Component):
 
     def execute(self, obj):
 
+        execute_cache_key = self._get_execute_cache_key(obj)
+        if (
+            execute_cache_key == getattr(self, "_execute_cache_key", None)
+            and hasattr(obj, "Shape")
+            and obj.Shape
+            and not obj.Shape.isNull()
+        ):
+            return
+
         if self.clone(obj):
             clonedProxy = obj.CloneOf.Proxy
             if not (hasattr(clonedProxy, "sshapes") and hasattr(clonedProxy, "vshapes")):
@@ -742,8 +813,10 @@ class _Window(ArchComponent.Component):
             self.vshapes = clonedProxy.vshapes
             if hasattr(clonedProxy, "boxes"):
                 self.boxes = clonedProxy.boxes
+            self._execute_cache_key = execute_cache_key
             return
         if not self.ensureBase(obj):
+            self._execute_cache_key = None
             return
 
         import Part
@@ -791,8 +864,10 @@ class _Window(ArchComponent.Component):
                     # base = Part.makeCompound([base]+self.sshapes+self.vshapes)
                 self.applyShape(obj, base, pl, allowinvalid=True, allownosolid=True)
                 obj.Placement = pl
+                self._execute_cache_key = execute_cache_key
         else:
             obj.Shape = Part.Shape()
+            self._execute_cache_key = None
         if hasattr(obj, "Area"):
             obj.Area = obj.Width.Value * obj.Height.Value
 
