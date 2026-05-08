@@ -419,6 +419,9 @@ class _Window(ArchComponent.Component):
             round(getattr(obj.HoleDepth, "Value", 0.0), 6) if hasattr(obj, "HoleDepth") else None,
             normal_sig,
             getattr(obj, "AutoNormalReversed", None),
+            round(getattr(obj, "Opening", 0.0), 6) if hasattr(obj, "Opening") else None,
+            getattr(obj, "SymbolPlan", None),
+            getattr(obj, "SymbolElevation", None),
             (
                 round(getattr(obj.LouvreWidth, "Value", 0.0), 6)
                 if hasattr(obj, "LouvreWidth")

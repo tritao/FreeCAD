@@ -546,6 +546,33 @@ class TestArchWindow(TestArchBase.TestArchBase):
             len(symbol_edge_hashes), 2, "Expected 2 edges for the plan symbol (arc and line)."
         )
 
+    def test_symbol_plan_toggle_updates_shape(self):
+        """Test that toggling SymbolPlan after the first recompute rebuilds the shape."""
+        window = Arch.makeWindowPreset(
+            "Open 1-pane", width=1000, height=1200, h1=50, h2=50, h3=0, w1=100, w2=50, o1=0, o2=50
+        )
+        window.SymbolPlan = False
+        self.document.recompute()
+
+        face_edge_hashes = {e.hashCode() for face in window.Shape.Faces for e in face.Edges}
+        all_edge_hashes = {e.hashCode() for e in window.Shape.Edges}
+        symbol_edge_hashes = all_edge_hashes - face_edge_hashes
+        self.assertEqual(
+            len(symbol_edge_hashes), 0, "SymbolPlan=False should not add plan symbol edges."
+        )
+
+        window.SymbolPlan = True
+        self.document.recompute()
+
+        face_edge_hashes = {e.hashCode() for face in window.Shape.Faces for e in face.Edges}
+        all_edge_hashes = {e.hashCode() for e in window.Shape.Edges}
+        symbol_edge_hashes = all_edge_hashes - face_edge_hashes
+        self.assertEqual(
+            len(symbol_edge_hashes),
+            2,
+            "Enabling SymbolPlan after recompute should rebuild symbol edges.",
+        )
+
     def test_custom_subvolume_creates_opening(self):
         """Test that a custom Subvolume shape correctly creates an opening in a host wall."""
         # Create a wall and store its initial state
