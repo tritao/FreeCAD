@@ -21,6 +21,8 @@ SET(Test_SRCS
     TestPerf.py
     TestTreeSelection.py
     TestCoinNodeSnapshots.py
+    ClipPlaneTests.py
+    ClipPlaneGuiTests.py
 )
 
 SET(TestData_SRCS
