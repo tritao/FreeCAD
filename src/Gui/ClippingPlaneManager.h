@@ -60,10 +60,10 @@ private:
     std::vector<ActiveClip> activeClips;
 
     void garbageCollect();
-    void syncViewProviderState(const App::ClippingPlane* plane) const;
     static Base::Placement clipPlacement(const App::ClippingPlane& plane);
+    static void installActiveCue(View3DInventor* view, const App::ClippingPlane& plane);
     static void apply(View3DInventor* view, const App::ClippingPlane& plane);
-    static void clear(View3DInventor* view);
+    static void clear(View3DInventor* view, const App::ClippingPlane* plane = nullptr);
 };
 
 }  // namespace Gui

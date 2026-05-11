@@ -23,6 +23,7 @@
 
 #pragma once
 
+#include <compare>
 #include <list>
 #include <map>
 #include <memory>
@@ -270,6 +271,14 @@ public:
     void setupEditingRoot(SoNode* node = nullptr, const Base::Matrix4D* mat = nullptr);
     void resetEditingRoot(bool updateLinks = true);
     void setEditingTransform(const Base::Matrix4D& mat);
+    enum class RuntimeNodeLayer
+    {
+        Scene,
+        Foreground
+    };
+    void addRuntimeNode(const void* owner, SoNode* node, RuntimeNodeLayer layer);
+    void removeRuntimeNode(const void* owner, RuntimeNodeLayer layer);
+    void removeRuntimeNodes(const void* owner);
     /** Helper method to get picked entities while editing.
      * It's in the responsibility of the caller to delete the returned instance.
      */
@@ -598,10 +607,21 @@ private:
     void createStandardCursors();
 
 private:
+    struct RuntimeNodeKey
+    {
+        const void* owner {nullptr};
+        RuntimeNodeLayer layer {RuntimeNodeLayer::Scene};
+
+        auto operator<=>(const RuntimeNodeKey&) const = default;
+    };
+
+    SoSeparator* runtimeRoot(RuntimeNodeLayer layer) const;
+
     NaviCube* naviCube;
     SoAnnotation* naviCubeAnnotation;
     std::set<ViewProvider*> _ViewProviderSet;
     std::map<SoSeparator*, ViewProvider*> _ViewProviderMap;
+    std::map<RuntimeNodeKey, SoNode*> runtimeNodes;
     std::list<GLGraphicsItem*> graphicsItems;
     ViewProvider* editViewProvider;
     SoFCBackgroundGradient* pcBackGround;
@@ -610,6 +630,7 @@ private:
     // Dedicated root for viewer-owned HUD/decorations that should not be
     // treated as model content during capture/export traversals.
     SoSeparator* decorationroot;
+    SoSeparator* runtimeForegroundRoot;
 
     SoDirectionalLight* backlight;
     SoDirectionalLight* fillLight;

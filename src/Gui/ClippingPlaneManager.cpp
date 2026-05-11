@@ -25,37 +25,106 @@
 #include <cmath>
 #include <numbers>
 #include <ranges>
-#include <set>
 
+#include <Inventor/nodes/SoCoordinate3.h>
+#include <Inventor/nodes/SoDrawStyle.h>
+#include <Inventor/nodes/SoIndexedLineSet.h>
+#include <Inventor/nodes/SoMaterial.h>
+#include <Inventor/nodes/SoMatrixTransform.h>
+#include <Inventor/nodes/SoSeparator.h>
+
+#include <Inventor/So3DAnnotation.h>
 #include <App/ClippingPlane.h>
 #include <App/GeoFeature.h>
 
 #include "Application.h"
 #include "ClippingPlaneManager.h"
+#include "Inventor/SoAxisCrossKit.h"
+#include "Utilities.h"
 #include "View3DInventor.h"
 #include "View3DInventorViewer.h"
 #include "ViewProviderClippingPlane.h"
 
 using namespace Gui;
 
+namespace
+{
+
+SoNode* buildActiveCue(const App::ClippingPlane& plane)
+{
+    auto* vp = Application::Instance->getViewProvider<ViewProviderClippingPlane>(&plane);
+    if (!vp || !vp->Visibility.getValue()) {
+        return nullptr;
+    }
+
+    const float halfX = vp->DisplayLength.getValue() * 0.5F;
+    const float halfY = vp->DisplayHeight.getValue() * 0.5F;
+    float arrow = vp->ArrowSize.getValue();
+    if (plane.Reverse.getValue()) {
+        arrow = -arrow;
+    }
+
+    SbVec3f verts[6] = {
+        SbVec3f(halfX, halfY, 0.0F),
+        SbVec3f(halfX, -halfY, 0.0F),
+        SbVec3f(-halfX, -halfY, 0.0F),
+        SbVec3f(-halfX, halfY, 0.0F),
+        SbVec3f(0.0F, 0.0F, 0.0F),
+        SbVec3f(0.0F, 0.0F, arrow),
+    };
+
+    auto coords = new SoCoordinate3;
+    coords->point.setNum(6);
+    coords->point.setValues(0, 6, verts);
+
+    auto lines = new SoIndexedLineSet;
+    static constexpr int32_t lineIndices[] = {0, 1, 2, 3, 0, -1, 4, 5, -1};
+    lines->coordIndex.setNum(9);
+    lines->coordIndex.setValues(0, 9, lineIndices);
+
+    const auto colorValue = vp->ShapeAppearance.getDiffuseColor();
+    SbColor color(colorValue.r, colorValue.g, colorValue.b);
+
+    auto material = new SoMaterial;
+    material->ambientColor.setValue(color);
+    material->diffuseColor.setValue(color);
+    material->emissiveColor.setValue(color);
+    material->transparency = 0.0f;
+
+    auto drawStyle = new SoDrawStyle;
+    drawStyle->lineWidth = 3.0F;
+
+    auto shape = new SoSeparator;
+    shape->addChild(coords);
+    shape->addChild(material);
+    shape->addChild(drawStyle);
+    shape->addChild(lines);
+
+    auto scale = new SoShapeScale;
+    scale->active = vp->AutoSize.getValue();
+    scale->scaleFactor = 1.0F;
+    scale->setPart("shape", shape);
+
+    auto annotation = new So3DAnnotation;
+    annotation->addChild(scale);
+
+    auto transform = new SoMatrixTransform;
+    transform->matrix = Base::convertTo<SbMatrix>(
+        App::GeoFeature::getGlobalPlacement(&plane).toMatrix()
+    );
+
+    auto root = new SoSeparator;
+    root->addChild(transform);
+    root->addChild(annotation);
+    return root;
+}
+
+}  // namespace
+
 ClippingPlaneManager& ClippingPlaneManager::instance()
 {
     static ClippingPlaneManager manager;
     return manager;
-}
-
-void ClippingPlaneManager::syncViewProviderState(const App::ClippingPlane* plane) const
-{
-    if (!plane) {
-        return;
-    }
-
-    if (auto* vp = Application::Instance->getViewProvider<ViewProviderClippingPlane>(plane)) {
-        bool active = std::ranges::any_of(activeClips, [plane](const ActiveClip& clip) {
-            return clip.plane == plane && !clip.view.isNull();
-        });
-        vp->setClipActive(active);
-    }
 }
 
 void ClippingPlaneManager::activate(View3DInventor* view, App::ClippingPlane* plane)
@@ -68,7 +137,6 @@ void ClippingPlaneManager::activate(View3DInventor* view, App::ClippingPlane* pl
     deactivate(view);
     apply(view, *plane);
     activeClips.push_back({view, plane});
-    syncViewProviderState(plane);
 }
 
 void ClippingPlaneManager::deactivate(View3DInventor* view)
@@ -79,9 +147,8 @@ void ClippingPlaneManager::deactivate(View3DInventor* view)
     }
 
     auto plane = activePlane(view);
-    clear(view);
+    clear(view, plane);
     std::erase_if(activeClips, [view](const ActiveClip& clip) { return clip.view == view; });
-    syncViewProviderState(plane);
 }
 
 void ClippingPlaneManager::deactivate(const App::ClippingPlane* plane)
@@ -93,12 +160,11 @@ void ClippingPlaneManager::deactivate(const App::ClippingPlane* plane)
 
     for (const auto& clip : activeClips) {
         if (clip.plane == plane && clip.view) {
-            clear(clip.view);
+            clear(clip.view, plane);
         }
     }
 
     std::erase_if(activeClips, [plane](const ActiveClip& clip) { return clip.plane == plane; });
-    syncViewProviderState(plane);
 }
 
 void ClippingPlaneManager::refresh(const App::ClippingPlane* plane)
@@ -140,18 +206,7 @@ App::ClippingPlane* ClippingPlaneManager::activePlane(View3DInventor* view) cons
 
 void ClippingPlaneManager::garbageCollect()
 {
-    std::set<const App::ClippingPlane*> affectedPlanes;
-    std::erase_if(activeClips, [&affectedPlanes](const ActiveClip& clip) {
-        if (clip.view.isNull()) {
-            affectedPlanes.insert(clip.plane);
-            return true;
-        }
-        return false;
-    });
-
-    for (const auto* plane : affectedPlanes) {
-        syncViewProviderState(plane);
-    }
+    std::erase_if(activeClips, [](const ActiveClip& clip) { return clip.view.isNull(); });
 }
 
 Base::Placement ClippingPlaneManager::clipPlacement(const App::ClippingPlane& plane)
@@ -178,15 +233,35 @@ Base::Placement ClippingPlaneManager::clipPlacement(const App::ClippingPlane& pl
 
 void ClippingPlaneManager::apply(View3DInventor* view, const App::ClippingPlane& plane)
 {
-    clear(view);
-    if (view) {
+    clear(view, &plane);
+    if (view && view->getViewer()) {
         view->getViewer()->toggleClippingPlane(1, false, true, clipPlacement(plane));
+        installActiveCue(view, plane);
     }
 }
 
-void ClippingPlaneManager::clear(View3DInventor* view)
+void ClippingPlaneManager::installActiveCue(View3DInventor* view, const App::ClippingPlane& plane)
 {
-    if (view && view->getViewer()->hasClippingPlane()) {
+    if (view && view->getViewer()) {
+        view->getViewer()->addRuntimeNode(
+            &plane,
+            buildActiveCue(plane),
+            View3DInventorViewer::RuntimeNodeLayer::Foreground
+        );
+    }
+}
+
+void ClippingPlaneManager::clear(View3DInventor* view, const App::ClippingPlane* plane)
+{
+    if (!view || !view->getViewer()) {
+        return;
+    }
+
+    if (plane) {
+        view->getViewer()->removeRuntimeNode(plane, View3DInventorViewer::RuntimeNodeLayer::Foreground);
+    }
+
+    if (view->getViewer()->hasClippingPlane()) {
         view->getViewer()->toggleClippingPlane(0, false, true);
     }
 }

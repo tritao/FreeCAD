@@ -423,6 +423,7 @@ View3DInventorViewer::View3DInventorViewer(QWidget* parent, const QOpenGLWidget*
     : Quarter::SoQTQuarterAdaptor(parent, sharewidget)
     , SelectionObserver(false, ResolveMode::NoResolve)
     , editViewProvider(nullptr)
+    , runtimeForegroundRoot(nullptr)
     , objectGroup(nullptr)
     , navigation(nullptr)
     , renderType(Native)
@@ -447,6 +448,7 @@ View3DInventorViewer::View3DInventorViewer(
     : Quarter::SoQTQuarterAdaptor(format, parent, sharewidget)
     , SelectionObserver(false, ResolveMode::NoResolve)
     , editViewProvider(nullptr)
+    , runtimeForegroundRoot(nullptr)
     , objectGroup(nullptr)
     , navigation(nullptr)
     , renderType(Native)
@@ -578,6 +580,10 @@ void View3DInventorViewer::init()
     this->foregroundroot->addChild(cam);
     this->foregroundroot->addChild(foregroundLightModel);
     this->foregroundroot->addChild(foregroundBaseColor);
+    runtimeForegroundRoot = new SoSeparator;
+    runtimeForegroundRoot->ref();
+    runtimeForegroundRoot->setName("runtimeForegroundRoot");
+    this->foregroundroot->addChild(runtimeForegroundRoot);
 
     // NOTE: For every mouse click event the SoFCUnifiedSelection searches for the picked
     // point which causes a certain slow-down because for all objects the primitives
@@ -762,6 +768,21 @@ View3DInventorViewer::~View3DInventorViewer()
         }
         naviCubeAnnotation->unref();
         naviCubeAnnotation = nullptr;
+    }
+
+    for (auto it = runtimeNodes.begin(); it != runtimeNodes.end(); ++it) {
+        if (auto* root = runtimeRoot(it->first.layer)) {
+            int index = root->findChild(it->second);
+            if (index >= 0) {
+                root->removeChild(index);
+            }
+        }
+    }
+    runtimeNodes.clear();
+    if (runtimeForegroundRoot) {
+        runtimeForegroundRoot->removeAllChildren();
+        runtimeForegroundRoot->unref();
+        runtimeForegroundRoot = nullptr;
     }
 
     this->backgroundroot->unref();
@@ -964,6 +985,77 @@ bool View3DInventorViewer::containsViewProvider(const ViewProvider* vp) const
     return sa.getPath() != nullptr;
 }
 
+SoSeparator* View3DInventorViewer::runtimeRoot(RuntimeNodeLayer layer) const
+{
+    switch (layer) {
+        case RuntimeNodeLayer::Scene:
+            return pcViewProviderRoot;
+        case RuntimeNodeLayer::Foreground:
+            return runtimeForegroundRoot;
+    }
+
+    return nullptr;
+}
+
+void View3DInventorViewer::addRuntimeNode(const void* owner, SoNode* node, RuntimeNodeLayer layer)
+{
+    if (!owner) {
+        return;
+    }
+
+    removeRuntimeNode(owner, layer);
+    if (!node) {
+        return;
+    }
+
+    auto* root = runtimeRoot(layer);
+    if (!root) {
+        return;
+    }
+
+    if (layer == RuntimeNodeLayer::Scene) {
+        int index = pcViewProviderRoot ? pcViewProviderRoot->findChild(objectGroup) : -1;
+        if (index >= 0) {
+            pcViewProviderRoot->insertChild(node, index);
+        }
+        else {
+            pcViewProviderRoot->addChild(node);
+        }
+    }
+    else {
+        root->addChild(node);
+    }
+
+    runtimeNodes.emplace(RuntimeNodeKey {owner, layer}, node);
+}
+
+void View3DInventorViewer::removeRuntimeNode(const void* owner, RuntimeNodeLayer layer)
+{
+    if (!owner) {
+        return;
+    }
+
+    auto it = runtimeNodes.find(RuntimeNodeKey {owner, layer});
+    if (it == runtimeNodes.end()) {
+        return;
+    }
+
+    if (auto* root = runtimeRoot(layer)) {
+        int index = root->findChild(it->second);
+        if (index >= 0) {
+            root->removeChild(index);
+        }
+    }
+
+    runtimeNodes.erase(it);
+}
+
+void View3DInventorViewer::removeRuntimeNodes(const void* owner)
+{
+    removeRuntimeNode(owner, RuntimeNodeLayer::Scene);
+    removeRuntimeNode(owner, RuntimeNodeLayer::Foreground);
+}
+
 /// adds an ViewProvider to the view, e.g. from a feature
 void View3DInventorViewer::addViewProvider(ViewProvider* pcProvider)
 {
@@ -984,7 +1076,13 @@ void View3DInventorViewer::addViewProvider(ViewProvider* pcProvider)
     }
 
     if (SoSeparator* fore = pcProvider->getFrontRoot()) {
-        foregroundroot->addChild(fore);
+        int index = foregroundroot->findChild(runtimeForegroundRoot);
+        if (index >= 0) {
+            foregroundroot->insertChild(fore, index);
+        }
+        else {
+            foregroundroot->addChild(fore);
+        }
     }
 
     if (SoSeparator* back = pcProvider->getBackRoot()) {

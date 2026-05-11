@@ -25,9 +25,7 @@
 
 class SoCoordinate3;
 class SoIndexedLineSet;
-class SoFaceSet;
 class SoMaterial;
-class SoShapeHints;
 class SoSwitch;
 
 namespace Gui
@@ -56,7 +54,6 @@ public:
     void setupContextMenu(QMenu* menu, QObject* receiver, const char* member) override;
     bool doubleClicked() override;
     void beforeDelete() override;
-    void setClipActive(bool active);
 
 protected:
     void onChanged(const App::Property* prop) override;
@@ -66,17 +63,11 @@ private:
     void syncHelperVisibility();
     void updateGeometry();
 
-    SoCoordinate3* faceCoords {nullptr};
     SoCoordinate3* overlayCoords {nullptr};
     SoIndexedLineSet* overlayLines {nullptr};
-    SoFaceSet* faceSet {nullptr};
     SoMaterial* overlayMaterial {nullptr};
-    SoShapeHints* faceShapeHints {nullptr};
-    SoSwitch* faceSwitch {nullptr};
     SoSwitch* overlaySwitch {nullptr};
-    SoShapeScale* faceScale {nullptr};
     SoShapeScale* overlayScale {nullptr};
-    bool clipActive {false};
 };
 
 }  // namespace Gui

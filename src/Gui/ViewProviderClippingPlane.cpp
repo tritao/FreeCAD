@@ -24,11 +24,9 @@
 #include <QMenu>
 #include <Inventor/nodes/SoCoordinate3.h>
 #include <Inventor/nodes/SoDrawStyle.h>
-#include <Inventor/nodes/SoFaceSet.h>
 #include <Inventor/nodes/SoIndexedLineSet.h>
 #include <Inventor/nodes/SoMaterial.h>
 #include <Inventor/nodes/SoSeparator.h>
-#include <Inventor/nodes/SoShapeHints.h>
 #include <Inventor/nodes/SoSwitch.h>
 
 #include <App/ClippingPlane.h>
@@ -79,39 +77,18 @@ void ViewProviderClippingPlane::attach(App::DocumentObject* obj)
 {
     inherited::attach(obj);
 
-    faceCoords = new SoCoordinate3;
     overlayCoords = new SoCoordinate3;
     overlayLines = new SoIndexedLineSet;
-    faceSet = new SoFaceSet;
-    faceShapeHints = new SoShapeHints;
-    faceSwitch = new SoSwitch;
     overlaySwitch = new SoSwitch;
     overlayMaterial = new SoMaterial;
 
-    faceShapeHints->vertexOrdering = SoShapeHints::COUNTERCLOCKWISE;
-    faceShapeHints->shapeType = SoShapeHints::UNKNOWN_SHAPE_TYPE;
-    faceSwitch->whichChild = SO_SWITCH_ALL;
     overlaySwitch->whichChild = Visibility.getValue() ? SO_SWITCH_ALL : SO_SWITCH_NONE;
     overlayMaterial->transparency = 0.0f;
 
     static constexpr int32_t lineIndices[] = {0, 1, 2, 3, 0, -1, 4, 5, -1};
     overlayLines->coordIndex.setNum(9);
     overlayLines->coordIndex.setValues(0, 9, lineIndices);
-    faceSet->numVertices.set1Value(0, 4);
-
-    auto faceSeparator = new SoSeparator;
-    faceSeparator->addChild(faceShapeHints);
-    faceSeparator->addChild(faceSet);
-    faceSwitch->addChild(faceSeparator);
-
-    auto sceneRoot = new SoSeparator;
-    sceneRoot->addChild(faceCoords);
-    sceneRoot->addChild(pcShapeMaterial);
-    sceneRoot->addChild(faceSwitch);
-
-    faceScale = new SoShapeScale;
-    faceScale->setPart("shape", sceneRoot);
-    addDisplayMaskMode(faceScale, "Base");
+    addDisplayMaskMode(new SoSeparator, "Base");
 
     auto overlayLineStyle = new SoDrawStyle;
     overlayLineStyle->lineWidth = 2.0F;
@@ -192,16 +169,6 @@ bool ViewProviderClippingPlane::doubleClicked()
     return inherited::doubleClicked();
 }
 
-void ViewProviderClippingPlane::setClipActive(bool active)
-{
-    if (clipActive == active) {
-        return;
-    }
-
-    clipActive = active;
-    syncHelperVisibility();
-}
-
 void ViewProviderClippingPlane::beforeDelete()
 {
     ClippingPlaneManager::instance().deactivate(getObject<App::ClippingPlane>());
@@ -213,12 +180,15 @@ void ViewProviderClippingPlane::onChanged(const App::Property* prop)
     inherited::onChanged(prop);
     if (prop == &DisplayLength || prop == &DisplayHeight || prop == &ArrowSize || prop == &AutoSize) {
         updateGeometry();
+        ClippingPlaneManager::instance().refresh(getObject<App::ClippingPlane>());
     }
     else if (prop == &ShapeAppearance) {
         syncOverlayAppearance();
+        ClippingPlaneManager::instance().refresh(getObject<App::ClippingPlane>());
     }
     else if (prop == &Visibility) {
         syncHelperVisibility();
+        ClippingPlaneManager::instance().refresh(getObject<App::ClippingPlane>());
     }
 }
 
@@ -236,9 +206,6 @@ void ViewProviderClippingPlane::syncOverlayAppearance()
 
 void ViewProviderClippingPlane::syncHelperVisibility()
 {
-    if (faceSwitch) {
-        faceSwitch->whichChild = clipActive ? SO_SWITCH_NONE : SO_SWITCH_ALL;
-    }
     if (overlaySwitch) {
         overlaySwitch->whichChild = Visibility.getValue() ? SO_SWITCH_ALL : SO_SWITCH_NONE;
     }
@@ -246,7 +213,7 @@ void ViewProviderClippingPlane::syncHelperVisibility()
 
 void ViewProviderClippingPlane::updateGeometry()
 {
-    if (!faceCoords || !overlayCoords || !getObject()) {
+    if (!overlayCoords || !getObject()) {
         return;
     }
 
@@ -267,15 +234,9 @@ void ViewProviderClippingPlane::updateGeometry()
         SbVec3f(0.0F, 0.0F, arrow),
     };
 
-    faceCoords->point.setNum(6);
-    faceCoords->point.setValues(0, 6, verts);
     overlayCoords->point.setNum(6);
     overlayCoords->point.setValues(0, 6, verts);
 
-    if (faceScale) {
-        faceScale->active = AutoSize.getValue();
-        faceScale->scaleFactor = 1.0F;
-    }
     if (overlayScale) {
         overlayScale->active = AutoSize.getValue();
         overlayScale->scaleFactor = 1.0F;
