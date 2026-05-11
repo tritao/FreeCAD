@@ -171,6 +171,7 @@ SET(Document_CPP_SRCS
     ExpressionTokenizer.cpp
     FeaturePython.cpp
     FeatureTest.cpp
+    ClippingPlane.cpp
     GeoFeature.cpp
     GeoFeatureGroupExtensionPyImp.cpp
     GeoFeatureGroupExtension.cpp
@@ -223,6 +224,7 @@ SET(Document_HPP_SRCS
     FeaturePythonPyImp.h
     FeaturePythonPyImp.inl
     FeatureTest.h
+    ClippingPlane.h
     GeoFeature.h
     GeoFeatureGroupExtension.h
     ImagePlane.h

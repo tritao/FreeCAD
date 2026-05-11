@@ -48,7 +48,9 @@
 #include <QTextStream>
 #include <QToolButton>
 
+#include <App/AutoTransaction.h>
 #include <App/ComplexGeoDataPy.h>
+#include <App/ClippingPlane.h>
 #include <App/Document.h>
 #include <App/DocumentObject.h>
 #include <App/DocumentObjectGroup.h>
@@ -65,6 +67,7 @@
 #include "Action.h"
 #include "Application.h"
 #include "BitmapFactory.h"
+#include "ClippingPlaneManager.h"
 #include "Control.h"
 #include "Clipping.h"
 #include "DemoMode.h"
@@ -100,6 +103,44 @@ namespace sp = std::placeholders;
 
 namespace
 {
+View3DInventor* activeInventorView()
+{
+    return qobject_cast<View3DInventor*>(getMainWindow()->activeWindow());
+}
+
+Base::Placement initialClippingPlanePlacement(View3DInventor* view)
+{
+    Base::Vector3d center;
+    Base::Vector3d direction(0.0, 0.0, -1.0);
+
+    if (view) {
+        auto viewer = view->getViewer();
+        SbBox3f box = viewer->getBoundingBox();
+        if (!box.isEmpty()) {
+            center = Base::convertTo<Base::Vector3d>(box.getCenter());
+        }
+
+        SbVec3f viewDirection = viewer->getViewDirection();
+        direction = Base::Vector3d(viewDirection[0], viewDirection[1], viewDirection[2]);
+    }
+
+    return {center, Base::Rotation(Base::Vector3d(0, 0, -1), direction)};
+}
+
+App::ClippingPlane* selectedClippingPlane(App::Document* doc)
+{
+    if (!doc) {
+        return nullptr;
+    }
+
+    for (const auto& sel : Gui::Selection().getSelection(doc->getName())) {
+        if (auto plane = freecad_cast<App::ClippingPlane*>(sel.pObject)) {
+            return plane;
+        }
+    }
+    return nullptr;
+}
+
 // A helper class to open a transaction when changing properties of view providers.
 // It uses the same parameter key as the PropertyView to control the behaviour.
 class TransactionView
@@ -634,6 +675,116 @@ void StdCmdFreezeViews::languageChange()
     }
 }
 
+
+//===========================================================================
+// Std_CreateClippingPlane
+//===========================================================================
+
+class StdCmdCreateClippingPlane: public Gui::Command
+{
+public:
+    StdCmdCreateClippingPlane()
+        : Command("Std_CreateClippingPlane")
+    {
+        sGroup = "Standard-View";
+        sMenuText = QT_TR_NOOP("Create Clipping Plane");
+        sToolTipText = QT_TR_NOOP("Create a persistent clipping plane from the active view");
+        sWhatsThis = "Std_CreateClippingPlane";
+        sStatusTip = sToolTipText;
+        sPixmap = "Std_ToggleClipPlane";
+        eType = AlterDoc;
+    }
+
+    const char* className() const override
+    {
+        return "StdCmdCreateClippingPlane";
+    }
+
+    void activated(int iMsg) override
+    {
+        Q_UNUSED(iMsg);
+        auto doc = getActiveDocument();
+        auto view = activeInventorView();
+        if (!doc || !view) {
+            return;
+        }
+
+        App::AutoTransaction guard(
+            openActiveDocumentCommand(QT_TRANSLATE_NOOP("Command", "Create clipping plane"))
+        );
+        auto name = doc->getUniqueObjectName("ClippingPlane");
+        auto plane = freecad_cast<App::ClippingPlane*>(
+            doc->addObject("App::ClippingPlane", name.c_str())
+        );
+        if (!plane) {
+            return;
+        }
+
+        plane->Placement.setValue(initialClippingPlanePlacement(view));
+
+        Gui::Selection().clearSelection();
+        Gui::Selection().addSelection(doc->getName(), plane->getNameInDocument());
+        ClippingPlaneManager::instance().activate(view, plane);
+        Command::updateActive();
+    }
+
+    bool isActive() override
+    {
+        return getActiveDocument() && activeInventorView();
+    }
+};
+
+//===========================================================================
+// Std_ActivateClippingPlane
+//===========================================================================
+
+class StdCmdActivateClippingPlane: public Gui::Command
+{
+public:
+    StdCmdActivateClippingPlane()
+        : Command("Std_ActivateClippingPlane")
+    {
+        sGroup = "Standard-View";
+        sMenuText = QT_TR_NOOP("Toggle Selected Clipping Plane");
+        sToolTipText = QT_TR_NOOP(
+            "Activate or deactivate the selected clipping plane in the active view"
+        );
+        sWhatsThis = "Std_ActivateClippingPlane";
+        sStatusTip = sToolTipText;
+        sPixmap = "Std_ToggleClipPlane";
+        eType = Alter3DView;
+    }
+
+    const char* className() const override
+    {
+        return "StdCmdActivateClippingPlane";
+    }
+
+    void activated(int iMsg) override
+    {
+        Q_UNUSED(iMsg);
+        auto doc = getActiveDocument();
+        auto view = activeInventorView();
+        auto plane = selectedClippingPlane(doc);
+        if (!view || !plane) {
+            return;
+        }
+
+        auto& manager = ClippingPlaneManager::instance();
+        if (manager.isActive(view, plane)) {
+            manager.deactivate(view);
+        }
+        else {
+            manager.activate(view, plane);
+        }
+        Command::updateActive();
+    }
+
+    bool isActive() override
+    {
+        return activeInventorView() && selectedClippingPlane(getActiveDocument());
+    }
+};
 
 //===========================================================================
 // Std_ToggleClipPlane
@@ -4685,6 +4836,8 @@ void CreateViewStdCommands()
     rcCmdMgr.addCommand(new StdCmdHideObjects());
     rcCmdMgr.addCommand(new StdOrthographicCamera());
     rcCmdMgr.addCommand(new StdPerspectiveCamera());
+    rcCmdMgr.addCommand(new StdCmdCreateClippingPlane());
+    rcCmdMgr.addCommand(new StdCmdActivateClippingPlane());
     rcCmdMgr.addCommand(new StdCmdToggleClipPlane());
     rcCmdMgr.addCommand(new StdCmdDrawStyle());
     rcCmdMgr.addCommand(new StdCmdViewSaveCamera());

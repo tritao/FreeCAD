@@ -749,6 +749,8 @@ MenuItem* StdWorkbench::setupMenuBar() const
           << "Std_MainFullscreen" << "Separator" << stdviews << "Std_FreezeViews" << "Std_DrawStyle"
           << "Std_SelBoundingBox"
           << "Separator" << view3d << zoom << "Std_ViewDockUndockFullscreen" << "Std_AxisCross"
+          << "Std_CreateClippingPlane"
+          << "Std_ActivateClippingPlane"
           << "Std_ToggleClipPlane"
           << "Std_TextureMapping"
 #ifdef BUILD_VR

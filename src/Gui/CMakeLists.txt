@@ -482,6 +482,7 @@ SOURCE_GROUP("Command" FILES ${Command_SRCS})
 # The dialog sources
 SET(Dialog_CPP_SRCS
     Clipping.cpp
+    ClippingPlaneManager.cpp
     DemoMode.cpp
     Dialogs/DlgAbout.cpp
     Dialogs/DlgActivateWindowImp.cpp
@@ -525,6 +526,7 @@ SET(Dialog_CPP_SRCS
 
 SET(Dialog_HPP_SRCS
     Clipping.h
+    ClippingPlaneManager.h
     DemoMode.h
     Dialogs/DlgAbout.h
     Dialogs/DlgActivateWindowImp.h
@@ -995,6 +997,7 @@ SET(Viewprovider_CPP_SRCS
     ViewProviderExtern.cpp
     ViewProviderFeature.cpp
     ViewProviderGeometryObject.cpp
+    ViewProviderClippingPlane.cpp
     ViewProviderImagePlane.cpp
     ViewProviderInventorObject.cpp
     ViewProviderPyImp.cpp
@@ -1028,6 +1031,7 @@ SET(Viewprovider_SRCS
     ViewProviderGeoFeatureGroupExtension.h
     ViewProviderOriginGroupExtension.h
     ViewProviderAnnotation.h
+    ViewProviderClippingPlane.h
     ViewProviderDocumentObject.h
     ViewProviderDocumentObjectGroup.h
     ViewProviderDragger.h

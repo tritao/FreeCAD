@@ -109,6 +109,7 @@
 #include "View3DViewerPy.h"
 #include "View3DInventor.h"
 #include "ViewProviderAnnotation.h"
+#include "ViewProviderClippingPlane.h"
 #include "ViewProviderDocumentObject.h"
 #include "ViewProviderDocumentObjectGroup.h"
 #include "ViewProviderDragger.h"
@@ -2437,6 +2438,7 @@ void Application::initTypes()
     Gui::ViewProviderDocumentObjectGroupPython  ::init();
     Gui::ViewProviderDragger                    ::init();
     Gui::ViewProviderGeometryObject             ::init();
+    Gui::ViewProviderClippingPlane              ::init();
     Gui::ViewProviderImagePlane                 ::init();
     Gui::ViewProviderInventorObject             ::init();
     Gui::ViewProviderVRMLObject                 ::init();

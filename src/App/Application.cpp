@@ -110,6 +110,7 @@
 #include "ApplicationDirectoriesPy.h"
 #include "ApplicationPy.h"
 #include "CleanupProcess.h"
+#include "ClippingPlane.h"
 #include "ComplexGeoData.h"
 #include "ConsoleQtBridge.h"
 #include "TranslationQtBridge.h"
@@ -2295,6 +2296,7 @@ void Application::initTypes()
     App::TransactionalObject       ::init();
     App::DocumentObject            ::init();
     App::GeoFeature                ::init();
+    App::ClippingPlane             ::init();
 
     // Test features
     App::FeatureTest               ::init();
