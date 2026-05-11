@@ -172,6 +172,7 @@ SET(Document_CPP_SRCS
     FeaturePython.cpp
     FeatureTest.cpp
     ClippingPlane.cpp
+    SavedView.cpp
     GeoFeature.cpp
     GeoFeatureGroupExtensionPyImp.cpp
     GeoFeatureGroupExtension.cpp
@@ -225,6 +226,7 @@ SET(Document_HPP_SRCS
     FeaturePythonPyImp.inl
     FeatureTest.h
     ClippingPlane.h
+    SavedView.h
     GeoFeature.h
     GeoFeatureGroupExtension.h
     ImagePlane.h

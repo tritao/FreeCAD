@@ -57,8 +57,9 @@
 #include <App/DocumentObserver.h>
 #include <App/GeoFeature.h>
 #include <App/GeoFeatureGroupExtension.h>
-#include <App/Part.h>
 #include <App/Link.h>
+#include <App/Part.h>
+#include <App/SavedView.h>
 #include <Base/Console.h>
 #include <Base/Parameter.h>
 
@@ -81,6 +82,7 @@
 #include "Navigation/NavigationStyle.h"
 #include "OverlayParams.h"
 #include "OverlayManager.h"
+#include "SavedViewManager.h"
 #include "SceneInspector.h"
 #include "Selection.h"
 #include "Selection/SelectionView.h"
@@ -136,6 +138,20 @@ App::ClippingPlane* selectedClippingPlane(App::Document* doc)
     for (const auto& sel : Gui::Selection().getSelection(doc->getName())) {
         if (auto plane = freecad_cast<App::ClippingPlane*>(sel.pObject)) {
             return plane;
+        }
+    }
+    return nullptr;
+}
+
+App::SavedView* selectedSavedView(App::Document* doc)
+{
+    if (!doc) {
+        return nullptr;
+    }
+
+    for (const auto& sel : Gui::Selection().getSelection(doc->getName())) {
+        if (auto savedView = freecad_cast<App::SavedView*>(sel.pObject)) {
+            return savedView;
         }
     }
     return nullptr;
@@ -783,6 +799,151 @@ public:
     bool isActive() override
     {
         return activeInventorView() && selectedClippingPlane(getActiveDocument());
+    }
+};
+
+//===========================================================================
+// Std_CreateSavedView
+//===========================================================================
+
+class StdCmdCreateSavedView: public Gui::Command
+{
+public:
+    StdCmdCreateSavedView()
+        : Command("Std_CreateSavedView")
+    {
+        sGroup = "Standard-View";
+        sMenuText = QT_TR_NOOP("Create Saved View");
+        sToolTipText = QT_TR_NOOP("Create a saved view from the active 3D view");
+        sWhatsThis = "Std_CreateSavedView";
+        sStatusTip = sToolTipText;
+        sPixmap = "Std_ViewScreenShot";
+        eType = AlterDoc;
+    }
+
+    const char* className() const override
+    {
+        return "StdCmdCreateSavedView";
+    }
+
+    void activated(int iMsg) override
+    {
+        Q_UNUSED(iMsg);
+        auto doc = getActiveDocument();
+        auto view = activeInventorView();
+        if (!doc || !view) {
+            return;
+        }
+
+        App::AutoTransaction guard(
+            openActiveDocumentCommand(QT_TRANSLATE_NOOP("Command", "Create saved view"))
+        );
+        auto name = doc->getUniqueObjectName("SavedView");
+        auto savedView = freecad_cast<App::SavedView*>(doc->addObject("App::SavedView", name.c_str()));
+        if (!savedView) {
+            return;
+        }
+
+        if (!SavedViewManager::capture(view, savedView)) {
+            doc->removeObject(savedView->getNameInDocument());
+            return;
+        }
+
+        Command::updateActive();
+    }
+
+    bool isActive() override
+    {
+        return getActiveDocument() && activeInventorView();
+    }
+};
+
+//===========================================================================
+// Std_ApplySavedView
+//===========================================================================
+
+class StdCmdApplySavedView: public Gui::Command
+{
+public:
+    StdCmdApplySavedView()
+        : Command("Std_ApplySavedView")
+    {
+        sGroup = "Standard-View";
+        sMenuText = QT_TR_NOOP("Apply Selected Saved View");
+        sToolTipText = QT_TR_NOOP("Restore the selected saved view in the active 3D view");
+        sWhatsThis = "Std_ApplySavedView";
+        sStatusTip = sToolTipText;
+        sPixmap = "Std_ViewScreenShot";
+        eType = Alter3DView;
+    }
+
+    const char* className() const override
+    {
+        return "StdCmdApplySavedView";
+    }
+
+    void activated(int iMsg) override
+    {
+        Q_UNUSED(iMsg);
+        auto view = activeInventorView();
+        auto savedView = selectedSavedView(getActiveDocument());
+        if (!view || !savedView) {
+            return;
+        }
+
+        SavedViewManager::restore(view, savedView);
+        Command::updateActive();
+    }
+
+    bool isActive() override
+    {
+        return activeInventorView() && selectedSavedView(getActiveDocument());
+    }
+};
+
+//===========================================================================
+// Std_UpdateSavedView
+//===========================================================================
+
+class StdCmdUpdateSavedView: public Gui::Command
+{
+public:
+    StdCmdUpdateSavedView()
+        : Command("Std_UpdateSavedView")
+    {
+        sGroup = "Standard-View";
+        sMenuText = QT_TR_NOOP("Update Selected Saved View");
+        sToolTipText = QT_TR_NOOP("Capture the active 3D view into the selected saved view");
+        sWhatsThis = "Std_UpdateSavedView";
+        sStatusTip = sToolTipText;
+        sPixmap = "Std_ViewScreenShot";
+        eType = AlterDoc;
+    }
+
+    const char* className() const override
+    {
+        return "StdCmdUpdateSavedView";
+    }
+
+    void activated(int iMsg) override
+    {
+        Q_UNUSED(iMsg);
+        auto view = activeInventorView();
+        auto savedView = selectedSavedView(getActiveDocument());
+        if (!view || !savedView) {
+            return;
+        }
+
+        App::AutoTransaction guard(
+            openActiveDocumentCommand(QT_TRANSLATE_NOOP("Command", "Update saved view"))
+        );
+        SavedViewManager::capture(view, savedView);
+        Command::updateActive();
+    }
+
+    bool isActive() override
+    {
+        return activeInventorView() && selectedSavedView(getActiveDocument());
     }
 };
 
@@ -4838,6 +4999,9 @@ void CreateViewStdCommands()
     rcCmdMgr.addCommand(new StdPerspectiveCamera());
     rcCmdMgr.addCommand(new StdCmdCreateClippingPlane());
     rcCmdMgr.addCommand(new StdCmdActivateClippingPlane());
+    rcCmdMgr.addCommand(new StdCmdCreateSavedView());
+    rcCmdMgr.addCommand(new StdCmdApplySavedView());
+    rcCmdMgr.addCommand(new StdCmdUpdateSavedView());
     rcCmdMgr.addCommand(new StdCmdToggleClipPlane());
     rcCmdMgr.addCommand(new StdCmdDrawStyle());
     rcCmdMgr.addCommand(new StdCmdViewSaveCamera());

@@ -110,6 +110,7 @@
 #include "View3DInventor.h"
 #include "ViewProviderAnnotation.h"
 #include "ViewProviderClippingPlane.h"
+#include "ViewProviderSavedView.h"
 #include "ViewProviderDocumentObject.h"
 #include "ViewProviderDocumentObjectGroup.h"
 #include "ViewProviderDragger.h"
@@ -2439,6 +2440,7 @@ void Application::initTypes()
     Gui::ViewProviderDragger                    ::init();
     Gui::ViewProviderGeometryObject             ::init();
     Gui::ViewProviderClippingPlane              ::init();
+    Gui::ViewProviderSavedView                  ::init();
     Gui::ViewProviderImagePlane                 ::init();
     Gui::ViewProviderInventorObject             ::init();
     Gui::ViewProviderVRMLObject                 ::init();

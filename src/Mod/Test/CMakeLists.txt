@@ -23,6 +23,8 @@ SET(Test_SRCS
     TestCoinNodeSnapshots.py
     ClipPlaneTests.py
     ClipPlaneGuiTests.py
+    SavedViewTests.py
+    SavedViewGuiTests.py
 )
 
 SET(TestData_SRCS
