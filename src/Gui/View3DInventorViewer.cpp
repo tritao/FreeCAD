@@ -1056,6 +1056,57 @@ void View3DInventorViewer::removeRuntimeNodes(const void* owner)
     removeRuntimeNode(owner, RuntimeNodeLayer::Foreground);
 }
 
+View3DInventorViewer::ViewProviderLocation View3DInventorViewer::locateViewProvider(
+    const ViewProvider* vp
+) const
+{
+    if (!vp) {
+        return {};
+    }
+
+    auto* root = vp->getRoot();
+    if (!root) {
+        return {};
+    }
+
+    int index = objectGroup ? objectGroup->findChild(root) : -1;
+    if (index >= 0) {
+        return {objectGroup, index};
+    }
+
+    index = pcViewProviderRoot ? pcViewProviderRoot->findChild(root) : -1;
+    if (index >= 0) {
+        return {pcViewProviderRoot, index};
+    }
+
+    return {};
+}
+
+bool View3DInventorViewer::moveViewProvider(ViewProvider* vp, SoGroup* parent, int index)
+{
+    if (!vp || !parent) {
+        return false;
+    }
+
+    auto* root = vp->getRoot();
+    if (!root) {
+        return false;
+    }
+
+    if (auto current = locateViewProvider(vp)) {
+        current.parent->removeChild(current.index);
+    }
+
+    if (index >= 0 && index <= parent->getNumChildren()) {
+        parent->insertChild(root, index);
+    }
+    else {
+        parent->addChild(root);
+    }
+
+    return true;
+}
+
 /// adds an ViewProvider to the view, e.g. from a feature
 void View3DInventorViewer::addViewProvider(ViewProvider* pcProvider)
 {

@@ -22,6 +22,7 @@
 #pragma once
 
 #include "GeoFeature.h"
+#include "PropertyLinks.h"
 #include "PropertyStandard.h"
 
 namespace App
@@ -35,6 +36,8 @@ public:
     ClippingPlane();
     ~ClippingPlane() override = default;
 
+    App::PropertyEnumeration ScopeMode;
+    App::PropertyLinkList Targets;
     App::PropertyBool Reverse;
 
     const char* getViewProviderName() const override

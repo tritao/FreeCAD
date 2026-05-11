@@ -122,7 +122,8 @@ void ViewProviderClippingPlane::updateData(const App::Property* prop)
         return;
     }
 
-    if (prop == &plane->Placement || prop == &plane->Reverse) {
+    if (prop == &plane->Placement || prop == &plane->Reverse || prop == &plane->ScopeMode
+        || prop == &plane->Targets) {
         updateGeometry();
         ClippingPlaneManager::instance().refresh(plane);
     }

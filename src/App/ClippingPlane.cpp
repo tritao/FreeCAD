@@ -27,8 +27,26 @@ using namespace App;
 
 PROPERTY_SOURCE(App::ClippingPlane, App::GeoFeature)
 
+namespace
+{
+
+const char* scopeModeEnums[] = {"WholeDocument", "IncludeOnly", nullptr};
+
+}
+
 ClippingPlane::ClippingPlane()
 {
+    ADD_PROPERTY_TYPE(ScopeMode,
+                      (static_cast<long>(0)),
+                      "ClippingPlane",
+                      App::Prop_None,
+                      "How the clipping plane applies to the document");
+    ScopeMode.setEnums(scopeModeEnums);
+    ADD_PROPERTY_TYPE(Targets,
+                      (),
+                      "ClippingPlane",
+                      App::Prop_None,
+                      "Objects affected by the clipping plane when ScopeMode is IncludeOnly");
     ADD_PROPERTY_TYPE(Reverse,
                       (false),
                       "ClippingPlane",

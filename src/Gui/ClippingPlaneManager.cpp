@@ -25,7 +25,9 @@
 #include <cmath>
 #include <numbers>
 #include <ranges>
+#include <unordered_set>
 
+#include <Inventor/nodes/SoClipPlane.h>
 #include <Inventor/nodes/SoCoordinate3.h>
 #include <Inventor/nodes/SoDrawStyle.h>
 #include <Inventor/nodes/SoIndexedLineSet.h>
@@ -35,6 +37,7 @@
 
 #include <Inventor/So3DAnnotation.h>
 #include <App/ClippingPlane.h>
+#include <App/Document.h>
 #include <App/GeoFeature.h>
 
 #include "Application.h"
@@ -135,8 +138,11 @@ void ClippingPlaneManager::activate(View3DInventor* view, App::ClippingPlane* pl
     }
 
     deactivate(view);
-    apply(view, *plane);
-    activeClips.push_back({view, plane});
+    ActiveClip clip;
+    clip.view = view;
+    clip.plane = plane;
+    apply(clip);
+    activeClips.push_back(std::move(clip));
 }
 
 void ClippingPlaneManager::deactivate(View3DInventor* view)
@@ -146,9 +152,15 @@ void ClippingPlaneManager::deactivate(View3DInventor* view)
         return;
     }
 
-    auto plane = activePlane(view);
-    clear(view, plane);
-    std::erase_if(activeClips, [view](const ActiveClip& clip) { return clip.view == view; });
+    auto it = std::ranges::find_if(activeClips, [view](const ActiveClip& clip) {
+        return clip.view == view;
+    });
+    if (it == activeClips.end()) {
+        return;
+    }
+
+    clear(*it);
+    activeClips.erase(it);
 }
 
 void ClippingPlaneManager::deactivate(const App::ClippingPlane* plane)
@@ -158,9 +170,9 @@ void ClippingPlaneManager::deactivate(const App::ClippingPlane* plane)
         return;
     }
 
-    for (const auto& clip : activeClips) {
+    for (auto& clip : activeClips) {
         if (clip.plane == plane && clip.view) {
-            clear(clip.view, plane);
+            clear(clip);
         }
     }
 
@@ -174,9 +186,10 @@ void ClippingPlaneManager::refresh(const App::ClippingPlane* plane)
         return;
     }
 
-    for (const auto& clip : activeClips) {
+    for (auto& clip : activeClips) {
         if (clip.plane == plane && clip.view) {
-            apply(clip.view, *plane);
+            clear(clip);
+            apply(clip);
         }
     }
 }
@@ -231,13 +244,162 @@ Base::Placement ClippingPlaneManager::clipPlacement(const App::ClippingPlane& pl
     return placement;
 }
 
-void ClippingPlaneManager::apply(View3DInventor* view, const App::ClippingPlane& plane)
+SoNode* ClippingPlaneManager::buildScopedClipNode(const App::ClippingPlane& plane)
 {
-    clear(view, &plane);
-    if (view && view->getViewer()) {
-        view->getViewer()->toggleClippingPlane(1, false, true, clipPlacement(plane));
-        installActiveCue(view, plane);
+    auto* root = new SoSeparator;
+    root->setName("FCScopedClipPlaneRuntime");
+
+    auto* clip = new SoClipPlane;
+    clip->setName("FCScopedClipPlane");
+
+    Base::Placement placement = clipPlacement(plane);
+    Base::Vector3d dir;
+    placement.getRotation().multVec(Base::Vector3d(0, 0, -1), dir);
+    Base::Vector3d base = placement.getPosition();
+    clip->plane.setValue(SbPlane(Base::convertTo<SbVec3f>(dir), Base::convertTo<SbVec3f>(base)));
+
+    root->addChild(clip);
+    return root;
+}
+
+std::vector<ClippingPlaneManager::ActiveClip::MovedTarget> ClippingPlaneManager::resolveScopedTargets(
+    View3DInventor* view,
+    const App::ClippingPlane& plane
+)
+{
+    std::vector<ActiveClip::MovedTarget> targets;
+    if (!view || !view->getViewer() || plane.ScopeMode.getValue() != 1) {
+        return targets;
     }
+
+    std::unordered_set<std::string> seen;
+    for (auto* obj : plane.Targets.getValues()) {
+        if (!obj || obj == &plane) {
+            continue;
+        }
+
+        const auto name = obj->getNameInDocument();
+        if (!seen.emplace(name).second) {
+            continue;
+        }
+
+        auto* vp = Application::Instance->getViewProvider(obj);
+        if (!vp || !vp->getRoot()) {
+            continue;
+        }
+
+        auto location = view->getViewer()->locateViewProvider(vp);
+        if (!location) {
+            continue;
+        }
+
+        targets.push_back({name, location.parent, location.index});
+    }
+
+    return targets;
+}
+
+void ClippingPlaneManager::apply(ActiveClip& clip)
+{
+    if (!clip.view || !clip.view->getViewer() || !clip.plane) {
+        return;
+    }
+
+    clip.wholeDocument = true;
+    clip.movedTargets.clear();
+
+    const bool includeOnlyScope = clip.plane->ScopeMode.getValue() == 1;
+    auto targets = resolveScopedTargets(clip.view, *clip.plane);
+    if (includeOnlyScope && targets.empty()) {
+        clip.wholeDocument = false;
+        installActiveCue(clip.view, *clip.plane);
+        return;
+    }
+
+    if (!targets.empty()) {
+        auto* scopedRoot = static_cast<SoSeparator*>(buildScopedClipNode(*clip.plane));
+        if (scopedRoot) {
+            auto removeOrder = targets;
+            std::ranges::sort(removeOrder, [](const auto& left, const auto& right) {
+                if (left.parent == right.parent) {
+                    return left.index > right.index;
+                }
+                return left.parent < right.parent;
+            });
+
+            for (const auto& target : removeOrder) {
+                auto* obj = clip.view->getAppDocument()->getObject(target.objectName.c_str());
+                auto* vp = obj ? Application::Instance->getViewProvider(obj) : nullptr;
+                if (!vp || !target.parent) {
+                    continue;
+                }
+                auto location = clip.view->getViewer()->locateViewProvider(vp);
+                if (location && location.parent == target.parent && location.index >= 0) {
+                    target.parent->removeChild(location.index);
+                }
+            }
+
+            for (const auto& target : targets) {
+                auto* obj = clip.view->getAppDocument()->getObject(target.objectName.c_str());
+                auto* vp = obj ? Application::Instance->getViewProvider(obj) : nullptr;
+                if (vp && vp->getRoot()) {
+                    scopedRoot->addChild(vp->getRoot());
+                }
+            }
+
+            clip.wholeDocument = false;
+            clip.movedTargets = std::move(targets);
+            clip.view->getViewer()->addRuntimeNode(
+                clip.plane,
+                scopedRoot,
+                View3DInventorViewer::RuntimeNodeLayer::Scene
+            );
+            installActiveCue(clip.view, *clip.plane);
+            return;
+        }
+    }
+
+    clip.view->getViewer()->toggleClippingPlane(1, false, true, clipPlacement(*clip.plane));
+    installActiveCue(clip.view, *clip.plane);
+}
+
+void ClippingPlaneManager::clear(ActiveClip& clip)
+{
+    if (!clip.view || !clip.view->getViewer() || !clip.plane) {
+        return;
+    }
+
+    if (!clip.wholeDocument) {
+        clip.view->getViewer()->removeRuntimeNode(
+            clip.plane,
+            View3DInventorViewer::RuntimeNodeLayer::Scene
+        );
+
+        auto restoreOrder = clip.movedTargets;
+        std::ranges::sort(restoreOrder, [](const auto& left, const auto& right) {
+            if (left.parent == right.parent) {
+                return left.index < right.index;
+            }
+            return left.parent < right.parent;
+        });
+
+        for (const auto& target : restoreOrder) {
+            auto* obj = clip.view->getAppDocument()->getObject(target.objectName.c_str());
+            auto* vp = obj ? Application::Instance->getViewProvider(obj) : nullptr;
+            if (vp && target.parent) {
+                clip.view->getViewer()->moveViewProvider(vp, target.parent, target.index);
+            }
+        }
+        clip.movedTargets.clear();
+    }
+    else if (clip.view->getViewer()->hasClippingPlane()) {
+        clip.view->getViewer()->toggleClippingPlane(0, false, true);
+    }
+
+    clip.view->getViewer()->removeRuntimeNode(
+        clip.plane,
+        View3DInventorViewer::RuntimeNodeLayer::Foreground
+    );
 }
 
 void ClippingPlaneManager::installActiveCue(View3DInventor* view, const App::ClippingPlane& plane)
@@ -248,20 +410,5 @@ void ClippingPlaneManager::installActiveCue(View3DInventor* view, const App::Cli
             buildActiveCue(plane),
             View3DInventorViewer::RuntimeNodeLayer::Foreground
         );
-    }
-}
-
-void ClippingPlaneManager::clear(View3DInventor* view, const App::ClippingPlane* plane)
-{
-    if (!view || !view->getViewer()) {
-        return;
-    }
-
-    if (plane) {
-        view->getViewer()->removeRuntimeNode(plane, View3DInventorViewer::RuntimeNodeLayer::Foreground);
-    }
-
-    if (view->getViewer()->hasClippingPlane()) {
-        view->getViewer()->toggleClippingPlane(0, false, true);
     }
 }

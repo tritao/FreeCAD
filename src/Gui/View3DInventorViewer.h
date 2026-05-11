@@ -276,9 +276,21 @@ public:
         Scene,
         Foreground
     };
+    struct ViewProviderLocation
+    {
+        SoGroup* parent {nullptr};
+        int index {-1};
+
+        explicit operator bool() const
+        {
+            return parent != nullptr && index >= 0;
+        }
+    };
     void addRuntimeNode(const void* owner, SoNode* node, RuntimeNodeLayer layer);
     void removeRuntimeNode(const void* owner, RuntimeNodeLayer layer);
     void removeRuntimeNodes(const void* owner);
+    ViewProviderLocation locateViewProvider(const ViewProvider* vp) const;
+    bool moveViewProvider(ViewProvider* vp, SoGroup* parent, int index = -1);
     /** Helper method to get picked entities while editing.
      * It's in the responsibility of the caller to delete the returned instance.
      */

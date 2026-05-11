@@ -43,6 +43,7 @@ class SavedViewGuiTests(unittest.TestCase):
         FreeCADGui.activateView("Gui::View3DInventor", True)
         FreeCADGui.updateGui()
         self.view = FreeCADGui.getDocument(self.doc.Name).ActiveView
+        self.view.setAnimationEnabled(False)
         FreeCADGui.Selection.clearSelection()
 
     def tearDown(self):
