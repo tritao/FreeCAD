@@ -788,7 +788,7 @@ public:
 
         auto& manager = ClippingPlaneManager::instance();
         if (manager.isActive(view, plane)) {
-            manager.deactivate(view);
+            manager.deactivate(view, plane);
         }
         else {
             manager.activate(view, plane);

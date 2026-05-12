@@ -50,17 +50,16 @@ class ClipPlaneGuiTests(unittest.TestCase):
         FreeCADGui.activateView("Gui::View3DInventor", True)
         FreeCADGui.updateGui()
         self.view = FreeCADGui.getDocument(self.doc.Name).ActiveView
-        self.active_plane = None
+        self.active_planes = []
         FreeCADGui.Selection.clearSelection()
 
     def tearDown(self):
         if GUI_AVAILABLE:
-            if self.active_plane and self.active_plane.Name in [
-                obj.Name for obj in self.doc.Objects
-            ]:
-                self.select_object(self.active_plane)
-                FreeCADGui.runCommand("Std_ActivateClippingPlane", 0)
-                FreeCADGui.updateGui()
+            for plane in reversed(self.active_planes):
+                if plane and plane.Name in [obj.Name for obj in self.doc.Objects]:
+                    self.select_object(plane)
+                    FreeCADGui.runCommand("Std_ActivateClippingPlane", 0)
+                    FreeCADGui.updateGui()
             FreeCADGui.Selection.clearSelection()
             FreeCADGui.updateGui()
 
@@ -106,6 +105,16 @@ class ClipPlaneGuiTests(unittest.TestCase):
         path = search.getPath()
         return path.getTail() if path else None
 
+    def count_named_nodes(self, name):
+        if not COIN_AVAILABLE:
+            self.skipTest("pivy.coin not available")
+
+        search = coin.SoSearchAction()
+        search.setName(name)
+        search.setInterest(coin.SoSearchAction.ALL)
+        search.apply(self.view.getSceneGraph())
+        return search.getPaths().getLength()
+
     def parent_name_for_root(self, obj):
         if not COIN_AVAILABLE:
             self.skipTest("pivy.coin not available")
@@ -128,7 +137,7 @@ class ClipPlaneGuiTests(unittest.TestCase):
 
         self.assertEqual(len(self.doc.Objects), 1)
         plane = self.doc.Objects[0]
-        self.active_plane = plane
+        self.active_planes = [plane]
         self.assertEqual(plane.TypeId, "App::ClippingPlane")
         self.assertTrue(self.view.hasClippingPlane())
 
@@ -143,13 +152,13 @@ class ClipPlaneGuiTests(unittest.TestCase):
         self.select_object(plane)
         FreeCADGui.runCommand("Std_ActivateClippingPlane", 0)
         FreeCADGui.updateGui()
-        self.active_plane = plane
+        self.active_planes = [plane]
         self.assertTrue(self.view.hasClippingPlane())
         self.assertFalse(self.doc.isTouched())
 
         FreeCADGui.runCommand("Std_ActivateClippingPlane", 0)
         FreeCADGui.updateGui()
-        self.active_plane = None
+        self.active_planes = []
         self.assertFalse(self.view.hasClippingPlane())
         self.assertFalse(self.doc.isTouched())
 
@@ -158,7 +167,7 @@ class ClipPlaneGuiTests(unittest.TestCase):
         self.select_object(plane)
         FreeCADGui.runCommand("Std_ActivateClippingPlane", 0)
         FreeCADGui.updateGui()
-        self.active_plane = plane
+        self.active_planes = [plane]
         self.assertTrue(self.view.hasClippingPlane())
 
         plane.Reverse = True
@@ -174,12 +183,12 @@ class ClipPlaneGuiTests(unittest.TestCase):
         self.select_object(plane)
         FreeCADGui.runCommand("Std_ActivateClippingPlane", 0)
         FreeCADGui.updateGui()
-        self.active_plane = plane
+        self.active_planes = [plane]
         self.assertTrue(self.view.hasClippingPlane())
 
         self.doc.removeObject(plane.Name)
         FreeCADGui.updateGui()
-        self.active_plane = None
+        self.active_planes = []
         self.assertFalse(self.view.hasClippingPlane())
 
     def testScopedClipUsesRuntimeNode(self):
@@ -190,9 +199,9 @@ class ClipPlaneGuiTests(unittest.TestCase):
         self.select_object(plane)
         FreeCADGui.runCommand("Std_ActivateClippingPlane", 0)
         FreeCADGui.updateGui()
-        self.active_plane = plane
+        self.active_planes = [plane]
 
-        self.assertFalse(self.view.hasClippingPlane())
+        self.assertTrue(self.view.hasClippingPlane())
 
         runtime = self.find_named_node("FCScopedClipPlaneRuntime")
         self.assertIsNotNone(runtime)
@@ -208,7 +217,7 @@ class ClipPlaneGuiTests(unittest.TestCase):
         self.select_object(plane)
         FreeCADGui.runCommand("Std_ActivateClippingPlane", 0)
         FreeCADGui.updateGui()
-        self.active_plane = plane
+        self.active_planes = [plane]
 
         self.doc.removeObject(target.Name)
         FreeCADGui.updateGui()
@@ -224,9 +233,9 @@ class ClipPlaneGuiTests(unittest.TestCase):
         self.select_object(plane)
         FreeCADGui.runCommand("Std_ActivateClippingPlane", 0)
         FreeCADGui.updateGui()
-        self.active_plane = plane
+        self.active_planes = [plane]
 
-        self.assertFalse(self.view.hasClippingPlane())
+        self.assertTrue(self.view.hasClippingPlane())
 
         runtime = self.find_named_node("FCScopedClipPlaneRuntime")
         self.assertIsNotNone(runtime)
@@ -241,10 +250,54 @@ class ClipPlaneGuiTests(unittest.TestCase):
         self.select_object(plane)
         FreeCADGui.runCommand("Std_ActivateClippingPlane", 0)
         FreeCADGui.updateGui()
-        self.active_plane = plane
+        self.active_planes = [plane]
 
         self.doc.removeObject(target.Name)
         FreeCADGui.updateGui()
 
         self.assertIsNone(self.find_named_node("FCScopedClipPlaneRuntime"))
         self.assertTrue(self.view.hasClippingPlane())
+
+    def testMultipleWholeDocumentPlanesStayActive(self):
+        first = self.create_clip_plane("First")
+        second = self.create_clip_plane("Second")
+
+        self.select_object(first)
+        FreeCADGui.runCommand("Std_ActivateClippingPlane", 0)
+        FreeCADGui.updateGui()
+
+        self.select_object(second)
+        FreeCADGui.runCommand("Std_ActivateClippingPlane", 0)
+        FreeCADGui.updateGui()
+        self.active_planes = [first, second]
+
+        self.assertTrue(self.view.hasClippingPlane())
+        self.assertEqual(self.count_named_nodes("FCWholeClipPlaneRuntime"), 2)
+
+        self.select_object(second)
+        FreeCADGui.runCommand("Std_ActivateClippingPlane", 0)
+        FreeCADGui.updateGui()
+        self.active_planes = [first]
+
+        self.assertTrue(self.view.hasClippingPlane())
+        self.assertEqual(self.count_named_nodes("FCWholeClipPlaneRuntime"), 1)
+
+    def testOverlappingScopedPlanesShareOneWrapper(self):
+        target = self.create_clip_plane("Target")
+        first = self.create_scoped_clip_plane(target, "First")
+        second = self.create_scoped_clip_plane(target, "Second")
+
+        self.select_object(first)
+        FreeCADGui.runCommand("Std_ActivateClippingPlane", 0)
+        FreeCADGui.updateGui()
+        self.select_object(second)
+        FreeCADGui.runCommand("Std_ActivateClippingPlane", 0)
+        FreeCADGui.updateGui()
+        self.active_planes = [first, second]
+
+        runtime = self.find_named_node("FCScopedClipPlaneRuntime")
+        self.assertIsNotNone(runtime)
+        self.assertEqual(runtime.getNumChildren(), 3)
+        self.assertEqual(runtime.getChild(0).getName().getString(), "FCScopedClipPlane")
+        self.assertEqual(runtime.getChild(1).getName().getString(), "FCScopedClipPlane")
+        self.assertEqual(self.parent_name_for_root(target), "FCScopedClipPlaneRuntime")

@@ -48,40 +48,40 @@ public:
 
     void activate(View3DInventor* view, App::ClippingPlane* plane);
     void deactivate(View3DInventor* view);
+    void deactivate(View3DInventor* view, const App::ClippingPlane* plane);
     void deactivate(const App::ClippingPlane* plane);
     void refresh(const App::ClippingPlane* plane);
 
     bool isActive(View3DInventor* view, const App::ClippingPlane* plane) const;
+    std::vector<App::ClippingPlane*> activePlanes(View3DInventor* view) const;
     App::ClippingPlane* activePlane(View3DInventor* view) const;
 
 private:
-    struct ActiveClip
+    struct WrappedTarget
     {
-        struct MovedTarget
-        {
-            std::string objectName;
-            SoGroup* parent {nullptr};
-            int index {-1};
-        };
-
-        QPointer<View3DInventor> view;
-        App::ClippingPlane* plane {nullptr};
-        bool wholeDocument {true};
-        std::vector<MovedTarget> movedTargets;
+        std::string objectName;
+        SoGroup* parent {nullptr};
+        int index {-1};
+        SoGroup* wrapper {nullptr};
     };
 
-    std::vector<ActiveClip> activeClips;
+    struct ViewState
+    {
+        QPointer<View3DInventor> view;
+        std::vector<App::ClippingPlane*> planes;
+        std::vector<WrappedTarget> wrappedTargets;
+    };
+
+    std::vector<ViewState> viewStates;
 
     void garbageCollect();
+    ViewState* findViewState(View3DInventor* view);
+    const ViewState* findViewState(View3DInventor* view) const;
     static Base::Placement clipPlacement(const App::ClippingPlane& plane);
-    static SoNode* buildScopedClipNode(const App::ClippingPlane& plane);
-    static std::vector<ActiveClip::MovedTarget> resolveScopedTargets(
-        View3DInventor* view,
-        const App::ClippingPlane& plane
-    );
+    static SoNode* buildClipNode(const App::ClippingPlane& plane, const char* name);
     static void installActiveCue(View3DInventor* view, const App::ClippingPlane& plane);
-    static void apply(ActiveClip& clip);
-    static void clear(ActiveClip& clip);
+    static void clearApplied(ViewState& state);
+    static void rebuild(ViewState& state);
 };
 
 }  // namespace Gui

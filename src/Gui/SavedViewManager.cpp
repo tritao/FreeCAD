@@ -101,7 +101,11 @@ bool SavedViewManager::capture(View3DInventor* view, App::SavedView* savedView)
 
     savedView->CameraState.setValue(view->getCamera());
     savedView->VisibilityState.setValues(captureVisibilityState(*savedView));
-    savedView->ClipPlane.setValue(ClippingPlaneManager::instance().activePlane(view));
+    std::vector<App::DocumentObject*> clipPlanes;
+    for (auto* plane : ClippingPlaneManager::instance().activePlanes(view)) {
+        clipPlanes.push_back(plane);
+    }
+    savedView->ClipPlanes.setValues(clipPlanes);
     return true;
 }
 
@@ -128,12 +132,13 @@ bool SavedViewManager::restore(View3DInventor* view, const App::SavedView* saved
     }
 
     if (savedView->RestoreClipping.getValue()) {
-        auto* plane = freecad_cast<App::ClippingPlane*>(savedView->ClipPlane.getValue());
-        if (plane) {
-            ClippingPlaneManager::instance().activate(view, plane);
-        }
-        else {
-            ClippingPlaneManager::instance().deactivate(view);
+        auto& manager = ClippingPlaneManager::instance();
+        manager.deactivate(view);
+        for (auto* obj : savedView->ClipPlanes.getValues()) {
+            auto* plane = freecad_cast<App::ClippingPlane*>(obj);
+            if (plane) {
+                manager.activate(view, plane);
+            }
         }
     }
 

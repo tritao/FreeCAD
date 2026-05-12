@@ -41,7 +41,7 @@ public:
     App::PropertyBool RestoreCamera;
     App::PropertyBool RestoreVisibility;
     App::PropertyBool RestoreClipping;
-    App::PropertyLink ClipPlane;
+    App::PropertyLinkList ClipPlanes;
 
     const char* getViewProviderName() const override
     {

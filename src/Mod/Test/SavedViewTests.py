@@ -44,17 +44,18 @@ class SavedViewTests(unittest.TestCase):
         self.assertTrue(obj.RestoreCamera)
         self.assertTrue(obj.RestoreVisibility)
         self.assertTrue(obj.RestoreClipping)
-        self.assertIsNone(obj.ClipPlane)
+        self.assertEqual(list(obj.ClipPlanes), [])
 
     def testSaveRestoreSavedView(self):
         plane = self.doc.addObject("App::ClippingPlane", "Clip")
+        other = self.doc.addObject("App::ClippingPlane", "Other")
         saved = self.doc.addObject("App::SavedView", "Saved")
         saved.CameraState = "OrthographicCamera { position 1 2 3 }"
         saved.VisibilityState = {"Clip": "False", "Other": "True"}
         saved.RestoreCamera = False
         saved.RestoreVisibility = True
         saved.RestoreClipping = False
-        saved.ClipPlane = plane
+        saved.ClipPlanes = [plane, other]
 
         self.doc.saveAs(self.file_name)
         FreeCAD.closeDocument(self.doc.Name)
@@ -68,5 +69,4 @@ class SavedViewTests(unittest.TestCase):
         self.assertFalse(restored.RestoreCamera)
         self.assertTrue(restored.RestoreVisibility)
         self.assertFalse(restored.RestoreClipping)
-        self.assertIsNotNone(restored.ClipPlane)
-        self.assertEqual(restored.ClipPlane.Name, "Clip")
+        self.assertEqual([clip.Name for clip in restored.ClipPlanes], ["Clip", "Other"])

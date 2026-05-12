@@ -44,6 +44,7 @@
 #include <Inventor/actions/SoGetMatrixAction.h>
 #include <Inventor/actions/SoHandleEventAction.h>
 #include <Inventor/actions/SoRayPickAction.h>
+#include <Inventor/actions/SoSearchAction.h>
 #include <Inventor/annex/HardCopy/SoVectorizePSAction.h>
 #include <Inventor/annex/Profiler/SoProfiler.h>
 #include <Inventor/annex/Profiler/elements/SoProfilerElement.h>
@@ -423,6 +424,7 @@ View3DInventorViewer::View3DInventorViewer(QWidget* parent, const QOpenGLWidget*
     : Quarter::SoQTQuarterAdaptor(parent, sharewidget)
     , SelectionObserver(false, ResolveMode::NoResolve)
     , editViewProvider(nullptr)
+    , runtimeClipRoot(nullptr)
     , runtimeForegroundRoot(nullptr)
     , objectGroup(nullptr)
     , navigation(nullptr)
@@ -448,6 +450,7 @@ View3DInventorViewer::View3DInventorViewer(
     : Quarter::SoQTQuarterAdaptor(format, parent, sharewidget)
     , SelectionObserver(false, ResolveMode::NoResolve)
     , editViewProvider(nullptr)
+    , runtimeClipRoot(nullptr)
     , runtimeForegroundRoot(nullptr)
     , objectGroup(nullptr)
     , navigation(nullptr)
@@ -595,6 +598,11 @@ void View3DInventorViewer::init()
     pcViewProviderRoot = selectionRoot;
     pcViewProviderRoot->addChild(threePointLightingSeparator);
     pcViewProviderRoot->addChild(environment);
+
+    runtimeClipRoot = new SoSeparator;
+    runtimeClipRoot->ref();
+    runtimeClipRoot->setName("runtimeClipRoot");
+    pcViewProviderRoot->addChild(runtimeClipRoot);
 
     // add a global hidden anchor object to ensure transparent objects work correctly
     // in empty scenes - OpenInventor's two-pass transparency rendering requires at least
@@ -779,6 +787,11 @@ View3DInventorViewer::~View3DInventorViewer()
         }
     }
     runtimeNodes.clear();
+    if (runtimeClipRoot) {
+        runtimeClipRoot->removeAllChildren();
+        runtimeClipRoot->unref();
+        runtimeClipRoot = nullptr;
+    }
     if (runtimeForegroundRoot) {
         runtimeForegroundRoot->removeAllChildren();
         runtimeForegroundRoot->unref();
@@ -988,6 +1001,8 @@ bool View3DInventorViewer::containsViewProvider(const ViewProvider* vp) const
 SoSeparator* View3DInventorViewer::runtimeRoot(RuntimeNodeLayer layer) const
 {
     switch (layer) {
+        case RuntimeNodeLayer::Clip:
+            return runtimeClipRoot;
         case RuntimeNodeLayer::Scene:
             return pcViewProviderRoot;
         case RuntimeNodeLayer::Foreground:
@@ -1052,6 +1067,7 @@ void View3DInventorViewer::removeRuntimeNode(const void* owner, RuntimeNodeLayer
 
 void View3DInventorViewer::removeRuntimeNodes(const void* owner)
 {
+    removeRuntimeNode(owner, RuntimeNodeLayer::Clip);
     removeRuntimeNode(owner, RuntimeNodeLayer::Scene);
     removeRuntimeNode(owner, RuntimeNodeLayer::Foreground);
 }
@@ -3559,7 +3575,15 @@ void View3DInventorViewer::toggleClippingPlane(
 
 bool View3DInventorViewer::hasClippingPlane() const
 {
-    return pcClipPlane != nullptr;
+    if (pcClipPlane != nullptr) {
+        return true;
+    }
+
+    SoSearchAction search;
+    search.setType(SoClipPlane::getClassTypeId(), true);
+    search.setInterest(SoSearchAction::FIRST);
+    search.apply(getSceneGraph());
+    return search.getPath() != nullptr;
 }
 
 /**

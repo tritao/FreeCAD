@@ -273,6 +273,7 @@ public:
     void setEditingTransform(const Base::Matrix4D& mat);
     enum class RuntimeNodeLayer
     {
+        Clip,
         Scene,
         Foreground
     };
@@ -642,6 +643,7 @@ private:
     // Dedicated root for viewer-owned HUD/decorations that should not be
     // treated as model content during capture/export traversals.
     SoSeparator* decorationroot;
+    SoSeparator* runtimeClipRoot;
     SoSeparator* runtimeForegroundRoot;
 
     SoDirectionalLight* backlight;

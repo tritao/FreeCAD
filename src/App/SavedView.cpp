@@ -54,9 +54,9 @@ SavedView::SavedView()
                       "Saved View",
                       App::Prop_None,
                       "Restore clipping when applying this saved view");
-    ADD_PROPERTY_TYPE(ClipPlane,
-                      (nullptr),
+    ADD_PROPERTY_TYPE(ClipPlanes,
+                      (),
                       "Saved View",
                       App::Prop_None,
-                      "Clipping plane captured by this saved view");
+                      "Clipping planes captured by this saved view");
 }

@@ -151,8 +151,8 @@ void ViewProviderClippingPlane::setupContextMenu(QMenu* menu, QObject* receiver,
     auto plane = getObject<App::ClippingPlane>();
     if (view && plane) {
         if (ClippingPlaneManager::instance().isActive(view, plane)) {
-            menu->addAction(QObject::tr("Deactivate clipping in active view"), [view]() {
-                ClippingPlaneManager::instance().deactivate(view);
+            menu->addAction(QObject::tr("Deactivate clipping in active view"), [view, plane]() {
+                ClippingPlaneManager::instance().deactivate(view, plane);
             });
         }
         else {
