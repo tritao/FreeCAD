@@ -599,7 +599,9 @@ void View3DInventorViewer::init()
     pcViewProviderRoot->addChild(threePointLightingSeparator);
     pcViewProviderRoot->addChild(environment);
 
-    runtimeClipRoot = new SoSeparator;
+    // Clip planes must be inserted in a non-separating group so the clip
+    // state propagates to the subsequently rendered object subtree.
+    runtimeClipRoot = new SoGroup;
     runtimeClipRoot->ref();
     runtimeClipRoot->setName("runtimeClipRoot");
     pcViewProviderRoot->addChild(runtimeClipRoot);
@@ -998,7 +1000,7 @@ bool View3DInventorViewer::containsViewProvider(const ViewProvider* vp) const
     return sa.getPath() != nullptr;
 }
 
-SoSeparator* View3DInventorViewer::runtimeRoot(RuntimeNodeLayer layer) const
+SoGroup* View3DInventorViewer::runtimeRoot(RuntimeNodeLayer layer) const
 {
     switch (layer) {
         case RuntimeNodeLayer::Clip:

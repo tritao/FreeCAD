@@ -628,7 +628,7 @@ private:
         auto operator<=>(const RuntimeNodeKey&) const = default;
     };
 
-    SoSeparator* runtimeRoot(RuntimeNodeLayer layer) const;
+    SoGroup* runtimeRoot(RuntimeNodeLayer layer) const;
 
     NaviCube* naviCube;
     SoAnnotation* naviCubeAnnotation;
@@ -643,8 +643,8 @@ private:
     // Dedicated root for viewer-owned HUD/decorations that should not be
     // treated as model content during capture/export traversals.
     SoSeparator* decorationroot;
-    SoSeparator* runtimeClipRoot;
-    SoSeparator* runtimeForegroundRoot;
+    SoGroup* runtimeClipRoot;
+    SoGroup* runtimeForegroundRoot;
 
     SoDirectionalLight* backlight;
     SoDirectionalLight* fillLight;

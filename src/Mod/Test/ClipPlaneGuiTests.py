@@ -115,6 +115,17 @@ class ClipPlaneGuiTests(unittest.TestCase):
         search.apply(self.view.getSceneGraph())
         return search.getPaths().getLength()
 
+    def node_named(self, name):
+        if not COIN_AVAILABLE:
+            self.skipTest("pivy.coin not available")
+
+        search = coin.SoSearchAction()
+        search.setName(name)
+        search.setInterest(coin.SoSearchAction.FIRST)
+        search.apply(self.view.getSceneGraph())
+        path = search.getPath()
+        return path.getTail() if path else None
+
     def parent_name_for_root(self, obj):
         if not COIN_AVAILABLE:
             self.skipTest("pivy.coin not available")
@@ -281,6 +292,18 @@ class ClipPlaneGuiTests(unittest.TestCase):
 
         self.assertTrue(self.view.hasClippingPlane())
         self.assertEqual(self.count_named_nodes("FCWholeClipPlaneRuntime"), 1)
+
+    def testWholeDocumentClipRootDoesNotIsolateClipState(self):
+        plane = self.create_clip_plane()
+
+        self.select_object(plane)
+        FreeCADGui.runCommand("Std_ActivateClippingPlane", 0)
+        FreeCADGui.updateGui()
+        self.active_planes = [plane]
+
+        runtime_root = self.node_named("runtimeClipRoot")
+        self.assertIsNotNone(runtime_root)
+        self.assertFalse(runtime_root.isOfType(coin.SoSeparator.getClassTypeId()))
 
     def testOverlappingScopedPlanesShareOneWrapper(self):
         target = self.create_clip_plane("Target")
