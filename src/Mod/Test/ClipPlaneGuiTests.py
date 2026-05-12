@@ -305,6 +305,23 @@ class ClipPlaneGuiTests(unittest.TestCase):
         self.assertIsNotNone(runtime_root)
         self.assertFalse(runtime_root.isOfType(coin.SoSeparator.getClassTypeId()))
 
+    def testWholeDocumentClipRootStaysAfterEditingRoot(self):
+        if not COIN_AVAILABLE:
+            self.skipTest("pivy.coin not available")
+
+        scene_root = self.view.getSceneGraph()
+        runtime_root = self.node_named("runtimeClipRoot")
+        editing_root = self.node_named("EditingRoot")
+        object_root = self.node_named("ObjectGroup")
+
+        self.assertIsNotNone(scene_root)
+        self.assertIsNotNone(runtime_root)
+        self.assertIsNotNone(editing_root)
+        self.assertIsNotNone(object_root)
+
+        self.assertGreater(scene_root.findChild(runtime_root), scene_root.findChild(editing_root))
+        self.assertLess(scene_root.findChild(runtime_root), scene_root.findChild(object_root))
+
     def testOverlappingScopedPlanesShareOneWrapper(self):
         target = self.create_clip_plane("Target")
         first = self.create_scoped_clip_plane(target, "First")

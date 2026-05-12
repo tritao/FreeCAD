@@ -599,13 +599,6 @@ void View3DInventorViewer::init()
     pcViewProviderRoot->addChild(threePointLightingSeparator);
     pcViewProviderRoot->addChild(environment);
 
-    // Clip planes must be inserted in a non-separating group so the clip
-    // state propagates to the subsequently rendered object subtree.
-    runtimeClipRoot = new SoGroup;
-    runtimeClipRoot->ref();
-    runtimeClipRoot->setName("runtimeClipRoot");
-    pcViewProviderRoot->addChild(runtimeClipRoot);
-
     // add a global hidden anchor object to ensure transparent objects work correctly
     // in empty scenes - OpenInventor's two-pass transparency rendering requires at least
     // one opaque object to properly initialize the depth buffer. so this fixes transparency
@@ -664,6 +657,14 @@ void View3DInventorViewer::init()
     restoreEditingRoot = false;
     pcEditingRoot->addChild(pcEditingTransform);
     pcViewProviderRoot->addChild(pcEditingRoot);
+
+    // Clip planes must be inserted in a non-separating group so the clip
+    // state propagates to the rendered object subtree, but they must remain
+    // after the editing root so draggers and transform handles stay unclipped.
+    runtimeClipRoot = new SoGroup;
+    runtimeClipRoot->ref();
+    runtimeClipRoot->setName("runtimeClipRoot");
+    pcViewProviderRoot->addChild(runtimeClipRoot);
 
     // Create group for the physical object
     objectGroup = new SoGroup();
