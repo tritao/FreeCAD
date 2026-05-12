@@ -39,6 +39,13 @@ try:
 except ImportError:
     COIN_AVAILABLE = False
 
+try:
+    from PySide6 import QtWidgets
+
+    QT_WIDGETS_AVAILABLE = True
+except ImportError:
+    QT_WIDGETS_AVAILABLE = False
+
 
 class ClipPlaneGuiTests(unittest.TestCase):
     def setUp(self):
@@ -154,6 +161,51 @@ class ClipPlaneGuiTests(unittest.TestCase):
 
         selection = FreeCADGui.Selection.getSelection(self.doc.Name)
         self.assertEqual(selection, [plane])
+
+    def testDefaultEditModeOpensClippingPlaneTaskPanel(self):
+        if not QT_WIDGETS_AVAILABLE:
+            self.skipTest("Qt widgets bindings not available")
+
+        plane = self.create_clip_plane()
+        gui_doc = FreeCADGui.getDocument(self.doc.Name)
+
+        self.assertTrue(gui_doc.setEdit(plane, 0))
+        FreeCADGui.updateGui()
+
+        dialog = FreeCADGui.Control.activeTaskDialog()
+        self.assertIsNotNone(dialog)
+        self.assertEqual(
+            dialog.getStandardButtons(),
+            QtWidgets.QDialogButtonBox.StandardButton.Close.value,
+        )
+
+        gui_doc.resetEdit()
+        FreeCADGui.updateGui()
+        self.assertFalse(FreeCADGui.Control.activeDialog())
+
+    def testTransformEditModeKeepsGenericTransformDialog(self):
+        if not QT_WIDGETS_AVAILABLE:
+            self.skipTest("Qt widgets bindings not available")
+
+        plane = self.create_clip_plane()
+        gui_doc = FreeCADGui.getDocument(self.doc.Name)
+
+        self.assertTrue(gui_doc.setEdit(plane, 1))
+        FreeCADGui.updateGui()
+
+        dialog = FreeCADGui.Control.activeTaskDialog()
+        self.assertIsNotNone(dialog)
+        self.assertEqual(
+            dialog.getStandardButtons(),
+            (
+                QtWidgets.QDialogButtonBox.StandardButton.Ok.value
+                | QtWidgets.QDialogButtonBox.StandardButton.Cancel.value
+            ),
+        )
+
+        gui_doc.resetEdit()
+        FreeCADGui.updateGui()
+        self.assertFalse(FreeCADGui.Control.activeDialog())
 
     def testToggleCommandDoesNotTouchDocument(self):
         plane = self.create_clip_plane()
