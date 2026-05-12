@@ -508,6 +508,7 @@ SET(Dialog_CPP_SRCS
     TaskDlgRelocation.cpp
     Dialogs/DlgCheckableMessageBox.cpp
     TaskTransform.cpp
+    TaskClippingPlane.cpp
     TaskCommandLink.cpp
     Dialogs/DlgUndoRedo.cpp
     InputVector.cpp
@@ -553,6 +554,7 @@ SET(Dialog_HPP_SRCS
     Dialogs/DlgVersionMigrator.h
     TaskDlgRelocation.h
     TaskTransform.h
+    TaskClippingPlane.h
     TaskCommandLink.h
     Dialogs/DlgUndoRedo.h
     InputVector.h
@@ -605,6 +607,7 @@ SET(Dialog_SRCS
     MouseButtons.ui
     InputVector.ui
     Placement.ui
+    TaskClippingPlane.ui
     SceneInspector.ui
     TextureMapping.ui
     TaskElementColors.ui

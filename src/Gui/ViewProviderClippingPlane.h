@@ -52,6 +52,9 @@ public:
     std::vector<std::string> getDisplayModes() const override;
     void setDisplayMode(const char* ModeName) override;
     void setupContextMenu(QMenu* menu, QObject* receiver, const char* member) override;
+    bool setEdit(int ModNum) override;
+    void unsetEdit(int ModNum) override;
+    TaskView::TaskDialog* getTransformDialog() override;
     bool doubleClicked() override;
     void beforeDelete() override;
 
@@ -68,6 +71,7 @@ private:
     SoMaterial* overlayMaterial {nullptr};
     SoSwitch* overlaySwitch {nullptr};
     SoShapeScale* overlayScale {nullptr};
+    bool useClippingTaskDialog {false};
 };
 
 }  // namespace Gui

@@ -34,6 +34,7 @@
 #include "ClippingPlaneManager.h"
 #include "Inventor/SoAxisCrossKit.h"
 #include "Inventor/So3DAnnotation.h"
+#include "TaskClippingPlane.h"
 #include "View3DInventor.h"
 #include "ViewProviderClippingPlane.h"
 
@@ -147,6 +148,8 @@ void ViewProviderClippingPlane::setupContextMenu(QMenu* menu, QObject* receiver,
     Q_UNUSED(receiver);
     Q_UNUSED(member);
 
+    addDefaultAction(menu, QObject::tr("Edit clipping plane"));
+
     auto view = qobject_cast<View3DInventor*>(getActiveView());
     auto plane = getObject<App::ClippingPlane>();
     if (view && plane) {
@@ -163,6 +166,26 @@ void ViewProviderClippingPlane::setupContextMenu(QMenu* menu, QObject* receiver,
     }
 
     inherited::setupContextMenu(menu, receiver, member);
+}
+
+bool ViewProviderClippingPlane::setEdit(int ModNum)
+{
+    useClippingTaskDialog = (ModNum == static_cast<int>(ViewProvider::Default));
+    return inherited::setEdit(ModNum);
+}
+
+void ViewProviderClippingPlane::unsetEdit(int ModNum)
+{
+    inherited::unsetEdit(ModNum);
+    useClippingTaskDialog = false;
+}
+
+TaskView::TaskDialog* ViewProviderClippingPlane::getTransformDialog()
+{
+    if (useClippingTaskDialog) {
+        return new TaskClippingPlane(this);
+    }
+    return inherited::getTransformDialog();
 }
 
 bool ViewProviderClippingPlane::doubleClicked()

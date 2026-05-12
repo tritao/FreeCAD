@@ -1,0 +1,173 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>Gui::ClippingPlaneWidget</class>
+ <widget class="QWidget" name="Gui::ClippingPlaneWidget">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>314</width>
+    <height>394</height>
+   </rect>
+  </property>
+  <property name="windowTitle">
+   <string>Clipping plane</string>
+  </property>
+  <layout class="QVBoxLayout" name="verticalLayout">
+   <item>
+    <widget class="QLabel" name="dragHintLabel">
+     <property name="wordWrap">
+      <bool>true</bool>
+     </property>
+     <property name="text">
+      <string>Drag the handles in the 3D view to move or rotate the clipping plane.</string>
+     </property>
+    </widget>
+   </item>
+   <item>
+    <widget class="Line" name="lineTop">
+     <property name="orientation">
+      <enum>Qt::Horizontal</enum>
+     </property>
+    </widget>
+   </item>
+   <item>
+    <layout class="QGridLayout" name="activationLayout">
+     <item row="0" column="0">
+      <widget class="QCheckBox" name="activeInCurrentView">
+       <property name="text">
+        <string>Active in current view</string>
+       </property>
+      </widget>
+     </item>
+     <item row="1" column="0">
+      <widget class="QLabel" name="activationStateLabel">
+       <property name="wordWrap">
+        <bool>true</bool>
+       </property>
+       <property name="text">
+        <string/>
+       </property>
+      </widget>
+     </item>
+    </layout>
+   </item>
+   <item>
+    <layout class="QGridLayout" name="planeLayout">
+     <item row="0" column="0">
+      <widget class="QCheckBox" name="reverseCheck">
+       <property name="text">
+        <string>Reverse clipping direction</string>
+       </property>
+      </widget>
+     </item>
+    </layout>
+   </item>
+   <item>
+    <widget class="QGroupBox" name="scopeGroup">
+     <property name="title">
+      <string>Scope</string>
+     </property>
+     <layout class="QVBoxLayout" name="scopeGroupLayout">
+      <item>
+       <widget class="QComboBox" name="scopeModeCombo">
+        <item>
+         <property name="text">
+          <string>Whole document</string>
+         </property>
+        </item>
+        <item>
+         <property name="text">
+          <string>Only listed objects</string>
+         </property>
+        </item>
+        <item>
+         <property name="text">
+          <string>All except listed objects</string>
+         </property>
+        </item>
+       </widget>
+      </item>
+      <item>
+       <widget class="QLabel" name="targetsLabel">
+        <property name="text">
+         <string>Targets</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QListWidget" name="targetsList">
+        <property name="selectionMode">
+         <enum>QAbstractItemView::ExtendedSelection</enum>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <layout class="QHBoxLayout" name="targetsButtonsLayout">
+        <item>
+         <widget class="QPushButton" name="addSelectedButton">
+          <property name="text">
+           <string>Add selected</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QPushButton" name="removeSelectedButton">
+          <property name="text">
+           <string>Remove</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QPushButton" name="clearTargetsButton">
+          <property name="text">
+           <string>Clear</string>
+          </property>
+         </widget>
+        </item>
+       </layout>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item>
+    <widget class="QGroupBox" name="displayGroup">
+     <property name="title">
+      <string>Display</string>
+     </property>
+     <layout class="QVBoxLayout" name="displayGroupLayout">
+      <item>
+       <widget class="QCheckBox" name="autoSizeCheck">
+        <property name="text">
+         <string>Keep helper at constant screen size</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QCheckBox" name="showHelperCheck">
+        <property name="text">
+         <string>Show helper in 3D view</string>
+        </property>
+       </widget>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item>
+    <spacer name="verticalSpacer">
+     <property name="orientation">
+      <enum>Qt::Vertical</enum>
+     </property>
+     <property name="sizeHint" stdset="0">
+      <size>
+       <width>20</width>
+       <height>40</height>
+      </size>
+     </property>
+    </spacer>
+   </item>
+  </layout>
+ </widget>
+ <resources/>
+ <connections/>
+</ui>
