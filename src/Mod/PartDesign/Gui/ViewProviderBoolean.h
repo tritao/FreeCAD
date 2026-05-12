@@ -27,6 +27,8 @@
 
 #pragma once
 
+#include <string>
+
 #include "ViewProvider.h"
 #include <Gui/ViewProviderGeoFeatureGroupExtension.h>
 #include <Gui/Inventor/SoToggleSwitch.h>
@@ -57,8 +59,6 @@ public:
     const char* getDefaultDisplayMode() const override;
     void onChanged(const App::Property* prop) override;
     void update(const App::Property* prop) override;
-    void show() override;
-    bool isShow() const override;
 
 protected:
     void updateData(const App::Property* prop) override;
@@ -71,15 +71,19 @@ protected:
     static const char* DisplayEnum[];
 
 private:
+    const char* getConfiguredDisplayMode() const;
     void updateBasePreviewVisibility();
+    void restoreShownBody(bool restoreBooleanMode = true);
+    void syncActiveBodyVisibility();
     void onBodyActivated(const Gui::ViewProviderDocumentObject* vp, const char* name);
 
     Gui::CoinPtr<SoGroup> pcToolsPreview;
     Gui::CoinPtr<SoToggleSwitch> pcBasePreviewToggle;
     fastsignals::scoped_connection _bodyActivationConn;
-    App::DocumentObject* _shownBody = nullptr;
-    bool _indirectActivation = false;  // true when _shownBody is an intermediate body, not the
-                                       // activated leaf
+    std::string _shownBodyName;
+    bool _shownBodyWasVisible = false;
+    bool _indirectActivation = false;  // true when _shownBodyName is an intermediate body, not
+                                       // the activated leaf
 };
 
 }  // namespace PartDesignGui

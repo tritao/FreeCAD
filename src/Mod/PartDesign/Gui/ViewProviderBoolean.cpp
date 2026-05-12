@@ -31,6 +31,7 @@
 
 #include "StyleParameters.h"
 #include "TaskBooleanParameters.h"
+#include "ViewProviderBody.h"
 
 #include <Base/ServiceProvider.h>
 #include <Base/Tools.h>
@@ -43,6 +44,7 @@
 #include <Gui/Command.h>
 #include <Gui/Document.h>
 #include <Gui/MainWindow.h>
+#include <Gui/MDIView.h>
 #include <Gui/Utilities.h>
 #include <Gui/ViewProviderDocumentObject.h>
 #include <Mod/PartDesign/App/Body.h>
@@ -82,7 +84,7 @@ void ViewProviderBoolean::attach(App::DocumentObject* pcObject)
 
 void ViewProviderBoolean::update(const App::Property* prop)
 {
-    if (!_shownBody) {
+    if (_shownBodyName.empty() || prop == &getObject()->Visibility) {
         Gui::ViewProviderDocumentObject::update(prop);
         return;
     }
@@ -101,33 +103,17 @@ void ViewProviderBoolean::update(const App::Property* prop)
     }
 }
 
-void ViewProviderBoolean::show()
+const char* ViewProviderBoolean::getConfiguredDisplayMode() const
 {
-    // ViewProviderGeoFeatureGroupExtension::extensionShow() would iterate
-    // Boolean->Group and set every tool body's App Visibility = true,
-    // re-showing bodies that were intentionally hidden. User1 suppresses that
-    // propagation. It also suppresses the VP→App Visibility sync in onChanged,
-    // so we apply that sync manually after the guard drops.
-    {
-        Base::ObjectStatusLocker<App::Property::Status, App::Property> guard(
-            App::Property::User1,
-            &Visibility
-        );
-        Gui::ViewProviderDocumentObject::show();
+    if (Display.getValue() != 0) {
+        return "Group";
     }
-    if (auto* obj = getObject(); obj && Visibility.getValue() != obj->Visibility.getValue()) {
-        obj->Visibility.setValue(Visibility.getValue());
-    }
-}
 
-bool ViewProviderBoolean::isShow() const
-{
-    // setDisplayMaskMode("Group") sets pcModeSwitch >= 0 even when Boolean is hidden; use App
-    // Visibility.
-    if (auto* obj = getObject()) {
-        return obj->Visibility.getValue();
+    if (auto bodyViewProvider = getBodyViewProvider()) {
+        return bodyViewProvider->DisplayMode.getValueAsString();
     }
-    return ViewProvider::isShow();
+
+    return getDefaultDisplayMode();
 }
 
 // Returns true if target is contained anywhere inside container's Group hierarchy.
@@ -148,6 +134,85 @@ static bool containsRecursively(App::DocumentObject* container, App::DocumentObj
     return false;
 }
 
+static void setBodyVisible(App::DocumentObject* body, bool visible)
+{
+    auto* rawVP = Gui::Application::Instance->getViewProvider(body);
+    auto* vpdo = dynamic_cast<Gui::ViewProviderDocumentObject*>(rawVP);
+    if (!vpdo) {
+        return;
+    }
+
+    Base::ObjectStatusLocker<App::Property::Status, App::Property> guard(
+        App::Property::User1,
+        &vpdo->Visibility
+    );
+    if (visible) {
+        rawVP->Gui::ViewProvider::show();
+    }
+    else {
+        rawVP->Gui::ViewProvider::hide();
+    }
+}
+
+void ViewProviderBoolean::restoreShownBody(bool restoreBooleanMode)
+{
+    if (_shownBodyName.empty()) {
+        return;
+    }
+
+    auto* feature = getObject<PartDesign::Boolean>();
+    App::DocumentObject* shownBody = feature
+        ? feature->getDocument()->getObject(_shownBodyName.c_str())
+        : nullptr;
+
+    if (shownBody) {
+        if (_indirectActivation) {
+            auto* bodyVP = Gui::Application::Instance->getViewProvider(shownBody);
+            const bool keepVisible = _shownBodyWasVisible;
+            if (auto* vpBody = dynamic_cast<ViewProviderBody*>(bodyVP)) {
+                vpBody->onChanged(&vpBody->DisplayModeBody);
+                if (!keepVisible) {
+                    setBodyVisible(shownBody, false);
+                }
+            }
+            else if (bodyVP) {
+                setBodyVisible(shownBody, keepVisible);
+            }
+        }
+        else if (restoreBooleanMode) {
+            setBodyVisible(shownBody, _shownBodyWasVisible);
+        }
+        else if (!_shownBodyWasVisible) {
+            setBodyVisible(shownBody, false);
+        }
+    }
+
+    if (restoreBooleanMode && Visibility.getValue()) {
+        setDisplayMode(getConfiguredDisplayMode());
+    }
+
+    _shownBodyName.clear();
+    _shownBodyWasVisible = false;
+    _indirectActivation = false;
+}
+
+void ViewProviderBoolean::syncActiveBodyVisibility()
+{
+    auto* activeView = getDocument()->getActiveView();
+    if (!activeView) {
+        onBodyActivated(nullptr, PDBODYKEY);
+        return;
+    }
+
+    auto* activeBody = activeView->getActiveObject<App::DocumentObject*>(PDBODYKEY);
+    auto* activeBodyVP = activeBody ? dynamic_cast<Gui::ViewProviderDocumentObject*>(
+                                          Gui::Application::Instance->getViewProvider(activeBody)
+                                      )
+                                    : nullptr;
+
+    onBodyActivated(activeBodyVP, PDBODYKEY);
+}
+
 void ViewProviderBoolean::onBodyActivated(const Gui::ViewProviderDocumentObject* vp, const char* name)
 {
     if (strcmp(name, PDBODYKEY) != 0) {
@@ -156,6 +221,11 @@ void ViewProviderBoolean::onBodyActivated(const Gui::ViewProviderDocumentObject*
 
     auto* feature = getObject<PartDesign::Boolean>();
     if (!feature) {
+        return;
+    }
+
+    if (!Visibility.getValue()) {
+        restoreShownBody(false);
         return;
     }
 
@@ -173,79 +243,38 @@ void ViewProviderBoolean::onBodyActivated(const Gui::ViewProviderDocumentObject*
         }
     }
 
-    // Show or hide the body by calling Gui::ViewProvider::show/hide non-virtually,
-    // bypassing ViewProviderBody::show(). ViewProviderBody::show() would call
-    // tip->Visibility.setValue(true), changing App Visibility and triggering
-    // GroupExtension cascades that visually toggle the Boolean.
-    // User1 suppresses extensionShow/extensionHide member propagation and the
-    // VP->App Visibility sync in onChanged.
-    // Note: ViewProviderBody inherits from PartGui::ViewProviderPart, not
-    // PartDesignGui::ViewProvider, so we cast to Gui::ViewProviderDocumentObject
-    // to reach any VP type (bodies included).
-    const auto setBodyVisible = [](App::DocumentObject* body, bool visible) {
-        auto* rawVP = Gui::Application::Instance->getViewProvider(body);
-        auto* vpdo = dynamic_cast<Gui::ViewProviderDocumentObject*>(rawVP);
-        if (!vpdo) {
-            return;
-        }
-        Base::ObjectStatusLocker<App::Property::Status, App::Property> guard(
-            App::Property::User1,
-            &vpdo->Visibility
-        );
-        if (visible) {
-            rawVP->Gui::ViewProvider::show();
-        }
-        else {
-            rawVP->Gui::ViewProvider::hide();
-        }
-    };
-
-    // For nested Booleans, the activated body may live inside an intermediate body that is itself a
-    // direct Group member
-    const auto switchIntermediateToGroup = [](App::DocumentObject* body) {
-        if (auto* bodyVP = Gui::Application::Instance->getViewProvider(body)) {
-            bodyVP->setDisplayMaskMode("Group");
-        }
-    };
-
-    // Restore an intermediate body VP to hidden (pcModeSwitch = -1) without touching
-    // App Visibility as the body was never "shown" in the App sense, only in the scene graph
-    const auto restoreIntermediateToHidden = [](App::DocumentObject* body) {
-        auto* bodyVP = Gui::Application::Instance->getViewProvider(body);
-        auto* vpdo = dynamic_cast<Gui::ViewProviderDocumentObject*>(bodyVP);
-        if (!vpdo) {
-            return;
-        }
-        Base::ObjectStatusLocker<App::Property::Status, App::Property> guard(
-            App::Property::User1,
-            &vpdo->Visibility
-        );
-        bodyVP->Gui::ViewProvider::hide();
-    };
-
-    if (matchingMember) {
-        setDisplayMaskMode("Group");
-        _shownBody = matchingMember;
-        if (matchingMember == activatedBody) {
-            setBodyVisible(matchingMember, true);
-            _indirectActivation = false;
-        }
-        else {
-            // Indirect: open the intermediate bodys scene so the nested chain is visible
-            switchIntermediateToGroup(matchingMember);
-            _indirectActivation = true;
-        }
+    const bool indirectActivation = matchingMember && matchingMember != activatedBody;
+    if (matchingMember && _shownBodyName == matchingMember->getNameInDocument()
+        && _indirectActivation == indirectActivation) {
+        return;
     }
-    else if (_shownBody) {
-        if (_indirectActivation) {
-            restoreIntermediateToHidden(_shownBody);
-        }
-        else {
-            setBodyVisible(_shownBody, false);
-        }
-        setDisplayMaskMode(getDefaultDisplayMode());
-        _shownBody = nullptr;
-        _indirectActivation = false;
+
+    restoreShownBody();
+
+    if (!matchingMember) {
+        return;
+    }
+
+    auto* rawVP = Gui::Application::Instance->getViewProvider(matchingMember);
+    if (!dynamic_cast<Gui::ViewProviderDocumentObject*>(rawVP)) {
+        return;
+    }
+
+    setDisplayMode("Group");
+
+    _shownBodyName = matchingMember->getNameInDocument();
+    _shownBodyWasVisible = rawVP->Gui::ViewProvider::isShow();
+    _indirectActivation = indirectActivation;
+
+    if (_indirectActivation) {
+        // For nested Booleans, the activated body may live inside an intermediate body that is
+        // itself a direct Group member.
+        rawVP->setDisplayMaskMode("Group");
+    }
+    else {
+        // Bypass ViewProviderBody::show() to avoid mutating App Visibility while the active body is
+        // only being exposed temporarily through the Boolean.
+        setBodyVisible(matchingMember, true);
     }
 }
 
@@ -281,23 +310,19 @@ void ViewProviderBoolean::onChanged(const App::Property* prop)
     ViewProvider::onChanged(prop);
 
     if (prop == &Display) {
-        const auto getDisplayMode = [this]() {
-            if (Display.getValue() != 0) {
-                return "Group";
-            }
-
-            if (auto bodyViewProvider = getBodyViewProvider()) {
-                return bodyViewProvider->DisplayMode.getValueAsString();
-            }
-
-            return getDefaultDisplayMode();
-        };
-
-        setDisplayMode(getDisplayMode());
+        if (_shownBodyName.empty()) {
+            setDisplayMode(getConfiguredDisplayMode());
+        }
     }
 
     if (prop == &Visibility) {
         updateBasePreviewVisibility();
+        if (Visibility.getValue()) {
+            syncActiveBodyVisibility();
+        }
+        else {
+            restoreShownBody(false);
+        }
     }
 }
 
@@ -321,6 +346,9 @@ void ViewProviderBoolean::updateData(const App::Property* prop)
         }
 
         updateBasePreviewVisibility();
+    }
+    else if (prop == &feature->Group) {
+        syncActiveBodyVisibility();
     }
 
     ViewProvider::updateData(prop);
