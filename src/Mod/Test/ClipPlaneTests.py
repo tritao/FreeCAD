@@ -50,7 +50,7 @@ class ClipPlaneTests(unittest.TestCase):
         obj = self.doc.addObject("App::ClippingPlane", "Clip")
         target = self.doc.addObject("App::ClippingPlane", "Target")
         obj.Reverse = True
-        obj.ScopeMode = "IncludeOnly"
+        obj.ScopeMode = "Exclude"
         obj.Targets = [target]
         obj.Placement.Base = FreeCAD.Vector(1, 2, 3)
 
@@ -61,7 +61,7 @@ class ClipPlaneTests(unittest.TestCase):
         restored = self.doc.getObject("Clip")
         self.assertIsNotNone(restored)
         self.assertTrue(restored.Reverse)
-        self.assertEqual(restored.ScopeMode, "IncludeOnly")
+        self.assertEqual(restored.ScopeMode, "Exclude")
         self.assertEqual([target.Name for target in restored.Targets], ["Target"])
         self.assertAlmostEqual(restored.Placement.Base.x, 1.0)
         self.assertAlmostEqual(restored.Placement.Base.y, 2.0)

@@ -53,6 +53,10 @@ using namespace Gui;
 namespace
 {
 
+constexpr long WholeDocumentScope = 0;
+constexpr long IncludeOnlyScope = 1;
+constexpr long ExcludeScope = 2;
+
 SoNode* buildActiveCue(const App::ClippingPlane& plane)
 {
     auto* vp = Application::Instance->getViewProvider<ViewProviderClippingPlane>(&plane);
@@ -268,18 +272,57 @@ std::vector<ClippingPlaneManager::ActiveClip::MovedTarget> ClippingPlaneManager:
 )
 {
     std::vector<ActiveClip::MovedTarget> targets;
-    if (!view || !view->getViewer() || plane.ScopeMode.getValue() != 1) {
+    if (!view || !view->getViewer()) {
+        return targets;
+    }
+
+    const auto scopeMode = plane.ScopeMode.getValue();
+    if (scopeMode == WholeDocumentScope) {
+        return targets;
+    }
+
+    std::unordered_set<std::string> targetNames;
+    for (auto* obj : plane.Targets.getValues()) {
+        if (obj && obj != &plane) {
+            targetNames.emplace(obj->getNameInDocument());
+        }
+    }
+
+    if (scopeMode == IncludeOnlyScope) {
+        for (const auto& name : targetNames) {
+            auto* obj = view->getAppDocument()->getObject(name.c_str());
+            auto* vp = obj ? Application::Instance->getViewProvider(obj) : nullptr;
+            if (!vp || !vp->getRoot()) {
+                continue;
+            }
+
+            auto location = view->getViewer()->locateViewProvider(vp);
+            if (!location) {
+                continue;
+            }
+
+            targets.push_back({name, location.parent, location.index});
+        }
+        return targets;
+    }
+
+    if (scopeMode != ExcludeScope) {
+        return targets;
+    }
+
+    auto* doc = view->getAppDocument();
+    if (!doc) {
         return targets;
     }
 
     std::unordered_set<std::string> seen;
-    for (auto* obj : plane.Targets.getValues()) {
+    for (auto* obj : doc->getObjects()) {
         if (!obj || obj == &plane) {
             continue;
         }
 
         const auto name = obj->getNameInDocument();
-        if (!seen.emplace(name).second) {
+        if (targetNames.contains(name) || !seen.emplace(name).second) {
             continue;
         }
 
@@ -308,9 +351,20 @@ void ClippingPlaneManager::apply(ActiveClip& clip)
     clip.wholeDocument = true;
     clip.movedTargets.clear();
 
-    const bool includeOnlyScope = clip.plane->ScopeMode.getValue() == 1;
+    const auto scopeMode = clip.plane->ScopeMode.getValue();
+    const bool includeOnlyScope = scopeMode == IncludeOnlyScope;
+    const bool excludeScope = scopeMode == ExcludeScope;
+    const bool hasRequestedTargets = std::ranges::any_of(
+        clip.plane->Targets.getValues(),
+        [plane = clip.plane](const App::DocumentObject* obj) { return obj && obj != plane; }
+    );
     auto targets = resolveScopedTargets(clip.view, *clip.plane);
     if (includeOnlyScope && targets.empty()) {
+        clip.wholeDocument = false;
+        installActiveCue(clip.view, *clip.plane);
+        return;
+    }
+    if (excludeScope && hasRequestedTargets && targets.empty()) {
         clip.wholeDocument = false;
         installActiveCue(clip.view, *clip.plane);
         return;

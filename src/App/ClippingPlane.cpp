@@ -30,7 +30,7 @@ PROPERTY_SOURCE(App::ClippingPlane, App::GeoFeature)
 namespace
 {
 
-const char* scopeModeEnums[] = {"WholeDocument", "IncludeOnly", nullptr};
+const char* scopeModeEnums[] = {"WholeDocument", "IncludeOnly", "Exclude", nullptr};
 
 }
 
@@ -46,7 +46,7 @@ ClippingPlane::ClippingPlane()
                       (),
                       "ClippingPlane",
                       App::Prop_None,
-                      "Objects affected by the clipping plane when ScopeMode is IncludeOnly");
+                      "Objects affected by the clipping plane when ScopeMode is IncludeOnly or Exclude");
     ADD_PROPERTY_TYPE(Reverse,
                       (false),
                       "ClippingPlane",

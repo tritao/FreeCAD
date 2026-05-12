@@ -88,6 +88,13 @@ class ClipPlaneGuiTests(unittest.TestCase):
         FreeCADGui.updateGui()
         return plane
 
+    def create_excluded_clip_plane(self, target, name="Excluded"):
+        plane = self.create_clip_plane(name)
+        plane.ScopeMode = "Exclude"
+        plane.Targets = [target]
+        FreeCADGui.updateGui()
+        return plane
+
     def find_named_node(self, name):
         if not COIN_AVAILABLE:
             self.skipTest("pivy.coin not available")
@@ -208,3 +215,36 @@ class ClipPlaneGuiTests(unittest.TestCase):
 
         self.assertIsNone(self.find_named_node("FCScopedClipPlaneRuntime"))
         self.assertFalse(self.view.hasClippingPlane())
+
+    def testExcludedScopeUsesRuntimeNode(self):
+        target = self.create_clip_plane("Target")
+        other = self.create_clip_plane("Other")
+        plane = self.create_excluded_clip_plane(target)
+
+        self.select_object(plane)
+        FreeCADGui.runCommand("Std_ActivateClippingPlane", 0)
+        FreeCADGui.updateGui()
+        self.active_plane = plane
+
+        self.assertFalse(self.view.hasClippingPlane())
+
+        runtime = self.find_named_node("FCScopedClipPlaneRuntime")
+        self.assertIsNotNone(runtime)
+        self.assertEqual(runtime.getNumChildren(), 2)
+        self.assertNotEqual(self.parent_name_for_root(target), "FCScopedClipPlaneRuntime")
+        self.assertEqual(self.parent_name_for_root(other), "FCScopedClipPlaneRuntime")
+
+    def testDeletingExcludedTargetFallsBackToWholeDocumentClip(self):
+        target = self.create_clip_plane("Target")
+        plane = self.create_excluded_clip_plane(target)
+
+        self.select_object(plane)
+        FreeCADGui.runCommand("Std_ActivateClippingPlane", 0)
+        FreeCADGui.updateGui()
+        self.active_plane = plane
+
+        self.doc.removeObject(target.Name)
+        FreeCADGui.updateGui()
+
+        self.assertIsNone(self.find_named_node("FCScopedClipPlaneRuntime"))
+        self.assertTrue(self.view.hasClippingPlane())
