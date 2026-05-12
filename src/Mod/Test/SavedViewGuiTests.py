@@ -39,6 +39,13 @@ try:
 except ImportError:
     COIN_AVAILABLE = False
 
+try:
+    from PySide6 import QtWidgets
+
+    QT_WIDGETS_AVAILABLE = True
+except ImportError:
+    QT_WIDGETS_AVAILABLE = False
+
 
 class SavedViewGuiTests(unittest.TestCase):
     def setUp(self):
@@ -113,6 +120,27 @@ class SavedViewGuiTests(unittest.TestCase):
 
         self.assertEqual([plane.Name for plane in saved.ClipPlanes], ["First", "Second"])
         self.assertTrue(saved.CameraState)
+
+    def testDefaultEditModeOpensSavedViewTaskPanel(self):
+        if not QT_WIDGETS_AVAILABLE:
+            self.skipTest("Qt widgets bindings not available")
+
+        saved = self.create_saved_view()
+        gui_doc = FreeCADGui.getDocument(self.doc.Name)
+
+        self.assertTrue(gui_doc.setEdit(saved, 0))
+        FreeCADGui.updateGui()
+
+        dialog = FreeCADGui.Control.activeTaskDialog()
+        self.assertIsNotNone(dialog)
+        self.assertEqual(
+            dialog.getStandardButtons(),
+            QtWidgets.QDialogButtonBox.StandardButton.Close.value,
+        )
+
+        gui_doc.resetEdit()
+        FreeCADGui.updateGui()
+        self.assertFalse(FreeCADGui.Control.activeDialog())
 
     def testApplyCommandRestoresClipPlaneWithoutTouchingDocument(self):
         first = self.create_clip_plane("First")

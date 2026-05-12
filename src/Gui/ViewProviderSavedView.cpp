@@ -23,11 +23,15 @@
 
 #include <QMenu>
 
+#include <App/Document.h>
 #include <App/SavedView.h>
 
 #include "Application.h"
+#include "Control.h"
 #include "Command.h"
+#include "Document.h"
 #include "SavedViewManager.h"
+#include "TaskSavedView.h"
 #include "View3DInventor.h"
 #include "ViewProviderSavedView.h"
 
@@ -47,6 +51,29 @@ bool ViewProviderSavedView::doubleClicked()
     return SavedViewManager::restore(view, savedView);
 }
 
+bool ViewProviderSavedView::setEdit(int ModNum)
+{
+    if (ModNum != ViewProvider::Default) {
+        return ViewProviderDocumentObject::setEdit(ModNum);
+    }
+    if (Gui::Control().activeDialog(getDocument()->getDocument())) {
+        return false;
+    }
+
+    Gui::Control().showDialog(new TaskSavedView(this), getDocument()->getDocument());
+    return true;
+}
+
+void ViewProviderSavedView::unsetEdit(int ModNum)
+{
+    if (ModNum == ViewProvider::Default) {
+        Gui::Control().closeDialog(getDocument()->getDocument());
+    }
+    else {
+        ViewProviderDocumentObject::unsetEdit(ModNum);
+    }
+}
+
 void ViewProviderSavedView::setupContextMenu(QMenu* menu, QObject* receiver, const char* member)
 {
     Q_UNUSED(receiver);
@@ -58,6 +85,11 @@ void ViewProviderSavedView::setupContextMenu(QMenu* menu, QObject* receiver, con
         });
         menu->addAction(QObject::tr("Update from current view"), []() {
             Application::Instance->commandManager().runCommandByName("Std_UpdateSavedView");
+        });
+        menu->addAction(QObject::tr("Edit saved view"), [this]() {
+            if (auto* doc = getDocument()) {
+                doc->setEdit(this, ViewProvider::Default);
+            }
         });
     }
 

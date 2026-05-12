@@ -21,27 +21,78 @@
 
 #pragma once
 
-#include "ViewProviderDocumentObject.h"
+#include <memory>
+
+#include <QDialogButtonBox>
+#include <QWidget>
+
+#include <Gui/TaskView/TaskDialog.h>
+
+namespace App
+{
+class SavedView;
+}  // namespace App
 
 namespace Gui
 {
 
-class GuiExport ViewProviderSavedView: public ViewProviderDocumentObject
+class View3DInventor;
+class ViewProviderSavedView;
+
+class GuiExport SavedViewWidget: public QWidget
 {
-    PROPERTY_HEADER_WITH_OVERRIDE(Gui::ViewProviderSavedView);
+    Q_OBJECT
 
 public:
-    ViewProviderSavedView();
-    ~ViewProviderSavedView() override = default;
+    explicit SavedViewWidget(ViewProviderSavedView* viewProvider, QWidget* parent = nullptr);
+    ~SavedViewWidget() override;
 
-    bool doubleClicked() override;
-    bool setEdit(int ModNum) override;
-    void unsetEdit(int ModNum) override;
-    void setupContextMenu(QMenu* menu, QObject* receiver, const char* member) override;
-    bool isShow() const override
+    void refresh();
+
+private:
+    ViewProviderSavedView* getViewProvider() const;
+    App::SavedView* getSavedView() const;
+    View3DInventor* getCurrentView() const;
+    void refreshButtons();
+    void refreshSummary();
+    void setupConnections();
+
+    void onApplyClicked();
+    void onUpdateClicked();
+    void onRestoreCameraToggled(bool on);
+    void onRestoreVisibilityToggled(bool on);
+    void onRestoreClippingToggled(bool on);
+
+    void changeEvent(QEvent* event) override;
+
+private:
+    class Private;
+    std::unique_ptr<Private> d;
+};
+
+class GuiExport TaskSavedView: public Gui::TaskView::TaskDialog
+{
+    Q_OBJECT
+
+public:
+    explicit TaskSavedView(ViewProviderSavedView* viewProvider);
+    ~TaskSavedView() override;
+
+    QDialogButtonBox::StandardButtons getStandardButtons() const override
     {
-        return true;
+        return QDialogButtonBox::Close;
     }
+
+    void open() override;
+    void activate() override;
+    bool accept() override;
+    bool reject() override;
+
+private:
+    bool finishEditing();
+
+    SavedViewWidget* widget {nullptr};
+    ViewProviderSavedView* viewProvider {nullptr};
 };
 
 }  // namespace Gui
