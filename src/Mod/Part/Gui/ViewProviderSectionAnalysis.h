@@ -22,11 +22,16 @@
 #pragma once
 
 #include <App/PropertyStandard.h>
+#include <Gui/ViewProvider.h>
 #include <Mod/Part/Gui/ViewProvider.h>
 #include <Mod/Part/PartGlobal.h>
 
+class SoSeparator;
+
 namespace PartGui
 {
+
+class SoPreviewShape;
 
 class PartGuiExport ViewProviderSectionAnalysis: public ViewProviderPart
 {
@@ -39,6 +44,9 @@ public:
     App::PropertyColor SectionFaceColor;
     App::PropertyColor SectionEdgeColor;
     App::PropertyPercent SectionFaceTransparency;
+    App::PropertyColor HatchColor;
+    App::PropertyFloatConstraint HatchLineWidth;
+    App::PropertyBool UseSectionEdgeColorForHatching;
 
     void attach(App::DocumentObject* object) override;
     void updateData(const App::Property* prop) override;
@@ -53,6 +61,11 @@ protected:
 private:
     void syncAppearanceProperties();
     void syncDisplayForResultMode();
+    void syncHatchAppearance();
+    void syncHatchGeometry();
+
+    Gui::CoinPtr<SoSeparator> pcHatchRoot;
+    Gui::CoinPtr<SoPreviewShape> pcHatchShape;
 };
 
 }  // namespace PartGui

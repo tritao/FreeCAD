@@ -212,9 +212,18 @@ void SectionAnalysisWidget::refreshAppearance()
 
     setColorButtonPreview(d->ui.sectionFaceColorButton, viewProvider->SectionFaceColor.getValue());
     setColorButtonPreview(d->ui.sectionEdgeColorButton, viewProvider->SectionEdgeColor.getValue());
+    setColorButtonPreview(d->ui.hatchColorButton, viewProvider->HatchColor.getValue());
 
     const QSignalBlocker transparencyBlocker(d->ui.sectionFaceTransparencySpin);
     d->ui.sectionFaceTransparencySpin->setValue(viewProvider->SectionFaceTransparency.getValue());
+
+    const QSignalBlocker hatchEdgeColorBlocker(d->ui.useSectionEdgeColorForHatchingCheck);
+    d->ui.useSectionEdgeColorForHatchingCheck->setChecked(
+        viewProvider->UseSectionEdgeColorForHatching.getValue()
+    );
+
+    const QSignalBlocker hatchLineWidthBlocker(d->ui.hatchLineWidthSpin);
+    d->ui.hatchLineWidthSpin->setValue(viewProvider->HatchLineWidth.getValue());
 
     auto* analysis = getSectionAnalysis();
     if (!analysis) {
@@ -238,6 +247,9 @@ void SectionAnalysisWidget::refreshButtons()
     const bool hasSources = analysis && !analysis->Sources.getValues().empty();
     const bool hasView = getCurrentView() != nullptr;
     const bool hatchEnabled = analysis && analysis->ShowHatching.getValue();
+    auto* viewProvider = getViewProvider();
+    const bool useEdgeColorForHatching = viewProvider
+        && viewProvider->UseSectionEdgeColorForHatching.getValue();
 
     d->ui.selectClippingPlaneButton->setEnabled(hasPlane);
     d->ui.editClippingPlaneButton->setEnabled(hasPlane);
@@ -247,6 +259,9 @@ void SectionAnalysisWidget::refreshButtons()
     d->ui.showHatchingCheck->setEnabled(hasSources);
     d->ui.hatchSpacingSpin->setEnabled(hasSources && hatchEnabled);
     d->ui.hatchAngleSpin->setEnabled(hasSources && hatchEnabled);
+    d->ui.useSectionEdgeColorForHatchingCheck->setEnabled(hasSources && hatchEnabled);
+    d->ui.hatchColorButton->setEnabled(hasSources && hatchEnabled && !useEdgeColorForHatching);
+    d->ui.hatchLineWidthSpin->setEnabled(hasSources && hatchEnabled);
 }
 
 void SectionAnalysisWidget::setColorButtonPreview(QPushButton* button, const Base::Color& color)
@@ -347,6 +362,24 @@ void SectionAnalysisWidget::setupConnections()
         &QCheckBox::toggled,
         this,
         &SectionAnalysisWidget::onShowHatchingToggled
+    );
+    connect(
+        d->ui.useSectionEdgeColorForHatchingCheck,
+        &QCheckBox::toggled,
+        this,
+        &SectionAnalysisWidget::onUseSectionEdgeColorForHatchingToggled
+    );
+    connect(
+        d->ui.hatchColorButton,
+        &QPushButton::clicked,
+        this,
+        &SectionAnalysisWidget::onHatchColorClicked
+    );
+    connect(
+        d->ui.hatchLineWidthSpin,
+        qOverload<double>(&QDoubleSpinBox::valueChanged),
+        this,
+        &SectionAnalysisWidget::onHatchLineWidthChanged
     );
     connect(
         d->ui.hatchSpacingSpin,
@@ -529,6 +562,46 @@ void SectionAnalysisWidget::onShowHatchingToggled(bool on)
         doc->recompute();
     }
     refresh();
+}
+
+void SectionAnalysisWidget::onUseSectionEdgeColorForHatchingToggled(bool on)
+{
+    auto* viewProvider = getViewProvider();
+    if (!viewProvider) {
+        return;
+    }
+
+    viewProvider->UseSectionEdgeColorForHatching.setValue(on);
+    refreshAppearance();
+    refreshButtons();
+}
+
+void SectionAnalysisWidget::onHatchColorClicked()
+{
+    auto* viewProvider = getViewProvider();
+    if (!viewProvider) {
+        return;
+    }
+
+    const Base::Color current = viewProvider->HatchColor.getValue();
+    const QColor initial = QColor::fromRgbF(current.r, current.g, current.b, 1.0);
+    const QColor chosen = QColorDialog::getColor(initial, this, tr("Choose hatch color"));
+    if (!chosen.isValid()) {
+        return;
+    }
+
+    viewProvider->HatchColor.setValue(Base::Color::fromValue<QColor>(chosen));
+    refreshAppearance();
+}
+
+void SectionAnalysisWidget::onHatchLineWidthChanged(double value)
+{
+    auto* viewProvider = getViewProvider();
+    if (!viewProvider) {
+        return;
+    }
+
+    viewProvider->HatchLineWidth.setValue(static_cast<float>(value));
 }
 
 void SectionAnalysisWidget::onHatchSpacingChanged(double value)

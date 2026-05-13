@@ -89,6 +89,9 @@ private:
     void onSectionEdgeColorClicked();
     void onSectionFaceTransparencyChanged(int value);
     void onShowHatchingToggled(bool on);
+    void onUseSectionEdgeColorForHatchingToggled(bool on);
+    void onHatchColorClicked();
+    void onHatchLineWidthChanged(double value);
     void onHatchSpacingChanged(double value);
     void onHatchAngleChanged(double value);
 

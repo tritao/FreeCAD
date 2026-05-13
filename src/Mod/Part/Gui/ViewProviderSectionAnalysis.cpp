@@ -23,17 +23,21 @@
 
 #include <QMenu>
 
+#include <Inventor/nodes/SoSeparator.h>
+
 #include <App/Document.h>
 #include <App/ClippingPlane.h>
 #include <App/Property.h>
 #include <Gui/ClippingPlaneManager.h>
 #include <Gui/Control.h>
 #include <Gui/Document.h>
+#include <Gui/Utilities.h>
 #include <Gui/View3DInventor.h>
 
 #include <Mod/Part/App/FeatureSectionAnalysis.h>
 
 #include "TaskSectionAnalysis.h"
+#include "ViewProviderPreviewExtension.h"
 #include "ViewProviderSectionAnalysis.h"
 
 using namespace PartGui;
@@ -46,6 +50,7 @@ namespace
 constexpr long EdgeResultMode = 0;
 constexpr long FaceResultMode = 1;
 constexpr long BothResultMode = 2;
+App::PropertyFloatConstraint::Constraints HatchLineWidthRange = {1.0, 16.0, 0.5};
 
 const char* displayModeForResultMode(long resultMode)
 {
@@ -99,6 +104,28 @@ ViewProviderSectionAnalysis::ViewProviderSectionAnalysis()
         App::Prop_None,
         "Face transparency used for section analysis results"
     );
+    ADD_PROPERTY_TYPE(
+        HatchColor,
+        (Base::Color(0.80F, 0.33F, 0.0F)),
+        appearanceGroup,
+        App::Prop_None,
+        "Color used for section analysis hatch lines"
+    );
+    ADD_PROPERTY_TYPE(
+        HatchLineWidth,
+        (1.0F),
+        appearanceGroup,
+        App::Prop_None,
+        "Line width used for section analysis hatch lines"
+    );
+    HatchLineWidth.setConstraints(&HatchLineWidthRange);
+    ADD_PROPERTY_TYPE(
+        UseSectionEdgeColorForHatching,
+        (true),
+        appearanceGroup,
+        App::Prop_None,
+        "Use the section edge color for hatch lines"
+    );
 
     LineWidth.setValue(2.0F);
 }
@@ -108,14 +135,31 @@ ViewProviderSectionAnalysis::~ViewProviderSectionAnalysis() = default;
 void ViewProviderSectionAnalysis::attach(App::DocumentObject* object)
 {
     ViewProviderPart::attach(object);
+
+    pcHatchRoot = new SoSeparator;
+    pcHatchShape = new SoPreviewShape;
+    pcHatchShape->transparency = 0.0F;
+    pcHatchRoot->addChild(pcHatchShape);
+    getOrCreateAnnotation()->addChild(pcHatchRoot);
+
     syncAppearanceProperties();
     syncDisplayForResultMode();
+    syncHatchAppearance();
+    syncHatchGeometry();
 }
 
 void ViewProviderSectionAnalysis::onChanged(const App::Property* prop)
 {
     if (prop == &SectionFaceColor || prop == &SectionEdgeColor || prop == &SectionFaceTransparency) {
         syncAppearanceProperties();
+        if (prop == &SectionEdgeColor) {
+            syncHatchAppearance();
+        }
+        return;
+    }
+
+    if (prop == &HatchColor || prop == &HatchLineWidth || prop == &UseSectionEdgeColorForHatching) {
+        syncHatchAppearance();
         return;
     }
 
@@ -129,6 +173,11 @@ void ViewProviderSectionAnalysis::updateData(const App::Property* prop)
     auto* analysis = getObject<Part::SectionAnalysis>();
     if (analysis && (prop == &analysis->ResultMode || prop == &analysis->ShowHatching)) {
         syncDisplayForResultMode();
+    }
+    if (analysis
+        && (prop == &analysis->ShowHatching || prop == &analysis->HatchShape
+            || prop == &analysis->ResultMode)) {
+        syncHatchGeometry();
     }
 }
 
@@ -150,6 +199,64 @@ void ViewProviderSectionAnalysis::syncAppearanceProperties()
     LineColor.setValue(SectionEdgeColor.getValue());
     ShapeAppearance.setDiffuseColor(SectionFaceColor.getValue());
     Transparency.setValue(SectionFaceTransparency.getValue());
+}
+
+void ViewProviderSectionAnalysis::syncHatchAppearance()
+{
+    if (!pcHatchShape) {
+        return;
+    }
+
+    const Base::Color hatchColor = UseSectionEdgeColorForHatching.getValue()
+        ? SectionEdgeColor.getValue()
+        : HatchColor.getValue();
+    pcHatchShape->color.setValue(Base::convertTo<SbColor>(hatchColor));
+    pcHatchShape->lineWidth.setValue(HatchLineWidth.getValue());
+}
+
+void ViewProviderSectionAnalysis::syncHatchGeometry()
+{
+    if (!pcHatchRoot || !pcHatchShape) {
+        return;
+    }
+
+    auto* analysis = getObject<Part::SectionAnalysis>();
+    if (!analysis || !analysis->ShowHatching.getValue()) {
+        pcHatchRoot->removeAllChildren();
+        return;
+    }
+
+    const Part::TopoShape& hatchShape = analysis->HatchShape.getShape();
+    if (hatchShape.isNull()) {
+        pcHatchRoot->removeAllChildren();
+        return;
+    }
+
+    ViewProviderPartExt::setupCoinGeometry(
+        hatchShape.getShape(),
+        pcHatchShape,
+        Deviation.getValue(),
+        AngularDeflection.getValue()
+    );
+    pcHatchShape->transform.setValue(Base::convertTo<SbMatrix>(hatchShape.getTransform()));
+    syncHatchAppearance();
+
+    const unsigned lineCoordsCount = pcHatchShape->lineset->coordIndex.getNum();
+    unsigned lineCount = 1;
+    for (unsigned i = 0; i < lineCoordsCount; ++i) {
+        if (pcHatchShape->lineset->coordIndex[i] < 0) {
+            ++lineCount;
+        }
+    }
+
+    pcHatchShape->lineset->materialIndex.setNum(lineCount);
+    for (unsigned i = 0; i < lineCount; ++i) {
+        pcHatchShape->lineset->materialIndex.set1Value(i, 0);
+    }
+
+    if (pcHatchRoot->findChild(pcHatchShape) < 0) {
+        pcHatchRoot->addChild(pcHatchShape);
+    }
 }
 
 bool ViewProviderSectionAnalysis::doubleClicked()
