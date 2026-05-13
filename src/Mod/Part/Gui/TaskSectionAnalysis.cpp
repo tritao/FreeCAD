@@ -188,6 +188,7 @@ void SectionAnalysisWidget::refreshActivation()
 
     if (!plane || !view) {
         d->ui.activeInCurrentViewCheck->setChecked(false);
+        d->ui.activationStateLabel->setVisible(true);
         d->ui.activationStateLabel->setText(
             plane ? tr("No active 3D view is available.")
                   : tr("Link a clipping plane to preview this analysis in a 3D view.")
@@ -197,10 +198,8 @@ void SectionAnalysisWidget::refreshActivation()
 
     const bool active = Gui::ClippingPlaneManager::instance().isActive(view, plane);
     d->ui.activeInCurrentViewCheck->setChecked(active);
-    d->ui.activationStateLabel->setText(
-        active ? tr("The linked clipping plane is active in the current 3D view.")
-               : tr("The linked clipping plane is inactive in the current 3D view.")
-    );
+    d->ui.activationStateLabel->clear();
+    d->ui.activationStateLabel->setVisible(false);
 }
 
 void SectionAnalysisWidget::refreshAppearance()
@@ -267,6 +266,16 @@ void SectionAnalysisWidget::refreshButtons()
     d->ui.useSectionEdgeColorForHatchingCheck->setEnabled(hasSources && hatchEnabled);
     d->ui.hatchColorButton->setEnabled(hasSources && hatchEnabled && !useEdgeColorForHatching);
     d->ui.hatchLineWidthSpin->setEnabled(hasSources && hatchEnabled);
+
+    d->ui.useSectionEdgeColorForHatchingCheck->setVisible(hatchEnabled);
+    d->ui.hatchColorLabel->setVisible(hatchEnabled);
+    d->ui.hatchColorButton->setVisible(hatchEnabled);
+    d->ui.hatchLineWidthLabel->setVisible(hatchEnabled);
+    d->ui.hatchLineWidthSpin->setVisible(hatchEnabled);
+    d->ui.hatchSpacingLabel->setVisible(hatchEnabled);
+    d->ui.hatchSpacingSpin->setVisible(hatchEnabled);
+    d->ui.hatchAngleLabel->setVisible(hatchEnabled);
+    d->ui.hatchAngleSpin->setVisible(hatchEnabled);
 }
 
 void SectionAnalysisWidget::setClippingPlane(App::ClippingPlane* plane)

@@ -20,7 +20,7 @@
       <bool>true</bool>
      </property>
      <property name="text">
-      <string>Section analysis generates section faces and edges from explicit source objects and one linked clipping plane.</string>
+      <string>Generate section faces and edges from selected sources and one clipping plane.</string>
      </property>
     </widget>
    </item>
@@ -85,6 +85,18 @@
       </item>
       <item>
        <widget class="QListWidget" name="sourcesList">
+        <property name="minimumSize">
+         <size>
+          <width>0</width>
+          <height>120</height>
+         </size>
+        </property>
+        <property name="maximumSize">
+         <size>
+          <width>16777215</width>
+          <height>160</height>
+         </size>
+        </property>
         <property name="selectionMode">
          <enum>QAbstractItemView::ExtendedSelection</enum>
         </property>
@@ -102,7 +114,7 @@
         <item>
          <widget class="QPushButton" name="useCurrentSelectionButton">
           <property name="text">
-           <string>Replace with selection</string>
+           <string>Use selection</string>
           </property>
          </widget>
         </item>
@@ -123,7 +135,7 @@
         <item>
          <widget class="QPushButton" name="selectSourcesButton">
           <property name="text">
-           <string>Select sources</string>
+           <string>Select in tree</string>
           </property>
          </widget>
         </item>
