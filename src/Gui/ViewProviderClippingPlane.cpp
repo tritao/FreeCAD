@@ -30,10 +30,14 @@
 #include <Inventor/nodes/SoSwitch.h>
 
 #include <App/ClippingPlane.h>
+#include <App/Document.h>
 
+#include "Application.h"
 #include "ClippingPlaneManager.h"
+#include "Command.h"
 #include "Inventor/SoAxisCrossKit.h"
 #include "Inventor/So3DAnnotation.h"
+#include "Selection/Selection.h"
 #include "TaskClippingPlane.h"
 #include "View3DInventor.h"
 #include "ViewProviderClippingPlane.h"
@@ -163,6 +167,31 @@ void ViewProviderClippingPlane::setupContextMenu(QMenu* menu, QObject* receiver,
                 ClippingPlaneManager::instance().activate(view, plane);
             });
         }
+    }
+
+    if (plane) {
+        const std::string docName = plane->getDocument()->getName();
+        const std::string planeName = plane->getNameInDocument();
+        menu->addAction(QObject::tr("Create section analysis"), [docName, planeName]() {
+            std::vector<std::pair<std::string, std::string>> sources;
+            for (const auto& selected :
+                 Selection().getCompleteSelection(Gui::ResolveMode::FollowLink)) {
+                if (!selected.DocName || !selected.FeatName || docName != selected.DocName
+                    || planeName == selected.FeatName) {
+                    continue;
+                }
+
+                sources.emplace_back(selected.DocName, selected.FeatName);
+            }
+
+            Selection().clearSelection(docName.c_str());
+            Selection().addSelection(docName.c_str(), planeName.c_str());
+            for (const auto& [sourceDoc, sourceObject] : sources) {
+                Selection().addSelection(sourceDoc.c_str(), sourceObject.c_str());
+            }
+
+            Application::Instance->commandManager().runCommandByName("Part_SectionAnalysis");
+        });
     }
 
     inherited::setupContextMenu(menu, receiver, member);

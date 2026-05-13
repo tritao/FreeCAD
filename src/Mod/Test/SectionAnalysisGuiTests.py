@@ -98,6 +98,28 @@ class SectionAnalysisGuiTests(unittest.TestCase):
         FreeCADGui.updateGui()
         self.assertFalse(FreeCADGui.Control.activeDialog())
 
+    def testCreateCommandWithoutSelectionOpensTaskPanel(self):
+        if not QT_WIDGETS_AVAILABLE:
+            self.skipTest("Qt widgets bindings not available")
+
+        self.assertIn("Part_SectionAnalysis", FreeCADGui.listCommands())
+        FreeCADGui.runCommand("Part_SectionAnalysis", 0)
+        FreeCADGui.updateGui()
+
+        analysis = self.doc.Objects[-1]
+        self.assertEqual(analysis.TypeId, "Part::SectionAnalysis")
+        self.assertIsNone(analysis.ClippingPlane)
+        self.assertEqual(list(analysis.Sources), [])
+        self.assertEqual(analysis.ResultMode, "Both")
+
+        dialog = FreeCADGui.Control.activeTaskDialog()
+        self.assertIsNotNone(dialog)
+
+        gui_doc = FreeCADGui.getDocument(self.doc.Name)
+        gui_doc.resetEdit()
+        FreeCADGui.updateGui()
+        self.assertFalse(FreeCADGui.Control.activeDialog())
+
     def testCreateCommandBuildsSectionAnalysis(self):
         plane = self.doc.addObject("App::ClippingPlane", "Clip")
         plane.Placement.Base = FreeCAD.Vector(0, 0, 5)
@@ -122,3 +144,9 @@ class SectionAnalysisGuiTests(unittest.TestCase):
         self.assertFalse(analysis.Shape.isNull())
         self.assertGreater(len(analysis.Shape.Faces), 0)
         self.assertGreater(len(analysis.Shape.Edges), 0)
+        self.assertIsNotNone(FreeCADGui.Control.activeTaskDialog())
+
+        gui_doc = FreeCADGui.getDocument(self.doc.Name)
+        gui_doc.resetEdit()
+        FreeCADGui.updateGui()
+        self.assertFalse(FreeCADGui.Control.activeDialog())

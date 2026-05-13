@@ -1067,7 +1067,7 @@ CmdPartSectionAnalysis::CmdPartSectionAnalysis()
     sGroup = QT_TR_NOOP("Part");
     sMenuText = QT_TR_NOOP("Section Analysis");
     sToolTipText
-        = QT_TR_NOOP("Create a section analysis with section faces and edges from a clipping plane and source shapes");
+        = QT_TR_NOOP("Create a section analysis with section faces and edges, using the current selection as an optional prefill");
     sWhatsThis = "Part_SectionAnalysis";
     sStatusTip = sToolTipText;
     sPixmap = "Part_Section";
@@ -1076,6 +1076,10 @@ CmdPartSectionAnalysis::CmdPartSectionAnalysis()
 void CmdPartSectionAnalysis::activated(int iMsg)
 {
     Q_UNUSED(iMsg);
+    if (!getActiveGuiDocument() || Gui::Control().activeDialog()) {
+        return;
+    }
+
     std::vector<Gui::SelectionObject> selection = getSelection().getSelectionEx(
         nullptr,
         App::DocumentObject::getClassTypeId(),
@@ -1107,61 +1111,43 @@ void CmdPartSectionAnalysis::activated(int iMsg)
         sources.push_back(selected.getFeatName());
     }
 
-    if (!clippingPlane || sources.empty()) {
-        QMessageBox::warning(
-            Gui::getMainWindow(),
-            QObject::tr("Wrong Selection"),
-            QObject::tr("Select one clipping plane and at least one source object")
-        );
-        return;
-    }
-
     std::string featName = getUniqueObjectName("SectionAnalysis");
-    std::stringstream sourceAssignment;
-    sourceAssignment << "App.activeDocument()." << featName << ".Sources = [";
-    for (const auto& source : sources) {
-        sourceAssignment << "App.activeDocument()." << source << ",";
-    }
-    sourceAssignment << "]";
     openCommand(QT_TRANSLATE_NOOP("Command", "Section Analysis"));
     doCommand(Doc, "App.activeDocument().addObject(\"Part::SectionAnalysis\",\"%s\")", featName.c_str());
-    doCommand(
-        Doc,
-        "App.activeDocument().%s.ClippingPlane = App.activeDocument().%s",
-        featName.c_str(),
-        clippingPlane->getNameInDocument()
-    );
+
+    if (clippingPlane) {
+        doCommand(
+            Doc,
+            "App.activeDocument().%s.ClippingPlane = App.activeDocument().%s",
+            featName.c_str(),
+            clippingPlane->getNameInDocument()
+        );
+    }
+
     doCommand(Doc, "App.activeDocument().%s.ResultMode = \"Both\"", featName.c_str());
-    runCommand(Doc, sourceAssignment.str().c_str());
+
+    if (!sources.empty()) {
+        std::stringstream sourceAssignment;
+        sourceAssignment << "App.activeDocument()." << featName << ".Sources = [";
+        for (const auto& source : sources) {
+            sourceAssignment << "App.activeDocument()." << source << ",";
+        }
+        sourceAssignment << "]";
+        runCommand(Doc, sourceAssignment.str().c_str());
+    }
+
+    if (clippingPlane && !sources.empty()) {
+        doCommand(Doc, "App.ActiveDocument.recompute()");
+    }
+
     updateActive();
+    doCommand(Gui, "Gui.ActiveDocument.setEdit('%s')", featName.c_str());
     commitCommand();
 }
 
 bool CmdPartSectionAnalysis::isActive()
 {
-    int planeCount = 0;
-    int sourceCount = 0;
-    std::vector<Gui::SelectionObject> selection = getSelection().getSelectionEx(
-        nullptr,
-        App::DocumentObject::getClassTypeId(),
-        Gui::ResolveMode::FollowLink
-    );
-
-    for (const auto& selected : selection) {
-        auto* object = selected.getObject();
-        if (!object) {
-            continue;
-        }
-
-        if (object->isDerivedFrom(App::ClippingPlane::getClassTypeId())) {
-            ++planeCount;
-        }
-        else {
-            ++sourceCount;
-        }
-    }
-
-    return planeCount == 1 && sourceCount >= 1;
+    return getActiveGuiDocument() && !Gui::Control().activeDialog();
 }
 
 //===========================================================================
