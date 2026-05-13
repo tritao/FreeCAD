@@ -21,6 +21,7 @@
 
 #pragma once
 
+#include <App/PropertyStandard.h>
 #include <Mod/Part/Gui/ViewProvider.h>
 #include <Mod/Part/PartGlobal.h>
 
@@ -35,6 +36,10 @@ public:
     ViewProviderSectionAnalysis();
     ~ViewProviderSectionAnalysis() override;
 
+    App::PropertyColor SectionFaceColor;
+    App::PropertyColor SectionEdgeColor;
+    App::PropertyPercent SectionFaceTransparency;
+
     void attach(App::DocumentObject* object) override;
     void updateData(const App::Property* prop) override;
     bool doubleClicked() override;
@@ -42,7 +47,11 @@ public:
     void unsetEdit(int ModNum) override;
     void setupContextMenu(QMenu* menu, QObject* receiver, const char* member) override;
 
+protected:
+    void onChanged(const App::Property* prop) override;
+
 private:
+    void syncAppearanceProperties();
     void syncDisplayForResultMode();
 };
 

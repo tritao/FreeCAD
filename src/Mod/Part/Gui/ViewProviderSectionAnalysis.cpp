@@ -65,11 +65,33 @@ const char* displayModeForResultMode(long resultMode)
 
 ViewProviderSectionAnalysis::ViewProviderSectionAnalysis()
 {
+    static const char* appearanceGroup = "Section Appearance";
+
     sPixmap = "Part_Section";
-    LineColor.setValue(Base::Color(0.80F, 0.33F, 0.0F));
+
+    ADD_PROPERTY_TYPE(
+        SectionFaceColor,
+        (Base::Color(0.96F, 0.64F, 0.26F)),
+        appearanceGroup,
+        App::Prop_None,
+        "Face color used for section analysis results"
+    );
+    ADD_PROPERTY_TYPE(
+        SectionEdgeColor,
+        (Base::Color(0.80F, 0.33F, 0.0F)),
+        appearanceGroup,
+        App::Prop_None,
+        "Edge color used for section analysis results"
+    );
+    ADD_PROPERTY_TYPE(
+        SectionFaceTransparency,
+        (25),
+        appearanceGroup,
+        App::Prop_None,
+        "Face transparency used for section analysis results"
+    );
+
     LineWidth.setValue(2.0F);
-    ShapeAppearance.setDiffuseColor(0.96F, 0.64F, 0.26F);
-    Transparency.setValue(25);
 }
 
 ViewProviderSectionAnalysis::~ViewProviderSectionAnalysis() = default;
@@ -77,7 +99,18 @@ ViewProviderSectionAnalysis::~ViewProviderSectionAnalysis() = default;
 void ViewProviderSectionAnalysis::attach(App::DocumentObject* object)
 {
     ViewProviderPart::attach(object);
+    syncAppearanceProperties();
     syncDisplayForResultMode();
+}
+
+void ViewProviderSectionAnalysis::onChanged(const App::Property* prop)
+{
+    if (prop == &SectionFaceColor || prop == &SectionEdgeColor || prop == &SectionFaceTransparency) {
+        syncAppearanceProperties();
+        return;
+    }
+
+    ViewProviderPart::onChanged(prop);
 }
 
 void ViewProviderSectionAnalysis::updateData(const App::Property* prop)
@@ -101,6 +134,13 @@ void ViewProviderSectionAnalysis::syncDisplayForResultMode()
     if (std::string_view(DisplayMode.getValueAsString()) != modeName) {
         DisplayMode.setValue(modeName);
     }
+}
+
+void ViewProviderSectionAnalysis::syncAppearanceProperties()
+{
+    LineColor.setValue(SectionEdgeColor.getValue());
+    ShapeAppearance.setDiffuseColor(SectionFaceColor.getValue());
+    Transparency.setValue(SectionFaceTransparency.getValue());
 }
 
 bool ViewProviderSectionAnalysis::doubleClicked()
