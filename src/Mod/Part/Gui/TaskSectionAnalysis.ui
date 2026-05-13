@@ -54,6 +54,13 @@
       <item>
        <layout class="QHBoxLayout" name="clippingPlaneButtonsLayout">
         <item>
+         <widget class="QPushButton" name="useCurrentSelectionAsClippingPlaneButton">
+          <property name="text">
+           <string>Use selected clipping plane</string>
+          </property>
+         </widget>
+        </item>
+        <item>
          <widget class="QPushButton" name="selectClippingPlaneButton">
           <property name="text">
            <string>Select clipping plane</string>
@@ -95,7 +102,21 @@
         <item>
          <widget class="QPushButton" name="useCurrentSelectionButton">
           <property name="text">
-           <string>Use current selection as sources</string>
+           <string>Replace with selection</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QPushButton" name="appendCurrentSelectionButton">
+          <property name="text">
+           <string>Append selection</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QPushButton" name="removeSelectedSourcesButton">
+          <property name="text">
+           <string>Remove selected</string>
           </property>
          </widget>
         </item>

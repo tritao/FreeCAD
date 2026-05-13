@@ -73,7 +73,10 @@ private:
     void refreshActivation();
     void refreshAppearance();
     void refreshButtons();
+    void setClippingPlane(App::ClippingPlane* plane);
     void setSources(const std::vector<App::DocumentObject*>& sources);
+    std::vector<App::DocumentObject*> getSelectedSourceObjects() const;
+    App::ClippingPlane* getSelectedClippingPlane() const;
     void selectObjects(const std::vector<App::DocumentObject*>& objects);
     void setupConnections();
     void setColorButtonPreview(QPushButton* button, const Base::Color& color);
@@ -81,10 +84,13 @@ private:
     void onResultModeChanged(int index);
     void onRecomputeClicked();
     void onUseCurrentSelectionAsSources();
+    void onAppendCurrentSelectionAsSources();
+    void onRemoveSelectedSources();
     void onSelectSources();
     void onActivationToggled(bool on);
     void onSelectClippingPlane();
     void onEditClippingPlane();
+    void onUseCurrentSelectionAsClippingPlane();
     void onSectionFaceColorClicked();
     void onSectionEdgeColorClicked();
     void onSectionFaceTransparencyChanged(int value);

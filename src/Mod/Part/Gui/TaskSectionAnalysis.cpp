@@ -242,8 +242,9 @@ void SectionAnalysisWidget::refreshAppearance()
 
 void SectionAnalysisWidget::refreshButtons()
 {
-    const bool hasPlane = getClippingPlane() != nullptr;
     auto* analysis = getSectionAnalysis();
+    const bool hasDocument = analysis && analysis->getDocument();
+    const bool hasPlane = getClippingPlane() != nullptr;
     const bool hasSources = analysis && !analysis->Sources.getValues().empty();
     const bool hasView = getCurrentView() != nullptr;
     const bool hatchEnabled = analysis && analysis->ShowHatching.getValue();
@@ -251,8 +252,12 @@ void SectionAnalysisWidget::refreshButtons()
     const bool useEdgeColorForHatching = viewProvider
         && viewProvider->UseSectionEdgeColorForHatching.getValue();
 
+    d->ui.useCurrentSelectionAsClippingPlaneButton->setEnabled(hasDocument);
     d->ui.selectClippingPlaneButton->setEnabled(hasPlane);
     d->ui.editClippingPlaneButton->setEnabled(hasPlane);
+    d->ui.useCurrentSelectionButton->setEnabled(hasDocument);
+    d->ui.appendCurrentSelectionButton->setEnabled(hasDocument);
+    d->ui.removeSelectedSourcesButton->setEnabled(!d->ui.sourcesList->selectedItems().isEmpty());
     d->ui.selectSourcesButton->setEnabled(hasSources);
     d->ui.recomputeButton->setEnabled(hasPlane && hasSources);
     d->ui.activeInCurrentViewCheck->setEnabled(hasPlane && hasView);
@@ -262,6 +267,20 @@ void SectionAnalysisWidget::refreshButtons()
     d->ui.useSectionEdgeColorForHatchingCheck->setEnabled(hasSources && hatchEnabled);
     d->ui.hatchColorButton->setEnabled(hasSources && hatchEnabled && !useEdgeColorForHatching);
     d->ui.hatchLineWidthSpin->setEnabled(hasSources && hatchEnabled);
+}
+
+void SectionAnalysisWidget::setClippingPlane(App::ClippingPlane* plane)
+{
+    auto* analysis = getSectionAnalysis();
+    if (!analysis) {
+        return;
+    }
+
+    analysis->ClippingPlane.setValue(plane);
+    if (auto* doc = analysis->getDocument()) {
+        doc->recompute();
+    }
+    refresh();
 }
 
 void SectionAnalysisWidget::setColorButtonPreview(QPushButton* button, const Base::Color& color)
@@ -287,6 +306,64 @@ void SectionAnalysisWidget::setSources(const std::vector<App::DocumentObject*>& 
         doc->recompute();
     }
     refresh();
+}
+
+std::vector<App::DocumentObject*> SectionAnalysisWidget::getSelectedSourceObjects() const
+{
+    std::vector<App::DocumentObject*> sources;
+    std::set<std::string> sourceNames;
+
+    auto* analysis = getSectionAnalysis();
+    if (!analysis || !analysis->getDocument()) {
+        return sources;
+    }
+
+    auto* plane = getClippingPlane();
+    for (const auto& selected :
+         Gui::Selection().getSelection(analysis->getDocument()->getName(), Gui::ResolveMode::NoResolve)) {
+        auto* object = selected.pObject;
+        if (!object || object == analysis || object == plane
+            || object->getDocument() != analysis->getDocument()
+            || object->isDerivedFrom(App::ClippingPlane::getClassTypeId())) {
+            continue;
+        }
+
+        if (sourceNames.insert(object->getNameInDocument()).second) {
+            sources.push_back(object);
+        }
+    }
+
+    return sources;
+}
+
+App::ClippingPlane* SectionAnalysisWidget::getSelectedClippingPlane() const
+{
+    auto* analysis = getSectionAnalysis();
+    if (!analysis || !analysis->getDocument()) {
+        return nullptr;
+    }
+
+    App::ClippingPlane* plane = nullptr;
+    for (const auto& selected :
+         Gui::Selection().getSelection(analysis->getDocument()->getName(), Gui::ResolveMode::NoResolve)) {
+        auto* object = selected.pObject;
+        if (!object || object->getDocument() != analysis->getDocument()) {
+            continue;
+        }
+
+        auto* candidate = freecad_cast<App::ClippingPlane*>(object);
+        if (!candidate) {
+            continue;
+        }
+
+        if (plane && plane != candidate) {
+            return nullptr;
+        }
+
+        plane = candidate;
+    }
+
+    return plane;
 }
 
 void SectionAnalysisWidget::selectObjects(const std::vector<App::DocumentObject*>& objects)
@@ -320,6 +397,24 @@ void SectionAnalysisWidget::setupConnections()
         this,
         &SectionAnalysisWidget::onUseCurrentSelectionAsSources
     );
+    connect(
+        d->ui.appendCurrentSelectionButton,
+        &QPushButton::clicked,
+        this,
+        &SectionAnalysisWidget::onAppendCurrentSelectionAsSources
+    );
+    connect(
+        d->ui.removeSelectedSourcesButton,
+        &QPushButton::clicked,
+        this,
+        &SectionAnalysisWidget::onRemoveSelectedSources
+    );
+    connect(
+        d->ui.sourcesList,
+        &QListWidget::itemSelectionChanged,
+        this,
+        &SectionAnalysisWidget::refreshButtons
+    );
     connect(d->ui.selectSourcesButton, &QPushButton::clicked, this, &SectionAnalysisWidget::onSelectSources);
     connect(
         d->ui.activeInCurrentViewCheck,
@@ -332,6 +427,12 @@ void SectionAnalysisWidget::setupConnections()
         &QPushButton::clicked,
         this,
         &SectionAnalysisWidget::onSelectClippingPlane
+    );
+    connect(
+        d->ui.useCurrentSelectionAsClippingPlaneButton,
+        &QPushButton::clicked,
+        this,
+        &SectionAnalysisWidget::onUseCurrentSelectionAsClippingPlane
     );
     connect(
         d->ui.editClippingPlaneButton,
@@ -422,29 +523,69 @@ void SectionAnalysisWidget::onRecomputeClicked()
 
 void SectionAnalysisWidget::onUseCurrentSelectionAsSources()
 {
+    std::vector<App::DocumentObject*> sources = getSelectedSourceObjects();
+    if (sources.empty()) {
+        refreshSources();
+        return;
+    }
+
+    setSources(sources);
+}
+
+void SectionAnalysisWidget::onAppendCurrentSelectionAsSources()
+{
     auto* analysis = getSectionAnalysis();
-    if (!analysis || !analysis->getDocument()) {
+    if (!analysis) {
+        return;
+    }
+
+    std::vector<App::DocumentObject*> sources = analysis->Sources.getValues();
+    std::set<std::string> sourceNames;
+    for (auto* source : sources) {
+        if (source) {
+            sourceNames.insert(source->getNameInDocument());
+        }
+    }
+
+    bool changed = false;
+    for (auto* source : getSelectedSourceObjects()) {
+        if (source && sourceNames.insert(source->getNameInDocument()).second) {
+            sources.push_back(source);
+            changed = true;
+        }
+    }
+
+    if (changed) {
+        setSources(sources);
+    }
+    else {
+        refreshSources();
+    }
+}
+
+void SectionAnalysisWidget::onRemoveSelectedSources()
+{
+    auto* analysis = getSectionAnalysis();
+    if (!analysis) {
+        return;
+    }
+
+    std::set<std::string> removedNames;
+    for (auto* item : d->ui.sourcesList->selectedItems()) {
+        removedNames.insert(item->data(Qt::UserRole).toByteArray().constData());
+    }
+
+    if (removedNames.empty()) {
+        refreshButtons();
         return;
     }
 
     std::vector<App::DocumentObject*> sources;
-    std::set<std::string> sourceNames;
-    auto* plane = getClippingPlane();
-    for (const auto& selected :
-         Gui::Selection().getSelection(analysis->getDocument()->getName(), Gui::ResolveMode::NoResolve)) {
-        auto* object = selected.pObject;
-        if (!object || object == analysis || object == plane
-            || object->getDocument() != analysis->getDocument()) {
+    for (auto* source : analysis->Sources.getValues()) {
+        if (!source || removedNames.contains(source->getNameInDocument())) {
             continue;
         }
-        if (sourceNames.insert(object->getNameInDocument()).second) {
-            sources.push_back(object);
-        }
-    }
-
-    if (sources.empty()) {
-        refreshSources();
-        return;
+        sources.push_back(source);
     }
 
     setSources(sources);
@@ -487,6 +628,18 @@ void SectionAnalysisWidget::onSelectClippingPlane()
     }
 
     selectObjects({plane});
+}
+
+void SectionAnalysisWidget::onUseCurrentSelectionAsClippingPlane()
+{
+    if (auto* plane = getSelectedClippingPlane()) {
+        setClippingPlane(plane);
+    }
+    else {
+        refreshClippingPlane();
+        refreshActivation();
+        refreshButtons();
+    }
 }
 
 void SectionAnalysisWidget::onEditClippingPlane()
