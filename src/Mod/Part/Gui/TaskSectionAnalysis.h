@@ -24,7 +24,10 @@
 #include <memory>
 
 #include <QDialogButtonBox>
+#include <QPushButton>
 #include <QWidget>
+
+#include <Base/Color.h>
 
 #include <Gui/TaskView/TaskDialog.h>
 
@@ -68,10 +71,12 @@ private:
     void refreshSources();
     void refreshResult();
     void refreshActivation();
+    void refreshAppearance();
     void refreshButtons();
     void setSources(const std::vector<App::DocumentObject*>& sources);
     void selectObjects(const std::vector<App::DocumentObject*>& objects);
     void setupConnections();
+    void setColorButtonPreview(QPushButton* button, const Base::Color& color);
 
     void onResultModeChanged(int index);
     void onRecomputeClicked();
@@ -80,6 +85,9 @@ private:
     void onActivationToggled(bool on);
     void onSelectClippingPlane();
     void onEditClippingPlane();
+    void onSectionFaceColorClicked();
+    void onSectionEdgeColorClicked();
+    void onSectionFaceTransparencyChanged(int value);
 
     void changeEvent(QEvent* event) override;
 

@@ -23,6 +23,8 @@
 
 #include <set>
 
+#include <QColor>
+#include <QColorDialog>
 #include <QEvent>
 #include <QListWidgetItem>
 #include <QSignalBlocker>
@@ -125,6 +127,7 @@ void SectionAnalysisWidget::refresh()
     refreshSources();
     refreshResult();
     refreshActivation();
+    refreshAppearance();
     refreshButtons();
 }
 
@@ -200,6 +203,20 @@ void SectionAnalysisWidget::refreshActivation()
     );
 }
 
+void SectionAnalysisWidget::refreshAppearance()
+{
+    auto* viewProvider = getViewProvider();
+    if (!viewProvider) {
+        return;
+    }
+
+    setColorButtonPreview(d->ui.sectionFaceColorButton, viewProvider->SectionFaceColor.getValue());
+    setColorButtonPreview(d->ui.sectionEdgeColorButton, viewProvider->SectionEdgeColor.getValue());
+
+    const QSignalBlocker blocker(d->ui.sectionFaceTransparencySpin);
+    d->ui.sectionFaceTransparencySpin->setValue(viewProvider->SectionFaceTransparency.getValue());
+}
+
 void SectionAnalysisWidget::refreshButtons()
 {
     const bool hasPlane = getClippingPlane() != nullptr;
@@ -212,6 +229,17 @@ void SectionAnalysisWidget::refreshButtons()
     d->ui.selectSourcesButton->setEnabled(hasSources);
     d->ui.recomputeButton->setEnabled(hasPlane && hasSources);
     d->ui.activeInCurrentViewCheck->setEnabled(hasPlane && hasView);
+}
+
+void SectionAnalysisWidget::setColorButtonPreview(QPushButton* button, const Base::Color& color)
+{
+    if (!button) {
+        return;
+    }
+
+    const QColor qtColor = QColor::fromRgbF(color.r, color.g, color.b, 1.0);
+    button->setText(qtColor.name(QColor::HexRgb).toUpper());
+    button->setStyleSheet(QString::fromLatin1("background-color: %1;").arg(qtColor.name()));
 }
 
 void SectionAnalysisWidget::setSources(const std::vector<App::DocumentObject*>& sources)
@@ -277,6 +305,24 @@ void SectionAnalysisWidget::setupConnections()
         &QPushButton::clicked,
         this,
         &SectionAnalysisWidget::onEditClippingPlane
+    );
+    connect(
+        d->ui.sectionFaceColorButton,
+        &QPushButton::clicked,
+        this,
+        &SectionAnalysisWidget::onSectionFaceColorClicked
+    );
+    connect(
+        d->ui.sectionEdgeColorButton,
+        &QPushButton::clicked,
+        this,
+        &SectionAnalysisWidget::onSectionEdgeColorClicked
+    );
+    connect(
+        d->ui.sectionFaceTransparencySpin,
+        qOverload<int>(&QSpinBox::valueChanged),
+        this,
+        &SectionAnalysisWidget::onSectionFaceTransparencyChanged
     );
 }
 
@@ -387,6 +433,52 @@ void SectionAnalysisWidget::onEditClippingPlane()
     if (auto* planeViewProvider = doc->getViewProvider(plane)) {
         doc->setEdit(planeViewProvider, Gui::ViewProvider::Default);
     }
+}
+
+void SectionAnalysisWidget::onSectionFaceColorClicked()
+{
+    auto* viewProvider = getViewProvider();
+    if (!viewProvider) {
+        return;
+    }
+
+    const Base::Color current = viewProvider->SectionFaceColor.getValue();
+    const QColor initial = QColor::fromRgbF(current.r, current.g, current.b, 1.0);
+    const QColor chosen = QColorDialog::getColor(initial, this, tr("Choose section face color"));
+    if (!chosen.isValid()) {
+        return;
+    }
+
+    viewProvider->SectionFaceColor.setValue(Base::Color::fromValue<QColor>(chosen));
+    refreshAppearance();
+}
+
+void SectionAnalysisWidget::onSectionEdgeColorClicked()
+{
+    auto* viewProvider = getViewProvider();
+    if (!viewProvider) {
+        return;
+    }
+
+    const Base::Color current = viewProvider->SectionEdgeColor.getValue();
+    const QColor initial = QColor::fromRgbF(current.r, current.g, current.b, 1.0);
+    const QColor chosen = QColorDialog::getColor(initial, this, tr("Choose section edge color"));
+    if (!chosen.isValid()) {
+        return;
+    }
+
+    viewProvider->SectionEdgeColor.setValue(Base::Color::fromValue<QColor>(chosen));
+    refreshAppearance();
+}
+
+void SectionAnalysisWidget::onSectionFaceTransparencyChanged(int value)
+{
+    auto* viewProvider = getViewProvider();
+    if (!viewProvider) {
+        return;
+    }
+
+    viewProvider->SectionFaceTransparency.setValue(value);
 }
 
 void SectionAnalysisWidget::changeEvent(QEvent* event)

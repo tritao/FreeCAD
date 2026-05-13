@@ -143,10 +143,64 @@
         </property>
        </widget>
       </item>
-      <item>
+     <item>
        <widget class="QLabel" name="resultSummaryLabel">
         <property name="text">
          <string/>
+        </property>
+       </widget>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item>
+    <widget class="QGroupBox" name="appearanceGroup">
+     <property name="title">
+      <string>Appearance</string>
+     </property>
+     <layout class="QGridLayout" name="appearanceGroupLayout">
+      <item row="0" column="0">
+       <widget class="QLabel" name="sectionFaceColorLabel">
+        <property name="text">
+         <string>Face color</string>
+        </property>
+       </widget>
+      </item>
+      <item row="0" column="1">
+       <widget class="QPushButton" name="sectionFaceColorButton">
+        <property name="text">
+         <string/>
+        </property>
+       </widget>
+      </item>
+      <item row="1" column="0">
+       <widget class="QLabel" name="sectionEdgeColorLabel">
+        <property name="text">
+         <string>Edge color</string>
+        </property>
+       </widget>
+      </item>
+      <item row="1" column="1">
+       <widget class="QPushButton" name="sectionEdgeColorButton">
+        <property name="text">
+         <string/>
+        </property>
+       </widget>
+      </item>
+      <item row="2" column="0">
+       <widget class="QLabel" name="sectionFaceTransparencyLabel">
+        <property name="text">
+         <string>Face transparency</string>
+        </property>
+       </widget>
+      </item>
+      <item row="2" column="1">
+       <widget class="QSpinBox" name="sectionFaceTransparencySpin">
+        <property name="maximum">
+         <number>100</number>
+        </property>
+        <property name="suffix">
+         <string>%</string>
         </property>
        </widget>
       </item>
