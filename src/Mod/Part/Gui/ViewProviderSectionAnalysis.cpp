@@ -68,10 +68,6 @@ const char* displayModeForResultMode(long resultMode)
 
 const char* displayModeForSectionAnalysis(const Part::SectionAnalysis& analysis)
 {
-    if (analysis.ResultMode.getValue() == FaceResultMode && analysis.ShowHatching.getValue()) {
-        return "Flat Lines";
-    }
-
     return displayModeForResultMode(analysis.ResultMode.getValue());
 }
 
