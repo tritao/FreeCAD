@@ -25,6 +25,8 @@ SET(Test_SRCS
     ClipPlaneGuiTests.py
     SavedViewTests.py
     SavedViewGuiTests.py
+    SectionAnalysisTests.py
+    SectionAnalysisGuiTests.py
 )
 
 SET(TestData_SRCS

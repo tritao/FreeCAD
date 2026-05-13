@@ -35,4 +35,5 @@ FreeCAD.__unit_test__ += [
     "TestCoinNodeSnapshots",
     "ClipPlaneTests",
     "SavedViewTests",
+    "SectionAnalysisTests",
 ]

@@ -100,4 +100,5 @@ FreeCAD.__unit_test__ += [
     "GuiDocument",
     "ClipPlaneGuiTests",
     "SavedViewGuiTests",
+    "SectionAnalysisGuiTests",
 ]

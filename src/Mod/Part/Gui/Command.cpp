@@ -32,6 +32,7 @@
 
 
 #include <App/Document.h>
+#include <App/ClippingPlane.h>
 #include <App/GeoFeature.h>
 #include <App/DocumentObjectGroup.h>
 #include <Base/Console.h>
@@ -1052,6 +1053,113 @@ bool CmdPartSection::isActive()
 {
     return getSelection().countObjectsOfType<App::DocumentObject>(nullptr, Gui::ResolveMode::FollowLink)
         == 2;
+}
+
+//===========================================================================
+// Part_SectionAnalysis
+//===========================================================================
+DEF_STD_CMD_A(CmdPartSectionAnalysis)
+
+CmdPartSectionAnalysis::CmdPartSectionAnalysis()
+    : Command("Part_SectionAnalysis")
+{
+    sAppModule = "Part";
+    sGroup = QT_TR_NOOP("Part");
+    sMenuText = QT_TR_NOOP("Section Analysis");
+    sToolTipText = QT_TR_NOOP("Create a section analysis from a clipping plane and source shapes");
+    sWhatsThis = "Part_SectionAnalysis";
+    sStatusTip = sToolTipText;
+    sPixmap = "Part_Section";
+}
+
+void CmdPartSectionAnalysis::activated(int iMsg)
+{
+    Q_UNUSED(iMsg);
+    std::vector<Gui::SelectionObject> selection = getSelection().getSelectionEx(
+        nullptr,
+        App::DocumentObject::getClassTypeId(),
+        Gui::ResolveMode::FollowLink
+    );
+
+    const App::ClippingPlane* clippingPlane = nullptr;
+    std::vector<std::string> sources;
+    sources.reserve(selection.size());
+    for (const auto& selected : selection) {
+        auto* object = selected.getObject();
+        if (!object) {
+            continue;
+        }
+
+        if (object->isDerivedFrom(App::ClippingPlane::getClassTypeId())) {
+            if (clippingPlane) {
+                QMessageBox::warning(
+                    Gui::getMainWindow(),
+                    QObject::tr("Wrong Selection"),
+                    QObject::tr("Select exactly one clipping plane")
+                );
+                return;
+            }
+            clippingPlane = static_cast<const App::ClippingPlane*>(object);
+            continue;
+        }
+
+        sources.push_back(selected.getFeatName());
+    }
+
+    if (!clippingPlane || sources.empty()) {
+        QMessageBox::warning(
+            Gui::getMainWindow(),
+            QObject::tr("Wrong Selection"),
+            QObject::tr("Select one clipping plane and at least one source object")
+        );
+        return;
+    }
+
+    std::string featName = getUniqueObjectName("SectionAnalysis");
+    std::stringstream sourceAssignment;
+    sourceAssignment << "App.activeDocument()." << featName << ".Sources = [";
+    for (const auto& source : sources) {
+        sourceAssignment << "App.activeDocument()." << source << ",";
+    }
+    sourceAssignment << "]";
+    openCommand(QT_TRANSLATE_NOOP("Command", "Section Analysis"));
+    doCommand(Doc, "App.activeDocument().addObject(\"Part::SectionAnalysis\",\"%s\")", featName.c_str());
+    doCommand(
+        Doc,
+        "App.activeDocument().%s.ClippingPlane = App.activeDocument().%s",
+        featName.c_str(),
+        clippingPlane->getNameInDocument()
+    );
+    runCommand(Doc, sourceAssignment.str().c_str());
+    updateActive();
+    commitCommand();
+}
+
+bool CmdPartSectionAnalysis::isActive()
+{
+    int planeCount = 0;
+    int sourceCount = 0;
+    std::vector<Gui::SelectionObject> selection = getSelection().getSelectionEx(
+        nullptr,
+        App::DocumentObject::getClassTypeId(),
+        Gui::ResolveMode::FollowLink
+    );
+
+    for (const auto& selected : selection) {
+        auto* object = selected.getObject();
+        if (!object) {
+            continue;
+        }
+
+        if (object->isDerivedFrom(App::ClippingPlane::getClassTypeId())) {
+            ++planeCount;
+        }
+        else {
+            ++sourceCount;
+        }
+    }
+
+    return planeCount == 1 && sourceCount >= 1;
 }
 
 //===========================================================================
@@ -2710,6 +2818,7 @@ void CreatePartCommands()
     rcCmdMgr.addCommand(new CmdPartCompCompoundTools());
     rcCmdMgr.addCommand(new CmdPartCompound());
     rcCmdMgr.addCommand(new CmdPartSection());
+    rcCmdMgr.addCommand(new CmdPartSectionAnalysis());
     rcCmdMgr.addCommand(new CmdPartPrimitives());
 
     rcCmdMgr.addCommand(new CmdPartImport());
