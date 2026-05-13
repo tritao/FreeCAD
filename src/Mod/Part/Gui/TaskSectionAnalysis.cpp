@@ -213,22 +213,40 @@ void SectionAnalysisWidget::refreshAppearance()
     setColorButtonPreview(d->ui.sectionFaceColorButton, viewProvider->SectionFaceColor.getValue());
     setColorButtonPreview(d->ui.sectionEdgeColorButton, viewProvider->SectionEdgeColor.getValue());
 
-    const QSignalBlocker blocker(d->ui.sectionFaceTransparencySpin);
+    const QSignalBlocker transparencyBlocker(d->ui.sectionFaceTransparencySpin);
     d->ui.sectionFaceTransparencySpin->setValue(viewProvider->SectionFaceTransparency.getValue());
+
+    auto* analysis = getSectionAnalysis();
+    if (!analysis) {
+        return;
+    }
+
+    const QSignalBlocker showHatchingBlocker(d->ui.showHatchingCheck);
+    d->ui.showHatchingCheck->setChecked(analysis->ShowHatching.getValue());
+
+    const QSignalBlocker hatchSpacingBlocker(d->ui.hatchSpacingSpin);
+    d->ui.hatchSpacingSpin->setValue(analysis->HatchSpacing.getValue());
+
+    const QSignalBlocker hatchAngleBlocker(d->ui.hatchAngleSpin);
+    d->ui.hatchAngleSpin->setValue(analysis->HatchAngle.getValue());
 }
 
 void SectionAnalysisWidget::refreshButtons()
 {
     const bool hasPlane = getClippingPlane() != nullptr;
-    const bool hasSources = getSectionAnalysis()
-        && !getSectionAnalysis()->Sources.getValues().empty();
+    auto* analysis = getSectionAnalysis();
+    const bool hasSources = analysis && !analysis->Sources.getValues().empty();
     const bool hasView = getCurrentView() != nullptr;
+    const bool hatchEnabled = analysis && analysis->ShowHatching.getValue();
 
     d->ui.selectClippingPlaneButton->setEnabled(hasPlane);
     d->ui.editClippingPlaneButton->setEnabled(hasPlane);
     d->ui.selectSourcesButton->setEnabled(hasSources);
     d->ui.recomputeButton->setEnabled(hasPlane && hasSources);
     d->ui.activeInCurrentViewCheck->setEnabled(hasPlane && hasView);
+    d->ui.showHatchingCheck->setEnabled(hasSources);
+    d->ui.hatchSpacingSpin->setEnabled(hasSources && hatchEnabled);
+    d->ui.hatchAngleSpin->setEnabled(hasSources && hatchEnabled);
 }
 
 void SectionAnalysisWidget::setColorButtonPreview(QPushButton* button, const Base::Color& color)
@@ -323,6 +341,24 @@ void SectionAnalysisWidget::setupConnections()
         qOverload<int>(&QSpinBox::valueChanged),
         this,
         &SectionAnalysisWidget::onSectionFaceTransparencyChanged
+    );
+    connect(
+        d->ui.showHatchingCheck,
+        &QCheckBox::toggled,
+        this,
+        &SectionAnalysisWidget::onShowHatchingToggled
+    );
+    connect(
+        d->ui.hatchSpacingSpin,
+        qOverload<double>(&QDoubleSpinBox::valueChanged),
+        this,
+        &SectionAnalysisWidget::onHatchSpacingChanged
+    );
+    connect(
+        d->ui.hatchAngleSpin,
+        qOverload<double>(&QDoubleSpinBox::valueChanged),
+        this,
+        &SectionAnalysisWidget::onHatchAngleChanged
     );
 }
 
@@ -479,6 +515,48 @@ void SectionAnalysisWidget::onSectionFaceTransparencyChanged(int value)
     }
 
     viewProvider->SectionFaceTransparency.setValue(value);
+}
+
+void SectionAnalysisWidget::onShowHatchingToggled(bool on)
+{
+    auto* analysis = getSectionAnalysis();
+    if (!analysis) {
+        return;
+    }
+
+    analysis->ShowHatching.setValue(on);
+    if (auto* doc = analysis->getDocument()) {
+        doc->recompute();
+    }
+    refresh();
+}
+
+void SectionAnalysisWidget::onHatchSpacingChanged(double value)
+{
+    auto* analysis = getSectionAnalysis();
+    if (!analysis) {
+        return;
+    }
+
+    analysis->HatchSpacing.setValue(value);
+    if (auto* doc = analysis->getDocument()) {
+        doc->recompute();
+    }
+    refreshResult();
+}
+
+void SectionAnalysisWidget::onHatchAngleChanged(double value)
+{
+    auto* analysis = getSectionAnalysis();
+    if (!analysis) {
+        return;
+    }
+
+    analysis->HatchAngle.setValue(value);
+    if (auto* doc = analysis->getDocument()) {
+        doc->recompute();
+    }
+    refreshResult();
 }
 
 void SectionAnalysisWidget::changeEvent(QEvent* event)

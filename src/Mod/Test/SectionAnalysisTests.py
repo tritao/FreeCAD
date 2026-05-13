@@ -56,6 +56,9 @@ class SectionAnalysisTests(unittest.TestCase):
         self.assertEqual(list(obj.Sources), [])
         self.assertIsNone(obj.ClippingPlane)
         self.assertEqual(obj.ResultMode, "Both")
+        self.assertFalse(obj.ShowHatching)
+        self.assertEqual(obj.HatchSpacing, 2)
+        self.assertEqual(obj.HatchAngle, 45)
 
     def testSectionAnalysisRecomputeProducesEdges(self):
         box = self.make_box()
@@ -128,6 +131,23 @@ class SectionAnalysisTests(unittest.TestCase):
         self.doc.recompute()
 
         self.assertEqual(analysis.ResultMode, "Both")
+        self.assertFalse(analysis.Shape.isNull())
+        self.assertGreater(len(analysis.Shape.Faces), 0)
+        self.assertGreater(len(analysis.Shape.Edges), 0)
+
+    def testHatchingAddsEdgesInFacesMode(self):
+        box = self.make_box()
+        plane = self.make_clipping_plane()
+        analysis = self.doc.addObject("Part::SectionAnalysis", "Analysis")
+        analysis.Sources = [box]
+        analysis.ClippingPlane = plane
+        analysis.ResultMode = "Faces"
+        analysis.ShowHatching = True
+        analysis.HatchSpacing = 2
+        analysis.HatchAngle = 45
+
+        self.doc.recompute()
+
         self.assertFalse(analysis.Shape.isNull())
         self.assertGreater(len(analysis.Shape.Faces), 0)
         self.assertGreater(len(analysis.Shape.Edges), 0)

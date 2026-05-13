@@ -23,6 +23,7 @@
 
 #include <App/PropertyLinks.h>
 #include <App/PropertyStandard.h>
+#include <App/PropertyUnits.h>
 
 #include "PartFeature.h"
 
@@ -40,6 +41,9 @@ public:
     App::PropertyLinkList Sources;
     App::PropertyLink ClippingPlane;
     App::PropertyEnumeration ResultMode;
+    App::PropertyBool ShowHatching;
+    App::PropertyDistance HatchSpacing;
+    App::PropertyAngle HatchAngle;
 
     App::DocumentObjectExecReturn* execute() override;
     short mustExecute() const override;

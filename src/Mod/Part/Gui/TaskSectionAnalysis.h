@@ -88,6 +88,9 @@ private:
     void onSectionFaceColorClicked();
     void onSectionEdgeColorClicked();
     void onSectionFaceTransparencyChanged(int value);
+    void onShowHatchingToggled(bool on);
+    void onHatchSpacingChanged(double value);
+    void onHatchAngleChanged(double value);
 
     void changeEvent(QEvent* event) override;
 

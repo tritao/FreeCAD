@@ -23,20 +23,28 @@
 
 #include <memory>
 #include <numbers>
+#include <vector>
 
 #include <App/ClippingPlane.h>
 #include <App/GeoFeature.h>
 #include <Base/Placement.h>
 #include <Base/Rotation.h>
+#include <Base/Tools.h>
+#include <Base/Unit.h>
 #include <BRep_Builder.hxx>
+#include <BRep_Tool.hxx>
 #include <Mod/Part/App/CrossSection.h>
 #include <Mod/Part/App/FCBRepAlgoAPI_Section.h>
 #include <Standard_Failure.hxx>
 #include <TopAbs_ShapeEnum.hxx>
+#include <TopExp_Explorer.hxx>
 #include <TopoDS_Compound.hxx>
+#include <TopoDS_Vertex.hxx>
 #include <gp_Dir.hxx>
+#include <gp_Ax1.hxx>
 #include <gp_Pln.hxx>
 #include <gp_Pnt.hxx>
+#include <gp_Vec.hxx>
 
 #include "FeatureSectionAnalysis.h"
 #include "TopoShapeOpCode.h"
@@ -51,6 +59,7 @@ namespace
 constexpr long EdgeResultMode = 0;
 constexpr long FaceResultMode = 1;
 constexpr long BothResultMode = 2;
+constexpr int MaxHatchPlanes = 512;
 
 struct SectionPlaneData
 {
@@ -61,6 +70,12 @@ struct SectionPlaneData
     double b;
     double c;
     double d;
+};
+
+struct HatchFrame
+{
+    gp_Dir lineDirection;
+    gp_Dir offsetDirection;
 };
 
 SectionPlaneData resolveSectionPlane(const App::ClippingPlane& plane)
@@ -85,6 +100,63 @@ SectionPlaneData resolveSectionPlane(const App::ClippingPlane& plane)
         normal.z,
         d,
     };
+}
+
+HatchFrame resolveHatchFrame(const SectionPlaneData& planeData, double angleDegrees)
+{
+    gp_Dir reference(0.0, 0.0, 1.0);
+    if (planeData.normal.IsParallel(reference, Precision::Angular())) {
+        reference = gp_Dir(1.0, 0.0, 0.0);
+    }
+
+    gp_Vec u = gp_Vec(reference) ^ gp_Vec(planeData.normal);
+    u.Normalize();
+    gp_Vec v = gp_Vec(planeData.normal) ^ u;
+    v.Normalize();
+
+    const double angleRadians = Base::toRadians<double>(angleDegrees);
+    gp_Vec lineDirection = std::cos(angleRadians) * u + std::sin(angleRadians) * v;
+    if (lineDirection.Magnitude() <= Precision::Confusion()) {
+        lineDirection = u;
+    }
+    lineDirection.Normalize();
+
+    gp_Vec offsetDirection = gp_Vec(planeData.normal) ^ lineDirection;
+    offsetDirection.Normalize();
+
+    return {gp_Dir(lineDirection), gp_Dir(offsetDirection)};
+}
+
+bool getProjectedRange(
+    const TopoShape& shape,
+    const gp_Pnt& origin,
+    const gp_Dir& direction,
+    double& minimum,
+    double& maximum
+)
+{
+    bool found = false;
+    minimum = 0.0;
+    maximum = 0.0;
+
+    for (auto face : shape.getSubTopoShapes(TopAbs_FACE)) {
+        for (TopExp_Explorer explorer(face.getShape(), TopAbs_VERTEX); explorer.More();
+             explorer.Next()) {
+            const gp_Pnt point = BRep_Tool::Pnt(TopoDS::Vertex(explorer.Current()));
+            const double projection = gp_Vec(origin, point).Dot(gp_Vec(direction));
+            if (!found) {
+                minimum = projection;
+                maximum = projection;
+                found = true;
+            }
+            else {
+                minimum = std::min(minimum, projection);
+                maximum = std::max(maximum, projection);
+            }
+        }
+    }
+
+    return found;
 }
 
 TopoDS_Compound makeEmptyCompound()
@@ -129,6 +201,54 @@ TopoShape makeSectionFaces(const TopoShape& sourceShape, const SectionPlaneData&
     return result;
 }
 
+std::vector<TopoShape> makeSectionHatchEdges(
+    const TopoShape& faceShape,
+    const SectionPlaneData& planeData,
+    double spacing,
+    double angleDegrees
+)
+{
+    std::vector<TopoShape> hatchEdges;
+    if (faceShape.isNull() || spacing <= Precision::Confusion()) {
+        return hatchEdges;
+    }
+
+    double minimum = 0.0;
+    double maximum = 0.0;
+    const HatchFrame hatchFrame = resolveHatchFrame(planeData, angleDegrees);
+    if (!getProjectedRange(faceShape, planeData.origin, hatchFrame.offsetDirection, minimum, maximum)) {
+        return hatchEdges;
+    }
+
+    const double range = std::max(0.0, maximum - minimum);
+    const double effectiveSpacing = range > 0.0
+        ? std::max(spacing, range / static_cast<double>(MaxHatchPlanes))
+        : spacing;
+    const double start = minimum + (effectiveSpacing * 0.5);
+
+    for (double offset = start; offset < (maximum - Precision::Confusion());
+         offset += effectiveSpacing) {
+        gp_Pnt point = planeData.origin.Translated(gp_Vec(hatchFrame.offsetDirection) * offset);
+        gp_Pln hatchPlane(point, gp_Dir(gp_Vec(hatchFrame.lineDirection) ^ gp_Vec(planeData.normal)));
+        FCBRepAlgoAPI_Section section(faceShape.getShape(), hatchPlane);
+        section.setAutoFuzzy();
+        section.Build();
+        if (!section.IsDone() || section.Shape().IsNull()) {
+            continue;
+        }
+
+        TopoShape hatch(0);
+        hatch.setShape(section.Shape());
+        for (auto edge : hatch.getSubTopoShapes(TopAbs_EDGE)) {
+            if (!edge.isNull()) {
+                hatchEdges.push_back(edge);
+            }
+        }
+    }
+
+    return hatchEdges;
+}
+
 }  // namespace
 
 const char* SectionAnalysis::ResultModeEnums[] = {"Edges", "Faces", "Both", nullptr};
@@ -152,11 +272,34 @@ SectionAnalysis::SectionAnalysis()
         "Type of section result to generate"
     );
     ResultMode.setEnums(ResultModeEnums);
+    ADD_PROPERTY_TYPE(
+        ShowHatching,
+        (false),
+        "SectionAnalysis",
+        App::Prop_None,
+        "Generate hatch geometry on section faces"
+    );
+    ADD_PROPERTY_TYPE(
+        HatchSpacing,
+        (2.0),
+        "SectionAnalysis",
+        App::Prop_None,
+        "Spacing between generated hatch lines"
+    );
+    HatchSpacing.setUnit(Base::Unit::Length);
+    ADD_PROPERTY_TYPE(
+        HatchAngle,
+        (45.0),
+        "SectionAnalysis",
+        App::Prop_None,
+        "Angle used for generated hatch lines"
+    );
 }
 
 short SectionAnalysis::mustExecute() const
 {
-    if (Sources.isTouched() || ClippingPlane.isTouched() || ResultMode.isTouched()) {
+    if (Sources.isTouched() || ClippingPlane.isTouched() || ResultMode.isTouched()
+        || ShowHatching.isTouched() || HatchSpacing.isTouched() || HatchAngle.isTouched()) {
         return 1;
     }
     return Part::Feature::mustExecute();
@@ -182,9 +325,12 @@ App::DocumentObjectExecReturn* SectionAnalysis::execute()
         }
 
         const SectionPlaneData planeData = resolveSectionPlane(*planeObject);
+        const bool includeFaces = resultMode == FaceResultMode || resultMode == BothResultMode;
+        const bool includeEdges = resultMode == EdgeResultMode || resultMode == BothResultMode;
+        const bool includeHatching = includeFaces && ShowHatching.getValue();
 
         std::vector<TopoShape> sectionResults;
-        sectionResults.reserve(sourceObjects.size() * (resultMode == BothResultMode ? 2 : 1));
+        sectionResults.reserve(sourceObjects.size() * (includeHatching ? 3 : 2));
         for (std::size_t i = 0; i < sourceObjects.size(); ++i) {
             auto* sourceObject = sourceObjects[i];
             if (!sourceObject) {
@@ -199,17 +345,27 @@ App::DocumentObjectExecReturn* SectionAnalysis::execute()
                 return new App::DocumentObjectExecReturn("Linked source shape is null");
             }
 
-            if (resultMode == EdgeResultMode || resultMode == BothResultMode) {
+            if (includeEdges) {
                 TopoShape edges = makeSectionEdges(sourceShape, planeData.plane);
                 if (!edges.isNull()) {
                     sectionResults.push_back(edges);
                 }
             }
 
-            if (resultMode == FaceResultMode || resultMode == BothResultMode) {
+            if (includeFaces) {
                 TopoShape faces = makeSectionFaces(sourceShape, planeData, static_cast<int>(i + 1));
                 if (!faces.isNull()) {
                     sectionResults.push_back(faces);
+                    if (includeHatching) {
+                        std::vector<TopoShape> hatchEdges = makeSectionHatchEdges(
+                            faces,
+                            planeData,
+                            HatchSpacing.getValue(),
+                            HatchAngle.getValue()
+                        );
+                        sectionResults
+                            .insert(sectionResults.end(), hatchEdges.begin(), hatchEdges.end());
+                    }
                 }
             }
         }

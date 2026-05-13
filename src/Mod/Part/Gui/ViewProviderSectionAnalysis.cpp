@@ -61,6 +61,15 @@ const char* displayModeForResultMode(long resultMode)
     }
 }
 
+const char* displayModeForSectionAnalysis(const Part::SectionAnalysis& analysis)
+{
+    if (analysis.ResultMode.getValue() == FaceResultMode && analysis.ShowHatching.getValue()) {
+        return "Flat Lines";
+    }
+
+    return displayModeForResultMode(analysis.ResultMode.getValue());
+}
+
 }  // namespace
 
 ViewProviderSectionAnalysis::ViewProviderSectionAnalysis()
@@ -118,7 +127,7 @@ void ViewProviderSectionAnalysis::updateData(const App::Property* prop)
     ViewProviderPart::updateData(prop);
 
     auto* analysis = getObject<Part::SectionAnalysis>();
-    if (analysis && prop == &analysis->ResultMode) {
+    if (analysis && (prop == &analysis->ResultMode || prop == &analysis->ShowHatching)) {
         syncDisplayForResultMode();
     }
 }
@@ -130,7 +139,7 @@ void ViewProviderSectionAnalysis::syncDisplayForResultMode()
         return;
     }
 
-    const char* modeName = displayModeForResultMode(analysis->ResultMode.getValue());
+    const char* modeName = displayModeForSectionAnalysis(*analysis);
     if (std::string_view(DisplayMode.getValueAsString()) != modeName) {
         DisplayMode.setValue(modeName);
     }
