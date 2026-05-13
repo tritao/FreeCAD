@@ -1,0 +1,199 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>SectionAnalysisWidget</class>
+ <widget class="QWidget" name="SectionAnalysisWidget">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>336</width>
+    <height>462</height>
+   </rect>
+  </property>
+  <property name="windowTitle">
+   <string>Section analysis</string>
+  </property>
+  <layout class="QVBoxLayout" name="verticalLayout">
+   <item>
+    <widget class="QLabel" name="descriptionLabel">
+     <property name="wordWrap">
+      <bool>true</bool>
+     </property>
+     <property name="text">
+      <string>Section analysis generates section geometry from explicit source objects and one linked clipping plane.</string>
+     </property>
+    </widget>
+   </item>
+   <item>
+    <widget class="QGroupBox" name="sourceGroup">
+     <property name="title">
+      <string>Source</string>
+     </property>
+     <layout class="QVBoxLayout" name="sourceGroupLayout">
+      <item>
+       <layout class="QGridLayout" name="sourceSummaryLayout">
+        <item row="0" column="0">
+         <widget class="QLabel" name="clippingPlaneLabel">
+          <property name="text">
+           <string>Linked clipping plane</string>
+          </property>
+         </widget>
+        </item>
+        <item row="0" column="1">
+         <widget class="QLabel" name="clippingPlaneValue">
+          <property name="text">
+           <string/>
+          </property>
+          <property name="wordWrap">
+           <bool>true</bool>
+          </property>
+         </widget>
+        </item>
+       </layout>
+      </item>
+      <item>
+       <layout class="QHBoxLayout" name="clippingPlaneButtonsLayout">
+        <item>
+         <widget class="QPushButton" name="selectClippingPlaneButton">
+          <property name="text">
+           <string>Select clipping plane</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QPushButton" name="editClippingPlaneButton">
+          <property name="text">
+           <string>Edit clipping plane</string>
+          </property>
+         </widget>
+        </item>
+       </layout>
+      </item>
+      <item>
+       <widget class="QLabel" name="sourcesLabel">
+        <property name="text">
+         <string>Source objects</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QListWidget" name="sourcesList">
+        <property name="selectionMode">
+         <enum>QAbstractItemView::ExtendedSelection</enum>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QLabel" name="sourcesSummaryLabel">
+        <property name="text">
+         <string/>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <layout class="QHBoxLayout" name="sourceButtonsLayout">
+        <item>
+         <widget class="QPushButton" name="useCurrentSelectionButton">
+          <property name="text">
+           <string>Use current selection as sources</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QPushButton" name="selectSourcesButton">
+          <property name="text">
+           <string>Select sources</string>
+          </property>
+         </widget>
+        </item>
+       </layout>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item>
+    <widget class="QGroupBox" name="resultGroup">
+     <property name="title">
+      <string>Result</string>
+     </property>
+     <layout class="QVBoxLayout" name="resultGroupLayout">
+      <item>
+       <widget class="QComboBox" name="resultModeCombo">
+        <item>
+         <property name="text">
+          <string>Edges</string>
+         </property>
+        </item>
+        <item>
+         <property name="text">
+          <string>Faces</string>
+         </property>
+        </item>
+        <item>
+         <property name="text">
+          <string>Both</string>
+         </property>
+        </item>
+       </widget>
+      </item>
+      <item>
+       <widget class="QPushButton" name="recomputeButton">
+        <property name="text">
+         <string>Recompute result</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QLabel" name="resultSummaryLabel">
+        <property name="text">
+         <string/>
+        </property>
+       </widget>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item>
+    <widget class="QGroupBox" name="viewGroup">
+     <property name="title">
+      <string>View</string>
+     </property>
+     <layout class="QVBoxLayout" name="viewGroupLayout">
+      <item>
+       <widget class="QCheckBox" name="activeInCurrentViewCheck">
+        <property name="text">
+         <string>Active in current view</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QLabel" name="activationStateLabel">
+        <property name="wordWrap">
+         <bool>true</bool>
+        </property>
+        <property name="text">
+         <string/>
+        </property>
+       </widget>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item>
+    <spacer name="verticalSpacer">
+     <property name="orientation">
+      <enum>Qt::Vertical</enum>
+     </property>
+     <property name="sizeHint" stdset="0">
+      <size>
+       <width>20</width>
+       <height>40</height>
+      </size>
+     </property>
+    </spacer>
+   </item>
+  </layout>
+ </widget>
+ <resources/>
+ <connections/>
+</ui>

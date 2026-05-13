@@ -31,6 +31,13 @@ try:
 except (ImportError, AttributeError):
     GUI_AVAILABLE = False
 
+try:
+    from PySide6 import QtWidgets
+
+    QT_WIDGETS_AVAILABLE = True
+except ImportError:
+    QT_WIDGETS_AVAILABLE = False
+
 HEADLESS_OFFSCREEN = os.environ.get("QT_QPA_PLATFORM") == "offscreen"
 
 
@@ -64,6 +71,32 @@ class SectionAnalysisGuiTests(unittest.TestCase):
     def select_object(self, obj):
         FreeCADGui.Selection.addSelection(self.doc.Name, obj.Name)
         FreeCADGui.updateGui()
+
+    def testDefaultEditModeOpensTaskPanel(self):
+        if not QT_WIDGETS_AVAILABLE:
+            self.skipTest("Qt widgets bindings not available")
+
+        plane = self.doc.addObject("App::ClippingPlane", "Clip")
+        box = self.doc.addObject("Part::Box", "Box")
+        analysis = self.doc.addObject("Part::SectionAnalysis", "Section")
+        analysis.ClippingPlane = plane
+        analysis.Sources = [box]
+        self.doc.recompute()
+
+        gui_doc = FreeCADGui.getDocument(self.doc.Name)
+        self.assertTrue(gui_doc.setEdit(analysis, 0))
+        FreeCADGui.updateGui()
+
+        dialog = FreeCADGui.Control.activeTaskDialog()
+        self.assertIsNotNone(dialog)
+        self.assertEqual(
+            dialog.getStandardButtons(),
+            QtWidgets.QDialogButtonBox.StandardButton.Close.value,
+        )
+
+        gui_doc.resetEdit()
+        FreeCADGui.updateGui()
+        self.assertFalse(FreeCADGui.Control.activeDialog())
 
     def testCreateCommandBuildsSectionAnalysis(self):
         plane = self.doc.addObject("App::ClippingPlane", "Clip")

@@ -75,6 +75,7 @@
 #include "ViewProviderProjectOnSurface.h"
 #include "ViewProviderRegularPolygon.h"
 #include "ViewProviderRuledSurface.h"
+#include "ViewProviderSectionAnalysis.h"
 #include "ViewProviderSphereParametric.h"
 #include "ViewProviderSpline.h"
 #include "ViewProviderTorusParametric.h"
@@ -227,6 +228,7 @@ PyMOD_INIT_FUNC(PartGui)
     PartGui::ViewProviderRuledSurface               ::init();
     PartGui::ViewProviderFace                       ::init();
     PartGui::ViewProviderProjectOnSurface           ::init();
+    PartGui::ViewProviderSectionAnalysis            ::init();
 
     PartGui::Workbench                              ::init();
     auto manip = std::make_shared<PartGui::WorkbenchManipulator>();

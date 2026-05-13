@@ -54,6 +54,7 @@ set(PartGui_UIC_SRCS
     SectionCutting.ui
     ShapeFromMesh.ui
     TaskFaceAppearances.ui
+    TaskSectionAnalysis.ui
     TaskShapeBuilder.ui
     TaskLoft.ui
     TaskOffset.ui
@@ -220,6 +221,8 @@ SET(PartGui_SRCS
     ViewProviderRuledSurface.h
     ViewProviderPrimitive.cpp
     ViewProviderPrimitive.h
+    ViewProviderSectionAnalysis.cpp
+    ViewProviderSectionAnalysis.h
     Workbench.cpp
     Workbench.h
     WorkbenchManipulator.cpp
@@ -234,6 +237,9 @@ SET(PartGui_SRCS
     TaskFaceAppearances.cpp
     TaskFaceAppearances.h
     TaskFaceAppearances.ui
+    TaskSectionAnalysis.cpp
+    TaskSectionAnalysis.h
+    TaskSectionAnalysis.ui
     TaskShapeBuilder.cpp
     TaskShapeBuilder.h
     TaskShapeBuilder.ui

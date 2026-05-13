@@ -21,35 +21,24 @@
 
 #pragma once
 
-#include <App/PropertyLinks.h>
-#include <App/PropertyStandard.h>
+#include <Mod/Part/Gui/ViewProvider.h>
+#include <Mod/Part/PartGlobal.h>
 
-#include "PartFeature.h"
-
-namespace Part
+namespace PartGui
 {
 
-class PartExport SectionAnalysis: public Part::Feature
+class PartGuiExport ViewProviderSectionAnalysis: public ViewProviderPart
 {
-    PROPERTY_HEADER_WITH_OVERRIDE(Part::SectionAnalysis);
+    PROPERTY_HEADER_WITH_OVERRIDE(PartGui::ViewProviderSectionAnalysis);
 
 public:
-    SectionAnalysis();
-    ~SectionAnalysis() override = default;
+    ViewProviderSectionAnalysis();
+    ~ViewProviderSectionAnalysis() override;
 
-    App::PropertyLinkList Sources;
-    App::PropertyLink ClippingPlane;
-    App::PropertyEnumeration ResultMode;
-
-    App::DocumentObjectExecReturn* execute() override;
-    short mustExecute() const override;
-    const char* getViewProviderName() const override
-    {
-        return "PartGui::ViewProviderSectionAnalysis";
-    }
-
-private:
-    static const char* ResultModeEnums[];
+    bool doubleClicked() override;
+    bool setEdit(int ModNum) override;
+    void unsetEdit(int ModNum) override;
+    void setupContextMenu(QMenu* menu, QObject* receiver, const char* member) override;
 };
 
-}  // namespace Part
+}  // namespace PartGui
