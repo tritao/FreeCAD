@@ -23,6 +23,7 @@
 
 #include <QPointer>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 #include <App/Placement.h>
@@ -51,8 +52,11 @@ public:
     void deactivate(View3DInventor* view, const App::ClippingPlane* plane);
     void deactivate(const App::ClippingPlane* plane);
     void refresh(const App::ClippingPlane* plane);
+    void setPreviewPlacement(const App::ClippingPlane* plane, const Base::Placement& placement);
+    void clearPreviewPlacement(const App::ClippingPlane* plane);
 
     bool isActive(View3DInventor* view, const App::ClippingPlane* plane) const;
+    bool isActive(const App::ClippingPlane* plane) const;
     std::vector<App::ClippingPlane*> activePlanes(View3DInventor* view) const;
     App::ClippingPlane* activePlane(View3DInventor* view) const;
 
@@ -73,15 +77,18 @@ private:
     };
 
     std::vector<ViewState> viewStates;
+    std::unordered_map<const App::ClippingPlane*, Base::Placement> previewPlacements;
 
     void garbageCollect();
     ViewState* findViewState(View3DInventor* view);
     const ViewState* findViewState(View3DInventor* view) const;
-    static Base::Placement clipPlacement(const App::ClippingPlane& plane);
-    static SoNode* buildClipNode(const App::ClippingPlane& plane, const char* name);
-    static void installActiveCue(View3DInventor* view, const App::ClippingPlane& plane);
+    Base::Placement planePlacement(const App::ClippingPlane& plane) const;
+    Base::Placement clipPlacement(const App::ClippingPlane& plane) const;
+    Base::Placement helperPlacement(const App::ClippingPlane& plane) const;
+    SoNode* buildClipNode(const App::ClippingPlane& plane, const char* name) const;
+    void installActiveCue(View3DInventor* view, const App::ClippingPlane& plane) const;
     static void clearApplied(ViewState& state);
-    static void rebuild(ViewState& state);
+    void rebuild(ViewState& state);
 };
 
 }  // namespace Gui

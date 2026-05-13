@@ -31,6 +31,7 @@
 
 #include <App/ClippingPlane.h>
 #include <App/Document.h>
+#include <App/GeoFeature.h>
 
 #include "Application.h"
 #include "ClippingPlaneManager.h"
@@ -200,13 +201,18 @@ void ViewProviderClippingPlane::setupContextMenu(QMenu* menu, QObject* receiver,
 bool ViewProviderClippingPlane::setEdit(int ModNum)
 {
     useClippingTaskDialog = (ModNum == static_cast<int>(ViewProvider::Default));
+    editModeActive = true;
+    syncHelperVisibility();
     return inherited::setEdit(ModNum);
 }
 
 void ViewProviderClippingPlane::unsetEdit(int ModNum)
 {
+    ClippingPlaneManager::instance().clearPreviewPlacement(getObject<App::ClippingPlane>());
     inherited::unsetEdit(ModNum);
     useClippingTaskDialog = false;
+    editModeActive = false;
+    syncHelperVisibility();
 }
 
 TaskView::TaskDialog* ViewProviderClippingPlane::getTransformDialog()
@@ -224,6 +230,7 @@ bool ViewProviderClippingPlane::doubleClicked()
 
 void ViewProviderClippingPlane::beforeDelete()
 {
+    ClippingPlaneManager::instance().clearPreviewPlacement(getObject<App::ClippingPlane>());
     ClippingPlaneManager::instance().deactivate(getObject<App::ClippingPlane>());
     inherited::beforeDelete();
 }
@@ -260,8 +267,26 @@ void ViewProviderClippingPlane::syncOverlayAppearance()
 void ViewProviderClippingPlane::syncHelperVisibility()
 {
     if (overlaySwitch) {
-        overlaySwitch->whichChild = Visibility.getValue() ? SO_SWITCH_ALL : SO_SWITCH_NONE;
+        const bool hideDuringActiveEdit = editModeActive
+            && ClippingPlaneManager::instance().isActive(getObject<App::ClippingPlane>());
+        overlaySwitch->whichChild = (Visibility.getValue() && !hideDuringActiveEdit)
+            ? SO_SWITCH_ALL
+            : SO_SWITCH_NONE;
     }
+}
+
+void ViewProviderClippingPlane::syncRuntimePreview()
+{
+    auto* plane = getObject<App::ClippingPlane>();
+    if (!plane || !editModeActive) {
+        return;
+    }
+
+    const auto originPlacement = App::GeoFeature::getGlobalPlacement(plane)
+        * getObjectPlacement().inverse();
+    const auto previewPlacement = originPlacement
+        * (getDraggerPlacement() * getTransformOrigin().inverse());
+    ClippingPlaneManager::instance().setPreviewPlacement(plane, previewPlacement);
 }
 
 void ViewProviderClippingPlane::updateGeometry()
@@ -294,4 +319,14 @@ void ViewProviderClippingPlane::updateGeometry()
         overlayScale->active = AutoSize.getValue();
         overlayScale->scaleFactor = 1.0F;
     }
+}
+
+void ViewProviderClippingPlane::onDragMotion()
+{
+    syncRuntimePreview();
+}
+
+void ViewProviderClippingPlane::onDragFinish()
+{
+    ClippingPlaneManager::instance().clearPreviewPlacement(getObject<App::ClippingPlane>());
 }

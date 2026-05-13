@@ -56,8 +56,17 @@ namespace
 constexpr long WholeDocumentScope = 0;
 constexpr long IncludeOnlyScope = 1;
 constexpr long ExcludeScope = 2;
+double helperMargin(const App::ClippingPlane& plane)
+{
+    double margin = 0.01;
+    if (auto* vp = Application::Instance->getViewProvider<ViewProviderClippingPlane>(&plane)) {
+        const auto size = std::max(vp->DisplayLength.getValue(), vp->DisplayHeight.getValue());
+        margin = std::max(0.01, static_cast<double>(size) * 1e-4);
+    }
+    return margin;
+}
 
-SoNode* buildActiveCue(const App::ClippingPlane& plane)
+SoNode* buildActiveCue(const App::ClippingPlane& plane, const Base::Placement& placement)
 {
     auto* vp = Application::Instance->getViewProvider<ViewProviderClippingPlane>(&plane);
     if (!vp || !vp->Visibility.getValue()) {
@@ -116,9 +125,7 @@ SoNode* buildActiveCue(const App::ClippingPlane& plane)
     annotation->addChild(scale);
 
     auto* transform = new SoMatrixTransform;
-    transform->matrix = Base::convertTo<SbMatrix>(
-        App::GeoFeature::getGlobalPlacement(&plane).toMatrix()
-    );
+    transform->matrix = Base::convertTo<SbMatrix>(placement.toMatrix());
 
     auto* root = new SoSeparator;
     root->addChild(transform);
@@ -265,6 +272,32 @@ void ClippingPlaneManager::refresh(const App::ClippingPlane* plane)
     }
 }
 
+void ClippingPlaneManager::setPreviewPlacement(
+    const App::ClippingPlane* plane,
+    const Base::Placement& placement
+)
+{
+    garbageCollect();
+    if (!plane) {
+        return;
+    }
+
+    previewPlacements[plane] = placement;
+    refresh(plane);
+}
+
+void ClippingPlaneManager::clearPreviewPlacement(const App::ClippingPlane* plane)
+{
+    garbageCollect();
+    if (!plane) {
+        return;
+    }
+
+    if (previewPlacements.erase(plane) > 0) {
+        refresh(plane);
+    }
+}
+
 bool ClippingPlaneManager::isActive(View3DInventor* view, const App::ClippingPlane* plane) const
 {
     if (!view || !plane) {
@@ -273,6 +306,17 @@ bool ClippingPlaneManager::isActive(View3DInventor* view, const App::ClippingPla
 
     auto* state = findViewState(view);
     return state && std::ranges::find(state->planes, plane) != state->planes.end();
+}
+
+bool ClippingPlaneManager::isActive(const App::ClippingPlane* plane) const
+{
+    if (!plane) {
+        return false;
+    }
+
+    return std::ranges::any_of(viewStates, [plane](const ViewState& state) {
+        return std::ranges::find(state.planes, plane) != state.planes.end();
+    });
 }
 
 std::vector<App::ClippingPlane*> ClippingPlaneManager::activePlanes(View3DInventor* view) const
@@ -292,29 +336,45 @@ void ClippingPlaneManager::garbageCollect()
     std::erase_if(viewStates, [](const ViewState& state) { return state.view.isNull(); });
 }
 
-Base::Placement ClippingPlaneManager::clipPlacement(const App::ClippingPlane& plane)
+Base::Placement ClippingPlaneManager::planePlacement(const App::ClippingPlane& plane) const
 {
-    Base::Placement placement = App::GeoFeature::getGlobalPlacement(&plane);
+    Base::Placement placement;
+    if (auto it = previewPlacements.find(&plane); it != previewPlacements.end()) {
+        placement = it->second;
+    }
+    else {
+        placement = App::GeoFeature::getGlobalPlacement(&plane);
+    }
+
     if (plane.Reverse.getValue()) {
         Base::Rotation flip(Base::Vector3d(1, 0, 0), std::numbers::pi_v<double>);
         placement.setRotation(placement.getRotation() * flip);
     }
-
-    // Keep the displayed helper just in front of the effective clip plane to avoid
-    // clipping it exactly on its own surface, which causes visible flicker.
-    double margin = 0.01;
-    if (auto* vp = Application::Instance->getViewProvider<ViewProviderClippingPlane>(&plane)) {
-        const auto size = std::max(vp->DisplayLength.getValue(), vp->DisplayHeight.getValue());
-        margin = std::max(0.01, static_cast<double>(size) * 1e-4);
-    }
-
-    Base::Vector3d normal;
-    placement.getRotation().multVec(Base::Vector3d(0, 0, -1), normal);
-    placement.setPosition(placement.getPosition() - normal * margin);
     return placement;
 }
 
-SoNode* ClippingPlaneManager::buildClipNode(const App::ClippingPlane& plane, const char* name)
+Base::Placement ClippingPlaneManager::clipPlacement(const App::ClippingPlane& plane) const
+{
+    Base::Placement placement = planePlacement(plane);
+
+    Base::Vector3d normal;
+    placement.getRotation().multVec(Base::Vector3d(0, 0, -1), normal);
+    placement.setPosition(placement.getPosition() - normal * helperMargin(plane));
+    return placement;
+}
+
+Base::Placement ClippingPlaneManager::helperPlacement(const App::ClippingPlane& plane) const
+{
+    Base::Placement placement = planePlacement(plane);
+    Base::Vector3d normal;
+    placement.getRotation().multVec(Base::Vector3d(0, 0, -1), normal);
+
+    // Keep the visible helper fully on the kept side of the clip plane.
+    placement.setPosition(placement.getPosition() - normal * (helperMargin(plane) * 2.0));
+    return placement;
+}
+
+SoNode* ClippingPlaneManager::buildClipNode(const App::ClippingPlane& plane, const char* name) const
 {
     auto* clip = new SoClipPlane;
     clip->setName(name);
@@ -488,12 +548,12 @@ void ClippingPlaneManager::rebuild(ViewState& state)
     }
 }
 
-void ClippingPlaneManager::installActiveCue(View3DInventor* view, const App::ClippingPlane& plane)
+void ClippingPlaneManager::installActiveCue(View3DInventor* view, const App::ClippingPlane& plane) const
 {
     if (view && view->getViewer()) {
         view->getViewer()->addRuntimeNode(
             &plane,
-            buildActiveCue(plane),
+            buildActiveCue(plane, helperPlacement(plane)),
             View3DInventorViewer::RuntimeNodeLayer::Foreground
         );
     }

@@ -124,6 +124,9 @@ protected:
     //@}
 
     void onChanged(const App::Property* prop) override;
+    virtual void onDragStart();
+    virtual void onDragMotion();
+    virtual void onDragFinish();
 
     bool forwardToLink();
 

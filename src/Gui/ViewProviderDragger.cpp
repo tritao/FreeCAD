@@ -268,6 +268,7 @@ void ViewProviderDragger::dragStartCallback(void* data, [[maybe_unused]] SoDragg
 
     vp->draggerPlacement = vp->getDraggerPlacement();
     vp->transformDragger->clearIncrementCounts();
+    vp->onDragStart();
 }
 
 void ViewProviderDragger::dragFinishCallback(void* data, [[maybe_unused]] SoDragger* d)
@@ -279,6 +280,7 @@ void ViewProviderDragger::dragFinishCallback(void* data, [[maybe_unused]] SoDrag
     vp->transformDragger->clearIncrementCounts();
 
     vp->updatePlacementFromDragger();
+    vp->onDragFinish();
 }
 
 void ViewProviderDragger::dragMotionCallback(void* data, [[maybe_unused]] SoDragger* d)
@@ -286,6 +288,7 @@ void ViewProviderDragger::dragMotionCallback(void* data, [[maybe_unused]] SoDrag
     auto vp = static_cast<ViewProviderDragger*>(data);
 
     vp->updateTransformFromDragger();
+    vp->onDragMotion();
 }
 
 void ViewProviderDragger::updatePlacementFromDragger(DraggerComponents components)
@@ -422,6 +425,15 @@ void ViewProviderDragger::updateTransformFromDragger()
     pcTransform->translation.setValue(Base::convertTo<SbVec3f>(placement.getPosition()));
     pcTransform->rotation.setValue(Base::convertTo<SbRotation>(placement.getRotation()));
 }
+
+void ViewProviderDragger::onDragStart()
+{}
+
+void ViewProviderDragger::onDragMotion()
+{}
+
+void ViewProviderDragger::onDragFinish()
+{}
 
 Base::Placement ViewProviderDragger::getObjectPlacement() const
 {

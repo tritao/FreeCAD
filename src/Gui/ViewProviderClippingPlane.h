@@ -60,8 +60,11 @@ public:
 
 protected:
     void onChanged(const App::Property* prop) override;
+    void onDragMotion() override;
+    void onDragFinish() override;
 
 private:
+    void syncRuntimePreview();
     void syncOverlayAppearance();
     void syncHelperVisibility();
     void updateGeometry();
@@ -72,6 +75,7 @@ private:
     SoSwitch* overlaySwitch {nullptr};
     SoShapeScale* overlayScale {nullptr};
     bool useClippingTaskDialog {false};
+    bool editModeActive {false};
 };
 
 }  // namespace Gui
