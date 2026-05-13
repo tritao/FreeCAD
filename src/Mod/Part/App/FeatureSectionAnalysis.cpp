@@ -294,6 +294,15 @@ SectionAnalysis::SectionAnalysis()
         App::Prop_None,
         "Angle used for generated hatch lines"
     );
+    ADD_PROPERTY_TYPE(
+        HatchShape,
+        (TopoShape()),
+        "SectionAnalysis",
+        App::Prop_None,
+        "Generated hatch geometry for display"
+    );
+    HatchShape.setStatus(App::Property::Output, true);
+    HatchShape.setStatus(App::Property::Hidden, true);
 }
 
 short SectionAnalysis::mustExecute() const
@@ -330,7 +339,9 @@ App::DocumentObjectExecReturn* SectionAnalysis::execute()
         const bool includeHatching = includeFaces && ShowHatching.getValue();
 
         std::vector<TopoShape> sectionResults;
-        sectionResults.reserve(sourceObjects.size() * (includeHatching ? 3 : 2));
+        std::vector<TopoShape> hatchResults;
+        sectionResults.reserve(sourceObjects.size() * 2);
+        hatchResults.reserve(includeHatching ? sourceObjects.size() * 4 : 0);
         for (std::size_t i = 0; i < sourceObjects.size(); ++i) {
             auto* sourceObject = sourceObjects[i];
             if (!sourceObject) {
@@ -363,8 +374,7 @@ App::DocumentObjectExecReturn* SectionAnalysis::execute()
                             HatchSpacing.getValue(),
                             HatchAngle.getValue()
                         );
-                        sectionResults
-                            .insert(sectionResults.end(), hatchEdges.begin(), hatchEdges.end());
+                        hatchResults.insert(hatchResults.end(), hatchEdges.begin(), hatchEdges.end());
                     }
                 }
             }
@@ -376,6 +386,13 @@ App::DocumentObjectExecReturn* SectionAnalysis::execute()
         else {
             Shape.setValue(TopoShape().makeElementCompound(sectionResults));
             copyMaterial(sourceObjects.front());
+        }
+
+        if (hatchResults.empty()) {
+            HatchShape.setValue(TopoShape());
+        }
+        else {
+            HatchShape.setValue(TopoShape().makeElementCompound(hatchResults));
         }
 
         return Part::Feature::execute();

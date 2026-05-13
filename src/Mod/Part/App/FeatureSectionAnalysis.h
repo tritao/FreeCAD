@@ -26,6 +26,7 @@
 #include <App/PropertyUnits.h>
 
 #include "PartFeature.h"
+#include "PropertyTopoShape.h"
 
 namespace Part
 {
@@ -44,6 +45,7 @@ public:
     App::PropertyBool ShowHatching;
     App::PropertyDistance HatchSpacing;
     App::PropertyAngle HatchAngle;
+    PropertyPartShape HatchShape;
 
     App::DocumentObjectExecReturn* execute() override;
     short mustExecute() const override;
