@@ -104,10 +104,8 @@ void SavedViewWidget::refreshButtons()
     const bool hasView = getCurrentView() != nullptr;
     d->ui.applyButton->setEnabled(hasView);
     d->ui.updateButton->setEnabled(hasView);
-    d->ui.viewStateLabel->setText(
-        hasView ? tr("The saved view can be applied or updated from the current 3D view.")
-                : tr("No active 3D view is available.")
-    );
+    d->ui.viewStateLabel->setVisible(!hasView);
+    d->ui.viewStateLabel->setText(hasView ? QString() : tr("No active 3D view is available."));
 }
 
 void SavedViewWidget::refreshSummary()
@@ -118,18 +116,22 @@ void SavedViewWidget::refreshSummary()
     }
 
     const bool hasCamera = savedView->CameraState.getValue() && *savedView->CameraState.getValue();
-    d->ui.cameraStateValue->setText(hasCamera ? tr("Captured") : tr("Not captured"));
+    d->ui.cameraStateValue->setText(hasCamera ? tr("Saved") : tr("Not saved"));
     d->ui.visibilityStateValue->setText(
         tr("%1 object states").arg(savedView->VisibilityState.getValues().size())
     );
 
     d->ui.clippingPlanesList->clear();
+    QString singlePlaneLabel;
     for (auto* obj : savedView->ClipPlanes.getValues()) {
         auto* plane = freecad_cast<App::ClippingPlane*>(obj);
         if (!plane) {
             continue;
         }
 
+        if (singlePlaneLabel.isEmpty()) {
+            singlePlaneLabel = QString::fromUtf8(plane->Label.getValue());
+        }
         auto* item = new QListWidgetItem(
             QString::fromUtf8(plane->Label.getValue()),
             d->ui.clippingPlanesList
@@ -137,9 +139,16 @@ void SavedViewWidget::refreshSummary()
         item->setToolTip(QString::fromUtf8(plane->getNameInDocument()));
     }
 
-    d->ui.clippingStateValue->setText(
-        tr("%1 clipping plane(s)").arg(savedView->ClipPlanes.getValues().size())
-    );
+    const int clippingPlaneCount = d->ui.clippingPlanesList->count();
+    d->ui.clippingStateValue->setText(tr("%1 clipping plane(s)").arg(clippingPlaneCount));
+
+    const bool hasSinglePlane = clippingPlaneCount == 1;
+    const bool hasMultiplePlanes = clippingPlaneCount > 1;
+    d->ui.singleClippingPlaneLabel->setVisible(hasSinglePlane);
+    d->ui.singleClippingPlaneValue->setVisible(hasSinglePlane);
+    d->ui.singleClippingPlaneValue->setText(hasSinglePlane ? singlePlaneLabel : QString());
+    d->ui.clippingPlanesLabel->setVisible(hasMultiplePlanes);
+    d->ui.clippingPlanesList->setVisible(hasMultiplePlanes);
 }
 
 void SavedViewWidget::setupConnections()
