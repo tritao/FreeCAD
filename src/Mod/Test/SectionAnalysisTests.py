@@ -69,12 +69,40 @@ class SectionAnalysisTests(unittest.TestCase):
         self.assertFalse(analysis.Shape.isNull())
         self.assertGreater(len(analysis.Shape.Edges), 0)
 
+    def testSectionAnalysisRecomputeProducesFaces(self):
+        box = self.make_box()
+        plane = self.make_clipping_plane()
+        analysis = self.doc.addObject("Part::SectionAnalysis", "Analysis")
+        analysis.Sources = [box]
+        analysis.ClippingPlane = plane
+        analysis.ResultMode = "Faces"
+
+        self.doc.recompute()
+
+        self.assertFalse(analysis.Shape.isNull())
+        self.assertGreater(len(analysis.Shape.Faces), 0)
+
+    def testSectionAnalysisRecomputeProducesFacesAndEdges(self):
+        box = self.make_box()
+        plane = self.make_clipping_plane()
+        analysis = self.doc.addObject("Part::SectionAnalysis", "Analysis")
+        analysis.Sources = [box]
+        analysis.ClippingPlane = plane
+        analysis.ResultMode = "Both"
+
+        self.doc.recompute()
+
+        self.assertFalse(analysis.Shape.isNull())
+        self.assertGreater(len(analysis.Shape.Faces), 0)
+        self.assertGreater(len(analysis.Shape.Edges), 0)
+
     def testSaveRestoreSectionAnalysis(self):
         box = self.make_box()
         plane = self.make_clipping_plane()
         analysis = self.doc.addObject("Part::SectionAnalysis", "Analysis")
         analysis.Sources = [box]
         analysis.ClippingPlane = plane
+        analysis.ResultMode = "Faces"
         self.doc.recompute()
 
         self.doc.saveAs(self.file_name)
@@ -85,6 +113,6 @@ class SectionAnalysisTests(unittest.TestCase):
         self.assertIsNotNone(restored)
         self.assertEqual([obj.Name for obj in restored.Sources], ["Box"])
         self.assertEqual(restored.ClippingPlane.Name, "Clip")
-        self.assertEqual(restored.ResultMode, "Edges")
+        self.assertEqual(restored.ResultMode, "Faces")
         self.assertFalse(restored.Shape.isNull())
-        self.assertGreater(len(restored.Shape.Edges), 0)
+        self.assertGreater(len(restored.Shape.Faces), 0)

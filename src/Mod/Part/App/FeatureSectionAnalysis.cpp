@@ -29,8 +29,10 @@
 #include <Base/Placement.h>
 #include <Base/Rotation.h>
 #include <BRep_Builder.hxx>
+#include <Mod/Part/App/CrossSection.h>
 #include <Mod/Part/App/FCBRepAlgoAPI_Section.h>
 #include <Standard_Failure.hxx>
+#include <TopAbs_ShapeEnum.hxx>
 #include <TopoDS_Compound.hxx>
 #include <gp_Dir.hxx>
 #include <gp_Pln.hxx>
@@ -47,8 +49,21 @@ namespace
 {
 
 constexpr long EdgeResultMode = 0;
+constexpr long FaceResultMode = 1;
+constexpr long BothResultMode = 2;
 
-std::pair<gp_Pnt, gp_Dir> resolveSectionPlane(const App::ClippingPlane& plane)
+struct SectionPlaneData
+{
+    gp_Pnt origin;
+    gp_Dir normal;
+    gp_Pln plane;
+    double a;
+    double b;
+    double c;
+    double d;
+};
+
+SectionPlaneData resolveSectionPlane(const App::ClippingPlane& plane)
 {
     Base::Placement placement = App::GeoFeature::getGlobalPlacement(&plane);
     if (plane.Reverse.getValue()) {
@@ -60,9 +75,15 @@ std::pair<gp_Pnt, gp_Dir> resolveSectionPlane(const App::ClippingPlane& plane)
 
     const Base::Vector3d origin = placement.getPosition();
     const Base::Vector3d normal = placement.getRotation().multVec(Base::Vector3d(0.0, 0.0, -1.0));
+    const double d = (origin * normal);
     return {
         gp_Pnt(origin.x, origin.y, origin.z),
         gp_Dir(normal.x, normal.y, normal.z),
+        gp_Pln(gp_Pnt(origin.x, origin.y, origin.z), gp_Dir(normal.x, normal.y, normal.z)),
+        normal.x,
+        normal.y,
+        normal.z,
+        d,
     };
 }
 
@@ -74,9 +95,43 @@ TopoDS_Compound makeEmptyCompound()
     return compound;
 }
 
+TopoShape makeSectionEdges(const TopoShape& sourceShape, const gp_Pln& plane)
+{
+    std::unique_ptr<FCBRepAlgoAPI_Section> mkSection(
+        new FCBRepAlgoAPI_Section(sourceShape.getShape(), plane)
+    );
+    mkSection->setAutoFuzzy();
+    mkSection->Build();
+    if (!mkSection->IsDone()) {
+        FC_THROWM(Base::CADKernelError, "Section operation failed");
+    }
+
+    if (mkSection->Shape().IsNull()) {
+        return TopoShape();
+    }
+
+    TopoShape result(0);
+    result.makeElementShape(*mkSection, sourceShape, Part::OpCodes::Section);
+    return result;
+}
+
+TopoShape makeSectionFaces(const TopoShape& sourceShape, const SectionPlaneData& planeData, int index)
+{
+    TopoCrossSection
+        crossSection(planeData.a, planeData.b, planeData.c, sourceShape, Part::OpCodes::Section);
+    TopoShape wires = crossSection.slice(index, planeData.d);
+    if (wires.isNull() || wires.countSubShapes(TopAbs_WIRE) == 0) {
+        return TopoShape();
+    }
+
+    TopoShape result(0);
+    result.makeElementFace(wires, Part::OpCodes::Section, nullptr, &planeData.plane);
+    return result;
+}
+
 }  // namespace
 
-const char* SectionAnalysis::ResultModeEnums[] = {"Edges", nullptr};
+const char* SectionAnalysis::ResultModeEnums[] = {"Edges", "Faces", "Both", nullptr};
 
 SectionAnalysis::SectionAnalysis()
 {
@@ -120,16 +175,18 @@ App::DocumentObjectExecReturn* SectionAnalysis::execute()
             return new App::DocumentObjectExecReturn("No source objects linked");
         }
 
-        if (ResultMode.getValue() != EdgeResultMode) {
+        const long resultMode = ResultMode.getValue();
+        if (resultMode != EdgeResultMode && resultMode != FaceResultMode
+            && resultMode != BothResultMode) {
             return new App::DocumentObjectExecReturn("Unsupported section analysis result mode");
         }
 
-        const auto [planeOrigin, planeNormal] = resolveSectionPlane(*planeObject);
-        const gp_Pln occPlane(planeOrigin, planeNormal);
+        const SectionPlaneData planeData = resolveSectionPlane(*planeObject);
 
         std::vector<TopoShape> sectionResults;
-        sectionResults.reserve(sourceObjects.size());
-        for (auto* sourceObject : sourceObjects) {
+        sectionResults.reserve(sourceObjects.size() * (resultMode == BothResultMode ? 2 : 1));
+        for (std::size_t i = 0; i < sourceObjects.size(); ++i) {
+            auto* sourceObject = sourceObjects[i];
             if (!sourceObject) {
                 return new App::DocumentObjectExecReturn("Linked source object is null");
             }
@@ -142,24 +199,18 @@ App::DocumentObjectExecReturn* SectionAnalysis::execute()
                 return new App::DocumentObjectExecReturn("Linked source shape is null");
             }
 
-            std::unique_ptr<FCBRepAlgoAPI_Section> mkSection(
-                new FCBRepAlgoAPI_Section(sourceShape.getShape(), occPlane)
-            );
-            mkSection->setAutoFuzzy();
-            mkSection->Build();
-            if (!mkSection->IsDone()) {
-                return new App::DocumentObjectExecReturn("Section operation failed");
+            if (resultMode == EdgeResultMode || resultMode == BothResultMode) {
+                TopoShape edges = makeSectionEdges(sourceShape, planeData.plane);
+                if (!edges.isNull()) {
+                    sectionResults.push_back(edges);
+                }
             }
 
-            const TopoDS_Shape resultShape = mkSection->Shape();
-            if (resultShape.IsNull()) {
-                continue;
-            }
-
-            TopoShape result(0);
-            result.makeElementShape(*mkSection, sourceShape, Part::OpCodes::Section);
-            if (!result.isNull()) {
-                sectionResults.push_back(result);
+            if (resultMode == FaceResultMode || resultMode == BothResultMode) {
+                TopoShape faces = makeSectionFaces(sourceShape, planeData, static_cast<int>(i + 1));
+                if (!faces.isNull()) {
+                    sectionResults.push_back(faces);
+                }
             }
         }
 
