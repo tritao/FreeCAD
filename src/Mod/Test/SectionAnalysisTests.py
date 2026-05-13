@@ -55,7 +55,7 @@ class SectionAnalysisTests(unittest.TestCase):
         self.assertEqual(obj.TypeId, "Part::SectionAnalysis")
         self.assertEqual(list(obj.Sources), [])
         self.assertIsNone(obj.ClippingPlane)
-        self.assertEqual(obj.ResultMode, "Edges")
+        self.assertEqual(obj.ResultMode, "Both")
 
     def testSectionAnalysisRecomputeProducesEdges(self):
         box = self.make_box()
@@ -63,6 +63,7 @@ class SectionAnalysisTests(unittest.TestCase):
         analysis = self.doc.addObject("Part::SectionAnalysis", "Analysis")
         analysis.Sources = [box]
         analysis.ClippingPlane = plane
+        analysis.ResultMode = "Edges"
 
         self.doc.recompute()
 
@@ -116,3 +117,17 @@ class SectionAnalysisTests(unittest.TestCase):
         self.assertEqual(restored.ResultMode, "Faces")
         self.assertFalse(restored.Shape.isNull())
         self.assertGreater(len(restored.Shape.Faces), 0)
+
+    def testDefaultModeProducesFacesAndEdges(self):
+        box = self.make_box()
+        plane = self.make_clipping_plane()
+        analysis = self.doc.addObject("Part::SectionAnalysis", "Analysis")
+        analysis.Sources = [box]
+        analysis.ClippingPlane = plane
+
+        self.doc.recompute()
+
+        self.assertEqual(analysis.ResultMode, "Both")
+        self.assertFalse(analysis.Shape.isNull())
+        self.assertGreater(len(analysis.Shape.Faces), 0)
+        self.assertGreater(len(analysis.Shape.Edges), 0)

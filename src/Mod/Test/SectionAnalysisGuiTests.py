@@ -118,5 +118,7 @@ class SectionAnalysisGuiTests(unittest.TestCase):
         self.assertEqual(analysis.TypeId, "Part::SectionAnalysis")
         self.assertEqual(analysis.ClippingPlane.Name, "Clip")
         self.assertEqual([obj.Name for obj in analysis.Sources], ["Box"])
+        self.assertEqual(analysis.ResultMode, "Both")
         self.assertFalse(analysis.Shape.isNull())
+        self.assertGreater(len(analysis.Shape.Faces), 0)
         self.assertGreater(len(analysis.Shape.Edges), 0)

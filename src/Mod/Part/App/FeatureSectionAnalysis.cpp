@@ -146,7 +146,7 @@ SectionAnalysis::SectionAnalysis()
     );
     ADD_PROPERTY_TYPE(
         ResultMode,
-        (static_cast<long>(EdgeResultMode)),
+        (static_cast<long>(BothResultMode)),
         "SectionAnalysis",
         App::Prop_None,
         "Type of section result to generate"

@@ -20,7 +20,7 @@
       <bool>true</bool>
      </property>
      <property name="text">
-      <string>Section analysis generates section geometry from explicit source objects and one linked clipping plane.</string>
+      <string>Section analysis generates section faces and edges from explicit source objects and one linked clipping plane.</string>
      </property>
     </widget>
    </item>

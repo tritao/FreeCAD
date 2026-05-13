@@ -1066,7 +1066,8 @@ CmdPartSectionAnalysis::CmdPartSectionAnalysis()
     sAppModule = "Part";
     sGroup = QT_TR_NOOP("Part");
     sMenuText = QT_TR_NOOP("Section Analysis");
-    sToolTipText = QT_TR_NOOP("Create a section analysis from a clipping plane and source shapes");
+    sToolTipText
+        = QT_TR_NOOP("Create a section analysis with section faces and edges from a clipping plane and source shapes");
     sWhatsThis = "Part_SectionAnalysis";
     sStatusTip = sToolTipText;
     sPixmap = "Part_Section";
@@ -1130,6 +1131,7 @@ void CmdPartSectionAnalysis::activated(int iMsg)
         featName.c_str(),
         clippingPlane->getNameInDocument()
     );
+    doCommand(Doc, "App.activeDocument().%s.ResultMode = \"Both\"", featName.c_str());
     runCommand(Doc, sourceAssignment.str().c_str());
     updateActive();
     commitCommand();
