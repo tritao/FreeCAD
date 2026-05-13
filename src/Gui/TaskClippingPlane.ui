@@ -20,7 +20,7 @@
       <bool>true</bool>
      </property>
      <property name="text">
-      <string>Drag the handles in the 3D view to move or rotate the clipping plane.</string>
+      <string>Use the 3D handles to move or rotate the clipping plane.</string>
      </property>
     </widget>
    </item>
@@ -57,7 +57,7 @@
      <item row="0" column="0">
       <widget class="QCheckBox" name="reverseCheck">
        <property name="text">
-        <string>Reverse clipping direction</string>
+        <string>Flip cut direction</string>
        </property>
       </widget>
      </item>
@@ -91,7 +91,7 @@
       <item>
        <widget class="QLabel" name="targetsLabel">
         <property name="text">
-         <string>Targets</string>
+         <string>Objects</string>
         </property>
        </widget>
       </item>
@@ -133,20 +133,20 @@
    <item>
     <widget class="QGroupBox" name="displayGroup">
      <property name="title">
-      <string>Display</string>
+      <string>Helper</string>
      </property>
      <layout class="QVBoxLayout" name="displayGroupLayout">
       <item>
        <widget class="QCheckBox" name="autoSizeCheck">
         <property name="text">
-         <string>Keep helper at constant screen size</string>
+         <string>Constant on-screen size</string>
         </property>
        </widget>
       </item>
       <item>
        <widget class="QCheckBox" name="showHelperCheck">
         <property name="text">
-         <string>Show helper in 3D view</string>
+         <string>Show helper</string>
         </property>
        </widget>
       </item>

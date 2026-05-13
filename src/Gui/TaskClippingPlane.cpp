@@ -27,7 +27,9 @@
 
 #include <QByteArray>
 #include <QEvent>
+#include <QFont>
 #include <QListWidgetItem>
+#include <QPalette>
 #include <QSignalBlocker>
 
 #include <App/ClippingPlane.h>
@@ -59,6 +61,18 @@ ClippingPlaneWidget::ClippingPlaneWidget(ViewProviderClippingPlane* viewProvider
 {
     d->viewProvider = viewProvider;
     d->ui.setupUi(this);
+
+    QPalette hintPalette = d->ui.dragHintLabel->palette();
+    hintPalette.setColor(
+        QPalette::WindowText,
+        palette().color(QPalette::Disabled, QPalette::WindowText)
+    );
+    d->ui.dragHintLabel->setPalette(hintPalette);
+
+    QFont hintFont = d->ui.dragHintLabel->font();
+    hintFont.setPointSizeF(std::max(8.0, hintFont.pointSizeF() - 1.0));
+    d->ui.dragHintLabel->setFont(hintFont);
+
     setupConnections();
     refresh();
 }
@@ -118,6 +132,7 @@ void ClippingPlaneWidget::refreshActivation()
     if (!plane || !view) {
         d->ui.activeInCurrentView->setEnabled(false);
         d->ui.activeInCurrentView->setChecked(false);
+        d->ui.activationStateLabel->setVisible(true);
         d->ui.activationStateLabel->setText(tr("No active 3D view is available."));
         return;
     }
@@ -125,10 +140,8 @@ void ClippingPlaneWidget::refreshActivation()
     const bool active = ClippingPlaneManager::instance().isActive(view, plane);
     d->ui.activeInCurrentView->setEnabled(true);
     d->ui.activeInCurrentView->setChecked(active);
-    d->ui.activationStateLabel->setText(
-        active ? tr("The clipping plane is active in the current 3D view.")
-               : tr("The clipping plane is inactive in the current 3D view.")
-    );
+    d->ui.activationStateLabel->clear();
+    d->ui.activationStateLabel->setVisible(false);
 }
 
 void ClippingPlaneWidget::refreshTargets()
@@ -154,11 +167,17 @@ void ClippingPlaneWidget::refreshTargets()
 void ClippingPlaneWidget::refreshScopeControls()
 {
     const bool scoped = d->ui.scopeModeCombo->currentIndex() != 0;
+    d->ui.targetsLabel->setVisible(scoped);
+    d->ui.targetsList->setVisible(scoped);
+    d->ui.addSelectedButton->setVisible(scoped);
+    d->ui.removeSelectedButton->setVisible(scoped);
+    d->ui.clearTargetsButton->setVisible(scoped);
+
     d->ui.targetsLabel->setEnabled(scoped);
     d->ui.targetsList->setEnabled(scoped);
     d->ui.addSelectedButton->setEnabled(scoped);
-    d->ui.removeSelectedButton->setEnabled(scoped);
-    d->ui.clearTargetsButton->setEnabled(scoped);
+    d->ui.removeSelectedButton->setEnabled(scoped && !d->ui.targetsList->selectedItems().isEmpty());
+    d->ui.clearTargetsButton->setEnabled(scoped && d->ui.targetsList->count() > 0);
 }
 
 void ClippingPlaneWidget::setTargets(const std::vector<App::DocumentObject*>& targets)
@@ -184,6 +203,12 @@ void ClippingPlaneWidget::setupConnections()
         &ClippingPlaneWidget::onScopeModeChanged
     );
     connect(d->ui.addSelectedButton, &QPushButton::clicked, this, &ClippingPlaneWidget::onAddSelected);
+    connect(
+        d->ui.targetsList,
+        &QListWidget::itemSelectionChanged,
+        this,
+        &ClippingPlaneWidget::refreshScopeControls
+    );
     connect(
         d->ui.removeSelectedButton,
         &QPushButton::clicked,
