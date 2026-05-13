@@ -35,10 +35,15 @@ public:
     ViewProviderSectionAnalysis();
     ~ViewProviderSectionAnalysis() override;
 
+    void attach(App::DocumentObject* object) override;
+    void updateData(const App::Property* prop) override;
     bool doubleClicked() override;
     bool setEdit(int ModNum) override;
     void unsetEdit(int ModNum) override;
     void setupContextMenu(QMenu* menu, QObject* receiver, const char* member) override;
+
+private:
+    void syncDisplayForResultMode();
 };
 
 }  // namespace PartGui

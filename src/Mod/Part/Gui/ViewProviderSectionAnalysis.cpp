@@ -25,6 +25,7 @@
 
 #include <App/Document.h>
 #include <App/ClippingPlane.h>
+#include <App/Property.h>
 #include <Gui/ClippingPlaneManager.h>
 #include <Gui/Control.h>
 #include <Gui/Document.h>
@@ -39,12 +40,68 @@ using namespace PartGui;
 
 PROPERTY_SOURCE(PartGui::ViewProviderSectionAnalysis, PartGui::ViewProviderPart)
 
+namespace
+{
+
+constexpr long EdgeResultMode = 0;
+constexpr long FaceResultMode = 1;
+constexpr long BothResultMode = 2;
+
+const char* displayModeForResultMode(long resultMode)
+{
+    switch (resultMode) {
+        case EdgeResultMode:
+            return "Wireframe";
+        case FaceResultMode:
+            return "Shaded";
+        case BothResultMode:
+            return "Flat Lines";
+        default:
+            return "Flat Lines";
+    }
+}
+
+}  // namespace
+
 ViewProviderSectionAnalysis::ViewProviderSectionAnalysis()
 {
     sPixmap = "Part_Section";
+    LineColor.setValue(Base::Color(0.80F, 0.33F, 0.0F));
+    LineWidth.setValue(2.0F);
+    ShapeAppearance.setDiffuseColor(0.96F, 0.64F, 0.26F);
+    Transparency.setValue(25);
 }
 
 ViewProviderSectionAnalysis::~ViewProviderSectionAnalysis() = default;
+
+void ViewProviderSectionAnalysis::attach(App::DocumentObject* object)
+{
+    ViewProviderPart::attach(object);
+    syncDisplayForResultMode();
+}
+
+void ViewProviderSectionAnalysis::updateData(const App::Property* prop)
+{
+    ViewProviderPart::updateData(prop);
+
+    auto* analysis = getObject<Part::SectionAnalysis>();
+    if (analysis && prop == &analysis->ResultMode) {
+        syncDisplayForResultMode();
+    }
+}
+
+void ViewProviderSectionAnalysis::syncDisplayForResultMode()
+{
+    auto* analysis = getObject<Part::SectionAnalysis>();
+    if (!analysis) {
+        return;
+    }
+
+    const char* modeName = displayModeForResultMode(analysis->ResultMode.getValue());
+    if (std::string_view(DisplayMode.getValueAsString()) != modeName) {
+        DisplayMode.setValue(modeName);
+    }
+}
 
 bool ViewProviderSectionAnalysis::doubleClicked()
 {
