@@ -26,6 +26,7 @@
 #include <map>
 #include <string>
 #include <vector>
+#include <unordered_set>
 #include <QIcon>
 #include <fastsignals/signal.h>
 #include <boost/intrusive_ptr.hpp>
@@ -38,7 +39,9 @@
 #include "TreeItemMode.h"
 
 class SbVec2s;
+class SbVec2f;
 class SbVec3f;
+class SbViewportRegion;
 class SoNode;
 class SoPath;
 class SoSeparator;
@@ -74,7 +77,32 @@ class View3DInventorViewer;
 class ViewProviderPy;
 class ObjectItem;
 class MDIView;
+class Document;
 class SelectionChanges;
+class SelectionGate;
+
+/// Additional single-pick context. All fields are optional; callers may pass null when they only
+/// need legacy detail-to-subelement resolution.
+struct GuiExport SelectionPickContext
+{
+    const SelectionGate* gate {nullptr};
+
+    // Normalized cursor position in the current viewport.
+    const SbVec2f* normalizedCursorPosition {nullptr};
+
+    struct RepickInputs
+    {
+        SoNode* sceneRoot {nullptr};
+        const SbViewportRegion* viewportRegion {nullptr};
+        const SbVec2s* eventPosition {nullptr};
+        float pickRadius {0.0F};
+
+        bool isValid() const
+        {
+            return sceneRoot && viewportRegion && eventPosition;
+        }
+    } repick;
+};
 
 enum ViewStatus
 {
@@ -283,6 +311,14 @@ public:
     {}
     /// return a hit element given the picked point which contains the full node path
     virtual bool getElementPicked(const SoPickedPoint*, std::string& subname) const;
+    /// Context-aware overload for gated single-pick resolution. \a pickContext may be null; when
+    /// present it carries the normalized cursor position plus the original pick action inputs for
+    /// view-provider-specific recovery.
+    virtual bool getElementPicked(
+        const SoPickedPoint*,
+        std::string& subname,
+        const SelectionPickContext* pickContext
+    ) const;
     /** Return additional sub-element names related to a picked element.
      *
      * Lets a view provider expand a single pick into a set of logically related
@@ -652,6 +688,10 @@ public:
     };
 
 protected:
+    // Resolve the picked subelement directly from the Coin detail without consulting extensions
+    // or virtual overloads. Derived classes can use this as a recursion-free fallback.
+    bool resolvePickedElementFromDetail(const SoPickedPoint*, std::string& subname) const;
+
     /// is called by the document when the provider goes in edit mode
     virtual bool setEdit(int ModNum);
     /// is called when you lose the edit mode

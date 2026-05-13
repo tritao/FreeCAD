@@ -138,6 +138,93 @@ float getCursorDistanceSquared(const SoPickedPoint* pickedPoint, const SbVec2f& 
     return dx * dx + dy * dy;
 }
 
+struct PickContext
+{
+    SelectionPickContext selectionPickContext;
+    std::optional<SbVec2f> normalizedCursorPosition;
+    std::optional<SbVec2s> eventPosition;
+
+    const SbVec2f* normalizedCursorPositionPtr() const
+    {
+        return selectionPickContext.normalizedCursorPosition;
+    }
+
+    const SelectionPickContext* pickContext() const
+    {
+        return &selectionPickContext;
+    }
+};
+
+// Normal and expanded single-pick paths share the same gate and cursor context.
+PickContext getPickContext(const Gui::Document* document, SoHandleEventAction* action)
+{
+    PickContext context;
+    if (document) {
+        context.selectionPickContext.gate = Selection().getSelectionGate(document->getDocument());
+    }
+    if (action) {
+        context.selectionPickContext.repick.sceneRoot = action->getCurPath()
+            ? action->getCurPath()->getHead()
+            : nullptr;
+        context.selectionPickContext.repick.viewportRegion = &action->getViewportRegion();
+        context.selectionPickContext.repick.pickRadius = action->getPickRadius();
+    }
+    if (action && action->getEvent()) {
+        context.normalizedCursorPosition = action->getEvent()->getNormalizedPosition(
+            action->getViewportRegion()
+        );
+        context.selectionPickContext.normalizedCursorPosition = &*context.normalizedCursorPosition;
+        context.eventPosition = action->getEvent()->getPosition();
+        context.selectionPickContext.repick.eventPosition = &*context.eventPosition;
+    }
+    return context;
+}
+
+bool resolveDetailPathForElement(
+    ViewProviderDocumentObject* vpd,
+    const std::string& element,
+    SoFullPath* detailPath,
+    SoFullPath*& path,
+    const SoDetail*& det,
+    SoDetail*& ownedDetail
+)
+{
+    detailPath->truncate(0);
+    SoDetail* detCandidate = nullptr;
+    if (vpd->getDetailPath(element.c_str(), detailPath, true, detCandidate)
+        && detailPath->getLength()) {
+        path = detailPath;
+        det = detCandidate;
+        ownedDetail = detCandidate;
+        return true;
+    }
+
+    delete detCandidate;
+    return false;
+}
+
+void maybeResolvePromotedSelectionTarget(
+    ViewProviderDocumentObject* vpd,
+    bool pickedElementWasPromoted,
+    bool ctrlDown,
+    bool hasNext,
+    SoSelectionElementAction::Type type,
+    const std::string& subName,
+    SoFullPath* detailPath,
+    SoFullPath*& path,
+    const SoDetail*& det,
+    SoDetail*& ownedDetail
+)
+{
+    // If the view provider promoted the raw picked element (for example Edge -> Face),
+    // rebuild the visual action target from the promoted sub-element before highlighting.
+    if (!pickedElementWasPromoted || ctrlDown || hasNext || type == SoSelectionElementAction::None) {
+        return;
+    }
+
+    resolveDetailPathForElement(vpd, subName, detailPath, path, det, ownedDetail);
+}
+
 }  // namespace
 
 namespace Gui::SelectionPickPolicy
@@ -507,16 +594,12 @@ bool SoFCUnifiedSelection::canFinalizeSinglePick(const std::vector<PickedInfo>& 
     return SelectionPickPolicy::canFinalizeSinglePick(getPickCandidates(picked, nullptr));
 }
 
-bool SoFCUnifiedSelection::shouldExpandPickRadius(const std::vector<PickedInfo>& picked)
-{
-    return SelectionPickPolicy::shouldExpandPickRadius(getPickCandidates(picked, nullptr));
-}
-
 std::vector<SoFCUnifiedSelection::PickedInfo> SoFCUnifiedSelection::collectPickedList(
     const SoPickedPointList& points,
     const SoPath* actionPath,
     bool singlePick,
-    bool copyPickedPoints
+    bool copyPickedPoints,
+    const SelectionPickContext* pickContext
 ) const
 {
     ViewProvider* last_vp = nullptr;
@@ -560,7 +643,7 @@ std::vector<SoFCUnifiedSelection::PickedInfo> SoFCUnifiedSelection::collectPicke
             }
             break;
         }
-        if (!info.vpd->getElementPicked(info.pp, info.element)) {
+        if (!info.vpd->getElementPicked(info.pp, info.element, pickContext)) {
             continue;
         }
 
@@ -599,13 +682,20 @@ std::vector<SoFCUnifiedSelection::PickedInfo> SoFCUnifiedSelection::getExpandedP
     pickAction.setPickAll(true);
     pickAction.apply(sceneRoot);
 
-    auto expanded = collectPickedList(pickAction.getPickedPointList(), actionPath, false, true);
+    const auto pickContext = getPickContext(this->pcDocument, action);
+    auto expanded = collectPickedList(
+        pickAction.getPickedPointList(),
+        actionPath,
+        false,
+        true,
+        pickContext.pickContext()
+    );
     if (expanded.empty()) {
         return {};
     }
 
-    const auto cursorPosition = action->getEvent()->getNormalizedPosition(action->getViewportRegion());
-    auto candidates = getPickCandidates(expanded, this->pcDocument, &cursorPosition);
+    auto candidates
+        = getPickCandidates(expanded, this->pcDocument, pickContext.normalizedCursorPositionPtr());
     if (SelectionPickPolicy::shouldExpandPickRadius(candidates)) {
         return {};
     }
@@ -619,9 +709,16 @@ std::vector<SoFCUnifiedSelection::PickedInfo> SoFCUnifiedSelection::getPickedLis
     bool singlePick
 ) const
 {
-    auto ret = collectPickedList(action->getPickedPointList(), action->getCurPath(), singlePick);
+    const auto pickContext = getPickContext(this->pcDocument, action);
+    auto ret = collectPickedList(
+        action->getPickedPointList(),
+        action->getCurPath(),
+        singlePick,
+        false,
+        pickContext.pickContext()
+    );
 
-    if (singlePick && shouldExpandPickRadius(ret)) {
+    if (singlePick && SelectionPickPolicy::shouldExpandPickRadius(getPickCandidates(ret, nullptr))) {
         auto expanded = getExpandedPickedList(action);
         if (!expanded.empty()) {
             return expanded;
@@ -635,17 +732,9 @@ std::vector<SoFCUnifiedSelection::PickedInfo> SoFCUnifiedSelection::getPickedLis
     // To identify the picking of lines in a concave area we have to get all intersection points.
     // If the preferred point is rejected by the active selection gate, choose the nearest allowed
     // candidate still inside the viewer pick radius.
-    const SbVec2f* cursorPosition = nullptr;
-    SbVec2f normalizedCursorPosition;
-    if (action && action->getEvent()) {
-        normalizedCursorPosition = action->getEvent()->getNormalizedPosition(
-            action->getViewportRegion()
-        );
-        cursorPosition = &normalizedCursorPosition;
-    }
-    auto pickedIndex = SelectionPickPolicy::choosePreferredPick(
-        getPickCandidates(ret, this->pcDocument, cursorPosition)
-    );
+    auto candidates
+        = getPickCandidates(ret, this->pcDocument, pickContext.normalizedCursorPositionPtr());
+    auto pickedIndex = SelectionPickPolicy::choosePreferredPick(candidates);
     auto itPicked = ret.begin() + pickedIndex;
 
     if (singlePick) {
@@ -918,15 +1007,19 @@ bool SoFCUnifiedSelection::setPreselect(const PickedInfo& info)
     }
 
     const auto& pt = info.pp->getPoint();
-    return setPreselect(
-        Gui::toFullPath(info.pp->getPath()),
-        info.pp->getDetail(),
-        info.vpd,
-        info.element.c_str(),
-        pt[0],
-        pt[1],
-        pt[2]
-    );
+    const SoDetail* det = info.pp->getDetail();
+    SoDetail* detResolved = nullptr;
+    auto path = Gui::toFullPath(info.pp->getPath());
+    if (info.vpd) {
+        std::string rawElement;
+        if (info.vpd->getElementPicked(info.pp, rawElement) && rawElement != info.element) {
+            resolveDetailPathForElement(info.vpd, info.element, detailPath, path, det, detResolved);
+        }
+    }
+
+    bool highlighted = setPreselect(path, det, info.vpd, info.element.c_str(), pt[0], pt[1], pt[2]);
+    delete detResolved;
+    return highlighted;
 }
 
 bool SoFCUnifiedSelection::setPreselect(
@@ -1048,6 +1141,9 @@ bool SoFCUnifiedSelection::setSelection(const std::vector<PickedInfo>& infos, bo
     static char buf[513];
     auto subName = info.element;
     std::string objectName = objname;
+    std::string rawElement;
+    bool pickedElementWasPromoted = vpd->getElementPicked(pp, rawElement)
+        && rawElement != info.element;
 
     if (ctrlDown) {
         if (Gui::Selection().isSelected(docname, objname, info.element.c_str(), ResolveMode::NoResolve)) {
@@ -1080,11 +1176,7 @@ bool SoFCUnifiedSelection::setSelection(const std::vector<PickedInfo>& infos, bo
 
                 getMainWindow()->showMessage(QString::fromLatin1(buf));
             }
-            detailPath->truncate(0);
-            if (vpd->getDetailPath(info.element.c_str(), detailPath, true, detNext)
-                && detailPath->getLength()) {
-                pPath = detailPath;
-                det = detNext;
+            if (resolveDetailPathForElement(vpd, info.element, detailPath, pPath, det, detNext)) {
                 FC_TRACE("select next " << objectName << ", " << subName);
                 if (ok) {
                     type = hasNext ? SoSelectionElementAction::All : SoSelectionElementAction::Append;
@@ -1115,6 +1207,7 @@ bool SoFCUnifiedSelection::setSelection(const std::vector<PickedInfo>& infos, bo
         // We need to convert the short name in the selection to a full element path to look it up
         // Ex:  Body.Pad.Face9  to Body.Pad.;g3;SKT;:H12dc,E;FAC;:H12dc:4,F;:G0;XTR;:H12dc:8,F.Face9
         getFullSubElementName(subName);
+        const auto clickedSubName = subName;
         std::string subSelected
             = Gui::Selection().getSelectedElement(vpd->getObject(), subName.c_str());
 
@@ -1144,14 +1237,20 @@ bool SoFCUnifiedSelection::setSelection(const std::vector<PickedInfo>& infos, bo
                 }
             }
             if (!nextsub.empty() || !subSelected.empty()) {
-                hasNext = true;
-                subName = nextsub;
-                detailPath->truncate(0);
-                if (vpd->getDetailPath(subName.c_str(), detailPath, true, detNext)
-                    && detailPath->getLength()) {
-                    pPath = detailPath;
-                    det = detNext;
-                    FC_TRACE("select next " << objectName << ", " << subName);
+                // Keep the clicked subelement when the gate rejects the next hierarchy level.
+                if (Gui::Selection().testSelection(
+                        vpd->getObject()->getDocument(),
+                        vpd->getObject(),
+                        nextsub.c_str()
+                    )) {
+                    hasNext = true;
+                    subName = nextsub;
+                    if (resolveDetailPathForElement(vpd, subName, detailPath, pPath, det, detNext)) {
+                        FC_TRACE("select next " << objectName << ", " << subName);
+                    }
+                }
+                else {
+                    subName = clickedSubName;
                 }
             }
         }
@@ -1188,6 +1287,19 @@ bool SoFCUnifiedSelection::setSelection(const std::vector<PickedInfo>& infos, bo
             getMainWindow()->showMessage(QString::fromLatin1(buf));
         }
     }
+
+    maybeResolvePromotedSelectionTarget(
+        vpd,
+        pickedElementWasPromoted,
+        ctrlDown,
+        hasNext,
+        type,
+        subName,
+        detailPath,
+        pPath,
+        det,
+        detNext
+    );
 
     if (pPath) {
         FC_TRACE("applying action");
