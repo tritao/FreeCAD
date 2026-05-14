@@ -35,9 +35,13 @@
 #include <App/ClippingPlane.h>
 #include <App/Document.h>
 #include <App/DocumentObject.h>
+#include <App/GeoFeature.h>
 
 #include "ClippingPlaneManager.h"
 #include "Document.h"
+#include "Inventor/Draggers/Gizmo.h"
+#include "PlaneGizmoEditor.h"
+#include "QuantitySpinBox.h"
 #include "Selection/Selection.h"
 #include "TaskClippingPlane.h"
 #include "View3DInventor.h"
@@ -62,6 +66,18 @@ ClippingPlaneWidget::ClippingPlaneWidget(ViewProviderClippingPlane* viewProvider
     d->viewProvider = viewProvider;
     d->ui.setupUi(this);
 
+    d->ui.planeOffsetSpin->setUnit(Base::Unit::Length);
+    d->ui.planeOffsetSpin->setRange(-1.0e9, 1.0e9);
+    d->ui.planeOffsetSpin->setSingleStep(1.0);
+
+    d->ui.planeTiltXSpin->setUnit(Base::Unit::Angle);
+    d->ui.planeTiltXSpin->setRange(-89.99, 89.99);
+    d->ui.planeTiltXSpin->setSingleStep(1.0);
+
+    d->ui.planeTiltYSpin->setUnit(Base::Unit::Angle);
+    d->ui.planeTiltYSpin->setRange(-180.0, 180.0);
+    d->ui.planeTiltYSpin->setSingleStep(1.0);
+
     QPalette hintPalette = d->ui.dragHintLabel->palette();
     hintPalette.setColor(
         QPalette::WindowText,
@@ -77,7 +93,10 @@ ClippingPlaneWidget::ClippingPlaneWidget(ViewProviderClippingPlane* viewProvider
     refresh();
 }
 
-ClippingPlaneWidget::~ClippingPlaneWidget() = default;
+ClippingPlaneWidget::~ClippingPlaneWidget()
+{
+    stopPlaneEditing();
+}
 
 ViewProviderClippingPlane* ClippingPlaneWidget::getViewProvider() const
 {
@@ -95,6 +114,19 @@ View3DInventor* ClippingPlaneWidget::getCurrentView() const
     auto* vp = getViewProvider();
     auto* doc = vp ? vp->getDocument() : nullptr;
     return doc ? qobject_cast<View3DInventor*>(doc->getActiveView()) : nullptr;
+}
+
+Base::Placement ClippingPlaneWidget::currentEditablePlanePlacement() const
+{
+    if (planeEditor) {
+        return planeEditor->currentPlacement();
+    }
+
+    if (auto* plane = getPlane()) {
+        return App::GeoFeature::getGlobalPlacement(plane);
+    }
+
+    return {};
 }
 
 void ClippingPlaneWidget::refresh()
@@ -118,9 +150,11 @@ void ClippingPlaneWidget::refresh()
         d->ui.showHelperCheck->setChecked(vp->Visibility.getValue());
     }
 
+    refreshPlane();
     refreshTargets();
     refreshScopeControls();
     refreshActivation();
+    refreshButtons();
 }
 
 void ClippingPlaneWidget::refreshActivation()
@@ -142,6 +176,30 @@ void ClippingPlaneWidget::refreshActivation()
     d->ui.activeInCurrentView->setChecked(active);
     d->ui.activationStateLabel->clear();
     d->ui.activationStateLabel->setVisible(false);
+}
+
+void ClippingPlaneWidget::refreshPlane()
+{
+    auto* plane = getPlane();
+
+    const QSignalBlocker reverseBlocker(d->ui.reverseCheck);
+    const QSignalBlocker offsetBlocker(d->ui.planeOffsetSpin);
+    const QSignalBlocker tiltXBlocker(d->ui.planeTiltXSpin);
+    const QSignalBlocker tiltYBlocker(d->ui.planeTiltYSpin);
+
+    if (!plane) {
+        d->ui.reverseCheck->setChecked(false);
+        d->ui.planeOffsetSpin->setValue(0.0);
+        d->ui.planeTiltXSpin->setValue(0.0);
+        d->ui.planeTiltYSpin->setValue(0.0);
+        return;
+    }
+
+    d->ui.reverseCheck->setChecked(plane->Reverse.getValue());
+    const auto state = Gui::PlaneGizmoEditor::stateFromPlacement(currentEditablePlanePlacement());
+    d->ui.planeOffsetSpin->setValue(Base::Quantity(state.offset, Base::Unit::Length));
+    d->ui.planeTiltXSpin->setValue(Base::Quantity(state.tiltXDegrees, Base::Unit::Angle));
+    d->ui.planeTiltYSpin->setValue(Base::Quantity(state.tiltYDegrees, Base::Unit::Angle));
 }
 
 void ClippingPlaneWidget::refreshTargets()
@@ -180,6 +238,31 @@ void ClippingPlaneWidget::refreshScopeControls()
     d->ui.clearTargetsButton->setEnabled(scoped && d->ui.targetsList->count() > 0);
 }
 
+void ClippingPlaneWidget::refreshButtons()
+{
+    auto* plane = getPlane();
+    auto* vp = getViewProvider();
+    const bool hasPlane = plane != nullptr;
+    const bool hasView = getCurrentView() != nullptr;
+    const bool editingPlaneIn3D = (planeEditor && planeEditor->isActive())
+        || (vp && vp->isPanelPlaneEditActive());
+    const bool presetNeedsView = d->ui.planePresetCombo->currentIndex()
+        == static_cast<int>(Gui::PlaneGizmoEditor::Preset::View);
+
+    {
+        const QSignalBlocker blocker(d->ui.editIn3DButton);
+        d->ui.editIn3DButton->setChecked(editingPlaneIn3D);
+    }
+
+    d->ui.editIn3DButton->setEnabled(hasPlane && hasView);
+    d->ui.reverseCheck->setEnabled(hasPlane);
+    d->ui.planeOffsetSpin->setEnabled(hasPlane);
+    d->ui.planeTiltXSpin->setEnabled(hasPlane);
+    d->ui.planeTiltYSpin->setEnabled(hasPlane);
+    d->ui.planePresetCombo->setEnabled(hasPlane);
+    d->ui.applyPlanePresetButton->setEnabled(hasPlane && (!presetNeedsView || hasView));
+}
+
 void ClippingPlaneWidget::setTargets(const std::vector<App::DocumentObject*>& targets)
 {
     auto* plane = getPlane();
@@ -190,12 +273,79 @@ void ClippingPlaneWidget::setTargets(const std::vector<App::DocumentObject*>& ta
     plane->Targets.setValues(targets);
     refreshTargets();
     refreshScopeControls();
+    refreshButtons();
+}
+
+Gui::PlaneGizmoEditor* ClippingPlaneWidget::ensurePlaneEditor()
+{
+    auto* vp = getViewProvider();
+    if (!vp) {
+        planeEditor.reset();
+        return nullptr;
+    }
+
+    if (planeEditor && planeEditor->getViewProvider() == vp) {
+        return planeEditor.get();
+    }
+
+    planeEditor = std::make_unique<Gui::PlaneGizmoEditor>(vp, this);
+    connect(planeEditor.get(), &Gui::PlaneGizmoEditor::stateChanged, this, [this]() {
+        refreshPlane();
+        refreshActivation();
+        refreshButtons();
+    });
+    connect(planeEditor.get(), &Gui::PlaneGizmoEditor::editingChanged, this, [this](bool) {
+        refreshButtons();
+    });
+    connect(planeEditor.get(), &Gui::PlaneGizmoEditor::committed, this, [this]() { refresh(); });
+    return planeEditor.get();
+}
+
+void ClippingPlaneWidget::stopPlaneEditing()
+{
+    if (planeEditor && planeEditor->isActive()) {
+        planeEditor->finish(true);
+    }
+    else if (auto* vp = getViewProvider()) {
+        vp->finishPanelPlaneEdit();
+    }
 }
 
 void ClippingPlaneWidget::setupConnections()
 {
     connect(d->ui.activeInCurrentView, &QCheckBox::toggled, this, &ClippingPlaneWidget::onActivationToggled);
     connect(d->ui.reverseCheck, &QCheckBox::toggled, this, &ClippingPlaneWidget::onReverseToggled);
+    connect(d->ui.editIn3DButton, &QPushButton::toggled, this, &ClippingPlaneWidget::onEditIn3DToggled);
+    connect(
+        d->ui.planeOffsetSpin,
+        qOverload<double>(&Gui::QuantitySpinBox::valueChanged),
+        this,
+        &ClippingPlaneWidget::onPlaneControlsChanged
+    );
+    connect(
+        d->ui.planeTiltXSpin,
+        qOverload<double>(&Gui::QuantitySpinBox::valueChanged),
+        this,
+        &ClippingPlaneWidget::onPlaneControlsChanged
+    );
+    connect(
+        d->ui.planeTiltYSpin,
+        qOverload<double>(&Gui::QuantitySpinBox::valueChanged),
+        this,
+        &ClippingPlaneWidget::onPlaneControlsChanged
+    );
+    connect(
+        d->ui.planePresetCombo,
+        qOverload<int>(&QComboBox::currentIndexChanged),
+        this,
+        &ClippingPlaneWidget::refreshButtons
+    );
+    connect(
+        d->ui.applyPlanePresetButton,
+        &QPushButton::clicked,
+        this,
+        &ClippingPlaneWidget::onApplyPlanePreset
+    );
     connect(
         d->ui.scopeModeCombo,
         qOverload<int>(&QComboBox::currentIndexChanged),
@@ -244,6 +394,85 @@ void ClippingPlaneWidget::onReverseToggled(bool on)
     if (auto* plane = getPlane()) {
         plane->Reverse.setValue(on);
     }
+
+    refreshActivation();
+    refreshButtons();
+}
+
+void ClippingPlaneWidget::onEditIn3DToggled(bool on)
+{
+    auto* vp = getViewProvider();
+    auto* view = getCurrentView();
+    auto* editor = ensurePlaneEditor();
+    if (!vp || !view || !editor) {
+        const QSignalBlocker blocker(d->ui.editIn3DButton);
+        d->ui.editIn3DButton->setChecked(false);
+        return;
+    }
+
+    if (!Gui::GizmoContainer::isEnabled()) {
+        if (on) {
+            const bool started = vp->startPanelPlaneEdit(view->getViewer(), [this]() { refresh(); });
+            if (!started) {
+                const QSignalBlocker blocker(d->ui.editIn3DButton);
+                d->ui.editIn3DButton->setChecked(false);
+            }
+        }
+        else {
+            vp->finishPanelPlaneEdit();
+        }
+
+        refreshButtons();
+        return;
+    }
+
+    if (on) {
+        if (!editor->start(view->getViewer())) {
+            const QSignalBlocker blocker(d->ui.editIn3DButton);
+            d->ui.editIn3DButton->setChecked(false);
+        }
+    }
+    else {
+        editor->finish(true);
+    }
+
+    refreshButtons();
+}
+
+void ClippingPlaneWidget::onPlaneControlsChanged()
+{
+    auto* editor = ensurePlaneEditor();
+    if (!editor) {
+        refreshPlane();
+        refreshButtons();
+        return;
+    }
+
+    Gui::PlaneGizmoEditor::State state;
+    state.offset = d->ui.planeOffsetSpin->rawValue();
+    state.tiltXDegrees = d->ui.planeTiltXSpin->rawValue();
+    state.tiltYDegrees = d->ui.planeTiltYSpin->rawValue();
+    editor->setState(state, !editor->isActive());
+}
+
+void ClippingPlaneWidget::onApplyPlanePreset()
+{
+    auto* editor = ensurePlaneEditor();
+    if (!editor) {
+        refreshPlane();
+        refreshButtons();
+        return;
+    }
+
+    const auto preset = static_cast<Gui::PlaneGizmoEditor::Preset>(
+        d->ui.planePresetCombo->currentIndex()
+    );
+    if (preset == Gui::PlaneGizmoEditor::Preset::View && !getCurrentView()) {
+        refreshButtons();
+        return;
+    }
+
+    editor->setPreset(preset, getCurrentView(), !editor->isActive());
 }
 
 void ClippingPlaneWidget::onScopeModeChanged(int index)
@@ -253,6 +482,7 @@ void ClippingPlaneWidget::onScopeModeChanged(int index)
     }
 
     refreshScopeControls();
+    refreshButtons();
 }
 
 void ClippingPlaneWidget::onAddSelected()
@@ -380,6 +610,10 @@ bool TaskClippingPlane::reject()
 
 bool TaskClippingPlane::finishEditing()
 {
+    if (widget) {
+        widget->stopPlaneEditing();
+    }
+
     if (auto* doc = viewProvider ? viewProvider->getDocument() : nullptr) {
         if (doc->hasPendingCommand()) {
             doc->commitCommand();

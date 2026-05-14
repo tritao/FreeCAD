@@ -26,6 +26,8 @@
 #include <QDialogButtonBox>
 #include <QWidget>
 
+#include <Base/Placement.h>
+
 #include <Gui/TaskView/TaskDialog.h>
 
 namespace App
@@ -37,6 +39,7 @@ class DocumentObject;
 namespace Gui
 {
 
+class PlaneGizmoEditor;
 class View3DInventor;
 class ViewProviderClippingPlane;
 
@@ -49,19 +52,27 @@ public:
     ~ClippingPlaneWidget() override;
 
     void refresh();
+    void stopPlaneEditing();
 
 private:
     ViewProviderClippingPlane* getViewProvider() const;
     App::ClippingPlane* getPlane() const;
     View3DInventor* getCurrentView() const;
+    Base::Placement currentEditablePlanePlacement() const;
     void refreshActivation();
+    void refreshPlane();
     void refreshTargets();
     void refreshScopeControls();
+    void refreshButtons();
     void setTargets(const std::vector<App::DocumentObject*>& targets);
+    Gui::PlaneGizmoEditor* ensurePlaneEditor();
     void setupConnections();
 
     void onActivationToggled(bool on);
     void onReverseToggled(bool on);
+    void onEditIn3DToggled(bool on);
+    void onPlaneControlsChanged();
+    void onApplyPlanePreset();
     void onScopeModeChanged(int index);
     void onAddSelected();
     void onRemoveSelectedTargets();
@@ -74,6 +85,7 @@ private:
 private:
     class Private;
     std::unique_ptr<Private> d;
+    std::unique_ptr<Gui::PlaneGizmoEditor> planeEditor;
 };
 
 class GuiExport TaskClippingPlane: public Gui::TaskView::TaskDialog

@@ -27,6 +27,7 @@
 #include <QPushButton>
 #include <QWidget>
 
+#include <Base/Placement.h>
 #include <Base/Color.h>
 
 #include <Gui/TaskView/TaskDialog.h>
@@ -39,7 +40,9 @@ class DocumentObject;
 
 namespace Gui
 {
+class PlaneGizmoEditor;
 class View3DInventor;
+class ViewProviderClippingPlane;
 }  // namespace Gui
 
 namespace Part
@@ -61,20 +64,29 @@ public:
     ~SectionAnalysisWidget() override;
 
     void refresh();
+    void stopPlaneEditing();
 
 private:
     ViewProviderSectionAnalysis* getViewProvider() const;
     Part::SectionAnalysis* getSectionAnalysis() const;
     App::ClippingPlane* getClippingPlane() const;
     Gui::View3DInventor* getCurrentView() const;
+    Base::Placement currentEditablePlanePlacement() const;
     void refreshClippingPlane();
     void refreshSources();
+    void refreshPlane();
     void refreshResult();
     void refreshActivation();
     void refreshAppearance();
     void refreshButtons();
     void setClippingPlane(App::ClippingPlane* plane);
     void setSources(const std::vector<App::DocumentObject*>& sources);
+    void recomputeSectionAnalysisIfReady();
+    bool startDedicatedPlaneGizmoEdit();
+    void finishDedicatedPlaneGizmoEdit(bool commitPreview);
+    void queueSectionRecompute();
+    void flushQueuedSectionRecompute();
+    Gui::PlaneGizmoEditor* ensurePlaneEditor();
     std::vector<App::DocumentObject*> getSelectedSourceObjects() const;
     App::ClippingPlane* getSelectedClippingPlane() const;
     void selectObjects(const std::vector<App::DocumentObject*>& objects);
@@ -89,8 +101,11 @@ private:
     void onSelectSources();
     void onActivationToggled(bool on);
     void onSelectClippingPlane();
-    void onEditClippingPlane();
+    void onEditClippingPlaneToggled(bool on);
     void onUseCurrentSelectionAsClippingPlane();
+    void onFlipClippingDirectionToggled(bool on);
+    void onPlaneControlsChanged();
+    void onApplyPlanePreset();
     void onSectionFaceColorClicked();
     void onSectionEdgeColorClicked();
     void onSectionFaceTransparencyChanged(int value);
@@ -106,6 +121,7 @@ private:
 private:
     class Private;
     std::unique_ptr<Private> d;
+    std::unique_ptr<Gui::PlaneGizmoEditor> planeEditor;
 };
 
 class PartGuiExport TaskSectionAnalysis: public Gui::TaskView::TaskDialog

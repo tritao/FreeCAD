@@ -202,19 +202,7 @@ bool ViewProviderDragger::setEdit(int ModNum)
         return true;
     }
 
-    assert(!transformDragger);
-
-    transformDragger = new SoTransformDragger();
-    transformDragger->setAxisColors(
-        Gui::ViewParams::instance()->getAxisXColor(),
-        Gui::ViewParams::instance()->getAxisYColor(),
-        Gui::ViewParams::instance()->getAxisZColor()
-    );
-    transformDragger->draggerSize.setValue(ViewParams::instance()->getDraggerScale());
-
-    transformDragger->addStartCallback(dragStartCallback, this);
-    transformDragger->addFinishCallback(dragFinishCallback, this);
-    transformDragger->addMotionCallback(dragMotionCallback, this);
+    createTransformDragger();
 
     Gui::Control().showDialog(getTransformDialog(), getDocument()->getDocument());
 
@@ -227,7 +215,7 @@ void ViewProviderDragger::unsetEdit(int ModNum)
 {
     Q_UNUSED(ModNum);
 
-    transformDragger.reset();
+    destroyTransformDragger();
 
     Gui::Control().closeDialog(getDocument()->getDocument());
 }
@@ -281,6 +269,9 @@ void ViewProviderDragger::dragFinishCallback(void* data, [[maybe_unused]] SoDrag
 
     vp->updatePlacementFromDragger();
     vp->onDragFinish();
+    if (vp->externalDragFinishHandler) {
+        vp->externalDragFinishHandler();
+    }
 }
 
 void ViewProviderDragger::dragMotionCallback(void* data, [[maybe_unused]] SoDragger* d)
@@ -489,6 +480,57 @@ void ViewProviderDragger::setDraggerPlacement(const Base::Placement& placement)
     transformDragger->clearIncrementCounts();
 }
 
+bool ViewProviderDragger::startExternalTransformEdit(View3DInventorViewer* viewer)
+{
+    if (!viewer) {
+        return false;
+    }
+
+    if (transformDragger) {
+        return externalEditViewer == viewer;
+    }
+
+    createTransformDragger();
+    updateDraggerPosition();
+
+    externalEditingTransformBackup = viewer->getDocument()->getEditingTransform();
+    hasExternalEditingTransformBackup = true;
+    transformDragger->setUpAutoScale(viewer->getSoRenderManager()->getCamera());
+    auto originPlacement = App::GeoFeature::getGlobalPlacement(getObject())
+        * getObjectPlacement().inverse();
+    auto mat = originPlacement.toMatrix();
+
+    viewer->getDocument()->setEditingTransform(mat);
+    viewer->setupEditingRoot(transformDragger, &mat);
+    externalEditViewer = viewer;
+    return true;
+}
+
+void ViewProviderDragger::finishExternalTransformEdit()
+{
+    if (externalEditViewer) {
+        externalEditViewer->resetEditingRoot(false);
+        if (hasExternalEditingTransformBackup) {
+            externalEditViewer->getDocument()->setEditingTransform(externalEditingTransformBackup);
+        }
+        externalEditViewer = nullptr;
+    }
+
+    destroyTransformDragger();
+    externalDragFinishHandler = {};
+    hasExternalEditingTransformBackup = false;
+}
+
+bool ViewProviderDragger::isExternalTransformEditActive() const
+{
+    return externalEditViewer != nullptr;
+}
+
+void ViewProviderDragger::setExternalDragFinishHandler(std::function<void()> handler)
+{
+    externalDragFinishHandler = std::move(handler);
+}
+
 void ViewProviderDragger::attach(App::DocumentObject* pcObject)
 {
     ViewProviderDocumentObject::attach(pcObject);
@@ -512,6 +554,30 @@ void ViewProviderDragger::updateDraggerPosition()
     auto placement = getObjectPlacement() * getTransformOrigin();
 
     setDraggerPlacement(placement);
+}
+
+void ViewProviderDragger::createTransformDragger()
+{
+    assert(!transformDragger);
+
+    transformDragger = new SoTransformDragger();
+    transformDragger->setAxisColors(
+        Gui::ViewParams::instance()->getAxisXColor(),
+        Gui::ViewParams::instance()->getAxisYColor(),
+        Gui::ViewParams::instance()->getAxisZColor()
+    );
+    transformDragger->draggerSize.setValue(ViewParams::instance()->getDraggerScale());
+
+    transformDragger->addStartCallback(dragStartCallback, this);
+    transformDragger->addFinishCallback(dragFinishCallback, this);
+    transformDragger->addMotionCallback(dragMotionCallback, this);
+}
+
+void ViewProviderDragger::destroyTransformDragger()
+{
+    transformDragger.reset();
+    externalEditViewer = nullptr;
+    hasExternalEditingTransformBackup = false;
 }
 
 void ViewProviderDragger::updateTransform(const Base::Placement& from, SoTransform* to)

@@ -21,6 +21,8 @@
 
 #pragma once
 
+#include <functional>
+
 #include <Gui/ViewProviderGeometryObject.h>
 
 class SoCoordinate3;
@@ -32,6 +34,7 @@ namespace Gui
 {
 
 class SoShapeScale;
+class View3DInventorViewer;
 
 class GuiExport ViewProviderClippingPlane: public ViewProviderGeometryObject
 {
@@ -54,9 +57,12 @@ public:
     void setupContextMenu(QMenu* menu, QObject* receiver, const char* member) override;
     bool setEdit(int ModNum) override;
     void unsetEdit(int ModNum) override;
-    TaskView::TaskDialog* getTransformDialog() override;
     bool doubleClicked() override;
     void beforeDelete() override;
+    bool startPanelPlaneEdit(View3DInventorViewer* viewer, std::function<void()> onDragFinish);
+    void finishPanelPlaneEdit();
+    void setPanelPlaneEditActive(bool active);
+    bool isPanelPlaneEditActive() const;
 
 protected:
     void onChanged(const App::Property* prop) override;
@@ -74,8 +80,8 @@ private:
     SoMaterial* overlayMaterial {nullptr};
     SoSwitch* overlaySwitch {nullptr};
     SoShapeScale* overlayScale {nullptr};
-    bool useClippingTaskDialog {false};
     bool editModeActive {false};
+    bool panelPlaneEditActive {false};
 };
 
 }  // namespace Gui

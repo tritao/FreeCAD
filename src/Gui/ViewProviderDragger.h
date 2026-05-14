@@ -23,7 +23,10 @@
 
 #pragma once
 
+#include <functional>
+
 #include "ViewProviderDocumentObject.h"
+#include <Base/Matrix.h>
 #include <Base/Placement.h>
 #include <App/PropertyGeo.h>
 #include <Base/Bitmask.h>
@@ -115,6 +118,10 @@ public:
     Base::Placement getOriginalDraggerPlacement() const;
     /// Sets placement of dragger relative to objects origin
     void setDraggerPlacement(const Base::Placement& placement);
+    bool startExternalTransformEdit(View3DInventorViewer* viewer);
+    void finishExternalTransformEdit();
+    bool isExternalTransformEditActive() const;
+    void setExternalDragFinishHandler(std::function<void()> handler);
 
 protected:
     bool setEdit(int ModNum) override;
@@ -159,6 +166,13 @@ private:
     );
 
     GizmoContainer* gizmoContainer = nullptr;
+    View3DInventorViewer* externalEditViewer = nullptr;
+    std::function<void()> externalDragFinishHandler;
+    Base::Matrix4D externalEditingTransformBackup {};
+    bool hasExternalEditingTransformBackup {false};
+
+    void createTransformDragger();
+    void destroyTransformDragger();
 };
 
 }  // namespace Gui

@@ -69,8 +69,11 @@
         </item>
         <item>
          <widget class="QPushButton" name="editClippingPlaneButton">
+          <property name="checkable">
+           <bool>true</bool>
+          </property>
           <property name="text">
-           <string>Edit clipping plane</string>
+           <string>Edit in 3D</string>
           </property>
          </widget>
         </item>
@@ -136,6 +139,94 @@
          <widget class="QPushButton" name="selectSourcesButton">
           <property name="text">
            <string>Select in tree</string>
+          </property>
+         </widget>
+        </item>
+       </layout>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item>
+    <widget class="QGroupBox" name="planeGroup">
+     <property name="title">
+      <string>Plane</string>
+     </property>
+     <layout class="QGridLayout" name="planeGroupLayout">
+      <item row="0" column="0" colspan="2">
+       <widget class="QCheckBox" name="flipClippingDirectionCheck">
+        <property name="text">
+         <string>Flip cut direction</string>
+        </property>
+       </widget>
+      </item>
+      <item row="1" column="0">
+       <widget class="QLabel" name="planeOffsetLabel">
+        <property name="text">
+         <string>Offset</string>
+        </property>
+       </widget>
+      </item>
+      <item row="1" column="1">
+       <widget class="Gui::QuantitySpinBox" name="planeOffsetSpin"/>
+      </item>
+      <item row="2" column="0">
+       <widget class="QLabel" name="planeTiltXLabel">
+        <property name="text">
+         <string>Tilt X</string>
+        </property>
+       </widget>
+      </item>
+      <item row="2" column="1">
+       <widget class="Gui::QuantitySpinBox" name="planeTiltXSpin"/>
+      </item>
+      <item row="3" column="0">
+       <widget class="QLabel" name="planeTiltYLabel">
+        <property name="text">
+         <string>Tilt Y</string>
+        </property>
+       </widget>
+      </item>
+      <item row="3" column="1">
+       <widget class="Gui::QuantitySpinBox" name="planeTiltYSpin"/>
+      </item>
+      <item row="4" column="0">
+       <widget class="QLabel" name="planePresetLabel">
+        <property name="text">
+         <string>Preset</string>
+        </property>
+       </widget>
+      </item>
+      <item row="4" column="1">
+       <layout class="QHBoxLayout" name="planePresetLayout">
+        <item>
+         <widget class="QComboBox" name="planePresetCombo">
+          <item>
+           <property name="text">
+            <string>XY</string>
+           </property>
+          </item>
+          <item>
+           <property name="text">
+            <string>XZ</string>
+           </property>
+          </item>
+          <item>
+           <property name="text">
+            <string>YZ</string>
+           </property>
+          </item>
+          <item>
+           <property name="text">
+            <string>View</string>
+           </property>
+          </item>
+         </widget>
+        </item>
+        <item>
+         <widget class="QPushButton" name="applyPlanePresetButton">
+          <property name="text">
+           <string>Apply</string>
           </property>
          </widget>
         </item>
@@ -397,6 +488,13 @@
    </item>
   </layout>
  </widget>
+ <customwidgets>
+  <customwidget>
+   <class>Gui::QuantitySpinBox</class>
+   <extends>QWidget</extends>
+   <header>Gui/QuantitySpinBox.h</header>
+  </customwidget>
+ </customwidgets>
  <resources/>
  <connections/>
 </ui>

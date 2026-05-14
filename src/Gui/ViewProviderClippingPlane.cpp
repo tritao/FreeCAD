@@ -36,6 +36,7 @@
 #include "Application.h"
 #include "ClippingPlaneManager.h"
 #include "Command.h"
+#include "Control.h"
 #include "Inventor/SoAxisCrossKit.h"
 #include "Inventor/So3DAnnotation.h"
 #include "Selection/Selection.h"
@@ -200,32 +201,84 @@ void ViewProviderClippingPlane::setupContextMenu(QMenu* menu, QObject* receiver,
 
 bool ViewProviderClippingPlane::setEdit(int ModNum)
 {
-    useClippingTaskDialog = (ModNum == static_cast<int>(ViewProvider::Default));
+    auto* appDoc = getObject() ? getObject()->getDocument() : nullptr;
     editModeActive = true;
     syncHelperVisibility();
-    return inherited::setEdit(ModNum);
+
+    if (ModNum != static_cast<int>(ViewProvider::Default)) {
+        if (inherited::setEdit(ModNum)) {
+            return true;
+        }
+
+        editModeActive = false;
+        syncHelperVisibility();
+        return false;
+    }
+    if (Gui::Control().activeDialog(appDoc)) {
+        editModeActive = false;
+        syncHelperVisibility();
+        return false;
+    }
+
+    Gui::Control().showDialog(new TaskClippingPlane(this), appDoc);
+    return true;
 }
 
 void ViewProviderClippingPlane::unsetEdit(int ModNum)
 {
+    auto* appDoc = getObject() ? getObject()->getDocument() : nullptr;
     ClippingPlaneManager::instance().clearPreviewPlacement(getObject<App::ClippingPlane>());
-    inherited::unsetEdit(ModNum);
-    useClippingTaskDialog = false;
+
+    if (ModNum == static_cast<int>(ViewProvider::Default)) {
+        Gui::Control().closeDialog(appDoc);
+    }
+    else {
+        inherited::unsetEdit(ModNum);
+    }
+
     editModeActive = false;
     syncHelperVisibility();
-}
-
-TaskView::TaskDialog* ViewProviderClippingPlane::getTransformDialog()
-{
-    if (useClippingTaskDialog) {
-        return new TaskClippingPlane(this);
-    }
-    return inherited::getTransformDialog();
 }
 
 bool ViewProviderClippingPlane::doubleClicked()
 {
     return inherited::doubleClicked();
+}
+
+bool ViewProviderClippingPlane::startPanelPlaneEdit(
+    View3DInventorViewer* viewer,
+    std::function<void()> onDragFinish
+)
+{
+    if (!startExternalTransformEdit(viewer)) {
+        return false;
+    }
+
+    setExternalDragFinishHandler(std::move(onDragFinish));
+    setPanelPlaneEditActive(true);
+    return true;
+}
+
+void ViewProviderClippingPlane::finishPanelPlaneEdit()
+{
+    ClippingPlaneManager::instance().clearPreviewPlacement(getObject<App::ClippingPlane>());
+    finishExternalTransformEdit();
+    setPanelPlaneEditActive(false);
+}
+
+void ViewProviderClippingPlane::setPanelPlaneEditActive(bool active)
+{
+    if (panelPlaneEditActive == active) {
+        return;
+    }
+
+    panelPlaneEditActive = active;
+    syncHelperVisibility();
+}
+
+bool ViewProviderClippingPlane::isPanelPlaneEditActive() const
+{
+    return panelPlaneEditActive;
 }
 
 void ViewProviderClippingPlane::beforeDelete()
@@ -267,7 +320,7 @@ void ViewProviderClippingPlane::syncOverlayAppearance()
 void ViewProviderClippingPlane::syncHelperVisibility()
 {
     if (overlaySwitch) {
-        const bool hideDuringActiveEdit = editModeActive
+        const bool hideDuringActiveEdit = (editModeActive || panelPlaneEditActive)
             && ClippingPlaneManager::instance().isActive(getObject<App::ClippingPlane>());
         overlaySwitch->whichChild = (Visibility.getValue() && !hideDuringActiveEdit)
             ? SO_SWITCH_ALL

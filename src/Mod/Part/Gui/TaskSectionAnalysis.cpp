@@ -21,6 +21,7 @@
 
 #include "PreCompiled.h"
 
+#include <algorithm>
 #include <set>
 
 #include <QColor>
@@ -28,17 +29,28 @@
 #include <QEvent>
 #include <QListWidgetItem>
 #include <QSignalBlocker>
+#include <QTimer>
 
+#include <Base/Placement.h>
+#include <Base/Rotation.h>
+#include <Base/Tools.h>
+#include <Base/Vector3D.h>
 #include <TopAbs_ShapeEnum.hxx>
 #include <TopExp_Explorer.hxx>
 
 #include <App/ClippingPlane.h>
 #include <App/Document.h>
 #include <App/DocumentObject.h>
+#include <App/GeoFeature.h>
 #include <Gui/ClippingPlaneManager.h>
 #include <Gui/Document.h>
+#include <Gui/Inventor/Draggers/Gizmo.h>
+#include <Gui/PlaneGizmoEditor.h>
+#include <Gui/QuantitySpinBox.h>
 #include <Gui/Selection/Selection.h>
 #include <Gui/View3DInventor.h>
+#include <Gui/View3DInventorViewer.h>
+#include <Gui/ViewProviderClippingPlane.h>
 
 #include <Mod/Part/App/FeatureSectionAnalysis.h>
 
@@ -71,6 +83,7 @@ class SectionAnalysisWidget::Private
 public:
     Ui::SectionAnalysisWidget ui {};
     ViewProviderSectionAnalysis* viewProvider {nullptr};
+    QTimer* recomputeTimer {nullptr};
 };
 
 /* TRANSLATOR PartGui::SectionAnalysisWidget */
@@ -81,11 +94,32 @@ SectionAnalysisWidget::SectionAnalysisWidget(ViewProviderSectionAnalysis* viewPr
 {
     d->viewProvider = viewProvider;
     d->ui.setupUi(this);
+
+    d->ui.planeOffsetSpin->setUnit(Base::Unit::Length);
+    d->ui.planeOffsetSpin->setRange(-1.0e9, 1.0e9);
+    d->ui.planeOffsetSpin->setSingleStep(1.0);
+
+    d->ui.planeTiltXSpin->setUnit(Base::Unit::Angle);
+    d->ui.planeTiltXSpin->setRange(-89.99, 89.99);
+    d->ui.planeTiltXSpin->setSingleStep(1.0);
+
+    d->ui.planeTiltYSpin->setUnit(Base::Unit::Angle);
+    d->ui.planeTiltYSpin->setRange(-180.0, 180.0);
+    d->ui.planeTiltYSpin->setSingleStep(1.0);
+
+    d->recomputeTimer = new QTimer(this);
+    d->recomputeTimer->setSingleShot(true);
+    d->recomputeTimer->setInterval(150);
+    connect(d->recomputeTimer, &QTimer::timeout, this, &SectionAnalysisWidget::flushQueuedSectionRecompute);
+
     setupConnections();
     refresh();
 }
 
-SectionAnalysisWidget::~SectionAnalysisWidget() = default;
+SectionAnalysisWidget::~SectionAnalysisWidget()
+{
+    stopPlaneEditing();
+}
 
 ViewProviderSectionAnalysis* SectionAnalysisWidget::getViewProvider() const
 {
@@ -111,6 +145,19 @@ Gui::View3DInventor* SectionAnalysisWidget::getCurrentView() const
     return doc ? qobject_cast<Gui::View3DInventor*>(doc->getActiveView()) : nullptr;
 }
 
+Base::Placement SectionAnalysisWidget::currentEditablePlanePlacement() const
+{
+    if (planeEditor) {
+        return planeEditor->currentPlacement();
+    }
+
+    if (auto* plane = getClippingPlane()) {
+        return App::GeoFeature::getGlobalPlacement(plane);
+    }
+
+    return {};
+}
+
 void SectionAnalysisWidget::refresh()
 {
     auto* analysis = getSectionAnalysis();
@@ -125,6 +172,7 @@ void SectionAnalysisWidget::refresh()
 
     refreshClippingPlane();
     refreshSources();
+    refreshPlane();
     refreshResult();
     refreshActivation();
     refreshAppearance();
@@ -166,6 +214,30 @@ void SectionAnalysisWidget::refreshSources()
     d->ui.sourcesSummaryLabel->setText(
         tr("%1 source object(s)").arg(analysis->Sources.getValues().size())
     );
+}
+
+void SectionAnalysisWidget::refreshPlane()
+{
+    auto* plane = getClippingPlane();
+
+    const QSignalBlocker flipBlocker(d->ui.flipClippingDirectionCheck);
+    const QSignalBlocker offsetBlocker(d->ui.planeOffsetSpin);
+    const QSignalBlocker tiltXBlocker(d->ui.planeTiltXSpin);
+    const QSignalBlocker tiltYBlocker(d->ui.planeTiltYSpin);
+
+    if (!plane) {
+        d->ui.flipClippingDirectionCheck->setChecked(false);
+        d->ui.planeOffsetSpin->setValue(0.0);
+        d->ui.planeTiltXSpin->setValue(0.0);
+        d->ui.planeTiltYSpin->setValue(0.0);
+        return;
+    }
+
+    d->ui.flipClippingDirectionCheck->setChecked(plane->Reverse.getValue());
+    const auto state = Gui::PlaneGizmoEditor::stateFromPlacement(currentEditablePlanePlacement());
+    d->ui.planeOffsetSpin->setValue(Base::Quantity(state.offset, Base::Unit::Length));
+    d->ui.planeTiltXSpin->setValue(Base::Quantity(state.tiltXDegrees, Base::Unit::Angle));
+    d->ui.planeTiltYSpin->setValue(Base::Quantity(state.tiltYDegrees, Base::Unit::Angle));
 }
 
 void SectionAnalysisWidget::refreshResult()
@@ -244,8 +316,11 @@ void SectionAnalysisWidget::refreshButtons()
     auto* analysis = getSectionAnalysis();
     const bool hasDocument = analysis && analysis->getDocument();
     const bool hasPlane = getClippingPlane() != nullptr;
+    const bool editingPlaneIn3D = planeEditor && planeEditor->isActive();
     const bool hasSources = analysis && !analysis->Sources.getValues().empty();
     const bool hasView = getCurrentView() != nullptr;
+    const bool presetNeedsView = d->ui.planePresetCombo->currentIndex()
+        == static_cast<int>(Gui::PlaneGizmoEditor::Preset::View);
     const bool hatchEnabled = analysis && analysis->ShowHatching.getValue();
     auto* viewProvider = getViewProvider();
     const bool useEdgeColorForHatching = viewProvider
@@ -253,12 +328,22 @@ void SectionAnalysisWidget::refreshButtons()
 
     d->ui.useCurrentSelectionAsClippingPlaneButton->setEnabled(hasDocument);
     d->ui.selectClippingPlaneButton->setEnabled(hasPlane);
-    d->ui.editClippingPlaneButton->setEnabled(hasPlane);
+    {
+        const QSignalBlocker blocker(d->ui.editClippingPlaneButton);
+        d->ui.editClippingPlaneButton->setChecked(editingPlaneIn3D);
+    }
+    d->ui.editClippingPlaneButton->setEnabled(hasPlane && hasView);
+    d->ui.flipClippingDirectionCheck->setEnabled(hasPlane);
+    d->ui.planeOffsetSpin->setEnabled(hasPlane);
+    d->ui.planeTiltXSpin->setEnabled(hasPlane);
+    d->ui.planeTiltYSpin->setEnabled(hasPlane);
+    d->ui.planePresetCombo->setEnabled(hasPlane);
+    d->ui.applyPlanePresetButton->setEnabled(hasPlane && (!presetNeedsView || hasView));
     d->ui.useCurrentSelectionButton->setEnabled(hasDocument);
     d->ui.appendCurrentSelectionButton->setEnabled(hasDocument);
     d->ui.removeSelectedSourcesButton->setEnabled(!d->ui.sourcesList->selectedItems().isEmpty());
     d->ui.selectSourcesButton->setEnabled(hasSources);
-    d->ui.recomputeButton->setEnabled(hasPlane && hasSources);
+    d->ui.recomputeButton->setEnabled(hasPlane && hasSources && !editingPlaneIn3D);
     d->ui.activeInCurrentViewCheck->setEnabled(hasPlane && hasView);
     d->ui.showHatchingCheck->setEnabled(hasSources);
     d->ui.hatchSpacingSpin->setEnabled(hasSources && hatchEnabled);
@@ -285,6 +370,7 @@ void SectionAnalysisWidget::setClippingPlane(App::ClippingPlane* plane)
         return;
     }
 
+    stopPlaneEditing();
     analysis->ClippingPlane.setValue(plane);
     if (auto* doc = analysis->getDocument()) {
         doc->recompute();
@@ -315,6 +401,107 @@ void SectionAnalysisWidget::setSources(const std::vector<App::DocumentObject*>& 
         doc->recompute();
     }
     refresh();
+}
+
+void SectionAnalysisWidget::recomputeSectionAnalysisIfReady()
+{
+    auto* analysis = getSectionAnalysis();
+    if (!analysis) {
+        return;
+    }
+
+    auto* doc = analysis->getDocument();
+    if (!doc) {
+        refresh();
+        return;
+    }
+
+    if (getClippingPlane() && !analysis->Sources.getValues().empty()) {
+        doc->recompute();
+    }
+
+    refresh();
+}
+
+Gui::PlaneGizmoEditor* SectionAnalysisWidget::ensurePlaneEditor()
+{
+    auto* vp = getViewProvider();
+    auto* doc = vp ? vp->getDocument() : nullptr;
+    auto* plane = getClippingPlane();
+    auto* planeViewProvider = (plane && doc)
+        ? freecad_cast<Gui::ViewProviderClippingPlane*>(doc->getViewProvider(plane))
+        : nullptr;
+
+    if (!planeViewProvider) {
+        planeEditor.reset();
+        return nullptr;
+    }
+
+    if (planeEditor && planeEditor->getViewProvider() == planeViewProvider) {
+        return planeEditor.get();
+    }
+
+    planeEditor = std::make_unique<Gui::PlaneGizmoEditor>(planeViewProvider, this);
+    connect(planeEditor.get(), &Gui::PlaneGizmoEditor::stateChanged, this, [this]() {
+        refreshPlane();
+        refreshActivation();
+        refreshButtons();
+    });
+    connect(planeEditor.get(), &Gui::PlaneGizmoEditor::editingChanged, this, [this](bool) {
+        refreshButtons();
+    });
+    connect(planeEditor.get(), &Gui::PlaneGizmoEditor::committed, this, [this]() {
+        recomputeSectionAnalysisIfReady();
+    });
+    return planeEditor.get();
+}
+
+bool SectionAnalysisWidget::startDedicatedPlaneGizmoEdit()
+{
+    auto* view = getCurrentView();
+    auto* editor = ensurePlaneEditor();
+    if (!editor || !view) {
+        return false;
+    }
+    return editor->start(view->getViewer());
+}
+
+void SectionAnalysisWidget::finishDedicatedPlaneGizmoEdit(bool commitPreview)
+{
+    if (planeEditor && planeEditor->isActive()) {
+        planeEditor->finish(commitPreview);
+    }
+}
+
+void SectionAnalysisWidget::queueSectionRecompute()
+{
+    if (planeEditor && planeEditor->isActive()) {
+        return;
+    }
+    d->recomputeTimer->start();
+}
+
+void SectionAnalysisWidget::flushQueuedSectionRecompute()
+{
+    recomputeSectionAnalysisIfReady();
+}
+
+void SectionAnalysisWidget::stopPlaneEditing()
+{
+    if (planeEditor && planeEditor->isActive()) {
+        finishDedicatedPlaneGizmoEdit(true);
+    }
+    else {
+        auto* vp = getViewProvider();
+        auto* doc = vp ? vp->getDocument() : nullptr;
+        auto* plane = getClippingPlane();
+        auto* planeViewProvider = (plane && doc)
+            ? freecad_cast<Gui::ViewProviderClippingPlane*>(doc->getViewProvider(plane))
+            : nullptr;
+        if (planeViewProvider) {
+            planeViewProvider->finishPanelPlaneEdit();
+        }
+    }
 }
 
 std::vector<App::DocumentObject*> SectionAnalysisWidget::getSelectedSourceObjects() const
@@ -444,10 +631,46 @@ void SectionAnalysisWidget::setupConnections()
         &SectionAnalysisWidget::onUseCurrentSelectionAsClippingPlane
     );
     connect(
-        d->ui.editClippingPlaneButton,
+        d->ui.flipClippingDirectionCheck,
+        &QCheckBox::toggled,
+        this,
+        &SectionAnalysisWidget::onFlipClippingDirectionToggled
+    );
+    connect(
+        d->ui.planeOffsetSpin,
+        qOverload<double>(&Gui::QuantitySpinBox::valueChanged),
+        this,
+        &SectionAnalysisWidget::onPlaneControlsChanged
+    );
+    connect(
+        d->ui.planeTiltXSpin,
+        qOverload<double>(&Gui::QuantitySpinBox::valueChanged),
+        this,
+        &SectionAnalysisWidget::onPlaneControlsChanged
+    );
+    connect(
+        d->ui.planeTiltYSpin,
+        qOverload<double>(&Gui::QuantitySpinBox::valueChanged),
+        this,
+        &SectionAnalysisWidget::onPlaneControlsChanged
+    );
+    connect(
+        d->ui.planePresetCombo,
+        qOverload<int>(&QComboBox::currentIndexChanged),
+        this,
+        &SectionAnalysisWidget::refreshButtons
+    );
+    connect(
+        d->ui.applyPlanePresetButton,
         &QPushButton::clicked,
         this,
-        &SectionAnalysisWidget::onEditClippingPlane
+        &SectionAnalysisWidget::onApplyPlanePreset
+    );
+    connect(
+        d->ui.editClippingPlaneButton,
+        &QPushButton::toggled,
+        this,
+        &SectionAnalysisWidget::onEditClippingPlaneToggled
     );
     connect(
         d->ui.sectionFaceColorButton,
@@ -651,19 +874,96 @@ void SectionAnalysisWidget::onUseCurrentSelectionAsClippingPlane()
     }
 }
 
-void SectionAnalysisWidget::onEditClippingPlane()
+void SectionAnalysisWidget::onEditClippingPlaneToggled(bool on)
 {
-    auto* plane = getClippingPlane();
-    auto* sectionViewProvider = getViewProvider();
-    auto* doc = sectionViewProvider ? sectionViewProvider->getDocument() : nullptr;
-    if (!plane || !doc) {
+    auto* editor = ensurePlaneEditor();
+    auto* planeViewProvider = editor ? editor->getViewProvider() : nullptr;
+    auto* view = getCurrentView();
+    if (!planeViewProvider || !view) {
+        const QSignalBlocker blocker(d->ui.editClippingPlaneButton);
+        d->ui.editClippingPlaneButton->setChecked(false);
         return;
     }
 
-    selectObjects({plane});
-    if (auto* planeViewProvider = doc->getViewProvider(plane)) {
-        doc->setEdit(planeViewProvider, Gui::ViewProvider::Default);
+    if (!Gui::GizmoContainer::isEnabled()) {
+        if (on) {
+            const bool started = planeViewProvider->startPanelPlaneEdit(view->getViewer(), [this]() {
+                recomputeSectionAnalysisIfReady();
+            });
+            if (!started) {
+                const QSignalBlocker blocker(d->ui.editClippingPlaneButton);
+                d->ui.editClippingPlaneButton->setChecked(false);
+            }
+        }
+        else {
+            planeViewProvider->finishPanelPlaneEdit();
+        }
+        refreshButtons();
+        return;
     }
+
+    if (on) {
+        if (!startDedicatedPlaneGizmoEdit()) {
+            const QSignalBlocker blocker(d->ui.editClippingPlaneButton);
+            d->ui.editClippingPlaneButton->setChecked(false);
+        }
+    }
+    else {
+        finishDedicatedPlaneGizmoEdit(true);
+    }
+
+    refreshButtons();
+}
+
+void SectionAnalysisWidget::onFlipClippingDirectionToggled(bool on)
+{
+    auto* plane = getClippingPlane();
+    if (!plane) {
+        refreshPlane();
+        refreshButtons();
+        return;
+    }
+
+    plane->Reverse.setValue(on);
+    queueSectionRecompute();
+    refreshActivation();
+    refreshButtons();
+}
+
+void SectionAnalysisWidget::onPlaneControlsChanged()
+{
+    auto* editor = ensurePlaneEditor();
+    if (!editor) {
+        refreshPlane();
+        refreshButtons();
+        return;
+    }
+
+    Gui::PlaneGizmoEditor::State state;
+    state.offset = d->ui.planeOffsetSpin->rawValue();
+    state.tiltXDegrees = d->ui.planeTiltXSpin->rawValue();
+    state.tiltYDegrees = d->ui.planeTiltYSpin->rawValue();
+    editor->setState(state, !editor->isActive());
+}
+
+void SectionAnalysisWidget::onApplyPlanePreset()
+{
+    auto* editor = ensurePlaneEditor();
+    if (!editor) {
+        refreshPlane();
+        refreshButtons();
+        return;
+    }
+
+    const auto preset = static_cast<Gui::PlaneGizmoEditor::Preset>(
+        d->ui.planePresetCombo->currentIndex()
+    );
+    if (preset == Gui::PlaneGizmoEditor::Preset::View && !getCurrentView()) {
+        refreshButtons();
+        return;
+    }
+
+    editor->setPreset(preset, getCurrentView(), !editor->isActive());
 }
 
 void SectionAnalysisWidget::onSectionFaceColorClicked()
@@ -846,6 +1146,10 @@ bool TaskSectionAnalysis::reject()
 
 bool TaskSectionAnalysis::finishEditing()
 {
+    if (widget) {
+        widget->stopPlaneEditing();
+    }
+
     if (auto* doc = viewProvider ? viewProvider->getDocument() : nullptr) {
         if (doc->hasPendingCommand()) {
             doc->commitCommand();

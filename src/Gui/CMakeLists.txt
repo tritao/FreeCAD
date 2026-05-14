@@ -483,6 +483,7 @@ SOURCE_GROUP("Command" FILES ${Command_SRCS})
 SET(Dialog_CPP_SRCS
     Clipping.cpp
     ClippingPlaneManager.cpp
+    PlaneGizmoEditor.cpp
     SavedViewManager.cpp
     DemoMode.cpp
     Dialogs/DlgAbout.cpp
