@@ -56,9 +56,27 @@ def get_repo_root() -> Path:
     return Path(__file__).resolve().parents[4]
 
 
-def sync_bim_python_tree(repo_root: Path) -> None:
+def resolve_freecad_executable(repo_root: Path, freecad_path: str) -> Path:
+    candidate = Path(freecad_path)
+    if not candidate.is_absolute():
+        candidate = repo_root / candidate
+    return candidate.resolve()
+
+
+def get_build_root(freecad_executable: Path) -> Path:
+    for parent in (freecad_executable.parent, *freecad_executable.parents):
+        if (parent / "Mod" / "BIM").exists() and (
+            parent / "bin" / freecad_executable.name
+        ).exists():
+            return parent
+    raise FileNotFoundError(
+        f"Unable to determine build root from FreeCAD executable: {freecad_executable}"
+    )
+
+
+def sync_bim_python_tree(repo_root: Path, build_root: Path) -> None:
     source_dir = repo_root / "src/Mod/BIM/"
-    build_dir = repo_root / "build/Mod/BIM/"
+    build_dir = build_root / "Mod/BIM/"
     command = [
         "rsync",
         "-a",
@@ -72,9 +90,9 @@ def sync_bim_python_tree(repo_root: Path) -> None:
     subprocess.run(command, check=True, cwd=repo_root)
 
 
-def make_default_output_dir(repo_root: Path) -> Path:
+def make_default_output_dir(build_root: Path) -> Path:
     timestamp = time.strftime("%Y%m%d_%H%M%S")
-    return repo_root / "build" / "plan_edit_benchmarks" / timestamp
+    return build_root / "plan_edit_benchmarks" / timestamp
 
 
 def write_benchmark_test_module(
@@ -147,17 +165,22 @@ def print_readiness_summary(output_dir: Path) -> None:
 def main() -> int:
     args = parse_args()
     repo_root = get_repo_root()
-    freecad_executable = (repo_root / args.freecad).resolve()
-    output_dir = Path(args.output_dir) if args.output_dir else make_default_output_dir(repo_root)
-    output_dir.mkdir(parents=True, exist_ok=True)
+    freecad_executable = resolve_freecad_executable(repo_root, args.freecad)
 
     if not freecad_executable.exists():
         print(f"FreeCAD executable not found: {freecad_executable}", file=sys.stderr)
         return 2
+    try:
+        build_root = get_build_root(freecad_executable)
+    except FileNotFoundError as exc:
+        print(str(exc), file=sys.stderr)
+        return 2
+    output_dir = Path(args.output_dir) if args.output_dir else make_default_output_dir(build_root)
+    output_dir.mkdir(parents=True, exist_ok=True)
 
     if not args.no_sync:
-        print("Syncing BIM Python sources into build/Mod/BIM...", flush=True)
-        sync_bim_python_tree(repo_root)
+        print(f"Syncing BIM Python sources into {build_root / 'Mod/BIM'}...", flush=True)
+        sync_bim_python_tree(repo_root, build_root)
 
     with tempfile.TemporaryDirectory(prefix="freecad_plan_edit_benchmark_test_") as temp:
         module_name = write_benchmark_test_module(
