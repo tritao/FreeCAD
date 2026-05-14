@@ -231,6 +231,24 @@
        </widget>
       </item>
       <item>
+       <layout class="QHBoxLayout" name="fitHelperButtonsLayout">
+        <item>
+         <widget class="QPushButton" name="fitToSelectionButton">
+          <property name="text">
+           <string>Fit to selection</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QPushButton" name="fitToTargetsButton">
+          <property name="text">
+           <string>Fit to targets</string>
+          </property>
+         </widget>
+        </item>
+       </layout>
+      </item>
+      <item>
        <widget class="QCheckBox" name="showHelperCheck">
         <property name="text">
          <string>Show helper</string>

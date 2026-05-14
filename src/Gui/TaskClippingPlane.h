@@ -77,6 +77,8 @@ private:
     void onAddSelected();
     void onRemoveSelectedTargets();
     void onClearTargets();
+    void onFitHelperToSelection();
+    void onFitHelperToTargets();
     void onAutoSizeToggled(bool on);
     void onShowHelperToggled(bool on);
 
