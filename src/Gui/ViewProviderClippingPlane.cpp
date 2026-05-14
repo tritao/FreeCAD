@@ -46,6 +46,16 @@
 
 using namespace Gui;
 
+namespace
+{
+
+constexpr long HelperSizeModeScreen = 0;
+constexpr long HelperSizeModeWorld = 1;
+constexpr long HelperSizeModeFit = 2;
+const char* helperSizeModeEnums[] = {"Screen size", "World size", "Fit to objects", nullptr};
+
+}  // namespace
+
 PROPERTY_SOURCE(Gui::ViewProviderClippingPlane, Gui::ViewProviderGeometryObject)
 
 ViewProviderClippingPlane::ViewProviderClippingPlane()
@@ -66,12 +76,21 @@ ViewProviderClippingPlane::ViewProviderClippingPlane()
     );
     ADD_PROPERTY_TYPE(ArrowSize, (35.0F), "Clipping Plane", App::Prop_None, "Displayed normal arrow length");
     ADD_PROPERTY_TYPE(
+        HelperSizeMode,
+        (HelperSizeModeScreen),
+        "Clipping Plane",
+        App::Prop_None,
+        "How the clipping plane helper size is determined"
+    );
+    ADD_PROPERTY_TYPE(
         AutoSize,
         (true),
         "Clipping Plane",
         App::Prop_None,
         "Keep the clipping plane helper at a constant on-screen size"
     );
+    HelperSizeMode.setEnums(helperSizeModeEnums);
+    AutoSize.setStatus(App::Property::Hidden, true);
 
     sPixmap = "Std_ToggleClipPlane";
     ShapeAppearance.setDiffuseColor(0.0F, 0.75F, 0.75F);
@@ -116,6 +135,7 @@ void ViewProviderClippingPlane::attach(App::DocumentObject* obj)
     getOrCreateAnnotation()->addChild(overlaySwitch);
 
     syncOverlayAppearance();
+    syncHelperSizeMode();
     syncHelperVisibility();
     updateGeometry();
 }
@@ -291,7 +311,12 @@ void ViewProviderClippingPlane::beforeDelete()
 void ViewProviderClippingPlane::onChanged(const App::Property* prop)
 {
     inherited::onChanged(prop);
-    if (prop == &DisplayLength || prop == &DisplayHeight || prop == &ArrowSize || prop == &AutoSize) {
+    if (prop == &HelperSizeMode || prop == &AutoSize) {
+        syncHelperSizeMode(prop);
+        updateGeometry();
+        ClippingPlaneManager::instance().refresh(getObject<App::ClippingPlane>());
+    }
+    else if (prop == &DisplayLength || prop == &DisplayHeight || prop == &ArrowSize) {
         updateGeometry();
         ClippingPlaneManager::instance().refresh(getObject<App::ClippingPlane>());
     }
@@ -315,6 +340,39 @@ void ViewProviderClippingPlane::syncOverlayAppearance()
     SbColor color(colorValue.r, colorValue.g, colorValue.b);
     overlayMaterial->ambientColor.setValue(color);
     overlayMaterial->diffuseColor.setValue(color);
+}
+
+bool ViewProviderClippingPlane::helperUsesScreenSize() const
+{
+    return HelperSizeMode.getValue() == HelperSizeModeScreen;
+}
+
+void ViewProviderClippingPlane::syncHelperSizeMode(const App::Property* changedProp)
+{
+    if (changedProp == &HelperSizeMode) {
+        const bool screenSized = helperUsesScreenSize();
+        if (AutoSize.getValue() != screenSized) {
+            AutoSize.setValue(screenSized);
+        }
+        return;
+    }
+
+    if (changedProp == &AutoSize) {
+        const bool screenSized = AutoSize.getValue();
+        if (screenSized && HelperSizeMode.getValue() != HelperSizeModeScreen) {
+            HelperSizeMode.setValue(HelperSizeModeScreen);
+        }
+        else if (!screenSized && HelperSizeMode.getValue() == HelperSizeModeScreen) {
+            HelperSizeMode.setValue(HelperSizeModeWorld);
+        }
+        return;
+    }
+
+    const bool screenSized = AutoSize.getValue();
+    const long expectedMode = screenSized ? HelperSizeModeScreen : HelperSizeModeWorld;
+    if (HelperSizeMode.getValue() != expectedMode) {
+        HelperSizeMode.setValue(expectedMode);
+    }
 }
 
 void ViewProviderClippingPlane::syncHelperVisibility()
@@ -369,7 +427,7 @@ void ViewProviderClippingPlane::updateGeometry()
     overlayCoords->point.setValues(0, 6, verts);
 
     if (overlayScale) {
-        overlayScale->active = AutoSize.getValue();
+        overlayScale->active = helperUsesScreenSize();
         overlayScale->scaleFactor = 1.0F;
     }
 }

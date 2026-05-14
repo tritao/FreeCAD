@@ -48,6 +48,7 @@ public:
     App::PropertyFloat DisplayLength;
     App::PropertyFloat DisplayHeight;
     App::PropertyFloat ArrowSize;
+    App::PropertyEnumeration HelperSizeMode;
     App::PropertyBool AutoSize;
 
     void attach(App::DocumentObject* obj) override;
@@ -70,6 +71,8 @@ protected:
     void onDragFinish() override;
 
 private:
+    bool helperUsesScreenSize() const;
+    void syncHelperSizeMode(const App::Property* changedProp = nullptr);
     void syncRuntimePreview();
     void syncOverlayAppearance();
     void syncHelperVisibility();

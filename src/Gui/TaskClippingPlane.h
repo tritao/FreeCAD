@@ -79,7 +79,7 @@ private:
     void onClearTargets();
     void onFitHelperToSelection();
     void onFitHelperToTargets();
-    void onAutoSizeToggled(bool on);
+    void onHelperSizeModeChanged(int index);
     void onShowHelperToggled(bool on);
 
     void changeEvent(QEvent* event) override;

@@ -62,6 +62,10 @@ struct FittedClippingPlaneHelper
     double arrow {35.0};
 };
 
+constexpr int HelperSizeModeScreen = 0;
+constexpr int HelperSizeModeWorld = 1;
+constexpr int HelperSizeModeFit = 2;
+
 Base::BoundBox3d collectClippingPlaneHelperBounds(
     Gui::Document* guiDocument,
     Gui::MDIView* view,
@@ -139,7 +143,7 @@ void applyFittedClippingPlaneHelper(
     }
 
     const auto helper = fittedClippingPlaneHelper(placement, bbox);
-    viewProvider->AutoSize.setValue(false);
+    viewProvider->HelperSizeMode.setValue(HelperSizeModeFit);
     viewProvider->DisplayLength.setValue(static_cast<float>(helper.length));
     viewProvider->DisplayHeight.setValue(static_cast<float>(helper.height));
     viewProvider->ArrowSize.setValue(static_cast<float>(helper.arrow));
@@ -238,12 +242,12 @@ void ClippingPlaneWidget::refresh()
         const QSignalBlocker activeBlocker(d->ui.activeInCurrentView);
         const QSignalBlocker reverseBlocker(d->ui.reverseCheck);
         const QSignalBlocker scopeBlocker(d->ui.scopeModeCombo);
-        const QSignalBlocker autoSizeBlocker(d->ui.autoSizeCheck);
+        const QSignalBlocker helperSizeModeBlocker(d->ui.helperSizeModeCombo);
         const QSignalBlocker helperBlocker(d->ui.showHelperCheck);
 
         d->ui.reverseCheck->setChecked(plane->Reverse.getValue());
         d->ui.scopeModeCombo->setCurrentIndex(static_cast<int>(plane->ScopeMode.getValue()));
-        d->ui.autoSizeCheck->setChecked(vp->AutoSize.getValue());
+        d->ui.helperSizeModeCombo->setCurrentIndex(static_cast<int>(vp->HelperSizeMode.getValue()));
         d->ui.showHelperCheck->setChecked(vp->Visibility.getValue());
     }
 
@@ -466,6 +470,12 @@ void ClippingPlaneWidget::setupConnections()
     );
     connect(d->ui.clearTargetsButton, &QPushButton::clicked, this, &ClippingPlaneWidget::onClearTargets);
     connect(
+        d->ui.helperSizeModeCombo,
+        qOverload<int>(&QComboBox::currentIndexChanged),
+        this,
+        &ClippingPlaneWidget::onHelperSizeModeChanged
+    );
+    connect(
         d->ui.fitToSelectionButton,
         &QPushButton::clicked,
         this,
@@ -477,7 +487,6 @@ void ClippingPlaneWidget::setupConnections()
         this,
         &ClippingPlaneWidget::onFitHelperToTargets
     );
-    connect(d->ui.autoSizeCheck, &QCheckBox::toggled, this, &ClippingPlaneWidget::onAutoSizeToggled);
     connect(d->ui.showHelperCheck, &QCheckBox::toggled, this, &ClippingPlaneWidget::onShowHelperToggled);
 }
 
@@ -705,10 +714,10 @@ void ClippingPlaneWidget::onFitHelperToTargets()
     refresh();
 }
 
-void ClippingPlaneWidget::onAutoSizeToggled(bool on)
+void ClippingPlaneWidget::onHelperSizeModeChanged(int index)
 {
     if (auto* vp = getViewProvider()) {
-        vp->AutoSize.setValue(on);
+        vp->HelperSizeMode.setValue(index);
     }
 }
 
