@@ -22,7 +22,6 @@
 #include "PreCompiled.h"
 
 #include <algorithm>
-#include <array>
 #include <ranges>
 #include <set>
 
@@ -39,117 +38,18 @@
 #include <App/GeoFeature.h>
 
 #include "ClippingPlaneManager.h"
+#include "ClippingPlaneHelperFit.h"
 #include "Document.h"
 #include "Inventor/Draggers/Gizmo.h"
 #include "PlaneGizmoEditor.h"
 #include "QuantitySpinBox.h"
 #include "Selection/Selection.h"
 #include "TaskClippingPlane.h"
-#include "ViewProvider.h"
 #include "View3DInventor.h"
 #include "ViewProviderClippingPlane.h"
 #include "ui_TaskClippingPlane.h"
 
 using namespace Gui;
-
-namespace
-{
-
-struct FittedClippingPlaneHelper
-{
-    double length {100.0};
-    double height {100.0};
-    double arrow {35.0};
-};
-
-constexpr int HelperSizeModeScreen = 0;
-constexpr int HelperSizeModeWorld = 1;
-constexpr int HelperSizeModeFit = 2;
-
-Base::BoundBox3d collectClippingPlaneHelperBounds(
-    Gui::Document* guiDocument,
-    Gui::MDIView* view,
-    const std::vector<App::DocumentObject*>& objects,
-    const App::DocumentObject* excludedObject
-)
-{
-    Base::BoundBox3d bbox;
-
-    if (!guiDocument) {
-        return bbox;
-    }
-
-    for (auto* object : objects) {
-        if (!object || object == excludedObject) {
-            continue;
-        }
-
-        if (auto* viewProvider = guiDocument->getViewProvider(object)) {
-            const auto objectBox = viewProvider->getBoundingBox(nullptr, true, view);
-            if (objectBox.IsValid()) {
-                bbox.Add(objectBox);
-            }
-        }
-    }
-
-    return bbox;
-}
-
-FittedClippingPlaneHelper fittedClippingPlaneHelper(
-    const Base::Placement& placement,
-    const Base::BoundBox3d& bbox
-)
-{
-    if (!bbox.IsValid()) {
-        return {};
-    }
-
-    const Base::Vector3d center = bbox.GetCenter();
-    const Base::Rotation rotation = placement.getRotation();
-    const Base::Vector3d planeX = rotation.multVec(Base::Vector3d(1.0, 0.0, 0.0));
-    const Base::Vector3d planeY = rotation.multVec(Base::Vector3d(0.0, 1.0, 0.0));
-    const std::array<double, 2> xs = {bbox.MinX, bbox.MaxX};
-    const std::array<double, 2> ys = {bbox.MinY, bbox.MaxY};
-    const std::array<double, 2> zs = {bbox.MinZ, bbox.MaxZ};
-
-    double halfLength = 0.0;
-    double halfHeight = 0.0;
-    for (double x : xs) {
-        for (double y : ys) {
-            for (double z : zs) {
-                const Base::Vector3d delta(x - center.x, y - center.y, z - center.z);
-                halfLength = std::max(halfLength, std::abs(delta * planeX));
-                halfHeight = std::max(halfHeight, std::abs(delta * planeY));
-            }
-        }
-    }
-
-    constexpr double helperPadding = 1.10;
-    FittedClippingPlaneHelper helper;
-    helper.length = std::max(1.0, halfLength * 2.0 * helperPadding);
-    helper.height = std::max(1.0, halfHeight * 2.0 * helperPadding);
-    helper.arrow = std::max(10.0, std::max(helper.length, helper.height) * 0.35);
-    return helper;
-}
-
-void applyFittedClippingPlaneHelper(
-    Gui::ViewProviderClippingPlane* viewProvider,
-    const Base::Placement& placement,
-    const Base::BoundBox3d& bbox
-)
-{
-    if (!viewProvider || !bbox.IsValid()) {
-        return;
-    }
-
-    const auto helper = fittedClippingPlaneHelper(placement, bbox);
-    viewProvider->HelperSizeMode.setValue(HelperSizeModeFit);
-    viewProvider->DisplayLength.setValue(static_cast<float>(helper.length));
-    viewProvider->DisplayHeight.setValue(static_cast<float>(helper.height));
-    viewProvider->ArrowSize.setValue(static_cast<float>(helper.arrow));
-}
-
-}  // namespace
 
 class ClippingPlaneWidget::Private
 {
@@ -685,12 +585,13 @@ void ClippingPlaneWidget::onFitHelperToSelection()
     }
 
     auto* guiDocument = viewProvider->getDocument();
-    const auto bbox = collectClippingPlaneHelperBounds(guiDocument, view, selectionObjects, plane);
+    const auto bbox
+        = Gui::ClippingPlaneHelperFit::collectBounds(guiDocument, view, selectionObjects, plane);
     if (!bbox.IsValid()) {
         return;
     }
 
-    applyFittedClippingPlaneHelper(viewProvider, currentEditablePlanePlacement(), bbox);
+    Gui::ClippingPlaneHelperFit::applyFittedHelper(viewProvider, currentEditablePlanePlacement(), bbox);
     refresh();
 }
 
@@ -704,13 +605,17 @@ void ClippingPlaneWidget::onFitHelperToTargets()
     }
 
     auto* guiDocument = viewProvider->getDocument();
-    const auto bbox
-        = collectClippingPlaneHelperBounds(guiDocument, view, plane->Targets.getValues(), plane);
+    const auto bbox = Gui::ClippingPlaneHelperFit::collectBounds(
+        guiDocument,
+        view,
+        plane->Targets.getValues(),
+        plane
+    );
     if (!bbox.IsValid()) {
         return;
     }
 
-    applyFittedClippingPlaneHelper(viewProvider, currentEditablePlanePlacement(), bbox);
+    Gui::ClippingPlaneHelperFit::applyFittedHelper(viewProvider, currentEditablePlanePlacement(), bbox);
     refresh();
 }
 

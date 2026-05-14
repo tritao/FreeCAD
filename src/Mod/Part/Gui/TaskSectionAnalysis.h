@@ -106,6 +106,9 @@ private:
     void onFlipClippingDirectionToggled(bool on);
     void onPlaneControlsChanged();
     void onApplyPlanePreset();
+    void onHelperSizeModeChanged(int index);
+    void onFitHelperToSources();
+    void onFitHelperToSelection();
     void onSectionFaceColorClicked();
     void onSectionEdgeColorClicked();
     void onSectionFaceTransparencyChanged(int value);

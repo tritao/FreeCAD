@@ -56,7 +56,6 @@ namespace
 constexpr long WholeDocumentScope = 0;
 constexpr long IncludeOnlyScope = 1;
 constexpr long ExcludeScope = 2;
-constexpr long HelperSizeModeScreen = 0;
 double helperMargin(const App::ClippingPlane& plane)
 {
     double margin = 0.01;
@@ -118,7 +117,8 @@ SoNode* buildActiveCue(const App::ClippingPlane& plane, const Base::Placement& p
     shape->addChild(lines);
 
     auto* scale = new SoShapeScale;
-    scale->active = vp->HelperSizeMode.getValue() == HelperSizeModeScreen;
+    scale->active = vp->HelperSizeMode.getValue()
+        == static_cast<long>(ViewProviderClippingPlane::HelperSizeModeOption::Screen);
     scale->scaleFactor = 1.0F;
     scale->setPart("shape", shape);
 

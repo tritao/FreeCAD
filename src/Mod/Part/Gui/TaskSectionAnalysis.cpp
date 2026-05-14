@@ -42,6 +42,7 @@
 #include <App/Document.h>
 #include <App/DocumentObject.h>
 #include <App/GeoFeature.h>
+#include <Gui/ClippingPlaneHelperFit.h>
 #include <Gui/ClippingPlaneManager.h>
 #include <Gui/Document.h>
 #include <Gui/Inventor/Draggers/Gizmo.h>
@@ -74,6 +75,19 @@ int countSubShapes(const Part::TopoShape& shape, TopAbs_ShapeEnum type)
         ++count;
     }
     return count;
+}
+
+Gui::ViewProviderClippingPlane* getClippingPlaneViewProvider(
+    PartGui::ViewProviderSectionAnalysis* viewProvider,
+    App::ClippingPlane* plane
+)
+{
+    auto* guiDocument = viewProvider ? viewProvider->getDocument() : nullptr;
+    if (!guiDocument || !plane) {
+        return nullptr;
+    }
+
+    return freecad_cast<Gui::ViewProviderClippingPlane*>(guiDocument->getViewProvider(plane));
 }
 
 }  // namespace
@@ -224,12 +238,16 @@ void SectionAnalysisWidget::refreshPlane()
     const QSignalBlocker offsetBlocker(d->ui.planeOffsetSpin);
     const QSignalBlocker tiltXBlocker(d->ui.planeTiltXSpin);
     const QSignalBlocker tiltYBlocker(d->ui.planeTiltYSpin);
+    const QSignalBlocker helperSizeModeBlocker(d->ui.helperSizeModeCombo);
 
     if (!plane) {
         d->ui.flipClippingDirectionCheck->setChecked(false);
         d->ui.planeOffsetSpin->setValue(0.0);
         d->ui.planeTiltXSpin->setValue(0.0);
         d->ui.planeTiltYSpin->setValue(0.0);
+        d->ui.helperSizeModeCombo->setCurrentIndex(
+            static_cast<int>(Gui::ViewProviderClippingPlane::HelperSizeModeOption::Screen)
+        );
         return;
     }
 
@@ -238,6 +256,11 @@ void SectionAnalysisWidget::refreshPlane()
     d->ui.planeOffsetSpin->setValue(Base::Quantity(state.offset, Base::Unit::Length));
     d->ui.planeTiltXSpin->setValue(Base::Quantity(state.tiltXDegrees, Base::Unit::Angle));
     d->ui.planeTiltYSpin->setValue(Base::Quantity(state.tiltYDegrees, Base::Unit::Angle));
+    if (auto* clippingPlaneViewProvider = getClippingPlaneViewProvider(getViewProvider(), plane)) {
+        d->ui.helperSizeModeCombo->setCurrentIndex(
+            static_cast<int>(clippingPlaneViewProvider->HelperSizeMode.getValue())
+        );
+    }
 }
 
 void SectionAnalysisWidget::refreshResult()
@@ -339,6 +362,9 @@ void SectionAnalysisWidget::refreshButtons()
     d->ui.planeTiltYSpin->setEnabled(hasPlane);
     d->ui.planePresetCombo->setEnabled(hasPlane);
     d->ui.applyPlanePresetButton->setEnabled(hasPlane && (!presetNeedsView || hasView));
+    d->ui.helperSizeModeCombo->setEnabled(hasPlane);
+    d->ui.fitHelperToSourcesButton->setEnabled(hasPlane && hasSources);
+    d->ui.fitHelperToSelectionButton->setEnabled(hasPlane && hasDocument);
     d->ui.useCurrentSelectionButton->setEnabled(hasDocument);
     d->ui.appendCurrentSelectionButton->setEnabled(hasDocument);
     d->ui.removeSelectedSourcesButton->setEnabled(!d->ui.sourcesList->selectedItems().isEmpty());
@@ -667,6 +693,24 @@ void SectionAnalysisWidget::setupConnections()
         &SectionAnalysisWidget::onApplyPlanePreset
     );
     connect(
+        d->ui.helperSizeModeCombo,
+        qOverload<int>(&QComboBox::currentIndexChanged),
+        this,
+        &SectionAnalysisWidget::onHelperSizeModeChanged
+    );
+    connect(
+        d->ui.fitHelperToSourcesButton,
+        &QPushButton::clicked,
+        this,
+        &SectionAnalysisWidget::onFitHelperToSources
+    );
+    connect(
+        d->ui.fitHelperToSelectionButton,
+        &QPushButton::clicked,
+        this,
+        &SectionAnalysisWidget::onFitHelperToSelection
+    );
+    connect(
         d->ui.editClippingPlaneButton,
         &QPushButton::toggled,
         this,
@@ -964,6 +1008,76 @@ void SectionAnalysisWidget::onApplyPlanePreset()
     }
 
     editor->setPreset(preset, getCurrentView(), !editor->isActive());
+}
+
+void SectionAnalysisWidget::onHelperSizeModeChanged(int index)
+{
+    auto* plane = getClippingPlane();
+    auto* clippingPlaneViewProvider = getClippingPlaneViewProvider(getViewProvider(), plane);
+    if (!clippingPlaneViewProvider) {
+        return;
+    }
+
+    clippingPlaneViewProvider->HelperSizeMode.setValue(index);
+}
+
+void SectionAnalysisWidget::onFitHelperToSources()
+{
+    auto* analysis = getSectionAnalysis();
+    auto* plane = getClippingPlane();
+    auto* view = getCurrentView();
+    auto* clippingPlaneViewProvider = getClippingPlaneViewProvider(getViewProvider(), plane);
+    if (!analysis || !plane || !clippingPlaneViewProvider) {
+        return;
+    }
+
+    auto* guiDocument = clippingPlaneViewProvider->getDocument();
+    const auto bbox = Gui::ClippingPlaneHelperFit::collectBounds(
+        guiDocument,
+        view,
+        analysis->Sources.getValues(),
+        plane
+    );
+    if (!bbox.IsValid()) {
+        return;
+    }
+
+    Gui::ClippingPlaneHelperFit::applyFittedHelper(
+        clippingPlaneViewProvider,
+        currentEditablePlanePlacement(),
+        bbox
+    );
+    refreshPlane();
+    refreshButtons();
+}
+
+void SectionAnalysisWidget::onFitHelperToSelection()
+{
+    auto* plane = getClippingPlane();
+    auto* view = getCurrentView();
+    auto* clippingPlaneViewProvider = getClippingPlaneViewProvider(getViewProvider(), plane);
+    if (!plane || !clippingPlaneViewProvider) {
+        return;
+    }
+
+    auto* guiDocument = clippingPlaneViewProvider->getDocument();
+    const auto bbox = Gui::ClippingPlaneHelperFit::collectBounds(
+        guiDocument,
+        view,
+        getSelectedSourceObjects(),
+        plane
+    );
+    if (!bbox.IsValid()) {
+        return;
+    }
+
+    Gui::ClippingPlaneHelperFit::applyFittedHelper(
+        clippingPlaneViewProvider,
+        currentEditablePlanePlacement(),
+        bbox
+    );
+    refreshPlane();
+    refreshButtons();
 }
 
 void SectionAnalysisWidget::onSectionFaceColorClicked()

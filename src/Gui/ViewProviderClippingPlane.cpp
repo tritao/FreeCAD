@@ -49,9 +49,6 @@ using namespace Gui;
 namespace
 {
 
-constexpr long HelperSizeModeScreen = 0;
-constexpr long HelperSizeModeWorld = 1;
-constexpr long HelperSizeModeFit = 2;
 const char* helperSizeModeEnums[] = {"Screen size", "World size", "Fit to objects", nullptr};
 
 }  // namespace
@@ -77,7 +74,7 @@ ViewProviderClippingPlane::ViewProviderClippingPlane()
     ADD_PROPERTY_TYPE(ArrowSize, (35.0F), "Clipping Plane", App::Prop_None, "Displayed normal arrow length");
     ADD_PROPERTY_TYPE(
         HelperSizeMode,
-        (HelperSizeModeScreen),
+        (static_cast<long>(HelperSizeModeOption::Screen)),
         "Clipping Plane",
         App::Prop_None,
         "How the clipping plane helper size is determined"
@@ -344,7 +341,7 @@ void ViewProviderClippingPlane::syncOverlayAppearance()
 
 bool ViewProviderClippingPlane::helperUsesScreenSize() const
 {
-    return HelperSizeMode.getValue() == HelperSizeModeScreen;
+    return HelperSizeMode.getValue() == static_cast<long>(HelperSizeModeOption::Screen);
 }
 
 void ViewProviderClippingPlane::syncHelperSizeMode(const App::Property* changedProp)
@@ -359,17 +356,22 @@ void ViewProviderClippingPlane::syncHelperSizeMode(const App::Property* changedP
 
     if (changedProp == &AutoSize) {
         const bool screenSized = AutoSize.getValue();
-        if (screenSized && HelperSizeMode.getValue() != HelperSizeModeScreen) {
-            HelperSizeMode.setValue(HelperSizeModeScreen);
+        if (screenSized
+            && HelperSizeMode.getValue() != static_cast<long>(HelperSizeModeOption::Screen)) {
+            HelperSizeMode.setValue(static_cast<long>(HelperSizeModeOption::Screen));
         }
-        else if (!screenSized && HelperSizeMode.getValue() == HelperSizeModeScreen) {
-            HelperSizeMode.setValue(HelperSizeModeWorld);
+        else if (
+            !screenSized
+            && HelperSizeMode.getValue() == static_cast<long>(HelperSizeModeOption::Screen)
+        ) {
+            HelperSizeMode.setValue(static_cast<long>(HelperSizeModeOption::World));
         }
         return;
     }
 
     const bool screenSized = AutoSize.getValue();
-    const long expectedMode = screenSized ? HelperSizeModeScreen : HelperSizeModeWorld;
+    const long expectedMode = screenSized ? static_cast<long>(HelperSizeModeOption::Screen)
+                                          : static_cast<long>(HelperSizeModeOption::World);
     if (HelperSizeMode.getValue() != expectedMode) {
         HelperSizeMode.setValue(expectedMode);
     }

@@ -42,6 +42,13 @@ class GuiExport ViewProviderClippingPlane: public ViewProviderGeometryObject
     using inherited = ViewProviderGeometryObject;
 
 public:
+    enum class HelperSizeModeOption : long
+    {
+        Screen = 0,
+        World = 1,
+        Fit = 2
+    };
+
     ViewProviderClippingPlane();
     ~ViewProviderClippingPlane() override;
 
