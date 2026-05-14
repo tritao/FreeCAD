@@ -31,8 +31,10 @@
 #include <Inventor/nodes/SoClipPlane.h>
 #include <Inventor/nodes/SoCoordinate3.h>
 #include <Inventor/nodes/SoDrawStyle.h>
+#include <Inventor/nodes/SoFaceSet.h>
 #include <Inventor/nodes/SoIndexedLineSet.h>
 #include <Inventor/nodes/SoMaterial.h>
+#include <Inventor/nodes/SoShapeHints.h>
 #include <Inventor/nodes/SoMatrixTransform.h>
 #include <Inventor/nodes/SoSeparator.h>
 
@@ -101,6 +103,19 @@ SoNode* buildActiveCue(const App::ClippingPlane& plane, const Base::Placement& p
     const auto colorValue = vp->ShapeAppearance.getDiffuseColor();
     SbColor color(colorValue.r, colorValue.g, colorValue.b);
 
+    auto* faceHints = new SoShapeHints;
+    faceHints->vertexOrdering = SoShapeHints::COUNTERCLOCKWISE;
+    faceHints->shapeType = SoShapeHints::UNKNOWN_SHAPE_TYPE;
+
+    auto* faceMaterial = new SoMaterial;
+    faceMaterial->ambientColor.setValue(color);
+    faceMaterial->diffuseColor.setValue(color);
+    faceMaterial->transparency = static_cast<float>(vp->Transparency.getValue()) / 100.0f;
+
+    auto* faces = new SoFaceSet;
+    faces->numVertices.setNum(1);
+    faces->numVertices.set1Value(0, 4);
+
     auto* material = new SoMaterial;
     material->ambientColor.setValue(color);
     material->diffuseColor.setValue(color);
@@ -112,6 +127,9 @@ SoNode* buildActiveCue(const App::ClippingPlane& plane, const Base::Placement& p
 
     auto* shape = new SoSeparator;
     shape->addChild(coords);
+    shape->addChild(faceHints);
+    shape->addChild(faceMaterial);
+    shape->addChild(faces);
     shape->addChild(material);
     shape->addChild(drawStyle);
     shape->addChild(lines);

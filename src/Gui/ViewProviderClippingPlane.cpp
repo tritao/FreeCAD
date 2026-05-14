@@ -24,8 +24,10 @@
 #include <QMenu>
 #include <Inventor/nodes/SoCoordinate3.h>
 #include <Inventor/nodes/SoDrawStyle.h>
+#include <Inventor/nodes/SoFaceSet.h>
 #include <Inventor/nodes/SoIndexedLineSet.h>
 #include <Inventor/nodes/SoMaterial.h>
+#include <Inventor/nodes/SoShapeHints.h>
 #include <Inventor/nodes/SoSeparator.h>
 #include <Inventor/nodes/SoSwitch.h>
 
@@ -101,23 +103,36 @@ void ViewProviderClippingPlane::attach(App::DocumentObject* obj)
     inherited::attach(obj);
 
     overlayCoords = new SoCoordinate3;
+    overlayFaces = new SoFaceSet;
     overlayLines = new SoIndexedLineSet;
     overlaySwitch = new SoSwitch;
+    overlayFaceMaterial = new SoMaterial;
     overlayMaterial = new SoMaterial;
 
     overlaySwitch->whichChild = Visibility.getValue() ? SO_SWITCH_ALL : SO_SWITCH_NONE;
+    overlayFaceMaterial->transparency = 0.8f;
     overlayMaterial->transparency = 0.0f;
+
+    overlayFaces->numVertices.setNum(1);
+    overlayFaces->numVertices.set1Value(0, 4);
 
     static constexpr int32_t lineIndices[] = {0, 1, 2, 3, 0, -1, 4, 5, -1};
     overlayLines->coordIndex.setNum(9);
     overlayLines->coordIndex.setValues(0, 9, lineIndices);
     addDisplayMaskMode(new SoSeparator, "Base");
 
+    auto overlayShapeHints = new SoShapeHints;
+    overlayShapeHints->vertexOrdering = SoShapeHints::COUNTERCLOCKWISE;
+    overlayShapeHints->shapeType = SoShapeHints::UNKNOWN_SHAPE_TYPE;
+
     auto overlayLineStyle = new SoDrawStyle;
     overlayLineStyle->lineWidth = 2.0F;
 
     auto overlayRoot = new SoSeparator;
     overlayRoot->addChild(overlayCoords);
+    overlayRoot->addChild(overlayShapeHints);
+    overlayRoot->addChild(overlayFaceMaterial);
+    overlayRoot->addChild(overlayFaces);
     overlayRoot->addChild(overlayMaterial);
     overlayRoot->addChild(overlayLineStyle);
     overlayRoot->addChild(overlayLines);
@@ -317,7 +332,7 @@ void ViewProviderClippingPlane::onChanged(const App::Property* prop)
         updateGeometry();
         ClippingPlaneManager::instance().refresh(getObject<App::ClippingPlane>());
     }
-    else if (prop == &ShapeAppearance) {
+    else if (prop == &ShapeAppearance || prop == &Transparency) {
         syncOverlayAppearance();
         ClippingPlaneManager::instance().refresh(getObject<App::ClippingPlane>());
     }
@@ -329,12 +344,15 @@ void ViewProviderClippingPlane::onChanged(const App::Property* prop)
 
 void ViewProviderClippingPlane::syncOverlayAppearance()
 {
-    if (!overlayMaterial) {
+    if (!overlayMaterial || !overlayFaceMaterial) {
         return;
     }
 
     const auto colorValue = ShapeAppearance.getDiffuseColor();
     SbColor color(colorValue.r, colorValue.g, colorValue.b);
+    overlayFaceMaterial->ambientColor.setValue(color);
+    overlayFaceMaterial->diffuseColor.setValue(color);
+    overlayFaceMaterial->transparency = static_cast<float>(Transparency.getValue()) / 100.0f;
     overlayMaterial->ambientColor.setValue(color);
     overlayMaterial->diffuseColor.setValue(color);
 }

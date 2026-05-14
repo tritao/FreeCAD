@@ -26,6 +26,7 @@
 #include <Gui/ViewProviderGeometryObject.h>
 
 class SoCoordinate3;
+class SoFaceSet;
 class SoIndexedLineSet;
 class SoMaterial;
 class SoSwitch;
@@ -86,6 +87,8 @@ private:
     void updateGeometry();
 
     SoCoordinate3* overlayCoords {nullptr};
+    SoFaceSet* overlayFaces {nullptr};
+    SoMaterial* overlayFaceMaterial {nullptr};
     SoIndexedLineSet* overlayLines {nullptr};
     SoMaterial* overlayMaterial {nullptr};
     SoSwitch* overlaySwitch {nullptr};
