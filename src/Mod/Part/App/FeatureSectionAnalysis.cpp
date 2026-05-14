@@ -274,7 +274,7 @@ SectionAnalysis::SectionAnalysis()
     ResultMode.setEnums(ResultModeEnums);
     ADD_PROPERTY_TYPE(
         ShowHatching,
-        (false),
+        (true),
         "SectionAnalysis",
         App::Prop_None,
         "Generate hatch geometry on section faces"
