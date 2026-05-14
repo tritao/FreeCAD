@@ -36,7 +36,6 @@
 #include <App/GeoFeature.h>
 #include <App/DocumentObjectGroup.h>
 #include <Base/BoundBox.h>
-#include <Base/Converter.h>
 #include <Base/Console.h>
 #include <Base/Exception.h>
 #include <Base/Tools.h>
@@ -243,6 +242,13 @@ bool CmdPartPrimitives::isActive()
 
 namespace PartGui
 {
+struct SectionAnalysisPlaneHelperSize
+{
+    double length {100.0};
+    double height {100.0};
+    double arrow {35.0};
+};
+
 Gui::View3DInventor* activeInventorViewForSectionAnalysis()
 {
     return qobject_cast<Gui::View3DInventor*>(Gui::getMainWindow()->activeWindow());
@@ -273,6 +279,44 @@ Base::Placement initialSectionAnalysisPlanePlacement(
     }
 
     return {center, Base::Rotation(Base::Vector3d(0, 0, -1), direction)};
+}
+
+SectionAnalysisPlaneHelperSize fittedSectionAnalysisPlaneHelper(
+    const Base::Placement& placement,
+    const Base::BoundBox3d& bbox
+)
+{
+    if (!bbox.IsValid()) {
+        return {};
+    }
+
+    const Base::Vector3d center = bbox.GetCenter();
+    const Base::Rotation rotation = placement.getRotation();
+    const Base::Vector3d planeX = rotation.multVec(Base::Vector3d(1.0, 0.0, 0.0));
+    const Base::Vector3d planeY = rotation.multVec(Base::Vector3d(0.0, 1.0, 0.0));
+
+    double halfLength = 0.0;
+    double halfHeight = 0.0;
+    const double xs[2] = {bbox.MinX, bbox.MaxX};
+    const double ys[2] = {bbox.MinY, bbox.MaxY};
+    const double zs[2] = {bbox.MinZ, bbox.MaxZ};
+
+    for (double x : xs) {
+        for (double y : ys) {
+            for (double z : zs) {
+                const Base::Vector3d delta(x - center.x, y - center.y, z - center.z);
+                halfLength = std::max(halfLength, std::abs(delta * planeX));
+                halfHeight = std::max(halfHeight, std::abs(delta * planeY));
+            }
+        }
+    }
+
+    constexpr double helperPadding = 1.10;
+    SectionAnalysisPlaneHelperSize size;
+    size.length = std::max(1.0, halfLength * 2.0 * helperPadding);
+    size.height = std::max(1.0, halfHeight * 2.0 * helperPadding);
+    size.arrow = std::max(10.0, std::max(size.length, size.height) * 0.35);
+    return size;
 }
 
 bool checkForSolids(const TopoDS_Shape& shape)
@@ -1162,13 +1206,9 @@ void CmdPartSectionAnalysis::activated(int iMsg)
 
         if (bbox.IsValid()) {
             const auto placement = PartGui::initialSectionAnalysisPlanePlacement(view, bbox);
+            const auto helperSize = PartGui::fittedSectionAnalysisPlaneHelper(placement, bbox);
             const auto position = placement.getPosition();
             const auto direction = placement.getRotation().multVec(Base::Vector3d(0.0, 0.0, -1.0));
-            const double sizeX = std::max(1.0, bbox.LengthX());
-            const double sizeY = std::max(1.0, bbox.LengthY());
-            const double sizeZ = std::max(1.0, bbox.LengthZ());
-            const double helperSize = std::max({sizeX, sizeY, sizeZ});
-            const double helperArrow = std::max(10.0, helperSize * 0.35);
 
             clippingPlaneName = getUniqueObjectName("ClippingPlane");
             doCommand(
@@ -1189,9 +1229,9 @@ void CmdPartSectionAnalysis::activated(int iMsg)
                 direction.z
             );
             doCommand(Doc, "plane.ViewObject.AutoSize = False");
-            doCommand(Doc, "plane.ViewObject.DisplayLength = %.17g", helperSize);
-            doCommand(Doc, "plane.ViewObject.DisplayHeight = %.17g", helperSize);
-            doCommand(Doc, "plane.ViewObject.ArrowSize = %.17g", helperArrow);
+            doCommand(Doc, "plane.ViewObject.DisplayLength = %.17g", helperSize.length);
+            doCommand(Doc, "plane.ViewObject.DisplayHeight = %.17g", helperSize.height);
+            doCommand(Doc, "plane.ViewObject.ArrowSize = %.17g", helperSize.arrow);
             autoCreatedClippingPlane = true;
         }
     }
