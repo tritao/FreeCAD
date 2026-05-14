@@ -150,3 +150,36 @@ class SectionAnalysisGuiTests(unittest.TestCase):
         gui_doc.resetEdit()
         FreeCADGui.updateGui()
         self.assertFalse(FreeCADGui.Control.activeDialog())
+
+    def testCreateCommandAutoCreatesClippingPlaneFromSources(self):
+        box = self.doc.addObject("Part::Box", "Box")
+        box.Length = 10
+        box.Width = 10
+        box.Height = 10
+        self.doc.recompute()
+
+        self.select_object(box)
+        self.assertIn("Part_SectionAnalysis", FreeCADGui.listCommands())
+        FreeCADGui.runCommand("Part_SectionAnalysis", 0)
+        FreeCADGui.updateGui()
+        self.doc.recompute()
+
+        analysis = self.doc.Objects[-1]
+        self.assertEqual(analysis.TypeId, "Part::SectionAnalysis")
+        self.assertIsNotNone(analysis.ClippingPlane)
+        self.assertEqual(analysis.ClippingPlane.TypeId, "App::ClippingPlane")
+        self.assertEqual([obj.Name for obj in analysis.Sources], ["Box"])
+        self.assertEqual(analysis.ResultMode, "Both")
+        self.assertFalse(analysis.Shape.isNull())
+        self.assertGreater(len(analysis.Shape.Faces), 0)
+        self.assertGreater(len(analysis.Shape.Edges), 0)
+        self.assertIsNotNone(FreeCADGui.Control.activeTaskDialog())
+
+        planes = [obj for obj in self.doc.Objects if obj.TypeId == "App::ClippingPlane"]
+        self.assertEqual(len(planes), 1)
+        self.assertIs(analysis.ClippingPlane, planes[0])
+
+        gui_doc = FreeCADGui.getDocument(self.doc.Name)
+        gui_doc.resetEdit()
+        FreeCADGui.updateGui()
+        self.assertFalse(FreeCADGui.Control.activeDialog())

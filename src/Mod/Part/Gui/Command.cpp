@@ -35,6 +35,8 @@
 #include <App/ClippingPlane.h>
 #include <App/GeoFeature.h>
 #include <App/DocumentObjectGroup.h>
+#include <Base/BoundBox.h>
+#include <Base/Converter.h>
 #include <Base/Console.h>
 #include <Base/Exception.h>
 #include <Base/Tools.h>
@@ -42,6 +44,7 @@
 #include <Gui/Action.h>
 #include <Gui/Application.h>
 #include <Gui/BitmapFactory.h>
+#include <Gui/ClippingPlaneManager.h>
 #include <Gui/Command.h>
 #include <Gui/Control.h>
 #include <Gui/Document.h>
@@ -240,6 +243,38 @@ bool CmdPartPrimitives::isActive()
 
 namespace PartGui
 {
+Gui::View3DInventor* activeInventorViewForSectionAnalysis()
+{
+    return qobject_cast<Gui::View3DInventor*>(Gui::getMainWindow()->activeWindow());
+}
+
+Base::Placement initialSectionAnalysisPlanePlacement(
+    Gui::View3DInventor* view,
+    const Base::BoundBox3d& bbox
+)
+{
+    Base::Vector3d center;
+    Base::Vector3d direction(0.0, 0.0, -1.0);
+
+    if (bbox.IsValid()) {
+        center = bbox.GetCenter();
+    }
+    else if (view) {
+        SbBox3f viewBox = view->getViewer()->getBoundingBox();
+        if (!viewBox.isEmpty()) {
+            const SbVec3f viewCenter = viewBox.getCenter();
+            center = Base::Vector3d(viewCenter[0], viewCenter[1], viewCenter[2]);
+        }
+    }
+
+    if (view) {
+        SbVec3f viewDirection = view->getViewer()->getViewDirection();
+        direction = Base::Vector3d(viewDirection[0], viewDirection[1], viewDirection[2]);
+    }
+
+    return {center, Base::Rotation(Base::Vector3d(0, 0, -1), direction)};
+}
+
 bool checkForSolids(const TopoDS_Shape& shape)
 {
     TopExp_Explorer xp;
@@ -1111,16 +1146,56 @@ void CmdPartSectionAnalysis::activated(int iMsg)
         sources.push_back(selected.getFeatName());
     }
 
-    std::string featName = getUniqueObjectName("SectionAnalysis");
     openCommand(QT_TRANSLATE_NOOP("Command", "Section Analysis"));
+
+    std::string clippingPlaneName;
+    bool autoCreatedClippingPlane = false;
+    auto* view = PartGui::activeInventorViewForSectionAnalysis();
+    if (clippingPlane) {
+        clippingPlaneName = clippingPlane->getNameInDocument();
+    }
+    else if (!sources.empty()) {
+        Base::BoundBox3d bbox;
+        for (const auto& shape : PartGui::getShapesFromSelection()) {
+            bbox.Add(shape.getBoundBox());
+        }
+
+        if (bbox.IsValid()) {
+            const auto placement = PartGui::initialSectionAnalysisPlanePlacement(view, bbox);
+            const auto position = placement.getPosition();
+            const auto direction = placement.getRotation().multVec(Base::Vector3d(0.0, 0.0, -1.0));
+
+            clippingPlaneName = getUniqueObjectName("ClippingPlane");
+            doCommand(
+                Doc,
+                "plane = App.activeDocument().addObject(\"App::ClippingPlane\",\"%s\")",
+                clippingPlaneName.c_str()
+            );
+            doCommand(
+                Doc,
+                "plane.Placement = App.Placement("
+                "App.Vector(%.17g, %.17g, %.17g), "
+                "App.Rotation(App.Vector(0, 0, -1), App.Vector(%.17g, %.17g, %.17g)))",
+                position.x,
+                position.y,
+                position.z,
+                direction.x,
+                direction.y,
+                direction.z
+            );
+            autoCreatedClippingPlane = true;
+        }
+    }
+
+    std::string featName = getUniqueObjectName("SectionAnalysis");
     doCommand(Doc, "App.activeDocument().addObject(\"Part::SectionAnalysis\",\"%s\")", featName.c_str());
 
-    if (clippingPlane) {
+    if (!clippingPlaneName.empty()) {
         doCommand(
             Doc,
             "App.activeDocument().%s.ClippingPlane = App.activeDocument().%s",
             featName.c_str(),
-            clippingPlane->getNameInDocument()
+            clippingPlaneName.c_str()
         );
     }
 
@@ -1136,11 +1211,19 @@ void CmdPartSectionAnalysis::activated(int iMsg)
         runCommand(Doc, sourceAssignment.str().c_str());
     }
 
-    if (clippingPlane && !sources.empty()) {
+    if (!clippingPlaneName.empty() && !sources.empty()) {
         doCommand(Doc, "App.ActiveDocument.recompute()");
     }
 
     updateActive();
+    if (autoCreatedClippingPlane && view) {
+        auto* plane = freecad_cast<App::ClippingPlane*>(
+            getDocument()->getObject(clippingPlaneName.c_str())
+        );
+        if (plane) {
+            Gui::ClippingPlaneManager::instance().activate(view, plane);
+        }
+    }
     doCommand(Gui, "Gui.ActiveDocument.setEdit('%s')", featName.c_str());
     commitCommand();
 }
