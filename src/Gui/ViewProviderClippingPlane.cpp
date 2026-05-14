@@ -320,7 +320,7 @@ void ViewProviderClippingPlane::syncOverlayAppearance()
 void ViewProviderClippingPlane::syncHelperVisibility()
 {
     if (overlaySwitch) {
-        const bool hideDuringActiveEdit = (editModeActive || panelPlaneEditActive)
+        const bool hideDuringActiveEdit = (transformDragger || isExternalTransformEditActive())
             && ClippingPlaneManager::instance().isActive(getObject<App::ClippingPlane>());
         overlaySwitch->whichChild = (Visibility.getValue() && !hideDuringActiveEdit)
             ? SO_SWITCH_ALL
