@@ -1164,6 +1164,11 @@ void CmdPartSectionAnalysis::activated(int iMsg)
             const auto placement = PartGui::initialSectionAnalysisPlanePlacement(view, bbox);
             const auto position = placement.getPosition();
             const auto direction = placement.getRotation().multVec(Base::Vector3d(0.0, 0.0, -1.0));
+            const double sizeX = std::max(1.0, bbox.LengthX());
+            const double sizeY = std::max(1.0, bbox.LengthY());
+            const double sizeZ = std::max(1.0, bbox.LengthZ());
+            const double helperSize = std::max({sizeX, sizeY, sizeZ});
+            const double helperArrow = std::max(10.0, helperSize * 0.35);
 
             clippingPlaneName = getUniqueObjectName("ClippingPlane");
             doCommand(
@@ -1183,6 +1188,10 @@ void CmdPartSectionAnalysis::activated(int iMsg)
                 direction.y,
                 direction.z
             );
+            doCommand(Doc, "plane.ViewObject.AutoSize = False");
+            doCommand(Doc, "plane.ViewObject.DisplayLength = %.17g", helperSize);
+            doCommand(Doc, "plane.ViewObject.DisplayHeight = %.17g", helperSize);
+            doCommand(Doc, "plane.ViewObject.ArrowSize = %.17g", helperArrow);
             autoCreatedClippingPlane = true;
         }
     }
