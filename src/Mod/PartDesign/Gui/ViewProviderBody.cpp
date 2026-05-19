@@ -335,36 +335,7 @@ void ViewProviderBody::onChanged(const App::Property* prop)
 {
 
     if (prop == &DisplayModeBody) {
-        auto body = getObject<PartDesign::Body>();
-
-        if (DisplayModeBody.getValue() == 0) {
-            // if we are in an override mode we need to make sure to come out, because
-            // otherwise the maskmode is blocked and won't go into "through"
-            if (getOverrideMode() != "As Is") {
-                auto mode = getOverrideMode();
-                ViewProvider::setOverrideMode("As Is");
-                overrideMode = mode;
-            }
-            setDisplayMaskMode("Group");
-            if (body) {
-                body->setShowTip(false);
-            }
-        }
-        else {
-            if (body) {
-                body->setShowTip(true);
-            }
-            if (getOverrideMode() == "As Is") {
-                setDisplayMaskMode(DisplayMode.getValueAsString());
-            }
-            else {
-                Base::Console().message("Set override mode: %s\n", getOverrideMode().c_str());
-                setDisplayMaskMode(getOverrideMode().c_str());
-            }
-        }
-
-        // #0002559: Body becomes visible upon changing DisplayModeBody
-        Visibility.touch();
+        syncBodyDisplayMode(/*touchVisibility=*/true);
     }
     else {
         unifyVisualProperty(prop);
@@ -382,6 +353,48 @@ void ViewProviderBody::onChanged(const App::Property* prop)
 
     if (prop == &Transparency) {
         ShapeAppearance.enableNotify(true);
+    }
+}
+
+void ViewProviderBody::finishRestoring()
+{
+    PartGui::ViewProviderPartExt::finishRestoring();
+    syncBodyDisplayMode(/*touchVisibility=*/false);
+}
+
+void ViewProviderBody::syncBodyDisplayMode(bool touchVisibility)
+{
+    auto* body = getObject<PartDesign::Body>();
+
+    if (DisplayModeBody.getValue() == 0) {
+        // If we are in an override mode we need to make sure to come out, because
+        // otherwise the mask mode is blocked and won't go into "Through".
+        if (getOverrideMode() != "As Is") {
+            auto mode = getOverrideMode();
+            ViewProvider::setOverrideMode("As Is");
+            overrideMode = mode;
+        }
+        setDisplayMaskMode("Group");
+        if (body) {
+            body->setShowTip(false);
+        }
+    }
+    else {
+        if (body) {
+            body->setShowTip(true);
+        }
+        if (getOverrideMode() == "As Is") {
+            setDisplayMaskMode(DisplayMode.getValueAsString());
+        }
+        else {
+            Base::Console().message("Set override mode: %s\n", getOverrideMode().c_str());
+            setDisplayMaskMode(getOverrideMode().c_str());
+        }
+    }
+
+    if (touchVisibility) {
+        // #0002559: Body becomes visible upon changing DisplayModeBody
+        Visibility.touch();
     }
 }
 
@@ -603,6 +616,15 @@ void ViewProviderBody::show()
 {
     // Call the base version first to ensure normal behavior
     PartGui::ViewProviderPart::show();
+
+    // ViewProvider::show() restores the last selected display branch from the
+    // mode switch. Reapply the Body-specific branch so the runtime state stays
+    // consistent with the saved DisplayModeBody property.
+    syncBodyDisplayMode(/*touchVisibility=*/false);
+
+    if (DisplayModeBody.getValue() != 0) {
+        return;
+    }
 
     auto* body = static_cast<PartDesign::Body*>(getObject());
 

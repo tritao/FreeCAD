@@ -77,6 +77,7 @@ public:
     void updateData(const App::Property* prop) override;
     /// unify children visuals
     void onChanged(const App::Property* prop) override;
+    void finishRestoring() override;
 
     /**
      * Return the bounding box of visible features
@@ -113,6 +114,7 @@ protected:
 
 private:
     static const char* BodyModeEnum[];
+    void syncBodyDisplayMode(bool touchVisibility);
 
     void afterRecompute(const App::Document&, const std::vector<App::DocumentObject*>& recomputedObjs);
     fastsignals::scoped_connection m_RecomputedConn;
