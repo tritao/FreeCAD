@@ -309,12 +309,18 @@ public:
     /// called when the selection changes for the view provider
     virtual void onSelectionChanged(const SelectionChanges&)
     {}
-    /// return a hit element given the picked point which contains the full node path
-    virtual bool getElementPicked(const SoPickedPoint*, std::string& subname) const;
-    /// Context-aware overload for gated single-pick resolution. \a pickContext may be null; when
+    /// Convenience wrapper for callers that do not need pick context.
+    bool getElementPicked(const SoPickedPoint*, std::string& subname) const;
+    /// Convenience wrapper for callers that do have pick context.
+    bool getElementPicked(
+        const SoPickedPoint*,
+        std::string& subname,
+        const SelectionPickContext* pickContext
+    ) const;
+    /// Canonical virtual hook for single-pick resolution. \a pickContext may be null; when
     /// present it carries the normalized cursor position plus the original pick action inputs for
     /// view-provider-specific recovery.
-    virtual bool getElementPicked(
+    virtual bool resolvePickedElement(
         const SoPickedPoint*,
         std::string& subname,
         const SelectionPickContext* pickContext

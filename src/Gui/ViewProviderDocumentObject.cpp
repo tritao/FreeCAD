@@ -666,12 +666,7 @@ bool ViewProviderDocumentObject::showInTree() const
     return ShowInTree.getValue();
 }
 
-bool ViewProviderDocumentObject::getElementPicked(const SoPickedPoint* pp, std::string& subname) const
-{
-    return getElementPicked(pp, subname, nullptr);
-}
-
-bool ViewProviderDocumentObject::getElementPicked(
+bool ViewProviderDocumentObject::resolvePickedElement(
     const SoPickedPoint* pp,
     std::string& subname,
     const SelectionPickContext* pickContext

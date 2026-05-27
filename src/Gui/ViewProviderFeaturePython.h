@@ -233,7 +233,7 @@ public:
 
 private:
     template<typename Fallback>
-    bool dispatchGetElementPicked(const SoPickedPoint* pp, std::string& subname, Fallback&& fallback) const
+    bool dispatchResolvePickedElement(const SoPickedPoint* pp, std::string& subname, Fallback&& fallback) const
     {
         const auto ret = imp->getElementPicked(pp, subname);
         if (ret == ViewProviderFeaturePythonImp::NotImplemented) {
@@ -323,20 +323,14 @@ public:
     {
         return imp->onSelectionChanged(changes);
     }
-    bool getElementPicked(const SoPickedPoint* pp, std::string& subname) const override
-    {
-        return dispatchGetElementPicked(pp, subname, [&]() {
-            return ViewProviderT::getElementPicked(pp, subname);
-        });
-    }
-    bool getElementPicked(
+    bool resolvePickedElement(
         const SoPickedPoint* pp,
         std::string& subname,
         const SelectionPickContext* pickContext
     ) const override
     {
-        return dispatchGetElementPicked(pp, subname, [&]() {
-            return ViewProviderT::getElementPicked(pp, subname, pickContext);
+        return dispatchResolvePickedElement(pp, subname, [&]() {
+            return ViewProviderT::resolvePickedElement(pp, subname, pickContext);
         });
     }
     std::string getElement(const SoDetail* det) const override
