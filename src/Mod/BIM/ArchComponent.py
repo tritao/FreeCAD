@@ -67,6 +67,25 @@ else:
     # \endcond
 
 
+def _copy_without_element_map(shape):
+    """Return a transient copy that does not retain element-map metadata."""
+
+    if shape is None:
+        return None
+    try:
+        return shape.copy(noElementMap=True)
+    except TypeError:
+        try:
+            plain_shape = shape.copy()
+            if getattr(plain_shape, "ElementMapSize", 0):
+                plain_shape.clearElementMap()
+            return plain_shape
+        except Exception:
+            return shape
+    except Exception:
+        return shape
+
+
 def _make_projected_horizontal_area_face(projected_faces):
     """Build one transient XY face from projected coplanar analysis faces."""
 

@@ -1665,21 +1665,34 @@ class _Space(ArchComponent.Component):
             hints=self._load_boundary_side_hints(obj),
         )
 
-    def _copy_without_element_map(self, shape):
+    def _is_usable_solid_shape(self, shape):
         if shape is None:
-            return None
+            return False
         try:
-            return shape.copy(noElementMap=True)
-        except TypeError:
-            try:
-                plain_shape = shape.copy()
-                if getattr(plain_shape, "ElementMapSize", 0):
-                    plain_shape.clearElementMap()
-                return plain_shape
-            except Exception:
-                return shape
+            if shape.isNull():
+                return False
         except Exception:
-            return shape
+            return False
+        try:
+            if not shape.isValid():
+                return False
+        except Exception:
+            pass
+        try:
+            if getattr(shape, "Volume", 0.0) > 0.0:
+                return True
+        except Exception:
+            pass
+        try:
+            solids = list(getattr(shape, "Solids", []) or [])
+        except Exception:
+            solids = []
+        if solids:
+            return True
+        return getattr(shape, "ShapeType", "") in {"Solid", "CompSolid"}
+
+    def _copy_without_element_map(self, shape):
+        return ArchComponent._copy_without_element_map(shape)
 
     def _copy_clean_slice_edge(self, edge):
         try:
