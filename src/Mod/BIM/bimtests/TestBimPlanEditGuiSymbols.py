@@ -2,11 +2,29 @@
 
 """Symbol and passive-context GUI tests."""
 
+import os
+
 from .TestBimPlanEditGuiBase import *  # noqa: F401,F403
 from .TestBimPlanEditGuiBase import BimPlanEditGuiBase
 
 
 class BimPlanEditGuiSymbolsMixin:
+    def _make_hidden_techdraw_page(self, name="Page"):
+        template_path = os.path.join(
+            FreeCAD.getResourceDir(),
+            "Mod",
+            "TechDraw",
+            "Templates",
+            "ISO",
+            "A3_Landscape_blank.svg",
+        )
+        page = self.document.addObject("TechDraw::DrawPage", name)
+        template = self.document.addObject("TechDraw::DrawSVGTemplate", f"{name}Template")
+        template.Template = template_path
+        page.Template = template
+        page.ViewObject.Visibility = False
+        return page
+
     def test_plan_edit_keeps_slabs_visible_but_not_selectable(self):
         """Active-storey slabs should not block wall picking in Plan Edit."""
 
@@ -816,6 +834,69 @@ class BimPlanEditGuiSymbolsMixin:
 
         self.assertTrue(group.ViewObject.Visibility)
         self.assertFalse(getattr(group.ViewObject, "Selectable", False))
+        self.assertTrue(wall.ViewObject.Visibility)
+        self.assertTrue(wall.ViewObject.Selectable)
+
+        session.shutdown(close_dialog=False)
+        self.pump_gui_events()
+
+    def test_plan_edit_hides_plain_groups_with_only_techdraw_content(self):
+        """Generic groups that only wrap TechDraw content should stay out of Plan Edit."""
+
+        group = self.document.addObject("App::DocumentObjectGroup", "TechDrawGroup")
+        page = self._make_hidden_techdraw_page("PlanEditTechDrawPage")
+        group.addObject(page)
+
+        level = Arch.makeFloor(name="Level 0")
+        wall = Arch.makeWall(length=3000, width=200, height=2500)
+        level.addObject(wall)
+
+        self.document.recompute()
+        group.ViewObject.Visibility = True
+        page.ViewObject.Visibility = False
+
+        FreeCADGui.Selection.clearSelection()
+        FreeCADGui.Selection.addSelection(level)
+
+        session = BimPlanSession.start_session()
+        self.assertIsNotNone(session, "Plan Edit session should start in GUI tests.")
+        self.pump_gui_events()
+
+        self.assertFalse(group.ViewObject.Visibility)
+        self.assertFalse(getattr(group.ViewObject, "Selectable", False))
+        self.assertFalse(page.ViewObject.Visibility)
+        self.assertTrue(wall.ViewObject.Visibility)
+        self.assertTrue(wall.ViewObject.Selectable)
+
+        session.shutdown(close_dialog=False)
+        self.pump_gui_events()
+
+    def test_plan_edit_keeps_plan_groups_visible_without_showing_hidden_techdraw_children(self):
+        """Visible plan groups should not surface hidden TechDraw pages during Plan Edit."""
+
+        group = self.document.addObject("App::DocumentObjectGroup", "MixedGroup")
+        level = Arch.makeFloor(name="Level 0")
+        wall = Arch.makeWall(length=3000, width=200, height=2500)
+        page = self._make_hidden_techdraw_page("PlanEditMixedTechDrawPage")
+
+        group.addObject(level)
+        group.addObject(page)
+        level.addObject(wall)
+        self.document.recompute()
+
+        group.ViewObject.Visibility = True
+        page.ViewObject.Visibility = False
+
+        FreeCADGui.Selection.clearSelection()
+        FreeCADGui.Selection.addSelection(level)
+
+        session = BimPlanSession.start_session()
+        self.assertIsNotNone(session, "Plan Edit session should start in GUI tests.")
+        self.pump_gui_events()
+
+        self.assertTrue(group.ViewObject.Visibility)
+        self.assertFalse(getattr(group.ViewObject, "Selectable", False))
+        self.assertFalse(page.ViewObject.Visibility)
         self.assertTrue(wall.ViewObject.Visibility)
         self.assertTrue(wall.ViewObject.Selectable)
 

@@ -36,6 +36,9 @@ def _has_view_object_property(view_object, property_name):
 def _set_view_object_property(view_object, property_name, value):
     if not _has_view_object_property(view_object, property_name):
         return False
+    current_value = _get_view_object_property(view_object, property_name)
+    if current_value == value:
+        return False
     return runtime_capabilities.set_attr_if_present(view_object, property_name, value)
 
 
@@ -163,13 +166,14 @@ def invalidate_plan_classification_cache(session):
     cache_state = session.overlay_cache_state
     cache_state.plan_semantic_object_cache.clear()
     cache_state.plan_object_storeys_cache.clear()
+    cache_state.plan_group_context_cache.clear()
     cache_state.plan_symbol_instances_cache = None
     cache_state.plan_space_instances_cache = None
     cache_state.plan_region_instances_cache = None
     cache_state.symbol_overlay_screen_cache.clear()
 
 
-def is_storey_object(obj):
+def is_storey_object(_session, obj):
     if not obj:
         return False
     if getattr(obj, "IfcType", "") == "Building Storey":
@@ -182,27 +186,35 @@ def is_storey_object(obj):
         return False
 
 
-def is_plan_container_object(obj):
+def _get_draft_type(obj):
+    try:
+        import Draft
+
+        return Draft.getType(obj)
+    except Exception:
+        return ""
+
+
+def is_techdraw_object(_session, obj):
+    return bool(obj and str(getattr(obj, "TypeId", "") or "").startswith("TechDraw::"))
+
+
+def is_intrinsic_plan_container_object(_session, obj):
     if not obj:
         return False
     if getattr(obj, "IfcType", "") in {"Site", "Building", "Building Storey"}:
         return True
+    return _get_draft_type(obj) in {"Site", "Building", "Floor", "BuildingPart"}
+
+
+def is_generic_plan_group_object(_session, obj):
+    if not obj or is_intrinsic_plan_container_object(_session, obj):
+        return False
     if _is_document_object_group(obj):
         return True
-    if _has_group_extension(obj):
+    if _get_draft_type(obj) == "Group":
         return True
-    try:
-        import Draft
-
-        return Draft.getType(obj) in {
-            "Site",
-            "Building",
-            "Floor",
-            "BuildingPart",
-            "Group",
-        }
-    except Exception:
-        return False
+    return _has_group_extension(obj)
 
 
 def is_plan_background_object(session, obj):
@@ -344,13 +356,80 @@ def is_plan_symbol_instance(session, obj):
     return obj == semantic_obj and has_direct_plan_symbols(semantic_obj)
 
 
+def is_explicit_plan_object(session, obj):
+    if not obj or is_techdraw_object(session, obj):
+        return False
+    if is_plan_symbol_instance(session, obj):
+        return True
+    if session.selection.targets.is_plan_region_object(obj):
+        return True
+    if session.selection.targets.is_plan_space_separator_object(obj):
+        return True
+    if is_intrinsic_plan_container_object(session, obj):
+        return True
+    if is_plan_background_object(session, obj):
+        return True
+    if is_plan_equipment_object(session, obj):
+        return True
+    if is_cabinetry_plan_context_object(obj):
+        return True
+
+    semantic_obj = get_plan_semantic_object(session, obj)
+    obj_type = _get_draft_type(semantic_obj)
+    if obj_type in {"Wall", "Window", "Space", "Axis", "AxisSystem"}:
+        return True
+
+    return getattr(semantic_obj, "IfcType", "") in {
+        "Wall",
+        "Window",
+        "Door",
+        "Space",
+        "Column",
+        "Grid",
+        "Stair",
+        "Curtain Wall",
+    }
+
+
+def is_plan_group_context_object(session, obj):
+    if not is_generic_plan_group_object(session, obj):
+        return False
+
+    key = get_document_object_key(session, obj)
+    cache = session.overlay_cache_state.plan_group_context_cache
+    if key is not None and key in cache:
+        _perf_count(session, "group_context_cache_hits")
+        return cache[key]
+
+    result = False
+    descendants = getattr(obj, "OutListRecursive", ()) or ()
+    for child in descendants:
+        if child is obj or not is_live_document_object(session, child):
+            continue
+        if is_explicit_plan_object(session, child):
+            result = True
+            break
+
+    if key is not None:
+        cache[key] = result
+    return result
+
+
+def is_plan_container_object(session, obj):
+    return is_intrinsic_plan_container_object(session, obj) or is_plan_group_context_object(
+        session, obj
+    )
+
+
 def is_plan_context_only_object(session, obj):
     if not obj:
+        return False
+    if is_techdraw_object(session, obj):
         return False
     if is_plan_symbol_instance(session, obj):
         return False
     return (
-        is_plan_container_object(obj)
+        is_plan_container_object(session, obj)
         or is_plan_background_object(session, obj)
         or is_plan_equipment_object(session, obj)
         or is_cabinetry_plan_context_object(obj)
@@ -372,38 +451,9 @@ def is_component_addition_object(obj):
 def is_supported_plan_object(session, obj):
     if not obj:
         return False
-    if is_plan_symbol_instance(session, obj):
+    if is_plan_group_context_object(session, obj):
         return True
-    if session.selection.targets.is_plan_region_object(obj):
-        return True
-    if session.selection.targets.is_plan_space_separator_object(obj):
-        return True
-    if is_plan_context_only_object(session, obj):
-        return True
-    semantic_obj = get_plan_semantic_object(session, obj)
-    try:
-        import Draft
-
-        obj_type = Draft.getType(semantic_obj)
-    except Exception:
-        obj_type = ""
-
-    if obj_type in {"Wall", "Window", "Space", "Axis", "AxisSystem"}:
-        return True
-
-    if getattr(semantic_obj, "IfcType", "") in {
-        "Wall",
-        "Window",
-        "Door",
-        "Space",
-        "Column",
-        "Grid",
-        "Stair",
-        "Curtain Wall",
-    }:
-        return True
-
-    return False
+    return is_explicit_plan_object(session, obj)
 
 
 def get_object_storeys(session, obj):
@@ -418,13 +468,13 @@ def get_object_storeys(session, obj):
     storeys = []
     seen = set()
     parents = list(getattr(obj, "InListRecursive", []) or getattr(obj, "InList", []))
-    if is_storey_object(obj):
+    if is_storey_object(session, obj):
         parents.insert(0, obj)
     for parent in parents:
         if not parent or parent.Name in seen:
             continue
         seen.add(parent.Name)
-        if is_storey_object(parent):
+        if is_storey_object(session, parent):
             storeys.append(parent)
     if key is not None:
         cache[key] = tuple(storeys)
