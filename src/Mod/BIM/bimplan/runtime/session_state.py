@@ -328,6 +328,7 @@ class PlanOverlayCacheState:
     )
     plan_semantic_object_cache: dict = field(default_factory=dict)
     plan_object_storeys_cache: dict = field(default_factory=dict)
+    plan_group_context_cache: dict = field(default_factory=dict)
     plan_symbol_instances_cache: object = None
     plan_space_instances_cache: object = None
     plan_region_instances_cache: object = None
