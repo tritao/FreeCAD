@@ -4114,6 +4114,66 @@ class TestBimPlanCore(unittest.TestCase):
 
         self.assertEqual([False], calls)
 
+    def test_plan_edit_shutdown_skips_recompute_when_document_is_clean(self):
+        doc = SimpleNamespace(
+            mustExecute=lambda: False,
+            isTouched=lambda: False,
+            recompute=Mock(),
+        )
+        session = SimpleNamespace(
+            document_visuals=SimpleNamespace(document_is_alive=lambda: True),
+            begin_teardown=Mock(),
+            lifecycle_state=SimpleNamespace(tearing_down=False),
+            task_panel=object(),
+            viewport=SimpleNamespace(restore_state=Mock()),
+            doc=doc,
+        )
+
+        with patch.object(plan_lifecycle_module.plan_command_gate, "uninstall"), patch.object(
+            plan_lifecycle_module,
+            "_cleanup_shutdown",
+        ), patch.object(
+            plan_lifecycle_module,
+            "_close_or_detach_task_panel",
+        ), patch.object(
+            plan_lifecycle_module.FreeCAD.Console,
+            "PrintMessage",
+        ):
+            self.assertTrue(plan_lifecycle_module.shutdown(session, close_dialog=False))
+
+        session.viewport.restore_state.assert_called_once_with()
+        doc.recompute.assert_not_called()
+
+    def test_plan_edit_shutdown_does_not_recompute_dirty_documents(self):
+        doc = SimpleNamespace(
+            mustExecute=lambda: True,
+            isTouched=lambda: False,
+            recompute=Mock(),
+        )
+        session = SimpleNamespace(
+            document_visuals=SimpleNamespace(document_is_alive=lambda: True),
+            begin_teardown=Mock(),
+            lifecycle_state=SimpleNamespace(tearing_down=False),
+            task_panel=object(),
+            viewport=SimpleNamespace(restore_state=Mock()),
+            doc=doc,
+        )
+
+        with patch.object(plan_lifecycle_module.plan_command_gate, "uninstall"), patch.object(
+            plan_lifecycle_module,
+            "_cleanup_shutdown",
+        ), patch.object(
+            plan_lifecycle_module,
+            "_close_or_detach_task_panel",
+        ), patch.object(
+            plan_lifecycle_module.FreeCAD.Console,
+            "PrintMessage",
+        ):
+            self.assertTrue(plan_lifecycle_module.shutdown(session, close_dialog=False))
+
+        session.viewport.restore_state.assert_called_once_with()
+        doc.recompute.assert_not_called()
+
     def test_plan_edit_provider_point_start_cancels_active_provider_move_first(self):
         calls = []
         session = SimpleNamespace(

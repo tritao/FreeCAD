@@ -244,14 +244,9 @@ def shutdown(session, close_dialog=True, teardown=False):
     _cleanup_shutdown(session, teardown=teardown)
     _close_or_detach_task_panel(panel, close_dialog=close_dialog, teardown=teardown)
     if not teardown:
+        # Plan Edit mutations are recomputed at the mutation sites. Shutdown only restores
+        # viewer/task-panel state and should not recompute unrelated dirty document state.
         session.viewport.restore_state()
-        if session.doc:
-            try:
-                session.doc.recompute()
-            except ReferenceError:
-                session.doc = None
-            except RuntimeError:
-                session.doc = None
         FreeCAD.Console.PrintMessage(translate("BIM_PlanEdit", "Exited BIM Plan Edit mode.\n"))
     return True
 
