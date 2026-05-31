@@ -84,9 +84,9 @@ class TestArchBaseGui(TestArchBase):
     def pump_gui_events(self, timeout_ms=200):
         """Process Qt events briefly so queued GUI callbacks execute.
 
-        Avoid creating a nested PySide QEventLoop/QTimer pair here: the Plan Edit GUI tests already
-        exercise many deferred Qt callbacks, and adding another Python-owned event loop/timer makes
-        Shiboken wrapper teardown more fragile while posted DeferredDelete events are being flushed.
+        Avoid creating a nested PySide QEventLoop/QTimer pair here: another Python-owned
+        event loop/timer makes Shiboken wrapper teardown more fragile while posted
+        DeferredDelete events are being flushed.
         Any exception is ignored so tests can still run in pure-CLI environments.
         """
         if not FreeCAD.GuiUp:
