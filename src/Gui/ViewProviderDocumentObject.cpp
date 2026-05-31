@@ -332,6 +332,15 @@ void ViewProviderDocumentObject::show()
     }
 }
 
+void ViewProviderDocumentObject::setTemporaryVisibility(bool visible)
+{
+    Base::ObjectStatusLocker<App::Property::Status, App::Property> guard(
+        App::Property::User1,
+        &Visibility
+    );
+    Visibility.setValue(visible);
+}
+
 const char* ViewProviderDocumentObject::getTransactionText() const
 {
     return QT_TRANSLATE_NOOP("Command", "Edit");

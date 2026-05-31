@@ -54,6 +54,21 @@ PyObject* ViewProviderDocumentObjectPy::update(PyObject* args)
     PY_CATCH;
 }
 
+PyObject* ViewProviderDocumentObjectPy::setTemporaryVisibility(PyObject* args, PyObject* kwd)
+{
+    int visible {};
+    static char* keywords[] = {const_cast<char*>("visible"), nullptr};
+    if (!PyArg_ParseTupleAndKeywords(args, kwd, "p", keywords, &visible)) {
+        return nullptr;
+    }
+    PY_TRY
+    {
+        getViewProviderDocumentObjectPtr()->setTemporaryVisibility(visible != 0);
+        Py_Return;
+    }
+    PY_CATCH;
+}
+
 Py::Object ViewProviderDocumentObjectPy::getObject() const
 {
     App::DocumentObject* obj = getViewProviderDocumentObjectPtr()->getObject();

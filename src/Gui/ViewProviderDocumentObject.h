@@ -74,6 +74,8 @@ public:
     void hide() override;
     /// Show the object in the view
     void show() override;
+    /// Temporarily set view visibility without syncing to the document object
+    void setTemporaryVisibility(bool visible);
     /// Is called by the tree if the user double clicks on the object. It returns the string
     /// for the transaction that will be shown in the undo/redo dialog.
     /// If null is returned then no transaction will be opened.
