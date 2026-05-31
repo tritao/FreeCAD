@@ -233,6 +233,7 @@ class PlanViewportState:
     saved_preselection_state: object = None
     plan_preselection_forced: bool = False
     saved_object_view_state: dict = field(default_factory=dict)
+    changed_object_view_state: dict = field(default_factory=dict)
     working_plane: object = None
     interaction_plane: object = None
 

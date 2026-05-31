@@ -447,6 +447,19 @@ def restore_navigation_state(session):
     restore_locked_view_actions(session)
 
 
+def _set_widget_updates_enabled(widget, enabled):
+    if widget is None:
+        return False
+    set_updates_enabled = getattr(widget, "setUpdatesEnabled", None)
+    if not callable(set_updates_enabled):
+        return False
+    try:
+        set_updates_enabled(bool(enabled))
+        return True
+    except Exception:
+        return False
+
+
 def _get_view_preferences():
     return FreeCAD.ParamGet(_VIEW_PREFERENCES_PATH)
 
@@ -546,40 +559,48 @@ def apply_plan_view(session, fit=True):
 def restore_state(session):
     import WorkingPlane
 
-    restore_preselection_state(session)
-    session.visibility.restore_object_view_state()
-    session.snap.restore_snap_profile()
-    session.viewport_state.interaction_plane = None
+    widget = get_plan_view_widget(session)
+    updates_suspended = _set_widget_updates_enabled(widget, False)
+    try:
+        restore_preselection_state(session)
 
-    if session.viewer:
-        try:
-            session.viewer.setOverrideMode("As Is")
-            clear_plan_background_override(session)
-        except RuntimeError:
-            session.viewer = None
+        if session.viewer:
+            try:
+                session.viewer.setOverrideMode("As Is")
+                clear_plan_background_override(session)
+            except RuntimeError:
+                session.viewer = None
 
-    viewport_state = session.viewport_state
-    if session.view and viewport_state.saved_camera_type:
-        try:
-            session.view.setCameraType(viewport_state.saved_camera_type)
-        except RuntimeError:
-            session.view = None
-    if session.view and viewport_state.saved_camera:
-        try:
-            session.view.setCamera(viewport_state.saved_camera)
-        except RuntimeError:
-            session.view = None
+        session.visibility.restore_object_view_state()
+        session.snap.restore_snap_profile()
+        session.viewport_state.interaction_plane = None
 
-    wp = viewport_state.working_plane or WorkingPlane.get_working_plane(update=False)
-    restore = getattr(wp, "restore", None)
-    if callable(restore):
-        try:
-            restore()
-            _update_working_plane(wp)
-        except RuntimeError:
-            pass
+        viewport_state = session.viewport_state
+        if session.view and viewport_state.saved_camera_type:
+            try:
+                session.view.setCameraType(viewport_state.saved_camera_type)
+            except RuntimeError:
+                session.view = None
+        if session.view and viewport_state.saved_camera:
+            try:
+                session.view.setCamera(viewport_state.saved_camera)
+            except RuntimeError:
+                session.view = None
 
-    restore_navigation_state(session)
+        wp = viewport_state.working_plane or WorkingPlane.get_working_plane(update=False)
+        restore = getattr(wp, "restore", None)
+        if callable(restore):
+            try:
+                restore()
+                _update_working_plane(wp)
+            except RuntimeError:
+                pass
+
+        restore_navigation_state(session)
+    finally:
+        if updates_suspended:
+            _set_widget_updates_enabled(widget, True)
+            request_view_redraw(session)
 
 
 def capture_state(session):

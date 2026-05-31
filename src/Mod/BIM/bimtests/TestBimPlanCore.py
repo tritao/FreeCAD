@@ -113,9 +113,11 @@ from bimplan.providers import edit as plan_provider_edit_module
 from bimplan.providers import builtin as plan_provider_builtin_module
 from bimplan.providers import point as plan_provider_point_module
 from bimplan.providers import PlanEditRegistry
+from bimplan import object_visibility as plan_object_visibility_module
 from bimplan.runtime import lifecycle as plan_lifecycle_module
 from bimplan.runtime import session as plan_session_module
 from bimplan.runtime import tools as plan_runtime_tools
+from bimplan.runtime import view as plan_view_module
 from bimplan.selection import gui_sync as plan_selection_gui_sync
 from bimplan.selection import targets as plan_selection_targets_module
 from bimplan.selection.interaction import PlanSelectionActivationService
@@ -4173,6 +4175,197 @@ class TestBimPlanCore(unittest.TestCase):
 
         session.viewport.restore_state.assert_called_once_with()
         doc.recompute.assert_not_called()
+
+    def test_plan_visibility_restore_object_view_state_restores_only_changed_properties(self):
+        obj_a = SimpleNamespace(Name="Wall001")
+        view_a = SimpleNamespace(
+            Object=obj_a,
+            Visibility=False,
+            Transparency=85,
+            Selectable=False,
+        )
+        obj_a.ViewObject = view_a
+        obj_b = SimpleNamespace(Name="Wall002")
+        view_b = SimpleNamespace(
+            Object=obj_b,
+            Visibility=False,
+            Transparency=99,
+            Selectable=False,
+        )
+        obj_b.ViewObject = view_b
+        doc = SimpleNamespace(
+            Name="TestDoc",
+            getObject=lambda name: (
+                obj_a if name == obj_a.Name else obj_b if name == obj_b.Name else None
+            ),
+        )
+        session = SimpleNamespace(
+            doc=doc,
+            viewport_state=SimpleNamespace(
+                saved_object_view_state={
+                    obj_a.Name: {"Visibility": True, "Transparency": 0, "Selectable": True},
+                    obj_b.Name: {"Visibility": True, "Transparency": 20, "Selectable": True},
+                },
+                changed_object_view_state={
+                    obj_a.Name: {"Visibility", "Transparency"},
+                },
+            ),
+        )
+
+        plan_object_visibility_module.restore_object_view_state(session)
+
+        self.assertTrue(view_a.Visibility)
+        self.assertEqual(0, view_a.Transparency)
+        self.assertFalse(view_a.Selectable)
+        self.assertFalse(view_b.Visibility)
+        self.assertEqual(99, view_b.Transparency)
+        self.assertFalse(view_b.Selectable)
+        self.assertEqual({}, session.viewport_state.changed_object_view_state)
+
+    def test_plan_visibility_tracking_clears_restored_properties_from_dirty_set(self):
+        obj = SimpleNamespace(Name="Wall001")
+        view_object = SimpleNamespace(
+            Object=obj,
+            Visibility=True,
+            Transparency=0,
+            Selectable=True,
+        )
+        obj.ViewObject = view_object
+        session = SimpleNamespace(
+            viewport_state=SimpleNamespace(
+                saved_object_view_state={
+                    obj.Name: {"Visibility": True, "Transparency": 0, "Selectable": True},
+                },
+                changed_object_view_state={},
+            )
+        )
+
+        plan_object_visibility_module._set_view_object_property(
+            session,
+            view_object,
+            "Visibility",
+            False,
+        )
+        self.assertEqual(
+            {obj.Name: {"Visibility"}},
+            session.viewport_state.changed_object_view_state,
+        )
+
+        plan_object_visibility_module._set_view_object_property(
+            session,
+            view_object,
+            "Selectable",
+            False,
+        )
+        self.assertEqual(
+            {obj.Name: {"Visibility", "Selectable"}},
+            session.viewport_state.changed_object_view_state,
+        )
+
+        plan_object_visibility_module._set_view_object_property(
+            session,
+            view_object,
+            "Visibility",
+            True,
+        )
+        self.assertEqual(
+            {obj.Name: {"Selectable"}},
+            session.viewport_state.changed_object_view_state,
+        )
+
+        plan_object_visibility_module._set_view_object_property(
+            session,
+            view_object,
+            "Selectable",
+            True,
+        )
+        self.assertEqual({}, session.viewport_state.changed_object_view_state)
+
+    def test_plan_view_restore_state_suspends_widget_updates_during_restore(self):
+        update_calls = []
+        redraw = Mock()
+        widget = SimpleNamespace(
+            setUpdatesEnabled=lambda enabled: update_calls.append(bool(enabled))
+        )
+        session = SimpleNamespace(
+            lifecycle_state=SimpleNamespace(tearing_down=False),
+            view=SimpleNamespace(
+                graphicsView=lambda: widget,
+                redraw=redraw,
+            ),
+            viewer=SimpleNamespace(setOverrideMode=Mock()),
+            visibility=SimpleNamespace(restore_object_view_state=Mock()),
+            snap=SimpleNamespace(restore_snap_profile=Mock()),
+            viewport=SimpleNamespace(
+                get_runtime_attr=lambda obj, attr_name: getattr(obj, attr_name, None),
+                discard_stale_runtime_object=lambda obj: None,
+            ),
+            viewport_state=SimpleNamespace(
+                interaction_plane="sentinel",
+                saved_camera_type=None,
+                saved_camera=None,
+                working_plane=None,
+                saved_navigation_style=None,
+                saved_navigation_state={},
+                saved_view_action_state={},
+                saved_preselection_state=None,
+                plan_preselection_forced=False,
+            ),
+        )
+
+        with patch.object(plan_view_module, "restore_preselection_state"), patch.object(
+            plan_view_module,
+            "clear_plan_background_override",
+        ), patch.object(
+            plan_view_module,
+            "restore_navigation_state",
+        ), patch.object(
+            plan_view_module,
+            "_update_working_plane",
+        ), patch.dict(
+            sys.modules,
+            {"WorkingPlane": SimpleNamespace(get_working_plane=lambda update=False: None)},
+        ):
+            plan_view_module.restore_state(session)
+
+        self.assertEqual([False, True], update_calls)
+        redraw.assert_called_once_with()
+
+    def test_plan_visibility_uses_no_propagation_visibility_for_groups(self):
+        obj = SimpleNamespace(Name="Group001")
+        obj.isDerivedFrom = lambda type_name: type_name == "App::DocumentObjectGroup"
+        visibility_calls = []
+
+        def set_visibility_no_propagation(visible):
+            visibility_calls.append(bool(visible))
+            view_object.Visibility = bool(visible)
+
+        view_object = SimpleNamespace(
+            Object=obj,
+            Visibility=False,
+            setTemporaryVisibility=set_visibility_no_propagation,
+        )
+        session = SimpleNamespace(
+            viewport_state=SimpleNamespace(
+                saved_object_view_state={obj.Name: {"Visibility": False}},
+                changed_object_view_state={},
+            )
+        )
+
+        applied = plan_object_visibility_module._set_view_object_property(
+            session,
+            view_object,
+            "Visibility",
+            True,
+        )
+
+        self.assertTrue(applied)
+        self.assertTrue(view_object.Visibility)
+        self.assertEqual([True], visibility_calls)
+        self.assertEqual(
+            {obj.Name: {"Visibility"}},
+            session.viewport_state.changed_object_view_state,
+        )
 
     def test_plan_edit_provider_point_start_cancels_active_provider_move_first(self):
         calls = []
