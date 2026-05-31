@@ -33,13 +33,77 @@ def _has_view_object_property(view_object, property_name):
     return view_object is not None and hasattr(view_object, property_name)
 
 
-def _set_view_object_property(view_object, property_name, value):
+def _get_view_object_owner_name(view_object):
+    owner = runtime_capabilities.get_attr(view_object, "Object", None)
+    if owner is None:
+        return None
+    try:
+        return getattr(owner, "Name", None)
+    except Exception:
+        return None
+
+
+def _track_view_object_property_change(session, view_object, property_name, value):
+    if session is None:
+        return
+    viewport_state = _viewport_state(session)
+    saved_state = viewport_state.saved_object_view_state
+    if not saved_state:
+        return
+    obj_name = _get_view_object_owner_name(view_object)
+    if not obj_name:
+        return
+    original_state = saved_state.get(obj_name)
+    if not original_state or property_name not in original_state:
+        return
+    changed_state = viewport_state.changed_object_view_state
+    original_value = original_state[property_name]
+    if value == original_value:
+        changed_props = changed_state.get(obj_name)
+        if not changed_props:
+            return
+        changed_props.discard(property_name)
+        if not changed_props:
+            changed_state.pop(obj_name, None)
+        return
+    changed_state.setdefault(obj_name, set()).add(property_name)
+
+
+def _get_view_object_owner(view_object):
+    return runtime_capabilities.get_attr(view_object, "Object", None)
+
+
+def _can_set_group_visibility_without_propagation(view_object, property_name):
+    if property_name != "Visibility":
+        return False
+    owner = _get_view_object_owner(view_object)
+    return owner is not None and (_is_document_object_group(owner) or _has_group_extension(owner))
+
+
+def _set_group_visibility_without_propagation(view_object, value):
+    setter = _get_callable(view_object, "setTemporaryVisibility")
+    if setter is None:
+        return False
+    try:
+        setter(bool(value))
+        return True
+    except Exception:
+        return False
+
+
+def _set_view_object_property(session, view_object, property_name, value):
     if not _has_view_object_property(view_object, property_name):
         return False
     current_value = _get_view_object_property(view_object, property_name)
     if current_value == value:
         return False
-    return runtime_capabilities.set_attr_if_present(view_object, property_name, value)
+    if _can_set_group_visibility_without_propagation(view_object, property_name):
+        applied = _set_group_visibility_without_propagation(view_object, value)
+    else:
+        applied = runtime_capabilities.set_attr_if_present(view_object, property_name, value)
+    if applied:
+        _track_view_object_property_change(session, view_object, property_name, value)
+    return applied
 
 
 def _get_view_object_property(view_object, property_name):
@@ -57,10 +121,10 @@ def _capture_view_object_state(view_object, property_names):
     return state
 
 
-def _restore_view_object_properties(view_object, state):
+def _restore_view_object_properties(session, view_object, state):
     applied = False
     for property_name, value in dict(state or {}).items():
-        applied = _set_view_object_property(view_object, property_name, value) or applied
+        applied = _set_view_object_property(session, view_object, property_name, value) or applied
     return applied
 
 
@@ -484,6 +548,7 @@ def get_object_storeys(session, obj):
 def capture_object_view_state(session):
     viewport_state = _viewport_state(session)
     viewport_state.saved_object_view_state = {}
+    viewport_state.changed_object_view_state = {}
     if not session.doc:
         return
     with _perf_trace_span(session, "capture_object_view_state_objects"):
@@ -553,13 +618,21 @@ def restore_object_view_state(session):
     viewport_state = _viewport_state(session)
     if not session.doc or not viewport_state.saved_object_view_state:
         return
+    changed_state = {
+        obj_name: tuple(changed_props)
+        for obj_name, changed_props in dict(viewport_state.changed_object_view_state).items()
+        if changed_props
+    }
+    if not changed_state:
+        return
+    viewport_state.changed_object_view_state = {}
     try:
         doc = session.doc
         _ = doc.Name
     except Exception:
         session.doc = None
         return
-    for obj_name, state in viewport_state.saved_object_view_state.items():
+    for obj_name, changed_props in changed_state.items():
         try:
             obj = doc.getObject(obj_name)
         except Exception:
@@ -570,7 +643,15 @@ def restore_object_view_state(session):
         view_object = getattr(obj, "ViewObject", None)
         if not view_object:
             continue
-        _restore_view_object_properties(view_object, state)
+        state = viewport_state.saved_object_view_state.get(obj_name, {})
+        restore_state = {
+            property_name: state[property_name]
+            for property_name in changed_props
+            if property_name in state
+        }
+        if not restore_state:
+            continue
+        _restore_view_object_properties(session, view_object, restore_state)
 
 
 def get_supported_plan_visibility(session, obj, state):
@@ -594,36 +675,37 @@ def apply_context_object_selectability(session, obj, view_object):
         semantic_obj,
         obj,
     ):
-        _set_view_object_property(view_object, "Selectable", True)
+        _set_view_object_property(session, view_object, "Selectable", True)
         return
     # Openings, spaces, and plan regions are selected through Plan Edit's
     # semantic picking paths. Leaving their native 3D view objects
     # selectable lets the viewer replace the intended target with
     # overlapping native hits on button release.
     if session.selection.targets.is_plan_custom_pick_only_object(semantic_obj or obj):
-        _set_view_object_property(view_object, "Selectable", False)
+        _set_view_object_property(session, view_object, "Selectable", False)
         return
     if not is_plan_context_only_object(session, obj):
         return
-    _set_view_object_property(view_object, "Selectable", False)
+    _set_view_object_property(session, view_object, "Selectable", False)
 
 
-def apply_hidden_object_state(view_object):
+def apply_hidden_object_state(session, view_object):
     if not view_object:
         return
-    _set_view_object_property(view_object, "Visibility", False)
-    _set_view_object_property(view_object, "Selectable", False)
+    _set_view_object_property(session, view_object, "Visibility", False)
+    _set_view_object_property(session, view_object, "Selectable", False)
 
 
-def _restore_view_object_state(view_object, state):
+def _restore_view_object_state(session, view_object, state):
     for prop, value in state.items():
-        _set_view_object_property(view_object, prop, value)
+        _set_view_object_property(session, view_object, prop, value)
 
 
 def _apply_supported_object_view_state(session, obj, view_object, state):
     _perf_count(session, "storey_visibility_supported")
-    _restore_view_object_state(view_object, state)
+    _restore_view_object_state(session, view_object, state)
     _set_view_object_property(
+        session,
         view_object,
         "Visibility",
         get_supported_plan_visibility(session, obj, state),
@@ -641,9 +723,10 @@ def _apply_global_plan_visibility(session):
         state = viewport_state.saved_object_view_state.get(obj.Name, {})
         if not is_supported_plan_object(session, obj):
             _perf_count(session, "storey_visibility_hidden_unsupported")
-            apply_hidden_object_state(view_object)
+            apply_hidden_object_state(session, view_object)
             continue
         _set_view_object_property(
+            session,
             view_object,
             "Visibility",
             get_supported_plan_visibility(session, obj, state),
@@ -655,7 +738,7 @@ def _apply_storey_visibility_for_global_object(session, obj, view_object, state)
     _perf_count(session, "storey_visibility_global_objects")
     if not is_supported_plan_object(session, obj):
         _perf_count(session, "storey_visibility_hidden_unsupported")
-        apply_hidden_object_state(view_object)
+        apply_hidden_object_state(session, view_object)
         return
     _apply_supported_object_view_state(session, obj, view_object, state)
 
@@ -664,7 +747,7 @@ def _apply_storey_visibility_for_active_storey_object(session, obj, view_object,
     _perf_count(session, "storey_visibility_active_storey_objects")
     if not is_supported_plan_object(session, obj):
         _perf_count(session, "storey_visibility_hidden_unsupported")
-        apply_hidden_object_state(view_object)
+        apply_hidden_object_state(session, view_object)
         return
     _apply_supported_object_view_state(session, obj, view_object, state)
 
@@ -672,16 +755,18 @@ def _apply_storey_visibility_for_active_storey_object(session, obj, view_object,
 def _apply_storey_visibility_for_other_storey_object(session, obj, view_object, state):
     _perf_count(session, "storey_visibility_other_storey_objects")
     _set_view_object_property(
+        session,
         view_object,
         "Visibility",
         get_supported_plan_visibility(session, obj, state),
     )
     _set_view_object_property(
+        session,
         view_object,
         "Transparency",
         max(int(state.get("Transparency", 0)), 85),
     )
-    _set_view_object_property(view_object, "Selectable", False)
+    _set_view_object_property(session, view_object, "Selectable", False)
 
 
 def apply_storey_visibility(session):
