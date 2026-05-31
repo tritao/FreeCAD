@@ -21,6 +21,11 @@ class ViewProviderDocumentObject(ViewProvider):
         Update the view representation of the object
         """
         ...
+    def setTemporaryVisibility(self, visible: bool) -> None:
+        """
+        Temporarily set view-provider visibility without syncing to the document object
+        """
+        ...
     Object: _DocumentObject = ...
     """Set/Get the associated data object"""
 
