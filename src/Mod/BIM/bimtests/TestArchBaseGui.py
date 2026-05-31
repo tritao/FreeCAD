@@ -22,6 +22,7 @@
 # *                                                                         *
 # ***************************************************************************
 
+import time
 import unittest
 import FreeCAD
 import FreeCADGui
@@ -81,18 +82,23 @@ class TestArchBaseGui(TestArchBase):
         super().tearDown()
 
     def pump_gui_events(self, timeout_ms=200):
-        """Run the Qt event loop briefly so queued GUI callbacks execute.
+        """Process Qt events briefly so queued GUI callbacks execute.
 
-        This helper starts a QEventLoop and quits it after `timeout_ms` milliseconds using
-        QTimer.singleShot. Any exception (e.g. missing Qt in the environment) is silently ignored so
-        tests can still run in pure-CLI environments where the GUI isn't available.
+        Avoid creating a nested PySide QEventLoop/QTimer pair here: the Plan Edit GUI tests already
+        exercise many deferred Qt callbacks, and adding another Python-owned event loop/timer makes
+        Shiboken wrapper teardown more fragile while posted DeferredDelete events are being flushed.
+        Any exception is ignored so tests can still run in pure-CLI environments.
         """
+        if not FreeCAD.GuiUp:
+            return
+        timeout_s = max(0.0, float(timeout_ms) / 1000.0)
+        deadline = time.monotonic() + timeout_s
         try:
-            from PySide import QtCore
-
-            loop = QtCore.QEventLoop()
-            QtCore.QTimer.singleShot(int(timeout_ms), loop.quit)
-            loop.exec_()
+            while True:
+                FreeCADGui.updateGui()
+                if time.monotonic() >= deadline:
+                    break
+                time.sleep(0.01)
         except Exception:
-            # Best-effort: if Qt isn't present or event pumping fails, continue.
+            # Best-effort: if event pumping fails, continue.
             pass
