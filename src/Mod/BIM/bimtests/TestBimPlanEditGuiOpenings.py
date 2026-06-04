@@ -64,6 +64,39 @@ class BimPlanEditGuiOpeningsMixin:
 
         self.assertTrue(door.ViewObject.Selectable)
 
+    def test_plan_edit_hides_hosted_openings_outside_active_storey(self):
+        """Hosted openings should inherit level scope from their host wall."""
+
+        level = Arch.makeFloor(name="Level 0")
+        other_level = Arch.makeFloor(name="Level 1")
+        other_level.Placement.Base.z = 3000
+        wall = Arch.makeWall(length=3000, width=200, height=2500)
+        other_wall = Arch.makeWall(length=3000, width=200, height=2500)
+        level.addObject(wall)
+        other_level.addObject(other_wall)
+        self.document.recompute()
+
+        other_door = self._make_hosted_door(other_wall, name="OtherLevelDoor")
+
+        FreeCADGui.Selection.clearSelection()
+        FreeCADGui.Selection.addSelection(level)
+
+        session = BimPlanSession.start_session()
+        self.assertIsNotNone(session)
+        self.pump_gui_events()
+
+        self.assertFalse(other_door.ViewObject.Visibility)
+        self.assertFalse(other_door.ViewObject.Selectable)
+
+        session.storey.set_active_storey(other_level)
+        self.pump_gui_events()
+
+        self.assertTrue(other_door.ViewObject.Visibility)
+        self.assertFalse(other_door.ViewObject.Selectable)
+
+        session.shutdown(close_dialog=False)
+        self.pump_gui_events()
+
     def test_plan_edit_hosted_door_populates_footprint_lines(self):
         """Hosted doors should have committed footprint line data while Plan Edit is active."""
 

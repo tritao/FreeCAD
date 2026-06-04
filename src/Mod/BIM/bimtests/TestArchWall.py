@@ -920,6 +920,12 @@ class TestArchWall(TestArchBase.TestArchBase):
         self.assertTrue(wall.Shape.isValid(), "Wall shape became invalid after trimming.")
         self.assertLess(wall.Shape.Volume, initial_volume)
         self.assertLess(wall.Shape.BoundBox.XMax, 1000.01)
+        if wall.Shape.ElementMapVersion != "":
+            self.assertEqual(
+                wall.Shape.ElementMapSize,
+                0,
+                "Transient wall end-condition trims should not keep partial element maps.",
+            )
 
         wall.EndingEnd = App.Placement()
         self.document.recompute()
