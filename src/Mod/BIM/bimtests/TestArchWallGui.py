@@ -24,6 +24,8 @@
 
 """GUI tests for the ArchWall module."""
 
+import json
+
 import Arch
 import ArchWallJoinUtils
 import ArchWallJoint
@@ -510,6 +512,22 @@ class TestArchWallGui(ArchWallGuiTestCase):
         self.assertEqual(getattr(in_edit, "Object", None), joint)
         FreeCADGui.ActiveDocument.resetEdit()
         self.pump_gui_events()
+
+    def test_wall_joint_view_provider_serializes_without_object_reference(self):
+        """Wall-joint view providers should not persist live FeaturePython object references."""
+        wall1 = self._make_baseless_wall_between(
+            FreeCAD.Vector(-1000, 0, 0), FreeCAD.Vector(0, 0, 0)
+        )
+        wall2 = self._make_baseless_wall_between(
+            FreeCAD.Vector(0, 0, 0), FreeCAD.Vector(0, 1000, 0)
+        )
+        joint = Arch.makeWallJoint(wall1, wall2, "Miter")
+        self.document.recompute()
+
+        state = joint.ViewObject.Proxy.dumps()
+
+        self.assertIsNone(state)
+        json.dumps(state)
 
     def test_wall_joint_task_panel_applies_joint_settings(self):
         """Tests that the wall-joint task panel applies edited settings cleanly."""

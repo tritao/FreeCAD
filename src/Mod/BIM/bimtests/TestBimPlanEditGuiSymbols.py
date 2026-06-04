@@ -788,6 +788,108 @@ class BimPlanEditGuiSymbolsMixin:
         session.shutdown(close_dialog=False)
         self.pump_gui_events()
 
+    def test_plan_edit_hides_supported_objects_outside_active_storey(self):
+        """Supported objects from other storeys should not render in the active storey."""
+
+        level = Arch.makeFloor(name="Level 0")
+        other_level = Arch.makeFloor(name="Level 1")
+        other_level.Placement.Base.z = 3000
+        wall = Arch.makeWall(length=3000, width=200, height=2500)
+        other_wall = Arch.makeWall(length=3000, width=200, height=2500)
+        slab_profile = Draft.makeRectangle(4000, 4000)
+        other_slab = Arch.makeStructure(slab_profile, height=200, name="OtherStoreySlab")
+        other_slab.IfcType = "Slab"
+
+        level.addObject(wall)
+        other_level.addObject(other_wall)
+        other_level.addObject(other_slab)
+        self.document.recompute()
+
+        FreeCADGui.Selection.clearSelection()
+        FreeCADGui.Selection.addSelection(level)
+
+        session = BimPlanSession.start_session()
+        self.assertIsNotNone(session, "Plan Edit session should start in GUI tests.")
+        self.pump_gui_events()
+
+        self.assertTrue(wall.ViewObject.Visibility)
+        self.assertTrue(wall.ViewObject.Selectable)
+        self.assertFalse(
+            other_wall.ViewObject.Visibility,
+            "Supported objects from other storeys should be hidden in Plan Edit.",
+        )
+        self.assertFalse(other_wall.ViewObject.Selectable)
+        self.assertFalse(other_slab.ViewObject.Visibility)
+        self.assertFalse(other_slab.ViewObject.Selectable)
+
+        session.storey.set_active_storey(other_level)
+        self.pump_gui_events()
+
+        self.assertFalse(wall.ViewObject.Visibility)
+        self.assertFalse(wall.ViewObject.Selectable)
+        self.assertTrue(other_wall.ViewObject.Visibility)
+        self.assertTrue(other_wall.ViewObject.Selectable)
+        self.assertTrue(other_slab.ViewObject.Visibility)
+        self.assertFalse(other_slab.ViewObject.Selectable)
+
+        session.shutdown(close_dialog=False)
+        self.pump_gui_events()
+
+    def test_plan_edit_hides_storeyless_supported_objects_in_active_storey_mode(self):
+        """Storeyless plan objects should not appear on every selected storey."""
+
+        site = Arch.makeSite(name="TestSite")
+        building = Arch.makeBuilding(name="TestBuilding")
+        level = Arch.makeFloor(name="Level 0")
+        wall = Arch.makeWall(length=3000, width=200, height=2500)
+        unscoped_wall = Arch.makeWall(length=3000, width=200, height=2500)
+        unscoped_slab_profile = Draft.makeRectangle(4000, 4000)
+        unscoped_slab = Arch.makeStructure(unscoped_slab_profile, height=200, name="UnscopedSlab")
+        unscoped_slab.IfcType = "Slab"
+        axis = Arch.makeAxis(num=2, size=500)
+        axis_group = self.document.addObject("App::DocumentObjectGroup", "AxisContext")
+
+        site.addObject(building)
+        building.addObject(level)
+        level.addObject(wall)
+        axis_group.addObject(axis)
+        self.document.recompute()
+
+        FreeCADGui.Selection.clearSelection()
+        FreeCADGui.Selection.addSelection(level)
+
+        session = BimPlanSession.start_session()
+        self.assertIsNotNone(session, "Plan Edit session should start in GUI tests.")
+        self.pump_gui_events()
+
+        self.assertTrue(wall.ViewObject.Visibility)
+        self.assertTrue(wall.ViewObject.Selectable)
+        self.assertFalse(
+            unscoped_wall.ViewObject.Visibility,
+            "Storeyless supported walls should be hidden in active-storey Plan Edit.",
+        )
+        self.assertFalse(unscoped_wall.ViewObject.Selectable)
+        self.assertFalse(unscoped_slab.ViewObject.Visibility)
+        self.assertFalse(unscoped_slab.ViewObject.Selectable)
+
+        self.assertTrue(site.ViewObject.Visibility)
+        self.assertFalse(site.ViewObject.Selectable)
+        self.assertTrue(building.ViewObject.Visibility)
+        self.assertFalse(building.ViewObject.Selectable)
+        self.assertTrue(axis.ViewObject.Visibility)
+        self.assertFalse(axis.ViewObject.Selectable)
+        self.assertTrue(axis_group.ViewObject.Visibility)
+        self.assertFalse(getattr(axis_group.ViewObject, "Selectable", False))
+
+        target_names = {
+            target.object_name for target in session.selection.targets.get_plan_targets()
+        }
+        self.assertIn(wall.Name, target_names)
+        self.assertNotIn(unscoped_wall.Name, target_names)
+
+        session.shutdown(close_dialog=False)
+        self.pump_gui_events()
+
     def test_plan_edit_keeps_building_visible_but_not_selectable(self):
         """Building containers should stay visible as context, but not intercept selection."""
 

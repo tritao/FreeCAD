@@ -2138,7 +2138,7 @@ class _Wall(ArchComponent.Component):
         )
         cutting_tool_local = cutting_tool_global.copy()
         cutting_tool_local.transformShape(wall_placement.inverse().toMatrix())
-        return solid_to_trim.common(cutting_tool_local)
+        return solid_to_trim.common(cutting_tool_local, noElementMap=True)
 
     @staticmethod
     def _is_null_placement(placement, tol=1e-9):

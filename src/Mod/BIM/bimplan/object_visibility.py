@@ -479,6 +479,75 @@ def is_plan_group_context_object(session, obj):
     return result
 
 
+def _is_site_or_building_context_object(session, obj):
+    if not obj or is_techdraw_object(session, obj):
+        return False
+    semantic_obj = get_plan_semantic_object(session, obj)
+    if getattr(semantic_obj, "IfcType", "") in {"Site", "Building"}:
+        return True
+    return _get_draft_type(semantic_obj) in {"Site", "Building"}
+
+
+def is_global_plan_reference_object(session, obj):
+    if not obj or is_techdraw_object(session, obj):
+        return False
+    semantic_obj = get_plan_semantic_object(session, obj)
+    obj_type = _get_draft_type(semantic_obj)
+    if obj_type in {"Axis", "AxisSystem"}:
+        return True
+    return getattr(semantic_obj, "IfcType", "") == "Grid"
+
+
+def _object_belongs_to_active_storey(session, obj):
+    active_storey_name = getattr(session.active_storey, "Name", None)
+    if active_storey_name is None:
+        return False
+    return any(parent.Name == active_storey_name for parent in get_object_storeys(session, obj))
+
+
+def _group_contains_active_storey_context(session, obj):
+    active_storey = session.active_storey
+    active_storey_name = getattr(active_storey, "Name", None)
+    if active_storey_name is None:
+        return False
+    for child in getattr(obj, "OutListRecursive", ()) or ():
+        if child is obj or not is_live_document_object(session, child):
+            continue
+        if child is active_storey:
+            return True
+        if _object_belongs_to_active_storey(session, child):
+            return True
+    return False
+
+
+def _group_contains_global_reference_context(session, obj):
+    for child in getattr(obj, "OutListRecursive", ()) or ():
+        if child is obj or not is_live_document_object(session, child):
+            continue
+        if _is_site_or_building_context_object(session, child):
+            return True
+        if is_global_plan_reference_object(session, child):
+            return True
+    return False
+
+
+def is_global_plan_context_object(session, obj):
+    if not obj or is_techdraw_object(session, obj):
+        return False
+    semantic_obj = get_plan_semantic_object(session, obj)
+    if is_storey_object(session, semantic_obj):
+        return False
+    if _is_site_or_building_context_object(session, semantic_obj):
+        return True
+    if is_global_plan_reference_object(session, semantic_obj):
+        return True
+    if not is_generic_plan_group_object(session, obj):
+        return False
+    return _group_contains_active_storey_context(
+        session, obj
+    ) or _group_contains_global_reference_context(session, obj)
+
+
 def is_plan_container_object(session, obj):
     return is_intrinsic_plan_container_object(session, obj) or is_plan_group_context_object(
         session, obj
@@ -496,6 +565,7 @@ def is_plan_context_only_object(session, obj):
         is_plan_container_object(session, obj)
         or is_plan_background_object(session, obj)
         or is_plan_equipment_object(session, obj)
+        or is_global_plan_reference_object(session, obj)
         or is_cabinetry_plan_context_object(obj)
     )
 
@@ -520,10 +590,33 @@ def is_supported_plan_object(session, obj):
     return is_explicit_plan_object(session, obj)
 
 
-def get_object_storeys(session, obj):
+def _iter_storey_scope_hosts(obj):
+    try:
+        hosts = tuple(getattr(obj, "Hosts", None) or ())
+    except Exception:
+        hosts = ()
+    for host in hosts:
+        if host:
+            yield host
+    try:
+        host = getattr(obj, "Host", None)
+    except Exception:
+        host = None
+    if host:
+        yield host
+
+
+def get_object_storeys(session, obj, _visited=None):
     if not obj:
         return []
     key = get_document_object_key(session, obj)
+    visit_key = key if key is not None else id(obj)
+    if _visited is None:
+        _visited = set()
+    if visit_key in _visited:
+        return []
+    _visited.add(visit_key)
+
     cache = session.overlay_cache_state.plan_object_storeys_cache
     if key is not None and key in cache:
         _perf_count(session, "object_storeys_cache_hits")
@@ -540,6 +633,14 @@ def get_object_storeys(session, obj):
         seen.add(parent.Name)
         if is_storey_object(session, parent):
             storeys.append(parent)
+    for host in _iter_storey_scope_hosts(obj):
+        if not host or host is obj:
+            continue
+        for storey in get_object_storeys(session, host, _visited):
+            if not storey or storey.Name in seen:
+                continue
+            seen.add(storey.Name)
+            storeys.append(storey)
     if key is not None:
         cache[key] = tuple(storeys)
     return storeys
@@ -740,6 +841,10 @@ def _apply_storey_visibility_for_global_object(session, obj, view_object, state)
         _perf_count(session, "storey_visibility_hidden_unsupported")
         apply_hidden_object_state(session, view_object)
         return
+    if not is_global_plan_context_object(session, obj):
+        _perf_count(session, "storey_visibility_hidden_unscoped_supported")
+        apply_hidden_object_state(session, view_object)
+        return
     _apply_supported_object_view_state(session, obj, view_object, state)
 
 
@@ -754,19 +859,7 @@ def _apply_storey_visibility_for_active_storey_object(session, obj, view_object,
 
 def _apply_storey_visibility_for_other_storey_object(session, obj, view_object, state):
     _perf_count(session, "storey_visibility_other_storey_objects")
-    _set_view_object_property(
-        session,
-        view_object,
-        "Visibility",
-        get_supported_plan_visibility(session, obj, state),
-    )
-    _set_view_object_property(
-        session,
-        view_object,
-        "Transparency",
-        max(int(state.get("Transparency", 0)), 85),
-    )
-    _set_view_object_property(session, view_object, "Selectable", False)
+    apply_hidden_object_state(session, view_object)
 
 
 def apply_storey_visibility(session):
@@ -892,6 +985,15 @@ class PlanVisibilityAPI:
 
     def is_plan_context_only_object(self, *args, **kwargs):
         return is_plan_context_only_object(self.session, *args, **kwargs)
+
+    def is_global_plan_context_object(self, *args, **kwargs):
+        return is_global_plan_context_object(self.session, *args, **kwargs)
+
+    def is_global_plan_reference_object(self, *args, **kwargs):
+        return is_global_plan_reference_object(self.session, *args, **kwargs)
+
+    def object_belongs_to_active_storey(self, *args, **kwargs):
+        return _object_belongs_to_active_storey(self.session, *args, **kwargs)
 
     def is_component_addition_object(self, *args, **kwargs):
         return is_component_addition_object(self.session, *args, **kwargs)

@@ -347,7 +347,12 @@ def get_plan_targets(session, selected_only=False):
                 semantic_obj = session.visibility.get_plan_semantic_object(target_obj)
                 if active_storey_name is not None:
                     storeys = session.visibility.get_object_storeys(semantic_obj or target_obj)
-                    if storeys and not any(parent.Name == active_storey_name for parent in storeys):
+                    if storeys:
+                        if not any(parent.Name == active_storey_name for parent in storeys):
+                            continue
+                    elif not session.visibility.is_global_plan_context_object(
+                        semantic_obj or target_obj
+                    ):
                         continue
                 seen.add(state_key)
                 source_targets.append(target)

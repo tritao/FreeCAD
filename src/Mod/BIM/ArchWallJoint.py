@@ -394,6 +394,12 @@ class _ViewProviderWallJoint:
     def onChanged(self, _vobj, _prop):
         return
 
+    def dumps(self):
+        return None
+
+    def loads(self, _state):
+        return None
+
     def getIcon(self):
         joint_type = getattr(self.Object, "JointType", "Miter")
         return f":/icons/BIM_Join_{joint_type}.svg"

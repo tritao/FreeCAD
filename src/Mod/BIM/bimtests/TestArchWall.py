@@ -708,6 +708,12 @@ class TestArchWall(TestArchBase.TestArchBase):
             1000.01,
             "Wall should be trimmed at the positive X end.",
         )
+        if wall.Shape.ElementMapVersion != "":
+            self.assertEqual(
+                wall.Shape.ElementMapSize,
+                0,
+                "Transient wall end-condition trims should not keep partial element maps.",
+            )
 
         wall.EndingEnd = App.Placement()
         self.document.recompute()
