@@ -970,6 +970,7 @@ class BIMWorkbench(Workbench):
                 self.commands = commands
                 self.title = title
                 self._condition = condition
+                self.showContextHeader = False
 
             def shouldShow(self):
                 return scene_ready() and not plan_edit_active() and self._condition()
@@ -977,6 +978,7 @@ class BIMWorkbench(Workbench):
         class BimContextWatcher:
             def __init__(self):
                 self.widgets = [context_card]
+                self.showContextHeader = False
 
             def shouldShow(self):
                 if not scene_ready() or plan_edit_active():
@@ -989,6 +991,7 @@ class BIMWorkbench(Workbench):
 
         class BimPlanEditSessionWatcher:
             def __init__(self):
+                self.showContextHeader = False
                 self._session = None
                 self._widget = None
                 self.container = QtGui.QFrame()

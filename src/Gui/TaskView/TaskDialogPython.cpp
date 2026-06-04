@@ -409,6 +409,23 @@ bool TaskWatcherPython::shouldShow()
     }
 }
 
+bool TaskWatcherPython::shouldShowContextHeader() const
+{
+    Base::PyGILStateLocker lock;
+    try {
+        if (watcher.hasAttr(std::string("showContextHeader"))) {
+            Py::Object value(watcher.getAttr(std::string("showContextHeader")));
+            return value.isTrue();
+        }
+    }
+    catch (Py::Exception&) {
+        Base::PyException e;  // extract the Python error text
+        e.reportException();
+    }
+
+    return TaskWatcher::shouldShowContextHeader();
+}
+
 // ------------------------------------------------------------------
 
 void TaskDialogPy::init_type()

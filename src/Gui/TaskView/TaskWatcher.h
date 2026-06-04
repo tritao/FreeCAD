@@ -60,6 +60,7 @@ public:
 public:
     /// is called wenn the document or the Selection changes.
     virtual bool shouldShow();
+    virtual bool shouldShowContextHeader() const;
 
 protected:
     /// List of TaskBoxes of that dialog

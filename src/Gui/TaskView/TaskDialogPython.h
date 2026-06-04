@@ -65,6 +65,7 @@ public:
     explicit TaskWatcherPython(const Py::Object&);
     ~TaskWatcherPython() override;
     bool shouldShow() override;
+    bool shouldShowContextHeader() const override;
 
 private:
     Py::Object watcher;
