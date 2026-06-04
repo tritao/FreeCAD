@@ -982,9 +982,13 @@ void TaskView::updateWatcher()
     }
 
     int visibleSections = 0;
+    bool showContextHeader = true;
     // add all widgets for all watcher to the task view
     for (const auto& it : ActiveWatcher) {
         bool match = it->shouldShow();
+        if (match && !it->shouldShowContextHeader()) {
+            showContextHeader = false;
+        }
         std::vector<QWidget*>& cont = it->getWatcherContent();
         for (auto& it2 : cont) {
             if (match) {
@@ -997,7 +1001,10 @@ void TaskView::updateWatcher()
         }
     }
 
-    updateWatcherContext(visibleSections);
+    watcherContextPanel->setVisible(showContextHeader);
+    if (showContextHeader) {
+        updateWatcherContext(visibleSections);
+    }
     updateWatcherEmptyState(visibleSections);
 
     // In case the previous widget that had the focus is still visible

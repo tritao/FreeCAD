@@ -89,6 +89,11 @@ bool TaskWatcher::shouldShow()
     return false;
 }
 
+bool TaskWatcher::shouldShowContextHeader() const
+{
+    return true;
+}
+
 //**************************************************************************
 //**************************************************************************
 // TaskWatcherCommands
