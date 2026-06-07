@@ -56,6 +56,17 @@
 
 using namespace SketcherGui;
 
+namespace
+{
+
+bool isSameDatumQuantity(const Base::Quantity& lhs, const Base::Quantity& rhs)
+{
+    return lhs.getUnit() == rhs.getUnit()
+        && std::abs(lhs.getValue() - rhs.getValue()) <= Precision::Confusion();
+}
+
+}  // namespace
+
 /* TRANSLATOR SketcherGui::EditDatumDialog */
 
 bool SketcherGui::checkConstraintName(const Sketcher::SketchObject* sketch, std::string constraintName)
@@ -79,7 +90,6 @@ bool SketcherGui::checkConstraintName(const Sketcher::SketchObject* sketch, std:
 
 EditDatumDialog::EditDatumDialog(int tid, ViewProviderSketch* vp, int ConstrNbr)
     : ConstrNbr(ConstrNbr)
-    , success(false)
     , transactionID(tid)
 {
     sketch = vp->getSketchObject();
@@ -192,6 +202,13 @@ int EditDatumDialog::exec(bool atCursor)
 
         ui_ins_datum->cbDriving->setChecked(!Constr->isDriving);
 
+        initialDatum = ui_ins_datum->labelEdit->value();
+        initialConstraintType = Constr->Type;
+        initialReference = ui_ins_datum->cbDriving->isChecked();
+        initialHasExpression = ui_ins_datum->labelEdit->hasExpression();
+        initialExpression = ui_ins_datum->labelEdit->expressionText().toStdString();
+        initialConstraintName = Constr->Name;
+
         connect(ui_ins_datum->cbDriving, &QCheckBox::toggled, this, &EditDatumDialog::drivingToggled);
         connect(
             ui_ins_datum->labelEdit,
@@ -257,17 +274,32 @@ void EditDatumDialog::typeChanged(bool checked)
 
 void EditDatumDialog::accepted()
 {
+    int newConstraintType = Constr->Type;
     // Check if we need to swap Radius <-> Diameter
     if (Constr->Type == Sketcher::Radius && ui_ins_datum->rbDiameter->isChecked()) {
-        Constr->Type = Sketcher::Diameter;
+        newConstraintType = Sketcher::Diameter;
     }
     else if (Constr->Type == Sketcher::Diameter && ui_ins_datum->rbRadius->isChecked()) {
-        Constr->Type = Sketcher::Radius;
+        newConstraintType = Sketcher::Radius;
     }
 
     Base::Quantity newQuant = ui_ins_datum->labelEdit->value();
     if (Constr->Type == Sketcher::SnellsLaw || Constr->Type == Sketcher::Weight
         || !newQuant.isDimensionless()) {
+        std::string constraintName = ui_ins_datum->name->text().trimmed().toStdString();
+        bool hasExpression = ui_ins_datum->labelEdit->hasExpression();
+        std::string expression = ui_ins_datum->labelEdit->expressionText().toStdString();
+        bool isReference = ui_ins_datum->cbDriving->isChecked();
+
+        if (newConstraintType == initialConstraintType && isReference == initialReference
+            && constraintName == initialConstraintName && hasExpression == initialHasExpression
+            && expression == initialExpression && isSameDatumQuantity(newQuant, initialDatum)) {
+            Gui::Command::commitCommand(transactionID);
+            success = true;
+            return;
+        }
+
+        Constr->Type = static_cast<Sketcher::ConstraintType>(newConstraintType);
 
         // save the value for the history
         ui_ins_datum->labelEdit->pushToHistory();
@@ -300,7 +332,6 @@ void EditDatumDialog::accepted()
                 }
             }
 
-            std::string constraintName = ui_ins_datum->name->text().trimmed().toStdString();
             std::string currConstraintName = sketch->Constraints[ConstrNbr]->Name;
 
             if (constraintName != currConstraintName) {

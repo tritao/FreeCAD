@@ -24,8 +24,10 @@
 
 #pragma once
 
+#include <Base/Quantity.h>
 #include <QObject>
 #include <memory>
+#include <string>
 
 
 namespace Sketcher
@@ -57,9 +59,15 @@ private:
     Sketcher::SketchObject* sketch;
     Sketcher::Constraint* Constr;
     int ConstrNbr;
-    bool success;
+    bool success {false};
     std::unique_ptr<Ui_InsertDatum> ui_ins_datum;
     int transactionID;
+    Base::Quantity initialDatum;
+    int initialConstraintType {};
+    bool initialReference {false};
+    bool initialHasExpression {false};
+    std::string initialExpression;
+    std::string initialConstraintName;
 
 private Q_SLOTS:
     void accepted();
