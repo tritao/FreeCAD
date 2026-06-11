@@ -33,7 +33,7 @@ from dataclasses import dataclass, field
 
 import FreeCAD
 
-import ArchWallJoinUtils
+import ArchWallJoin
 
 END_TOLERANCE = 1e-4
 INTERSECTION_TOLERANCE = 1e-4
@@ -86,7 +86,7 @@ def solve_wall_junction(junction, include_conflicts=True):
         getattr(junction, "CarrierWall", None),
     )
     if include_conflicts and solution.is_ok():
-        conflicts = ArchWallJoinUtils.get_relation_conflicts(junction, solution)
+        conflicts = ArchWallJoin.get_relation_conflicts(junction, solution)
         if conflicts:
             _apply_conflicts(solution, conflicts)
     return solution
@@ -104,7 +104,7 @@ def solve_wall_junction_inputs(walls, carrier_mode="Auto", carrier_wall=None):
 
     paths = {}
     for wall in walls:
-        path = ArchWallJoinUtils.get_join_path(wall)
+        path = ArchWallJoin.get_join_path(wall)
         if not path:
             return WallJunctionSolution(
                 "UnsupportedBaseline",
@@ -130,7 +130,7 @@ def solve_wall_junction_inputs(walls, carrier_mode="Auto", carrier_wall=None):
     for candidate in walls:
         solution = _solve_carrier_candidate(walls, paths, candidate)
         if solution.is_ok():
-            score = ArchWallJoinUtils.get_join_path(candidate).nearest_end_distance(
+            score = ArchWallJoin.get_join_path(candidate).nearest_end_distance(
                 solution.intersection
             )
             if (best is None) or (score > best_score):
@@ -159,7 +159,7 @@ def solve_wall_junction_inputs(walls, carrier_mode="Auto", carrier_wall=None):
 
 
 def _solve_carrier_candidate(walls, paths, carrier_wall):
-    carrier_section = ArchWallJoinUtils.get_join_section(carrier_wall)
+    carrier_section = ArchWallJoin.get_join_section(carrier_wall)
     if not carrier_section:
         return WallJunctionSolution(
             "SolverError",
@@ -171,7 +171,7 @@ def _solve_carrier_candidate(walls, paths, carrier_wall):
     for wall in walls:
         if wall == carrier_wall:
             continue
-        intersection, _end_a, _end_b = ArchWallJoinUtils.find_best_intersection(
+        intersection, _end_a, _end_b = ArchWallJoin.find_best_intersection(
             paths[carrier_wall], paths[wall]
         )
         if not intersection:
@@ -213,7 +213,7 @@ def _solve_carrier_candidate(walls, paths, carrier_wall):
             )
         branch_walls.append(wall)
         end_name = paths[wall].nearest_end_name(common_point)
-        plane = ArchWallJoinUtils.calculate_tee_cutting_plane(
+        plane = ArchWallJoin.calculate_tee_cutting_plane(
             wall,
             carrier_wall,
             paths[wall],

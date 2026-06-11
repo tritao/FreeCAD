@@ -663,13 +663,13 @@ def solve_preview_wall_relation(session, relation, wall, preview_wall):
     if not relation or not wall or not preview_wall:
         return None
 
-    import ArchWallJoinUtils
+    import ArchWallJoin
     import ArchWallJunctionUtils
 
-    if ArchWallJoinUtils.is_wall_joint(relation):
+    if ArchWallJoin.is_wall_joint(relation):
         wall_a = preview_wall if getattr(relation, "WallA", None) == wall else relation.WallA
         wall_b = preview_wall if getattr(relation, "WallB", None) == wall else relation.WallB
-        return ArchWallJoinUtils.solve_wall_joint_inputs(
+        return ArchWallJoin.solve_wall_joint_inputs(
             wall_a,
             wall_b,
             getattr(relation, "JointType", "Miter"),
@@ -679,7 +679,7 @@ def solve_preview_wall_relation(session, relation, wall, preview_wall):
             getattr(relation, "EndB", "Auto"),
         )
 
-    if ArchWallJoinUtils.is_wall_junction(relation):
+    if ArchWallJoin.is_wall_junction(relation):
         walls = [
             preview_wall if linked_wall == wall else linked_wall
             for linked_wall in list(getattr(relation, "Walls", []) or [])
@@ -704,11 +704,11 @@ def collect_preview_wall_relation_data(session, wall, points):
     if not preview_wall:
         return {"Start": None, "End": None, "Conflicts": set()}, []
 
-    import ArchWallJoinUtils
+    import ArchWallJoin
 
     claims = {"Start": [], "End": []}
     warnings = []
-    for relation in ArchWallJoinUtils.iter_wall_relations(wall):
+    for relation in ArchWallJoin.iter_wall_relations(wall):
         solution = solve_preview_wall_relation(session, relation, wall, preview_wall)
         if not solution:
             continue
@@ -721,7 +721,7 @@ def collect_preview_wall_relation_data(session, wall, points):
                 )
             )
             continue
-        end_name, plane = ArchWallJoinUtils.get_trim_for_wall(solution, preview_wall)
+        end_name, plane = ArchWallJoin.get_trim_for_wall(solution, preview_wall)
         if end_name and plane:
             claims[end_name].append((relation, plane))
 

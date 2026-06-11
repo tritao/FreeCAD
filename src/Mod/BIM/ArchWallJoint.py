@@ -31,7 +31,7 @@ status, wall ends, and global trim planes for editing and inspection.
 
 import FreeCAD
 
-import ArchWallJoinUtils
+import ArchWallJoin
 
 translate = FreeCAD.Qt.translate
 
@@ -317,12 +317,13 @@ class _WallJoint:
             self._touch_walls(
                 self._pre_change_walls + [getattr(obj, "WallA", None), getattr(obj, "WallB", None)]
             )
+            obj.touch()
             self._pre_change_walls = []
         if prop in ("AutoLabel", "JointType", "WallA", "WallB"):
             self.updatePresentation(obj, force_label=(prop == "AutoLabel"))
 
     def execute(self, obj):
-        solution = ArchWallJoinUtils.solve_wall_joint(obj)
+        solution = ArchWallJoin.solve_wall_joint(obj)
         obj.Status = solution.status
         obj.StatusMessage = solution.status_message
         obj.ConflictJointA = None
@@ -364,7 +365,7 @@ class _WallJoint:
         joint_type = getattr(obj, "JointType", "Miter")
         wall_a = getattr(obj, "WallA", None)
         wall_b = getattr(obj, "WallB", None)
-        if wall_a and wall_b:
+        if wall_a is not None and wall_b is not None:
             return f"{joint_type}: {wall_a.Label} <-> {wall_b.Label}"
         return f"{joint_type} {translate('Arch', 'Wall Joint')}"
 
@@ -372,7 +373,7 @@ class _WallJoint:
     def _touch_walls(walls):
         seen = set()
         for wall in walls:
-            if not wall or wall.Name in seen:
+            if wall is None or wall.Name in seen:
                 continue
             seen.add(wall.Name)
             wall.touch()
@@ -603,7 +604,7 @@ if FreeCAD.GuiUp:
         def _refresh_preview(self):
             self._update_editor_state()
             values = self._current_values()
-            solution = ArchWallJoinUtils.solve_wall_joint_settings(
+            solution = ArchWallJoin.solve_wall_joint_settings(
                 self.obj,
                 values["JointType"],
                 values["ButtTrimmed"],
@@ -674,18 +675,18 @@ if FreeCAD.GuiUp:
         def _get_wall_summary_text(self):
             wall_a = getattr(self.obj, "WallA", None)
             wall_b = getattr(self.obj, "WallB", None)
-            label_a = wall_a.Label if wall_a else translate("BIM", "Unassigned")
-            label_b = wall_b.Label if wall_b else translate("BIM", "Unassigned")
+            label_a = wall_a.Label if wall_a is not None else translate("BIM", "Unassigned")
+            label_b = wall_b.Label if wall_b is not None else translate("BIM", "Unassigned")
             return translate("BIM", "WallA: {0}\nWallB: {1}").format(label_a, label_b)
 
         def _get_end_label(self, wall_key):
             wall = getattr(self.obj, "Wall" + wall_key, None)
-            label = wall.Label if wall else translate("BIM", "Unassigned")
+            label = wall.Label if wall is not None else translate("BIM", "Unassigned")
             return translate("BIM", "Trimmed end ({0})").format(label)
 
         def _get_wall_choice_label(self, wall_key):
             wall = getattr(self.obj, "Wall" + wall_key, None)
-            label = wall.Label if wall else translate("BIM", "Unassigned")
+            label = wall.Label if wall is not None else translate("BIM", "Unassigned")
             return f"Wall{wall_key} ({label})"
 
         @staticmethod

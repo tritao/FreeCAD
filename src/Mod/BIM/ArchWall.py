@@ -51,7 +51,7 @@ import ArchCommands
 import ArchComponent
 import ArchSketchObject
 import ArchWallEndCondition
-import ArchWallJoinUtils
+import ArchWallJoin
 import ArchWallPath
 import Draft
 import DraftVecUtils
@@ -880,12 +880,12 @@ class _Wall(ArchComponent.Component):
             return
         touched = set()
         touched_walls = {obj.Name}
-        for relation in ArchWallJoinUtils.iter_wall_relations(obj):
+        for relation in ArchWallJoin.iter_wall_relations(obj):
             if relation.Name in touched:
                 continue
             touched.add(relation.Name)
             relation.touch()
-            for linked_wall in ArchWallJoinUtils.get_relation_walls(relation):
+            for linked_wall in ArchWallJoin.get_relation_walls(relation):
                 if not linked_wall or linked_wall.Name in touched_walls:
                     continue
                 touched_walls.add(linked_wall.Name)
@@ -2066,7 +2066,7 @@ class _Wall(ArchComponent.Component):
 
         solid_to_trim = base_solid
         tool_size = base_solid.BoundBox.DiagonalLength * 2
-        relation_endings = ArchWallJoinUtils.collect_wall_relation_endings(obj)
+        relation_endings = ArchWallJoin.collect_wall_relation_endings(obj)
         start_condition = self._resolve_end_condition(obj, "Start", relation_endings)
         if start_condition:
             solid_to_trim = self._apply_cutting_plane(
@@ -2138,7 +2138,7 @@ class _Wall(ArchComponent.Component):
         )
         cutting_tool_local = cutting_tool_global.copy()
         cutting_tool_local.transformShape(wall_placement.inverse().toMatrix())
-        return solid_to_trim.common(cutting_tool_local, noElementMap=True)
+        return solid_to_trim.common(cutting_tool_local)
 
     @staticmethod
     def _is_null_placement(placement, tol=1e-9):
@@ -2157,7 +2157,10 @@ class _Wall(ArchComponent.Component):
         bounded_face = Part.Face(Part.makePolygon([p1, p2, p3, p4, p1]))
         bounded_face.Placement = cutting_placement
 
-        cutting_tool = bounded_face.makeHalfSpace(ref_point)
+        keep_direction = cutting_placement.Rotation.multVec(FreeCAD.Vector(0, 0, 1))
+        if (ref_point - cutting_placement.Base).dot(keep_direction) < 0:
+            keep_direction = keep_direction.negative()
+        cutting_tool = bounded_face.extrude(keep_direction.normalize() * tool_size)
 
         return cutting_tool
 
@@ -2179,7 +2182,7 @@ class _Wall(ArchComponent.Component):
             return False
 
         try:
-            has_relations = any(True for _relation in ArchWallJoinUtils.iter_wall_relations(obj))
+            has_relations = any(True for _relation in ArchWallJoin.iter_wall_relations(obj))
         except Exception:
             return False
         return has_relations

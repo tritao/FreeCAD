@@ -1817,14 +1817,15 @@ def makeWallJoint(wall_a=None, wall_b=None, joint_type="Miter", name=None):
         moduleName="ArchWallJoint",
         viewProviderName="_ViewProviderWallJoint",
     )
-    if not joint:
+    if joint is None:
         return None
 
-    joint.JointType = joint_type
-    if wall_a:
+    if wall_a is not None:
         joint.WallA = wall_a
-    if wall_b:
+    if wall_b is not None:
         joint.WallB = wall_b
+    joint.JointType = joint_type
+    joint.touch()
     if name:
         joint.AutoLabel = False
         joint.Label = name

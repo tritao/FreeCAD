@@ -345,7 +345,7 @@ def get_plan_context_junctions(session):
     if session.current_tool not in ("Select", "Join"):
         return []
 
-    import ArchWallJoinUtils
+    import ArchWallJoin
 
     junctions = []
     seen = set()
@@ -353,8 +353,8 @@ def get_plan_context_junctions(session):
     for wall in (selected_wall, session.hovered_wall):
         if not session.selection.targets.is_plan_selectable_wall(wall):
             continue
-        for relation in ArchWallJoinUtils.iter_wall_relations(wall):
-            if not ArchWallJoinUtils.is_wall_junction(relation):
+        for relation in ArchWallJoin.iter_wall_relations(wall):
+            if not ArchWallJoin.is_wall_junction(relation):
                 continue
             relation_name = getattr(relation, "Name", None)
             if not relation_name or relation_name in seen:

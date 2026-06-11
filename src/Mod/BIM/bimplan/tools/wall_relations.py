@@ -307,7 +307,7 @@ def get_plan_join_candidate_wall(session):
 
 
 def get_plan_candidate_joint(session, target_wall=None):
-    import ArchWallJoinUtils
+    import ArchWallJoin
 
     source_wall = session.selection.state.get_selected_plan_target_object("wall")
     target_wall = target_wall or get_plan_join_candidate_wall(session)
@@ -318,7 +318,7 @@ def get_plan_candidate_joint(session, target_wall=None):
     doc = getattr(source_wall, "Document", None) or session.doc
     if doc is None:
         return None
-    return ArchWallJoinUtils.find_existing_joint(doc, source_wall, target_wall)
+    return ArchWallJoin.find_existing_joint(doc, source_wall, target_wall)
 
 
 def get_plan_join_candidate_state(session):
@@ -404,7 +404,7 @@ def _commit_wall_relation_change(doc, action_label, callback):
 
 
 def unjoin_plan_wall_pair(session, source_wall, target_wall):
-    import ArchWallJoinUtils
+    import ArchWallJoin
 
     if not session.selection.targets.is_plan_selectable_wall(source_wall):
         return False
@@ -414,7 +414,7 @@ def unjoin_plan_wall_pair(session, source_wall, target_wall):
     doc = getattr(source_wall, "Document", None) or session.doc
     if doc is None:
         return False
-    joint = ArchWallJoinUtils.find_existing_joint(doc, source_wall, target_wall)
+    joint = ArchWallJoin.find_existing_joint(doc, source_wall, target_wall)
     if not joint:
         return False
 
@@ -464,7 +464,7 @@ def iter_unique_wall_sets(source_wall, target_wall, extra_walls):
 
 
 def find_plan_junction_promotion(session, source_wall, target_wall):
-    import ArchWallJoinUtils
+    import ArchWallJoin
     import ArchWallJunctionUtils
 
     if not session.selection.targets.is_plan_selectable_wall(source_wall):
@@ -479,13 +479,13 @@ def find_plan_junction_promotion(session, source_wall, target_wall):
     candidate_relations = []
     seen_relations = set()
     for wall in (source_wall, target_wall):
-        for relation in ArchWallJoinUtils.iter_wall_relations(wall):
+        for relation in ArchWallJoin.iter_wall_relations(wall):
             relation_name = getattr(relation, "Name", None)
             if not relation_name or relation_name in seen_relations:
                 continue
             seen_relations.add(relation_name)
             candidate_relations.append(relation)
-            for linked_wall in ArchWallJoinUtils.get_relation_walls(relation):
+            for linked_wall in ArchWallJoin.get_relation_walls(relation):
                 if session.selection.targets.is_plan_selectable_wall(linked_wall):
                     candidate_walls[getattr(linked_wall, "Name", "")] = linked_wall
 
@@ -521,7 +521,7 @@ def find_reusable_plan_junction(candidate_relations, walls):
 
 def apply_plan_wall_junction_promotion(session, doc, source_wall, target_wall):
     import Arch
-    import ArchWallJoinUtils
+    import ArchWallJoin
 
     promotion = find_plan_junction_promotion(session, source_wall, target_wall)
     if not promotion:
@@ -532,12 +532,10 @@ def apply_plan_wall_junction_promotion(session, doc, source_wall, target_wall):
     junction = find_reusable_plan_junction(candidate_relations, walls)
 
     for relation in candidate_relations:
-        if not ArchWallJoinUtils.is_wall_joint(relation):
+        if not ArchWallJoin.is_wall_joint(relation):
             continue
         relation_walls = {
-            getattr(wall, "Name", "")
-            for wall in ArchWallJoinUtils.get_relation_walls(relation)
-            if wall
+            getattr(wall, "Name", "") for wall in ArchWallJoin.get_relation_walls(relation) if wall
         }
         if relation_walls and relation_walls.issubset(wall_names):
             doc.removeObject(relation.Name)
@@ -578,11 +576,11 @@ def restore_selected_wall_relation_status(session):
 def collect_wall_relation_warnings(session, wall):
     if not wall:
         return []
-    import ArchWallJoinUtils
+    import ArchWallJoin
 
     warnings = []
     seen = set()
-    for relation in ArchWallJoinUtils.iter_wall_relations(wall):
+    for relation in ArchWallJoin.iter_wall_relations(wall):
         if not relation or relation.Name in seen or not getattr(relation, "Enabled", True):
             continue
         seen.add(relation.Name)
@@ -644,7 +642,7 @@ def apply_plan_wall_join(session, source_wall, target_wall):
         return False
 
     import Arch
-    import ArchWallJoinUtils
+    import ArchWallJoin
 
     join_command = session.wall_relations.get_plan_join_command()
     created = False
@@ -663,7 +661,7 @@ def apply_plan_wall_join(session, source_wall, target_wall):
             target_wall,
         )
         if relation is None:
-            relation = ArchWallJoinUtils.find_existing_joint(doc, source_wall, target_wall)
+            relation = ArchWallJoin.find_existing_joint(doc, source_wall, target_wall)
             if not relation:
                 relation = Arch.makeWallJoint(source_wall, target_wall, join_command.JointType)
                 created = True

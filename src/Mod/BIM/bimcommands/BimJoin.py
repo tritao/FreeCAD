@@ -12,7 +12,7 @@ the derived trims during recompute.
 """
 
 import Arch
-import ArchWallJoinUtils
+import ArchWallJoin
 import FreeCAD
 import FreeCADGui
 
@@ -49,10 +49,10 @@ class BIM_Join:
 
         doc = sel[0].Document
         doc.openTransaction(translate("BIM", "Join objects"))
-        joint = ArchWallJoinUtils.find_existing_joint(doc, sel[0], sel[1])
-        if not joint:
+        joint = ArchWallJoin.find_existing_joint(doc, sel[0], sel[1])
+        if joint is None:
             joint = Arch.makeWallJoint(sel[0], sel[1], self.JointType)
-        if not joint:
+        if joint is None:
             doc.abortTransaction()
             return
 
@@ -75,7 +75,7 @@ class BIM_Join:
             )
             return None
 
-        baseline = ArchWallJoinUtils.get_join_baseline(obj)
+        baseline = ArchWallJoin.get_join_baseline(obj)
         if not baseline:
             self._report_unsupported_baseline(obj)
             return None
@@ -83,7 +83,7 @@ class BIM_Join:
         return baseline
 
     def find_best_intersection(self, line1, line2):
-        return ArchWallJoinUtils.find_best_intersection(line1, line2)
+        return ArchWallJoin.find_best_intersection(line1, line2)
 
     def _configure_joint(self, joint, wall1, wall2):
         baseline1 = self._get_join_baseline(wall1)
@@ -111,7 +111,7 @@ class BIM_Join:
 
     @staticmethod
     def _report_joint_status(joint):
-        if not joint or getattr(joint, "Status", "OK") == "OK":
+        if joint is None or getattr(joint, "Status", "OK") == "OK":
             return
         message = joint.StatusMessage or translate("BIM", "The wall joint could not be solved.")
         FreeCAD.Console.PrintError(message + "\n")
@@ -155,7 +155,7 @@ class BIM_Join_Tee(BIM_Join):
         }
 
     def configure_joint(self, joint, wall1, wall2, baseline1, baseline2, intersection):
-        stem_role = ArchWallJoinUtils.get_auto_tee_stem_role(baseline1, baseline2, intersection)
+        stem_role = ArchWallJoin.get_auto_tee_stem_role(baseline1, baseline2, intersection)
         stem_wall = wall1 if stem_role == "WallA" else wall2
         joint.TeeStem = "WallA" if joint.WallA == stem_wall else "WallB"
         return True
@@ -202,12 +202,12 @@ class BIM_Unjoin:
 
     @staticmethod
     def _get_selected_joints(sel):
-        if sel and all(ArchWallJoinUtils.is_wall_joint(obj) for obj in sel):
+        if sel and all(ArchWallJoin.is_wall_joint(obj) for obj in sel):
             return list(sel)
 
         if len(sel) == 2:
-            joint = ArchWallJoinUtils.find_existing_joint(sel[0].Document, sel[0], sel[1])
-            if joint:
+            joint = ArchWallJoin.find_existing_joint(sel[0].Document, sel[0], sel[1])
+            if joint is not None:
                 return [joint]
             FreeCAD.Console.PrintError(
                 translate("BIM", "The selected objects are not joined by a wall joint.") + "\n"
@@ -240,11 +240,11 @@ class BIM_EditWallJoint:
     def IsActive(self):
         sel = FreeCADGui.Selection.getSelection()
         v = hasattr(FreeCADGui.getMainWindow().getActiveWindow(), "getSceneGraph")
-        return v and len(sel) == 1 and ArchWallJoinUtils.is_wall_joint(sel[0])
+        return v and len(sel) == 1 and ArchWallJoin.is_wall_joint(sel[0])
 
     def Activated(self):
         sel = FreeCADGui.Selection.getSelection()
-        if len(sel) != 1 or not ArchWallJoinUtils.is_wall_joint(sel[0]):
+        if len(sel) != 1 or not ArchWallJoin.is_wall_joint(sel[0]):
             FreeCAD.Console.PrintError(
                 translate("BIM", "The BIM Edit Wall Joint command needs 1 wall joint selected.")
                 + "\n"

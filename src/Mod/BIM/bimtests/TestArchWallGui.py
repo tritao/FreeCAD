@@ -27,7 +27,7 @@
 import json
 
 import Arch
-import ArchWallJoinUtils
+import ArchWallJoin
 import ArchWallJoint
 import Draft
 import FreeCAD
@@ -846,18 +846,18 @@ class TestArchWallGui(ArchWallGuiTestCase):
             FreeCAD.Vector(-1000, 0, 0), FreeCAD.Vector(1000, 0, 0)
         )
 
-        existing_baseline = ArchWallJoinUtils.get_join_baseline(existing_join_wall)
-        top_baseline = ArchWallJoinUtils.get_join_baseline(top_wall)
-        intersection, _, top_end_name = ArchWallJoinUtils.find_best_intersection(
+        existing_baseline = ArchWallJoin.get_join_baseline(existing_join_wall)
+        top_baseline = ArchWallJoin.get_join_baseline(top_wall)
+        intersection, _, top_end_name = ArchWallJoin.find_best_intersection(
             existing_baseline,
             top_baseline,
         )
-        _, top_plane = ArchWallJoinUtils.calculate_butt_cutting_planes(
+        _, top_plane = ArchWallJoin.calculate_butt_cutting_planes(
             existing_baseline,
             top_baseline,
             intersection,
-            ArchWallJoinUtils.get_join_section(existing_join_wall),
-            ArchWallJoinUtils.get_join_section(top_wall),
+            ArchWallJoin.get_join_section(existing_join_wall),
+            ArchWallJoin.get_join_section(top_wall),
         )
         relative_top_placement = top_wall.Placement.inverse().multiply(top_plane)
         setattr(top_wall, "Ending" + top_end_name, relative_top_placement)
@@ -969,6 +969,7 @@ class TestArchWallGui(ArchWallGuiTestCase):
         self.assertEqual(len(self.document.Objects), initial_object_count + 1)
         self.assertIn(wall2, wall1.Additions, "New baseless wall should be in wall1's Additions.")
 
+    @patch("draftutils.params.get_param")
     def test_baseless_wall_does_not_join_when_autojoin_is_off(self, mock_get_param):
         """Verify no relationship is created for baseless wall when AUTOJOIN is off."""
         mock_get_param.side_effect = self._get_mock_side_effect(autoJoinWalls=False, WallBaseline=0)
@@ -983,6 +984,7 @@ class TestArchWallGui(ArchWallGuiTestCase):
 
         self.assertEqual(len(wall1.Additions), 0, "No join action should have occurred.")
 
+    @patch("draftutils.params.get_param")
     def test_line_based_wall_merges_with_joinWallSketches(self, mock_get_param):
         """Verify line-based wall performs a destructive merge."""
         mock_get_param.side_effect = self._get_mock_side_effect(
@@ -1015,6 +1017,7 @@ class TestArchWallGui(ArchWallGuiTestCase):
             "The base sketch should have more edges after the merge.",
         )
 
+    @patch("draftutils.params.get_param")
     def test_line_based_wall_uses_autojoin_when_joinWallSketches_is_off(self, mock_get_param):
         """Verify line-based wall uses AUTOJOIN when sketch joining is off."""
         mock_get_param.side_effect = self._get_mock_side_effect(
@@ -1038,6 +1041,7 @@ class TestArchWallGui(ArchWallGuiTestCase):
         )
         self.assertIn(wall2, wall1.Additions, "The new wall should be an Addition to the first.")
 
+    @patch("draftutils.params.get_param")
     def test_line_based_wall_falls_back_to_autojoin_on_incompatible_walls(self, mock_get_param):
         """Verify fallback to AUTOJOIN for incompatible line-based walls."""
         mock_get_param.side_effect = self._get_mock_side_effect(
@@ -1055,6 +1059,7 @@ class TestArchWallGui(ArchWallGuiTestCase):
 
         self.assertIn(wall2, wall1.Additions, "Fallback failed; wall should be an Addition.")
 
+    @patch("draftutils.params.get_param")
     def test_sketch_based_wall_merges_with_joinWallSketches(self, mock_get_param):
         """Verify sketch-based wall performs a destructive merge."""
         mock_get_param.side_effect = self._get_mock_side_effect(
@@ -1083,6 +1088,7 @@ class TestArchWallGui(ArchWallGuiTestCase):
             "The base sketch should have more edges after the merge.",
         )
 
+    @patch("draftutils.params.get_param")
     def test_sketch_based_wall_uses_autojoin_when_joinWallSketches_is_off(self, mock_get_param):
         """Verify sketch-based wall uses AUTOJOIN when sketch joining is off."""
         mock_get_param.side_effect = self._get_mock_side_effect(
@@ -1103,6 +1109,7 @@ class TestArchWallGui(ArchWallGuiTestCase):
 
         self.assertIn(wall2, wall1.Additions, "The new wall should be an Addition to the first.")
 
+    @patch("draftutils.params.get_param")
     def test_sketch_based_wall_falls_back_to_autojoin_on_incompatible_walls(self, mock_get_param):
         """Verify fallback to AUTOJOIN for incompatible sketch-based walls."""
         mock_get_param.side_effect = self._get_mock_side_effect(
@@ -1121,6 +1128,7 @@ class TestArchWallGui(ArchWallGuiTestCase):
 
         self.assertIn(wall2, wall1.Additions, "Fallback failed; wall should be an Addition.")
 
+    @patch("draftutils.params.get_param")
     def test_no_join_action_when_prefs_are_off(self, mock_get_param):
         """Verify no join action occurs when both preferences are off."""
         mock_get_param.side_effect = self._get_mock_side_effect(

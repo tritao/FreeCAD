@@ -22,7 +22,7 @@
 # *                                                                         *
 # ***************************************************************************
 
-"""Solver and utility helpers for BIM wall joints.
+"""Solver and relation helpers for BIM wall joins.
 
 This module validates supported wall baselines, resolves joint roles and wall
 ends, computes the global cutting planes for each wall, and reports conflicts
@@ -114,19 +114,25 @@ class WallJointSolution:
 
 def is_wall_joint(obj):
     """Returns True when the given object is a BIM wall joint."""
-    return bool(obj and hasattr(obj, "Proxy") and getattr(obj.Proxy, "Type", None) == "WallJoint")
+    return bool(
+        obj is not None
+        and hasattr(obj, "Proxy")
+        and getattr(obj.Proxy, "Type", None) == "WallJoint"
+    )
 
 
 def is_wall_junction(obj):
     """Returns True when the given object is a BIM wall junction."""
     return bool(
-        obj and hasattr(obj, "Proxy") and getattr(obj.Proxy, "Type", None) == "WallJunction"
+        obj is not None
+        and hasattr(obj, "Proxy")
+        and getattr(obj.Proxy, "Type", None) == "WallJunction"
     )
 
 
 def iter_wall_relations(wall):
     """Yields wall relations that reference the given wall."""
-    if not wall:
+    if wall is None:
         return
     for obj in wall.InList:
         if is_wall_joint(obj) or is_wall_junction(obj):
@@ -144,7 +150,7 @@ def get_relation_walls(relation):
 
 def iter_wall_joints(wall):
     """Yields joint relations that reference the given wall."""
-    if not wall:
+    if wall is None:
         return
     for obj in wall.InList:
         if is_wall_joint(obj):
@@ -179,7 +185,7 @@ def get_join_section(wall):
 
 def solve_wall_joint(joint, include_conflicts=True):
     """Solves a wall joint relation and returns derived trim data."""
-    if not joint:
+    if joint is None:
         return _status_result("MissingWall", "The joint object is missing.")
     if not getattr(joint, "Enabled", True):
         return _status_result(
@@ -220,7 +226,7 @@ def solve_wall_joint_settings(
     include_conflicts=True,
 ):
     """Solves a wall joint from explicit settings, optionally including conflict checks."""
-    if not joint:
+    if joint is None:
         return _status_result("MissingWall", "The joint object is missing.")
 
     result = solve_wall_joint_inputs(
@@ -250,7 +256,7 @@ def solve_wall_joint_inputs(
 ):
     """Solves a wall joint configuration from wall objects and relation settings."""
     result = _status_result("SolverError", "The joint solver failed.", wall_a=wall_a, wall_b=wall_b)
-    if not wall_a or not wall_b:
+    if wall_a is None or wall_b is None:
         return _status_result(
             "MissingWall", "The joint must reference two walls.", wall_a=wall_a, wall_b=wall_b
         )
@@ -401,7 +407,7 @@ def get_joint_conflicts(joint, solution=None):
 
 def get_relation_conflicts(relation, solution=None):
     """Returns structured conflict entries for wall ends already trimmed by older relations."""
-    if not relation:
+    if relation is None:
         return []
     if solution is None:
         solution = solve_wall_relation(relation, include_conflicts=False)
@@ -410,7 +416,7 @@ def get_relation_conflicts(relation, solution=None):
 
     conflicts = []
     for wall_key, wall_obj, end_name in _iter_solution_trim_claims(solution):
-        if not wall_obj or not end_name:
+        if wall_obj is None or not end_name:
             continue
         for other in iter_wall_relations(wall_obj):
             if other == relation or not getattr(other, "Enabled", True):
@@ -455,7 +461,7 @@ def collect_wall_relation_endings(wall):
         if not solution.is_ok():
             continue
         end_name, plane = get_trim_for_wall(solution, wall)
-        if end_name and plane:
+        if end_name and plane is not None:
             claims[end_name].append((relation, plane))
 
     result = {"Start": None, "End": None, "Conflicts": set()}
@@ -469,7 +475,7 @@ def collect_wall_relation_endings(wall):
 
 def get_trim_for_wall(solution, wall):
     """Returns the resolved end and plane for the requested wall."""
-    if not solution:
+    if solution is None:
         return None, None
     return solution.trim_for_wall(wall)
 
@@ -483,7 +489,7 @@ def calculate_miter_cutting_planes(baseline1, baseline2, intersection, _section1
     """Calculates the cutting planes for a miter wall joint."""
     path1 = ArchWallPath.coerce_wall_path(baseline1)
     path2 = ArchWallPath.coerce_wall_path(baseline2)
-    if not path1 or not path2:
+    if path1 is None or path2 is None:
         return None, None
 
     dir1 = path1.tangent_towards(intersection)
@@ -503,7 +509,7 @@ def calculate_butt_cutting_planes(baseline1, baseline2, intersection, section1, 
     """Calculates the cutting planes for a butt wall joint."""
     path1 = ArchWallPath.coerce_wall_path(baseline1)
     path2 = ArchWallPath.coerce_wall_path(baseline2)
-    if not path1 or not path2:
+    if path1 is None or path2 is None:
         return None, None
     offset_1 = _get_section_face_offset_vector(path2, section2, path1.center() - intersection)
     offset_2 = _get_section_face_offset_vector(path1, section1, path2.center() - intersection)
@@ -531,9 +537,9 @@ def calculate_tee_cutting_plane(
     """Calculates the cutting plane for the stem wall in a tee joint."""
     stem_path = ArchWallPath.coerce_wall_path(stem_line, wall=stem_wall)
     top_path = ArchWallPath.coerce_wall_path(top_line, wall=top_wall)
-    if not stem_path or not top_path:
+    if stem_path is None or top_path is None:
         return None
-    top_section = top_section if top_section else top_wall
+    top_section = top_section if top_section is not None else top_wall
     offset = _get_section_face_offset_vector(
         top_path,
         top_section,
@@ -555,7 +561,7 @@ def calculate_tee_cutting_plane(
 def get_auto_tee_stem_role(baseline_a, baseline_b, intersection):
     path_a = ArchWallPath.coerce_wall_path(baseline_a)
     path_b = ArchWallPath.coerce_wall_path(baseline_b)
-    if not path_a or not path_b:
+    if path_a is None or path_b is None:
         return "WallB"
 
     dist_to_end_a = path_a.nearest_end_distance(intersection)
@@ -605,19 +611,19 @@ def _iter_solution_trim_claims(solution):
             ("A", solution.wall_a, solution.resolved_end_a),
             ("B", solution.wall_b, solution.resolved_end_b),
         ):
-            if wall_obj and end_name:
+            if wall_obj is not None and end_name:
                 yield wall_key, wall_obj, end_name
         return
 
     for trim in getattr(solution, "trim_claims", []):
         wall = getattr(trim, "wall", None)
         end_name = getattr(trim, "end_name", None)
-        if wall and end_name:
+        if wall is not None and end_name:
             yield getattr(wall, "Name", ""), wall, end_name
 
 
 def _relation_precedes(left, right):
-    if not left or not right or left == right:
+    if left is None or right is None or left == right:
         return False
     if left.Document and left.Document == right.Document:
         object_order = {
@@ -647,7 +653,7 @@ def _get_relation_type_name(relation):
 
 def _get_section_face_offset_vector(path, section, towards_vector):
     """Returns a signed lateral offset from a wall centerline to the requested section face."""
-    if not path:
+    if path is None:
         return None
     lateral = path.lateral_direction()
     extent = ArchWallSection.get_section_extent_towards(section, lateral, towards_vector)
