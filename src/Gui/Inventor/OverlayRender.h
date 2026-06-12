@@ -4,7 +4,14 @@
 
 #pragma once
 
+#include <cstdint>
+
+#include <Inventor/SbViewportRegion.h>
+#include <Inventor/actions/SoGLRenderAction.h>
+
 #include <FCGlobal.h>
+
+class SoNode;
 
 namespace Gui
 {
@@ -26,6 +33,18 @@ struct OverlayViewport
         return width > 0 && height > 0;
     }
 };
+
+/** Render-action settings shared by Inventor overlay passes. */
+struct OverlayRenderPolicy
+{
+    SbViewportRegion viewportRegion;
+    SoGLRenderAction::TransparencyType transparencyType {SoGLRenderAction::BLEND};
+    uint32_t cacheContext {0};
+    bool hasCacheContext {false};
+};
+
+/** Applies an overlay scene graph with the requested render-action policy. */
+GuiExport void renderOverlay(SoNode* root, const OverlayRenderPolicy& policy);
 
 /** Clears depth only inside an overlay viewport without touching color output. */
 GuiExport void clearOverlayDepth(const OverlayViewport& viewport);

@@ -8,6 +8,7 @@
 # include <windows.h>
 #endif
 
+#include <Inventor/actions/SoGLRenderAction.h>
 #include <Inventor/system/gl.h>
 
 #include "OverlayRender.h"
@@ -51,6 +52,20 @@ private:
 };
 
 }  // namespace
+
+void Gui::renderOverlay(SoNode* root, const OverlayRenderPolicy& policy)
+{
+    if (!root) {
+        return;
+    }
+
+    SoGLRenderAction action(policy.viewportRegion);
+    if (policy.hasCacheContext) {
+        action.setCacheContext(policy.cacheContext);
+    }
+    action.setTransparencyType(policy.transparencyType);
+    action.apply(root);
+}
 
 void Gui::clearOverlayDepth(const OverlayViewport& viewport)
 {

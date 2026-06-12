@@ -124,6 +124,7 @@
 #include "Command.h"
 #include "Document.h"
 #include "GLPainter.h"
+#include "Inventor/OverlayRender.h"
 #include "Inventor/SoAxisCrossKit.h"
 #include "Inventor/SoFCBackgroundGradient.h"
 #include "Inventor/SoFCBoundingBox.h"
@@ -257,15 +258,24 @@ int qImageByteCount(const QImage& image)
 #endif
 }
 
-void setOverlayCacheContext(SoGLRenderAction& action, const View3DInventorViewer* viewer)
+OverlayRenderPolicy makeOverlayRenderPolicy(
+    const SbViewportRegion& viewportRegion,
+    const View3DInventorViewer* viewer
+)
 {
+    OverlayRenderPolicy policy;
+    policy.viewportRegion = viewportRegion;
+
     if (!viewer || !viewer->getSoRenderManager()) {
-        return;
+        return policy;
     }
 
     if (auto* glra = viewer->getSoRenderManager()->getGLRenderAction()) {
-        action.setCacheContext(glra->getCacheContext());
+        policy.cacheContext = glra->getCacheContext();
+        policy.hasCacheContext = true;
     }
+
+    return policy;
 }
 
 SoSeparator* create2DOverlayRoot(int viewportWidth, int viewportHeight)
@@ -291,14 +301,6 @@ SoSeparator* create2DOverlayRoot(int viewportWidth, int viewportHeight)
     root->addChild(lightModel);
 
     return root;
-}
-
-void applyOverlay(SoNode* root, int viewportWidth, int viewportHeight, const View3DInventorViewer* viewer)
-{
-    SoGLRenderAction action(SbViewportRegion(viewportWidth, viewportHeight));
-    setOverlayCacheContext(action, viewer);
-    action.setTransparencyType(SoGLRenderAction::BLEND);
-    action.apply(root);
 }
 
 struct OverlayImageState
@@ -410,7 +412,10 @@ void renderOverlayImage(
     overlay.vertices->vertex.set1Value(2, SbVec3f(baseX + drawWidth, baseY + drawHeight, 0.0f));
     overlay.vertices->vertex.set1Value(3, SbVec3f(baseX, baseY + drawHeight, 0.0f));
 
-    applyOverlay(overlay.root, viewportWidth, viewportHeight, viewer);
+    renderOverlay(
+        overlay.root,
+        makeOverlayRenderPolicy(SbViewportRegion(viewportWidth, viewportHeight), viewer)
+    );
 }
 
 void renderOverlaySolidColor(
@@ -442,7 +447,10 @@ void renderOverlaySolidColor(
     face->numVertices.setValue(4);
     root->addChild(face);
 
-    applyOverlay(root, viewportWidth, viewportHeight, viewer);
+    renderOverlay(
+        root,
+        makeOverlayRenderPolicy(SbViewportRegion(viewportWidth, viewportHeight), viewer)
+    );
     root->unref();
 }
 
@@ -5030,15 +5038,9 @@ void View3DInventorViewer::drawAxisCross()
     SbViewportRegion vp = this->getSoRenderManager()->getViewportRegion();
     vp.setViewportPixels(origin[0], origin[1], pixelarea, pixelarea);
 
-    SoGLRenderAction axisAction(vp);
-    setOverlayCacheContext(axisAction, this);
-    axisAction.setTransparencyType(SoGLRenderAction::BLEND);
-    axisAction.apply(overlay.axisRoot);
-
-    SoGLRenderAction letterAction(vp);
-    setOverlayCacheContext(letterAction, this);
-    letterAction.setTransparencyType(SoGLRenderAction::BLEND);
-    letterAction.apply(overlay.lettersRoot);
+    const OverlayRenderPolicy policy = makeOverlayRenderPolicy(vp, this);
+    renderOverlay(overlay.axisRoot, policy);
+    renderOverlay(overlay.lettersRoot, policy);
 }
 
 void View3DInventorViewer::drawSingleBackground(const QColor& col)

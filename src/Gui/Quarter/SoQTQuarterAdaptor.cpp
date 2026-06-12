@@ -55,6 +55,7 @@
 # include <GL/gl.h>
 # endif
 
+#include "Inventor/OverlayRender.h"
 #include "SoQTQuarterAdaptor.h"
 
 #ifdef BUILD_TRACY_FRAME_PROFILER
@@ -646,10 +647,11 @@ void SIM::Coin3D::Quarter::SoQTQuarterAdaptor::draw2DString(
     overlay.baseColor->rgb.setValue(color.r, color.g, color.b);
     overlay.text->string.setValue(str);
 
-    SoGLRenderAction action(SbViewportRegion(viewportWidth, viewportHeight));
-    action.setCacheContext(this->getCacheContextId());
-    action.setTransparencyType(SoGLRenderAction::BLEND);
-    action.apply(overlay.root);
+    Gui::OverlayRenderPolicy policy;
+    policy.viewportRegion = SbViewportRegion(viewportWidth, viewportHeight);
+    policy.cacheContext = this->getCacheContextId();
+    policy.hasCacheContext = true;
+    Gui::renderOverlay(overlay.root, policy);
 }
 
 void SIM::Coin3D::Quarter::SoQTQuarterAdaptor::moveCameraScreen(const SbVec2f& screenpos)
