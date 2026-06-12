@@ -1060,6 +1060,7 @@ SOURCE_GROUP("View3D\\Viewprovider" FILES ${Viewprovider_SRCS})
 # The Inventor sources
 SET(Inventor_CPP_SRCS
     Inventor/MarkerBitmaps.cpp
+    Inventor/OverlayRender.cpp
     Inventor/SmSwitchboard.cpp
     Inventor/So3DAnnotation.cpp
     Inventor/SoAutoZoomTranslation.cpp
@@ -1102,6 +1103,7 @@ SET(Inventor_CPP_SRCS
 SET(Inventor_SRCS
     ${Inventor_CPP_SRCS}
     Inventor/MarkerBitmaps.h
+    Inventor/OverlayRender.h
     Inventor/SmSwitchboard.h
     Inventor/SoAutoZoomTranslation.h
     Inventor/SoAxisCrossKit.h
