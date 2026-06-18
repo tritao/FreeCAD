@@ -4339,7 +4339,7 @@ packages:
   - libwinpthread >=12.0.0.r4.gg4f2fc60ca
   - tbb >=2022.3.0
   input:
-    hash: 1e66a133830a44bac191206d54fcbf9c37a76c18fd5246d009673965ca5c1776
+    hash: cfbf10c8e5d5bd7480c60e3d1307eaffe7d61d2ffff4324fbe2853caaa7af78f
     globs:
     - recipe.yaml
     - variants.yaml

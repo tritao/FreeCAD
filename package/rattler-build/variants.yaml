@@ -1,7 +1,11 @@
 c_compiler:
+- if: linux
+  then: clang
 - if: win
   then: vs2022
 cxx_compiler:
+- if: linux
+  then: clangxx
 - if: win
   then: vs2022
 
