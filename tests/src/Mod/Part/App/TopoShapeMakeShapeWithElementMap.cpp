@@ -21,6 +21,49 @@
 using namespace Part;
 using namespace Data;
 
+namespace
+{
+
+struct CandidatePriorityMapper: TopoShape::Mapper
+{
+    TopoDS_Shape fallbackSource;
+    TopoDS_Shape primarySource;
+    TopoDS_Shape generatedShape;
+
+    const std::vector<Candidate>& generatedCandidates(const TopoDS_Shape& source) const override
+    {
+        _candidateRes.clear();
+        if (!fallbackSource.IsNull() && source.IsSame(fallbackSource)) {
+            appendCandidate(generatedShape, CandidatePriority::Fallback);
+        }
+        if (!primarySource.IsNull() && source.IsSame(primarySource)) {
+            appendCandidate(generatedShape, CandidatePriority::Primary);
+        }
+        return _candidateRes;
+    }
+};
+
+std::string mappedGeneratedFaceName(
+    const TopoShape::Mapper& mapper,
+    const TopoDS_Shape& outputShape,
+    const TopoDS_Shape& outputFace,
+    const TopoShape& source
+)
+{
+    TopoShape result;
+    result.makeShapeWithElementMap(outputShape, mapper, {source}, "TST");
+
+    int outputFaceIndex = result.findShape(outputFace);
+    EXPECT_GT(outputFaceIndex, 0);
+    if (outputFaceIndex <= 0) {
+        return {};
+    }
+
+    return result.getMappedName(IndexedName("Face", outputFaceIndex), true).toString();
+}
+
+}  // namespace
+
 class TopoShapeMakeShapeWithElementMapTests: public ::testing::Test
 {
 protected:
@@ -175,6 +218,52 @@ TEST_F(TopoShapeMakeShapeWithElementMapTests, emptySourceShapes)
             &modifiedShape.makeShapeWithElementMap(source.getShape(), *Mapper(), emptySources)
         );
     }
+}
+
+TEST_F(TopoShapeMakeShapeWithElementMapTests, fallbackCandidateMapsElementWithoutPrimaryCandidate)
+{
+    // Arrange
+    auto [sourceShape, outputShape] = PartTestHelpers::CreateTwoCubes();
+    TopoShape source {sourceShape, 1L};
+    TopoShape output {outputShape};
+    const auto sourceFaces = source.getSubShapes(TopAbs_FACE);
+    const auto outputFaces = output.getSubShapes(TopAbs_FACE);
+    ASSERT_GE(sourceFaces.size(), 1U);
+    ASSERT_GE(outputFaces.size(), 1U);
+
+    CandidatePriorityMapper mapper;
+    mapper.fallbackSource = sourceFaces[0];
+    mapper.generatedShape = outputFaces[0];
+
+    // Act
+    const auto mappedName = mappedGeneratedFaceName(mapper, outputShape, outputFaces[0], source);
+
+    // Assert
+    EXPECT_NE(mappedName.find("Face1"), std::string::npos);
+}
+
+TEST_F(TopoShapeMakeShapeWithElementMapTests, primaryCandidateReplacesEarlierFallbackCandidate)
+{
+    // Arrange
+    auto [sourceShape, outputShape] = PartTestHelpers::CreateTwoCubes();
+    TopoShape source {sourceShape, 1L};
+    TopoShape output {outputShape};
+    const auto sourceFaces = source.getSubShapes(TopAbs_FACE);
+    const auto outputFaces = output.getSubShapes(TopAbs_FACE);
+    ASSERT_GE(sourceFaces.size(), 2U);
+    ASSERT_GE(outputFaces.size(), 1U);
+
+    CandidatePriorityMapper mapper;
+    mapper.fallbackSource = sourceFaces[0];
+    mapper.primarySource = sourceFaces[1];
+    mapper.generatedShape = outputFaces[0];
+
+    // Act
+    const auto mappedName = mappedGeneratedFaceName(mapper, outputShape, outputFaces[0], source);
+
+    // Assert
+    EXPECT_EQ(mappedName.find("Face1"), std::string::npos);
+    EXPECT_NE(mappedName.find("Face2"), std::string::npos);
 }
 
 TEST_F(TopoShapeMakeShapeWithElementMapTests, nonMappableSources)

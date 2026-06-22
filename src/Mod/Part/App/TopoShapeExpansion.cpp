@@ -1377,8 +1377,61 @@ struct NameInfo
     int index {};
     Data::ElementIDRefs sids;
     const char* shapetype {};
+    TopoShape::Mapper::CandidatePriority priority {TopoShape::Mapper::CandidatePriority::Primary};
 };
 
+
+bool isFallbackCandidate(TopoShape::Mapper::CandidatePriority priority)
+{
+    return priority == TopoShape::Mapper::CandidatePriority::Fallback;
+}
+
+bool hasPrimaryCandidate(const std::map<NameKey, NameInfo>& names)
+{
+    for (const auto& item : names) {
+        if (!isFallbackCandidate(item.second.priority)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+void removeFallbackCandidates(std::map<NameKey, NameInfo>& names)
+{
+    for (auto it = names.begin(); it != names.end();) {
+        if (isFallbackCandidate(it->second.priority)) {
+            it = names.erase(it);
+        }
+        else {
+            ++it;
+        }
+    }
+}
+
+NameInfo* addNameCandidate(
+    std::map<Data::IndexedName, std::map<NameKey, NameInfo>>& newNames,
+    const Data::IndexedName& element,
+    const NameKey& key,
+    TopoShape::Mapper::CandidatePriority priority
+)
+{
+    auto& names = newNames[element];
+    // Fallback candidates are placeholders. They can name otherwise unnamed
+    // elements, but they do not participate once primary history is available
+    // for the same output element.
+    if (isFallbackCandidate(priority)) {
+        if (hasPrimaryCandidate(names)) {
+            return nullptr;
+        }
+    }
+    else {
+        removeFallbackCandidates(names);
+    }
+
+    auto& nameInfo = names[key];
+    nameInfo.priority = priority;
+    return &nameInfo;
+}
 
 const std::string& modPostfix()
 {
@@ -1556,7 +1609,8 @@ TopoShape& TopoShape::makeShapeWithElementMap(
                 );
 
                 int newShapeCounter = 0;
-                for (auto& newShape : mapper.modified(otherElement)) {
+                for (const auto& candidate : mapper.modifiedCandidates(otherElement)) {
+                    const auto& newShape = candidate.shape;
                     ++newShapeCounter;
                     if (newShape.ShapeType() >= TopAbs_SHAPE) {
                         // NOLINTNEXTLINE
@@ -1602,10 +1656,13 @@ TopoShape& TopoShape::makeShapeWithElementMap(
                     }
 
                     key.tag = incomingShape.Tag;
-                    auto& name_info = newNames[element][key];
-                    name_info.sids = sids;
-                    name_info.index = newShapeCounter;
-                    name_info.shapetype = info.shapetype;
+                    auto* name_info = addNameCandidate(newNames, element, key, candidate.priority);
+                    if (!name_info) {
+                        continue;
+                    }
+                    name_info->sids = sids;
+                    name_info->index = newShapeCounter;
+                    name_info->shapetype = info.shapetype;
                 }
 
                 int checkParallel = -1;
@@ -1614,7 +1671,8 @@ TopoShape& TopoShape::makeShapeWithElementMap(
                 // Find all new objects that were generated from an old object
                 // (e.g. a face generated from an edge)
                 newShapeCounter = 0;
-                for (auto& newShape : mapper.generated(otherElement)) {
+                for (const auto& candidate : mapper.generatedCandidates(otherElement)) {
+                    const auto& newShape = candidate.shape;
                     if (newShape.ShapeType() >= TopAbs_SHAPE) {
                         // NOLINTNEXTLINE
                         FC_ERR(
@@ -1690,18 +1748,21 @@ TopoShape& TopoShape::makeShapeWithElementMap(
                         }
 
                         key.tag = incomingShape.Tag;
-                        auto& name_info = newNames[element][key];
-                        name_info.sids = sids;
+                        auto* name_info = addNameCandidate(newNames, element, key, candidate.priority);
+                        if (!name_info) {
+                            continue;
+                        }
+                        name_info->sids = sids;
                         if (newShapeCounter == parallelFace) {
-                            name_info.index = std::numeric_limits<int>::min();
+                            name_info->index = std::numeric_limits<int>::min();
                         }
                         else if (newShapeCounter == coplanarFace) {
-                            name_info.index = std::numeric_limits<int>::min() + 1;
+                            name_info->index = std::numeric_limits<int>::min() + 1;
                         }
                         else {
-                            name_info.index = -newShapeCounter;
+                            name_info->index = -newShapeCounter;
                         }
-                        name_info.shapetype = info.shapetype;
+                        name_info->shapetype = info.shapetype;
                     }
                     key.shapetype -= shapeOffset;
                 }
@@ -3723,6 +3784,31 @@ struct MapperThruSections: MapperMaker
         }
         return _res;
     }
+
+    const std::vector<Candidate>& generatedCandidates(const TopoDS_Shape& s) const override
+    {
+        candidatesFrom(MapperMaker::generated(s), CandidatePriority::Primary);
+        if (!_candidateRes.empty()) {
+            return _candidateRes;
+        }
+
+        try {
+            auto& tmaker = dynamic_cast<BRepOffsetAPI_ThruSections&>(maker);
+            appendUniqueCandidate(tmaker.GeneratedFace(s), CandidatePriority::Fallback);
+            if (firstProfile.getShape().IsSame(s) || firstProfile.findShape(s)) {
+                appendUniqueCandidate(tmaker.FirstShape(), CandidatePriority::Fallback);
+            }
+            else if (lastProfile.getShape().IsSame(s) || lastProfile.findShape(s)) {
+                appendUniqueCandidate(tmaker.LastShape(), CandidatePriority::Fallback);
+            }
+        }
+        catch (const Standard_Failure& e) {
+            if (FC_LOG_INSTANCE.isEnabled(FC_LOGLEVEL_LOG)) {
+                FC_WARN("Exception on shape mapper: " << e.GetMessageString());
+            }
+        }
+        return _candidateRes;
+    }
 };
 
 struct MapperPrism: MapperMaker
@@ -3866,6 +3952,29 @@ struct MapperFinitePrism: MapperMaker
         }
 
         return _res;
+    }
+
+    const std::vector<Candidate>& generatedCandidates(const TopoDS_Shape& s) const override
+    {
+        candidatesFrom(MapperMaker::generated(s), CandidatePriority::Primary);
+        if (!_candidateRes.empty()) {
+            return _candidateRes;
+        }
+
+        try {
+            // BRepPrimAPI_MakePrism exposes cap history separately from Generated().
+            // Keep it as fallback history for sources that have no standard
+            // Generated() history, so existing stable prism names are preserved.
+            appendUniqueCandidate(prism.FirstShape(s), CandidatePriority::Fallback);
+            appendUniqueCandidate(prism.LastShape(s), CandidatePriority::Fallback);
+        }
+        catch (const Standard_Failure& e) {
+            if (FC_LOG_INSTANCE.isEnabled(FC_LOGLEVEL_LOG)) {
+                FC_WARN("Exception on prism shape mapper: " << e.GetMessageString());
+            }
+        }
+
+        return _candidateRes;
     }
 
 private:

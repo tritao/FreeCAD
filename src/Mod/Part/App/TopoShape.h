@@ -1731,8 +1731,30 @@ public:
      */
     struct PartExport Mapper
     {
+        /** Candidate selection priority for generated or modified shapes.
+         *
+         * Primary candidates come from the operation's normal history and
+         * participate in naming as before. Fallback candidates are supplemental
+         * history that may fill unnamed elements, but must not displace primary
+         * candidates for the same output element.
+         */
+        enum class CandidatePriority
+        {
+            Primary,
+            Fallback
+        };
+
+        /** Shape candidate returned by a Mapper for element naming. */
+        struct Candidate
+        {
+            TopoDS_Shape shape;
+            CandidatePriority priority {CandidatePriority::Primary};
+        };
+
         /// Helper vector for temporary storage of both generated and modified shapes
         mutable std::vector<TopoDS_Shape> _res;
+        /// Helper vector for temporary storage of mapper candidates
+        mutable std::vector<Candidate> _candidateRes;
         virtual ~Mapper()
         {}
         /// Return a list of shape generated from the given input shape
@@ -1744,6 +1766,48 @@ public:
         virtual const std::vector<TopoDS_Shape>& modified(const TopoDS_Shape&) const
         {
             return _res;
+        }
+        /// Return generated shape candidates with selection priority metadata
+        virtual const std::vector<Candidate>& generatedCandidates(const TopoDS_Shape& shape) const
+        {
+            return candidatesFrom(generated(shape), CandidatePriority::Primary);
+        }
+        /// Return modified shape candidates with selection priority metadata
+        virtual const std::vector<Candidate>& modifiedCandidates(const TopoDS_Shape& shape) const
+        {
+            return candidatesFrom(modified(shape), CandidatePriority::Primary);
+        }
+
+    protected:
+        const std::vector<Candidate>& candidatesFrom(
+            const std::vector<TopoDS_Shape>& shapes,
+            CandidatePriority priority
+        ) const
+        {
+            _candidateRes.clear();
+            _candidateRes.reserve(shapes.size());
+            for (const auto& shape : shapes) {
+                appendCandidate(shape, priority);
+            }
+            return _candidateRes;
+        }
+
+        void appendCandidate(const TopoDS_Shape& shape, CandidatePriority priority) const
+        {
+            _candidateRes.push_back({shape, priority});
+        }
+
+        void appendUniqueCandidate(const TopoDS_Shape& shape, CandidatePriority priority) const
+        {
+            if (shape.IsNull()) {
+                return;
+            }
+            for (const auto& candidate : _candidateRes) {
+                if (candidate.shape.IsSame(shape)) {
+                    return;
+                }
+            }
+            appendCandidate(shape, priority);
         }
     };
     /** Make an evolved shape
