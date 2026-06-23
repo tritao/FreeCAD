@@ -4,7 +4,6 @@ add_library(FreeCADApp SHARED)
 
 if(WIN32)
     add_definitions(-DFCApp)
-    add_definitions(-DBOOST_DYN_LINK)
 endif(WIN32)
 
 if(BUILD_TRACY_FRAME_PROFILER)
@@ -67,13 +66,6 @@ target_include_directories(
     ${CMAKE_BINARY_DIR}/src
     ${CMAKE_SOURCE_DIR}/src
     ${CMAKE_CURRENT_BINARY_DIR}
-)
-
-target_include_directories(
-    FreeCADApp
-    SYSTEM
-    PUBLIC
-    ${Boost_INCLUDE_DIRS}
 )
 
 if(FREECAD_HAS_QT)

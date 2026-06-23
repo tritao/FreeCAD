@@ -72,8 +72,6 @@
 #include <unordered_set>
 #include <vector>
 
-// Boost
-#include <boost_graph_adjacency_list.hpp>
 #include <fastsignals/signal.h>
 
 #include <fmt/format.h>
