@@ -35,29 +35,17 @@
 #include <unordered_map>
 #include <unordered_set>
 
-#include <boost/graph/adjacency_list.hpp>
-
 #include <CXX/Objects.hxx>
 
+#include <App/DirectedGraph.h>
 #include <App/DocumentObject.h>
 #include <App/DocumentObserver.h>
 #include <App/StringHasher.h>
 #include <App/ExportInfo.h>
 #include <Base/UniqueNameManager.h>
 
-// using VertexProperty = boost::property<boost::vertex_root_t, DocumentObject* >;
-using DependencyList = boost::adjacency_list<
-    boost::vecS,         // class OutEdgeListS  : a Sequence or an AssociativeContainer
-    boost::vecS,         // class VertexListS   : a Sequence or a RandomAccessContainer
-    boost::directedS,    // class DirectedS     : This is a directed graph
-    boost::no_property,  // class VertexProperty:
-    boost::no_property,  // class EdgeProperty:
-    boost::no_property,  // class GraphProperty:
-    boost::listS         // class EdgeListS:
-    >;
-using Traits = boost::graph_traits<DependencyList>;
-using Vertex = Traits::vertex_descriptor;
-using Edge = Traits::edge_descriptor;
+using DependencyList = App::DirectedGraph;
+using Vertex = DependencyList::Vertex;
 using Node = std::vector<size_t>;
 using Path = std::vector<size_t>;
 

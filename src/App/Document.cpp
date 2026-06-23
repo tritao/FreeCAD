@@ -40,9 +40,6 @@
 #include <optional>
 #include <regex>
 
-#include <boost/graph/strong_components.hpp>
-#include <boost/graph/topological_sort.hpp>
-
 #include <random>
 #include <unordered_map>
 #include <unordered_set>
@@ -98,7 +95,6 @@ using Base::Console;
 using Base::streq;
 using Base::Writer;
 using namespace App;
-using namespace boost;
 using namespace zipios;
 
 #if FC_DEBUG
@@ -2644,7 +2640,7 @@ static void buildDependencyList(const std::vector<DocumentObject*>& objectArray,
                 depObjs->push_back(objF);
             }
             if (objectMap && depList) {
-                (*objectMap)[objF] = add_vertex(*depList);
+                (*objectMap)[objF] = depList->addVertex();
             }
 
             auto& outList = outLists[objF];
@@ -2662,7 +2658,7 @@ static void buildDependencyList(const std::vector<DocumentObject*>& objectArray,
         for (const auto& [key, objects] : outLists) {
             for (auto obj : objects) {
                 if (obj && obj->isAttachedToDocument()) {
-                    add_edge((*objectMap)[key], (*objectMap)[obj], *depList);
+                    depList->addEdge((*objectMap)[key], (*objectMap)[obj]);
                 }
             }
         }
@@ -2688,24 +2684,16 @@ Document::getDependencyList(const std::vector<DocumentObject*>& objs, int option
         vertexMap[v.second] = v.first;
     }
 
-    std::list<Vertex> make_order;
+    std::vector<Vertex> make_order;
     try {
-        boost::topological_sort(depList, std::front_inserter(make_order));
+        make_order = depList.topologicalSort();
     }
     catch (const std::exception& e) {
         if ((options & DepNoCycle) != 0) {
-            // Use boost::strong_components to find cycles. It groups strongly
-            // connected vertices as components, and therefore each component
-            // forms a cycle.
-            std::vector<int> c(vertexMap.size());
             std::map<int, std::vector<Vertex>> components;
-            boost::strong_components(
-                depList,
-                boost::make_iterator_property_map(c.begin(),
-                                                  boost::get(boost::vertex_index, depList),
-                                                  c[0]));
-            for (size_t i = 0; i < c.size(); ++i) {
-                components[c[i]].push_back(i);
+            const auto strongComponents = depList.stronglyConnectedComponents();
+            for (size_t i = 0; i < strongComponents.size(); ++i) {
+                components[static_cast<int>(i)] = strongComponents[i];
             }
 
             FC_ERR("Dependency cycles: ");
@@ -2750,8 +2738,8 @@ Document::getDependencyList(const std::vector<DocumentObject*>& objs, int option
         return ret;
     }
 
-    for (auto i = make_order.rbegin(); i != make_order.rend(); ++i) {
-        ret.push_back(vertexMap[*i]);
+    for (auto vertex : make_order) {
+        ret.push_back(vertexMap[vertex]);
     }
     return ret;
 }
@@ -2778,7 +2766,7 @@ std::vector<Document*> Document::getDependentDocuments(std::vector<Document*> do
     docSet.insert(docs.begin(), docs.end());
     if (sort) {
         for (auto doc : docs) {
-            docMap[doc] = add_vertex(depList);
+            docMap[doc] = depList.addVertex();
         }
     }
     while (!docs.empty()) {
@@ -2790,15 +2778,20 @@ std::vector<Document*> Document::getDependentDocuments(std::vector<Document*> do
             continue;
         }
 
-        const auto& vertex = docMap[doc];
+        Vertex vertex {};
+        if (sort) {
+            vertex = docMap[doc];
+        }
         for (auto depDoc : it->second) {
             if (docSet.insert(depDoc).second) {
                 docs.push_back(depDoc);
                 if (sort) {
-                    docMap[depDoc] = add_vertex(depList);
+                    docMap[depDoc] = depList.addVertex();
                 }
             }
-            add_edge(vertex, docMap[depDoc], depList);
+            if (sort) {
+                depList.addEdge(vertex, docMap[depDoc]);
+            }
         }
     }
 
@@ -2807,9 +2800,9 @@ std::vector<Document*> Document::getDependentDocuments(std::vector<Document*> do
         return ret;
     }
 
-    std::list<Vertex> make_order;
+    std::vector<Vertex> make_order;
     try {
-        boost::topological_sort(depList, std::front_inserter(make_order));
+        make_order = depList.topologicalSort();
     }
     catch (const std::exception& e) {
         std::string msg("Document::getDependentDocuments: ");
@@ -2820,8 +2813,8 @@ std::vector<Document*> Document::getDependentDocuments(std::vector<Document*> do
     for (auto& v : docMap) {
         vertexMap[v.second] = v.first;
     }
-    for (auto rIt = make_order.rbegin(); rIt != make_order.rend(); ++rIt) {
-        ret.push_back(vertexMap[*rIt]);
+    for (auto vertex : make_order) {
+        ret.push_back(vertexMap[vertex]);
     }
     return ret;
 }
@@ -2910,7 +2903,7 @@ int Document::recompute(const std::vector<DocumentObject*>& objs,
     //////////////////////////////////////////////////////////////////////////
     // FIXME Comment by Realthunder:
     // the topologicalSrot() below cannot handle partial recompute, haven't got
-    // time to figure out the code yet, simply use back boost::topological_sort
+    // time to figure out the code yet, simply use back the dependency graph sort
     // for now, that is, rely on getDependencyList() to do the sorting. The
     // downside is, it didn't take advantage of the ready built InList, nor will
     // it report for cyclic dependency.

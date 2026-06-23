@@ -23,12 +23,11 @@
  ***************************************************************************/
 
 #include <algorithm>
-#include <boost_graph_adjacency_list.hpp>
-#include <boost/graph/depth_first_search.hpp>
-#include <boost/graph/topological_sort.hpp>
+#include <set>
 #include <unordered_map>
 
 #include <App/Application.h>
+#include <App/DirectedGraph.h>
 #include <App/Document.h>
 #include <App/DocumentObject.h>
 #include <App/DocumentObserver.h>
@@ -45,7 +44,6 @@ FC_LOG_LEVEL_INIT("App", true);
 
 using namespace App;
 using namespace Base;
-using namespace boost;
 namespace sp = std::placeholders;
 
 TYPESYSTEM_SOURCE_ABSTRACT(App::PropertyExpressionContainer, App::PropertyXLinkContainer)
@@ -92,28 +90,7 @@ void PropertyExpressionContainer::slotRenameDynamicProperty(const App::Property&
 
 ///////////////////////////////////////////////////////////////////////////////////////
 
-/* The cycle_detector struct is used by the boost graph routines to detect
- * cycles in the graph. */
-struct cycle_detector: public boost::dfs_visitor<>
-{
-    cycle_detector(bool& has_cycle, int& src)
-        : _has_cycle(has_cycle)
-        , _src(src)
-    {}
-
-    template<class Edge, class Graph>
-    void back_edge(Edge e, Graph& g)
-    {
-        _has_cycle = true;
-        _src = source(e, g);
-    }
-
-protected:
-    bool& _has_cycle;
-    int& _src;
-};
-
-using DiGraph = boost::adjacency_list<boost::listS, boost::vecS, boost::directedS>;
+using DiGraph = App::DirectedGraph;
 struct PropertyExpressionEngine::Private
 {
     // For some reason, MSVC has trouble with vector of scoped_connection if
@@ -163,17 +140,15 @@ struct PropertyExpressionEngine::Private
 
         // Add edges to graph
         for (const auto& edge : edges) {
-            add_edge(edge.first, edge.second, g);
+            g.addEdge(edge.first, edge.second);
         }
 
         // Check for cycles
-        bool has_cycle = false;
-        int src = -1;
-        cycle_detector vis(has_cycle, src);
-        depth_first_search(g, visitor(vis));
-
-        if (has_cycle) {
-            std::string s = revNodes[src].toString() + " reference creates a cyclic dependency.";
+        const auto cycleSource = g.findCycleSource();
+        if (cycleSource != DiGraph::npos) {
+            const auto node = revNodes.find(static_cast<int>(cycleSource));
+            std::string source = node != revNodes.end() ? node->second.toString() : "Expression";
+            std::string s = source + " reference creates a cyclic dependency.";
 
             throw Base::RuntimeError(s.c_str());
         }
@@ -628,14 +603,14 @@ PropertyExpressionEngine::computeEvaluationOrder(ExecuteOption option)
     Private::buildGraph(expressions, revNodes, g, option);
 
     /* Compute evaluation order for expressions */
-    std::vector<int> c;
-    topological_sort(g, std::back_inserter(c));
+    const auto c = g.topologicalSort();
 
-    for (int i : c) {
+    for (auto i : c) {
         // we return the evaluation order for our properties, not the dependencies
         // the topo sort will contain node ids for both our props and their deps
-        if (revNodes.find(i) != revNodes.end()) {
-            evaluationOrder.push_back(revNodes[i]);
+        const auto node = revNodes.find(static_cast<int>(i));
+        if (node != revNodes.end()) {
+            evaluationOrder.push_back(node->second);
         }
     }
 
