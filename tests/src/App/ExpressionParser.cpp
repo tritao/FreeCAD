@@ -25,9 +25,9 @@ void PrintTo(const Quantity& qty, std::ostream* os)
 }
 }  // namespace Base
 
-namespace boost
+namespace App
 {
-void PrintTo(const boost::any& e, std::ostream* os)
+void PrintTo(const any& e, std::ostream* os)
 {
     *os << "any (";
     if (e.type() == typeid(Base::Quantity)) {
@@ -53,7 +53,7 @@ void PrintTo(const boost::any& e, std::ostream* os)
     }
     *os << ")";
 }
-}  // namespace boost
+}  // namespace App
 
 namespace App::ExpressionParser::Test
 {
@@ -95,7 +95,7 @@ protected:
         return Base::Quantity::parse(quantity_text);
     }
 
-    boost::any parseExpr(const char* text)
+    App::any parseExpr(const char* text)
     {
         try {
             const auto expression = parse(thisObj, text);
