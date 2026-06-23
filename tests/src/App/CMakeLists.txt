@@ -10,6 +10,7 @@ add_executable(App_tests_run
         Document.cpp
         DocumentObject.cpp
         DocumentObserver.cpp
+        DirectedGraph.cpp
         Expression.cpp
         ExpressionParser.cpp
         ExpressionTokenizer.cpp
