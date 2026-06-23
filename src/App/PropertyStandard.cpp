@@ -207,11 +207,7 @@ const std::filesystem::path& PropertyPath::getValue() const
 
 PyObject* PropertyPath::getPyObject()
 {
-#if (BOOST_FILESYSTEM_VERSION == 2)
-    std::string str = _cValue.native_file_string();
-#else
     std::string str = _cValue.string();
-#endif
 
     // Returns a new reference, don't increment it!
     PyObject* p = PyUnicode_DecodeUTF8(str.c_str(), str.size(), nullptr);

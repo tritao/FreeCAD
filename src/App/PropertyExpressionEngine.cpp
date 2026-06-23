@@ -1014,11 +1014,7 @@ Property* PropertyExpressionEngine::CopyOnImportExternal(
 {
     std::unique_ptr<PropertyExpressionEngine> engine;
     for (auto it = expressions.begin(); it != expressions.end(); ++it) {
-#ifdef BOOST_NO_CXX11_SMART_PTR
-        std::shared_ptr<Expression> expr(it->second.expression->importSubNames(nameMap).release());
-#else
         std::shared_ptr<Expression> expr(it->second.expression->importSubNames(nameMap));
-#endif
         if (!expr && !engine) {
             continue;
         }
@@ -1047,13 +1043,8 @@ Property* PropertyExpressionEngine::CopyOnLabelChange(App::DocumentObject* obj,
 {
     std::unique_ptr<PropertyExpressionEngine> engine;
     for (auto it = expressions.begin(); it != expressions.end(); ++it) {
-#ifdef BOOST_NO_CXX11_SMART_PTR
-        std::shared_ptr<Expression> expr(
-            it->second.expression->updateLabelReference(obj, ref, newLabel).release());
-#else
         std::shared_ptr<Expression> expr(
             it->second.expression->updateLabelReference(obj, ref, newLabel));
-#endif
         if (!expr && !engine) {
             continue;
         }
@@ -1085,13 +1076,8 @@ Property* PropertyExpressionEngine::CopyOnLinkReplace(const App::DocumentObject*
 {
     std::unique_ptr<PropertyExpressionEngine> engine;
     for (auto it = expressions.begin(); it != expressions.end(); ++it) {
-#ifdef BOOST_NO_CXX11_SMART_PTR
-        std::shared_ptr<Expression> expr(
-            it->second.expression->replaceObject(parent, oldObj, newObj).release());
-#else
         std::shared_ptr<Expression> expr(
             it->second.expression->replaceObject(parent, oldObj, newObj));
-#endif
         if (!expr && !engine) {
             continue;
         }
@@ -1131,15 +1117,9 @@ void PropertyExpressionEngine::setExpressions(
     std::map<App::ObjectIdentifier, App::ExpressionPtr>&& exprs)
 {
     AtomicPropertyChange signaller(*this);
-#ifdef BOOST_NO_CXX11_SMART_PTR
-    for (auto& v : exprs) {
-        setValue(v.first, std::shared_ptr<Expression>(v.second.release()));
-    }
-#else
     for (auto& v : exprs) {
         setValue(v.first, std::move(v.second));
     }
-#endif
 }
 
 void PropertyExpressionEngine::onRelabeledDocument(const App::Document& doc)
