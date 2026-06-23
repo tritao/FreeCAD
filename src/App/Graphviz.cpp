@@ -24,11 +24,21 @@
 
 
 #include <algorithm>
-#include <boost/graph/graphviz.hpp>
+#include <cassert>
+#include <iomanip>
+#include <map>
+#include <memory>
 #include <random>
+#include <set>
+#include <sstream>
+#include <string>
+#include <utility>
+#include <vector>
+
 #include <App/Application.h>
 
 #include "Application.h"
+#include "DirectedGraph.h"
 #include "Document.h"
 #include "private/DocumentP.h"
 #include "DocumentObject.h"
@@ -39,16 +49,204 @@
 #include "ObjectIdentifier.h"
 
 using namespace App;
-using namespace boost;
+
+namespace
+{
+
+using GraphvizAttributes = std::map<std::string, std::string>;
+
+std::string dotQuote(const std::string& text)
+{
+    std::string result;
+    result.reserve(text.size() + 2);
+    result += '"';
+    for (char ch : text) {
+        if (ch == '"' || ch == '\\') {
+            result += '\\';
+        }
+        result += ch;
+    }
+    result += '"';
+    return result;
+}
+
+void writeAttributes(std::ostream& out, const GraphvizAttributes& attributes)
+{
+    if (attributes.empty()) {
+        return;
+    }
+
+    out << " [";
+    const char* separator = "";
+    for (const auto& [key, value] : attributes) {
+        out << separator << key << "=" << dotQuote(value);
+        separator = ", ";
+    }
+    out << "]";
+}
+
+class DotGraph
+{
+public:
+    using Vertex = App::DirectedGraph::Vertex;
+    using Edge = std::size_t;
+
+    struct Cluster
+    {
+        std::string name;
+        GraphvizAttributes attributes;
+        std::vector<Vertex> vertices;
+        std::vector<std::unique_ptr<Cluster>> children;
+        Cluster* parent {};
+    };
+
+    DotGraph()
+    {
+        _root.name = "G";
+    }
+
+    Cluster* root()
+    {
+        return &_root;
+    }
+
+    const Cluster* root() const
+    {
+        return &_root;
+    }
+
+    Cluster* createSubgraph(Cluster& parent)
+    {
+        auto subgraph = std::make_unique<Cluster>();
+        subgraph->parent = &parent;
+        auto* result = subgraph.get();
+        parent.children.push_back(std::move(subgraph));
+        return result;
+    }
+
+    Vertex addVertex(Cluster& graph)
+    {
+        const auto vertex = _graph.addVertex();
+        _vertices.emplace_back();
+        graph.vertices.push_back(vertex);
+        return vertex;
+    }
+
+    Edge addEdge(Vertex source, Vertex target)
+    {
+        const auto index = _graph.addEdge(source, target);
+        _edges.push_back({source, target, {}});
+        return index;
+    }
+
+    bool hasEdge(Vertex source, Vertex target) const
+    {
+        return _graph.hasEdge(source, target);
+    }
+
+    Edge findEdge(Vertex source, Vertex target) const
+    {
+        return _graph.edgeIndex(source, target);
+    }
+
+    GraphvizAttributes& graphAttributes(Cluster& graph)
+    {
+        return graph.attributes;
+    }
+
+    std::string& graphName(Cluster& graph)
+    {
+        return graph.name;
+    }
+
+    GraphvizAttributes& vertexAttributes(Vertex vertex)
+    {
+        return _vertices.at(vertex).attributes;
+    }
+
+    GraphvizAttributes& edgeAttributes(Edge edge)
+    {
+        return _edges.at(edge).attributes;
+    }
+
+    void markCycleEdges()
+    {
+        for (auto edge : _graph.cyclicEdgeIndices()) {
+            edgeAttributes(edge)["color"] = "red";
+        }
+    }
+
+    void write(std::ostream& out) const
+    {
+        out << "digraph " << _root.name << " {\n";
+        writeGraphBody(out, _root, 1);
+        out << "}\n";
+    }
+
+private:
+    struct VertexInfo
+    {
+        GraphvizAttributes attributes;
+    };
+
+    struct EdgeInfo
+    {
+        Vertex source {};
+        Vertex target {};
+        GraphvizAttributes attributes;
+    };
+
+    static void indent(std::ostream& out, int level)
+    {
+        for (int i = 0; i < level; ++i) {
+            out << "  ";
+        }
+    }
+
+    void writeGraphBody(std::ostream& out, const Cluster& graph, int level) const
+    {
+        for (const auto& [key, value] : graph.attributes) {
+            indent(out, level);
+            out << key << "=" << dotQuote(value) << ";\n";
+        }
+
+        for (const auto& child : graph.children) {
+            indent(out, level);
+            out << "subgraph " << child->name << " {\n";
+            writeGraphBody(out, *child, level + 1);
+            indent(out, level);
+            out << "}\n";
+        }
+
+        for (auto vertex : graph.vertices) {
+            indent(out, level);
+            out << vertex;
+            writeAttributes(out, _vertices.at(vertex).attributes);
+            out << ";\n";
+        }
+
+        if (graph.parent) {
+            return;
+        }
+
+        for (const auto& edge : _edges) {
+            indent(out, level);
+            out << edge.source << " -> " << edge.target;
+            writeAttributes(out, edge.attributes);
+            out << ";\n";
+        }
+    }
+
+    Cluster _root;
+    App::DirectedGraph _graph;
+    std::vector<VertexInfo> _vertices;
+    std::vector<EdgeInfo> _edges;
+};
+
+}  // namespace
 
 void Document::writeDependencyGraphViz(std::ostream& out)
 {
-    //  // caching vertex to DocObject
-    // std::map<Vertex,DocumentObject*> VertexMap;
-    // for(std::map<DocumentObject*,Vertex>::const_iterator It1= _DepConMap.begin();It1 !=
-    // _DepConMap.end(); ++It1)
-    //  VertexMap[It1->second] = It1->first;
-
     out << "digraph G {" << std::endl;
     out << "\tordering=out;" << std::endl;
     out << "\tnode [shape = box];" << std::endl;
@@ -62,16 +260,6 @@ void Document::writeDependencyGraphViz(std::ostream& out)
             }
         }
     }
-
-    /*
-    graph_traits<DependencyList>::edge_iterator ei, ei_end;
-    for (tie(ei,ei_end) = edges(_DepList); ei != ei_end; ++ei)
-      out << "\t"
-          << VertexMap[source(*ei, _DepList)]->getNameInDocument()
-          << " -> "
-          << VertexMap[target(*ei, _DepList)]->getNameInDocument()
-          << ";" << endl;
-    */
     out << "}" << std::endl;
 }
 
@@ -197,21 +385,9 @@ void Document::exportGraphviz(std::ostream& out) const
         return;
     }
 
-    /* Type defs for a graph with graphviz attributes */
-    using GraphvizAttributes = std::map<std::string, std::string>;
-    using Graph = boost::subgraph<adjacency_list<
-        vecS,
-        vecS,
-        directedS,
-        property<vertex_attribute_t, GraphvizAttributes>,
-        property<edge_index_t, int, property<edge_attribute_t, GraphvizAttributes>>,
-        property<graph_name_t,
-                 std::string,
-                 property<graph_graph_attribute_t,
-                          GraphvizAttributes,
-                          property<graph_vertex_attribute_t,
-                                   GraphvizAttributes,
-                                   property<graph_edge_attribute_t, GraphvizAttributes>>>>>>;
+    using Graph = DotGraph::Cluster;
+    using Vertex = DotGraph::Vertex;
+    using Edge = DotGraph::Edge;
 
     /**
      * @brief The GraphCreator class
@@ -230,7 +406,7 @@ void Document::exportGraphviz(std::ostream& out) const
             build();
         }
 
-        const Graph& getGraph() const
+        const DotGraph& getGraph() const
         {
             return DepList;
         }
@@ -239,7 +415,7 @@ void Document::exportGraphviz(std::ostream& out) const
         void build()
         {
             // Set attribute(s) for main graph
-            get_property(DepList, graph_graph_attribute)["compound"] = "true";
+            DepList.graphAttributes(*DepList.root())["compound"] = "true";
 
             addSubgraphs();
             buildAdjacencyList();
@@ -286,15 +462,15 @@ void Document::exportGraphviz(std::ostream& out) const
             return std::string("cluster") + docObj->getNameInDocument();
         }
 
-        void setGraphLabel(Graph& g, const DocumentObject* obj) const
+        void setGraphLabel(Graph& g, const DocumentObject* obj)
         {
             std::string name(obj->getNameInDocument());
             std::string label(obj->Label.getValue());
             if (name == label) {
-                get_property(g, graph_graph_attribute)["label"] = name;
+                DepList.graphAttributes(g)["label"] = name;
             }
             else {
-                get_property(g, graph_graph_attribute)["label"] = name + "&#92;n(" + label + ")";
+                DepList.graphAttributes(g)["label"] = name + "&#92;n(" + label + ")";
             }
         }
 
@@ -305,11 +481,11 @@ void Document::exportGraphviz(std::ostream& out) const
         void setGraphAttributes(const DocumentObject* obj)
         {
             assert(GraphList.find(obj) != GraphList.end());
-            get_property(*GraphList[obj], graph_name) = getClusterName(obj);
+            DepList.graphName(*GraphList[obj]) = getClusterName(obj);
 
-            get_property(*GraphList[obj], graph_graph_attribute)["bgcolor"] = "#e0e0e0";
+            DepList.graphAttributes(*GraphList[obj])["bgcolor"] = "#e0e0e0";
 
-            get_property(*GraphList[obj], graph_graph_attribute)["style"] = "rounded,filled";
+            DepList.graphAttributes(*GraphList[obj])["style"] = "rounded,filled";
             setGraphLabel(*GraphList[obj], obj);
         }
 
@@ -319,12 +495,13 @@ void Document::exportGraphviz(std::ostream& out) const
          * @param vertex Property node
          * @param name Name of node
          */
-        void setPropertyVertexAttributes(Graph& g, Vertex vertex, const std::string& name)
+        void setPropertyVertexAttributes(Vertex vertex, const std::string& name)
         {
-            get(vertex_attribute, g)[vertex]["label"] = name;
-            get(vertex_attribute, g)[vertex]["shape"] = "box";
-            get(vertex_attribute, g)[vertex]["style"] = "dashed";
-            get(vertex_attribute, g)[vertex]["fontsize"] = "8pt";
+            auto& attributes = DepList.vertexAttributes(vertex);
+            attributes["label"] = name;
+            attributes["shape"] = "box";
+            attributes["style"] = "dashed";
+            attributes["fontsize"] = "8pt";
         }
 
         /**
@@ -341,8 +518,7 @@ void Document::exportGraphviz(std::ostream& out) const
 
             if (!expressions.empty()) {
 
-                Graph* graph = nullptr;
-                graph = &DepList;
+                Graph* graph = DepList.root();
                 if (CSsubgraphs) {
                     auto group = GeoFeatureGroupExtension::getGroupOfObject(obj);
                     if (group) {
@@ -355,7 +531,7 @@ void Document::exportGraphviz(std::ostream& out) const
 
                 // If documentObject has an expression, create a subgraph for it
                 if (graph && !GraphList[obj]) {
-                    GraphList[obj] = &graph->create_subgraph();
+                    GraphList[obj] = DepList.createSubgraph(*graph);
                     setGraphAttributes(obj);
                 }
 
@@ -377,14 +553,14 @@ void Document::exportGraphviz(std::ostream& out) const
 
                             if (CSsubgraphs) {
                                 auto group = GeoFeatureGroupExtension::getGroupOfObject(o);
-                                auto graph2 = group ? GraphList[group] : &DepList;
+                                auto graph2 = group ? GraphList[group] : DepList.root();
                                 if (graph2) {
-                                    GraphList[o] = &graph2->create_subgraph();
+                                    GraphList[o] = DepList.createSubgraph(*graph2);
                                     setGraphAttributes(o);
                                 }
                             }
                             else if (graph) {
-                                GraphList[o] = &graph->create_subgraph();
+                                GraphList[o] = DepList.createSubgraph(*graph);
                                 setGraphAttributes(o);
                             }
                         }
@@ -436,35 +612,35 @@ void Document::exportGraphviz(std::ostream& out) const
                 }
             }
             if (!sgraph) {
-                sgraph = &DepList;
+                sgraph = DepList.root();
             }
 
             // Keep a list of all added document objects.
             objects.insert(docObj);
 
             // Add vertex to graph. Track global and local index
-            LocalVertexList[getId(docObj)] = add_vertex(*sgraph);
-            GlobalVertexList[getId(docObj)] = vertex_no++;
+            LocalVertexList[getId(docObj)] = DepList.addVertex(*sgraph);
+            GlobalVertexList[getId(docObj)] = LocalVertexList[getId(docObj)];
 
             // If node is in main graph, style it with rounded corners. If not, make it invisible.
             if (!GraphList[docObj]) {
-                get(vertex_attribute, *sgraph)[LocalVertexList[getId(docObj)]]["style"] = "filled";
-                get(vertex_attribute, *sgraph)[LocalVertexList[getId(docObj)]]["shape"] = "Mrecord";
+                auto& attributes = DepList.vertexAttributes(LocalVertexList[getId(docObj)]);
+                attributes["style"] = "filled";
+                attributes["shape"] = "Mrecord";
                 // Set node label
                 if (name == label) {
-                    get(vertex_attribute, *sgraph)[LocalVertexList[getId(docObj)]]["label"] = name;
+                    attributes["label"] = name;
                 }
                 else {
-                    get(vertex_attribute, *sgraph)[LocalVertexList[getId(docObj)]]["label"] =
-                        name + "&#92;n(" + label + ")";
+                    attributes["label"] = name + "&#92;n(" + label + ")";
                 }
             }
             else {
-                get(vertex_attribute, *sgraph)[LocalVertexList[getId(docObj)]]["style"] = "invis";
-                get(vertex_attribute, *sgraph)[LocalVertexList[getId(docObj)]]["fixedsize"] =
-                    "true";
-                get(vertex_attribute, *sgraph)[LocalVertexList[getId(docObj)]]["width"] = "0";
-                get(vertex_attribute, *sgraph)[LocalVertexList[getId(docObj)]]["height"] = "0";
+                auto& attributes = DepList.vertexAttributes(LocalVertexList[getId(docObj)]);
+                attributes["style"] = "invis";
+                attributes["fixedsize"] = "true";
+                attributes["width"] = "0";
+                attributes["height"] = "0";
             }
 
             // Add expressions and its dependencies
@@ -472,9 +648,9 @@ void Document::exportGraphviz(std::ostream& out) const
             for (const auto& expr : expressions) {
                 auto found = std::as_const(GlobalVertexList).find(getId(expr.first));
                 if (found == GlobalVertexList.end()) {
-                    int vid = LocalVertexList[getId(expr.first)] = add_vertex(*sgraph);
-                    GlobalVertexList[getId(expr.first)] = vertex_no++;
-                    setPropertyVertexAttributes(*sgraph, vid, expr.first.toString());
+                    Vertex vid = LocalVertexList[getId(expr.first)] = DepList.addVertex(*sgraph);
+                    GlobalVertexList[getId(expr.first)] = vid;
+                    setPropertyVertexAttributes(vid, expr.first.toString());
                 }
             }
 
@@ -494,12 +670,12 @@ void Document::exportGraphviz(std::ostream& out) const
                     auto found = GlobalVertexList.find(getId(dep.first));
 
                     if (found == GlobalVertexList.end()) {
-                        Graph* depSgraph = GraphList[depObjDoc] ? GraphList[depObjDoc] : &DepList;
+                        Graph* depSgraph =
+                            GraphList[depObjDoc] ? GraphList[depObjDoc] : DepList.root();
 
-                        LocalVertexList[getId(dep.first)] = add_vertex(*depSgraph);
-                        GlobalVertexList[getId(dep.first)] = vertex_no++;
-                        setPropertyVertexAttributes(*depSgraph,
-                                                    LocalVertexList[getId(dep.first)],
+                        LocalVertexList[getId(dep.first)] = DepList.addVertex(*depSgraph);
+                        GlobalVertexList[getId(dep.first)] = LocalVertexList[getId(dep.first)];
+                        setPropertyVertexAttributes(LocalVertexList[getId(dep.first)],
                                                     dep.first.getPropertyName()
                                                         + dep.first.getSubPathStr());
                     }
@@ -510,14 +686,14 @@ void Document::exportGraphviz(std::ostream& out) const
         void recursiveCSSubgraphs(DocumentObject* cs, DocumentObject* parent)
         {
 
-            auto graph = parent ? GraphList[parent] : &DepList;
+            auto graph = parent ? GraphList[parent] : DepList.root();
             // check if the value for the key 'parent' is null
             if (!graph) {
                 return;
             }
-            auto& sub = graph->create_subgraph();
-            GraphList[cs] = &sub;
-            get_property(sub, graph_name) = getClusterName(cs);
+            auto* sub = DepList.createSubgraph(*graph);
+            GraphList[cs] = sub;
+            DepList.graphName(*sub) = getClusterName(cs);
 
             // build random color string
             std::stringstream stream;
@@ -526,9 +702,9 @@ void Document::exportGraphviz(std::ostream& out) const
                    << std::setfill('0') << std::setw(2) << std::hex << distribution(seed) << 80;
             std::string result(stream.str());
 
-            get_property(sub, graph_graph_attribute)["bgcolor"] = result;
-            get_property(sub, graph_graph_attribute)["style"] = "rounded,filled";
-            setGraphLabel(sub, cs);
+            DepList.graphAttributes(*sub)["bgcolor"] = result;
+            DepList.graphAttributes(*sub)["style"] = "rounded,filled";
+            setGraphLabel(*sub, cs);
 
             for (auto obj : cs->getOutList()) {
                 if (obj->hasExtension(GeoFeatureGroupExtension::getExtensionClassTypeId())) {
@@ -548,11 +724,11 @@ void Document::exportGraphviz(std::ostream& out) const
                     std::cerr << "Origin feature not found" << std::endl;
                     return;
                 }
-                auto& osub = sub.create_subgraph();
-                GraphList[origin] = &osub;
-                get_property(osub, graph_name) = getClusterName(origin);
-                get_property(osub, graph_graph_attribute)["bgcolor"] = "none";
-                setGraphLabel(osub, origin);
+                auto* osub = DepList.createSubgraph(*sub);
+                GraphList[origin] = osub;
+                DepList.graphName(*osub) = getClusterName(origin);
+                DepList.graphAttributes(*osub)["bgcolor"] = "none";
+                setGraphLabel(*osub, origin);
             }
         }
 
@@ -640,10 +816,6 @@ void Document::exportGraphviz(std::ostream& out) const
 
         void addEdges()
         {
-            // Get edge properties for main graph
-            const boost::property_map<Graph, boost::edge_attribute_t>::type& edgeAttrMap =
-                boost::get(boost::edge_attribute, DepList);
-
             // Track edges between document objects connected by expression dependencies
             std::set<std::pair<const DocumentObject*, const DocumentObject*>> existingEdges;
 
@@ -663,19 +835,22 @@ void Document::exportGraphviz(std::ostream& out) const
                             continue;
                         }
                         DocumentObject* depObjDoc = dep.first.getDocumentObject();
-                        Edge edge;
-                        bool inserted;
+                        auto exprVertex = GlobalVertexList.find(getId(expr.first));
+                        auto depVertex = GlobalVertexList.find(getId(dep.first));
+                        if (exprVertex == GlobalVertexList.end()
+                            || depVertex == GlobalVertexList.end()) {
+                            continue;
+                        }
 
-                        tie(edge, inserted) = add_edge(GlobalVertexList[getId(expr.first)],
-                                                       GlobalVertexList[getId(dep.first)],
-                                                       DepList);
+                        Edge edge = DepList.addEdge(exprVertex->second, depVertex->second);
 
                         // Add this edge to the set of all expression generated edges
                         existingEdges.insert(std::make_pair(docObj, depObjDoc));
 
                         // Edges between properties should be a bit smaller, and dashed
-                        edgeAttrMap[edge]["arrowsize"] = "0.5";
-                        edgeAttrMap[edge]["style"] = "dashed";
+                        auto& attributes = DepList.edgeAttributes(edge);
+                        attributes["arrowsize"] = "0.5";
+                        attributes["style"] = "dashed";
                     }
                 }
             }
@@ -703,12 +878,15 @@ void Document::exportGraphviz(std::ostream& out) const
                             && GeoFeatureGroupExtension::getGroupOfObject(obj) == docObj) {
                             continue;
                         }
+                        auto docVertex = GlobalVertexList.find(getId(docObj));
+                        auto objVertex = GlobalVertexList.find(getId(obj));
+                        if (docVertex == GlobalVertexList.end()
+                            || objVertex == GlobalVertexList.end()) {
+                            continue;
+                        }
+
                         // Count duplicate edges
-                        bool inserted = edge(GlobalVertexList[getId(docObj)],
-                                             GlobalVertexList[getId(obj)],
-                                             DepList)
-                                            .second;
-                        if (inserted) {
+                        if (DepList.hasEdge(docVertex->second, objVertex->second)) {
                             dups[obj]++;
                             continue;
                         }
@@ -721,153 +899,44 @@ void Document::exportGraphviz(std::ostream& out) const
 
                         // Add edge
 
-                        Edge edge;
-
-                        tie(edge, inserted) = add_edge(GlobalVertexList[getId(docObj)],
-                                                       GlobalVertexList[getId(obj)],
-                                                       DepList);
+                        Edge edge = DepList.addEdge(docVertex->second, objVertex->second);
 
                         // Set properties to make arrows go between subgraphs if needed
+                        auto& attributes = DepList.edgeAttributes(edge);
                         if (GraphList[docObj]) {
-                            edgeAttrMap[edge]["ltail"] = getClusterName(docObj);
+                            attributes["ltail"] = getClusterName(docObj);
                         }
                         if (GraphList[obj]) {
-                            edgeAttrMap[edge]["lhead"] = getClusterName(obj);
+                            attributes["lhead"] = getClusterName(obj);
                         }
                     }
                 }
 
                 // Set labels for duplicate edges
                 for (const auto& dup : dups) {
-                    Edge e(edge(GlobalVertexList[getId(It.second)],
-                                GlobalVertexList[getId(dup.first)],
-                                DepList)
-                               .first);
+                    auto source = GlobalVertexList.find(getId(It.second));
+                    auto target = GlobalVertexList.find(getId(dup.first));
+                    if (source == GlobalVertexList.end() || target == GlobalVertexList.end()) {
+                        continue;
+                    }
+                    Edge e = DepList.findEdge(source->second, target->second);
+                    if (e == App::DirectedGraph::npos) {
+                        continue;
+                    }
                     std::stringstream s;
                     s << " " << (dup.second + 1) << "x";
-                    edgeAttrMap[e]["label"] = s.str();
+                    DepList.edgeAttributes(e)["label"] = s.str();
                 }
             }
         }
-
-        using EdgeMap = std::unordered_multimap<Vertex, Edge>;
-
-        void removeEdges(EdgeMap& in_edges,
-                         EdgeMap& out_edges,
-                         std::pair<EdgeMap::iterator, EdgeMap::iterator> i_pair,
-                         std::function<Vertex(const Edge&)> select_vertex)
-        {
-            auto i = i_pair.first;
-
-            while (i != i_pair.second) {
-                // Remove from in edges in other nodes
-                auto in_i_pair = in_edges.equal_range(select_vertex(i->second));
-                auto in_i = in_i_pair.first;
-
-                while (in_i != in_i_pair.second) {
-                    if (in_i->second == i->second) {
-                        in_i = in_edges.erase(in_i);
-                    }
-                    else {
-                        ++in_i;
-                    }
-                }
-
-                // Remove node from out_edges
-                i = out_edges.erase(i);
-            }
-        }
-
-#if defined(__clang__)
-#elif defined(__GNUC__)
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wmaybe-uninitialized"
-#endif
 
         void markCycles()
         {
-            bool changed = true;
-            std::unordered_set<Vertex> in_use;
-            EdgeMap in_edges;
-            EdgeMap out_edges;
-
-            // Add all vertices to the in_use set
-            graph_traits<Graph>::vertex_iterator vi, vi_end;
-            tie(vi, vi_end) = vertices(DepList);
-            for (; vi != vi_end; ++vi) {
-                in_use.insert(*vi);
-            }
-
-            // Add all edges to the in_edges and out_edges multimaps
-            graph_traits<Graph>::edge_iterator ei, ei_end;
-            tie(ei, ei_end) = edges(DepList);
-            for (; ei != ei_end; ++ei) {
-                in_edges.insert(std::make_pair(target(*ei, DepList), *ei));
-                out_edges.insert(std::make_pair(source(*ei, DepList), *ei));
-            }
-
-            // Go through dependency graph and remove nodes with either no input or output
-            // A normal DAG without any cycles will get all its edges removed.
-            // If one or more cycles exist in the graph, there will remain nodes with
-            // both in and out edges.
-
-            while (changed) {
-                auto uvi = in_use.begin();
-                auto uvi_end = in_use.end();
-
-                // Flag that no changes has occurred so far. If the loop goes through
-                // without this flag being set to true, we are done.
-                changed = false;
-
-                while (uvi != uvi_end) {
-                    auto i_in_deg_pair = in_edges.equal_range(*uvi);
-                    auto i_out_deg_pair = out_edges.equal_range(*uvi);
-
-                    if (i_in_deg_pair.first == in_edges.end()
-                        && i_out_deg_pair.first == out_edges.end()) {
-                        uvi = in_use.erase(uvi);
-                        continue;
-                    }
-
-                    // Remove out edges of nodes that don't have a single edge in
-                    if (i_in_deg_pair.first == in_edges.end()) {
-                        removeEdges(in_edges, out_edges, i_out_deg_pair, [&](Edge e) {
-                            return target(e, DepList);
-                        });
-                        changed = true;
-                        i_out_deg_pair = out_edges.equal_range(*uvi);
-                    }
-
-                    // Remove in edges of nodes that don't have a single edge out
-                    if (i_out_deg_pair.first == out_edges.end()) {
-                        removeEdges(out_edges, in_edges, i_in_deg_pair, [&](Edge e) {
-                            return source(e, DepList);
-                        });
-                        changed = true;
-                    }
-
-                    ++uvi;
-                }
-            }
-
-            // Update colors in graph
-            const boost::property_map<Graph, boost::edge_attribute_t>::type& edgeAttrMap =
-                boost::get(boost::edge_attribute, DepList);
-            for (auto ei : out_edges) {
-                edgeAttrMap[ei.second]["color"] = "red";
-            }
+            DepList.markCycleEdges();
         }
-
-#if defined(__clang__)
-#elif defined(__GNUC__)
-#pragma GCC diagnostic pop
-#endif
 
         void markOutOfScopeLinks()
         {
-            const boost::property_map<Graph, boost::edge_attribute_t>::type& edgeAttrMap =
-                boost::get(boost::edge_attribute, DepList);
-
             for (auto obj : objects) {
 
                 std::vector<App::DocumentObject*> invalids;
@@ -875,19 +944,21 @@ void Document::exportGraphviz(std::ostream& out) const
                 // isLinkValid returns true for non-link properties
                 for (auto linkedObj : invalids) {
 
-                    auto res = edge(GlobalVertexList[getId(obj)],
-                                    GlobalVertexList[getId(linkedObj)],
-                                    DepList);
-                    if (res.second) {
-                        edgeAttrMap[res.first]["color"] = "orange";
+                    auto source = GlobalVertexList.find(getId(obj));
+                    auto target = GlobalVertexList.find(getId(linkedObj));
+                    if (source == GlobalVertexList.end() || target == GlobalVertexList.end()) {
+                        continue;
+                    }
+                    auto edge = DepList.findEdge(source->second, target->second);
+                    if (edge != App::DirectedGraph::npos) {
+                        DepList.edgeAttributes(edge)["color"] = "orange";
                     }
                 }
             }
         }
 
         const struct DocumentP* d;
-        Graph DepList;
-        int vertex_no {0};
+        DotGraph DepList;
         std::map<std::string, Vertex> LocalVertexList;
         std::map<std::string, Vertex> GlobalVertexList;
         std::set<const DocumentObject*> objects;
@@ -899,5 +970,5 @@ void Document::exportGraphviz(std::ostream& out) const
 
     GraphCreator g(d);
 
-    boost::write_graphviz(out, g.getGraph());
+    g.getGraph().write(out);
 }
