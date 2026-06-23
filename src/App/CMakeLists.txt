@@ -216,6 +216,7 @@ SET(Document_CPP_SRCS
 SET(Document_HPP_SRCS
     Annotation.h
     BackupPolicy.h
+    DirectedGraph.h
     Document.h
     RecoverySnapshot.h
     DepEdge.h
