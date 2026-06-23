@@ -20,8 +20,6 @@
  *                                                                                                 *
  **************************************************************************************************/
 
-#include <fmt/format.h>
-#include <boost/version.hpp>
 #include <algorithm>
 #include <cctype>
 #include <cstdlib>
@@ -29,6 +27,8 @@
 #include <string_view>
 #include <system_error>
 #include <utility>
+
+#include <fmt/format.h>
 
 #include "ApplicationDirectories.h"
 
@@ -225,14 +225,6 @@ void ApplicationDirectories::configurePaths(std::map<std::string,std::string>& m
     auto dataHome = standardPaths.data;
     auto cacheHome = standardPaths.cache;
     auto tempPath = standardPaths.temp;
-
-#if defined(FC_OS_WIN32) && (BOOST_VERSION < 107600)
-    // Keep the old behaviour for old Boost versions. On systems with
-    // non-7-bit-ASCII application data directories, GetTempPathW returns a path
-    // accepted by boost's narrow file_lock API. Boost 1.76 added wide path support.
-    tempPath = Base::FileInfo::stringToPath(Base::FileInfo::getTempPath());
-    cacheHome = tempPath;
-#endif
 
     if (mConfig.contains("SafeMode")) {
         if (startSafeMode(mConfig)) {

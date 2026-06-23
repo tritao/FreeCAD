@@ -441,7 +441,6 @@ void ProgramInformation::getLibraryVersions(std::stringstream& str)
 #endif
     str << "Coin " << fcCoin3dVersion << ", ";
     str << "Vtk " << fcVtkVersion << ", ";
-    str << "boost " << fcBoostVersion << ", ";
     str << "Eigen3 " << fcEigen3Version;
 #if defined(FREECAD_BUILD_QT) && FREECAD_BUILD_QT
     str << ", ";
