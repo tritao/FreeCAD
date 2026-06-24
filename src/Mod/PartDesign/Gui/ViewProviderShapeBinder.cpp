@@ -30,7 +30,7 @@
 #include <TopTools_IndexedMapOfShape.hxx>
 
 
-#include <boost/algorithm/string/predicate.hpp>
+#include <Base/StringPredicates.h>
 #include <App/Document.h>
 #include <Gui/ActionFunction.h>
 #include <Gui/Application.h>
@@ -248,7 +248,7 @@ ViewProviderSubShapeBinder::ViewProviderSubShapeBinder()
 void ViewProviderSubShapeBinder::attach(App::DocumentObject* obj)
 {
 
-    UseBinderStyle.setValue(boost::istarts_with(obj->getNameInDocument(), "binder"));
+    UseBinderStyle.setValue(Base::istartsWith(obj->getNameInDocument(), "binder"));
     if (auto geo = dynamic_cast<App::GeoFeature*>(obj)) {
         geo->setMaterialAppearance(ShapeAppearance[0]);
     }

@@ -25,9 +25,11 @@
  ***************************************************************************/
 
 #include <cstdlib>
+#include <charconv>
+#include <cctype>
+#include <cstring>
 #include <limits>
-
-#include <boost/regex.hpp>
+#include <string_view>
 
 #include "ComplexGeoData.h"
 #include "ElementMap.h"
@@ -39,9 +41,7 @@
 #include <Base/Rotation.h>
 #include <Base/Writer.h>
 
-#include <boost/iostreams/device/array.hpp>
-#include <boost/iostreams/stream.hpp>
-#include <boost/algorithm/string/predicate.hpp>
+#include <Base/BufferIStream.h>
 
 
 using namespace Data;
@@ -51,7 +51,6 @@ TYPESYSTEM_SOURCE_ABSTRACT(Data::ComplexGeoData, Base::Persistence)  // NOLINT
 
 FC_LOG_LEVEL_INIT("ComplexGeoData", true, true)  // NOLINT
 
-namespace bio = boost::iostreams;
 using namespace Data;
 
 // NOLINTBEGIN(cppcoreguidelines-pro-bounds-pointer-arithmetic)
@@ -60,17 +59,37 @@ ComplexGeoData::ComplexGeoData() = default;
 
 std::pair<std::string, unsigned long> ComplexGeoData::getTypeAndIndex(const char* Name)
 {
-    int index = 0;
-    std::string element;
-    boost::regex ex("^([^0-9]*)([0-9]*)$");
-    boost::cmatch what;
-
-    if (Name && boost::regex_match(Name, what, ex)) {
-        element = what[1].str();
-        index = std::atoi(what[2].str().c_str());
+    if (!Name) {
+        return {"", 0};
     }
 
-    return std::make_pair(element, index);
+    const std::string_view input(Name);
+
+    std::size_t split = 0;
+    while (split < input.size()
+           && std::isdigit(static_cast<unsigned char>(input[split])) == 0) {
+        ++split;
+    }
+
+    // Match the old regex semantics: a sequence of non-digits followed by digits only.
+    for (std::size_t i = split; i < input.size(); ++i) {
+        if (std::isdigit(static_cast<unsigned char>(input[i])) == 0) {
+            return {"", 0};
+        }
+    }
+
+    std::string element(input.substr(0, split));
+
+    unsigned long index = 0;
+    if (split != input.size()) {
+        const std::string_view digits = input.substr(split);
+        const auto res = std::from_chars(digits.data(), digits.data() + digits.size(), index, 10);
+        if (res.ec != std::errc {}) {
+            index = 0;
+        }
+    }
+
+    return {std::move(element), index};
 }
 
 Data::Segment* ComplexGeoData::getSubElementByName(const char* name) const
@@ -216,7 +235,10 @@ std::string ComplexGeoData::getElementMapVersion() const
 
 bool ComplexGeoData::checkElementMapVersion(const char* ver) const
 {
-    return !boost::ends_with(ver, "5");
+    if (!ver) {
+        return true;
+    }
+    return !std::string_view{ver}.ends_with("5");
 }
 
 size_t ComplexGeoData::getElementMapSize(bool flush) const
@@ -385,7 +407,7 @@ char ComplexGeoData::elementType(const Data::IndexedName& element) const
         return 0;
     }
     for (auto& type : getElementTypes()) {
-        if (boost::equals(element.getType(), type)) {
+        if (std::string_view{element.getType()} == type) {
             return type[0];
         }
     }
@@ -438,7 +460,7 @@ char ComplexGeoData::elementType(const char* name) const
 
     if (type && (type[0] != 0)) {
         for (auto& elementTypes : getElementTypes()) {
-            if (boost::starts_with(type, elementTypes)) {
+            if (std::string_view{type}.starts_with(elementTypes)) {
                 return type[0];
             }
         }
@@ -547,7 +569,7 @@ void ComplexGeoData::readElements(Base::XMLReader& reader, size_t count)
             }
             else {
                 const char* attr = reader.getAttribute<const char*>("sid");
-                bio::stream<bio::array_source> iss(attr, std::strlen(attr));
+                Base::BufferIStream iss(attr, std::strlen(attr));
                 long id {};
                 while ((iss >> id)) {
                     if (id == 0) {
@@ -654,7 +676,7 @@ void ComplexGeoData::RestoreDocFile(Base::Reader& reader)
     std::string marker;
     std::string ver;
     reader >> marker;
-    if (boost::equals(marker, "BeginElementMap")) {
+    if (marker == "BeginElementMap") {
         resetElementMap();
         reader >> ver;
         if (ver != "v1") {

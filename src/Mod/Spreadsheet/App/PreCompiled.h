@@ -38,11 +38,7 @@
 #include <string>
 
 // boost
-#include <boost/algorithm/string/predicate.hpp>
-#include <boost/range/adaptor/map.hpp>
-#include <boost/range/algorithm/copy.hpp>
-#include <boost/regex.hpp>
-#include <boost/tokenizer.hpp>
+#include <Base/StringPredicates.h>
 
 // Qt
 #include <QLocale>

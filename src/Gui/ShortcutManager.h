@@ -22,12 +22,9 @@
 
 #pragma once
 
+#include <map>
 #include <unordered_map>
-
-#include <boost/multi_index_container.hpp>
-#include <boost/multi_index/hashed_index.hpp>
-#include <boost/multi_index/ordered_index.hpp>
-#include <boost/multi_index/member.hpp>
+#include <vector>
 
 #include <QAction>
 #include <QKeySequence>
@@ -40,7 +37,6 @@ namespace Gui
 {
 
 class Command;
-namespace bmi = boost::multi_index;
 
 class GuiExport ShortcutManager: public QObject, public ParameterGrp::ObserverType
 {
@@ -129,6 +125,7 @@ private:
         ActionKey key;
         intptr_t pointer;
         QPointer<QAction> action;
+        std::multimap<ActionKey, intptr_t>::iterator keyIterator;
 
         explicit ActionData(QAction* action, const char* name = "")
             : key(action->shortcut(), name)
@@ -136,14 +133,8 @@ private:
             , action(action)
         {}
     };
-    bmi::multi_index_container<
-        ActionData,
-        bmi::indexed_by<
-            // hashed index on ActionData::Action pointer
-            bmi::hashed_unique<bmi::member<ActionData, intptr_t, &ActionData::pointer>>,
-            // ordered index on shortcut + name
-            bmi::ordered_non_unique<bmi::member<ActionData, ActionKey, &ActionData::key>>>>
-        actionMap;
+    std::unordered_map<intptr_t, ActionData> actionMapByPointer;
+    std::multimap<ActionKey, intptr_t> actionMapByKey;
 
     std::unordered_map<std::string, int> priorities;
     int topPriority;

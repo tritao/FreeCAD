@@ -24,10 +24,9 @@
  ***************************************************************************/
 
 
-#include <boost/tokenizer.hpp>
-
 #include <App/Range.h>
 #include <Base/Exception.h>
+#include <Base/StringTokenizer.h>
 
 #include "Sheet.h"
 // inclusion of the generated files (generated out of SheetPy.xml)
@@ -372,14 +371,9 @@ PyObject* SheetPy::setStyle(PyObject* args)
         Py_DECREF(copy);
     }
     else if (PyUnicode_Check(value)) {
-        using namespace boost;
-
-        escaped_list_separator<char> e('\0', '|', '\0');
         std::string line = PyUnicode_AsUTF8(value);
-        tokenizer<escaped_list_separator<char>> tok(line, e);
-
-        for (tokenizer<escaped_list_separator<char>>::iterator i = tok.begin(); i != tok.end(); ++i) {
-            style.insert(*i);
+        for (const auto& token : Base::splitEscaped(line, '|', '\0', '\0')) {
+            style.insert(token);
         }
     }
     else {
@@ -666,15 +660,10 @@ PyObject* SheetPy::setAlignment(PyObject* args)
     }
     else if (PyUnicode_Check(value)) {
         // Argument is a string, combination of alignments, separated by the pipe character
-        using namespace boost;
-
-        escaped_list_separator<char> e('\0', '|', '\0');
         std::string line = PyUnicode_AsUTF8(value);
-        tokenizer<escaped_list_separator<char>> tok(line, e);
-
-        for (tokenizer<escaped_list_separator<char>>::iterator i = tok.begin(); i != tok.end(); ++i) {
-            if (!i->empty()) {
-                alignment = Cell::decodeAlignment(*i, alignment);
+        for (const auto& token : Base::splitEscaped(line, '|', '\0', '\0')) {
+            if (!token.empty()) {
+                alignment = Cell::decodeAlignment(token, alignment);
             }
         }
     }

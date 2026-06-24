@@ -23,16 +23,16 @@
  ***************************************************************************/
 
 #include <algorithm>
+#include <cmath>
 #include <set>
 #include <limits>
 #include <memory>
 #include <list>
 #include <map>
 #include <string>
+#include <string_view>
+#include <stdexcept>
 #include <vector>
-
-#include <boost/algorithm/string/predicate.hpp>
-#include <boost/math/special_functions/round.hpp>
 
 #include <Base/Console.h>
 #include <Base/Exception.h>
@@ -139,24 +139,24 @@ void PropertyInteger::Paste(const Property& from)
     hasSetValue();
 }
 
-void PropertyInteger::setPathValue(const ObjectIdentifier& path, const boost::any& value)
+void PropertyInteger::setPathValue(const ObjectIdentifier& path, const std::any& value)
 {
     verifyPath(path);
 
     if (value.type() == typeid(long)) {
-        setValue(boost::any_cast<long>(value));
+        setValue(std::any_cast<long>(value));
     }
     else if (value.type() == typeid(int)) {
-        setValue(boost::any_cast<int>(value));
+        setValue(std::any_cast<int>(value));
     }
     else if (value.type() == typeid(double)) {
-        setValue(boost::math::round(boost::any_cast<double>(value)));
+        setValue(std::lround(std::any_cast<double>(value)));
     }
     else if (value.type() == typeid(float)) {
-        setValue(boost::math::round(boost::any_cast<float>(value)));
+        setValue(std::lround(std::any_cast<float>(value)));
     }
     else if (value.type() == typeid(Quantity)) {
-        setValue(boost::math::round(boost::any_cast<Quantity>(value).getValue()));
+        setValue(std::lround(std::any_cast<Quantity>(value).getValue()));
     }
     else {
         throw bad_cast();
@@ -207,11 +207,7 @@ const std::filesystem::path& PropertyPath::getValue() const
 
 PyObject* PropertyPath::getPyObject()
 {
-#if (BOOST_FILESYSTEM_VERSION == 2)
-    std::string str = _cValue.native_file_string();
-#else
     std::string str = _cValue.string();
-#endif
 
     // Returns a new reference, don't increment it!
     PyObject* p = PyUnicode_DecodeUTF8(str.c_str(), str.size(), nullptr);
@@ -299,7 +295,7 @@ void PropertyEnumeration::setEnums(const char** plEnums)
     // For backward compatibility, if the property container is not attached to
     // any document (i.e. its full name starts with '?'), do not notify, or
     // else existing code may crash.
-    bool notify = !boost::starts_with(getFullName(), "?");
+    bool notify = !std::string_view{getFullName()}.starts_with("?");
     if (notify) {
         aboutToSetValue();
     }
@@ -373,7 +369,7 @@ void PropertyEnumeration::setEnumVector(const std::vector<std::string>& values)
     // For backward compatibility, if the property container is not attached to
     // any document (i.e. its full name starts with '?'), do not notify, or
     // else existing code may crash.
-    bool notify = !boost::starts_with(getFullName(), "?");
+    bool notify = !std::string_view{getFullName()}.starts_with("?");
     if (notify) {
         aboutToSetValue();
     }
@@ -538,31 +534,31 @@ void PropertyEnumeration::Paste(const Property& from)
     setValue(prop._enum);
 }
 
-void PropertyEnumeration::setPathValue(const ObjectIdentifier&, const boost::any& value)
+void PropertyEnumeration::setPathValue(const ObjectIdentifier&, const std::any& value)
 {
     if (value.type() == typeid(int)) {
-        setValue(boost::any_cast<int>(value));
+        setValue(std::any_cast<int>(value));
     }
     else if (value.type() == typeid(long)) {
-        setValue(boost::any_cast<long>(value));
+        setValue(std::any_cast<long>(value));
     }
     else if (value.type() == typeid(double)) {
-        setValue(boost::any_cast<double>(value));
+        setValue(std::any_cast<double>(value));
     }
     else if (value.type() == typeid(float)) {
-        setValue(boost::any_cast<float>(value));
+        setValue(std::any_cast<float>(value));
     }
     else if (value.type() == typeid(short)) {
-        setValue(boost::any_cast<short>(value));
+        setValue(std::any_cast<short>(value));
     }
     else if (value.type() == typeid(std::string)) {
-        setValue(boost::any_cast<std::string>(value).c_str());
+        setValue(std::any_cast<std::string>(value).c_str());
     }
     else if (value.type() == typeid(char*)) {
-        setValue(boost::any_cast<char*>(value));
+        setValue(std::any_cast<char*>(value));
     }
     else if (value.type() == typeid(const char*)) {
-        setValue(boost::any_cast<const char*>(value));
+        setValue(std::any_cast<const char*>(value));
     }
     else {
         Base::PyGILStateLocker lock;
@@ -577,7 +573,7 @@ bool PropertyEnumeration::setPyPathValue(const ObjectIdentifier&, const Py::Obje
     return true;
 }
 
-const boost::any PropertyEnumeration::getPathValue(const ObjectIdentifier& path) const
+const std::any PropertyEnumeration::getPathValue(const ObjectIdentifier& path) const
 {
     std::string p = path.getSubPathStr();
     if (p == ".Enum" || p == ".All") {
@@ -1130,34 +1126,34 @@ void PropertyFloat::Paste(const Property& from)
     hasSetValue();
 }
 
-void PropertyFloat::setPathValue(const ObjectIdentifier& path, const boost::any& value)
+void PropertyFloat::setPathValue(const ObjectIdentifier& path, const std::any& value)
 {
     verifyPath(path);
 
     if (value.type() == typeid(long)) {
-        setValue(boost::any_cast<long>(value));
+        setValue(std::any_cast<long>(value));
     }
     else if (value.type() == typeid(unsigned long)) {
-        setValue(boost::any_cast<unsigned long>(value));
+        setValue(std::any_cast<unsigned long>(value));
     }
     else if (value.type() == typeid(int)) {
-        setValue(boost::any_cast<int>(value));
+        setValue(std::any_cast<int>(value));
     }
     else if (value.type() == typeid(double)) {
-        setValue(boost::any_cast<double>(value));
+        setValue(std::any_cast<double>(value));
     }
     else if (value.type() == typeid(float)) {
-        setValue(boost::any_cast<float>(value));
+        setValue(std::any_cast<float>(value));
     }
     else if (value.type() == typeid(Quantity)) {
-        setValue((boost::any_cast<Quantity>(value)).getValue());
+        setValue((std::any_cast<Quantity>(value)).getValue());
     }
     else {
         throw bad_cast();
     }
 }
 
-const boost::any PropertyFloat::getPathValue(const ObjectIdentifier& path) const
+const std::any PropertyFloat::getPathValue(const ObjectIdentifier& path) const
 {
     verifyPath(path);
     return _dValue;
@@ -1678,17 +1674,17 @@ unsigned int PropertyString::getMemSize() const
     return static_cast<unsigned int>(_cValue.size());
 }
 
-void PropertyString::setPathValue(const ObjectIdentifier& path, const boost::any& value)
+void PropertyString::setPathValue(const ObjectIdentifier& path, const std::any& value)
 {
     verifyPath(path);
     if (value.type() == typeid(bool)) {
-        setValue(boost::any_cast<bool>(value) ? "True" : "False");
+        setValue(std::any_cast<bool>(value) ? "True" : "False");
     }
     else if (value.type() == typeid(int)) {
-        setValue(std::to_string(boost::any_cast<int>(value)));
+        setValue(std::to_string(std::any_cast<int>(value)));
     }
     else if (value.type() == typeid(long)) {
-        setValue(std::to_string(boost::any_cast<long>(value)));
+        setValue(std::to_string(std::any_cast<long>(value)));
     }
     else if (value.type() == typeid(double)) {
         setValue(std::to_string(App::any_cast<double>(value)));
@@ -1697,10 +1693,10 @@ void PropertyString::setPathValue(const ObjectIdentifier& path, const boost::any
         setValue(std::to_string(App::any_cast<float>(value)));
     }
     else if (value.type() == typeid(Quantity)) {
-        setValue(boost::any_cast<Quantity>(value).getUserString().c_str());
+        setValue(std::any_cast<Quantity>(value).getUserString().c_str());
     }
     else if (value.type() == typeid(std::string)) {
-        setValue(boost::any_cast<const std::string &>(value));
+        setValue(std::any_cast<const std::string&>(value));
     }
     else {
         Base::PyGILStateLocker lock;
@@ -1708,7 +1704,7 @@ void PropertyString::setPathValue(const ObjectIdentifier& path, const boost::any
     }
 }
 
-const boost::any PropertyString::getPathValue(const ObjectIdentifier& path) const
+const std::any PropertyString::getPathValue(const ObjectIdentifier& path) const
 {
     verifyPath(path);
     return _cValue;
@@ -2228,34 +2224,34 @@ void PropertyBool::Paste(const Property& from)
     hasSetValue();
 }
 
-void PropertyBool::setPathValue(const ObjectIdentifier& path, const boost::any& value)
+void PropertyBool::setPathValue(const ObjectIdentifier& path, const std::any& value)
 {
     verifyPath(path);
 
     if (value.type() == typeid(bool)) {
-        setValue(boost::any_cast<bool>(value));
+        setValue(std::any_cast<bool>(value));
     }
     else if (value.type() == typeid(int)) {
-        setValue(boost::any_cast<int>(value) != 0);
+        setValue(std::any_cast<int>(value) != 0);
     }
     else if (value.type() == typeid(long)) {
-        setValue(boost::any_cast<long>(value) != 0);
+        setValue(std::any_cast<long>(value) != 0);
     }
     else if (value.type() == typeid(double)) {
-        setValue(boost::math::round(boost::any_cast<double>(value)));
+        setValue(std::lround(std::any_cast<double>(value)) != 0);
     }
     else if (value.type() == typeid(float)) {
-        setValue(boost::math::round(boost::any_cast<float>(value)));
+        setValue(std::lround(std::any_cast<float>(value)) != 0);
     }
     else if (value.type() == typeid(Quantity)) {
-        setValue(boost::any_cast<Quantity>(value).getValue() != 0);
+        setValue(std::any_cast<Quantity>(value).getValue() != 0);
     }
     else {
         throw bad_cast();
     }
 }
 
-const boost::any PropertyBool::getPathValue(const ObjectIdentifier& path) const
+const std::any PropertyBool::getPathValue(const ObjectIdentifier& path) const
 {
     verifyPath(path);
 
@@ -2280,6 +2276,41 @@ PropertyBoolList::~PropertyBoolList() = default;
 //**************************************************************************
 // Base class implementer
 
+namespace
+{
+std::vector<bool> parseBoolBitsetString(const std::string& str)
+{
+    std::vector<bool> values;
+    values.resize(str.size());
+
+    const std::size_t n = str.size();
+    for (std::size_t pos = 0; pos < n; ++pos) {
+        const char ch = str[pos];
+        if (ch == '0' || ch == '1') {
+            values[n - 1 - pos] = (ch == '1');
+        }
+        else {
+            throw std::invalid_argument("invalid bit string");
+        }
+    }
+
+    return values;
+}
+
+std::string toBoolBitsetString(const std::vector<bool>& values)
+{
+    std::string out;
+    out.resize(values.size());
+
+    const std::size_t n = values.size();
+    for (std::size_t pos = 0; pos < n; ++pos) {
+        out[pos] = values[n - 1 - pos] ? '1' : '0';
+    }
+
+    return out;
+}
+}  // namespace
+
 PyObject* PropertyBoolList::getPyObject()
 {
     PyObject* tuple = PyTuple_New(getSize());
@@ -2301,8 +2332,7 @@ void PropertyBoolList::setPyObject(PyObject* value)
     std::string str;
     if (PyUnicode_Check(value)) {
         str = PyUnicode_AsUTF8(value);
-        boost::dynamic_bitset<> values(str);
-        setValues(values);
+        setValues(parseBoolBitsetString(str));
     }
     else {
         inherited::setPyObject(value);
@@ -2327,9 +2357,7 @@ bool PropertyBoolList::getPyValue(PyObject* item) const
 void PropertyBoolList::Save(Base::Writer& writer) const
 {
     writer.Stream() << writer.ind() << "<BoolList value=\"";
-    std::string bitset;
-    boost::to_string(_lValueList, bitset);
-    writer.Stream() << bitset << "\"/>";
+    writer.Stream() << toBoolBitsetString(_lValueList) << "\"/>";
     writer.Stream() << std::endl;
 }
 
@@ -2339,8 +2367,7 @@ void PropertyBoolList::Restore(Base::XMLReader& reader)
     reader.readElement("BoolList");
     // get the value of my Attribute
     string str = reader.getAttribute<const char*>("value");
-    boost::dynamic_bitset<> bitset(str);
-    setValues(bitset);
+    setValues(parseBoolBitsetString(str));
 }
 
 Property* PropertyBoolList::Copy() const

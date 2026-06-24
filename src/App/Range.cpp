@@ -22,12 +22,12 @@
  *                                                                         *
  ***************************************************************************/
 
-#include <boost/regex.hpp>
 #include <cassert>
+#include <cctype>
+#include <cstring>
 #include <sstream>
 #include <string>
 #include <cmath>
-#include <regex>
 
 #include <string_view>
 #include <Base/Exception.h>
@@ -224,7 +224,16 @@ int App::validRow(const std::string& rowstr)
 
 bool App::validColumn(const std::string& colstr)
 {
-    return boost::regex_match(colstr, boost::regex("[A-Z]{1,3}"));
+    if (colstr.empty() || colstr.size() > 3) {
+        return false;
+    }
+
+    for (const unsigned char c : colstr) {
+        if (std::isupper(c) == 0) {
+            return false;
+        }
+    }
+    return true;
 }
 
 /**
@@ -241,34 +250,56 @@ App::CellAddress App::stringToAddress(const char* strAddress, bool silent)
 {
     assert(strAddress);
 
-    static boost::regex e("(\\$?[A-Z]{1,2})(\\$?[0-9]{1,5})");
-    boost::cmatch cm;
-
-    if (boost::regex_match(strAddress, cm, e)) {
-        bool absCol = (cm[1].first[0] == '$');
-        std::string r, c;
-        if (absCol) {
-            c = std::string(cm[1].first + 1, cm[1].second);
+    std::string_view address(strAddress);
+    if (address.empty()) {
+        if (silent) {
+            return CellAddress();
         }
-        else {
-            c = std::string(cm[1].first, cm[1].second);
-        }
-
-        bool absRow = (cm[2].first[0] == '$');
-        if (absRow) {
-            r = std::string(cm[2].first + 1, cm[2].second);
-        }
-        else {
-            r = std::string(cm[2].first, cm[2].second);
-        }
-
-        return CellAddress(decodeRow(r, silent), decodeColumn(c, silent), absRow, absCol);
-    }
-    else if (silent) {
-        return CellAddress();
+        throw Base::RuntimeError("Invalid cell specifier.");
     }
 
-    throw Base::RuntimeError("Invalid cell specifier.");
+    bool absCol = false;
+    bool absRow = false;
+
+    std::size_t pos = 0;
+
+    if (pos < address.size() && address[pos] == '$') {
+        absCol = true;
+        ++pos;
+    }
+
+    const std::size_t colStart = pos;
+    while (pos < address.size() && std::isupper(static_cast<unsigned char>(address[pos])) != 0) {
+        ++pos;
+    }
+    const std::size_t colLen = pos - colStart;
+    if (colLen < 1 || colLen > 2) {
+        if (silent) {
+            return CellAddress();
+        }
+        throw Base::RuntimeError("Invalid cell specifier.");
+    }
+
+    if (pos < address.size() && address[pos] == '$') {
+        absRow = true;
+        ++pos;
+    }
+
+    const std::size_t rowStart = pos;
+    while (pos < address.size() && std::isdigit(static_cast<unsigned char>(address[pos])) != 0) {
+        ++pos;
+    }
+    const std::size_t rowLen = pos - rowStart;
+    if (rowLen < 1 || rowLen > 5 || pos != address.size()) {
+        if (silent) {
+            return CellAddress();
+        }
+        throw Base::RuntimeError("Invalid cell specifier.");
+    }
+
+    const std::string c(address.substr(colStart, colLen));
+    const std::string r(address.substr(rowStart, rowLen));
+    return CellAddress(decodeRow(r, silent), decodeColumn(c, silent), absRow, absCol);
 }
 
 /**

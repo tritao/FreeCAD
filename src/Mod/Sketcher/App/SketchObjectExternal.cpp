@@ -62,8 +62,6 @@
 #include <gp_Parab.hxx>
 #include <gp_Pln.hxx>
 
-#include <boost/algorithm/string/predicate.hpp>
-
 #include <HLRAlgo_Projector.hxx>
 #include <HLRBRep_Algo.hxx>
 #include <HLRBRep_HLRToShape.hxx>
@@ -78,6 +76,7 @@
 #include <App/Datums.h>
 #include <App/Part.h>
 #include <Base/Console.h>
+#include <Base/StringPredicates.h>
 #include <Base/Tools.h>
 #include <Base/Vector3D.h>
 #include <Mod/Part/App/BodyBase.h>
@@ -426,7 +425,7 @@ int SketchObject::carbonCopy(App::DocumentObject* pObj, bool construction)
             else {
                 auto egf = ExternalGeometryFacade::getFacade(geo);
                 const auto& ref = egf->getRef();
-                if (boost::starts_with(ref, myName)) {
+                if (Base::startsWith(ref, myName)) {
                     int geoId;
                     PointPos posId;
                     if (this->geoIdFromShapeType(ref.c_str() + myName.size(), geoId, posId)) {

@@ -27,12 +27,11 @@
 #include <TDF_ChildIterator.hxx>
 #include <TDF_Tool.hxx>
 
-
-#include <boost/algorithm/string.hpp>
-#include <boost/format.hpp>
+#include <fmt/format.h>
 
 #include "Tools.h"
 #include <Base/Console.h>
+#include <Base/StringTools.h>
 #include <Mod/Part/App/TopoShape.h>
 
 // See https://dev.opencascade.org/content/occt-3d-viewer-becomes-srgb-aware
@@ -63,7 +62,7 @@ static inline std::ostream& operator<<(std::ostream& os, const Quantity_ColorRGB
 {
     Base::Color color = Tools::convertColor(rgba);
     auto toHex = [](float v) {
-        return boost::format("%02X") % static_cast<int>(v * 255);
+        return fmt::format("{:02X}", static_cast<int>(v * 255));
     };
     return os << "#" << toHex(color.r) << toHex(color.g) << toHex(color.b) << toHex(color.a);
 }
@@ -78,7 +77,7 @@ std::string Tools::labelName(TDF_Label label)
         extstr.ToUTF8CString(str);
         txt = str;
         delete[] str;
-        boost::trim(txt);
+        Base::StringTools::trimInPlace(txt);
     }
     return txt;
 }

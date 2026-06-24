@@ -17,7 +17,7 @@ find_package(Python3 COMPONENTS Interpreter Development REQUIRED)
 
 # Make sure we are using the shared versions of Boost here: the LibPack includes both
 set(Boost_USE_STATIC_LIBS OFF)
-find_package(Boost COMPONENTS filesystem program_options regex system thread date_time REQUIRED PATHS ${FREECAD_LIBPACK_DIR}/lib/cmake NO_DEFAULT_PATH)
+find_package(Boost REQUIRED PATHS ${FREECAD_LIBPACK_DIR}/lib/cmake NO_DEFAULT_PATH)
 
 set(OCE_DIR ${FREECAD_LIBPACK_DIR}/lib/cmake CACHE PATH "" FORCE)
 

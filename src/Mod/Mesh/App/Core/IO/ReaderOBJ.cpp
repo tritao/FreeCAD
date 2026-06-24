@@ -22,9 +22,6 @@
  *                                                                         *
  ***************************************************************************/
 
-#include <boost/algorithm/string.hpp>
-#include <boost/lexical_cast.hpp>
-#include <boost/tokenizer.hpp>
 #include <istream>
 #include <map>
 
@@ -32,6 +29,9 @@
 #include "Core/MeshKernel.h"
 #include <Base/Color.h>
 #include <Base/FileInfo.h>
+#include <Base/StringTools.h>
+#include <Base/StringPredicates.h>
+#include <Base/StringTokenizer.h>
 #include <Base/Stream.h>
 #include <Base/Tools.h>
 
@@ -58,9 +58,7 @@ public:
             return;
         }
 
-        boost::char_separator<char> sep(" /\t");
-        boost::tokenizer<boost::char_separator<char>> tokens(line, sep);
-        token_results.assign(tokens.begin(), tokens.end());
+        token_results = Base::splitAnyOf(line, " /\t");
         if (token_results.size() < 2) {
             return;
         }
@@ -124,11 +122,11 @@ private:
     bool Ignore(const std::string& line) const
     {
         // clang-format off
-        return boost::starts_with(line, "vn ") ||
-               boost::starts_with(line, "vt ") ||
-               boost::starts_with(line, "s ") ||
-               boost::starts_with(line, "o ") ||
-               boost::starts_with(line, "#");
+        return Base::startsWith(line, "vn ") ||
+               Base::startsWith(line, "vt ") ||
+               Base::startsWith(line, "s ") ||
+               Base::startsWith(line, "o ") ||
+               Base::startsWith(line, "#");
         // clang-format on
     }
 
@@ -368,7 +366,7 @@ bool ReaderOBJ::Load(std::istream& str)
     ReaderOBJImp reader(_material);
     std::string line;
     while (std::getline(str, line)) {
-        boost::trim(line);
+        Base::StringTools::trimInPlace(line);
         reader.Load(line);
     }
     reader.SetupMaterial();
@@ -433,10 +431,7 @@ bool ReaderOBJ::LoadMaterial(std::istream& str)
     };
 
     while (std::getline(str, line)) {
-        boost::char_separator<char> sep(" ");
-        boost::tokenizer<boost::char_separator<char>> tokens(line, sep);
-        std::vector<std::string> token_results;
-        token_results.assign(tokens.begin(), tokens.end());
+        std::vector<std::string> token_results = Base::splitAnyOf(line, " \t");
 
         try {
             if (token_results.size() >= 2) {

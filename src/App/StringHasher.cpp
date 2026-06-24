@@ -20,26 +20,24 @@
  *                                                                                                 *
  **************************************************************************************************/
 
+#include <charconv>
 #include <cstring>
 #include <deque>
+#include <map>
+#include <string_view>
+#include <unordered_set>
 
 #include <Base/Base64.h>
 #include <Base/ByteBuffer.h>
 #include <Base/BytesView.h>
+#include <Base/BufferIStream.h>
 #include <Base/Console.h>
 #include <Base/HashUtils.h>
 #include <Base/Reader.h>
 #include <Base/Sha1.h>
+#include <Base/ScopeGuard.h>
 #include <Base/Stream.h>
 #include <Base/Writer.h>
-
-#include <boost/algorithm/string/classification.hpp>
-#include <boost/algorithm/string/split.hpp>
-#include <boost/bimap.hpp>
-#include <boost/bimap/set_of.hpp>
-#include <boost/bimap/unordered_set_of.hpp>
-#include <boost/io/ios_state.hpp>
-#include <boost/iostreams/stream.hpp>
 
 #include "MappedElement.h"
 #include "StringHasher.h"
@@ -48,8 +46,6 @@
 
 
 FC_LOG_LEVEL_INIT("App", true, true)
-
-namespace bio = boost::iostreams;
 using namespace App;
 
 ///////////////////////////////////////////////////////////
@@ -62,6 +58,41 @@ Base::ByteBuffer sha1DigestBuffer(Base::BytesView bytes)
     const auto digest = Base::sha1Digest(bytes);
     return Base::ByteBuffer::copy(
         Base::BytesView(reinterpret_cast<const char*>(digest.data()), digest.size()));
+}
+
+void splitKeepEmpty(std::vector<std::string_view>& out, std::string_view input, char delim)
+{
+    out.clear();
+    std::size_t start = 0;
+    while (true) {
+        const std::size_t pos = input.find(delim, start);
+        if (pos == std::string_view::npos) {
+            out.push_back(input.substr(start));
+            return;
+        }
+        out.push_back(input.substr(start, pos - start));
+        start = pos + 1;
+    }
+}
+
+unsigned long parseUnsignedLong(std::string_view view, int base)
+{
+    unsigned long value = 0;
+    const auto res = std::from_chars(view.data(), view.data() + view.size(), value, base);
+    if (res.ec != std::errc {}) {
+        return 0;
+    }
+    return value;
+}
+
+long parseLong(std::string_view view, int base)
+{
+    long value = 0;
+    const auto res = std::from_chars(view.data(), view.data() + view.size(), value, base);
+    if (res.ec != std::errc {}) {
+        return 0;
+    }
+    return value;
 }
 
 }  // namespace
@@ -89,15 +120,40 @@ struct StringIDHasher
     }
 };
 
-using HashMapBase =
-    boost::bimap<boost::bimaps::unordered_set_of<StringID*, StringIDHasher, StringIDHasher>,
-                 boost::bimaps::set_of<long>>;
-
-class StringHasher::HashMap: public HashMapBase
+class StringHasher::HashMap
 {
 public:
+    using Left = std::unordered_set<StringID*, StringIDHasher, StringIDHasher>;
+    using Right = std::map<long, StringID*>;
+
     bool SaveAll = false;
     int Threshold = 0;
+
+    Left left;
+    Right right;
+
+    void clear()
+    {
+        left.clear();
+        right.clear();
+    }
+
+    std::size_t size() const
+    {
+        return right.size();
+    }
+
+    bool eraseById(long id)
+    {
+        auto it = right.find(id);
+        if (it == right.end()) {
+            return false;
+        }
+        StringID* sid = it->second;
+        right.erase(it);
+        left.erase(sid);
+        return true;
+    }
 };
 
 ///////////////////////////////////////////////////////////
@@ -107,7 +163,7 @@ TYPESYSTEM_SOURCE_ABSTRACT(App::StringID, Base::BaseClass)
 StringID::~StringID()
 {
     if (_hasher) {
-        _hasher->_hashes->right.erase(_id);
+        _hasher->_hashes->eraseById(_id);
     }
 }
 
@@ -145,7 +201,7 @@ StringID::IndexID StringID::fromString(const char* name, bool eof, int size)
     if (size < 0) {
         size = static_cast<int>(std::strlen(name));
     }
-    bio::stream<bio::array_source> iss(name, size);
+    Base::BufferIStream iss(name, static_cast<std::size_t>(size));
     char sep = 0;
     char sep2 = 0;
     iss >> sep >> std::hex >> res.id >> sep2 >> res.index;
@@ -225,7 +281,7 @@ void StringHasher::compact()
         StringIDRef sid = pendings.front();
         pendings.pop_front();
         // Try to erase the map entry for this StringID
-        if (_hashes->right.erase(sid.value()) == 0U) {
+        if (!_hashes->eraseById(sid.value())) {
             continue;  // If nothing was erased, there's nothing more to do
         }
         sid._sid->_hasher = nullptr;
@@ -295,7 +351,7 @@ StringIDRef StringHasher::getID(Base::BytesView data, Options options)
 
     auto it = _hashes->left.find(&dataID);
     if (it != _hashes->left.end()) {
-        return {it->first};
+        return {*it};
     }
 
     if (!hashed && !nocopy) {
@@ -340,7 +396,7 @@ StringIDRef StringHasher::getID(const Data::MappedName& name, const std::vector<
     // Check to see if there is already an entry in the hash table for this StringID
     auto it = _hashes->left.find(&tempID);
     if (it != _hashes->left.end()) {
-        auto res = StringIDRef(it->first);
+        auto res = StringIDRef(*it);
         if (indexed) {
             res._index = indexed.getIndex();
         }
@@ -518,7 +574,8 @@ void StringHasher::SaveDocFile(Base::Writer& writer) const
 void StringHasher::saveStream(std::ostream& stream) const
 {
     Base::TextOutputStream textStreamWrapper(stream);
-    boost::io::ios_flags_saver ifs(stream);
+    const auto oldFlags = stream.flags();
+    [[maybe_unused]] const auto flagsGuard = Base::makeScopeExit([&] { stream.flags(oldFlags); });
     stream << std::hex;
 
     long anchor = 0;
@@ -638,9 +695,10 @@ void StringHasher::restoreStreamNew(std::istream& stream, std::size_t count)
     Base::TextInputStream asciiStream(stream);
     _hashes->clear();
     std::string content;
-    boost::io::ios_flags_saver ifs(stream);
+    const auto oldFlags = stream.flags();
+    [[maybe_unused]] const auto flagsGuard = Base::makeScopeExit([&] { stream.flags(oldFlags); });
     stream >> std::hex;
-    std::vector<std::string> tokens;
+    std::vector<std::string_view> tokens;
     long lastid = 0;
     const StringID* last = nullptr;
 
@@ -651,25 +709,24 @@ void StringHasher::restoreStreamNew(std::istream& stream, std::size_t count)
             FC_THROWM(Base::RuntimeError, "Invalid string table");
         }
 
-        tokens.clear();
-        boost::split(tokens, tmp, boost::is_any_of("."));
+        splitKeepEmpty(tokens, tmp, '.');
         if (tokens.size() < 2) {
             FC_THROWM(Base::RuntimeError, "Invalid string table");
         }
 
         long id = 0;
         bool relative = false;
-        if (tokens[0][0] == '-') {
+        if (!tokens[0].empty() && tokens[0][0] == '-') {
             relative = true;
-            id = lastid + strtol(tokens[0].c_str() + 1, nullptr, 16);
+            id = lastid + static_cast<long>(parseUnsignedLong(tokens[0].substr(1), 16));
         }
         else {
-            id = strtol(tokens[0].c_str(), nullptr, 16);
+            id = static_cast<long>(parseUnsignedLong(tokens[0], 16));
         }
 
         lastid = id;
 
-        unsigned long flag = strtol(tokens[1].c_str(), nullptr, 16);
+        unsigned long flag = parseUnsignedLong(tokens[1], 16);
         StringIDRef sid(new StringID(id, Base::ByteBuffer{}, static_cast<StringID::Flag>(flag)));
 
         StringID& d = *sid._sid;
@@ -679,13 +736,7 @@ void StringHasher::restoreStreamNew(std::istream& stream, std::size_t count)
         if (relative && last) {
             for (; j < (int)tokens.size() && j - 2 < last->_sids.size(); ++j) {
                 long m = last->_sids[j - 2].value();
-                long n;
-                if (tokens[j][0] == '-') {
-                    n = -strtol(&tokens[j][1], nullptr, 16);
-                }
-                else {
-                    n = strtol(&tokens[j][0], nullptr, 16);
-                }
+                long n = parseLong(tokens[j], 16);
                 StringIDRef sid = getID(m + n);
                 if (!sid) {
                     FC_THROWM(Base::RuntimeError, "Invalid string id reference");
@@ -694,7 +745,7 @@ void StringHasher::restoreStreamNew(std::istream& stream, std::size_t count)
             }
         }
         for (; j < (int)tokens.size(); ++j) {
-            long n = strtol(tokens[j].data(), nullptr, 16);
+            long n = static_cast<long>(parseUnsignedLong(tokens[j], 16));
             StringIDRef sid = getID(relative ? id - n : n);
             if (!sid) {
                 FC_THROWM(Base::RuntimeError, "Invalid string id reference");
@@ -757,13 +808,22 @@ StringID* StringHasher::insert(const StringIDRef& sid)
     auto& hasher = *sid._sid;
     hasher._hasher = this;
     hasher.ref();
-    auto res = _hashes->right.insert(_hashes->right.end(),
-                                     HashMap::right_map::value_type(sid.value(), &hasher));
-    if (res->second != &hasher) {
+
+    auto [rit, inserted] = _hashes->right.emplace(sid.value(), &hasher);
+    if (!inserted) {
         hasher._hasher = nullptr;
         hasher.unref();
+        return rit->second;
     }
-    return res->second;
+
+    auto [lit, insertedLeft] = _hashes->left.insert(&hasher);
+    if (!insertedLeft) {
+        _hashes->right.erase(rit);
+        hasher._hasher = nullptr;
+        hasher.unref();
+        return *lit;
+    }
+    return &hasher;
 }
 
 void StringHasher::restoreStream(std::istream& stream, std::size_t count)

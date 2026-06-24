@@ -31,10 +31,9 @@
 # pragma clang diagnostic ignored "-Wdelete-non-virtual-dtor"
 #endif
 
-#include <boost/algorithm/string/predicate.hpp>
-#include <boost/io/ios_state.hpp>
-#include <boost/math/special_functions/round.hpp>
-#include <boost/math/special_functions/trunc.hpp>
+#include <cmath>
+
+#include <Base/ScopeGuard.h>
 
 #include <numbers>
 #include <limits>
@@ -52,6 +51,7 @@
 #include <Base/PlacementPy.h>
 #include <Base/QuantityPy.h>
 #include <Base/RotationPy.h>
+#include <Base/StringViewTools.h>
 #include <Base/Tools.h>
 #include <Base/VectorPy.h>
 #include <Base/Precision.h>
@@ -147,7 +147,7 @@ static inline bool is_type(const App::any &value, const std::type_info& t) {
 template<class T>
 static inline const T &cast(const App::any &value) {
 #ifdef USE_FAST_ANY
-    return *value.cast<T>();
+    return *std::any_cast<T>(&value);
 #else
     return App::any_cast<const T&>(value);
 #endif
@@ -156,18 +156,18 @@ static inline const T &cast(const App::any &value) {
 template<class T>
 static inline T &cast(App::any &value) {
 #ifdef USE_FAST_ANY
-    return *value.cast<T>();
+    return *std::any_cast<T>(&value);
 #else
     return App::any_cast<T&>(value);
 #endif
 }
 
 template<class T>
-static inline T &&cast(App::any &&value) {
+static inline T cast(App::any &&value) {
 #ifdef USE_FAST_ANY
-    return std::move(*value.cast<T>());
+    return std::move(*std::any_cast<T>(&value));
 #else
-    return App::any_cast<T&&>(std::move(value));
+    return std::any_cast<T>(std::move(value));
 #endif
 }
 
@@ -415,7 +415,7 @@ static inline Py::Object __pyObjectFromAny(const App::any &value) {
 }
 
 static Py::Object _pyObjectFromAny(const App::any &value, const Expression *e) {
-    if(value.empty())
+    if (!value.has_value())
         return Py::Object();
     else if (isAnyPyObject(value))
         return __pyObjectFromAny(value);
@@ -563,9 +563,9 @@ static inline bool anyToDouble(double &res, const App::any &value) {
 }
 
 bool isAnyEqual(const App::any &v1, const App::any &v2) {
-    if(v1.empty())
-        return v2.empty();
-    else if(v2.empty())
+    if (!v1.has_value())
+        return !v2.has_value();
+    else if (!v2.has_value())
         return false;
 
     if(!is_type(v1,v2.type())) {
@@ -1288,7 +1288,8 @@ void NumberExpression::_toString(std::ostream &ss, bool,int) const
     // https://en.cppreference.com/w/cpp/types/numeric_limits/digits10
     // https://en.cppreference.com/w/cpp/types/numeric_limits/max_digits10
     // https://www.boost.org/doc/libs/1_63_0/libs/multiprecision/doc/html/boost_multiprecision/tut/limits/constants.html
-    boost::io::ios_flags_saver ifs(ss);
+    const auto oldFlags = ss.flags();
+    [[maybe_unused]] const auto flagsGuard = Base::makeScopeExit([&] { ss.flags(oldFlags); });
     ss << std::setprecision(std::numeric_limits<double>::digits10) << getValue();
 
     /* Trim of any extra spaces */
@@ -2234,13 +2235,13 @@ Py::Object FunctionExpression::evaluate(const Expression *expr, int f, const std
             _EXPR_THROW("Function requires the first argument to be a string.", expr);
         std::string type(pytype.as_string());
         Py::Object res;
-        if (boost::iequals(type, "matrix"))
+        if (Base::StringViewTools::iequalsAscii(type, "matrix"))
             res = Py::asObject(new Base::MatrixPy(Base::Matrix4D()));
-        else if (boost::iequals(type, "vector"))
+        else if (Base::StringViewTools::iequalsAscii(type, "vector"))
             res = Py::asObject(new Base::VectorPy(Base::Vector3d()));
-        else if (boost::iequals(type, "placement"))
+        else if (Base::StringViewTools::iequalsAscii(type, "placement"))
             res = Py::asObject(new Base::PlacementPy(Base::Placement()));
-        else if (boost::iequals(type, "rotation"))
+        else if (Base::StringViewTools::iequalsAscii(type, "rotation"))
             res = Py::asObject(new Base::RotationPy(Base::Rotation()));
         else
             _EXPR_THROW("Unknown type '" << type << "'.", expr);
@@ -2457,7 +2458,7 @@ Py::Object FunctionExpression::evaluate(const Expression *expr, int f, const std
         // Compute new unit for exponentiation
         double exponent = v2.getValue();
         if (!v1.isDimensionless()) {
-            if (exponent - boost::math::round(exponent) < 1e-9)
+            if (exponent - std::round(exponent) < 1e-9)
                 unit = v1.getUnit().pow(exponent);
             else
                 _EXPR_THROW("Exponent must be an integer when used with a unit.",expr);
@@ -2558,10 +2559,10 @@ Py::Object FunctionExpression::evaluate(const Expression *expr, int f, const std
         break;
     }
     case ROUND:
-        output = boost::math::round(value);
+        output = std::round(value);
         break;
     case TRUNC:
-        output = boost::math::trunc(value);
+        output = std::trunc(value);
         break;
     case CEIL:
         output = ceil(value);

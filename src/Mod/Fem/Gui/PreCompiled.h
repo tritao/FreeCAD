@@ -43,10 +43,6 @@
 #include <vector>
 
 // boost
-#include <boost/algorithm/string.hpp>
-#include <boost/bind/bind.hpp>
-#include <boost/lexical_cast.hpp>
-
 #ifdef FC_OS_WIN32
 # include <windows.h>
 #endif

@@ -1,8 +1,10 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
 
 #include <algorithm>
+#include <charconv>
 #include <unordered_map>
 #include <vector>
+#include <string_view>
 #ifndef FC_DEBUG
 #include <random>
 #endif
@@ -16,10 +18,47 @@
 #include "Document.h"
 #include "DocumentObject.h"
 
-#include <boost/algorithm/string/classification.hpp>
-#include <boost/algorithm/string/predicate.hpp>
-#include <boost/algorithm/string/split.hpp>
-#include <boost/io/ios_state.hpp>
+#include <Base/ScopeGuard.h>
+
+namespace
+{
+
+void splitKeepEmpty(std::vector<std::string_view>& out, std::string_view input, char delim)
+{
+    out.clear();
+    std::size_t start = 0;
+    while (true) {
+        const std::size_t pos = input.find(delim, start);
+        if (pos == std::string_view::npos) {
+            out.push_back(input.substr(start));
+            return;
+        }
+        out.push_back(input.substr(start, pos - start));
+        start = pos + 1;
+    }
+}
+
+unsigned long parseUnsignedLong(std::string_view view, int base)
+{
+    unsigned long value = 0;
+    const auto res = std::from_chars(view.data(), view.data() + view.size(), value, base);
+    if (res.ec != std::errc {}) {
+        return 0;
+    }
+    return value;
+}
+
+long parseLong(std::string_view view, int base)
+{
+    long value = 0;
+    const auto res = std::from_chars(view.data(), view.data() + view.size(), value, base);
+    if (res.ec != std::errc {}) {
+        return 0;
+    }
+    return value;
+}
+
+}  // namespace
 
 
 FC_LOG_LEVEL_INIT("ElementMap", true, 2);  // NOLINT
@@ -149,7 +188,8 @@ void ElementMap::save(std::ostream& stream,
             continue;
         }
 
-        boost::io::ios_flags_saver ifs(stream);
+        const auto oldFlags = stream.flags();
+        [[maybe_unused]] const auto flagsGuard = Base::makeScopeExit([&] { stream.flags(oldFlags); });
         stream << std::hex;
 
         for (auto& dequeueOfMappedNameRef : indexedName.second.names) {
@@ -307,7 +347,7 @@ ElementMapPtr ElementMap::restore(::App::StringHasherRef hasherRef,
     const char* hasherIDWarn = nullptr;
     const char* postfixWarn = nullptr;
     const char* childSIDWarn = nullptr;
-    std::vector<std::string> tokens;
+    std::vector<std::string_view> tokens;
 
     for (int i = 0; i < typeCount; ++i) {
         int outerCount = 0;
@@ -358,8 +398,7 @@ ElementMapPtr ElementMap::restore(::App::StringHasherRef hasherRef,
                 FC_THROWM(Base::RuntimeError, "Invalid element child string id");  // NOLINT
             }
 
-            tokens.clear();
-            boost::split(tokens, tmp, boost::is_any_of("."));
+            splitKeepEmpty(tokens, tmp, '.');
             if (tokens.size() > 1) {
                 child.sids.reserve(static_cast<int>(tokens.size()) - 1);
                 for (unsigned k = 1; k < tokens.size(); ++k) {
@@ -367,7 +406,7 @@ ElementMapPtr ElementMap::restore(::App::StringHasherRef hasherRef,
                     // instead of hex by accident. To simplify maintenance
                     // of backward compatibility, it is not corrected, and
                     // just restored as decimal here.
-                    long childID = strtol(tokens[k].c_str(), nullptr, decBase);
+                    long childID = parseLong(tokens[k], decBase);
                     auto sid = hasherRef->getID(childID);
                     if (!sid) {
                         childSIDWarn = "Missing element child string id";
@@ -383,7 +422,8 @@ ElementMapPtr ElementMap::restore(::App::StringHasherRef hasherRef,
             FC_THROWM(Base::RuntimeError, "missing element name outerCount");  // NOLINT
         }
 
-        boost::io::ios_flags_saver ifs(stream);
+        const auto oldFlags = stream.flags();
+        [[maybe_unused]] const auto flagsGuard = Base::makeScopeExit([&] { stream.flags(oldFlags); });
         stream >> std::hex;
 
         indices.names.resize(outerCount);
@@ -402,8 +442,7 @@ ElementMapPtr ElementMap::restore(::App::StringHasherRef hasherRef,
                     ref->next = std::make_unique<MappedNameRef>();
                     ref = ref->next.get();
                 }
-                tokens.clear();
-                boost::split(tokens, tmp, boost::is_any_of("."));
+                splitKeepEmpty(tokens, tmp, '.');
                 if (tokens.size() < 2) {
                     FC_THROWM(Base::RuntimeError, "Invalid element entry");  // NOLINT
                 }
@@ -418,29 +457,29 @@ ElementMapPtr ElementMap::restore(::App::StringHasherRef hasherRef,
                             FC_THROWM(Base::RuntimeError, "Invalid element entry");  // NOLINT
                         }
                         ++offset;
-                        long elementNameIndex = strtol(tokens[0].c_str() + 1, nullptr, hexBase);
+                        long elementNameIndex = static_cast<long>(parseUnsignedLong(tokens[0].substr(1), hexBase));
                         if (elementNameIndex <= 0 || elementNameIndex > (int)postfixes.size()) {
                             FC_THROWM(Base::RuntimeError, "Invalid element name index");  // NOLINT
                         }
-                        long elementIndex = strtol(tokens[1].c_str(), nullptr, hexBase);
+                        long elementIndex = static_cast<long>(parseUnsignedLong(tokens[1], hexBase));
                         ref->name = MappedName(
                             IndexedName::fromConst(postfixes[elementNameIndex - 1].c_str(),
                                                    static_cast<int>(elementIndex)));
                         break;
                     }
                     case '$':
-                        ref->name = MappedName(tokens[0].c_str() + 1);
+                        ref->name = MappedName(std::string(tokens[0].substr(1)));
                         prefixID = ::App::StringID::fromString(ref->name.dataBytes());
                         break;
                     case ';':
-                        ref->name = MappedName(tokens[0].c_str() + 1);
+                        ref->name = MappedName(std::string(tokens[0].substr(1)));
                         break;
                     default:
                         FC_THROWM(Base::RuntimeError, "Invalid element name marker");  // NOLINT
                 }
 
                 if (tokens[offset] != "0") {
-                    long postfixIndex = strtol(tokens[offset].c_str(), nullptr, hexBase);
+                    long postfixIndex = static_cast<long>(parseUnsignedLong(tokens[offset], hexBase));
                     if (postfixIndex <= 0 || postfixIndex > (int)postfixes.size()) {
                         postfixWarn = "Invalid element postfix index";
                     }
@@ -470,7 +509,7 @@ ElementMapPtr ElementMap::restore(::App::StringHasherRef hasherRef,
                     }
                 }
                 for (int l = offset + 1; l < (int)tokens.size(); ++l) {
-                    long readID = strtol(tokens[l].c_str(), nullptr, hexBase);
+                    long readID = static_cast<long>(parseUnsignedLong(tokens[l], hexBase));
                     auto sid = hasherRef->getID(readID);
                     if (!sid) {
                         hasherIDWarn = "Invalid element name string id";
@@ -680,7 +719,8 @@ void ElementMap::encodeElementName(char element_type,
     if (forceTag || (tag != 0)) {
         assert(element_type);
         auto pos = ss.tellp();
-        boost::io::ios_flags_saver ifs(ss);
+        const auto oldFlags = ss.flags();
+        [[maybe_unused]] const auto flagsGuard = Base::makeScopeExit([&] { ss.flags(oldFlags); });
         ss << POSTFIX_TAG << std::hex;
         if (tag < 0) {
             ss << '-' << -tag;
@@ -861,7 +901,7 @@ IndexedName ElementMap::find(const MappedName& name, ElementIDRefs* sids) const
             res = childName.toIndexedName();
         }
 
-        if (res && boost::equals(res.getType(), child.indexedName.getType())
+        if (res && std::string_view{res.getType()} == child.indexedName.getType()
             && child.indexedName.getIndex() <= res.getIndex()
             && child.indexedName.getIndex() + child.count > res.getIndex()) {
             res.setIndex(res.getIndex() + it->second.childMap->offset);

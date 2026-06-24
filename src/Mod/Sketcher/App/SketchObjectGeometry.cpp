@@ -31,11 +31,11 @@
 #include <TopTools_IndexedMapOfShape.hxx>
 #include <TopoDS.hxx>
 
-#include <boost/algorithm/string/predicate.hpp>
-
 #include <App/IndexedName.h>
 #include <App/MappedName.h>
+#include <Base/StringPredicates.h>
 #include <Base/Tools.h>
+#include <Base/UuidTag.h>
 #include <Base/Vector3D.h>
 
 #include <memory>
@@ -1380,7 +1380,7 @@ int SketchObject::deleteUnusedInternalGeometryAndUpdateGeoId(int& GeoId, bool de
     // We need to remove the internal geometry of the BSpline, as BSplines change in number
     // of poles and knots We save the tags of the relevant geometry to retrieve the new
     // GeoIds later on.
-    boost::uuids::uuid GeoIdTag;
+    Base::UuidTag GeoIdTag;
 
     GeoIdTag = geo->getTag();
 
@@ -1691,22 +1691,20 @@ bool SketchObject::geoIdFromShapeType(const Data::IndexedName & indexedName,
     if (!indexedName)
         return false;
     const char *shapetype = indexedName.getType();
-    if (boost::equals(shapetype,"Edge") ||
-        boost::equals(shapetype,"edge")) {
+    if (Base::equals(shapetype, "Edge") || Base::equals(shapetype, "edge")) {
         geoId = indexedName.getIndex() - 1;
-    } else if (boost::equals(shapetype,"ExternalEdge")) {
+    } else if (Base::equals(shapetype, "ExternalEdge")) {
         geoId = indexedName.getIndex() - 1;
         geoId = Sketcher::GeoEnum::RefExt - geoId;
-    } else if (boost::equals(shapetype,"Vertex") ||
-               boost::equals(shapetype,"vertex")) {
+    } else if (Base::equals(shapetype, "Vertex") || Base::equals(shapetype, "vertex")) {
         int VtId = indexedName.getIndex() - 1;
         getGeoVertexIndex(VtId,geoId,posId);
         if (posId==PointPos::none) return false;
-    } else if (boost::equals(shapetype,"H_Axis")) {
+    } else if (Base::equals(shapetype, "H_Axis")) {
         geoId = Sketcher::GeoEnum::HAxis;
-    } else if (boost::equals(shapetype,"V_Axis")) {
+    } else if (Base::equals(shapetype, "V_Axis")) {
         geoId = Sketcher::GeoEnum::VAxis;
-    } else if (boost::equals(shapetype,"RootPoint")) {
+    } else if (Base::equals(shapetype, "RootPoint")) {
         geoId = Sketcher::GeoEnum::RtPnt;
         posId = PointPos::start;
     } else

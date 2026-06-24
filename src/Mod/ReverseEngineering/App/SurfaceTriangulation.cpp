@@ -35,8 +35,7 @@
 
 // http://svn.pointclouds.org/pcl/tags/pcl-1.5.1/test/
 #if defined(HAVE_PCL_SURFACE)
-# include <boost/math/special_functions/fpclassify.hpp>
-# include <boost/random.hpp>
+# include <cmath>
 # include <pcl/common/common.h>
 # include <pcl/common/io.h>
 # include <pcl/features/normal_3d.h>
@@ -80,7 +79,7 @@ void SurfaceTriangulation::perform(int ksearch)
 
     cloud->reserve(myPoints.size());
     for (Points::PointKernel::const_iterator it = myPoints.begin(); it != myPoints.end(); ++it) {
-        if (!boost::math::isnan(it->x) && !boost::math::isnan(it->y) && !boost::math::isnan(it->z)) {
+        if (!std::isnan(it->x) && !std::isnan(it->y) && !std::isnan(it->z)) {
             cloud->push_back(PointXYZ(it->x, it->y, it->z));
         }
     }
@@ -146,7 +145,7 @@ void SurfaceTriangulation::perform(const std::vector<Base::Vector3f>& normals)
     for (std::size_t index = 0; index < num_points; index++) {
         const Base::Vector3f& p = points[index];
         const Base::Vector3f& n = normals[index];
-        if (!boost::math::isnan(p.x) && !boost::math::isnan(p.y) && !boost::math::isnan(p.z)) {
+        if (!std::isnan(p.x) && !std::isnan(p.y) && !std::isnan(p.z)) {
             PointNormal pn;
             pn.x = p.x;
             pn.y = p.y;
@@ -205,7 +204,7 @@ void PoissonReconstruction::perform(int ksearch)
 
     cloud->reserve(myPoints.size());
     for (Points::PointKernel::const_iterator it = myPoints.begin(); it != myPoints.end(); ++it) {
-        if (!boost::math::isnan(it->x) && !boost::math::isnan(it->y) && !boost::math::isnan(it->z)) {
+        if (!std::isnan(it->x) && !std::isnan(it->y) && !std::isnan(it->z)) {
             cloud->push_back(PointXYZ(it->x, it->y, it->z));
         }
     }
@@ -268,7 +267,7 @@ void PoissonReconstruction::perform(const std::vector<Base::Vector3f>& normals)
     for (std::size_t index = 0; index < num_points; index++) {
         const Base::Vector3f& p = points[index];
         const Base::Vector3f& n = normals[index];
-        if (!boost::math::isnan(p.x) && !boost::math::isnan(p.y) && !boost::math::isnan(p.z)) {
+        if (!std::isnan(p.x) && !std::isnan(p.y) && !std::isnan(p.z)) {
             PointNormal pn;
             pn.x = p.x;
             pn.y = p.y;
@@ -323,7 +322,7 @@ void GridReconstruction::perform(int ksearch)
 
     cloud->reserve(myPoints.size());
     for (Points::PointKernel::const_iterator it = myPoints.begin(); it != myPoints.end(); ++it) {
-        if (!boost::math::isnan(it->x) && !boost::math::isnan(it->y) && !boost::math::isnan(it->z)) {
+        if (!std::isnan(it->x) && !std::isnan(it->y) && !std::isnan(it->z)) {
             cloud->push_back(PointXYZ(it->x, it->y, it->z));
         }
     }
@@ -381,7 +380,7 @@ void GridReconstruction::perform(const std::vector<Base::Vector3f>& normals)
     for (std::size_t index = 0; index < num_points; index++) {
         const Base::Vector3f& p = points[index];
         const Base::Vector3f& n = normals[index];
-        if (!boost::math::isnan(p.x) && !boost::math::isnan(p.y) && !boost::math::isnan(p.z)) {
+        if (!std::isnan(p.x) && !std::isnan(p.y) && !std::isnan(p.z)) {
             PointNormal pn;
             pn.x = p.x;
             pn.y = p.y;
@@ -515,7 +514,7 @@ void Reen::MarchingCubesRBF::perform(int ksearch)
 
     cloud->reserve(myPoints.size());
     for (Points::PointKernel::const_iterator it = myPoints.begin(); it != myPoints.end(); ++it) {
-        if (!boost::math::isnan(it->x) && !boost::math::isnan(it->y) && !boost::math::isnan(it->z)) {
+        if (!std::isnan(it->x) && !std::isnan(it->y) && !std::isnan(it->z)) {
             cloud->push_back(PointXYZ(it->x, it->y, it->z));
         }
     }
@@ -574,7 +573,7 @@ void Reen::MarchingCubesRBF::perform(const std::vector<Base::Vector3f>& normals)
     for (std::size_t index = 0; index < num_points; index++) {
         const Base::Vector3f& p = points[index];
         const Base::Vector3f& n = normals[index];
-        if (!boost::math::isnan(p.x) && !boost::math::isnan(p.y) && !boost::math::isnan(p.z)) {
+        if (!std::isnan(p.x) && !std::isnan(p.y) && !std::isnan(p.z)) {
             PointNormal pn;
             pn.x = p.x;
             pn.y = p.y;
@@ -626,7 +625,7 @@ void Reen::MarchingCubesHoppe::perform(int ksearch)
 
     cloud->reserve(myPoints.size());
     for (Points::PointKernel::const_iterator it = myPoints.begin(); it != myPoints.end(); ++it) {
-        if (!boost::math::isnan(it->x) && !boost::math::isnan(it->y) && !boost::math::isnan(it->z)) {
+        if (!std::isnan(it->x) && !std::isnan(it->y) && !std::isnan(it->z)) {
             cloud->push_back(PointXYZ(it->x, it->y, it->z));
         }
     }
@@ -683,7 +682,7 @@ void Reen::MarchingCubesHoppe::perform(const std::vector<Base::Vector3f>& normal
     for (std::size_t index = 0; index < num_points; index++) {
         const Base::Vector3f& p = points[index];
         const Base::Vector3f& n = normals[index];
-        if (!boost::math::isnan(p.x) && !boost::math::isnan(p.y) && !boost::math::isnan(p.z)) {
+        if (!std::isnan(p.x) && !std::isnan(p.y) && !std::isnan(p.z)) {
             PointNormal pn;
             pn.x = p.x;
             pn.y = p.y;

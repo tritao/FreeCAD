@@ -23,7 +23,6 @@
 
 #include <algorithm>
 
-#include <boost/algorithm/string/predicate.hpp>
 #include <QAbstractItemView>
 #include <QContextMenuEvent>
 #include <QLineEdit>
@@ -40,6 +39,7 @@
 #include <App/ObjectIdentifier.h>
 #include <Gui/Application.h>
 #include <Gui/MainWindow.h>
+#include <Base/StringPredicates.h>
 #include <Base/Tools.h>
 #include <CXX/Extensions.hxx>
 
@@ -809,7 +809,7 @@ QStringList ExpressionCompleter::splitPath(const QString& input) const
             }
 
             if (!stringList.empty()) {
-                if (!trim.empty() && boost::ends_with(stringList.back(), trim)) {
+                if (!trim.empty() && Base::endsWith(stringList.back(), trim)) {
                     stringList.back().resize(stringList.back().size() - trim.size());
                 }
                 while (stringListIter != stringList.end()) {

@@ -27,7 +27,7 @@
 #include <set>
 #include <cstdint>
 
-#include <boost/algorithm/string/predicate.hpp>
+#include <Base/StringPredicates.h>
 #include <QApplication>
 
 #include <Inventor/SbColor.h>
@@ -630,9 +630,9 @@ void SelectionSingleton::notify(SelectionChanges&& Chng)
             try {
                 signalSelectionChanged(msg);
             }
-            catch (const boost::exception&) {
+            catch (...) {
                 // reported by code analyzers
-                Base::Console().warning("notify: Unexpected boost exception\n");
+                Base::Console().warning("notify: Unexpected exception\n");
             }
         }
         NotificationQueue.pop_front();
@@ -824,9 +824,9 @@ void SelectionSingleton::slotSelectionChanged(const SelectionChanges& msg)
             msg2.pSubName = msg2.Object.getSubName().c_str();
             signalSelectionChanged2(msg2);
         }
-        catch (const boost::exception&) {
+        catch (...) {
             // reported by code analyzers
-            Base::Console().warning("slotSelectionChanged: Unexpected boost exception\n");
+            Base::Console().warning("slotSelectionChanged: Unexpected exception\n");
         }
     }
     else {
@@ -834,9 +834,9 @@ void SelectionSingleton::slotSelectionChanged(const SelectionChanges& msg)
             signalSelectionChanged3(msg);
             signalSelectionChanged2(msg);
         }
-        catch (const boost::exception&) {
+        catch (...) {
             // reported by code analyzers
-            Base::Console().warning("slotSelectionChanged: Unexpected boost exception\n");
+            Base::Console().warning("slotSelectionChanged: Unexpected exception\n");
         }
     }
 }
@@ -1789,7 +1789,7 @@ void SelectionSingleton::rmvSelection(
         // if no subname is specified, remove all subobjects of the matching object
         if (!temp.SubName.empty()) {
             // otherwise, match subojects with common prefix, separated by '.'
-            if (!boost::starts_with(It->SubName, temp.SubName)
+            if (!Base::startsWith(It->SubName, temp.SubName)
                 || (It->SubName.length() != temp.SubName.length()
                     && It->SubName[temp.SubName.length() - 1] != '.')) {
                 continue;
@@ -2249,7 +2249,7 @@ int SelectionSingleton::checkSelection(
             if (s.SubName == pSubName) {
                 return 1;
             }
-            if (resolve > ResolveMode::OldStyleElement && boost::starts_with(s.SubName, prefix)) {
+            if (resolve > ResolveMode::OldStyleElement && Base::startsWith(s.SubName, prefix)) {
                 return 1;
             }
         }
@@ -3056,13 +3056,13 @@ Gui::SoSelectionElementAction::Type getCoinSelectionType(PyObject* object)
     }
 
     std::string value = getCoinString(object, "mode");
-    if (boost::iequals(value, "append")) {
+    if (Base::iequals(value, "append")) {
         return Gui::SoSelectionElementAction::Append;
     }
-    if (boost::iequals(value, "remove")) {
+    if (Base::iequals(value, "remove")) {
         return Gui::SoSelectionElementAction::Remove;
     }
-    if (boost::iequals(value, "all")) {
+    if (Base::iequals(value, "all")) {
         return Gui::SoSelectionElementAction::All;
     }
     throw Base::ValueError("Unsupported 'mode'; expected one of: append, remove, all");

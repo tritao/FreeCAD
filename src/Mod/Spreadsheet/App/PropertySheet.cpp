@@ -23,10 +23,7 @@
  ***************************************************************************/
 
 #include <algorithm>
-
-#include <boost/range/adaptor/map.hpp>
-#include <boost/range/algorithm/copy.hpp>
-#include <boost/regex.hpp>
+#include <string_view>
 
 #include <App/Document.h>
 #include <App/DocumentObject.h>
@@ -128,28 +125,73 @@ const Cell* PropertySheet::getValueFromAlias(const std::string& alias) const
 
 bool PropertySheet::isValidCellAddressName(const std::string& candidate)
 {
-    /* Check if it matches a cell reference */
-    static const boost::regex e("\\${0,1}([A-Z]{1,2})\\${0,1}([0-9]{1,5})");
-    boost::cmatch cm;
+    // Accepted form: [$]A..Z{1,2}[$]0..9{1,5}
+    std::string_view view(candidate);
+    size_t pos = 0;
 
-    if (boost::regex_match(candidate.c_str(), cm, e)) {
-        const boost::sub_match<const char*> colstr = cm[1];
-        const boost::sub_match<const char*> rowstr = cm[2];
-
-        if (App::validRow(rowstr.str()) >= 0 && App::validColumn(colstr.str())) {
-            return true;
-        }
+    if (pos < view.size() && view[pos] == '$') {
+        ++pos;
     }
-    return false;
+
+    const size_t colStart = pos;
+    while (pos < view.size()) {
+        const char ch = view[pos];
+        if (ch < 'A' || ch > 'Z') {
+            break;
+        }
+        ++pos;
+    }
+    const size_t colLen = pos - colStart;
+    if (colLen < 1 || colLen > 2) {
+        return false;
+    }
+
+    if (pos < view.size() && view[pos] == '$') {
+        ++pos;
+    }
+
+    const size_t rowStart = pos;
+    while (pos < view.size()) {
+        const char ch = view[pos];
+        if (ch < '0' || ch > '9') {
+            break;
+        }
+        ++pos;
+    }
+    const size_t rowLen = pos - rowStart;
+    if (rowLen < 1 || rowLen > 5) {
+        return false;
+    }
+
+    if (pos != view.size()) {
+        return false;
+    }
+
+    return App::validRow(std::string(view.substr(rowStart, rowLen))) >= 0
+        && App::validColumn(std::string(view.substr(colStart, colLen)));
 }
 
 bool PropertySheet::isValidAlias(const std::string& candidate)
 {
     /* Ensure it only contains allowed characters */
-    static const boost::regex gen("^[A-Za-z][_A-Za-z0-9]*$");
-    boost::cmatch cm;
-    if (!boost::regex_match(candidate.c_str(), cm, gen)) {
+    if (candidate.empty()) {
         return false;
+    }
+
+    const char first = candidate.front();
+    const bool firstIsAlpha = (first >= 'a' && first <= 'z') || (first >= 'A' && first <= 'Z');
+    if (!firstIsAlpha) {
+        return false;
+    }
+
+    for (size_t i = 1; i < candidate.size(); ++i) {
+        const char ch = candidate[i];
+        const bool isAlpha = (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z');
+        const bool isDigit = (ch >= '0' && ch <= '9');
+        const bool isAllowed = isAlpha || isDigit || ch == '_' || ch == '-';
+        if (!isAllowed) {
+            return false;
+        }
     }
 
     /* Check if it is used before */
@@ -1014,7 +1056,10 @@ void PropertySheet::insertRows(int row, int count)
     std::map<App::ObjectIdentifier, App::ObjectIdentifier> renames;
 
     /* Copy all keys from cells map */
-    boost::copy(data | boost::adaptors::map_keys, std::back_inserter(keys));
+    keys.reserve(data.size());
+    for (const auto& item : data) {
+        keys.push_back(item.first);
+    }
 
     /* Sort them */
     std::sort(keys.begin(), keys.end(), std::bind(&PropertySheet::rowSortFunc, this, sp::_1, sp::_2));  // NOLINT
@@ -1092,7 +1137,10 @@ void PropertySheet::removeRows(int row, int count)
     std::map<App::ObjectIdentifier, App::ObjectIdentifier> renames;
 
     /* Copy all keys from cells map */
-    boost::copy(data | boost::adaptors::map_keys, std::back_inserter(keys));
+    keys.reserve(data.size());
+    for (const auto& item : data) {
+        keys.push_back(item.first);
+    }
 
     /* Sort them */
     std::sort(keys.begin(), keys.end(), std::bind(&PropertySheet::rowSortFunc, this, sp::_1, sp::_2));
@@ -1161,7 +1209,10 @@ void PropertySheet::insertColumns(int col, int count)
     std::map<App::ObjectIdentifier, App::ObjectIdentifier> renames;
 
     /* Copy all keys from cells map */
-    boost::copy(data | boost::adaptors::map_keys, std::back_inserter(keys));
+    keys.reserve(data.size());
+    for (const auto& item : data) {
+        keys.push_back(item.first);
+    }
 
     /* Sort them */
     std::sort(keys.begin(), keys.end());
@@ -1239,7 +1290,10 @@ void PropertySheet::removeColumns(int col, int count)
     std::map<App::ObjectIdentifier, App::ObjectIdentifier> renames;
 
     /* Copy all keys from cells map */
-    boost::copy(data | boost::adaptors::map_keys, std::back_inserter(keys));
+    keys.reserve(data.size());
+    for (const auto& item : data) {
+        keys.push_back(item.first);
+    }
 
     /* Sort them */
     std::sort(keys.begin(), keys.end(), std::bind(&PropertySheet::colSortFunc, this, sp::_1, sp::_2));  // NOLINT
@@ -2204,7 +2258,7 @@ PropertySheet::BindingType PropertySheet::getBinding(
     return BindingNone;
 }
 
-void PropertySheet::setPathValue(const ObjectIdentifier& path, const boost::any& value)
+void PropertySheet::setPathValue(const ObjectIdentifier& path, const std::any& value)
 {
     if (!owner) {
         FC_THROWM(Base::RuntimeError, "Invalid state");
@@ -2378,10 +2432,10 @@ void PropertySheet::setPathValue(const ObjectIdentifier& path, const boost::any&
     FC_THROWM(Base::TypeError, "Invalid path value '" << "' for " << getFullName());
 }
 
-const boost::any PropertySheet::getPathValue(const App::ObjectIdentifier& path) const
+const std::any PropertySheet::getPathValue(const App::ObjectIdentifier& path) const
 {
     if (isBindingPath(path)) {
-        return boost::any();
+        return std::any();
     }
     return path.getValue();
 }

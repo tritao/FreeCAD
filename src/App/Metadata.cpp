@@ -22,7 +22,6 @@
  *                                                                         *
  ***************************************************************************/
 
-#include <boost/core/ignore_unused.hpp>
 #include <memory>
 #include <sstream>
 
@@ -67,7 +66,7 @@ class XMLErrorHandler: public HandlerBase
     void warning(const SAXParseException& toCatch) override
     {
         // Don't deal with warnings at all
-        boost::ignore_unused(toCatch);
+        static_cast<void>(toCatch);
     }
 
     void error(const SAXParseException& toCatch) override
@@ -680,7 +679,7 @@ bool Metadata::satisfies(const Meta::Dependency& dep)
         }
         auto parsedExpression = App::Expression::parse(nullptr, dep.condition);
         auto result = parsedExpression->eval();
-        if (!boost::any_cast<bool>(result->getValueAsAny())) {
+        if (!std::any_cast<bool>(result->getValueAsAny())) {
             return false;
         }
     }

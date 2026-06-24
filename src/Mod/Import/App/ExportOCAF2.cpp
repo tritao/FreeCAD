@@ -38,15 +38,12 @@
 
 
 #include <XCAFDoc_ShapeMapTool.hxx>
-
-#include <boost/algorithm/string.hpp>
-#include <boost/format.hpp>
-
 #include <App/Application.h>
 #include <App/Document.h>
 #include <App/DocumentObject.h>
 #include <App/GeoFeatureGroupExtension.h>
 #include <App/Link.h>
+#include <Base/StringPredicates.h>
 #include <Base/Console.h>
 #include <Base/Parameter.h>
 #include <Mod/Part/App/PartFeature.h>
@@ -180,7 +177,7 @@ TDF_Label ExportOCAF2::findComponent(const char* subname, TDF_Label label, TDF_L
             auto component = components.Value(i);
             if (std::isdigit((int)subname[0])) {
                 auto n = std::to_string(i - 1) + ".";
-                if (boost::starts_with(subname, n)) {
+                if (Base::startsWith(subname, n)) {
                     labels.Append(component);
                     return findComponent(subname + n.size(), component, labels);
                 }
@@ -190,7 +187,7 @@ TDF_Label ExportOCAF2::findComponent(const char* subname, TDF_Label label, TDF_L
                 continue;
             }
             for (auto& n : it->second) {
-                if (boost::starts_with(subname, n)) {
+                if (Base::startsWith(subname, n)) {
                     labels.Append(component);
                     return findComponent(subname + n.size(), component, labels);
                 }
@@ -249,7 +246,7 @@ void ExportOCAF2::setupObject(
         for (auto& v : getShapeColors(obj, key)) {
             const char* subname = v.first.c_str();
             if (name) {
-                if (!boost::starts_with(v.first, childName)) {
+                if (!Base::startsWith(v.first, childName)) {
                     continue;
                 }
                 subname += childName.size();

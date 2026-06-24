@@ -33,7 +33,8 @@
 #include <set>
 #include <map>
 #include <string>
-#include <boost/algorithm/string/predicate.hpp>
+#include <string_view>
+#include <Base/StringPredicates.h>
 #include <Inventor/SoPickedPoint.h>
 #include <Inventor/actions/SoGetBoundingBoxAction.h>
 #include <Inventor/details/SoDetail.h>
@@ -53,8 +54,6 @@
 #include <QMenu>
 #include <QCheckBox>
 
-
-#include <boost/range.hpp>
 #include <App/ElementNamingUtils.h>
 #include <App/Document.h>
 #include <Base/BoundBoxPy.h>
@@ -98,7 +97,7 @@ void updateWindingOrder(Gui::LinkView* linkView, App::LinkBaseExtension* ext)
 }
 }  // namespace
 
-using CharRange = boost::iterator_range<const char*>;
+using CharRange = std::string_view;
 ////////////////////////////////////////////////////////////////////////////
 
 static inline bool appendPathSafe(SoPath* path, SoNode* node)
@@ -1340,7 +1339,7 @@ void LinkView::resetRoot()
 
 void LinkView::setChildren(
     const std::vector<App::DocumentObject*>& children,
-    const boost::dynamic_bitset<>& vis,
+    const std::vector<bool>& vis,
     SnapshotType type
 )
 {
@@ -1775,10 +1774,9 @@ bool LinkView::linkGetDetailPath(const char* subname, SoFullPath* path, SoDetail
                 }
                 int i = 0;
                 if (subname[0] == '$') {
-                    CharRange name(subname + 1, dot);
+                    const CharRange name(subname + 1, static_cast<std::size_t>(dot - (subname + 1)));
                     for (const auto& info : nodeArray) {
-                        if (info->isLinked()
-                            && boost::equals(name, info->linkInfo->getLinkedLabel())) {
+                        if (info->isLinked() && Base::equals(name, info->linkInfo->getLinkedLabel())) {
                             idx = i;
                             break;
                         }
@@ -1786,9 +1784,9 @@ bool LinkView::linkGetDetailPath(const char* subname, SoFullPath* path, SoDetail
                     }
                 }
                 else {
-                    CharRange name(subname, dot);
+                    const CharRange name(subname, static_cast<std::size_t>(dot - subname));
                     for (const auto& info : nodeArray) {
-                        if (info->isLinked() && boost::equals(name, info->linkInfo->getLinkedName())) {
+                        if (info->isLinked() && Base::equals(name, info->linkInfo->getLinkedName())) {
                             idx = i;
                             break;
                         }
@@ -1849,7 +1847,7 @@ bool LinkView::linkGetDetailPath(const char* subname, SoFullPath* path, SoDetail
                     nextsub = subname;
                 }
                 else {
-                    if (!boost::algorithm::starts_with(subname, v.first)) {
+                    if (!Base::startsWith(subname, v.first)) {
                         continue;
                     }
                     nextsub = subname + v.first.size();
@@ -2336,7 +2334,7 @@ void ViewProviderLink::updateDataPrivate(App::LinkBaseExtension* ext, const App:
             // elements is about to be collapsed, preserve the materials
             if (!elements.empty()) {
                 std::vector<App::Material> materials;
-                boost::dynamic_bitset<> overrideMaterials;
+                std::vector<bool> overrideMaterials;
                 overrideMaterials.resize(elements.size(), false);
                 bool overrideMaterial = false;
                 bool hasMaterial = false;
@@ -2896,14 +2894,14 @@ bool ViewProviderLink::getDetailPath(const char* subname, SoFullPath* pPath, boo
         if (auto linked = ext->getLinkedObjectValue()) {
             if (const char* dot = strchr(subname, '.')) {
                 if (subname[0] == '$') {
-                    CharRange sub(subname + 1, dot);
-                    if (!boost::equals(sub, linked->Label.getValue())) {
+                    CharRange sub(subname + 1, static_cast<std::size_t>(dot - (subname + 1)));
+                    if (!Base::equals(sub, linked->Label.getValue())) {
                         dot = nullptr;
                     }
                 }
                 else {
-                    CharRange sub(subname, dot);
-                    if (!boost::equals(sub, linked->getNameInDocument())) {
+                    CharRange sub(subname, static_cast<std::size_t>(dot - subname));
+                    if (!Base::equals(sub, linked->getNameInDocument())) {
                         dot = nullptr;
                     }
                 }
@@ -3653,7 +3651,7 @@ std::map<std::string, Base::Color> ViewProviderLink::getElementColorsFrom(
                 ++pos;
             }
             const char* element = sub.oldName.c_str() + pos;
-            if (boost::starts_with(element, wildcard)) {
+            if (Base::startsWith(element, wildcard)) {
                 colors[sub.oldName] = colorList[i];
             }
             else if (!element[0] && wildcard == "Face") {
@@ -3752,8 +3750,8 @@ std::map<std::string, Base::Color> ViewProviderLink::getElementColorsFrom(
         }
 
         if (isPrefix) {
-            if (!boost::starts_with(sub.newName, subname + offset)
-                && !boost::starts_with(sub.oldName, subname + offset)) {
+            if (!Base::startsWith(sub.newName, subname + offset)
+                && !Base::startsWith(sub.oldName, subname + offset)) {
                 continue;
             }
         }

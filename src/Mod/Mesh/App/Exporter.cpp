@@ -23,10 +23,7 @@
  ***************************************************************************/
 
 #include <algorithm>
-#include <boost/algorithm/string/replace.hpp>
-#include <boost/core/ignore_unused.hpp>
 #include <vector>
-
 
 #include <App/Application.h>
 #include <App/ComplexGeoData.h>

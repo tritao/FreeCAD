@@ -23,18 +23,19 @@
  ***************************************************************************/
 
 #include <algorithm>
+#include <charconv>
+#include <cmath>
+#include <cstdint>
+#include <cstring>
+#include <limits>
+#include <unordered_map>
+#include <vector>
 
 #include <BRepAdaptor_Curve.hxx>
 #include <BRepBuilderAPI_MakeVertex.hxx>
 #include <GCPnts_AbscissaPoint.hxx>
 #include <TopoDS.hxx>
 #include <TopoDS_Shape.hxx>
-
-#include <boost/algorithm/string/predicate.hpp>
-#include <boost/geometry/geometries/register/point.hpp>
-#include <boost/iostreams/device/array.hpp>
-#include <boost/iostreams/stream.hpp>
-#include <boost/geometry.hpp>
 
 #include <App/Application.h>
 #include <App/Document.h>
@@ -46,6 +47,7 @@
 #include <App/ObjectIdentifier.h>
 #include <Base/Console.h>
 #include <Base/Reader.h>
+#include <Base/StringPredicates.h>
 #include <Base/TimeInfo.h>
 #include <Base/Tools.h>
 #include <Base/Vector3D.h>
@@ -70,7 +72,6 @@
 using namespace Sketcher;
 using namespace Base;
 namespace sp = std::placeholders;
-namespace bio = boost::iostreams;
 
 FC_LOG_LEVEL_INIT("Sketch", true, true)
 
@@ -437,18 +438,9 @@ static const char *hasSketchMarker(const char *name) {
     return strstr(name,marker.c_str());
 }
 
-namespace bg = boost::geometry;
-namespace bgi = boost::geometry::index;
-
-// NOLINTNEXTLINE
-BOOST_GEOMETRY_REGISTER_POINT_3D(Base::Vector3d, double, bg::cs::cartesian, x, y, z)
-
 class SketchObject::GeoHistory
 {
 private:
-    static constexpr int bgiMaxElements = 16;
-
-    using Parameters = bgi::linear<bgiMaxElements>;
     using IdSet = std::set<long>;
     using IdSets = std::pair<IdSet, IdSet>;
     using AdjList = std::list<IdSet>;
@@ -457,35 +449,109 @@ private:
     using AdjMap = std::map<long, IdSets>;
 
     // maps start/end points to all existing geo to query and update adjacencies
-    using Value = std::pair<Base::Vector3d, AdjList::iterator>;
+    struct Value
+    {
+        Base::Vector3d point;
+        AdjList::iterator adj;
+    };
+
+    struct CellKey
+    {
+        std::int64_t x;
+        std::int64_t y;
+        std::int64_t z;
+
+        bool operator==(const CellKey& other) const noexcept
+        {
+            return x == other.x && y == other.y && z == other.z;
+        }
+    };
+
+    struct CellKeyHash
+    {
+        std::size_t operator()(const CellKey& key) const noexcept
+        {
+            std::size_t seed = std::hash<std::int64_t>{}(key.x);
+            seed = hashCombine(seed, std::hash<std::int64_t>{}(key.y));
+            seed = hashCombine(seed, std::hash<std::int64_t>{}(key.z));
+            return seed;
+        }
+
+    private:
+        static std::size_t hashCombine(std::size_t seed, std::size_t value) noexcept
+        {
+            seed ^= value + 0x9e3779b97f4a7c15ULL + (seed << 6) + (seed >> 2);
+            return seed;
+        }
+    };
+
+    static constexpr double GridCellSize = 1e-3;
+
+    using Grid = std::unordered_map<CellKey, std::vector<std::size_t>, CellKeyHash>;
 
     AdjList adjlist;
     AdjMap adjmap;
-    bgi::rtree<Value,Parameters> rtree;
+    std::vector<Value> values;
+    Grid grid;
+
+    static CellKey cellKeyFor(const Base::Vector3d& point)
+    {
+        return CellKey {cellIndex(point.x), cellIndex(point.y), cellIndex(point.z)};
+    }
+
+    static std::int64_t cellIndex(double value)
+    {
+        return static_cast<std::int64_t>(std::floor(value / GridCellSize));
+    }
 
 public:
     AdjList::iterator find(const Base::Vector3d &pt,bool strict=true){
-        std::vector<Value> ret;
-        rtree.query(bgi::nearest(pt, 1), std::back_inserter(ret));
-        if (!ret.empty()) {
-            // NOTE: we are using square distance here, the 1e-6 threshold is
-            // very forgiving. We should have used Precision::SquareConfisuion(),
-            // which is 1e-14. However, there is a problem with current
-            // commandGeoCreate. They create new geometry with initial point of
-            // the exact mouse position, instead of the preselected point
-            // position, and rely on auto constraint to snap in the new
-            // geometry. So, we cannot use a very strict threshold here.
-            double tol = strict?Precision::SquareConfusion()*10:1e-6;
-            double d = Base::DistanceP2(ret[0].first,pt);
-            if(d<tol) {
-                return ret[0].second;
+        // NOTE: we are using square distance here, the 1e-6 threshold is
+        // very forgiving. We should have used Precision::SquareConfisuion(),
+        // which is 1e-14. However, there is a problem with current
+        // commandGeoCreate. They create new geometry with initial point of
+        // the exact mouse position, instead of the preselected point
+        // position, and rely on auto constraint to snap in the new
+        // geometry. So, we cannot use a very strict threshold here.
+        double tol = strict ? Precision::SquareConfusion() * 10 : 1e-6;
+        double linearTol = std::sqrt(tol);
+        int cellRadius = std::max(1, static_cast<int>(std::ceil(linearTol / GridCellSize)));
+
+        const CellKey center = cellKeyFor(pt);
+
+        double bestDistance = std::numeric_limits<double>::infinity();
+        AdjList::iterator best = adjlist.end();
+
+        for (int dz = -cellRadius; dz <= cellRadius; ++dz) {
+            for (int dy = -cellRadius; dy <= cellRadius; ++dy) {
+                for (int dx = -cellRadius; dx <= cellRadius; ++dx) {
+                    CellKey key {center.x + dx, center.y + dy, center.z + dz};
+                    auto it = grid.find(key);
+                    if (it == grid.end()) {
+                        continue;
+                    }
+
+                    for (std::size_t idx : it->second) {
+                        double d = Base::DistanceP2(values[idx].point, pt);
+                        if (d < bestDistance) {
+                            bestDistance = d;
+                            best = values[idx].adj;
+                        }
+                    }
+                }
             }
         }
+
+        if (bestDistance < tol) {
+            return best;
+        }
+
         return adjlist.end();
     }
 
     void clear() {
-        rtree.clear();
+        grid.clear();
+        values.clear();
         adjlist.clear();
     }
 
@@ -496,7 +562,8 @@ public:
             adjlist.emplace_back();
             it = adjlist.end();
             --it;
-            rtree.insert(std::make_pair(pt,it));
+            values.push_back(Value {pt, it});
+            grid[cellKeyFor(pt)].push_back(values.size() - 1);
         }
         it->insert(id);
     }
@@ -541,7 +608,7 @@ public:
     }
 
     size_t size() {
-        return rtree.size();
+        return values.size();
     }
 };
 
@@ -1646,8 +1713,8 @@ App::DocumentObject *SketchObject::getSubObject(
     else if (!pyObj || !mapped) {
         if (!pyObj
             || (index > 0
-                && !boost::algorithm::contains(subname, "edge")
-                && !boost::algorithm::contains(subname, "vertex")))
+                && !Base::contains(subname, "edge")
+                && !Base::contains(subname, "vertex")))
             return Part2DObject::getSubObject(subname,pyObj,pmat,transform,depth);
     }
     else {
@@ -1657,21 +1724,21 @@ App::DocumentObject *SketchObject::getSubObject(
     }
 
     if (subshape.isNull()) {
-        if (boost::equals(shapetype,"Edge") ||
-            boost::equals(shapetype,"edge")) {
+        if (Base::equals(shapetype,"Edge") ||
+            Base::equals(shapetype,"edge")) {
             geo = getGeometry(index - 1);
             if (!geo)
                 return nullptr;
         }
-        else if (boost::equals(shapetype,"ExternalEdge")) {
+        else if (Base::equals(shapetype,"ExternalEdge")) {
             int GeoId = index - 1;
             GeoId = -GeoId - 3;
             geo = getGeometry(GeoId);
             if(!geo)
                 return nullptr;
         }
-        else if (boost::equals(shapetype,"Vertex") ||
-                 boost::equals(shapetype,"vertex")) {
+        else if (Base::equals(shapetype,"Vertex") ||
+                 Base::equals(shapetype,"vertex")) {
             int VtId = index- 1;
             int GeoId;
             PointPos PosId;
@@ -1680,13 +1747,13 @@ App::DocumentObject *SketchObject::getSubObject(
                 return nullptr;
             point = getPoint(GeoId,PosId);
         }
-        else if (boost::equals(shapetype,"RootPoint"))
+        else if (Base::equals(shapetype,"RootPoint"))
             point = getPoint(Sketcher::GeoEnum::RtPnt,PointPos::start);
-        else if (boost::equals(shapetype,"H_Axis"))
+        else if (Base::equals(shapetype,"H_Axis"))
             geo = getGeometry(Sketcher::GeoEnum::HAxis);
-        else if (boost::equals(shapetype,"V_Axis"))
+        else if (Base::equals(shapetype,"V_Axis"))
             geo = getGeometry(Sketcher::GeoEnum::VAxis);
-        else if (boost::equals(shapetype,"Constraint")) {
+        else if (Base::equals(shapetype,"Constraint")) {
             int ConstrId = PropertyConstraintList::getIndexFromConstraintName(shapetype);
             const std::vector< Constraint * > &vals = this->Constraints.getValues();
             if (ConstrId < 0 || ConstrId >= int(vals.size()))
@@ -1750,7 +1817,7 @@ SketchObject::getHigherElements(const char *element, bool silent) const
     // It is not a problem yet because getHigherElements is still unused.
     // see https://github.com/FreeCAD/FreeCAD/issues/20753
     if (false /*testStatus(App::ObjEditing)*/) {
-        if (boost::istarts_with(element, "vertex")) {
+        if (Base::istartsWith(element, "vertex")) {
             int n = 0;
             int index = atoi(element+6);
             for (auto cstr : Constraints.getValues()) {
@@ -1770,15 +1837,15 @@ SketchObject::getHigherElements(const char *element, bool silent) const
     }
 
     auto getNames = [this, &silent, &res](const char *element) {
-        bool internal = boost::starts_with(element, internalPrefix());
+        bool internal = Base::startsWith(element, internalPrefix());
         const auto &shape = internal ? InternalShape.getShape() : Shape.getShape();
         for (const auto &indexedName : shape.getHigherElements(element+(internal?internalPrefix().size() : 0), silent)) {
             if (!internal) {
                 res.push_back(indexedName);
             }
-            else if (boost::equals(indexedName.getType(), "Face")
-                    || boost::equals(indexedName.getType(), "Edge")
-                    || boost::equals(indexedName.getType(), "Wire")) {
+            else if (Base::equals(indexedName.getType(), "Face")
+                    || Base::equals(indexedName.getType(), "Edge")
+                    || Base::equals(indexedName.getType(), "Wire")) {
                 res.emplace_back((internalPrefix() + indexedName.getType()).c_str(), indexedName.getIndex());
             }
         }
@@ -1840,7 +1907,7 @@ const std::string &SketchObject::internalPrefix()
 
 const char *SketchObject::convertInternalName(const char *name)
 {
-    if (name && boost::starts_with(name, internalPrefix()))
+    if (name && Base::startsWith(name, internalPrefix()))
         return name + internalPrefix().size();
     return nullptr;
 }
@@ -1897,9 +1964,9 @@ App::ElementNamePair SketchObject::getElementName(
             return Part2DObject::getElementName(name,type);
     }
     if(index && type==ElementNameType::Export) {
-        if(boost::starts_with(ret.oldName,"Vertex"))
+        if(Base::startsWith(ret.oldName,"Vertex"))
             ret.oldName[0] = 'v';
-        else if(boost::starts_with(ret.oldName,"Edge"))
+        else if(Base::startsWith(ret.oldName,"Edge"))
             ret.oldName[0] = 'e';
     }
     ret.newName = convertSubName(index, true);
@@ -1933,15 +2000,16 @@ Data::IndexedName SketchObject::checkSubName(const char *subname) const
     // if not a mapped name parse the indexed name directly, uppercasing "edge" and "vertex"
     if(!mappedSubname)  {
         Data::IndexedName result(subname, types, true);
-        if (boost::equals(result.getType(), "edge"))
+        if (Base::equals(result.getType(), "edge"))
             return Data::IndexedName("Edge", result.getIndex());
-        if (boost::equals(result.getType(), "vertex"))
+        if (Base::equals(result.getType(), "vertex"))
             return Data::IndexedName("Vertex", result.getIndex());
         return result;
     }
 
-    bio::stream<bio::array_source> iss(mappedSubname+1, std::strlen(mappedSubname+1));
     int id = -1;
+    const char* idTail = nullptr;
+    const char* idTailEnd = nullptr;
     bool valid = false;
     switch (mappedSubname[0]) {
         case '\0':  // check length != 0
@@ -1949,10 +2017,17 @@ Data::IndexedName SketchObject::checkSubName(const char *subname) const
 
         case 'g':  // = geometry
         case 'e':  // = external geometry
-            if (iss >> id) {
+        {
+            const char* begin = mappedSubname + 1;
+            const char* end = begin + std::strlen(begin);
+            const auto res = std::from_chars(begin, end, id);
+            if (res.ptr != begin && res.ec == std::errc {}) {
                 valid = true;
+                idTail = res.ptr;
+                idTailEnd = end;
             }
             break;
+        }
 
         // for RootPoint, H_Axis, V_Axis
         default: {
@@ -1992,7 +2067,14 @@ Data::IndexedName SketchObject::checkSubName(const char *subname) const
     if (geo && GeometryFacade::getId(geo) == id) {
         char sep;
         int posId = static_cast<int>(PointPos::none);
-        if ((iss >> sep >> posId) && sep == 'v') {
+        bool hasPosId = false;
+        if (idTail && idTail < idTailEnd) {
+            sep = *idTail;
+            const char* posBegin = idTail + 1;
+            const auto res = std::from_chars(posBegin, idTailEnd, posId);
+            hasPosId = (sep == 'v' && res.ptr != posBegin && res.ec == std::errc {});
+        }
+        if (hasPosId) {
             int idx = getVertexIndexGeoPos(geoId, static_cast<PointPos>(posId));
 
             // Outside edit-mode circles exposes the seam point but not the center, while in edit-mode we expose the center but not the seam.
@@ -2073,9 +2155,9 @@ std::string SketchObject::convertSubName(const Data::IndexedName &indexedName, b
         // element mapping of the public shape and internal geometry.
         if (indexedName.getIndex() <= 0)
             ss << '.' << indexedName;
-        else if (boost::starts_with(indexedName.getType(), "Edge"))
+        else if (Base::startsWith(indexedName.getType(), "Edge"))
             ss << ".e" << (indexedName.getType() + 1) << indexedName.getIndex();
-        else if (boost::starts_with(indexedName.getType(), "Vertex"))
+        else if (Base::startsWith(indexedName.getType(), "Vertex"))
             ss << ".v" << (indexedName.getType() + 1) << indexedName.getIndex();
         else
             ss << '.' << indexedName;

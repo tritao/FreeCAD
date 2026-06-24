@@ -4,7 +4,6 @@ add_library(FreeCADApp SHARED)
 
 if(WIN32)
     add_definitions(-DFCApp)
-    add_definitions(-DBOOST_DYN_LINK)
 endif(WIN32)
 
 if(BUILD_TRACY_FRAME_PROFILER)
@@ -82,7 +81,6 @@ target_compile_definitions(FreeCADApp PRIVATE FREECAD_BUILD_QT=$<BOOL:${FREECAD_
 
 set(FreeCADApp_LIBS
     FreeCADBase
-    ${Boost_LIBRARIES}
     fmt::fmt
 )
 
@@ -210,6 +208,7 @@ SET(Document_CPP_SRCS
 SET(Document_HPP_SRCS
     Annotation.h
     BackupPolicy.h
+    DirectedGraph.h
     Document.h
     RecoverySnapshot.h
     DepEdge.h
@@ -298,6 +297,7 @@ SET(FreeCADApp_CPP_SRCS
     ${Document_CPP_SRCS}
     ${Properties_CPP_SRCS}
     Application.cpp
+    CommandLine.cpp
     ApplicationDirectories.cpp
     ApplicationDirectoriesPyImp.cpp
     ApplicationPy.cpp
@@ -338,6 +338,7 @@ SET(FreeCADApp_HPP_SRCS
     ${Document_HPP_SRCS}
     ${Properties_HPP_SRCS}
     Application.h
+    CommandLine.h
     ApplicationDirectories.h
     AutoTransaction.h
     Branding.h

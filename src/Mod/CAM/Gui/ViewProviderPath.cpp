@@ -23,7 +23,7 @@
  ***************************************************************************/
 
 #include <limits>
-#include <boost/algorithm/string/replace.hpp>
+#include <Base/StringTools.h>
 
 #include <Inventor/SbVec3f.h>
 #include <Inventor/details/SoLineDetail.h>
@@ -332,17 +332,19 @@ std::string ViewProviderPath::getElement(const SoDetail* detail) const
             index = edge2Command[index];
             Path::Feature* pcPathObj = static_cast<Path::Feature*>(pcObject);
             const Toolpath& tp = pcPathObj->Path.getValue();
-            if (index < (int)tp.getSize()) {
-                std::stringstream str;
-                str << index + 1 << " " << tp.getCommand(index).toGCode(6, false);
+	            if (index < (int)tp.getSize()) {
+	                std::stringstream str;
+	                str << index + 1 << " " << tp.getCommand(index).toGCode(6, false);
                 pt0Index = line_detail->getPoint0()->getCoordinateIndex();
-                if (pt0Index < 0 || pt0Index >= pcLineCoords->point.getNum()) {
-                    pt0Index = -1;
-                }
-                return boost::replace_all_copy(str.str(), ".", ",");
-            }
-        }
-    }
+	                if (pt0Index < 0 || pt0Index >= pcLineCoords->point.getNum()) {
+	                    pt0Index = -1;
+	                }
+	                std::string out = str.str();
+	                Base::StringTools::replaceAll(out, ".", ",");
+	                return out;
+	            }
+	        }
+	    }
     pt0Index = -1;
     pcArrowSwitch->whichChild = -1;
     return std::string();

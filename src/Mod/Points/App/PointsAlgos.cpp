@@ -27,13 +27,14 @@
 #ifdef FC_OS_LINUX
 # include <unistd.h>
 #endif
+#include <charconv>
+#include <locale>
 #include <memory>
 #include <sstream>
+#include <cctype>
+#include <cstdlib>
 
-#include <boost/algorithm/string.hpp>
-#include <boost/lexical_cast.hpp>
-#include <boost/math/special_functions/fpclassify.hpp>  // needed for compilation on some systems
-#include <boost/regex.hpp>
+#include <cmath>  // needed for compilation on some systems
 
 #include <Base/Console.h>
 #include <Base/Converter.h>
@@ -41,12 +42,87 @@
 #include <Base/FileInfo.h>
 #include <Base/Sequencer.h>
 #include <Base/Stream.h>
+#include <Base/StringTools.h>
 
 #include "PointsAlgos.h"
 #include <E57Format.h>
 
 
 using namespace Points;
+
+namespace
+{
+template<typename T>
+T parseIntegralStrict(const std::string& token, const char* errorMessage)
+{
+    T value {};
+    const char* begin = token.data();
+    const char* end = begin + token.size();
+    const auto [ptr, ec] = std::from_chars(begin, end, value);
+    if (ec != std::errc() || ptr != end) {
+        throw Base::BadFormatError(errorMessage);
+    }
+    return value;
+}
+
+double parseDoubleStrictClassic(const std::string& token, const char* errorMessage)
+{
+    std::istringstream str(token);
+    str.imbue(std::locale::classic());
+    double value {};
+    if (!(str >> value)) {
+        throw Base::BadFormatError(errorMessage);
+    }
+    str >> std::ws;
+    if (!str.eof()) {
+        throw Base::BadFormatError(errorMessage);
+    }
+    return value;
+}
+
+bool tryParsePointLine(const std::string& line, Base::Vector3d& point)
+{
+    const char* cursor = line.c_str();
+
+    auto skipSpace = [&cursor]() {
+        while (*cursor && std::isspace(static_cast<unsigned char>(*cursor))) {
+            ++cursor;
+        }
+    };
+
+    skipSpace();
+    char* end = nullptr;
+    const double x = std::strtod(cursor, &end);
+    if (end == cursor) {
+        return false;
+    }
+    cursor = end;
+
+    skipSpace();
+    const double y = std::strtod(cursor, &end);
+    if (end == cursor) {
+        return false;
+    }
+    cursor = end;
+
+    skipSpace();
+    const double z = std::strtod(cursor, &end);
+    if (end == cursor) {
+        return false;
+    }
+    cursor = end;
+
+    skipSpace();
+    if (*cursor != '\0') {
+        return false;
+    }
+
+    point.x = x;
+    point.y = y;
+    point.z = z;
+    return true;
+}
+}  // namespace
 
 void PointsAlgos::Load(PointKernel& points, const char* FileName)
 {
@@ -67,16 +143,6 @@ void PointsAlgos::Load(PointKernel& points, const char* FileName)
 
 void PointsAlgos::LoadAscii(PointKernel& points, const char* FileName)
 {
-    boost::regex rx(
-        "^\\s*([-+]?[0-9]*)\\.?([0-9]+([eE][-+]?[0-9]+)?)"
-        "\\s+([-+]?[0-9]*)\\.?([0-9]+([eE][-+]?[0-9]+)?)"
-        "\\s+([-+]?[0-9]*)\\.?([0-9]+([eE][-+]?[0-9]+)?)\\s*$"
-    );
-    // boost::regex rx("(\\b[0-9]+\\.([0-9]+\\b)?|\\.[0-9]+\\b)");
-    // boost::regex
-    // rx("^\\s*(-?[0-9]*)\\.([0-9]+)\\s+(-?[0-9]*)\\.([0-9]+)\\s+(-?[0-9]*)\\.([0-9]+)\\s*$");
-    boost::cmatch what;
-
     Base::Vector3d pt;
     int LineCnt = 0;
     std::string line;
@@ -101,11 +167,7 @@ void PointsAlgos::LoadAscii(PointKernel& points, const char* FileName)
     try {
         // read file
         while (std::getline(file, line)) {
-            if (boost::regex_match(line.c_str(), what, rx)) {
-                pt.x = std::atof(what[1].first);
-                pt.y = std::atof(what[4].first);
-                pt.z = std::atof(what[7].first);
-
+            if (tryParsePointLine(line, pt)) {
                 points.setPoint(LineCnt, pt);
                 seq.next();
                 LineCnt++;
@@ -760,8 +822,8 @@ std::size_t PlyReader::readHeader(
         }
 
         // since the file is loaded in binary mode we may get the CR at the end
-        boost::trim(line);
-        boost::split(list, line, boost::is_any_of("\t\r "), boost::token_compress_on);
+        Base::StringTools::trimInPlace(line);
+        Base::StringTools::splitAnyOf(list, line, "\t\r ", true);
 
         std::istringstream str(line);
         str.imbue(std::locale::classic());
@@ -800,7 +862,7 @@ std::size_t PlyReader::readHeader(
             }
 
             std::string name = list[1];
-            std::size_t count = boost::lexical_cast<std::size_t>(list[2]);
+            std::size_t count = parseIntegralStrict<std::size_t>(list[2], "Not a valid ply file");
             if (name == "vertex") {
                 element = name;
                 numPoints = count;
@@ -920,14 +982,14 @@ void PlyReader::readAscii(std::istream& inp, std::size_t offset, Eigen::MatrixXd
         }
 
         // since the file is loaded in binary mode we may get the CR at the end
-        boost::trim(line);
-        boost::split(list, line, boost::is_any_of("\t\r "), boost::token_compress_on);
+        Base::StringTools::trimInPlace(line);
+        Base::StringTools::splitAnyOf(list, line, "\t\r ", true);
 
         std::istringstream str(line);
 
         Eigen::Index size = Eigen::Index(list.size());
         for (Eigen::Index col = 0; col < size && col < numFields; col++) {
-            double value = boost::lexical_cast<double>(list[col]);
+            double value = parseDoubleStrictClassic(list[col], "Not a valid ply file");
             data(row, col) = value;
         }
 
@@ -1221,8 +1283,8 @@ std::size_t PcdReader::readHeader(
         }
 
         // since the file is loaded in binary mode we may get the CR at the end
-        boost::trim(line);
-        boost::split(list, line, boost::is_any_of("\t\r "), boost::token_compress_on);
+        Base::StringTools::trimInPlace(line);
+        Base::StringTools::splitAnyOf(list, line, "\t\r ", true);
 
         std::istringstream str(line);
         str.imbue(std::locale::classic());
@@ -1236,7 +1298,7 @@ std::size_t PcdReader::readHeader(
         }
         else if (kw == "SIZE") {
             for (std::size_t i = 1; i < list.size(); i++) {
-                sizes.push_back(boost::lexical_cast<int>(list[i]));
+                sizes.push_back(parseIntegralStrict<int>(list[i], ""));
             }
         }
         else if (kw == "TYPE") {
@@ -1288,14 +1350,14 @@ void PcdReader::readAscii(std::istream& inp, Eigen::MatrixXd& data)
         }
 
         // since the file is loaded in binary mode we may get the CR at the end
-        boost::trim(line);
-        boost::split(list, line, boost::is_any_of("\t\r "), boost::token_compress_on);
+        Base::StringTools::trimInPlace(line);
+        Base::StringTools::splitAnyOf(list, line, "\t\r ", true);
 
         std::istringstream str(line);
 
         Eigen::Index size = Eigen::Index(list.size());
         for (Eigen::Index col = 0; col < size && col < numFields; col++) {
-            double value = boost::lexical_cast<double>(list[col]);
+            double value = parseDoubleStrictClassic(list[col], "");
             data(row, col) = value;
         }
 
@@ -2011,7 +2073,7 @@ void PlyWriter::write(const std::string& filename)
     const std::vector<Base::Vector3f>& pts = points.getBasicPoints();
     for (Eigen::Index i = 0; i < numPoints; i++) {
         const Base::Vector3f& p = pts[i];
-        if (!boost::math::isnan(p.x) && !boost::math::isnan(p.y) && !boost::math::isnan(p.z)) {
+        if (!std::isnan(p.x) && !std::isnan(p.y) && !std::isnan(p.z)) {
             numValid++;
         }
     }
@@ -2097,13 +2159,13 @@ void PlyWriter::write(const std::string& filename)
     out << "end_header" << std::endl;
 
     for (Eigen::Index r = 0; r < numPoints; r++) {
-        if (boost::math::isnan(data(r, 0))) {
+        if (std::isnan(data(r, 0))) {
             continue;
         }
-        if (boost::math::isnan(data(r, 1))) {
+        if (std::isnan(data(r, 1))) {
             continue;
         }
-        if (boost::math::isnan(data(r, 2))) {
+        if (std::isnan(data(r, 2))) {
             continue;
         }
         for (Eigen::Index c = 0; c < col; c++) {
@@ -2283,7 +2345,7 @@ void PcdWriter::write(const std::string& filename)
     for (Eigen::Index r = 0; r < numPoints; r++) {
         for (Eigen::Index c = 0; c < col; c++) {
             double value = data(r, c);
-            if (boost::math::isnan(value)) {
+            if (std::isnan(value)) {
                 out << "nan ";
             }
             else {

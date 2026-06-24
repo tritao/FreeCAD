@@ -45,6 +45,7 @@
 #include <Gui/Selection/SoFCUnifiedSelection.h>
 #include <Gui/Selection/Selection.h>
 #include <Base/Color.h>
+#include <Base/StringPredicates.h>
 #include "SoBrepEdgeSet.h"
 #include "ViewProviderExt.h"
 
@@ -620,7 +621,7 @@ void SoBrepEdgeSet::doAction(SoAction* action)
                     static std::string element("Edge");
                     bool hasEdgeColors = false;
                     for (const auto& [name, color] : colors) {
-                        if (name.empty() || boost::starts_with(name, element)) {
+                        if (name.empty() || Base::startsWith(name, element)) {
                             hasEdgeColors = true;
                             break;
                         }

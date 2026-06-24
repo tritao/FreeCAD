@@ -25,10 +25,9 @@
 #include <cassert>
 #include <limits>
 
-#include <boost/algorithm/string/predicate.hpp>
-
 #include <App/DocumentObjectPy.h>
 #include <Base/GeometryPyCXX.h>
+#include <Base/HashUtils.h>
 #include <Base/Tools.h>
 #include <Base/Interpreter.h>
 #include <Base/QuantityPy.h>
@@ -389,7 +388,8 @@ std::size_t ObjectIdentifier::hash() const
     if (_hash && !_cache.empty()) {
         return _hash;
     }
-    const_cast<ObjectIdentifier*>(this)->_hash = boost::hash_value(toString());
+    const std::string str = toString();
+    const_cast<ObjectIdentifier*>(this)->_hash = Base::fnv1a64(str);
     return _hash;
 }
 
@@ -1254,7 +1254,7 @@ Property* ObjectIdentifier::resolveProperty(const App::DocumentObject* obj,
     else {
         ptype = it->second;
         if (ptype != PseudoShape && !subObjectName.getString().empty()
-            && !boost::ends_with(subObjectName.getString(), ".")) {
+            && !subObjectName.getString().ends_with('.')) {
             return nullptr;
         }
         return &const_cast<App::DocumentObject*>(obj)->Label;  // fake the property
@@ -1947,7 +1947,7 @@ std::string ObjectIdentifier::ResolveResults::resolveErrorString() const
     }
     else if (!resolvedProperty) {
         if (propertyType != PseudoShape && !subObjectName.getString().empty()
-            && !boost::ends_with(subObjectName.getString(), ".")) {
+            && !subObjectName.getString().ends_with('.')) {
             ss << "Non geometry subname reference must end with '.'";
         }
         else {

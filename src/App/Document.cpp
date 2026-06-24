@@ -38,13 +38,8 @@
 #include <filesystem>
 #include <format>
 #include <optional>
+#include <regex>
 
-#include <boost/algorithm/string.hpp>
-#include <boost/bimap.hpp>
-#include <boost/graph/strong_components.hpp>
-#include <boost/graph/topological_sort.hpp>
-
-#include <boost/regex.hpp>
 #include <random>
 #include <unordered_map>
 #include <unordered_set>
@@ -60,6 +55,7 @@
 #include <Base/FileInfo.h>
 #include <Base/PathUtils.h>
 #include <Base/Sha1.h>
+#include <Base/StringViewTools.h>
 #include <Base/TimeInfo.h>
 #include <Base/Reader.h>
 #include <Base/Writer.h>
@@ -99,7 +95,6 @@ using Base::Console;
 using Base::streq;
 using Base::Writer;
 using namespace App;
-using namespace boost;
 using namespace zipios;
 
 #if FC_DEBUG
@@ -435,7 +430,7 @@ int Document::_openTransaction(std::string name, int id)
 void Document::renameTransaction(const std::string& name, const int id) const
 {
     if (!name.empty() && d->activeUndoTransaction && d->activeUndoTransaction->getID() == id) {
-        if (boost::starts_with(d->activeUndoTransaction->Name, "-> ")) {
+        if (d->activeUndoTransaction->Name.starts_with("-> ")) {
             d->activeUndoTransaction->Name.resize(3);
         }
         else {
@@ -1069,8 +1064,7 @@ Document::~Document()
     try {
         clearUndos();
     }
-    catch (const boost::exception&) {
-    }
+    catch (...) {}
 
 #ifdef FC_LOGUPDATECHAIN
     Console().log("-Delete Features of %s \n", getName());
@@ -1270,12 +1264,24 @@ std::pair<bool, int> Document::addStringHasher(const StringHasherRef& hasher) co
     if (!hasher) {
         return std::make_pair(false, 0);
     }
-    auto ret =
-        d->hashers.left.insert(HasherMap::left_map::value_type(hasher, static_cast<int>(d->hashers.size())));
-    if (ret.second) {
+
+    auto* ptr = static_cast<StringHasher*>(hasher);
+    const auto found = d->hashers.byHasher.find(ptr);
+    if (found != d->hashers.byHasher.end()) {
+        return std::make_pair(false, found->second);
+    }
+
+    int idx = static_cast<int>(d->hashers.byIndex.size());
+    while (d->hashers.byIndex.contains(idx)) {
+        ++idx;
+    }
+
+    d->hashers.byIndex.emplace(idx, hasher);
+    d->hashers.byHasher.emplace(ptr, idx);
+    {
         hasher->clearMarks();
     }
-    return std::make_pair(ret.second, ret.first->second);
+    return std::make_pair(true, idx);
 }
 
 StringHasherRef Document::getStringHasher(const int idx) const
@@ -1287,10 +1293,11 @@ StringHasherRef Document::getStringHasher(const int idx) const
         }
         return hasher;
     }
-    const auto it = d->hashers.right.find(idx);
-    if (it == d->hashers.right.end()) {
+    const auto it = d->hashers.byIndex.find(idx);
+    if (it == d->hashers.byIndex.end()) {
         hasher = new StringHasher;
-        d->hashers.right.insert(HasherMap::right_map::value_type(idx, hasher));
+        d->hashers.byIndex.emplace(idx, hasher);
+        d->hashers.byHasher.emplace(static_cast<StringHasher*>(hasher), idx);
     }
     else {
         hasher = it->second;
@@ -1869,21 +1876,27 @@ static std::string checkFileName(const char* file)
     if (GetApplication()
             .GetParameterGroupByPath("User parameter:BaseApp/Preferences/Document")
             ->GetBool("CheckExtension", true)) {
+        const auto hasInsensitiveSuffix = [](std::string_view value, std::string_view suffix) {
+            return value.size() >= suffix.size()
+                && Base::StringViewTools::iequalsAscii(
+                    value.substr(value.size() - suffix.size()),
+                    suffix);
+        };
         constexpr std::size_t backupExtLen = sizeof(".fcbak") - 1;
         constexpr std::size_t backupAndDocExtLen = sizeof(".fcbak.fcstd") - 1;
-        if (boost::iends_with(fn, ".fcbak.fcstd")) {
+        if (hasInsensitiveSuffix(fn, ".fcbak.fcstd")) {
             fn.erase(fn.size() - backupAndDocExtLen);
             fn += ".FCStd";
             return fn;
         }
-        if (boost::iends_with(fn, ".fcbak")) {
+        if (hasInsensitiveSuffix(fn, ".fcbak")) {
             fn.erase(fn.size() - backupExtLen);
             fn += ".FCStd";
             return fn;
         }
 
         const char* ext = strrchr(fn.c_str(), '.');
-        if ((ext == nullptr) || !boost::iequals(ext + 1, "fcstd")) {
+        if ((ext == nullptr) || !Base::StringViewTools::iequalsAscii(ext + 1, "fcstd")) {
             if (ext && ext[1] == 0) {
                 fn += "FCStd";
             }
@@ -2627,7 +2640,7 @@ static void buildDependencyList(const std::vector<DocumentObject*>& objectArray,
                 depObjs->push_back(objF);
             }
             if (objectMap && depList) {
-                (*objectMap)[objF] = add_vertex(*depList);
+                (*objectMap)[objF] = depList->addVertex();
             }
 
             auto& outList = outLists[objF];
@@ -2645,7 +2658,7 @@ static void buildDependencyList(const std::vector<DocumentObject*>& objectArray,
         for (const auto& [key, objects] : outLists) {
             for (auto obj : objects) {
                 if (obj && obj->isAttachedToDocument()) {
-                    add_edge((*objectMap)[key], (*objectMap)[obj], *depList);
+                    depList->addEdge((*objectMap)[key], (*objectMap)[obj]);
                 }
             }
         }
@@ -2671,24 +2684,16 @@ Document::getDependencyList(const std::vector<DocumentObject*>& objs, int option
         vertexMap[v.second] = v.first;
     }
 
-    std::list<Vertex> make_order;
+    std::vector<Vertex> make_order;
     try {
-        boost::topological_sort(depList, std::front_inserter(make_order));
+        make_order = depList.topologicalSort();
     }
     catch (const std::exception& e) {
         if ((options & DepNoCycle) != 0) {
-            // Use boost::strong_components to find cycles. It groups strongly
-            // connected vertices as components, and therefore each component
-            // forms a cycle.
-            std::vector<int> c(vertexMap.size());
             std::map<int, std::vector<Vertex>> components;
-            boost::strong_components(
-                depList,
-                boost::make_iterator_property_map(c.begin(),
-                                                  boost::get(boost::vertex_index, depList),
-                                                  c[0]));
-            for (size_t i = 0; i < c.size(); ++i) {
-                components[c[i]].push_back(i);
+            const auto strongComponents = depList.stronglyConnectedComponents();
+            for (size_t i = 0; i < strongComponents.size(); ++i) {
+                components[static_cast<int>(i)] = strongComponents[i];
             }
 
             FC_ERR("Dependency cycles: ");
@@ -2733,8 +2738,8 @@ Document::getDependencyList(const std::vector<DocumentObject*>& objs, int option
         return ret;
     }
 
-    for (auto i = make_order.rbegin(); i != make_order.rend(); ++i) {
-        ret.push_back(vertexMap[*i]);
+    for (auto vertex : make_order) {
+        ret.push_back(vertexMap[vertex]);
     }
     return ret;
 }
@@ -2761,7 +2766,7 @@ std::vector<Document*> Document::getDependentDocuments(std::vector<Document*> do
     docSet.insert(docs.begin(), docs.end());
     if (sort) {
         for (auto doc : docs) {
-            docMap[doc] = add_vertex(depList);
+            docMap[doc] = depList.addVertex();
         }
     }
     while (!docs.empty()) {
@@ -2773,15 +2778,20 @@ std::vector<Document*> Document::getDependentDocuments(std::vector<Document*> do
             continue;
         }
 
-        const auto& vertex = docMap[doc];
+        Vertex vertex {};
+        if (sort) {
+            vertex = docMap[doc];
+        }
         for (auto depDoc : it->second) {
             if (docSet.insert(depDoc).second) {
                 docs.push_back(depDoc);
                 if (sort) {
-                    docMap[depDoc] = add_vertex(depList);
+                    docMap[depDoc] = depList.addVertex();
                 }
             }
-            add_edge(vertex, docMap[depDoc], depList);
+            if (sort) {
+                depList.addEdge(vertex, docMap[depDoc]);
+            }
         }
     }
 
@@ -2790,9 +2800,9 @@ std::vector<Document*> Document::getDependentDocuments(std::vector<Document*> do
         return ret;
     }
 
-    std::list<Vertex> make_order;
+    std::vector<Vertex> make_order;
     try {
-        boost::topological_sort(depList, std::front_inserter(make_order));
+        make_order = depList.topologicalSort();
     }
     catch (const std::exception& e) {
         std::string msg("Document::getDependentDocuments: ");
@@ -2803,8 +2813,8 @@ std::vector<Document*> Document::getDependentDocuments(std::vector<Document*> do
     for (auto& v : docMap) {
         vertexMap[v.second] = v.first;
     }
-    for (auto rIt = make_order.rbegin(); rIt != make_order.rend(); ++rIt) {
-        ret.push_back(vertexMap[*rIt]);
+    for (auto vertex : make_order) {
+        ret.push_back(vertexMap[vertex]);
     }
     return ret;
 }
@@ -2893,7 +2903,7 @@ int Document::recompute(const std::vector<DocumentObject*>& objs,
     //////////////////////////////////////////////////////////////////////////
     // FIXME Comment by Realthunder:
     // the topologicalSrot() below cannot handle partial recompute, haven't got
-    // time to figure out the code yet, simply use back boost::topological_sort
+    // time to figure out the code yet, simply use back the dependency graph sort
     // for now, that is, rely on getDependencyList() to do the sorting. The
     // downside is, it didn't take advantage of the ready built InList, nor will
     // it report for cyclic dependency.
@@ -3949,16 +3959,16 @@ std::vector<DocumentObject*> Document::getObjectsWithExtension(const Base::Type&
 std::vector<DocumentObject*>
 Document::findObjects(const Base::Type& typeId, const char* objname, const char* label) const
 {
-    boost::cmatch what;
-    boost::regex rx_name;
-    boost::regex rx_label;
+    std::cmatch what;
+    std::optional<std::regex> rx_name;
+    std::optional<std::regex> rx_label;
 
     if (objname) {
-        rx_name.set_expression(objname);
+        rx_name.emplace(objname);
     }
 
     if (label) {
-        rx_label.set_expression(label);
+        rx_label.emplace(label);
     }
 
     std::vector<DocumentObject*> Objects;
@@ -3967,11 +3977,11 @@ Document::findObjects(const Base::Type& typeId, const char* objname, const char*
         if (it->isDerivedFrom(typeId)) {
             found = it;
 
-            if (!rx_name.empty() && !boost::regex_search(it->getNameInDocument(), what, rx_name)) {
+            if (rx_name && !std::regex_search(it->getNameInDocument(), what, *rx_name)) {
                 found = nullptr;
             }
 
-            if (!rx_label.empty() && !boost::regex_search(it->Label.getValue(), what, rx_label)) {
+            if (rx_label && !std::regex_search(it->Label.getValue(), what, *rx_label)) {
                 found = nullptr;
             }
 

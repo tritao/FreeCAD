@@ -23,7 +23,7 @@
 
 #include "DisplayedFilesModel.h"
 
-#include <boost/algorithm/string/predicate.hpp>
+#include <Base/StringPredicates.h>
 
 #include <QDateTime>
 #include <QThreadPool>
@@ -57,7 +57,7 @@ static bool freecadCanOpen(const QString& extension)
     auto importTypes = App::GetApplication().getImportTypes();
     return std::ranges::find_if(
                importTypes,
-               [&ext](const auto& item) { return boost::iequals(item, ext); }
+               [&ext](const auto& item) { return Base::iequals(item, ext); }
            )
         != importTypes.end();
 }

@@ -1,5 +1,4 @@
 #include <gtest/gtest.h>
-#include <boost/core/ignore_unused.hpp>
 #include <Base/ParameterObserver.h>
 
 class ParamObserver: public Base::ParameterObserver

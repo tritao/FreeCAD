@@ -25,9 +25,9 @@
 #pragma once
 
 #include <string>
+#include <unordered_map>
 #include <vector>
 
-#include <boost/unordered/unordered_map.hpp>
 #include <fastsignals/signal.h>
 
 #include <App/Property.h>
@@ -142,8 +142,8 @@ public:
 
 
     const Constraint* getConstraint(const App::ObjectIdentifier& path) const;
-    void setPathValue(const App::ObjectIdentifier& path, const boost::any& value) override;
-    const boost::any getPathValue(const App::ObjectIdentifier& path) const override;
+    void setPathValue(const App::ObjectIdentifier& path, const std::any& value) override;
+    const std::any getPathValue(const App::ObjectIdentifier& path) const override;
     App::ObjectIdentifier canonicalPath(const App::ObjectIdentifier& p) const override;
     void getPaths(std::vector<App::ObjectIdentifier>& paths) const override;
 
@@ -171,7 +171,9 @@ private:
     App::ObjectIdentifier makePath(int idx, const Constraint* c);
 
     std::vector<Constraint*> _lValueList;
-    boost::unordered_map<boost::uuids::uuid, std::size_t> valueMap;
+
+    using UuidMap = std::unordered_map<Base::UuidTag, std::size_t, Base::UuidTagHash>;
+    UuidMap valueMap;
 
     std::vector<unsigned int> validGeometryKeys;
     bool invalidGeometry;

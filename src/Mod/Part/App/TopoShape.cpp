@@ -26,10 +26,12 @@
 
 #include <TopoDS_Shape.hxx>
 #include <array>
+#include <charconv>
+#include <cctype>
 #include <cmath>
 #include <cstdlib>
 #include <sstream>
-#include <boost/regex.hpp>
+#include <string_view>
 
 #include <APIHeaderSection_MakeHeader.hxx>
 #include <BinTools.hxx>
@@ -158,8 +160,7 @@
 # include <BRepAdaptor_HCompCurve.hxx>
 #endif
 
-#include <boost/algorithm/string/predicate.hpp>
-#include <boost/core/ignore_unused.hpp>
+#include <Base/StringPredicates.h>
 
 #include <App/Material.h>
 #include <App/ElementNamingUtils.h>
@@ -302,17 +303,55 @@ std::pair<std::string, unsigned long> TopoShape::getElementTypeAndIndex(const ch
 {
     std::string strName = Data::oldElementName(RawName);
     const char* Name = strName.c_str();
-    int index = 0;
-    std::string element;
-    boost::regex ex("^(Face|Edge|Vertex)([1-9][0-9]*)$");
-    boost::cmatch what;
-
-    if (Name && boost::regex_match(Name, what, ex)) {
-        element = what[1].str();
-        index = std::atoi(what[2].str().c_str());
+    if (!Name) {
+        return {"", 0};
     }
 
-    return std::make_pair(element, index);
+    const std::string_view input(Name);
+
+    constexpr std::string_view facePrefix = "Face";
+    constexpr std::string_view edgePrefix = "Edge";
+    constexpr std::string_view vertexPrefix = "Vertex";
+
+    std::string_view element;
+    std::size_t pos = 0;
+    if (input.starts_with(facePrefix)) {
+        element = facePrefix;
+        pos = facePrefix.size();
+    }
+    else if (input.starts_with(edgePrefix)) {
+        element = edgePrefix;
+        pos = edgePrefix.size();
+    }
+    else if (input.starts_with(vertexPrefix)) {
+        element = vertexPrefix;
+        pos = vertexPrefix.size();
+    }
+    else {
+        return {"", 0};
+    }
+
+    if (pos >= input.size()) {
+        return {"", 0};
+    }
+
+    const std::string_view digits = input.substr(pos);
+    if (digits.front() < '1' || digits.front() > '9') {
+        return {"", 0};
+    }
+    for (const unsigned char c : digits) {
+        if (std::isdigit(c) == 0) {
+            return {"", 0};
+        }
+    }
+
+    unsigned long index = 0;
+    const auto res = std::from_chars(digits.data(), digits.data() + digits.size(), index, 10);
+    if (res.ec != std::errc {}) {
+        return {"", 0};
+    }
+
+    return {std::string(element), index};
 }
 
 std::vector<const char*> TopoShape::getElementTypes() const
@@ -441,7 +480,7 @@ std::pair<TopAbs_ShapeEnum, int> TopoShape::shapeTypeAndIndex(const char* name)
     int idx = 0;
     TopAbs_ShapeEnum type = TopAbs_SHAPE;
     static const std::string _subshape("SubShape");
-    if (boost::starts_with(name, _subshape)) {
+    if (Base::startsWith(name, _subshape)) {
         std::istringstream iss(name + _subshape.size());
         iss >> idx;
         if (!iss.eof()) {
@@ -468,7 +507,7 @@ std::pair<TopAbs_ShapeEnum, int> TopoShape::shapeTypeAndIndex(const Data::Indexe
         return std::make_pair(TopAbs_SHAPE, 0);
     }
     static const std::string _subshape("SubShape");
-    if (boost::equals(element.getType(), _subshape)) {
+    if (Base::equals(element.getType(), _subshape)) {
         return std::make_pair(TopAbs_SHAPE, element.getIndex());
     }
     TopAbs_ShapeEnum shapetype = shapeType(element.getType(), true);
@@ -483,7 +522,7 @@ TopAbs_ShapeEnum TopoShape::shapeType(const char* type, bool silent)
     if (type) {
         initShapeNameMap();
         for (size_t idx = 0; idx < _ShapeNames.size(); ++idx) {
-            if (!_ShapeNames[idx].empty() && boost::starts_with(type, _ShapeNames[idx])) {
+            if (!_ShapeNames[idx].empty() && Base::startsWith(type, _ShapeNames[idx])) {
                 return static_cast<TopAbs_ShapeEnum>(idx);
             }
         }
@@ -4600,7 +4639,7 @@ TopoShape& TopoShape::makeGTransform(
     bool copy
 )
 {
-    boost::ignore_unused(op);
+    static_cast<void>(op);
     _Shape = shape.transformGShape(rclTrf, copy);
     return *this;
 }

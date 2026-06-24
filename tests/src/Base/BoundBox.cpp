@@ -6,8 +6,9 @@
 # endif
 # include <Windows.h>
 #endif
+#include <span>
+
 #include <Base/BoundBox.h>
-#include <boost/beast/core/span.hpp>
 
 // NOLINTBEGIN(cppcoreguidelines-*,readability-*)
 TEST(BoundBox, TestDefault)
@@ -82,7 +83,7 @@ TEST(BoundBox, TestDistance)
     EXPECT_EQ(box.MaxZ, 0.5);
 }
 
-Base::BoundBox3d createBox(boost::beast::span<Base::Vector3d> span)
+Base::BoundBox3d createBox(std::span<Base::Vector3d> span)
 {
     return {span.data(), span.size()};
 }

@@ -28,7 +28,7 @@
 #include <queue>
 
 
-#include <boost/math/special_functions/fpclassify.hpp>
+#include <cmath>
 
 #include "Degeneration.h"
 #include "Grid.h"
@@ -229,7 +229,7 @@ bool MeshEvalNaNPoints::Evaluate()
 {
     const MeshPointArray& rPoints = _rclMesh.GetPoints();
     for (const auto& it : rPoints) {
-        if (boost::math::isnan(it.x) || boost::math::isnan(it.y) || boost::math::isnan(it.z)) {
+        if (std::isnan(it.x) || std::isnan(it.y) || std::isnan(it.z)) {
             return false;
         }
     }
@@ -242,7 +242,7 @@ std::vector<PointIndex> MeshEvalNaNPoints::GetIndices() const
     std::vector<PointIndex> aInds;
     const MeshPointArray& rPoints = _rclMesh.GetPoints();
     for (auto it = rPoints.begin(); it != rPoints.end(); ++it) {
-        if (boost::math::isnan(it->x) || boost::math::isnan(it->y) || boost::math::isnan(it->z)) {
+        if (std::isnan(it->x) || std::isnan(it->y) || std::isnan(it->z)) {
             aInds.push_back(it - rPoints.begin());
         }
     }
@@ -255,7 +255,7 @@ bool MeshFixNaNPoints::Fixup()
     std::vector<PointIndex> aInds;
     const MeshPointArray& rPoints = _rclMesh.GetPoints();
     for (auto it = rPoints.begin(); it != rPoints.end(); ++it) {
-        if (boost::math::isnan(it->x) || boost::math::isnan(it->y) || boost::math::isnan(it->z)) {
+        if (std::isnan(it->x) || std::isnan(it->y) || std::isnan(it->z)) {
             aInds.push_back(it - rPoints.begin());
         }
     }

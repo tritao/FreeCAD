@@ -40,10 +40,6 @@
 #include <string>
 #include <vector>
 
-// Boost
-#include <boost/assign/list_of.hpp>
-#include <boost/tokenizer.hpp>
-
 #include <Python.h>
 #include <QFileInfo>
 #include <QStandardPaths>

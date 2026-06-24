@@ -34,38 +34,23 @@
 #include <vector>
 #include <unordered_map>
 #include <unordered_set>
-#include <optional>
-
-#include <boost/bimap.hpp>
-#include <boost/graph/adjacency_list.hpp>
 
 #include <CXX/Objects.hxx>
 
+#include <App/DirectedGraph.h>
 #include <App/DocumentObject.h>
 #include <App/DocumentObserver.h>
 #include <App/StringHasher.h>
 #include <App/ExportInfo.h>
 #include <Base/UniqueNameManager.h>
 
-// using VertexProperty = boost::property<boost::vertex_root_t, DocumentObject* >;
-using DependencyList = boost::adjacency_list<
-    boost::vecS,         // class OutEdgeListS  : a Sequence or an AssociativeContainer
-    boost::vecS,         // class VertexListS   : a Sequence or a RandomAccessContainer
-    boost::directedS,    // class DirectedS     : This is a directed graph
-    boost::no_property,  // class VertexProperty:
-    boost::no_property,  // class EdgeProperty:
-    boost::no_property,  // class GraphProperty:
-    boost::listS         // class EdgeListS:
-    >;
-using Traits = boost::graph_traits<DependencyList>;
-using Vertex = Traits::vertex_descriptor;
-using Edge = Traits::edge_descriptor;
+using DependencyList = App::DirectedGraph;
+using Vertex = DependencyList::Vertex;
 using Node = std::vector<size_t>;
 using Path = std::vector<size_t>;
 
 namespace App
 {
-using HasherMap = boost::bimap<StringHasherRef, int>;
 class Transaction;
 
 // Pimpl class
@@ -97,10 +82,21 @@ struct DocumentP
     unsigned int TransactionLock {0};
     // Id and name that the next transaction will take
     // as soon as there is a change to the document
-    int bookedTransaction { 0 }; 
+    int bookedTransaction { 0 };
 
     std::string programVersion;
-    mutable HasherMap hashers;
+    struct HasherRegistry
+    {
+        void clear()
+        {
+            byIndex.clear();
+            byHasher.clear();
+        }
+
+        std::unordered_map<int, StringHasherRef> byIndex;
+        std::unordered_map<StringHasher*, int> byHasher;
+    };
+    mutable HasherRegistry hashers;
     std::multimap<const App::DocumentObject*, std::unique_ptr<App::DocumentObjectExecReturn>>
         _RecomputeLog;
     ExportInfo exportInfo;

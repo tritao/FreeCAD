@@ -25,11 +25,15 @@
 
 #pragma once
 
-#include <map>
-#include <vector>
-#include <string>
-#include <memory>
+#include <functional>
 #include <limits>
+#include <list>
+#include <map>
+#include <memory>
+#include <string>
+#include <string_view>
+#include <unordered_map>
+#include <vector>
 #include <Base/Persistence.h>
 
 #include "DynamicProperty.h"
@@ -77,8 +81,6 @@ enum PropertyType
 
 struct AppExport PropertyData
 {
-  PropertyData();
-  ~PropertyData();
 
   /// @brief Struct to hold the property specification.
   struct PropertySpec
@@ -160,6 +162,18 @@ struct AppExport PropertyData
   private:
       const void* m_container;
   };
+
+    using PropertySpecList = std::list<PropertySpec>;
+    using PropertySpecListIterator = PropertySpecList::iterator;
+
+    mutable PropertySpecList propertyData;
+    mutable std::unordered_map<
+        const char*,
+        PropertySpecListIterator,
+        CStringHasher,
+        CStringHasher
+    > propertyDataByName;
+    mutable std::unordered_map<short, PropertySpecListIterator> propertyDataByOffset;
 
   /// Whether the property data is merged with the parent.
   mutable bool parentMerged = false;
@@ -279,10 +293,6 @@ struct AppExport PropertyData
    * @param[in] other The other PropertyData to split with; this can be the parent PropertyData.
    */
   void split(PropertyData *other);
-
-private:
-  struct Impl;
-  std::unique_ptr<Impl> impl;
 };
 
 

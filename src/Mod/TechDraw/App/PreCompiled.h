@@ -33,19 +33,11 @@
 #include <iostream>
 #include <limits>
 #include <map>
+#include <mutex>
+#include <random>
 #include <sstream>
 #include <string>
 #include <vector>
-
-// boost
-#include <boost/graph/boyer_myrvold_planar_test.hpp>
-#include <boost/graph/is_kuratowski_subgraph.hpp>
-#include <boost/random.hpp>
-#include <boost/thread/lock_guard.hpp>
-#include <boost/thread/mutex.hpp>
-#include <boost/uuid/uuid_generators.hpp>
-#include <boost/uuid/uuid_io.hpp>
-#include <boost_regex.hpp>
 
 // Qt
 #include <QApplication>

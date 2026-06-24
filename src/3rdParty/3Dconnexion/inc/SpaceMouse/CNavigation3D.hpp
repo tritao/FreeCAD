@@ -31,15 +31,7 @@
 #include <memory>
 #include <string>
 #include <vector>
-#if (!defined(_MSC_VER) || (_MSC_VER > 1600))
 #include <chrono>
-#else
-#include <boost/chrono.hpp>
-namespace std {
-namespace chrono = boost::chrono;
-using boost::milli;
-} // namespace std
-#endif
 
 // navlib
 #include <navlib/navlib.h>

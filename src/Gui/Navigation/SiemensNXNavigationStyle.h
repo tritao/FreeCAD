@@ -47,14 +47,6 @@ protected:
 
 private:
     struct NaviMachine;
-    struct IdleState;
-    struct AwaitingReleaseState;
-    struct AwaitingMoveState;
-    struct InteractState;
-    struct RotateState;
-    struct PanState;
-    struct ZoomState;
-    struct SelectionState;
 };
 
 }  // namespace Gui

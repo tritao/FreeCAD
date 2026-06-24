@@ -35,10 +35,8 @@
 #include <sstream>
 #include <vector>
 
-// boost
-#include <boost/algorithm/string/predicate.hpp>
-#include <boost/core/ignore_unused.hpp>
-#include <boost/range/adaptor/indexed.hpp>
+// Base
+#include <Base/StringPredicates.h>
 
 // OpenCasCade =====================================================================================
 // Base

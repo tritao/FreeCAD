@@ -115,13 +115,13 @@
 # include <GeomAdaptor_HCurve.hxx>
 #endif
 
-#include <boost/random.hpp>
 #include <cmath>
 #include <ctime>
 #include <fstream>
 #include <iterator>
 #include <limits>
 #include <memory>
+#include <random>
 #include <vector>
 
 // FreeType Headers
@@ -146,9 +146,7 @@
 #include <Base/Writer.h>
 #include <BRep_Tool.hxx>
 #include <TopoDS.hxx>
-#include <memory>
-#include <boost/thread/mutex.hpp>
-#include <boost/thread/thread.hpp>
+#include <mutex>
 
 #include "Geometry.h"
 #include "ArcOfCirclePy.h"
@@ -387,7 +385,7 @@ void Geometry::Restore(Base::XMLReader& reader)
     }
 }
 
-boost::uuids::uuid Geometry::getTag() const
+Base::UuidTag Geometry::getTag() const
 {
     return tag;
 }
@@ -499,22 +497,7 @@ void Geometry::deleteExtension(const std::string& name)
 
 void Geometry::createNewTag()
 {
-    // Initialize a random number generator, to avoid Valgrind false positives.
-    // The random number generator is not threadsafe so we guard it.  See
-    // https://www.boost.org/doc/libs/1_62_0/libs/uuid/uuid.html#Design%20notes
-    static boost::mt19937 ran;
-    static bool seeded = false;
-    static boost::mutex random_number_mutex;
-
-    boost::lock_guard<boost::mutex> guard(random_number_mutex);
-
-    if (!seeded) {
-        ran.seed(static_cast<std::uint64_t>(std::time(nullptr)));
-        seeded = true;
-    }
-    static boost::uuids::basic_random_generator<boost::mt19937> gen(&ran);
-
-    tag = gen();
+    tag = Base::UuidTag::randomV4();
 }
 
 void Geometry::assignTag(const Part::Geometry* geo)

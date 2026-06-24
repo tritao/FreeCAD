@@ -45,6 +45,7 @@
 #include <map>
 #include <memory>
 #include <numbers>
+#include <random>
 #include <sstream>
 #include <stdexcept>
 #include <string>
@@ -53,14 +54,8 @@
 // Qt
 #include <QtGlobal>
 
-// Boost
-#include <boost/regex.hpp>
-#include <boost/algorithm/string/predicate.hpp>
-#include <boost/core/ignore_unused.hpp>
-#include <boost/math/special_functions/fpclassify.hpp>
-#include <boost/random.hpp>
-#include <boost/uuid/uuid_generators.hpp>
-#include <boost/uuid/uuid_io.hpp>
+// Base
+#include <Base/StringPredicates.h>
 
 // OpenCasCade
 #include "OpenCascadeAll.h"

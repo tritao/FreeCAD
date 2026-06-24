@@ -22,7 +22,7 @@
 
 #include <fstream>
 
-#include <boost/algorithm/string.hpp>
+#include <Base/StringTools.h>
 #include <fmt/ostream.h>
 
 #include <Inventor/events/SoMouseButtonEvent.h>
@@ -667,7 +667,9 @@ void TaskCreateElementSet::DefineNodes(
     highLightMesh = selection[0].FeatName;
 
     meshType = "NULL";
-    std::size_t found = boost::to_upper_copy(highLightMesh).find(boost::to_upper_copy(resultMesh));
+    std::size_t found = Base::StringTools::toUpperAsciiCopy(highLightMesh).find(
+        Base::StringTools::toUpperAsciiCopy(resultMesh)
+    );
     actualResultMesh = highLightMesh;
     // highLightMesh.find(myToUpper(resultMesh));
 

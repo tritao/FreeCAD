@@ -24,9 +24,8 @@
 #include <QShortcutEvent>
 #include <QApplication>
 
-#include <boost/algorithm/string/predicate.hpp>
-
 #include <Base/Console.h>
+#include <Base/StringPredicates.h>
 #include <Base/Tools.h>
 #include "ShortcutManager.h"
 #include "Command.h"
@@ -87,7 +86,7 @@ void ShortcutManager::destroy()
 void ShortcutManager::OnChange(Base::Subject<const char*>& src, const char* reason)
 {
     if (hSetting == &src) {
-        if (boost::equals(reason, "ShortcutTimeout")) {
+        if (Base::equals(reason, "ShortcutTimeout")) {
             timeout = hSetting->GetInt("ShortcutTimeout");
         }
         return;
@@ -218,9 +217,8 @@ bool ShortcutManager::checkShortcut(QObject* o, const QKeySequence& key)
         return false;
     }
 
-    const auto& index = actionMap.get<1>();
-    auto iter = index.lower_bound(ActionKey(key));
-    if (iter == index.end()) {
+    auto iter = actionMapByKey.lower_bound(ActionKey(key));
+    if (iter == actionMapByKey.end()) {
         return false;
     }
 
@@ -231,11 +229,18 @@ bool ShortcutManager::checkShortcut(QObject* o, const QKeySequence& key)
     // check for potential partial match, i.e. longer key sequences
     bool flush = true;
     bool found = false;
-    for (auto it = iter; it != index.end(); ++it) {
-        if (key.matches(it->key.shortcut) == QKeySequence::NoMatch) {
+    for (auto it = iter; it != actionMapByKey.end(); ++it) {
+        const ActionKey& actionKey = it->first;
+        if (key.matches(actionKey.shortcut) == QKeySequence::NoMatch) {
             break;
         }
-        if (action == it->action) {
+        auto dataIt = actionMapByPointer.find(it->second);
+        if (dataIt == actionMapByPointer.end()) {
+            continue;
+        }
+        const ActionData& data = dataIt->second;
+
+        if (action == data.action) {
             // There maybe more than one action with the exact same shortcut.
             // However, we only disable and enqueue the triggered action.
             // Because, QAction::isEnabled() does not check if the action is
@@ -244,10 +249,10 @@ bool ShortcutManager::checkShortcut(QObject* o, const QKeySequence& key)
             // Instead, we rely on QEvent::Shortcut to be sure to enqueue only
             // active shortcuts. We'll fake the current key sequence below,
             // which will trigger all possible matches one by one.
-            pendingActions.back().priority = getPriority(it->key.name);
+            pendingActions.back().priority = getPriority(data.key.name);
             found = true;
         }
-        else if (it->action && it->action->isEnabled()) {
+        else if (data.action && data.action->isEnabled()) {
             flush = false;
             if (found) {
                 break;
@@ -344,12 +349,13 @@ bool ShortcutManager::eventFilter(QObject* o, QEvent* ev)
             break;
         case QEvent::ActionChanged:
             if (auto action = qobject_cast<QAction*>(o)) {
-                auto& index = actionMap.get<0>();
-                auto it = index.find(reinterpret_cast<intptr_t>(action));
+                const intptr_t pointer = reinterpret_cast<intptr_t>(action);
+                auto it = actionMapByPointer.find(pointer);
                 if (action->shortcut().isEmpty()) {
-                    if (it != index.end()) {
-                        QKeySequence oldShortcut = it->key.shortcut;
-                        index.erase(it);
+                    if (it != actionMapByPointer.end()) {
+                        QKeySequence oldShortcut = it->second.key.shortcut;
+                        actionMapByKey.erase(it->second.keyIterator);
+                        actionMapByPointer.erase(it);
                         actionShortcutChanged(action, oldShortcut);
                     }
                     break;
@@ -371,16 +377,22 @@ bool ShortcutManager::eventFilter(QObject* o, QEvent* ev)
                         name = QByteArray("~ ") + name;
                     }
                 }
-                if (it != index.end()) {
-                    if (it->key.shortcut == action->shortcut() && it->key.name == name) {
+                if (it != actionMapByPointer.end()) {
+                    if (it->second.key.shortcut == action->shortcut() && it->second.key.name == name) {
                         break;
                     }
-                    QKeySequence oldShortcut = it->key.shortcut;
-                    index.replace(it, ActionData {action, name});
+                    QKeySequence oldShortcut = it->second.key.shortcut;
+                    actionMapByKey.erase(it->second.keyIterator);
+                    it->second = ActionData {action, name};
+                    it->second.keyIterator = actionMapByKey.emplace(it->second.key, it->second.pointer);
                     actionShortcutChanged(action, oldShortcut);
                 }
                 else {
-                    index.insert(ActionData {action, name});
+                    auto inserted = actionMapByPointer.emplace(pointer, ActionData {action, name}).first;
+                    inserted->second.keyIterator = actionMapByKey.emplace(
+                        inserted->second.key,
+                        inserted->second.pointer
+                    );
                     actionShortcutChanged(action, QKeySequence());
                 }
             }
@@ -395,15 +407,19 @@ std::vector<std::pair<QByteArray, QAction*>> ShortcutManager::getActionsByShortc
     const QKeySequence& shortcut
 )
 {
-    const auto& index = actionMap.get<1>();
     std::vector<std::pair<QByteArray, QAction*>> res;
     std::multimap<int, const ActionData*, std::greater<>> map;
-    for (auto it = index.lower_bound(ActionKey(shortcut)); it != index.end(); ++it) {
-        if (it->key.shortcut != shortcut) {
+    for (auto it = actionMapByKey.lower_bound(ActionKey(shortcut)); it != actionMapByKey.end(); ++it) {
+        if (it->first.shortcut != shortcut) {
             break;
         }
-        if (it->key.name != "~" && it->action) {
-            map.emplace(getPriority(it->key.name), &(*it));
+        auto dataIt = actionMapByPointer.find(it->second);
+        if (dataIt == actionMapByPointer.end()) {
+            continue;
+        }
+        const ActionData& data = dataIt->second;
+        if (data.key.name != "~" && data.action) {
+            map.emplace(getPriority(data.key.name), &data);
         }
     }
     for (const auto& v : map) {
@@ -503,13 +519,12 @@ void ShortcutManager::onTimer()
         // our fake key strokes. So we try to fake some more obscure symbol key
         // stroke below, hoping to reset Qt's state machine.
 
-        const auto& index = actionMap.get<1>();
         static const std::string symbols = "~!@#$%^&*()_+";
         QString shortcut = pendingSequence.toString() + QStringLiteral(", Ctrl+");
         for (int s : symbols) {
             QKeySequence k(shortcut + QLatin1Char(s));
-            auto it = index.lower_bound(ActionKey(k));
-            if (it->key.shortcut != k) {
+            auto it = actionMapByKey.lower_bound(ActionKey(k));
+            if (it == actionMapByKey.end() || it->first.shortcut != k) {
                 QKeyEvent* kev = new QKeyEvent(QEvent::KeyPress, s, Qt::ControlModifier, 0, 0, 0);
                 QApplication::postEvent(lastFocus, kev);
                 kev = new QKeyEvent(QEvent::KeyRelease, s, Qt::ControlModifier, 0, 0, 0);
