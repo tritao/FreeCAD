@@ -1060,6 +1060,20 @@ BSpline* BSpline::Copy()
     return new BSpline(*this);
 }
 
+size_t BSpline::startPoleForKnot(size_t knotindex) const
+{
+    size_t startpole = 0;
+    for (size_t j = 1; j <= knotindex; ++j) {
+        startpole += mult[j];
+    }
+
+    if (!periodic && startpole >= poles.size()) {
+        startpole = poles.size() - 1;
+    }
+
+    return startpole;
+}
+
 double BSpline::getLinCombFactor(double x, size_t k, size_t i, unsigned int p)
 {
     // Adapted to C++ from the python implementation in the Wikipedia page for de Boor algorithm

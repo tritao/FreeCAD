@@ -1581,31 +1581,12 @@ int System::addConstraintInternalAlignmentKnotPoint(
         numpoles = 1;
     }
 
-    // `startpole` is the first pole affecting the knot with `knotindex`
-    size_t startpole = 0;
     std::vector<double*> pvec;
     pvec.push_back(p.x);
 
     std::vector<double> factors(numpoles, 1.0 / numpoles);
 
-    // Only poles with indices `[i, i+1,... i+b.degree]` affect the interval
-    // `flattenedknots[b.degree+i]` to `flattenedknots[b.degree+i+1]`.
-    // When a knot has higher multiplicity, it can be seen as spanning
-    // multiple of these intervals, and thus is only affected by an
-    // intersection of the poles that affect it.
-    // The `knotindex` gives us the intervals, so work backwards and find
-    // the affecting poles.
-    // Note that this works also for periodic B-splines, just that the poles wrap around if needed.
-    for (size_t j = 1; j <= knotindex; ++j) {
-        startpole += b.mult[j];
-    }
-    // For the last knot, even the upper limit of the last interval range
-    // is included. So offset for that.
-    // For periodic B-splines the `flattenedknots` are defined differently,
-    // so this is not needed for them.
-    if (!b.periodic && startpole >= b.poles.size()) {
-        startpole = b.poles.size() - 1;
-    }
+    const size_t startpole = b.startPoleForKnot(knotindex);
 
     // Calculate the factors to be passed to weighted linear combination constraint.
     // The if condition has a small performance benefit, but that is not why it is here.

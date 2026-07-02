@@ -275,15 +275,7 @@ ConstraintSlopeAtBSplineKnot::ConstraintSlopeAtBSplineKnot(BSpline& b, Line& l, 
 
     pvec.reserve(3 * numpoles + 4);
 
-    // `startpole` is the first pole affecting the knot with `knotindex`
-    size_t startpole = 0;
-    // See `System::addConstraintInternalAlignmentKnotPoint()` for some elaboration
-    for (size_t j = 1; j <= knotindex; ++j) {
-        startpole += b.mult[j];
-    }
-    if (!b.periodic && startpole >= b.poles.size()) {
-        startpole = b.poles.size() - 1;
-    }
+    const size_t startpole = b.startPoleForKnot(knotindex);
 
     for (size_t i = 0; i < numpoles; ++i) {
         pvec.push_back(b.poles[(startpole + i) % b.poles.size()].x);
