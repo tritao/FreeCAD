@@ -407,6 +407,68 @@ class TestSketcherSolver(unittest.TestCase):
         self.assertTrue(status == 0)  # no redundants/conflicts/convergence issues
         FreeCAD.closeDocument(self.Doc3.Name)
 
+    def testPeriodicBSplineEndKnotInternalAlignment(self):
+        sketch = self.Doc.addObject("Sketcher::SketchObject", "Sketch")
+        poles = [
+            vec(31.50630429814165, -54.01435685964354),
+            vec(35.2869891145661, -98.78845564074186),
+            vec(35.401149972722145, -121.67380073304174),
+            vec(31.170686383329404, -134.99237294815586),
+            vec(-27.5239272022092, -149.44417184016342),
+            vec(-26.628006877362857, -113.61015261628968),
+            vec(-32.90581337981534, -65.93332615966216),
+            vec(-39.80253217122746, -9.543026722688504),
+            vec(-56.853270766853484, 43.398491658069815),
+            vec(-34.02392297326577, 122.60783670408719),
+            vec(18.829566699278548, 141.03085943315202),
+            vec(55.12562918337584, 122.64760512685282),
+            vec(48.530501441792815, 76.55153977564765),
+            vec(50.30048219164103, 17.149947130195507),
+            vec(11.534094935405601, -0.7719905530438996),
+        ]
+        weights = [
+            1.0,
+            0.5060417090743469,
+            0.317993490313351,
+            0.1841324691212418,
+            0.2550189385197335,
+            0.5870833457402642,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+        ]
+        knots = [
+            0.0,
+            23.323963,
+            47.216206,
+            75.466804,
+            97.38132729250512,
+            158.23391533311354,
+            252.07154867262187,
+            311.065566,
+            326.7347114582955,
+            430.91584873088436,
+        ]
+        multiplicities = [3, 1, 1, 1, 2, 2, 2, 1, 2, 3]
+
+        bspline = Part.BSplineCurve()
+        bspline.buildFromPolesMultsKnots(poles, multiplicities, knots, True, 4, weights)
+        sketch.addGeometry(bspline)
+
+        sketch.exposeInternalGeometry(0)
+        self.assertSuccessfulSolve(sketch)
+
+        knot_points = [geo for geo in sketch.Geometry if isinstance(geo, Part.Point)]
+        self.assertEqual(len(knot_points), len(knots))
+        self.assertAlmostEqual(knot_points[0].X, knot_points[-1].X)
+        self.assertAlmostEqual(knot_points[0].Y, knot_points[-1].Y)
+
     def testThreeLinesWithCoincidences_1(self):
         sketch = self.Doc.addObject("Sketcher::SketchObject", "Sketch")
         CreateThreeLinesWithCommonPoint(sketch)
