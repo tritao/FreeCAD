@@ -28,6 +28,8 @@
 
 #include <cassert>
 
+#include <Base/Exception.h>
+
 #include "Geo.h"
 
 
@@ -1060,10 +1062,45 @@ BSpline* BSpline::Copy()
     return new BSpline(*this);
 }
 
+bool BSpline::isPeriodicEndKnot(size_t knotindex) const
+{
+    return periodic && !knots.empty() && knotindex == knots.size() - 1;
+}
+
+size_t BSpline::periodicCanonicalKnotIndex(size_t knotindex) const
+{
+    assert(knotindex < knots.size());
+    if (knotindex >= knots.size()) {
+        FC_THROWM(
+            Base::IndexError,
+            "BSpline::periodicCanonicalKnotIndex: knot index " << knotindex << " out of range "
+                                                               << knots.size()
+        );
+    }
+
+    return isPeriodicEndKnot(knotindex) ? 0 : knotindex;
+}
+
 size_t BSpline::startPoleForKnot(size_t knotindex) const
 {
+    const auto periodicKnotIndex = periodicCanonicalKnotIndex(knotindex);
+
+    assert(mult.size() == knots.size());
+    if (mult.size() != knots.size()) {
+        FC_THROWM(
+            Base::ValueError,
+            "BSpline::startPoleForKnot: knot count "
+                << knots.size() << " does not match multiplicity count " << mult.size()
+        );
+    }
+
+    assert(!poles.empty());
+    if (poles.empty()) {
+        throw Base::ValueError("BSpline::startPoleForKnot: B-spline has no poles");
+    }
+
     size_t startpole = 0;
-    for (size_t j = 1; j <= knotindex; ++j) {
+    for (size_t j = 1; j <= periodicKnotIndex; ++j) {
         startpole += mult[j];
     }
 
@@ -1088,6 +1125,18 @@ double BSpline::getLinCombFactor(double x, size_t k, size_t i, unsigned int p)
     // https://github.com/FreeCAD/FreeCAD/pull/7484#discussion_r1020858392
     if (flattenedknots.empty()) {
         setupFlattenedKnots();
+    }
+
+    const bool knotSpanInRange = k >= p && p < flattenedknots.size()
+        && k <= flattenedknots.size() - p - 1;
+    assert(knotSpanInRange);
+    if (!knotSpanInRange) {
+        FC_THROWM(
+            Base::IndexError,
+            "BSpline::getLinCombFactor: invalid knot span k=" << k << ", i=" << i << ", p=" << p
+                                                              << ", flattenedknots.size()="
+                                                              << flattenedknots.size()
+        );
     }
 
     std::vector d(p + 1, 0.0);

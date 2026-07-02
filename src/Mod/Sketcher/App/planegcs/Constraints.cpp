@@ -266,10 +266,12 @@ double ConstraintCenterOfGravity::grad(double* param)
 // Slope at B-spline knot
 ConstraintSlopeAtBSplineKnot::ConstraintSlopeAtBSplineKnot(BSpline& b, Line& l, size_t knotindex)
 {
+    const auto periodicKnotIndex = b.periodicCanonicalKnotIndex(knotindex);
+
     // set up pvec: pole x-coords, pole y-coords, pole weights,
     // line point 1 coords, line point 2 coords
 
-    numpoles = b.degree - b.mult[knotindex] + 1;
+    numpoles = b.degree - b.mult[periodicKnotIndex] + 1;
     // slope at knot doesn't make sense if there's only C0 continuity
     assert(numpoles >= 2);
 
@@ -297,7 +299,7 @@ ConstraintSlopeAtBSplineKnot::ConstraintSlopeAtBSplineKnot(BSpline& b, Line& l, 
     slopefactors.resize(numpoles);
     for (size_t i = 0; i < numpoles + 1; ++i) {
         tempfactors[i] = b.getLinCombFactor(
-                             *(b.knots[knotindex]),
+                             *(b.knots[periodicKnotIndex]),
                              startpole + b.degree,
                              startpole + i,
                              b.degree - 1
@@ -305,7 +307,8 @@ ConstraintSlopeAtBSplineKnot::ConstraintSlopeAtBSplineKnot(BSpline& b, Line& l, 
             / (b.flattenedknots[startpole + b.degree + i] - b.flattenedknots[startpole + i]);
     }
     for (size_t i = 0; i < numpoles; ++i) {
-        factors[i] = b.getLinCombFactor(*(b.knots[knotindex]), startpole + b.degree, startpole + i);
+        factors[i]
+            = b.getLinCombFactor(*(b.knots[periodicKnotIndex]), startpole + b.degree, startpole + i);
         slopefactors[i] = b.degree * (tempfactors[i] - tempfactors[i + 1]);
     }
 

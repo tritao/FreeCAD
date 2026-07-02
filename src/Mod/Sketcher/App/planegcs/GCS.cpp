@@ -1570,13 +1570,16 @@ int System::addConstraintInternalAlignmentKnotPoint(
     bool driving
 )
 {
-    if (b.periodic && knotindex == 0) {
+    const bool periodicEndKnot = b.isPeriodicEndKnot(knotindex);
+    const auto periodicKnotIndex = b.periodicCanonicalKnotIndex(knotindex);
+
+    if (b.periodic && (knotindex == 0 || periodicEndKnot)) {
         // This is done here since knotpoints themselves aren't stored
         addConstraintP2PCoincident(p, b.start, tagId, driving);
         addConstraintP2PCoincident(p, b.end, tagId, driving);
     }
 
-    size_t numpoles = b.degree - b.mult[knotindex] + 1;
+    size_t numpoles = b.degree - b.mult[periodicKnotIndex] + 1;
     if (numpoles == 0) {
         numpoles = 1;
     }
@@ -1594,8 +1597,9 @@ int System::addConstraintInternalAlignmentKnotPoint(
     // In this case, the interval `k` passed to `getLinCombFactor` is degenerate, and this is the
     // cleanest way to handle it.
     if (numpoles > 1) {
+        const double knot = *(b.knots[periodicKnotIndex]);
         for (size_t i = 0; i < numpoles; ++i) {
-            factors[i] = b.getLinCombFactor(*(b.knots[knotindex]), startpole + b.degree, startpole + i);
+            factors[i] = b.getLinCombFactor(knot, startpole + b.degree, startpole + i);
         }
     }
 

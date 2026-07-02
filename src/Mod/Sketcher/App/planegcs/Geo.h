@@ -392,6 +392,8 @@ public:
     int PushOwnParams(VEC_pD& pvec) override;
     void ReconstructOnNewPvec(VEC_pD& pvec, int& cnt) override;
     BSpline* Copy() override;
+    bool isPeriodicEndKnot(size_t knotindex) const;
+    size_t periodicCanonicalKnotIndex(size_t knotindex) const;
     size_t startPoleForKnot(size_t knotindex) const;
     /// finds the value B_i(x) such that spline(x) = sum(poles[i] * B_i(x))
     /// x is the point at which combination is needed
