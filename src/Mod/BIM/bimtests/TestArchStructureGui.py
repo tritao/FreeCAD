@@ -66,3 +66,19 @@ class TestArchStructureGui(TestArchBaseGui.TestArchBaseGui):
         self.assertTrue(hasattr(proxy, "fset"))
         self.assertGreater(proxy.fcoords.point.getNum(), 0)
         self.assertGreater(proxy.fset.coordIndex.getNum(), 0)
+
+    def test_slab_footprint_mode_populates_snap_outline_data(self):
+        """Slab footprint mode should expose outline edges for snapping."""
+
+        rect = Draft.makeRectangle(length=4000, height=3000)
+        slab = Arch.makeStructure(rect, height=200, name="GuiSlabFootprint")
+        slab.IfcType = "Slab"
+        self.document.recompute()
+        slab.ViewObject.DisplayMode = "Footprint"
+        self.pump_gui_events()
+
+        proxy = slab.ViewObject.Proxy
+        self.assertTrue(hasattr(proxy, "flcoords"))
+        self.assertTrue(hasattr(proxy, "flines"))
+        self.assertGreater(proxy.flcoords.point.getNum(), 0)
+        self.assertGreater(proxy.flines.coordIndex.getNum(), 0)

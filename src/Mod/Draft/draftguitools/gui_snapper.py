@@ -388,7 +388,24 @@ class Snapper:
         snaps = []
         point = App.Vector(self.snapInfo["x"], self.snapInfo["y"], self.snapInfo["z"])
         comp = self.snapInfo["Component"]
-        shape = Part.getShape(parent, subname, needSubElement=True, noElementMap=True)
+        shape = None
+
+        # BIM Footprint mode draws derived Coin geometry which is not part of
+        # the source object's Shape. Its view provider returns an empty
+        # component for outline picks, so resolve the picked point against the
+        # exact cached derived edge instead of treating it as EdgeN on Shape.
+        if getattr(obj.ViewObject, "DisplayMode", "") == "Footprint":
+            provider = obj.ViewObject.Proxy
+            if hasattr(provider, "getFootprintSnapEdge"):
+                footprint_edge = provider.getFootprintSnapEdge(point)
+                if footprint_edge:
+                    shape = footprint_edge
+                    comp = "Edge1"
+
+        # Only resolve the source shape when the picked point was not supplied
+        # by the derived Footprint edge cache.
+        if shape is None:
+            shape = Part.getShape(parent, subname, needSubElement=True, noElementMap=True)
 
         if not shape.isNull():
             snaps.extend(self.snapToSpecials(obj, lastpoint, eline))
