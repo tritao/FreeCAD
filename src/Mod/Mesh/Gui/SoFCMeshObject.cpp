@@ -54,6 +54,7 @@
 
 #include <Base/Console.h>
 #include <Base/Exception.h>
+#include <Gui/MeshRenderData.h>
 #include <Gui/SoFCInteractiveElement.h>
 #include <Gui/Selection/SoFCSelectionAction.h>
 #include <Mod/Mesh/App/Core/Algorithm.h>
@@ -660,7 +661,8 @@ void SoFCMeshObjectShape::GLRender(SoGLRenderAction* action)
             ccw = false;
         }
 
-        if (!mode || mesh->countFacets() <= this->renderTriangleLimit) {
+        const Gui::MeshInteractionLodPolicy policy(this->renderTriangleLimit);
+        if (!policy.shouldUseReducedGeometry(mode, mesh->countFacets())) {
             if (mbind != OVERALL) {
                 drawFaces(mesh, &mb, mbind, needNormals, ccw);
             }
@@ -809,7 +811,8 @@ void SoFCMeshObjectShape::drawPoints(const Mesh::MeshObject* mesh, SbBool needNo
 {
     const MeshCore::MeshPointArray& rPoints = mesh->getKernel().GetPoints();
     const MeshCore::MeshFacetArray& rFacets = mesh->getKernel().GetFacets();
-    int mod = rFacets.size() / renderTriangleLimit + 1;
+    const Gui::MeshInteractionLodPolicy policy(this->renderTriangleLimit);
+    int mod = static_cast<int>(policy.pointStride(rFacets.size()));
 
     float size = std::min<float>((float)mod, 3.0F);
     glPointSize(size);
@@ -1279,7 +1282,8 @@ void SoFCMeshSegmentShape::GLRender(SoGLRenderAction* action)
             ccw = false;
         }
 
-        if (!mode || mesh->countFacets() <= this->renderTriangleLimit) {
+        const Gui::MeshInteractionLodPolicy policy(this->renderTriangleLimit);
+        if (!policy.shouldUseReducedGeometry(mode, mesh->countFacets())) {
             if (mbind != OVERALL) {
                 drawFaces(mesh, &mb, mbind, needNormals, ccw);
             }
@@ -1427,7 +1431,8 @@ void SoFCMeshSegmentShape::drawPoints(const Mesh::MeshObject* mesh, SbBool needN
         return;
     }
     const std::vector<Mesh::FacetIndex> rSegm = mesh->getSegment(this->index.getValue()).getIndices();
-    int mod = rSegm.size() / renderTriangleLimit + 1;
+    const Gui::MeshInteractionLodPolicy policy(this->renderTriangleLimit);
+    int mod = static_cast<int>(policy.pointStride(rSegm.size()));
 
     float size = std::min<float>((float)mod, 3.0F);
     glPointSize(size);
