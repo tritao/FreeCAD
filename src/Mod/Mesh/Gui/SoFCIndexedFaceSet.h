@@ -29,10 +29,12 @@
 #include <Inventor/fields/SoSFBool.h>
 #include <Inventor/nodes/SoIndexedFaceSet.h>
 #include <vector>
+#include <Gui/MeshRenderData.h>
 #include <Mod/Mesh/MeshGlobal.h>
 
 
 class SoGLCoordinateElement;
+class SoState;
 class SoTextureCoordinateBundle;
 
 using GLuint = unsigned int;
@@ -48,12 +50,7 @@ class MeshRenderer
 public:
     MeshRenderer();
     ~MeshRenderer();
-    void generateGLArrays(
-        SoGLRenderAction*,
-        SoMaterialBindingElement::Binding binding,
-        std::vector<float>& vertex,
-        std::vector<int32_t>& index
-    );
+    void generateGLArrays(SoGLRenderAction*, const Gui::MeshRenderData& data);
     void renderFacesGLArray(SoGLRenderAction* action);
     void renderCoordsGLArray(SoGLRenderAction* action);
     bool canRenderGLArray(SoGLRenderAction* action) const;
@@ -141,11 +138,13 @@ private:
     void stopVisibility(SoAction* action);
     void renderVisibleFaces(const SbVec3f*);
 
+    Gui::MeshRenderData buildMeshRenderData(SoState* state);
     void generateGLArrays(SoGLRenderAction* action);
 
 private:
     MeshRenderer render;
     GLuint* selectBuf {nullptr};
+    std::uint64_t renderRevision {0};
 };
 // NOLINTEND
 
