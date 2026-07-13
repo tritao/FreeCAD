@@ -31,6 +31,8 @@ SET(Arch_SRCS
     ArchWallJoint.py
     ArchWallRelation.py
     ArchWallRelationBase.py
+    ArchWallJunction.py
+    ArchWallJunctionSolver.py
     Arch.py
     ArchSite.py
     ArchStructure.py
