@@ -214,6 +214,8 @@ class BuildingPart(ArchIFC.IfcProduct):
 
         obj.Proxy = self
         self.Type = "BuildingPart"
+        self.oldGroup = []
+        self.oldPlacement = None
         obj.addExtension("App::GroupExtensionPython")
         # obj.addExtension('App::OriginGroupExtensionPython')
         self.setProperties(obj)
@@ -332,6 +334,8 @@ class BuildingPart(ArchIFC.IfcProduct):
 
     def onDocumentRestored(self, obj):
 
+        self.oldGroup = []
+        self.oldPlacement = None
         self.setProperties(obj)
 
         vobj = getattr(obj, "ViewObject", None)
@@ -360,11 +364,62 @@ class BuildingPart(ArchIFC.IfcProduct):
     def loads(self, state):
 
         self.Type = "BuildingPart"
+        self.oldGroup = []
+        self.oldPlacement = None
 
     def onBeforeChange(self, obj, prop):
 
         if prop == "Placement":
             self.oldPlacement = FreeCAD.Placement(obj.Placement)
+        elif prop == "Group":
+            self.oldGroup = list(obj.Group)
+
+    def _footprint_children(self, obj, extra_children=None):
+        """Yield descendants whose footprint context may have changed."""
+
+        pending = list(obj.Group)
+        if "Additions" in obj.PropertiesList:
+            pending.extend(list(obj.Additions))
+        pending.extend(list(extra_children or []))
+        visited = set()
+
+        while pending:
+            child = pending.pop()
+            if child.Name not in visited:
+                visited.add(child.Name)
+                view_object = child.ViewObject
+                provider = view_object.Proxy if view_object else None
+                yield child, view_object, provider
+
+                if "Group" in child.PropertiesList:
+                    pending.extend(list(child.Group))
+                if "Additions" in child.PropertiesList:
+                    pending.extend(list(child.Additions))
+
+    def _invalidateFootprintChildren(self, obj, extra_children=None):
+        """Invalidate descendant footprint caches without rebuilding geometry."""
+
+        for _, _, provider in self._footprint_children(obj, extra_children):
+            try:
+                provider.invalidateFootprint()
+            except AttributeError:
+                pass
+
+    def _refreshFootprintChildren(self, obj, extra_children=None):
+        """Refresh only dirty, visible descendants using Footprint mode."""
+
+        for _, view_object, provider in self._footprint_children(obj, extra_children):
+            if (
+                view_object
+                and provider
+                and view_object.DisplayMode == "Footprint"
+                and view_object.Visibility
+            ):
+                try:
+                    if provider.isFootprintDirty():
+                        provider.refreshFootprint(view_object)
+                except AttributeError:
+                    pass
 
     def onChanged(self, obj, prop):
 
@@ -377,13 +432,26 @@ class BuildingPart(ArchIFC.IfcProduct):
             self.svgcache = None
             self.shapecache = None
 
+        footprint_context_props = [
+            "Placement",
+            "LevelOffset",
+            "PlanCutHeight",
+            "Group",
+            "IfcType",
+        ]
+        if prop in footprint_context_props:
+            # Invalidate before moving children. A moved child may refresh
+            # itself from its Placement callback; the final pass below then
+            # skips it because its generation is already clean.
+            self._invalidateFootprintChildren(obj, self.oldGroup)
+
         if (prop == "Height" or prop == "HeightPropagate") and obj.Height.Value:
             self.touchChildren(obj)
         elif prop == "IfcType":
             self._sync_plan_cut_height_property(obj)
 
         elif prop == "Placement":
-            if hasattr(self, "oldPlacement") and self.oldPlacement != obj.Placement:
+            if self.oldPlacement is not None and self.oldPlacement != obj.Placement:
                 deltap = obj.Placement.Base.sub(self.oldPlacement.Base)
                 if deltap.Length == 0:
                     deltap = None
@@ -402,6 +470,11 @@ class BuildingPart(ArchIFC.IfcProduct):
                         )
                     if deltap:
                         child.Placement.move(deltap)
+
+        if prop in footprint_context_props:
+            self._refreshFootprintChildren(obj, self.oldGroup)
+            if prop == "Group":
+                self.oldGroup = []
 
     def _sync_plan_cut_height_property(self, obj):
         """Expose plan cut height only on building storeys.
