@@ -46,11 +46,13 @@ import math
 import FreeCAD
 import ArchCommands
 import ArchIFC
+import ArchPlanRepresentation
 import Draft
 
 from draftutils import params
 
 DEFAULT_PLAN_CUT_HEIGHT = 1000.0
+PlanContext = ArchPlanRepresentation.PlanContext
 
 if FreeCAD.GuiUp:
     from PySide import QtGui, QtCore
@@ -74,28 +76,16 @@ def _make_projected_horizontal_area_face(projected_faces):
     if not projected_faces:
         return None
 
-    fused_face = projected_faces[0].copy(noElementMap=True)
+    try:
+        fused_face = projected_faces[0].copy(noElementMap=True)
+    except TypeError:
+        fused_face = projected_faces[0].copy()
     for face in projected_faces[1:]:
-        fused_face = fused_face.fuse(face, noElementMap=True)
+        try:
+            fused_face = fused_face.fuse(face, noElementMap=True)
+        except TypeError:
+            fused_face = fused_face.fuse(face)
     return fused_face.removeSplitter()
-
-
-class PlanContext:
-    """Plan view definition used to derive object plan representations.
-
-    `cut_z` is the absolute document Z coordinate where solid objects are cut.
-    `target_z` is the absolute document Z coordinate where the resulting plan
-    faces should be placed. `source` can reference the document object that
-    supplied the context, such as a Building Storey. The generic Footprint
-    display mode uses this as its default preview context, but callers can pass
-    another context to request a different plan representation of the same
-    object.
-    """
-
-    def __init__(self, cut_z=None, target_z=None, source=None):
-        self.cut_z = cut_z
-        self.target_z = target_z
-        self.source = source
 
 
 def addToComponent(compobject, addobject, prop):
@@ -621,17 +611,18 @@ class Component(ArchIFC.IfcProduct):
         `getPlanRepresentation()` provides the view-aware extension point.
         """
 
-        shape = getattr(obj, "Shape", None)
+        try:
+            shape = obj.Shape
+        except AttributeError:
+            shape = None
         if shape and not shape.isNull():
             target_z = shape.BoundBox.ZMin
         else:
             target_z = obj.Placement.Base.z
 
         storey = self.getParentBuildingPart(obj, ifc_type="Building Storey")
-        if storey and hasattr(storey, "PlanCutHeight") and storey.PlanCutHeight.Value > 0:
-            level_offset = getattr(storey, "LevelOffset", 0)
-            if hasattr(level_offset, "Value"):
-                level_offset = level_offset.Value
+        if storey and "PlanCutHeight" in storey.PropertiesList and storey.PlanCutHeight.Value > 0:
+            level_offset = storey.LevelOffset.Value if "LevelOffset" in storey.PropertiesList else 0
             cut_z = storey.Placement.Base.z + level_offset + storey.PlanCutHeight.Value
             return PlanContext(cut_z=cut_z, target_z=target_z, source=storey)
 
@@ -1680,8 +1671,17 @@ class ViewProviderComponent:
     """
 
     def __init__(self, vobj):
-        vobj.Proxy = self
         self.Object = vobj.Object
+        self._footprint_representation = None
+        self._footprint_dirty = True
+        self.fcoords = None
+        self.fset = None
+        self.flcoords = None
+        self.flines = None
+        self.flinecolor = None
+        # Assigning Proxy can synchronously deliver an updateData callback on
+        # some FreeCAD versions, so initialize all transient state first.
+        vobj.Proxy = self
         self.setProperties(vobj)
 
     def setProperties(self, vobj):
@@ -1761,32 +1761,175 @@ class ViewProviderComponent:
                             obj.ViewObject.DiffuseColor = obj.CloneOf.ViewObject.DiffuseColor
                             obj.ViewObject.update()
         if prop in ("Shape", "Placement"):
-            self.refreshFootprint(obj.ViewObject)
+            self.invalidateFootprint()
+            # A new shape must be available for the first Footprint mode
+            # display even when the object is currently shown normally. A
+            # placement-only change is cheap to invalidate and can wait until
+            # Footprint mode or snapping actually needs the representation.
+            self.refreshFootprint(obj.ViewObject, force=prop == "Shape")
         return
 
+    def getFootprintRepresentation(self):
+        """Return the neutral representation used by Footprint Coin nodes."""
+
+        representation = ArchPlanRepresentation.get_plan_representation(self.Object)
+        self._footprint_representation = representation
+        return representation
+
+    def invalidateFootprint(self):
+        """Mark neutral geometry and its Coin conversion stale."""
+
+        ArchPlanRepresentation.invalidate_plan_representation(self.Object)
+        self._footprint_dirty = True
+
+    def isFootprintDirty(self):
+        """Return whether the derived footprint needs to be rebuilt."""
+
+        return self._footprint_dirty
+
     def updateFootprint(self):
-        self.fset.coordIndex.deleteValues(0)
+        representation = self.getFootprintRepresentation()
+        inverse_placement = self.Object.Placement.inverse()
+        verts = []
+        fdata = []
+        edge_verts = []
+        edge_data = []
+        idx = 0
+        edge_idx = 0
+
+        for face in representation.faces:
+            tri = face.tessellate(1)
+            for v in tri[0]:
+                # The neutral service returns document-coordinate geometry.
+                # Store it in object-local coordinates because the Coin scene
+                # graph applies Placement separately.
+                v = inverse_placement.multVec(v)
+                verts.append([v.x, v.y, v.z])
+            for f in tri[1]:
+                fdata.extend([f[0] + idx, f[1] + idx, f[2] + idx, -1])
+            idx += len(tri[0])
+
+            # Keep exact derived edges for Draft snapping. The Coin outline
+            # remains a display cache and must not be interpreted as EdgeN
+            # elements of the source object's Shape.
+            if self.flines:
+                for wire in face.Wires:
+                    wire_points = []
+                    for edge in wire.Edges:
+                        if edge.Curve.TypeId == "Part::GeomLine":
+                            segment = [vertex.Point for vertex in edge.Vertexes]
+                        else:
+                            sample_count = max(8, min(64, int(edge.Length / 100.0) + 1))
+                            try:
+                                segment = edge.discretize(Number=sample_count)
+                            except TypeError:
+                                segment = edge.discretize(QuasiDeflection=1.0)
+                        if segment:
+                            if wire_points and wire_points[-1].sub(segment[0]).Length < 0.001:
+                                segment = segment[1:]
+                            wire_points.extend(segment)
+                    if len(wire_points) >= 2:
+                        if wire_points[0].sub(wire_points[-1]).Length >= 0.001:
+                            wire_points.append(wire_points[0])
+                        for point in wire_points:
+                            point = inverse_placement.multVec(point)
+                            edge_verts.append([point.x, point.y, point.z])
+                        edge_data.extend(range(edge_idx, edge_idx + len(wire_points)))
+                        edge_data.append(-1)
+                        edge_idx += len(wire_points)
+
+        # Replace all derived caches only after the complete representation has
+        # been built. A failed tessellation/section therefore cannot erase a
+        # previously valid display or snap cache.
         self.fcoords.point.deleteValues(0)
-        faces = self.Object.Proxy.getFootprint(self.Object)
-        if faces:
-            inverse_placement = self.Object.Placement.inverse()
-            verts = []
-            fdata = []
-            idx = 0
-            for face in faces:
-                tri = face.tessellate(1)
-                for v in tri[0]:
-                    # getFootprint() returns placed geometry. Store the
-                    # cached footprint node in object-local coordinates so
-                    # Placement changes do not double-transform it.
-                    if inverse_placement is not None:
-                        v = inverse_placement.multVec(v)
-                    verts.append([v.x, v.y, v.z])
-                for f in tri[1]:
-                    fdata.extend([f[0] + idx, f[1] + idx, f[2] + idx, -1])
-                idx += len(tri[0])
+        self.fset.coordIndex.deleteValues(0)
+        if self.flines:
+            self.flines.coordIndex.deleteValues(0)
+        self.flcoords.point.deleteValues(0)
+        if verts:
             self.fcoords.point.setValues(verts)
+        if fdata:
             self.fset.coordIndex.setValues(0, len(fdata), fdata)
+        if edge_verts and self.flines:
+            self.flcoords.point.setValues(edge_verts)
+            self.flines.coordIndex.setValues(0, len(edge_data), edge_data)
+        self.flinecolor.rgb.setValue(*self.Object.ViewObject.LineColor[:3])
+        self._footprint_dirty = False
+
+    def getFootprintSnapEdges(self):
+        """Return exact edges from the current shared representation."""
+
+        representation = self.getFootprintRepresentation()
+        return representation.edges
+
+    def getFootprintSnapEdge(self, point):
+        """Return the derived footprint edge nearest to a picked point."""
+
+        import Part
+
+        if point is None:
+            return None
+        try:
+            point_shape = Part.Vertex(point)
+        except Exception:
+            return None
+        representation = self.getFootprintRepresentation()
+        nearest = None
+        distance = None
+        # The neutral cache is deliberately small.  Keep the exact-edge lookup
+        # linear until plan-edit profiling demonstrates a need for an index.
+        for edge in representation.edges:
+            try:
+                current = edge.distToShape(point_shape)[0]
+            except Exception:
+                current = None
+            if current is not None and (distance is None or current < distance):
+                nearest = edge
+                distance = current
+        return nearest
+
+    def _path_contains_node(self, pp, node):
+        """Return whether a Coin pick path contains *node*."""
+
+        if not pp or not node:
+            return False
+        path = pp.getPath()
+        if not path:
+            return False
+        try:
+            if path.findNode(node) >= 0:
+                return True
+        except Exception:
+            pass
+        try:
+            for index in range(path.getLength()):
+                candidate = path.getNode(index)
+                if candidate == node:
+                    return True
+                # Some Pivy/Coin combinations wrap the same native node with
+                # distinct Python proxy objects. Footprint nodes are unique by
+                # type in their display group, so type matching is a safe
+                # fallback for those builds.
+                if candidate.getTypeId() == node.getTypeId():
+                    return True
+            return False
+        except Exception:
+            return False
+
+    def getElementPicked(self, pp):
+        """Keep derived Footprint geometry out of ordinary subelement picks.
+
+        The Coin outline is not an element of ``Object.Shape``. Returning an
+        empty component lets Draft use its dedicated derived-edge snap path;
+        rejecting the filled cache prevents synthetic FaceN names from being
+        resolved against the source shape.
+        """
+
+        if self._path_contains_node(pp, self.flines):
+            return ""
+        if self._path_contains_node(pp, self.fset):
+            return None
+        raise NotImplementedError
 
     def ensureFootprintGroup(self, vobj=None):
         """Ensure the generic Footprint display mode node exists.
@@ -1813,20 +1956,37 @@ class ViewProviderComponent:
         except Exception:
             return None
 
-    def refreshFootprint(self, vobj=None):
+    def refreshFootprint(self, vobj=None, force=False):
         """Refresh derived footprint display data when footprint mode is available.
 
         Footprint geometry is a derived GUI cache. Failures here should not break
         generic attach/update paths for the rest of the view provider.
         """
 
+        if vobj is None:
+            vobj = self.Object.ViewObject
         if not self.ensureFootprintGroup(vobj):
+            return False
+        if not force and (vobj.DisplayMode != "Footprint" or not vobj.Visibility):
             return False
         try:
             self.updateFootprint()
-        except Exception:
+        except Exception as error:
+            FreeCAD.Console.PrintWarning(
+                "Unable to refresh Footprint for {}: {}\n".format(
+                    self.Object.Label,
+                    error,
+                )
+            )
             return False
         return True
+
+    def onDocumentRestored(self, vobj):
+        """Discard transient derived geometry after document restoration."""
+
+        self._footprint_representation = None
+        self._footprint_dirty = True
+        ArchPlanRepresentation.invalidate_plan_representation(self.Object)
 
     def getIcon(self):
         """Return the path to the appropriate icon.
@@ -1881,6 +2041,9 @@ class ViewProviderComponent:
                 if len(vobj.DiffuseColor) > 1:
                     d = vobj.DiffuseColor
                     vobj.DiffuseColor = d
+        elif prop == "LineColor":
+            if self.flinecolor:
+                self.flinecolor.rgb.setValue(*vobj.LineColor[:3])
         elif prop == "Visibility":
             # do nothing if object is an addition
             if not [parent for parent in obj.InList if obj in getattr(parent, "Additions", [])]:
@@ -1892,6 +2055,8 @@ class ViewProviderComponent:
                 for hostedObj in hostedObjs:
                     if hasattr(hostedObj, "ViewObject"):
                         hostedObj.ViewObject.Visibility = vobj.Visibility
+            if vobj.Visibility and vobj.DisplayMode == "Footprint" and self.isFootprintDirty():
+                self.refreshFootprint(vobj)
         return
 
     def attach(self, vobj):
@@ -1921,7 +2086,7 @@ class ViewProviderComponent:
         self.hiresgroup.addChild(self.meshcolor)
         self.hiresgroup.setName("HiRes")
         vobj.addDisplayMode(self.hiresgroup, "HiRes")
-        self.refreshFootprint(vobj)
+        self.refreshFootprint(vobj, force=True)
         return
 
     def getDisplayModes(self, vobj):
@@ -1972,7 +2137,7 @@ class ViewProviderComponent:
             The name of the display mode the view provider has switched to.
         """
 
-        if mode == "Footprint" and self.refreshFootprint():
+        if mode == "Footprint" and self.refreshFootprint(force=True):
             # Footprint is a generic component display mode, so refresh its
             # derived display data whenever the viewer switches into it.
             return "Footprint"

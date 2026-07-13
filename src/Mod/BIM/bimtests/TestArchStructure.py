@@ -28,6 +28,7 @@ from FreeCAD import Vector
 import Arch
 import ArchComponent
 import Draft
+import Part
 from bimtests import TestArchBase
 
 
@@ -59,6 +60,24 @@ class TestArchStructure(TestArchBase.TestArchBase):
         context_bbox = context_faces[0].BoundBox
         self.assertAlmostEqual(context_bbox.ZMin, 42.0, places=6)
         self.assertAlmostEqual(context_bbox.ZMax, 42.0, places=6)
+
+    def test_slab_get_footprint_combines_stepped_regions(self):
+        """A stepped slab footprint should include every plan region."""
+
+        slab = Arch.makeStructure(length=1000, width=1000, height=100, name="SteppedSlab")
+        slab.IfcType = "Slab"
+        slab.Shape = Part.makeCompound(
+            [
+                Part.makeBox(2000, 2000, 100),
+                Part.makeBox(2000, 2000, 200, App.Vector(2000, 0, 0)),
+            ]
+        )
+        context = ArchComponent.PlanContext(cut_z=0, target_z=0)
+
+        faces = slab.Proxy.getPlanRepresentation(slab, context)
+
+        self.assertEqual(len(faces), 1)
+        self.assertAlmostEqual(faces[0].Area, 4000 * 2000, places=3)
 
     #  Dimensions
     def test_makeStructure_explicit_dimensions(self):

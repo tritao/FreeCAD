@@ -38,8 +38,10 @@ __url__ = "https://www.freecad.org"
 #  support other parts of the building.
 
 import enum
+import math
 import FreeCAD
 import ArchComponent
+import ArchPlanRepresentation
 import ArchCommands
 import ArchProfile
 import Draft
@@ -913,61 +915,66 @@ class _Structure(ArchComponent.Component):
     def getFootprint(self, obj):
         """Return a light plan footprint for flat slabs.
 
-        This derives the outline from the highest horizontal slab faces and
-        flattens it to the slab base elevation. Sloped slabs will need a
+        This derives the outline from all upward-facing horizontal slab faces
+        and flattens it to the slab base elevation. Sloped slabs will need a
         projection-based footprint path instead. This is the default-preview
         wrapper for `getPlanRepresentation()`.
         """
 
-        context = self.getDefaultPlanContext(obj)
-        return self.getPlanRepresentation(obj, context)
+        return ArchPlanRepresentation.get_plan_representation(obj).faces
 
     def getPlanRepresentation(self, obj, context):
         """Return slab plan faces for the supplied plan context.
 
-        The current slab implementation uses the context target elevation only:
-        it flattens the highest horizontal slab faces to that Z coordinate.
-        Future projection or section behavior can use the same context object
-        without changing the generic Footprint display mode contract.
+        The slab implementation uses the context target elevation only: it
+        projects all upward-facing horizontal slab faces to that Z coordinate
+        and fuses them in plan, preserving holes and disconnected regions.
+        Sloped slabs remain unsupported until a projection-based path is added.
         """
 
         if context is None:
             context = self.getDefaultPlanContext(obj)
-        if getattr(obj, "IfcType", "Beam") != "Slab":
+        if "IfcType" not in obj.PropertiesList or obj.IfcType != "Slab":
             return []
 
         shape = obj.Shape
         if not shape or shape.isNull():
             return []
 
-        top_faces = []
-        top_z = None
+        horizontal_faces = []
         target_z = context.target_z if context.target_z is not None else shape.BoundBox.ZMin
         for face in shape.Faces:
             normal = face.normalAt(0, 0)
-            if normal.getAngle(FreeCAD.Vector(0, 0, 1)) >= 0.01:
+            angle = normal.getAngle(FreeCAD.Vector(0, 0, 1))
+            if angle < 0.01:
+                horizontal_faces.append(face)
+            elif abs(angle - math.pi / 2) < 0.01 or abs(angle - math.pi) < 0.01:
                 continue
-            z_value = face.CenterOfMass.z
-            if top_z is None or z_value > top_z + 0.001:
-                top_faces = [face]
-                top_z = z_value
-            elif abs(z_value - top_z) < 0.001:
-                top_faces.append(face)
+            else:
+                # Do not show a partial footprint for a sloped slab. A
+                # projection-based representation is needed for that case.
+                return []
 
-        if not top_faces:
+        if not horizontal_faces:
             return []
 
-        delta_z = target_z - top_z
-        if abs(delta_z) < 0.001:
-            return top_faces
-
-        flattened = []
-        translation = FreeCAD.Vector(0, 0, delta_z)
-        for face in top_faces:
+        projected = []
+        for face in horizontal_faces:
             moved = face.copy()
+            translation = FreeCAD.Vector(0, 0, target_z - face.CenterOfMass.z)
             moved.translate(translation)
-            flattened.append(moved)
-        return flattened
+            projected.append(moved)
+
+        try:
+            combined = ArchComponent._make_projected_horizontal_area_face(projected)
+        except Exception as error:
+            FreeCAD.Console.PrintWarning(
+                "Unable to combine slab Footprint faces for {}: {}\n".format(obj.Label, error)
+            )
+            return []
+        if not combined or combined.isNull():
+            return []
+        return list(combined.Faces)
 
     def dumps(self):  # Supercede Arch.Component.dumps()
         dump = super().dumps()
@@ -1501,10 +1508,16 @@ class _ViewProviderStructure(ArchComponent.ViewProviderComponent):
         return modes
 
     def _drop_footprint_group(self, vobj):
-        if hasattr(self, "fcoords"):
+        self.invalidateFootprint()
+        self._footprint_representation = None
+        if self.fcoords:
             self.fcoords.point.deleteValues(0)
-        if hasattr(self, "fset"):
+        if self.fset:
             self.fset.coordIndex.deleteValues(0)
+        if self.flcoords:
+            self.flcoords.point.deleteValues(0)
+        if self.flines:
+            self.flines.coordIndex.deleteValues(0)
         if vobj.DisplayMode == "Footprint" and "Flat Lines" in vobj.listDisplayModes():
             vobj.DisplayMode = "Flat Lines"
 
@@ -1522,23 +1535,34 @@ class _ViewProviderStructure(ArchComponent.ViewProviderComponent):
         """Set up a subtle filled footprint style for slabs."""
 
         from pivy import coin
+        import PartGui  # Required for "SoBrepEdgeSet" on custom footprint nodes.
 
         base_color = ArchCommands.getDefaultColor("Structure")
         fill_color = tuple((component + 2.0) / 3.0 for component in base_color[:3])
 
         self.fcoords = coin.SoCoordinate3()
         self.fset = coin.SoIndexedFaceSet()
+        self.flcoords = coin.SoCoordinate3()
+        self.flinecolor = coin.SoBaseColor()
+        self.flines = coin.SoType.fromName("SoBrepEdgeSet").createInstance()
         material = coin.SoMaterial()
         material.diffuseColor.setValue(fill_color)
         material.transparency.setValue(0.7)
         shape_hints = coin.SoShapeHints()
         shape_hints.faceType = coin.SoShapeHints.UNKNOWN_FACE_TYPE
+        flinestyle = coin.SoDrawStyle()
+        flinestyle.style = coin.SoDrawStyle.LINES
 
         sep = coin.SoSeparator()
         sep.addChild(material)
         sep.addChild(shape_hints)
         sep.addChild(self.fcoords)
         sep.addChild(self.fset)
+        if self.flines:
+            sep.addChild(self.flinecolor)
+            sep.addChild(flinestyle)
+            sep.addChild(self.flcoords)
+            sep.addChild(self.flines)
         return sep
 
     def attach(self, vobj):
@@ -1559,7 +1583,7 @@ class _ViewProviderStructure(ArchComponent.ViewProviderComponent):
         vobj.addDisplayMode(self.hiresgroup, "HiRes")
         ArchComponent.ViewProviderComponent.ensureFootprintGroup(self, vobj)
         if self._is_slab(vobj):
-            self.refreshFootprint(vobj)
+            self.refreshFootprint(vobj, force=True)
         else:
             self._drop_footprint_group(vobj)
 
@@ -1612,6 +1636,7 @@ class _ViewProviderStructure(ArchComponent.ViewProviderComponent):
 
     def onDocumentRestored(self, vobj):
 
+        ArchComponent.ViewProviderComponent.onDocumentRestored(self, vobj)
         self.setProperties(vobj)
 
     def getIcon(self):
@@ -1654,9 +1679,10 @@ class _ViewProviderStructure(ArchComponent.ViewProviderComponent):
                     IfcType = obj.IfcType
                 else:
                     IfcType = None
+                self.invalidateFootprint()
                 if IfcType == "Slab":
                     obj.ViewObject.NodeType = "Area"
-                    self.refreshFootprint(obj.ViewObject)
+                    self.refreshFootprint(obj.ViewObject, force=True)
                     self._sync_display_mode_enums(obj.ViewObject)
                 else:
                     obj.ViewObject.NodeType = "Linear"

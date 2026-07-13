@@ -302,6 +302,37 @@ class TestArchWall(TestArchBase.TestArchBase):
             msg="Explicit plan contexts should drive wall plan representation height.",
         )
 
+    def test_wall_plan_representation_is_empty_outside_wall_height(self):
+        """A plan cut outside a wall must not be clamped into the wall."""
+
+        wall = Arch.makeWall(length=3000, width=200, height=1000)
+        self.document.recompute()
+        bb = wall.Shape.BoundBox
+
+        for cut_z in (bb.ZMin - 100, bb.ZMax + 100):
+            context = ArchComponent.PlanContext(cut_z=cut_z, target_z=bb.ZMin)
+            self.assertEqual(
+                wall.Proxy.getPlanRepresentation(wall, context),
+                [],
+                "A plan cut outside the wall should produce no footprint.",
+            )
+
+    def test_wall_plan_representation_preserves_enclosed_holes(self):
+        """An enclosed section loop should remain a hole in the footprint."""
+
+        wall = Arch.makeWall(length=4000, width=300, height=3000)
+        outer = Part.makeBox(4000, 3000, 3000)
+        inner = Part.makeBox(1000, 1000, 3002, App.Vector(1500, 1000, -1))
+        wall.Shape = outer.cut(inner)
+        bb = wall.Shape.BoundBox
+        context = ArchComponent.PlanContext(cut_z=1500, target_z=bb.ZMin)
+
+        faces = wall.Proxy.getPlanRepresentation(wall, context)
+
+        self.assertEqual(len(faces), 1)
+        self.assertEqual(len(faces[0].Wires), 2)
+        self.assertAlmostEqual(faces[0].Area, 4000 * 3000 - 1000 * 1000, places=3)
+
     def test_wall_footprint_uses_parent_storey_plan_cut_height(self):
         """Parent storeys should define the absolute plan cut for contained walls."""
         self.printTestMessage("Checking wall footprint uses parent storey plan cut height...")

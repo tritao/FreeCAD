@@ -49,6 +49,7 @@ import math
 import FreeCAD
 import ArchCommands
 import ArchComponent
+import ArchPlanRepresentation
 import ArchSketchObject
 import Draft
 import DraftVecUtils
@@ -808,7 +809,7 @@ class _Wall(ArchComponent.Component):
         Otherwise, fall back to the default 1000 mm plan cut above the wall
         base. This makes hosted openings appear naturally in footprint mode
         because the wall shape has already been cut by them. If that section
-        cannot be computed, fall back to the literal bottom faces of the wall.
+        cannot be computed, the wall has no derived footprint.
         This is the default-preview wrapper for `getPlanRepresentation()`.
 
         Returns
@@ -817,8 +818,7 @@ class _Wall(ArchComponent.Component):
             The faces that make up the wall footprint.
         """
 
-        context = self.getDefaultPlanContext(obj)
-        return self.getPlanRepresentation(obj, context)
+        return ArchPlanRepresentation.get_plan_representation(obj).faces
 
     def getPlanRepresentation(self, obj, context):
         """Return wall plan faces for the supplied plan context.
@@ -834,11 +834,20 @@ class _Wall(ArchComponent.Component):
         if context is None:
             context = self.getDefaultPlanContext(obj)
         shape = obj.Shape
+        if shape and not shape.isNull():
+            bb = shape.BoundBox
+            if bb.ZLength > 0.001 and context.cut_z is not None:
+                boundary_tolerance = 0.001
+                if (
+                    context.cut_z <= bb.ZMin + boundary_tolerance
+                    or context.cut_z >= bb.ZMax - boundary_tolerance
+                ):
+                    return []
+
         if shape and (not shape.isNull()) and shape.Solids:
             bb = shape.BoundBox
             if bb.ZLength > 0.001 and context.cut_z is not None:
                 cut_z = context.cut_z
-                cut_z = max(bb.ZMin + 0.001, min(bb.ZMax - 0.001, cut_z))
                 target_z = context.target_z if context.target_z is not None else bb.ZMin
                 cut_plane = Part.makePlane(1, 1)
                 cut_plane.translate(FreeCAD.Vector(bb.Center.x, bb.Center.y, cut_z))
@@ -851,12 +860,69 @@ class _Wall(ArchComponent.Component):
                                 edge_groups = Part.sortEdges(section.Edges)
                             except AttributeError:
                                 edge_groups = Part.__sortEdges__(section.Edges)
-                            faces = []
+                            wires = []
                             for edges in edge_groups:
                                 wire = Part.Wire(edges)
                                 if not wire.isClosed():
                                     continue
-                                face = Part.Face(wire)
+                                try:
+                                    wire_face = Part.Face(wire)
+                                except Part.OCCError:
+                                    continue
+                                if wire_face.Area > 0:
+                                    wires.append((wire, wire_face))
+
+                            # Build a containment tree so enclosed section loops
+                            # become holes instead of independent filled faces.
+                            parents = [None] * len(wires)
+                            for index, (_, wire_face) in enumerate(wires):
+                                vertices = wires[index][0].Vertexes
+                                if not vertices:
+                                    continue
+                                point = vertices[0].Point
+                                candidates = []
+                                for candidate, (_, candidate_face) in enumerate(wires):
+                                    if candidate == index or candidate_face.Area <= wire_face.Area:
+                                        continue
+                                    try:
+                                        if candidate_face.isInside(point, 0.001, True):
+                                            candidates.append(candidate)
+                                    except Part.OCCError:
+                                        continue
+                                if candidates:
+                                    parents[index] = min(
+                                        candidates, key=lambda candidate: wires[candidate][1].Area
+                                    )
+
+                            depths = {}
+
+                            def wire_depth(index):
+                                if index in depths:
+                                    return depths[index]
+                                parent = parents[index]
+                                depth = 0 if parent is None else wire_depth(parent) + 1
+                                depths[index] = depth
+                                return depth
+
+                            faces = []
+                            for index, (wire, _) in enumerate(wires):
+                                if wire_depth(index) % 2:
+                                    continue
+                                holes = [
+                                    wires[child][0]
+                                    for child in range(len(wires))
+                                    if parents[child] == index
+                                    and wire_depth(child) == wire_depth(index) + 1
+                                ]
+                                try:
+                                    face = Part.makeFace(
+                                        [wire] + holes,
+                                        "Part::FaceMakerCheese",
+                                    )
+                                except Part.OCCError:
+                                    # Do not fall back to a filled outer wire:
+                                    # that would silently erase a real hole.
+                                    continue
                                 if face.Area <= 0:
                                     continue
                                 face.translate(FreeCAD.Vector(0, 0, target_z - cut_z))
@@ -864,10 +930,12 @@ class _Wall(ArchComponent.Component):
                             if faces:
                                 return faces
                 except Part.OCCError:
-                    # Sectioning can fail on OCC edge cases; fall back to the
-                    # wall's literal bottom faces below instead of breaking the
-                    # footprint display mode.
                     pass
+
+            # A solid was supplied with a valid context, but no section could
+            # be constructed. Returning no footprint is safer than displaying
+            # an unrelated bottom face.
+            return []
 
         faces = []
         if shape:
@@ -2019,6 +2087,7 @@ class _ViewProviderWall(ArchComponent.ViewProviderComponent):
         """Sets up the Coin group for footprint display mode"""
 
         from pivy import coin
+        import PartGui  # Required for "SoBrepEdgeSet" on custom footprint nodes.
 
         tex = coin.SoTexture2()
         image = Draft.loadTexture(Draft.svgpatterns()["simple"][1], 128)
@@ -2031,12 +2100,22 @@ class _ViewProviderWall(ArchComponent.ViewProviderComponent):
 
         self.fcoords = coin.SoCoordinate3()
         self.fset = coin.SoIndexedFaceSet()
+        self.flcoords = coin.SoCoordinate3()
+        self.flinecolor = coin.SoBaseColor()
+        self.flines = coin.SoType.fromName("SoBrepEdgeSet").createInstance()
+        flinestyle = coin.SoDrawStyle()
+        flinestyle.style = coin.SoDrawStyle.LINES
 
         sep = coin.SoSeparator()
         sep.addChild(tex)
         sep.addChild(texcoords)
         sep.addChild(self.fcoords)
         sep.addChild(self.fset)
+        if self.flines:
+            sep.addChild(self.flinecolor)
+            sep.addChild(flinestyle)
+            sep.addChild(self.flcoords)
+            sep.addChild(self.flines)
 
         return sep
 
@@ -2071,8 +2150,6 @@ class _ViewProviderWall(ArchComponent.ViewProviderComponent):
         """
 
         if prop in ["Placement", "Shape", "Material"]:
-            if obj.ViewObject.DisplayMode == "Footprint":
-                obj.ViewObject.Proxy.setDisplayMode("Footprint")
             if hasattr(obj, "Material"):
                 if obj.Material and obj.Shape:
                     if hasattr(obj.Material, "Materials"):
@@ -2148,7 +2225,7 @@ class _ViewProviderWall(ArchComponent.ViewProviderComponent):
             The name of the display mode the view provider has switched to.
         """
         if mode == "Footprint":
-            if self.refreshFootprint():
+            if self.refreshFootprint(force=True):
                 return "Footprint"
         return ArchComponent.ViewProviderComponent.setDisplayMode(self, mode)
 
