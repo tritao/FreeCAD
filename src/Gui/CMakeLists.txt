@@ -1128,6 +1128,7 @@ SET(Inventor_SRCS
     SoFCColorLegend.h
     SoFCDB.h
     SoFCInteractiveElement.h
+    MeshRenderData.h
     SoFCOffscreenRenderer.h
     SoQtOffscreenRendererPy.h
     Selection/SoFCSelection.h
