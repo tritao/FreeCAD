@@ -616,7 +616,6 @@ SoFCMeshObjectShape::SoFCMeshObjectShape()
 {
     SO_NODE_CONSTRUCTOR(SoFCMeshObjectShape);
     setName(SoFCMeshObjectShape::getClassTypeId().getName());
-    updateGLArray = true;
 }
 
 SoFCMeshObjectShape::~SoFCMeshObjectShape() = default;
@@ -624,7 +623,7 @@ SoFCMeshObjectShape::~SoFCMeshObjectShape() = default;
 void SoFCMeshObjectShape::notify(SoNotList* node)
 {
     inherited::notify(node);
-    updateGLArray = true;
+    renderRevision.invalidate();
 }
 
 #define RENDER_GLARRAYS
@@ -668,11 +667,8 @@ void SoFCMeshObjectShape::GLRender(SoGLRenderAction* action)
             }
             else {
 #ifdef RENDER_GLARRAYS
-                if (updateGLArray) {
-                    updateGLArray = false;
+                if (render.needsUpdate(action, renderRevision)) {
                     render.update();
-                }
-                if (render.needUpdate(action)) {
                     render.generateGLArrays(action, buildMeshRenderData(state));
                 }
                 render.renderFacesGLArray(action);
@@ -895,6 +891,7 @@ Gui::MeshRenderData SoFCMeshObjectShape::buildMeshRenderData(SoState* state) con
 {
     const Mesh::MeshObject* mesh = SoFCMeshObjectElement::get(state);
     Gui::MeshRenderData data;
+    data.revision = renderRevision;
     if (!mesh) {
         return data;
     }
@@ -904,8 +901,7 @@ Gui::MeshRenderData SoFCMeshObjectShape::buildMeshRenderData(SoState* state) con
     const MeshCore::MeshFacetArray& cF = kernel.GetFacets();
 
     // Flat shading
-    data.positions.reserve(3 * cF.size() * 3);
-    data.normals.reserve(3 * cF.size() * 3);
+    data.reserveVertices(3 * cF.size(), false);
     data.indices.reserve(3 * cF.size());
 
     data.materialBinding = Gui::MeshMaterialBinding::Overall;

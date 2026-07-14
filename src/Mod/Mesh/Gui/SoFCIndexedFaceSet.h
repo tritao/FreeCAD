@@ -122,7 +122,7 @@ private:
 private:
     MeshGLRenderer render;
     GLuint* selectBuf {nullptr};
-    std::uint64_t renderRevision {0};
+    Gui::MeshRenderRevision renderRevision;
 };
 // NOLINTEND
 

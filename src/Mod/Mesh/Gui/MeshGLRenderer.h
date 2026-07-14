@@ -41,7 +41,7 @@ public:
     bool canRenderGLArray(SoGLRenderAction* action) const;
     bool matchMaterial(SoState*) const;
     void update();
-    bool needUpdate(SoGLRenderAction* action) const;
+    bool needsUpdate(SoGLRenderAction* action, const Gui::MeshRenderRevision& revision) const;
 
     static bool shouldRenderDirectly(bool);
 

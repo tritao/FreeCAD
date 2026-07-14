@@ -31,6 +31,7 @@
 #endif
 
 #include <cstddef>
+#include <cstdint>
 #include <vector>
 
 #include <Inventor/actions/SoGLRenderAction.h>
@@ -110,6 +111,7 @@ public:
     const SbColor* pcolors {nullptr};
     SoMaterialBindingElement::Binding matbinding {SoMaterialBindingElement::OVERALL};
     bool initialized {false};
+    Gui::MeshRenderRevision revision;
 
     Private();
     bool canRenderGLArray(SoGLRenderAction*) const;
@@ -117,7 +119,7 @@ public:
     void renderFacesGLArray(SoGLRenderAction*);
     void renderCoordsGLArray(SoGLRenderAction*);
     void update();
-    bool needUpdate(SoGLRenderAction*) const;
+    bool needsUpdate(SoGLRenderAction*, const Gui::MeshRenderRevision& revision) const;
 
 private:
     void renderGLArray(SoGLRenderAction*, GLenum);
@@ -152,6 +154,13 @@ void MeshGLRenderer::Private::generateGLArrays(SoGLRenderAction* action, const G
         return;
     }
 
+    // A revision change invalidates buffers in every context.  Keep this
+    // invariant inside the adapter so callers cannot accidentally leave an
+    // older context resident while uploading the new snapshot.
+    if (data.revision != this->revision) {
+        update();
+    }
+
     std::vector<float> vertex = interleaveMeshRenderData(data);
 
     vertices.setCurrentContext(action->getCacheContext());
@@ -169,6 +178,7 @@ void MeshGLRenderer::Private::generateGLArrays(SoGLRenderAction* action, const G
     indices.allocate(data.indices.data(), data.indices.size() * sizeof(std::uint32_t));
     indices.release();
     this->matbinding = toCoinMaterialBinding(data.materialBinding);
+    this->revision = data.revision;
 }
 
 void MeshGLRenderer::Private::renderGLArray(SoGLRenderAction* action, GLenum mode)
@@ -221,9 +231,12 @@ void MeshGLRenderer::Private::update()
     indices.destroy();
 }
 
-bool MeshGLRenderer::Private::needUpdate(SoGLRenderAction* action) const
+bool MeshGLRenderer::Private::needsUpdate(
+    SoGLRenderAction* action,
+    const Gui::MeshRenderRevision& revision
+) const
 {
-    return !vertices.isCreated(action->getCacheContext())
+    return revision != this->revision || !vertices.isCreated(action->getCacheContext())
         || !indices.isCreated(action->getCacheContext());
 }
 #elif defined RENDER_GLARRAYS
@@ -246,10 +259,12 @@ public:
     void renderCoordsGLArray(SoGLRenderAction* action);
     void update()
     {}
-    bool needUpdate(SoGLRenderAction*) const
+    bool needsUpdate(SoGLRenderAction*, const Gui::MeshRenderRevision& revision) const
     {
-        return false;
+        return revision != this->revision;
     }
+
+    Gui::MeshRenderRevision revision;
 };
 
 bool MeshGLRenderer::Private::canRenderGLArray(SoGLRenderAction*) const
@@ -266,6 +281,7 @@ void MeshGLRenderer::Private::generateGLArrays(SoGLRenderAction*, const Gui::Mes
     this->index_array = data.indices;
     this->vertex_array = interleaveMeshRenderData(data);
     this->matbinding = toCoinMaterialBinding(data.materialBinding);
+    this->revision = data.revision;
 }
 
 void MeshGLRenderer::Private::renderFacesGLArray(SoGLRenderAction* action)
@@ -330,7 +346,7 @@ public:
     {}
     void update()
     {}
-    bool needUpdate(SoGLRenderAction*) const
+    bool needsUpdate(SoGLRenderAction*, const Gui::MeshRenderRevision&) const
     {
         return false;
     }
@@ -351,9 +367,9 @@ void MeshGLRenderer::update()
     p->update();
 }
 
-bool MeshGLRenderer::needUpdate(SoGLRenderAction* action) const
+bool MeshGLRenderer::needsUpdate(SoGLRenderAction* action, const Gui::MeshRenderRevision& revision) const
 {
-    return p->needUpdate(action);
+    return p->needsUpdate(action, revision);
 }
 
 void MeshGLRenderer::generateGLArrays(SoGLRenderAction* action, const Gui::MeshRenderData& data)

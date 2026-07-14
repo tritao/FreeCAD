@@ -172,12 +172,12 @@ void SoFCIndexedFaceSet::GLRender(SoGLRenderAction* action)
     // use VBO for fast rendering if possible
     if (useVBO) {
         if (updateGLArray.getValue()) {
-            ++renderRevision;
+            renderRevision.invalidate();
             updateGLArray.setValue(false);
             render.update();
             generateGLArrays(action);
         }
-        else if (render.needUpdate(action)) {
+        else if (render.needsUpdate(action, renderRevision)) {
             generateGLArrays(action);
         }
 
@@ -214,7 +214,7 @@ void SoFCIndexedFaceSet::drawFaces(SoGLRenderAction* action)
             SoMaterialBundle mb(action);
             mb.sendFirst();
             if (updateGLArray.getValue()) {
-                ++renderRevision;
+                renderRevision.invalidate();
                 updateGLArray.setValue(false);
                 generateGLArrays(action);
             }

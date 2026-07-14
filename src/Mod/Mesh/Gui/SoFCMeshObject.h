@@ -242,7 +242,7 @@ private:
     GLfloat modelview[16] {};
     GLfloat projection[16] {};
     MeshGLRenderer render;
-    SbBool updateGLArray {true};
+    Gui::MeshRenderRevision renderRevision;
 };
 
 class MeshGuiExport SoFCMeshSegmentShape: public SoShape
