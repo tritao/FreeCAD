@@ -670,9 +670,12 @@ void SoFCMeshObjectShape::GLRender(SoGLRenderAction* action)
 #ifdef RENDER_GLARRAYS
                 if (updateGLArray) {
                     updateGLArray = false;
-                    generateGLArrays(state);
+                    render.update();
                 }
-                renderFacesGLArray(action);
+                if (render.needUpdate(action)) {
+                    render.generateGLArrays(action, buildMeshRenderData(state));
+                }
+                render.renderFacesGLArray(action);
 #else
                 drawFaces(mesh, 0, mbind, needNormals, ccw);
 #endif
@@ -888,72 +891,36 @@ void SoFCMeshObjectShape::drawPoints(const Mesh::MeshObject* mesh, SbBool needNo
     }
 }
 
-void SoFCMeshObjectShape::generateGLArrays(SoState* state)
+Gui::MeshRenderData SoFCMeshObjectShape::buildMeshRenderData(SoState* state) const
 {
     const Mesh::MeshObject* mesh = SoFCMeshObjectElement::get(state);
-
-    this->index_array.resize(0);
-    this->vertex_array.resize(0);
-
-    std::vector<float> face_vertices;
-    std::vector<int32_t> face_indices;
+    Gui::MeshRenderData data;
+    if (!mesh) {
+        return data;
+    }
 
     const MeshCore::MeshKernel& kernel = mesh->getKernel();
     const MeshCore::MeshPointArray& cP = kernel.GetPoints();
     const MeshCore::MeshFacetArray& cF = kernel.GetFacets();
 
     // Flat shading
-    face_vertices.reserve(3 * cF.size() * 6);  // duplicate each vertex
-    face_indices.resize(3 * cF.size());
+    data.positions.reserve(3 * cF.size() * 3);
+    data.normals.reserve(3 * cF.size() * 3);
+    data.indices.reserve(3 * cF.size());
 
-    int indexed = 0;
+    data.materialBinding = Gui::MeshMaterialBinding::Overall;
     for (const auto& it : cF) {
         Base::Vector3f n = kernel.GetFacet(it).GetNormal();
         for (Mesh::PointIndex ptIndex : it._aulPoints) {
-            face_vertices.push_back(n.x);
-            face_vertices.push_back(n.y);
-            face_vertices.push_back(n.z);
             const Base::Vector3f& v = cP[ptIndex];
-            face_vertices.push_back(v.x);
-            face_vertices.push_back(v.y);
-            face_vertices.push_back(v.z);
-
-            face_indices[indexed] = indexed;
-            indexed++;
+            const float position[3] {v.x, v.y, v.z};
+            const float normal[3] {n.x, n.y, n.z};
+            data.appendVertex(position, normal);
+            data.indices.push_back(static_cast<std::uint32_t>(data.vertexCount() - 1));
         }
     }
-    this->index_array.swap(face_indices);
-    this->vertex_array.swap(face_vertices);
-}
 
-void SoFCMeshObjectShape::renderFacesGLArray(SoGLRenderAction* action)
-{
-    (void)action;
-    GLsizei cnt = static_cast<GLsizei>(index_array.size());
-
-    glEnableClientState(GL_NORMAL_ARRAY);
-    glEnableClientState(GL_VERTEX_ARRAY);
-
-    glInterleavedArrays(GL_N3F_V3F, 0, vertex_array.data());
-    glDrawElements(GL_TRIANGLES, cnt, GL_UNSIGNED_INT, index_array.data());
-
-    glDisableClientState(GL_VERTEX_ARRAY);
-    glDisableClientState(GL_NORMAL_ARRAY);
-}
-
-void SoFCMeshObjectShape::renderCoordsGLArray(SoGLRenderAction* action)
-{
-    (void)action;
-    int cnt = index_array.size();
-
-    glEnableClientState(GL_NORMAL_ARRAY);
-    glEnableClientState(GL_VERTEX_ARRAY);
-
-    glInterleavedArrays(GL_N3F_V3F, 0, vertex_array.data());
-    glDrawElements(GL_POINTS, cnt, GL_UNSIGNED_INT, index_array.data());
-
-    glDisableClientState(GL_VERTEX_ARRAY);
-    glDisableClientState(GL_NORMAL_ARRAY);
+    return data;
 }
 
 void SoFCMeshObjectShape::doAction(SoAction* action)

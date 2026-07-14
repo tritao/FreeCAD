@@ -32,6 +32,8 @@
 #include <Inventor/nodes/SoShape.h>
 #include <Mod/Mesh/App/Mesh.h>
 
+#include "MeshGLRenderer.h"
+
 
 using GLuint = unsigned int;
 using GLint = int;
@@ -233,18 +235,14 @@ private:
     void stopSelection(SoAction* action, const Mesh::MeshObject*);
     void renderSelectionGeometry(const Mesh::MeshObject*);
 
-    void generateGLArrays(SoState* state);
-    void renderFacesGLArray(SoGLRenderAction* action);
-    void renderCoordsGLArray(SoGLRenderAction* action);
+    Gui::MeshRenderData buildMeshRenderData(SoState* state) const;
 
 private:
     GLuint* selectBuf {nullptr};
     GLfloat modelview[16] {};
     GLfloat projection[16] {};
-    // Vertex array handling
-    std::vector<int32_t> index_array;
-    std::vector<float> vertex_array;
-    SbBool updateGLArray {false};
+    MeshGLRenderer render;
+    SbBool updateGLArray {true};
 };
 
 class MeshGuiExport SoFCMeshSegmentShape: public SoShape

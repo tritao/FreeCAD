@@ -28,9 +28,9 @@
 #include <Inventor/fields/SoMFColor.h>
 #include <Inventor/fields/SoSFBool.h>
 #include <Inventor/nodes/SoIndexedFaceSet.h>
-#include <vector>
 #include <Gui/MeshRenderData.h>
 #include <Mod/Mesh/MeshGlobal.h>
+#include "MeshGLRenderer.h"
 
 
 class SoGLCoordinateElement;
@@ -38,31 +38,9 @@ class SoState;
 class SoTextureCoordinateBundle;
 
 using GLuint = unsigned int;
-using GLint = int;
-using GLfloat = float;
 
 namespace MeshGui
 {
-
-// NOLINTBEGIN
-class MeshRenderer
-{
-public:
-    MeshRenderer();
-    ~MeshRenderer();
-    void generateGLArrays(SoGLRenderAction*, const Gui::MeshRenderData& data);
-    void renderFacesGLArray(SoGLRenderAction* action);
-    void renderCoordsGLArray(SoGLRenderAction* action);
-    bool canRenderGLArray(SoGLRenderAction* action) const;
-    bool matchMaterial(SoState*) const;
-    void update();
-    bool needUpdate(SoGLRenderAction* action);
-    static bool shouldRenderDirectly(bool);
-
-private:
-    class Private;
-    Private* p;
-};
 
 /**
  * class SoFCMaterialEngine
@@ -142,7 +120,7 @@ private:
     void generateGLArrays(SoGLRenderAction* action);
 
 private:
-    MeshRenderer render;
+    MeshGLRenderer render;
     GLuint* selectBuf {nullptr};
     std::uint64_t renderRevision {0};
 };

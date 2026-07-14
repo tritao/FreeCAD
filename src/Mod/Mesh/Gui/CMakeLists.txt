@@ -77,6 +77,8 @@ SET(Dialogs_SRCS
 SOURCE_GROUP("Dialogs" FILES ${Dialogs_SRCS})
 
 SET(Inventor_SRCS
+    MeshGLRenderer.cpp
+    MeshGLRenderer.h
     SoFCIndexedFaceSet.cpp
     SoFCIndexedFaceSet.h
     SoFCMeshObject.cpp

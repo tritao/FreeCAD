@@ -103,7 +103,7 @@ void ViewProviderMeshFaceSet::updateData(const App::Property* prop)
     if (const auto* meshProp = dynamic_cast<const Mesh::PropertyMeshKernel*>(prop)) {
         const Mesh::MeshObject* mesh = meshProp->getValuePtr();
 
-        bool direct = MeshRenderer::shouldRenderDirectly(mesh->countFacets() > this->triangleCount);
+        bool direct = MeshGLRenderer::shouldRenderDirectly(mesh->countFacets() > this->triangleCount);
         if (direct) {
             this->pcMeshNode->mesh.setValue(mesh);
             // Needs to update internal bounding box caches
