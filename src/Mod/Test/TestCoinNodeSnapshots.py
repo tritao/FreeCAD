@@ -314,6 +314,9 @@ def _configure_software_gl_for_snapshots():
 
 
 def _require_gui():
+    # Keep GUI and Coin imports lazy: the test module is also discovered by
+    # headless FreeCADCmd runs, where importing them at module load time can
+    # initialize Qt before the display guard has a chance to skip the test.
     try:
         import FreeCAD  # type: ignore
     except Exception as exc:  # pragma: no cover
@@ -491,7 +494,12 @@ def _mesh_data(variant: str) -> tuple[list[tuple[float, float, float]], list[tup
 
 
 def _read_mesh_scene(coin, variant: str, node_type: str, shape_type: str | None = None):
-    """Read a MeshGui node graph through SoSFMeshObject's ASCII parser."""
+    """Read a MeshGui graph through SoSFMeshObject's ASCII parser.
+
+    Pivy does not expose a direct assignment path for the native
+    ``Mesh::MeshObject`` held by ``SoSFMeshObject``, so the fixture exercises
+    the field's supported serialized representation instead.
+    """
     points, facets = _mesh_data(variant)
     # MeshInput::LoadMeshNode intentionally matches the vertex and facet
     # records from column zero, so keep the payload unindented here.
@@ -1540,6 +1548,43 @@ class CoinNodeSnapshotTestCase(unittest.TestCase):
             self.assertAlmostEqual(picked.getPoint()[2], 0.0, places=5)
         finally:
             root.unref()
+
+    def test_so_fc_indexed_face_set_material_mutation_updates_cached_packet(self):
+        FreeCAD, FreeCADGui, coin = _require_gui()
+        _load_required_modules(_SnapshotFixture(required_modules=("MeshGui",)))
+
+        width = _SNAPSHOT_WIDTH
+        height = _SNAPSHOT_HEIGHT
+        out_dir = Path(
+            os.environ.get(
+                "FC_VISUAL_OUT_DIR",
+                os.path.join(tempfile.gettempdir(), "FreeCADTesting", "CoinNodeSnapshots"),
+            )
+        )
+        first_path = out_dir / "actual" / "SoFCIndexedFaceSetMaterialBeforeMutation.png"
+        second_path = out_dir / "actual" / "SoFCIndexedFaceSetMaterialAfterMutation.png"
+
+        root = _make_snapshot_scene(coin, "SoFCIndexedFaceSetPerFaceColor").root
+        material = _find_descendant(coin, root, "SoMaterial")
+        self.assertIsNotNone(material, "indexed face set material fixture is incomplete")
+
+        with _ViewerSnapshotHarness(FreeCAD, FreeCADGui, width, height) as harness:
+            _render_png(harness, coin, root, first_path, width, height)
+
+            material.diffuseColor.setValues(
+                0,
+                12,
+                [coin.SbColor(0.05, 0.90, 0.15)] * 12,
+            )
+            harness.view.redraw()
+            FreeCADGui.updateGui()
+            _render_png(harness, coin, root, second_path, width, height)
+
+        self.assertGreater(
+            _different_pixel_count(first_path, second_path),
+            1000,
+            "indexed face set material changes should update the cached retained packet",
+        )
 
     def test_so_datum_label_ignores_parent_cull_face(self):
         FreeCAD, FreeCADGui, coin = _require_gui()

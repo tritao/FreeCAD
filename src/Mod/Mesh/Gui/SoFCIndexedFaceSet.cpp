@@ -53,6 +53,7 @@
 #include <Inventor/elements/SoGLLazyElement.h>
 #include <Inventor/elements/SoMaterialBindingElement.h>
 #include <Inventor/elements/SoNormalBindingElement.h>
+#include <Inventor/elements/SoNormalElement.h>
 #include <Inventor/elements/SoProjectionMatrixElement.h>
 #include <Inventor/elements/SoViewingMatrixElement.h>
 #include <Inventor/errors/SoDebugError.h>
@@ -78,6 +79,10 @@ Gui::MeshMaterialBinding toMeshMaterialBinding(SoMaterialBindingElement::Binding
             return Gui::MeshMaterialBinding::PerFace;
         case SoMaterialBindingElement::PER_FACE_INDEXED:
             return Gui::MeshMaterialBinding::PerFaceIndexed;
+        case SoMaterialBindingElement::PER_PART:
+            return Gui::MeshMaterialBinding::PerPart;
+        case SoMaterialBindingElement::PER_PART_INDEXED:
+            return Gui::MeshMaterialBinding::PerPartIndexed;
         case SoMaterialBindingElement::PER_VERTEX:
             return Gui::MeshMaterialBinding::PerVertex;
         case SoMaterialBindingElement::PER_VERTEX_INDEXED:
@@ -175,10 +180,13 @@ void SoFCIndexedFaceSet::GLRender(SoGLRenderAction* action)
             renderRevision.invalidate();
             updateGLArray.setValue(false);
             render.update();
-            generateGLArrays(action);
+            const Gui::MeshRenderData data = buildMeshRenderData(state);
+            generateGLArrays(action, data);
         }
-        else if (render.needsUpdate(action, renderRevision)) {
-            generateGLArrays(action);
+        else if (render.needsUpdate(action, renderRevision) || !render.matchMaterial(state)) {
+            render.update();
+            const Gui::MeshRenderData data = buildMeshRenderData(state);
+            generateGLArrays(action, data);
         }
 
         if (render.matchMaterial(state)) {
@@ -203,9 +211,11 @@ void SoFCIndexedFaceSet::drawFaces(SoGLRenderAction* action)
     SoState* state = action->getState();
     SbBool mode = Gui::SoFCInteractiveElement::get(state);
 
-    unsigned int num = this->coordIndex.getNum() / 4;
+    const std::size_t numTriangles = this->coordIndex.getNum() / 4;
     const Gui::MeshInteractionLodPolicy policy(this->renderTriangleLimit);
-    if (!policy.shouldUseReducedGeometry(mode, num)) {
+    const Gui::MeshRenderPresentation presentation
+        = policy.presentation(mode, numTriangles, this->coordIndex.getNum(), 4);
+    if (!presentation.reducedGeometry) {
 #ifdef RENDER_GLARRAYS
         SoMaterialBindingElement::Binding matbind = SoMaterialBindingElement::get(state);
 
@@ -216,7 +226,8 @@ void SoFCIndexedFaceSet::drawFaces(SoGLRenderAction* action)
             if (updateGLArray.getValue()) {
                 renderRevision.invalidate();
                 updateGLArray.setValue(false);
-                generateGLArrays(action);
+                const Gui::MeshRenderData data = buildMeshRenderData(state);
+                generateGLArrays(action, data);
             }
             render.renderFacesGLArray(action);
         }
@@ -275,7 +286,8 @@ void SoFCIndexedFaceSet::drawFaces(SoGLRenderAction* action)
             mindices,
             binding,
             &tb,
-            tindices
+            tindices,
+            presentation.pointStride
         );
 
         // getVertexData() internally calls readLockNormalCache() that read locks
@@ -301,14 +313,14 @@ void SoFCIndexedFaceSet::drawCoords(
     const int32_t* /*matindices*/,
     const int32_t binding,
     const SoTextureCoordinateBundle* const /*texcoords*/,
-    const int32_t* /*texindices*/
+    const int32_t* /*texindices*/,
+    std::size_t pointStride
 )
 {
     const SbVec3f* coords3d = nullptr;
     coords3d = vertexlist->getArrayPtr3();
 
-    const Gui::MeshInteractionLodPolicy policy(this->renderTriangleLimit);
-    int mod = static_cast<int>(policy.pointStride(numindices, 4));
+    const int mod = static_cast<int>(pointStride);
     float size = std::min<float>((float)mod, 3.0F);
     glPointSize(size);
 
@@ -446,7 +458,7 @@ Gui::MeshRenderData SoFCIndexedFaceSet::buildMeshRenderData(SoState* state)
         return data;
     }
 
-    SoMaterialBindingElement::Binding matbind = SoMaterialBindingElement::get(state);
+    const SoMaterialBindingElement::Binding matbind = SoMaterialBindingElement::get(state);
     data.materialBinding = toMeshMaterialBinding(matbind);
     SoGLLazyElement* gl = SoGLLazyElement::getInstance(state);
     if (gl) {
@@ -454,121 +466,131 @@ Gui::MeshRenderData SoFCIndexedFaceSet::buildMeshRenderData(SoState* state)
         numcolors = gl->getNumDiffuse();
         transp = gl->getTransparencyPointer();
         numtransp = gl->getNumTransparencies();
-        (void)numtransp;
     }
 
-    std::size_t numTria = numindices / 4;
-
-    if (!mindices && matbind == SoMaterialBindingElement::PER_VERTEX_INDEXED) {
-        mindices = cindices;
+    const std::size_t numTria = static_cast<std::size_t>(numindices / 4);
+    const bool perFaceMaterial = matbind == SoMaterialBindingElement::PER_FACE
+        || matbind == SoMaterialBindingElement::PER_FACE_INDEXED
+        || matbind == SoMaterialBindingElement::PER_PART
+        || matbind == SoMaterialBindingElement::PER_PART_INDEXED;
+    const bool perVertexMaterial = matbind == SoMaterialBindingElement::PER_VERTEX
+        || matbind == SoMaterialBindingElement::PER_VERTEX_INDEXED;
+    const bool hasColors = pcolors && numcolors > 0 && (perFaceMaterial || perVertexMaterial);
+    if (!hasColors) {
+        data.materialBinding = Gui::MeshMaterialBinding::Overall;
     }
 
-    SoNormalBindingElement::Binding normbind = SoNormalBindingElement::get(state);
-
-    auto appendVertex =
-        [&data, points, normals](int32_t pointIndex, int32_t normalIndex, const float* color) {
-            const SbVec3f& normal = normals[normalIndex];
-            const SbVec3f& point = points[pointIndex];
-            const float position[3] {point[0], point[1], point[2]};
-            const float normalValue[3] {normal[0], normal[1], normal[2]};
-            if (color) {
-                data.appendColoredVertex(position, normalValue, color);
-            }
-            else {
-                data.appendVertex(position, normalValue);
-            }
-            data.indices.push_back(static_cast<std::uint32_t>(data.vertexCount() - 1));
-        };
-
-    if (normbind == SoNormalBindingElement::PER_VERTEX_INDEXED) {
-        const bool hasVertexColors = matbind == SoMaterialBindingElement::PER_FACE
-            || matbind == SoMaterialBindingElement::PER_VERTEX_INDEXED;
-        data.reserveVertices(3 * numTria, hasVertexColors);
-        data.indices.reserve(3 * numTria);
-
-        if (matbind == SoMaterialBindingElement::PER_FACE) {
-            if (numcolors != static_cast<int>(numTria)) {
-                SoDebugError::postWarning(
-                    "SoFCIndexedFaceSet::generateGLArrays",
-                    "The number of faces (%d) does not match with the number of colors (%d).",
-                    numTria,
-                    numcolors
-                );
-            }
-
-            // the nindices must have the length of numindices
-            int index = 0;
-            float t = transp ? transp[0] : 0;
-            for (std::size_t i = 0; i < numTria; i++) {
-                const SbColor& c = pcolors[i];
-                const float color[4] {c[0], c[1], c[2], t};
-                for (int j = 0; j < 3; j++) {
-                    appendVertex(cindices[index], nindices[index], color);
-                    index++;
-                }
-                index++;
-            }
+    const SoNormalBindingElement::Binding normalBinding = [&] {
+        SoNormalBindingElement::Binding binding = SoNormalBindingElement::get(state);
+        if (normalCacheUsed && binding == SoNormalBindingElement::PER_VERTEX) {
+            binding = SoNormalBindingElement::PER_VERTEX_INDEXED;
         }
-        else if (matbind == SoMaterialBindingElement::PER_VERTEX_INDEXED) {
-            if (numcolors != coords->getNum()) {
-                SoDebugError::postWarning(
-                    "SoFCIndexedFaceSet::generateGLArrays",
-                    "The number of points (%d) does not match with the number of colors (%d).",
-                    coords->getNum(),
-                    numcolors
-                );
-            }
+        if (normalCacheUsed && binding == SoNormalBindingElement::PER_FACE_INDEXED) {
+            binding = SoNormalBindingElement::PER_FACE;
+        }
+        return binding;
+    }();
 
-            // the nindices must have the length of numindices
-            int index = 0;
-            float t = transp ? transp[0] : 0;
-            for (std::size_t i = 0; i < numTria; i++) {
-                for (int j = 0; j < 3; j++) {
-                    const SbColor& c = pcolors[mindices[index]];
-                    const float color[4] {c[0], c[1], c[2], t};
-                    appendVertex(cindices[index], nindices[index], color);
-                    index++;
-                }
-                index++;
-            }
+    const int normalCount = SoNormalElement::getInstance(state)->getNum();
+    const auto safeIndex = [](int32_t index) -> std::size_t {
+        return index < 0 ? 0U : static_cast<std::size_t>(index);
+    };
+    const auto clampColorIndex = [&](std::size_t index) {
+        return std::min(index, static_cast<std::size_t>(numcolors - 1));
+    };
+    const auto opacityFor = [&](std::size_t index) {
+        if (!transp || numtransp <= 0) {
+            return 1.0F;
+        }
+        const std::size_t transparencyIndex = std::min(index, static_cast<std::size_t>(numtransp - 1));
+        return 1.0F - transp[transparencyIndex];
+    };
+    const auto materialIndexFor = [&](std::size_t faceIndex, std::size_t vertexIndex) {
+        switch (matbind) {
+            case SoMaterialBindingElement::PER_VERTEX:
+                return vertexIndex;
+            case SoMaterialBindingElement::PER_VERTEX_INDEXED:
+                return safeIndex(mindices ? mindices[vertexIndex] : cindices[vertexIndex]);
+            case SoMaterialBindingElement::PER_FACE_INDEXED:
+            case SoMaterialBindingElement::PER_PART_INDEXED:
+                return safeIndex(mindices ? mindices[faceIndex] : cindices[faceIndex * 4]);
+            case SoMaterialBindingElement::PER_FACE:
+            case SoMaterialBindingElement::PER_PART:
+                return faceIndex;
+            default:
+                return std::size_t {0};
+        }
+    };
+    const auto normalIndexFor = [&](std::size_t faceIndex, std::size_t vertexIndex) {
+        switch (normalBinding) {
+            case SoNormalBindingElement::PER_VERTEX:
+                return static_cast<int32_t>(vertexIndex);
+            case SoNormalBindingElement::PER_VERTEX_INDEXED:
+                return nindices ? nindices[vertexIndex] : cindices[vertexIndex];
+            case SoNormalBindingElement::PER_FACE_INDEXED:
+            case SoNormalBindingElement::PER_PART_INDEXED:
+                return nindices ? nindices[faceIndex] : cindices[faceIndex * 4];
+            case SoNormalBindingElement::PER_FACE:
+            case SoNormalBindingElement::PER_PART:
+                return static_cast<int32_t>(faceIndex);
+            default:
+                return 0;
+        }
+    };
+
+    auto appendVertex = [&data,
+                         points,
+                         normals,
+                         normalCount](int32_t pointIndex, int32_t normalIndex, const float* color) {
+        const int32_t safeNormalIndex = normalCount > 0 ? std::clamp(normalIndex, 0, normalCount - 1)
+                                                        : std::max(normalIndex, 0);
+        const SbVec3f& normal = normals[safeNormalIndex];
+        const SbVec3f& point = points[pointIndex];
+        const float position[3] {point[0], point[1], point[2]};
+        const float normalValue[3] {normal[0], normal[1], normal[2]};
+        if (color) {
+            data.appendColoredVertex(position, normalValue, color);
         }
         else {
-            // only an overall material
-            matbind = SoMaterialBindingElement::OVERALL;
-            data.materialBinding = Gui::MeshMaterialBinding::Overall;
+            data.appendVertex(position, normalValue);
+        }
+        data.indices.push_back(static_cast<std::uint32_t>(data.vertexCount() - 1));
+    };
 
-            // the nindices must have the length of numindices
-            int index = 0;
-            for (std::size_t i = 0; i < numTria; i++) {
-                for (int j = 0; j < 3; j++) {
-                    appendVertex(cindices[index], nindices[index], nullptr);
-                    index++;
-                }
-                index++;
+    data.reserveVertices(3 * numTria, hasColors);
+    data.indices.reserve(3 * numTria);
+    for (std::size_t faceIndex = 0; faceIndex < numTria; ++faceIndex) {
+        const std::size_t baseIndex = faceIndex * 4;
+        bool validFace = true;
+        for (std::size_t corner = 0; corner < 3; ++corner) {
+            const int32_t pointIndex = cindices[baseIndex + corner];
+            if (pointIndex < 0 || pointIndex >= coords->getNum()) {
+                validFace = false;
+                break;
             }
         }
-    }
-    else if (normbind == SoNormalBindingElement::PER_VERTEX) {
-        // only an overall material
-        data.materialBinding = Gui::MeshMaterialBinding::Overall;
-
-        std::size_t numPts = coords->getNum();
-        data.reserveVertices(numPts, false);
-        for (std::size_t i = 0; i < numPts; i++) {
-            const SbVec3f& n = normals[i];
-            const SbVec3f& p = coords->get3(i);
-            const float position[3] {p[0], p[1], p[2]};
-            const float normal[3] {n[0], n[1], n[2]};
-            data.appendVertex(position, normal);
+        if (!validFace) {
+            continue;
         }
 
-        int index = 0;
-        for (std::size_t i = 0; i < numTria; i++) {
-            for (int j = 0; j < 3; j++) {
-                data.indices.push_back(static_cast<std::uint32_t>(cindices[index]));
-                index++;
+        for (std::size_t corner = 0; corner < 3; ++corner) {
+            const std::size_t vertexIndex = baseIndex + corner;
+            const int32_t pointIndex = cindices[vertexIndex];
+
+            const std::size_t materialIndex = materialIndexFor(faceIndex, vertexIndex);
+            if (hasColors) {
+                const SbColor& color = pcolors[clampColorIndex(materialIndex)];
+                const float colorValue[4] {
+                    color[0],
+                    color[1],
+                    color[2],
+                    opacityFor(materialIndex),
+                };
+                appendVertex(pointIndex, normalIndexFor(faceIndex, vertexIndex), colorValue);
             }
-            index++;
+            else {
+                appendVertex(pointIndex, normalIndexFor(faceIndex, vertexIndex), nullptr);
+            }
         }
     }
 
@@ -582,9 +604,8 @@ Gui::MeshRenderData SoFCIndexedFaceSet::buildMeshRenderData(SoState* state)
     return data;
 }
 
-void SoFCIndexedFaceSet::generateGLArrays(SoGLRenderAction* action)
+void SoFCIndexedFaceSet::generateGLArrays(SoGLRenderAction* action, const Gui::MeshRenderData& data)
 {
-    const Gui::MeshRenderData data = buildMeshRenderData(action->getState());
     render.generateGLArrays(action, data);
 }
 

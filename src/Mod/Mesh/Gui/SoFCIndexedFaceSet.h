@@ -103,7 +103,8 @@ protected:
         const int32_t* matindices,
         const int32_t binding,
         const SoTextureCoordinateBundle* const texcoords,
-        const int32_t* texindices
+        const int32_t* texindices,
+        std::size_t pointStride
     );
 
     void doAction(SoAction* action) override;
@@ -117,7 +118,7 @@ private:
     void renderVisibleFaces(const SbVec3f*);
 
     Gui::MeshRenderData buildMeshRenderData(SoState* state);
-    void generateGLArrays(SoGLRenderAction* action);
+    void generateGLArrays(SoGLRenderAction* action, const Gui::MeshRenderData& data);
 
 private:
     MeshGLRenderer render;
