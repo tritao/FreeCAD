@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: LGPL-2.1-or-later
 
-"""GUI visual regression test for Coin selection/preselection ordering.
+"""GUI visual regression test for selection/preselection ordering.
 
 Run with:
     FreeCAD -t TestCoinSelectionVisual
@@ -26,7 +26,7 @@ PART_PLANE_TYPE = f"{Part.__name__}::Plane"
 
 
 class TestCoinSelectionVisual(unittest.TestCase):
-    """Verify that live preselection draws above Coin selection overlays."""
+    """Verify that live preselection draws above selection overlays."""
 
     _COLOR_DELTA_MIN = 0.15
     _COLOR_DELTA_RESTORE_MAX = 0.05
@@ -47,6 +47,8 @@ class TestCoinSelectionVisual(unittest.TestCase):
     def tearDown(self):
         with suppress(Exception):
             Selection.clearPreselection()
+        with suppress(Exception):
+            Selection.clearSelection()
 
         if self._path is not None:
             with suppress(Exception):
@@ -64,18 +66,13 @@ class TestCoinSelectionVisual(unittest.TestCase):
         if FreeCAD.getDocument(self.doc.Name):
             FreeCAD.closeDocument(self.doc.Name)
 
-    def test_preselection_overrides_coin_selection_overlay(self):
+    def test_preselection_overrides_selection_overlay(self):
         plane = self._create_test_plane()
         self._prepare_view()
-        self._path = self._find_scene_path(plane.ViewObject.RootNode)
 
         base_color = self._center_pixel_color()
 
-        Selection.applyCoinSelection(
-            self._path,
-            mode=Selection.SelectionActionMode.All,
-            color=(0.0, 0.6, 0.0),
-        )
+        Selection.addSelection(plane)
         self._flush_gui()
         selection_color = self._center_pixel_color()
 
@@ -87,7 +84,7 @@ class TestCoinSelectionVisual(unittest.TestCase):
             self._color_distance(base_color, selection_color),
             self._COLOR_DELTA_MIN,
             msg=(
-                "Coin selection overlay did not visibly change the rendered face. "
+                "Selection overlay did not visibly change the rendered face. "
                 f"base={base_color}, selection={selection_color}"
             ),
         )
@@ -95,7 +92,7 @@ class TestCoinSelectionVisual(unittest.TestCase):
             self._color_distance(selection_color, preselection_color),
             self._COLOR_DELTA_MIN,
             msg=(
-                "Preselection did not visibly override the Coin selection overlay. "
+                "Preselection did not visibly override the selection overlay. "
                 f"selection={selection_color}, preselection={preselection_color}"
             ),
         )
