@@ -101,6 +101,7 @@ _PART_GUI_NODES = (
 _MESH_GUI_NODES = (
     "SoFCMeshObjectNode",
     "SoFCMeshObjectPerFaceColor",
+    "SoFCMeshObjectPerFaceTranslucent",
     "SoFCMeshObjectPerVertexColor",
     "SoPolygon",
     "SoPolygonOpen",
@@ -646,10 +647,11 @@ def _make_scene_for_node(coin, type_name: str, fixture: _SnapshotFixture):
     if type_name in (
         "SoFCMeshObjectNode",
         "SoFCMeshObjectPerFaceColor",
+        "SoFCMeshObjectPerFaceTranslucent",
         "SoFCMeshObjectPerVertexColor",
     ):
         variant = "tetra"
-        if type_name == "SoFCMeshObjectPerFaceColor":
+        if type_name in ("SoFCMeshObjectPerFaceColor", "SoFCMeshObjectPerFaceTranslucent"):
             material = coin.SoMaterial()
             material.diffuseColor.setValues(
                 0,
@@ -661,10 +663,16 @@ def _make_scene_for_node(coin, type_name: str, fixture: _SnapshotFixture):
                     coin.SbColor(0.20, 0.45, 0.95),
                 ],
             )
+            if type_name == "SoFCMeshObjectPerFaceTranslucent":
+                material.transparency.setValues(0, 4, [0.20, 0.40, 0.60, 0.80])
             binding = coin.SoMaterialBinding()
             binding.value = coin.SoMaterialBinding.PER_FACE
             root.addChild(material)
             root.addChild(binding)
+            if type_name == "SoFCMeshObjectPerFaceTranslucent":
+                light_model = coin.SoLightModel()
+                light_model.model = coin.SoLightModel.BASE_COLOR
+                root.addChild(light_model)
         elif type_name == "SoFCMeshObjectPerVertexColor":
             material = coin.SoMaterial()
             material.diffuseColor.setValues(
@@ -1296,6 +1304,21 @@ def _non_background_pixel_count(path: Path) -> int:
     return count
 
 
+def _different_pixel_count(first_path: Path, second_path: Path) -> int:
+    from PySide.QtGui import QImage  # type: ignore
+
+    first = QImage(str(first_path)).convertToFormat(QImage.Format_ARGB32)
+    second = QImage(str(second_path)).convertToFormat(QImage.Format_ARGB32)
+    if first.isNull() or second.isNull() or first.size() != second.size():
+        return 0
+
+    return sum(
+        first.pixel(x, y) != second.pixel(x, y)
+        for y in range(first.height())
+        for x in range(first.width())
+    )
+
+
 def _pixel_bbox(path: Path, predicate):
     from PySide.QtGui import QImage  # type: ignore
 
@@ -1623,6 +1646,43 @@ class CoinNodeSnapshotTestCase(unittest.TestCase):
             _different_pixel_count(first_path, second_path),
             1000,
             "indexed face set material changes should update the cached retained packet",
+        )
+
+    def test_so_fc_mesh_object_material_mutation_updates_cached_packet(self):
+        FreeCAD, FreeCADGui, coin = _require_gui()
+        _load_required_modules(_SnapshotFixture(required_modules=("MeshGui",)))
+
+        width = _SNAPSHOT_WIDTH
+        height = _SNAPSHOT_HEIGHT
+        out_dir = Path(
+            os.environ.get(
+                "FC_VISUAL_OUT_DIR",
+                os.path.join(tempfile.gettempdir(), "FreeCADTesting", "CoinNodeSnapshots"),
+            )
+        )
+        first_path = out_dir / "actual" / "SoFCMeshObjectMaterialBeforeMutation.png"
+        second_path = out_dir / "actual" / "SoFCMeshObjectMaterialAfterMutation.png"
+
+        root = _make_snapshot_scene(coin, "SoFCMeshObjectPerFaceColor").root
+        material = _find_descendant(coin, root, "SoMaterial")
+        self.assertIsNotNone(material, "mesh material fixture is incomplete")
+
+        with _ViewerSnapshotHarness(FreeCAD, FreeCADGui, width, height) as harness:
+            _render_png(harness, coin, root, first_path, width, height)
+
+            material.diffuseColor.setValues(
+                0,
+                4,
+                [coin.SbColor(0.05, 0.90, 0.15)] * 4,
+            )
+            harness.view.redraw()
+            FreeCADGui.updateGui()
+            _render_png(harness, coin, root, second_path, width, height)
+
+        self.assertGreater(
+            _different_pixel_count(first_path, second_path),
+            1000,
+            "mesh material changes should update the cached retained packet",
         )
 
     def test_so_datum_label_ignores_parent_cull_face(self):

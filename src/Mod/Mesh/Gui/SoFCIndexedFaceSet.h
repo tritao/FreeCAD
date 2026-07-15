@@ -24,9 +24,6 @@
 
 #pragma once
 
-#include <Inventor/engines/SoSubEngine.h>
-#include <Inventor/fields/SoMFColor.h>
-#include <Inventor/fields/SoSFBool.h>
 #include <Inventor/nodes/SoIndexedFaceSet.h>
 #include <Gui/MeshRenderData.h>
 #include <Mod/Mesh/MeshGlobal.h>
@@ -41,30 +38,6 @@ using GLuint = unsigned int;
 
 namespace MeshGui
 {
-
-/**
- * class SoFCMaterialEngine
- * \brief The SoFCMaterialEngine class is used to notify an
- * SoFCIndexedFaceSet node about material changes.
- *
- * @author Werner Mayer
- */
-class MeshGuiExport SoFCMaterialEngine: public SoEngine
-{
-    SO_ENGINE_HEADER(SoFCMaterialEngine);
-
-public:
-    SoFCMaterialEngine();
-    static void initClass();
-
-    SoMFColor diffuseColor;
-    SoEngineOutput trigger;
-
-private:
-    ~SoFCMaterialEngine() override;
-    void evaluate() override;
-    void inputChanged(SoField*) override;
-};
 
 /**
  * class SoFCIndexedFaceSet
@@ -83,7 +56,6 @@ public:
     static void initClass();
     SoFCIndexedFaceSet();
 
-    SoSFBool updateGLArray;
     unsigned int renderTriangleLimit;
 
     void invalidate();

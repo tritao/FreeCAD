@@ -95,37 +95,6 @@ Gui::MeshMaterialBinding toMeshMaterialBinding(SoMaterialBindingElement::Binding
 
 }  // namespace
 
-// ----------------------------------------------------------------------------
-
-SO_ENGINE_SOURCE(SoFCMaterialEngine)
-
-SoFCMaterialEngine::SoFCMaterialEngine()
-{
-    SO_ENGINE_CONSTRUCTOR(SoFCMaterialEngine);
-
-    SO_ENGINE_ADD_INPUT(diffuseColor, (SbColor(0.0, 0.0, 0.0)));
-    SO_ENGINE_ADD_OUTPUT(trigger, SoSFBool);
-}
-
-SoFCMaterialEngine::~SoFCMaterialEngine() = default;
-
-void SoFCMaterialEngine::initClass()
-{
-    SO_ENGINE_INIT_CLASS(SoFCMaterialEngine, SoEngine, "Engine");
-}
-
-void SoFCMaterialEngine::inputChanged(SoField*)
-{
-    SO_ENGINE_OUTPUT(trigger, SoSFBool, setValue(true));
-}
-
-void SoFCMaterialEngine::evaluate()
-{
-    // do nothing here
-}
-
-// ----------------------------------------------------------------------------
-
 SO_NODE_SOURCE(SoFCIndexedFaceSet)
 
 void SoFCIndexedFaceSet::initClass()
@@ -137,8 +106,6 @@ SoFCIndexedFaceSet::SoFCIndexedFaceSet()
     : renderTriangleLimit(std::numeric_limits<unsigned>::max())
 {
     SO_NODE_CONSTRUCTOR(SoFCIndexedFaceSet);
-    SO_NODE_ADD_FIELD(updateGLArray, (false));
-    updateGLArray.setFieldType(SoField::EVENTOUT_FIELD);
     setName(SoFCIndexedFaceSet::getClassTypeId().getName());
 }
 
@@ -176,14 +143,7 @@ void SoFCIndexedFaceSet::GLRender(SoGLRenderAction* action)
 
     // use VBO for fast rendering if possible
     if (useVBO) {
-        if (updateGLArray.getValue()) {
-            renderRevision.invalidate();
-            updateGLArray.setValue(false);
-            render.update();
-            const Gui::MeshRenderData data = buildMeshRenderData(state);
-            generateGLArrays(action, data);
-        }
-        else if (render.needsUpdate(action, renderRevision) || !render.matchMaterial(state)) {
+        if (render.needsUpdate(action, renderRevision) || !render.matchMaterial(state)) {
             render.update();
             const Gui::MeshRenderData data = buildMeshRenderData(state);
             generateGLArrays(action, data);
@@ -223,9 +183,7 @@ void SoFCIndexedFaceSet::drawFaces(SoGLRenderAction* action)
         if (matbind == SoMaterialBindingElement::OVERALL && matchCtx) {
             SoMaterialBundle mb(action);
             mb.sendFirst();
-            if (updateGLArray.getValue()) {
-                renderRevision.invalidate();
-                updateGLArray.setValue(false);
+            if (render.needsUpdate(action, renderRevision)) {
                 const Gui::MeshRenderData data = buildMeshRenderData(state);
                 generateGLArrays(action, data);
             }
@@ -406,7 +364,7 @@ void SoFCIndexedFaceSet::drawCoords(
 
 void SoFCIndexedFaceSet::invalidate()
 {
-    updateGLArray.setValue(true);
+    renderRevision.invalidate();
 }
 
 Gui::MeshRenderData SoFCIndexedFaceSet::buildMeshRenderData(SoState* state)

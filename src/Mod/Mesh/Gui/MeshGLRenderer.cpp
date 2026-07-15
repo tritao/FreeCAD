@@ -30,6 +30,7 @@
 # include <GL/glext.h>
 #endif
 
+#include <algorithm>
 #include <cstddef>
 #include <cstdint>
 #include <vector>
@@ -103,6 +104,81 @@ std::vector<float> interleaveMeshRenderData(const Gui::MeshRenderData& data)
     return result;
 }
 
+struct CoinMaterialSnapshot
+{
+    std::vector<float> diffuse;
+    std::vector<float> transparency;
+
+    void capture(SoState* state)
+    {
+        diffuse.clear();
+        transparency.clear();
+
+        SoGLLazyElement* gl = SoGLLazyElement::getInstance(state);
+        if (!gl) {
+            return;
+        }
+
+        const SbColor* colors = gl->getDiffusePointer();
+        const int colorCount = gl->getNumDiffuse();
+        if (colors && colorCount > 0) {
+            diffuse.reserve(static_cast<std::size_t>(colorCount) * 3);
+            for (int index = 0; index < colorCount; ++index) {
+                diffuse.push_back(colors[index][0]);
+                diffuse.push_back(colors[index][1]);
+                diffuse.push_back(colors[index][2]);
+            }
+        }
+
+        const float* transparencies = gl->getTransparencyPointer();
+        const int transparencyCount = gl->getNumTransparencies();
+        if (transparencies && transparencyCount > 0) {
+            transparency.assign(transparencies, transparencies + transparencyCount);
+        }
+    }
+
+    bool matches(SoState* state) const
+    {
+        SoGLLazyElement* gl = SoGLLazyElement::getInstance(state);
+        if (!gl) {
+            return diffuse.empty() && transparency.empty();
+        }
+
+        const SbColor* colors = gl->getDiffusePointer();
+        const int colorCount = gl->getNumDiffuse();
+        if (!colors || colorCount <= 0) {
+            if (!diffuse.empty()) {
+                return false;
+            }
+        }
+        else if (diffuse.size() != static_cast<std::size_t>(colorCount) * 3) {
+            return false;
+        }
+        else {
+            for (int index = 0; index < colorCount; ++index) {
+                const std::size_t offset = static_cast<std::size_t>(index) * 3;
+                if (diffuse[offset] != colors[index][0] || diffuse[offset + 1] != colors[index][1]
+                    || diffuse[offset + 2] != colors[index][2]) {
+                    return false;
+                }
+            }
+        }
+
+        const float* transparencies = gl->getTransparencyPointer();
+        const int transparencyCount = gl->getNumTransparencies();
+        if (!transparencies || transparencyCount <= 0) {
+            return transparency.empty();
+        }
+        return transparency.size() == static_cast<std::size_t>(transparencyCount)
+            && std::equal(
+                   transparency.begin(),
+                   transparency.end(),
+                   transparencies,
+                   transparencies + transparencyCount
+            );
+    }
+};
+
 }  // namespace
 
 #if defined RENDER_GL_VAO
@@ -112,9 +188,7 @@ class MeshGLRenderer::Private
 public:
     Gui::OpenGLMultiBuffer vertices;
     Gui::OpenGLMultiBuffer indices;
-    const SbColor* pcolors {nullptr};
-    const float* ptransparencies {nullptr};
-    int transparencyCount {0};
+    CoinMaterialSnapshot material;
     SoMaterialBindingElement::Binding matbinding {SoMaterialBindingElement::OVERALL};
     bool initialized {false};
     Gui::MeshRenderRevision revision;
@@ -252,16 +326,11 @@ class MeshGLRenderer::Private
 public:
     std::vector<std::uint32_t> index_array;
     std::vector<float> vertex_array;
-    const SbColor* pcolors;
-    const float* ptransparencies;
-    int transparencyCount;
+    CoinMaterialSnapshot material;
     SoMaterialBindingElement::Binding matbinding;
 
     Private()
-        : pcolors(0)
-        , ptransparencies(nullptr)
-        , transparencyCount(0)
-        , matbinding(SoMaterialBindingElement::OVERALL)
+        : matbinding(SoMaterialBindingElement::OVERALL)
     {}
 
     bool canRenderGLArray(SoGLRenderAction*) const;
@@ -337,16 +406,11 @@ void MeshGLRenderer::Private::renderCoordsGLArray(SoGLRenderAction*)
 class MeshGLRenderer::Private
 {
 public:
-    const SbColor* pcolors;
-    const float* ptransparencies;
-    int transparencyCount;
+    CoinMaterialSnapshot material;
     SoMaterialBindingElement::Binding matbinding;
 
     Private()
-        : pcolors(0)
-        , ptransparencies(nullptr)
-        , transparencyCount(0)
-        , matbinding(SoMaterialBindingElement::OVERALL)
+        : matbinding(SoMaterialBindingElement::OVERALL)
     {}
 
     bool canRenderGLArray(SoGLRenderAction*) const
@@ -389,12 +453,7 @@ bool MeshGLRenderer::needsUpdate(SoGLRenderAction* action, const Gui::MeshRender
 
 void MeshGLRenderer::generateGLArrays(SoGLRenderAction* action, const Gui::MeshRenderData& data)
 {
-    SoGLLazyElement* gl = SoGLLazyElement::getInstance(action->getState());
-    if (gl) {
-        p->pcolors = gl->getDiffusePointer();
-        p->ptransparencies = gl->getTransparencyPointer();
-        p->transparencyCount = gl->getNumTransparencies();
-    }
+    p->material.capture(action->getState());
     p->generateGLArrays(action, data);
 }
 
@@ -422,17 +481,7 @@ bool MeshGLRenderer::matchMaterial(SoState* state) const
     if (matbind == SoMaterialBindingElement::OVERALL) {
         return true;
     }
-    const SbColor* pcolors = nullptr;
-    const float* ptransparencies = nullptr;
-    int transparencyCount = 0;
-    SoGLLazyElement* gl = SoGLLazyElement::getInstance(state);
-    if (gl) {
-        pcolors = gl->getDiffusePointer();
-        ptransparencies = gl->getTransparencyPointer();
-        transparencyCount = gl->getNumTransparencies();
-    }
-    return p->pcolors == pcolors && p->ptransparencies == ptransparencies
-        && p->transparencyCount == transparencyCount;
+    return p->material.matches(state);
 }
 
 bool MeshGLRenderer::shouldRenderDirectly([[maybe_unused]] bool direct)
