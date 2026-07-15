@@ -65,6 +65,8 @@ enum class MeshMaterialBinding
     Overall,
     PerFace,
     PerFaceIndexed,
+    PerPart,
+    PerPartIndexed,
     PerVertex,
     PerVertexIndexed
 };

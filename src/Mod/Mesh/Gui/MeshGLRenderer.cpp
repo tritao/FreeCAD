@@ -58,6 +58,10 @@ SoMaterialBindingElement::Binding toCoinMaterialBinding(Gui::MeshMaterialBinding
             return SoMaterialBindingElement::PER_FACE;
         case Gui::MeshMaterialBinding::PerFaceIndexed:
             return SoMaterialBindingElement::PER_FACE_INDEXED;
+        case Gui::MeshMaterialBinding::PerPart:
+            return SoMaterialBindingElement::PER_PART;
+        case Gui::MeshMaterialBinding::PerPartIndexed:
+            return SoMaterialBindingElement::PER_PART_INDEXED;
         case Gui::MeshMaterialBinding::PerVertex:
             return SoMaterialBindingElement::PER_VERTEX;
         case Gui::MeshMaterialBinding::PerVertexIndexed:
@@ -109,6 +113,8 @@ public:
     Gui::OpenGLMultiBuffer vertices;
     Gui::OpenGLMultiBuffer indices;
     const SbColor* pcolors {nullptr};
+    const float* ptransparencies {nullptr};
+    int transparencyCount {0};
     SoMaterialBindingElement::Binding matbinding {SoMaterialBindingElement::OVERALL};
     bool initialized {false};
     Gui::MeshRenderRevision revision;
@@ -229,6 +235,7 @@ void MeshGLRenderer::Private::update()
 {
     vertices.destroy();
     indices.destroy();
+    initialized = false;
 }
 
 bool MeshGLRenderer::Private::needsUpdate(
@@ -246,10 +253,14 @@ public:
     std::vector<std::uint32_t> index_array;
     std::vector<float> vertex_array;
     const SbColor* pcolors;
+    const float* ptransparencies;
+    int transparencyCount;
     SoMaterialBindingElement::Binding matbinding;
 
     Private()
         : pcolors(0)
+        , ptransparencies(nullptr)
+        , transparencyCount(0)
         , matbinding(SoMaterialBindingElement::OVERALL)
     {}
 
@@ -327,10 +338,14 @@ class MeshGLRenderer::Private
 {
 public:
     const SbColor* pcolors;
+    const float* ptransparencies;
+    int transparencyCount;
     SoMaterialBindingElement::Binding matbinding;
 
     Private()
         : pcolors(0)
+        , ptransparencies(nullptr)
+        , transparencyCount(0)
         , matbinding(SoMaterialBindingElement::OVERALL)
     {}
 
@@ -377,6 +392,8 @@ void MeshGLRenderer::generateGLArrays(SoGLRenderAction* action, const Gui::MeshR
     SoGLLazyElement* gl = SoGLLazyElement::getInstance(action->getState());
     if (gl) {
         p->pcolors = gl->getDiffusePointer();
+        p->ptransparencies = gl->getTransparencyPointer();
+        p->transparencyCount = gl->getNumTransparencies();
     }
     p->generateGLArrays(action, data);
 }
@@ -406,11 +423,16 @@ bool MeshGLRenderer::matchMaterial(SoState* state) const
         return true;
     }
     const SbColor* pcolors = nullptr;
+    const float* ptransparencies = nullptr;
+    int transparencyCount = 0;
     SoGLLazyElement* gl = SoGLLazyElement::getInstance(state);
     if (gl) {
         pcolors = gl->getDiffusePointer();
+        ptransparencies = gl->getTransparencyPointer();
+        transparencyCount = gl->getNumTransparencies();
     }
-    return p->pcolors == pcolors;
+    return p->pcolors == pcolors && p->ptransparencies == ptransparencies
+        && p->transparencyCount == transparencyCount;
 }
 
 bool MeshGLRenderer::shouldRenderDirectly([[maybe_unused]] bool direct)
