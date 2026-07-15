@@ -228,14 +228,12 @@ private:
         SbBool needNormals,
         SbBool ccw
     ) const;
-    void drawPoints(const Mesh::MeshObject*, SbBool needNormals, SbBool ccw) const;
+    void drawPoints(const Mesh::MeshObject*, SbBool needNormals, SbBool ccw, std::size_t pointStride) const;
     unsigned int countTriangles(SoAction* action) const;
 
     void startSelection(SoAction* action, const Mesh::MeshObject*);
     void stopSelection(SoAction* action, const Mesh::MeshObject*);
     void renderSelectionGeometry(const Mesh::MeshObject*);
-
-    Gui::MeshRenderData buildMeshRenderData(SoState* state) const;
 
 private:
     GLuint* selectBuf {nullptr};
@@ -243,6 +241,8 @@ private:
     GLfloat projection[16] {};
     MeshGLRenderer render;
     Gui::MeshRenderRevision renderRevision;
+    bool renderCcw {true};
+    bool renderCcwValid {false};
 };
 
 class MeshGuiExport SoFCMeshSegmentShape: public SoShape
@@ -267,6 +267,7 @@ protected:
     ~SoFCMeshSegmentShape() override = default;
 
 private:
+    void notify(SoNotList* node) override;
     enum Binding
     {
         OVERALL = 0,
@@ -285,7 +286,12 @@ private:
         SbBool needNormals,
         SbBool ccw
     ) const;
-    void drawPoints(const Mesh::MeshObject*, SbBool needNormals, SbBool ccw) const;
+    void drawPoints(const Mesh::MeshObject*, SbBool needNormals, SbBool ccw, std::size_t pointStride) const;
+
+    MeshGLRenderer render;
+    Gui::MeshRenderRevision renderRevision;
+    bool renderCcw {true};
+    bool renderCcwValid {false};
 };
 
 class MeshGuiExport SoFCMeshObjectBoundary: public SoShape

@@ -100,6 +100,8 @@ _PART_GUI_NODES = (
 )
 _MESH_GUI_NODES = (
     "SoFCMeshObjectNode",
+    "SoFCMeshObjectPerFaceColor",
+    "SoFCMeshObjectPerVertexColor",
     "SoPolygon",
     "SoPolygonOpen",
     "SoPolygonStartIndex",
@@ -641,11 +643,48 @@ def _make_scene_for_node(coin, type_name: str, fixture: _SnapshotFixture):
         root.addChild(indicator)
         return root
 
-    if type_name == "SoFCMeshObjectNode":
+    if type_name in (
+        "SoFCMeshObjectNode",
+        "SoFCMeshObjectPerFaceColor",
+        "SoFCMeshObjectPerVertexColor",
+    ):
         variant = "tetra"
-        color = coin.SoBaseColor()
-        color.rgb.setValue(0.16, 0.42, 0.86)
-        root.addChild(color)
+        if type_name == "SoFCMeshObjectPerFaceColor":
+            material = coin.SoMaterial()
+            material.diffuseColor.setValues(
+                0,
+                4,
+                [
+                    coin.SbColor(0.95, 0.25, 0.20),
+                    coin.SbColor(0.95, 0.75, 0.20),
+                    coin.SbColor(0.20, 0.80, 0.35),
+                    coin.SbColor(0.20, 0.45, 0.95),
+                ],
+            )
+            binding = coin.SoMaterialBinding()
+            binding.value = coin.SoMaterialBinding.PER_FACE
+            root.addChild(material)
+            root.addChild(binding)
+        elif type_name == "SoFCMeshObjectPerVertexColor":
+            material = coin.SoMaterial()
+            material.diffuseColor.setValues(
+                0,
+                4,
+                [
+                    coin.SbColor(0.95, 0.25, 0.20),
+                    coin.SbColor(0.95, 0.75, 0.20),
+                    coin.SbColor(0.20, 0.80, 0.35),
+                    coin.SbColor(0.20, 0.45, 0.95),
+                ],
+            )
+            binding = coin.SoMaterialBinding()
+            binding.value = coin.SoMaterialBinding.PER_VERTEX_INDEXED
+            root.addChild(material)
+            root.addChild(binding)
+        else:
+            color = coin.SoBaseColor()
+            color.rgb.setValue(0.16, 0.42, 0.86)
+            root.addChild(color)
         root.addChild(_read_mesh_scene(coin, variant, "SoFCMeshObjectNode", "SoFCMeshObjectShape"))
         return root
 

@@ -62,6 +62,7 @@
 #include <Mod/Mesh/App/Core/Grid.h>
 #include <Mod/Mesh/App/Core/MeshKernel.h>
 
+#include "MeshRenderDataBuilder.h"
 #include "SoFCMeshObject.h"
 
 
@@ -624,6 +625,7 @@ void SoFCMeshObjectShape::notify(SoNotList* node)
 {
     inherited::notify(node);
     renderRevision.invalidate();
+    renderCcwValid = false;
 }
 
 #define RENDER_GLARRAYS
@@ -660,29 +662,40 @@ void SoFCMeshObjectShape::GLRender(SoGLRenderAction* action)
             ccw = false;
         }
 
+        if (!renderCcwValid || renderCcw != bool(ccw)) {
+            renderRevision.invalidate();
+            renderCcw = ccw;
+            renderCcwValid = true;
+        }
+
         const Gui::MeshInteractionLodPolicy policy(this->renderTriangleLimit);
-        if (!policy.shouldUseReducedGeometry(mode, mesh->countFacets())) {
-            if (mbind != OVERALL) {
-                drawFaces(mesh, &mb, mbind, needNormals, ccw);
+        const Gui::MeshRenderPresentation presentation
+            = policy.presentation(mode, mesh->countFacets(), mesh->countFacets());
+        if (!presentation.reducedGeometry) {
+#ifdef RENDER_GLARRAYS
+            if (render.canRenderGLArray(action)) {
+                if (render.needsUpdate(action, renderRevision) || !render.matchMaterial(state)) {
+                    render.update();
+                    const Gui::MeshRenderData data
+                        = buildMeshObjectRenderData(state, mesh, renderRevision, ccw);
+                    render.generateGLArrays(action, data);
+                }
+                if (render.matchMaterial(state)) {
+                    render.renderFacesGLArray(action);
+                }
+                else {
+                    drawFaces(mesh, &mb, mbind, needNormals, ccw);
+                }
             }
             else {
-#ifdef RENDER_GLARRAYS
-                if (render.needsUpdate(action, renderRevision)) {
-                    render.update();
-                    render.generateGLArrays(action, buildMeshRenderData(state));
-                }
-                render.renderFacesGLArray(action);
-#else
-                drawFaces(mesh, 0, mbind, needNormals, ccw);
-#endif
+                drawFaces(mesh, &mb, mbind, needNormals, ccw);
             }
+#else
+            drawFaces(mesh, &mb, mbind, needNormals, ccw);
+#endif
         }
         else {
-#if 0 && defined(RENDER_GLARRAYS)
-            renderCoordsGLArray(action);
-#else
-            drawPoints(mesh, needNormals, ccw);
-#endif
+            drawPoints(mesh, needNormals, ccw, presentation.pointStride);
         }
     }
 }
@@ -806,12 +819,16 @@ void SoFCMeshObjectShape::drawFaces(
 /**
  * Renders the gravity points of a subset of triangles.
  */
-void SoFCMeshObjectShape::drawPoints(const Mesh::MeshObject* mesh, SbBool needNormals, SbBool ccw) const
+void SoFCMeshObjectShape::drawPoints(
+    const Mesh::MeshObject* mesh,
+    SbBool needNormals,
+    SbBool ccw,
+    std::size_t pointStride
+) const
 {
     const MeshCore::MeshPointArray& rPoints = mesh->getKernel().GetPoints();
     const MeshCore::MeshFacetArray& rFacets = mesh->getKernel().GetFacets();
-    const Gui::MeshInteractionLodPolicy policy(this->renderTriangleLimit);
-    int mod = static_cast<int>(policy.pointStride(rFacets.size()));
+    const int mod = static_cast<int>(pointStride);
 
     float size = std::min<float>((float)mod, 3.0F);
     glPointSize(size);
@@ -885,38 +902,6 @@ void SoFCMeshObjectShape::drawPoints(const Mesh::MeshObject* mesh, SbBool needNo
         }
         glEnd();
     }
-}
-
-Gui::MeshRenderData SoFCMeshObjectShape::buildMeshRenderData(SoState* state) const
-{
-    const Mesh::MeshObject* mesh = SoFCMeshObjectElement::get(state);
-    Gui::MeshRenderData data;
-    data.revision = renderRevision;
-    if (!mesh) {
-        return data;
-    }
-
-    const MeshCore::MeshKernel& kernel = mesh->getKernel();
-    const MeshCore::MeshPointArray& cP = kernel.GetPoints();
-    const MeshCore::MeshFacetArray& cF = kernel.GetFacets();
-
-    // Flat shading
-    data.reserveVertices(3 * cF.size(), false);
-    data.indices.reserve(3 * cF.size());
-
-    data.materialBinding = Gui::MeshMaterialBinding::Overall;
-    for (const auto& it : cF) {
-        Base::Vector3f n = kernel.GetFacet(it).GetNormal();
-        for (Mesh::PointIndex ptIndex : it._aulPoints) {
-            const Base::Vector3f& v = cP[ptIndex];
-            const float position[3] {v.x, v.y, v.z};
-            const float normal[3] {n.x, n.y, n.z};
-            data.appendVertex(position, normal);
-            data.indices.push_back(static_cast<std::uint32_t>(data.vertexCount() - 1));
-        }
-    }
-
-    return data;
 }
 
 void SoFCMeshObjectShape::doAction(SoAction* action)
@@ -1218,6 +1203,13 @@ SoFCMeshSegmentShape::SoFCMeshSegmentShape()
     SO_NODE_ADD_FIELD(index, (0));
 }
 
+void SoFCMeshSegmentShape::notify(SoNotList* node)
+{
+    inherited::notify(node);
+    renderRevision.invalidate();
+    renderCcwValid = false;
+}
+
 /**
  * Either renders the complete mesh or only a subset of the points.
  */
@@ -1232,8 +1224,6 @@ void SoFCMeshSegmentShape::GLRender(SoGLRenderAction* action)
             return;
         }
 
-        Binding mbind = this->findMaterialBinding(state);
-
         SoMaterialBundle mb(action);
         // SoTextureCoordinateBundle tb(action, true, false);
 
@@ -1245,17 +1235,52 @@ void SoFCMeshSegmentShape::GLRender(SoGLRenderAction* action)
             ccw = false;
         }
 
+        const std::size_t segmentIndex = this->index.getValue();
+        if (segmentIndex >= mesh->countSegments()) {
+            return;
+        }
+        const std::vector<Mesh::FacetIndex>& segment = mesh->getSegment(segmentIndex).getIndices();
+        if (segment.empty()) {
+            return;
+        }
+
+        if (!renderCcwValid || renderCcw != bool(ccw)) {
+            renderRevision.invalidate();
+            renderCcw = ccw;
+            renderCcwValid = true;
+        }
+
         const Gui::MeshInteractionLodPolicy policy(this->renderTriangleLimit);
-        if (!policy.shouldUseReducedGeometry(mode, mesh->countFacets())) {
-            if (mbind != OVERALL) {
-                drawFaces(mesh, &mb, mbind, needNormals, ccw);
+        const Gui::MeshRenderPresentation presentation
+            = policy.presentation(mode, segment.size(), segment.size());
+        if (!presentation.reducedGeometry) {
+#ifdef RENDER_GLARRAYS
+            if (render.canRenderGLArray(action)) {
+                if (render.needsUpdate(action, renderRevision) || !render.matchMaterial(state)) {
+                    render.update();
+                    const Gui::MeshRenderData data
+                        = buildMeshObjectRenderData(state, mesh, renderRevision, ccw, segmentIndex);
+                    render.generateGLArrays(action, data);
+                }
+                if (render.matchMaterial(state)) {
+                    render.renderFacesGLArray(action);
+                }
+                else {
+                    const Binding mbind = this->findMaterialBinding(state);
+                    drawFaces(mesh, &mb, mbind, needNormals, ccw);
+                }
             }
             else {
-                drawFaces(mesh, nullptr, mbind, needNormals, ccw);
+                const Binding mbind = this->findMaterialBinding(state);
+                drawFaces(mesh, &mb, mbind, needNormals, ccw);
             }
+#else
+            const Binding mbind = this->findMaterialBinding(state);
+            drawFaces(mesh, &mb, mbind, needNormals, ccw);
+#endif
         }
         else {
-            drawPoints(mesh, needNormals, ccw);
+            drawPoints(mesh, needNormals, ccw, presentation.pointStride);
         }
     }
 }
@@ -1386,7 +1411,12 @@ void SoFCMeshSegmentShape::drawFaces(
 /**
  * Renders the gravity points of a subset of triangles.
  */
-void SoFCMeshSegmentShape::drawPoints(const Mesh::MeshObject* mesh, SbBool needNormals, SbBool ccw) const
+void SoFCMeshSegmentShape::drawPoints(
+    const Mesh::MeshObject* mesh,
+    SbBool needNormals,
+    SbBool ccw,
+    std::size_t pointStride
+) const
 {
     const MeshCore::MeshPointArray& rPoints = mesh->getKernel().GetPoints();
     const MeshCore::MeshFacetArray& rFacets = mesh->getKernel().GetFacets();
@@ -1394,8 +1424,7 @@ void SoFCMeshSegmentShape::drawPoints(const Mesh::MeshObject* mesh, SbBool needN
         return;
     }
     const std::vector<Mesh::FacetIndex> rSegm = mesh->getSegment(this->index.getValue()).getIndices();
-    const Gui::MeshInteractionLodPolicy policy(this->renderTriangleLimit);
-    int mod = static_cast<int>(policy.pointStride(rSegm.size()));
+    const int mod = static_cast<int>(pointStride);
 
     float size = std::min<float>((float)mod, 3.0F);
     glPointSize(size);
