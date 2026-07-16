@@ -99,6 +99,7 @@ _PART_GUI_NODES = (
     "SoFCControlPoints",
 )
 _MESH_GUI_NODES = (
+    "SoFCMeshObjectNode",
     "SoPolygon",
     "SoPolygonOpen",
     "SoPolygonStartIndex",
@@ -453,6 +454,70 @@ def _load_required_modules(fixture: _SnapshotFixture) -> None:
             raise AssertionError(f"failed to import required module: {module_name}") from exc
 
 
+def _find_descendant(coin, root, type_name: str):
+    """Return the first descendant of ``root`` with the requested Coin type."""
+    type_id = coin.SoType.fromName(type_name)
+    if type_id.isBad():
+        raise unittest.SkipTest(f"Coin type not registered: {type_name}")
+
+    search = coin.SoSearchAction()
+    search.setType(type_id)
+    search.setSearchingAll(False)
+    search.apply(root)
+    path = search.getPath()
+    return None if path is None else path.getTail()
+
+
+def _mesh_data(variant: str) -> tuple[list[tuple[float, float, float]], list[tuple[int, int, int]]]:
+    """Return deterministic mesh points/facets for serialized MeshGui fixtures."""
+    if variant == "boundary":
+        # Two triangles forming a quad, used by the mesh picking fixture.
+        return (
+            [(-0.9, -0.65, 0.0), (0.9, -0.65, 0.0), (0.9, 0.65, 0.0), (-0.9, 0.65, 0.0)],
+            [(0, 1, 2), (0, 2, 3)],
+        )
+
+    # A tetrahedron gives the object fixture visible faces from the fixed
+    # isometric camera while remaining small and deterministic.
+    return (
+        [
+            (-0.75, -0.55, -0.45),
+            (0.75, -0.55, -0.45),
+            (0.0, 0.72, -0.45),
+            (0.0, 0.0, 0.72),
+        ],
+        [(0, 2, 1), (0, 1, 3), (1, 2, 3), (2, 0, 3)],
+    )
+
+
+def _read_mesh_scene(coin, variant: str, node_type: str, shape_type: str | None = None):
+    """Read a MeshGui node graph through SoSFMeshObject's ASCII parser."""
+    points, facets = _mesh_data(variant)
+    # MeshInput::LoadMeshNode intentionally matches the vertex and facet
+    # records from column zero, so keep the payload unindented here.
+    mesh_lines = ["mesh ["]
+    mesh_lines.extend(f"v {x} {y} {z}" for x, y, z in points)
+    mesh_lines.extend(f"f {a + 1} {b + 1} {c + 1}" for a, b, c in facets)
+    mesh_lines.append("]")
+    scene_lines = [
+        "#Inventor V2.1 ascii",
+        "Separator {",
+        f"  {node_type} {{",
+        *mesh_lines,
+        "  }",
+    ]
+    if shape_type is not None:
+        scene_lines.append(f"  {shape_type} {{}}")
+    scene_lines.extend(["}", ""])
+    scene_text = "\n".join(scene_lines)
+    input_stream = coin.SoInput()
+    input_stream.setBuffer(scene_text)
+    scene = coin.SoDB.readAll(input_stream)
+    if scene is None:
+        raise AssertionError(f"failed to deserialize {node_type} mesh fixture")
+    return scene
+
+
 def _configure_camera(coin, cam, policy: _CameraPolicy) -> None:
     if policy is _CameraPolicy.VIEW_ALL:
         return
@@ -566,6 +631,14 @@ def _make_scene_for_node(coin, type_name: str, fixture: _SnapshotFixture):
         indicator.scaleFactor.setValue(70.0)
         indicator.axisLabels.setValues(0, 3, ["X", "Y", "Z"])
         root.addChild(indicator)
+        return root
+
+    if type_name == "SoFCMeshObjectNode":
+        variant = "tetra"
+        color = coin.SoBaseColor()
+        color.rgb.setValue(0.16, 0.42, 0.86)
+        root.addChild(color)
+        root.addChild(_read_mesh_scene(coin, variant, "SoFCMeshObjectNode", "SoFCMeshObjectShape"))
         return root
 
     if type_name == "SoAxisCrossKit":
@@ -1438,6 +1511,35 @@ class CoinNodeSnapshotTestCase(unittest.TestCase):
             pick.getPickedPoint(),
             "SoRegPoint should stay unpickable so manual-alignment markers do not intercept clicks",
         )
+
+    def test_so_fc_mesh_pick_node_returns_facet_detail(self):
+        _, _, coin = _require_gui()
+        _load_required_modules(_SnapshotFixture(required_modules=("MeshGui",)))
+
+        root = _read_mesh_scene(coin, "boundary", "SoFCMeshPickNode")
+        root.ref()
+        try:
+            picker = _find_descendant(coin, root, "SoFCMeshPickNode")
+
+            pick = coin.SoRayPickAction(coin.SbViewportRegion(512, 512))
+            pick.setPickAll(True)
+            pick.setRay(
+                coin.SbVec3f(0.0, 0.0, 5.0),
+                coin.SbVec3f(0.0, 0.0, -1.0),
+                0.0,
+                10.0,
+            )
+            pick.apply(root)
+
+            picked = pick.getPickedPoint()
+            self.assertIsNotNone(picked)
+            detail = picked.getDetail(picker)
+            self.assertEqual(detail.getTypeId(), coin.SoFaceDetail.getClassTypeId())
+            detail = coin.cast(detail, "SoFaceDetail")
+            self.assertIn(detail.getFaceIndex(), (0, 1))
+            self.assertAlmostEqual(picked.getPoint()[2], 0.0, places=5)
+        finally:
+            root.unref()
 
     def test_so_datum_label_ignores_parent_cull_face(self):
         FreeCAD, FreeCADGui, coin = _require_gui()

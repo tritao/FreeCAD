@@ -26,6 +26,7 @@
 
 #include <algorithm>
 #include <limits>
+#include <utility>
 #ifdef FC_OS_WIN32
 # include <windows.h>
 #endif
@@ -614,6 +615,7 @@ SoFCMeshObjectShape::SoFCMeshObjectShape()
 {
     SO_NODE_CONSTRUCTOR(SoFCMeshObjectShape);
     setName(SoFCMeshObjectShape::getClassTypeId().getName());
+    updateGLArray = true;
 }
 
 SoFCMeshObjectShape::~SoFCMeshObjectShape() = default;
