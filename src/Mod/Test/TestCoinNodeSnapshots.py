@@ -1207,11 +1207,17 @@ class _ViewerSnapshotHarness:
 
     def render(self, root, out_path: Path):
         self.viewer.setSceneGraph(root)
+        self.captureCurrentScene(out_path, include_viewer_lighting=False)
+
+    def captureCurrentScene(self, out_path: Path, *, include_viewer_lighting: bool = True):
         image = None
 
         def capture_ready():
             nonlocal image
-            image = self.viewer.renderToImage(samples=0, includeViewerLighting=False)
+            image = self.viewer.renderToImage(
+                samples=0,
+                includeViewerLighting=include_viewer_lighting,
+            )
             return not image.isNull() and image.width() > 0 and image.height() > 0
 
         self._wait_until(capture_ready, "viewer framebuffer did not become ready")
@@ -1317,6 +1323,25 @@ def _different_pixel_count(first_path: Path, second_path: Path) -> int:
         for y in range(first.height())
         for x in range(first.width())
     )
+
+
+def _matching_pixel_count(path: Path, predicate) -> int:
+    from PySide.QtGui import QImage  # type: ignore
+
+    image = QImage(str(path)).convertToFormat(QImage.Format_ARGB32)
+    if image.isNull():
+        return 0
+    count = 0
+    for y in range(image.height()):
+        for x in range(image.width()):
+            pixel = image.pixel(x, y)
+            red = (pixel >> 16) & 0xFF
+            green = (pixel >> 8) & 0xFF
+            blue = pixel & 0xFF
+            alpha = (pixel >> 24) & 0xFF
+            if predicate(red, green, blue, alpha):
+                count += 1
+    return count
 
 
 def _pixel_bbox(path: Path, predicate):
@@ -1610,6 +1635,191 @@ class CoinNodeSnapshotTestCase(unittest.TestCase):
             self.assertAlmostEqual(picked.getPoint()[2], 0.0, places=5)
         finally:
             root.unref()
+
+    def test_mesh_open_edges_use_standard_retained_geometry(self):
+        FreeCAD, FreeCADGui, coin = _require_gui()
+        _load_required_modules(_SnapshotFixture(required_modules=("MeshGui",)))
+
+        try:
+            import Mesh  # type: ignore
+        except ImportError as exc:
+            raise unittest.SkipTest("Mesh module not available in this build") from exc
+
+        out_dir = Path(tempfile.gettempdir()) / "FreeCADTesting" / "CoinNodeSnapshots" / "actual"
+        without_edges = out_dir / "MeshOpenEdgesDisabled.png"
+        with_edges = out_dir / "MeshOpenEdgesEnabled.png"
+
+        with _ViewerSnapshotHarness(
+            FreeCAD, FreeCADGui, _SNAPSHOT_WIDTH, _SNAPSHOT_HEIGHT
+        ) as harness:
+            mesh = Mesh.Mesh(
+                [
+                    (-1.0, -1.0, 0.0),
+                    (1.0, -1.0, 0.0),
+                    (1.0, 1.0, 0.0),
+                    (-1.0, -1.0, 0.0),
+                    (1.0, 1.0, 0.0),
+                    (-1.0, 1.0, 0.0),
+                ]
+            )
+            obj = harness.doc.addObject("Mesh::Feature", "OpenEdgeMesh")
+            obj.Mesh = mesh
+            obj.ViewObject.ShapeColor = (0.16, 0.42, 0.86)
+            obj.ViewObject.LineWidth = 4.0
+            harness.doc.recompute()
+            harness.view.fitAll()
+            FreeCADGui.updateGui()
+            harness.captureCurrentScene(without_edges)
+
+            obj.ViewObject.OpenEdges = True
+            FreeCADGui.updateGui()
+            harness.captureCurrentScene(with_edges)
+
+            indexed_lines = []
+            line_type = coin.SoIndexedLineSet.getClassTypeId()
+
+            def collect_indexed_lines(node):
+                if node.getTypeId().isDerivedFrom(line_type):
+                    indexed_lines.append(node)
+                if node.getTypeId().isDerivedFrom(coin.SoGroup.getClassTypeId()):
+                    for child_index in range(node.getNumChildren()):
+                        collect_indexed_lines(node.getChild(child_index))
+
+            collect_indexed_lines(obj.ViewObject.RootNode)
+            self.assertTrue(
+                any(
+                    lines.coordIndex.getNum() == 12
+                    and list(lines.coordIndex.getValues(0))[:12].count(-1) == 4
+                    for lines in indexed_lines
+                ),
+                "the four open boundary edges should be retained as an SoIndexedLineSet",
+            )
+            self.assertGreater(
+                _different_pixel_count(without_edges, with_edges),
+                300,
+                "enabling open edges should visibly outline the mesh boundary",
+            )
+
+    def test_mesh_geometry_replacement_updates_production_rendering(self):
+        FreeCAD, FreeCADGui, coin = _require_gui()
+        _load_required_modules(_SnapshotFixture(required_modules=("MeshGui",)))
+
+        try:
+            import Mesh  # type: ignore
+        except ImportError as exc:
+            raise unittest.SkipTest("Mesh module not available in this build") from exc
+
+        out_dir = Path(tempfile.gettempdir()) / "FreeCADTesting" / "CoinNodeSnapshots" / "actual"
+        before_path = out_dir / "MeshGeometryBeforeReplacement.png"
+        after_path = out_dir / "MeshGeometryAfterReplacement.png"
+
+        with _ViewerSnapshotHarness(
+            FreeCAD, FreeCADGui, _SNAPSHOT_WIDTH, _SNAPSHOT_HEIGHT
+        ) as harness:
+            obj = harness.doc.addObject("Mesh::Feature", "MutableMesh")
+            obj.ViewObject.ShapeColor = (0.16, 0.42, 0.86)
+            obj.Mesh = Mesh.Mesh(
+                [
+                    (-1.0, -1.0, 0.0),
+                    (1.0, -1.0, 0.0),
+                    (1.0, 1.0, 0.0),
+                    (-1.0, -1.0, 0.0),
+                    (1.0, 1.0, 0.0),
+                    (-1.0, 1.0, 0.0),
+                ]
+            )
+            harness.doc.recompute()
+            harness.view.fitAll()
+            FreeCADGui.updateGui()
+            harness.captureCurrentScene(before_path)
+
+            indexed_type = coin.SoType.fromName("SoFCIndexedFaceSet")
+            search = coin.SoSearchAction()
+            search.setType(indexed_type)
+            search.setInterest(coin.SoSearchAction.FIRST)
+            search.apply(obj.ViewObject.RootNode)
+            self.assertIsNotNone(
+                search.getPath(),
+                "the production Mesh::Feature should exercise SoFCIndexedFaceSet",
+            )
+
+            obj.Mesh = Mesh.Mesh(
+                [
+                    (-1.0, -1.0, 0.0),
+                    (1.0, -1.0, 0.0),
+                    (-1.0, 1.0, 0.0),
+                ]
+            )
+            harness.doc.recompute()
+            FreeCADGui.updateGui()
+            harness.captureCurrentScene(after_path)
+
+        self.assertGreater(
+            _different_pixel_count(before_path, after_path),
+            5000,
+            "replacing mesh geometry should invalidate and visibly update the retained rendering",
+        )
+
+    def test_mesh_facet_selection_updates_production_rendering(self):
+        FreeCAD, FreeCADGui, _ = _require_gui()
+        _load_required_modules(_SnapshotFixture(required_modules=("MeshGui",)))
+
+        try:
+            import Mesh  # type: ignore
+        except ImportError as exc:
+            raise unittest.SkipTest("Mesh module not available in this build") from exc
+
+        out_dir = Path(tempfile.gettempdir()) / "FreeCADTesting" / "CoinNodeSnapshots" / "actual"
+        unselected_path = out_dir / "MeshFacetUnselected.png"
+        selected_path = out_dir / "MeshFacetSelected.png"
+
+        with _ViewerSnapshotHarness(
+            FreeCAD, FreeCADGui, _SNAPSHOT_WIDTH, _SNAPSHOT_HEIGHT
+        ) as harness:
+            obj = harness.doc.addObject("Mesh::Feature", "SelectableMesh")
+            obj.ViewObject.ShapeColor = (0.16, 0.42, 0.86)
+            obj.Mesh = Mesh.Mesh(
+                [
+                    (-1.0, -1.0, 0.0),
+                    (1.0, -1.0, 0.0),
+                    (1.0, 1.0, 0.0),
+                    (-1.0, -1.0, 0.0),
+                    (1.0, 1.0, 0.0),
+                    (-1.0, 1.0, 0.0),
+                ]
+            )
+            harness.doc.recompute()
+            harness.view.fitAll()
+            FreeCADGui.updateGui()
+            harness.captureCurrentScene(unselected_path)
+
+            obj.ViewObject.setSelection([0])
+            FreeCADGui.updateGui()
+            harness.captureCurrentScene(selected_path)
+
+            self.assertEqual(list(obj.Mesh.getFacetSelection()), [0])
+
+        unselected_red = _matching_pixel_count(
+            unselected_path, lambda red, green, blue, _alpha: red > green + 40 and red > blue + 40
+        )
+        selected_red = _matching_pixel_count(
+            selected_path, lambda red, green, blue, _alpha: red > green + 40 and red > blue + 40
+        )
+        self.assertGreater(
+            _different_pixel_count(unselected_path, selected_path),
+            3000,
+            "selecting one facet should visibly change the production mesh rendering",
+        )
+        self.assertGreater(
+            selected_red,
+            unselected_red + 1000,
+            "the selected facet should use the mesh selection color",
+        )
+        self.assertLess(
+            selected_red,
+            _non_background_pixel_count(selected_path) * 0.75,
+            "selecting one facet should not recolor the unselected facet",
+        )
 
     def test_so_fc_indexed_face_set_material_mutation_updates_cached_packet(self):
         FreeCAD, FreeCADGui, coin = _require_gui()
