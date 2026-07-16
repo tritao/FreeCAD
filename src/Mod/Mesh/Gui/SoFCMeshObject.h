@@ -25,9 +25,6 @@
 #pragma once
 
 #include <Inventor/elements/SoReplacedElement.h>
-#include <Inventor/fields/SoSFUInt32.h>
-#include <Inventor/fields/SoSFVec3f.h>
-#include <Inventor/fields/SoSFVec3s.h>
 #include <Inventor/fields/SoSField.h>
 #include <Inventor/nodes/SoShape.h>
 #include <Mod/Mesh/App/Mesh.h>
@@ -111,27 +108,6 @@ protected:
 
 private:
     MeshCore::MeshFacetGrid* meshGrid {nullptr};
-};
-
-// -------------------------------------------------------
-
-class MeshGuiExport SoFCMeshGridNode: public SoNode
-{
-    using inherited = SoNode;
-
-    SO_NODE_HEADER(SoFCMeshGridNode);
-
-public:
-    static void initClass();
-    SoFCMeshGridNode();
-    void GLRender(SoGLRenderAction* action) override;
-
-    SoSFVec3f minGrid;
-    SoSFVec3f maxGrid;
-    SoSFVec3s lenGrid;
-
-protected:
-    ~SoFCMeshGridNode() override;
 };
 
 // -------------------------------------------------------
@@ -245,76 +221,6 @@ private:
     bool renderCcwValid {false};
 };
 
-class MeshGuiExport SoFCMeshSegmentShape: public SoShape
-{
-    using inherited = SoShape;
-
-    SO_NODE_HEADER(SoFCMeshSegmentShape);
-
-public:
-    static void initClass();
-    SoFCMeshSegmentShape();
-
-    SoSFUInt32 index;
-    unsigned int renderTriangleLimit;
-
-protected:
-    void GLRender(SoGLRenderAction* action) override;
-    void computeBBox(SoAction* action, SbBox3f& box, SbVec3f& center) override;
-    void getPrimitiveCount(SoGetPrimitiveCountAction* action) override;
-    void generatePrimitives(SoAction* action) override;
-    // Force using the reference count mechanism.
-    ~SoFCMeshSegmentShape() override = default;
-
-private:
-    void notify(SoNotList* node) override;
-    enum Binding
-    {
-        OVERALL = 0,
-        PER_FACE_INDEXED,
-        PER_VERTEX_INDEXED,
-        NONE = OVERALL
-    };
-
-private:
-    Binding findMaterialBinding(SoState* const state) const;
-    // Draw faces
-    void drawFaces(
-        const Mesh::MeshObject*,
-        SoMaterialBundle* mb,
-        Binding bind,
-        SbBool needNormals,
-        SbBool ccw
-    ) const;
-    void drawPoints(const Mesh::MeshObject*, SbBool needNormals, SbBool ccw, std::size_t pointStride) const;
-
-    MeshGLRenderer render;
-    Gui::MeshRenderRevision renderRevision;
-    bool renderCcw {true};
-    bool renderCcwValid {false};
-};
-
-class MeshGuiExport SoFCMeshObjectBoundary: public SoShape
-{
-    using inherited = SoShape;
-
-    SO_NODE_HEADER(SoFCMeshObjectBoundary);
-
-public:
-    static void initClass();
-    SoFCMeshObjectBoundary();
-
-protected:
-    void GLRender(SoGLRenderAction* action) override;
-    void computeBBox(SoAction* action, SbBox3f& box, SbVec3f& center) override;
-    void getPrimitiveCount(SoGetPrimitiveCountAction* action) override;
-    void generatePrimitives(SoAction* action) override;
-    // Force using the reference count mechanism.
-    ~SoFCMeshObjectBoundary() override = default;
-
-private:
-    void drawLines(const Mesh::MeshObject*) const;
-};
 // NOLINTEND(cppcoreguidelines-special-member-functions,cppcoreguidelines-virtual-class-destructor)
 
 }  // namespace MeshGui
