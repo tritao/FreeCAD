@@ -103,6 +103,21 @@ using MeshCore::MeshGeomFacet;
 using MeshCore::MeshKernel;
 using MeshCore::MeshPointIterator;
 
+namespace
+{
+void setMeshCoordinates(const MeshCore::MeshKernel& kernel, SoCoordinate3* coordinates)
+{
+    const MeshCore::MeshPointArray& points = kernel.GetPoints();
+    coordinates->point.setNum(kernel.CountPoints());
+    SbVec3f* values = coordinates->point.startEditing();
+    int index = 0;
+    for (const auto& point : points) {
+        values[index++].setValue(point.x, point.y, point.z);
+    }
+    coordinates->point.finishEditing();
+}
+}  // namespace
+
 // NOLINTBEGIN(readability-magic-numbers,cppcoreguidelines-pro-bounds*)
 void ViewProviderMeshBuilder::buildNodes(const App::Property* prop, std::vector<SoNode*>& nodes) const
 {
@@ -147,15 +162,7 @@ void ViewProviderMeshBuilder::createMesh(
 ) const
 {
 
-    // set the point coordinates
-    const MeshCore::MeshPointArray& cP = kernel.GetPoints();
-    coords->point.setNum(kernel.CountPoints());
-    SbVec3f* verts = coords->point.startEditing();
-    int i = 0;
-    for (auto it = cP.begin(); it != cP.end(); ++it, i++) {
-        verts[i].setValue(it->x, it->y, it->z);
-    }
-    coords->point.finishEditing();
+    setMeshCoordinates(kernel, coords);
 
     // set the face indices
     int j = 0;
@@ -169,6 +176,39 @@ void ViewProviderMeshBuilder::createMesh(
         indices[4 * j + 3] = SO_END_FACE_INDEX;
     }
     faces->coordIndex.finishEditing();
+}
+
+void ViewProviderMeshBuilder::createOpenEdges(
+    const MeshCore::MeshKernel& kernel,
+    SoCoordinate3* coordinates,
+    SoIndexedLineSet* lines
+) const
+{
+    std::vector<SbVec3f> points;
+    std::vector<int32_t> indices;
+    const MeshCore::MeshPointArray& meshPoints = kernel.GetPoints();
+    for (const auto& face : kernel.GetFacets()) {
+        for (int edge = 0; edge < 3; ++edge) {
+            if (face._aulNeighbours[edge] == MeshCore::FACET_INDEX_MAX) {
+                const MeshCore::MeshPoint& start = meshPoints[face._aulPoints[edge]];
+                const MeshCore::MeshPoint& end = meshPoints[face._aulPoints[(edge + 1) % 3]];
+                const auto firstIndex = static_cast<int32_t>(points.size());
+                points.emplace_back(start.x, start.y, start.z);
+                points.emplace_back(end.x, end.y, end.z);
+                indices.push_back(firstIndex);
+                indices.push_back(firstIndex + 1);
+                indices.push_back(SO_END_LINE_INDEX);
+            }
+        }
+    }
+    if (points.empty()) {
+        coordinates->point.setNum(0);
+        lines->coordIndex.setNum(0);
+        return;
+    }
+
+    coordinates->point.setValues(0, static_cast<int>(points.size()), points.data());
+    lines->coordIndex.setValues(0, static_cast<int>(indices.size()), indices.data());
 }
 
 PROPERTY_SOURCE(MeshGui::ViewProviderExport, Gui::ViewProviderDocumentObject)
@@ -2524,8 +2564,7 @@ void ViewProviderIndexedFaceSet::attach(App::DocumentObject* obj)
     );
     long size = hGrp->GetInt("RenderTriangleLimit", -1);
     if (size > 0) {
-        static_cast<SoFCIndexedFaceSet*>(pcMeshFaces)->renderTriangleLimit
-            = (unsigned int)(pow(10.0F, size));
+        pcMeshFaces->renderTriangleLimit = (unsigned int)(pow(10.0F, size));
     }
 }
 
@@ -2535,6 +2574,7 @@ void ViewProviderIndexedFaceSet::updateData(const App::Property* prop)
     if (prop->is<Mesh::PropertyMeshKernel>()) {
         ViewProviderMeshBuilder builder;
         builder.createMesh(prop, pcMeshCoord, pcMeshFaces);
+        pcMeshFaces->invalidate();
         showOpenEdges(OpenEdges.getValue());
         highlightSelection();
     }
@@ -2553,26 +2593,15 @@ void ViewProviderIndexedFaceSet::showOpenEdges(bool show)
         pcOpenEdge->addChild(pcLineStyle);
         pcOpenEdge->addChild(pOpenColor);
 
-        pcOpenEdge->addChild(pcMeshCoord);
+        auto coordinates = new SoCoordinate3;
         auto lines = new SoIndexedLineSet;
+        ViewProviderMeshBuilder builder;
+        builder.createOpenEdges(getMeshObject().getKernel(), coordinates, lines);
+        pcOpenEdge->addChild(coordinates);
         pcOpenEdge->addChild(lines);
 
         // add to the highlight node
         pcRoot->addChild(pcOpenEdge);
-
-        // Build up the lines with indices to the list of vertices 'pcMeshCoord'
-        int index = 0;
-        const MeshCore::MeshKernel& rMesh = getMeshObject().getKernel();
-        const MeshCore::MeshFacetArray& rFaces = rMesh.GetFacets();
-        for (const auto& rFace : rFaces) {
-            for (int i = 0; i < 3; i++) {
-                if (rFace._aulNeighbours[i] == MeshCore::FACET_INDEX_MAX) {
-                    lines->coordIndex.set1Value(index++, rFace._aulPoints[i]);
-                    lines->coordIndex.set1Value(index++, rFace._aulPoints[(i + 1) % 3]);
-                    lines->coordIndex.set1Value(index++, SO_END_LINE_INDEX);
-                }
-            }
-        }
     }
 }
 
@@ -2627,6 +2656,7 @@ void ViewProviderMeshObject::updateData(const App::Property* prop)
         this->pcMeshNode->mesh.setValue(Base::Reference<const Mesh::MeshObject>(mesh->getValuePtr()));
         // Needs to update internal bounding box caches
         this->pcMeshShape->touch();
+        showOpenEdges(OpenEdges.getValue());
     }
 }
 
@@ -2643,8 +2673,12 @@ void ViewProviderMeshObject::showOpenEdges(bool show)
         pcOpenEdge->addChild(pcLineStyle);
         pcOpenEdge->addChild(pOpenColor);
 
-        pcOpenEdge->addChild(pcMeshNode);
-        pcOpenEdge->addChild(new SoFCMeshObjectBoundary);
+        auto coordinates = new SoCoordinate3;
+        auto lines = new SoIndexedLineSet;
+        ViewProviderMeshBuilder builder;
+        builder.createOpenEdges(getMeshObject().getKernel(), coordinates, lines);
+        pcOpenEdge->addChild(coordinates);
+        pcOpenEdge->addChild(lines);
 
         // add to the highlight node
         pcRoot->addChild(pcOpenEdge);

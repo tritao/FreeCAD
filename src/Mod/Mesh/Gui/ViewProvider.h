@@ -40,6 +40,7 @@ class SoBaseColor;
 class SoShape;
 class SoCoordinate3;
 class SoIndexedFaceSet;
+class SoIndexedLineSet;
 class SoShapeHints;
 class SoMaterialBinding;
 class SoMFColor;
@@ -83,6 +84,7 @@ class PropertyMeshKernel;
 
 namespace MeshGui
 {
+class SoFCIndexedFaceSet;
 class SoFCMeshObjectNode;
 class SoFCMeshObjectShape;
 
@@ -93,6 +95,7 @@ public:
     void buildNodes(const App::Property* prop, std::vector<SoNode*>& nodes) const override;
     void createMesh(const App::Property*, SoCoordinate3*, SoIndexedFaceSet*) const;
     void createMesh(const MeshCore::MeshKernel&, SoCoordinate3*, SoIndexedFaceSet*) const;
+    void createOpenEdges(const MeshCore::MeshKernel&, SoCoordinate3*, SoIndexedLineSet*) const;
 };
 
 /**
@@ -347,7 +350,7 @@ protected:
 
 private:
     SoCoordinate3* pcMeshCoord;
-    SoIndexedFaceSet* pcMeshFaces;
+    SoFCIndexedFaceSet* pcMeshFaces;
 
     FC_DISABLE_COPY_MOVE(ViewProviderIndexedFaceSet)
 };

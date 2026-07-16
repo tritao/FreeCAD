@@ -62,11 +62,6 @@ ViewProviderMeshFaceSet::ViewProviderMeshFaceSet()
     pcMeshFaces = new SoFCIndexedFaceSet;
     pcMeshFaces->ref();
 
-    // setup engine to notify 'pcMeshFaces' node about material changes.
-    // When the affected nodes are deleted the engine will be deleted, too.
-    SoFCMaterialEngine* engine = new SoFCMaterialEngine();
-    engine->diffuseColor.connectFrom(&pcShapeMaterial->diffuseColor);
-    pcMeshFaces->updateGLArray.connectFrom(&engine->trigger);
     // NOLINTEND
 }
 
@@ -159,32 +154,12 @@ void ViewProviderMeshFaceSet::showOpenEdges(bool show)
         pcOpenEdge->addChild(pcLineStyle);
         pcOpenEdge->addChild(pOpenColor);
 
-        if (directRendering) {
-            pcOpenEdge->addChild(pcMeshNode);
-            pcOpenEdge->addChild(new SoFCMeshObjectBoundary);
-        }
-        else {
-            pcOpenEdge->addChild(pcMeshCoord);
-            auto lines = new SoIndexedLineSet;
-            pcOpenEdge->addChild(lines);
-
-            // Build up the lines with indices to the list of vertices 'pcMeshCoord'
-            int index = 0;
-            const Mesh::MeshObject& mesh = getMeshObject();
-            const MeshCore::MeshKernel& kernel = mesh.getKernel();
-            const MeshCore::MeshFacetArray& rFaces = kernel.GetFacets();
-            for (const auto& rFace : rFaces) {
-                for (int i = 0; i < 3; i++) {
-                    // NOLINTBEGIN
-                    if (rFace._aulNeighbours[i] == MeshCore::FACET_INDEX_MAX) {
-                        lines->coordIndex.set1Value(index++, rFace._aulPoints[i]);
-                        lines->coordIndex.set1Value(index++, rFace._aulPoints[(i + 1) % 3]);
-                        lines->coordIndex.set1Value(index++, SO_END_LINE_INDEX);
-                    }
-                    // NOLINTEND
-                }
-            }
-        }
+        auto coordinates = new SoCoordinate3;
+        auto lines = new SoIndexedLineSet;
+        ViewProviderMeshBuilder builder;
+        builder.createOpenEdges(getMeshObject().getKernel(), coordinates, lines);
+        pcOpenEdge->addChild(coordinates);
+        pcOpenEdge->addChild(lines);
 
         // add to the highlight node
         pcRoot->addChild(pcOpenEdge);
