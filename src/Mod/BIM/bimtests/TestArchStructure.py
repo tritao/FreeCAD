@@ -27,6 +27,7 @@ import FreeCAD as App
 from FreeCAD import Vector
 import Arch
 import ArchComponent
+import ArchPlanRepresentation
 import Draft
 import Part
 from bimtests import TestArchBase
@@ -48,7 +49,7 @@ class TestArchStructure(TestArchBase.TestArchBase):
         slab.IfcType = "Slab"
         self.document.recompute()
 
-        faces = slab.Proxy.getFootprint(slab)
+        faces = ArchPlanRepresentation.get_plan_representation(slab).faces
         self.assertEqual(len(faces), 1, "Expected one footprint face for a rectangular slab.")
         self.assertAlmostEqual(faces[0].Area, 4000 * 3000, places=3)
         bbox = faces[0].BoundBox

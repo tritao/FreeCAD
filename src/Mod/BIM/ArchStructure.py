@@ -912,17 +912,6 @@ class _Structure(ArchComponent.Component):
         if not hasattr(self, "ArchSkPropSetListPrev"):
             self.ArchSkPropSetListPrev = []
 
-    def getFootprint(self, obj):
-        """Return a light plan footprint for flat slabs.
-
-        This derives the outline from all upward-facing horizontal slab faces
-        and flattens it to the slab base elevation. Sloped slabs will need a
-        projection-based footprint path instead. This is the default-preview
-        wrapper for `getPlanRepresentation()`.
-        """
-
-        return ArchPlanRepresentation.get_plan_representation(obj).faces
-
     def getPlanRepresentation(self, obj, context):
         """Return slab plan faces for the supplied plan context.
 
@@ -1509,7 +1498,6 @@ class _ViewProviderStructure(ArchComponent.ViewProviderComponent):
 
     def _drop_footprint_group(self, vobj):
         self.invalidateFootprint()
-        self._footprint_representation = None
         if self.fcoords:
             self.fcoords.point.deleteValues(0)
         if self.fset:

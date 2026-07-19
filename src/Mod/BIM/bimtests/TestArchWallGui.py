@@ -67,6 +67,86 @@ class TestArchWallGui(TestArchBaseGui.TestArchBaseGui):
         self.params.SetInt("WallBaseline", self.original_wall_base)
         super().tearDown()
 
+    def _make_hosted_window(self, wall, name="FootprintHostedWindow"):
+        """Create a visible Arch window whose shape is cut into *wall*."""
+
+        sketch = self.document.addObject("Sketcher::SketchObject", name + "Profile")
+        width = 800.0
+        height = 1200.0
+        frame = 100.0
+        sketch.addGeometry(
+            [
+                Part.LineSegment(FreeCAD.Vector(0, 0, 0), FreeCAD.Vector(width, 0, 0)),
+                Part.LineSegment(FreeCAD.Vector(width, 0, 0), FreeCAD.Vector(width, height, 0)),
+                Part.LineSegment(FreeCAD.Vector(width, height, 0), FreeCAD.Vector(0, height, 0)),
+                Part.LineSegment(FreeCAD.Vector(0, height, 0), FreeCAD.Vector(0, 0, 0)),
+                Part.LineSegment(
+                    FreeCAD.Vector(frame, frame, 0),
+                    FreeCAD.Vector(frame, height - frame, 0),
+                ),
+                Part.LineSegment(
+                    FreeCAD.Vector(frame, height - frame, 0),
+                    FreeCAD.Vector(width - frame, height - frame, 0),
+                ),
+                Part.LineSegment(
+                    FreeCAD.Vector(width - frame, height - frame, 0),
+                    FreeCAD.Vector(width - frame, frame, 0),
+                ),
+                Part.LineSegment(
+                    FreeCAD.Vector(width - frame, frame, 0),
+                    FreeCAD.Vector(frame, frame, 0),
+                ),
+            ]
+        )
+        sketch.Placement.Rotation = FreeCAD.Rotation(FreeCAD.Vector(1, 0, 0), 90)
+        sketch.Placement.Base = FreeCAD.Vector(1000, 0, 800)
+        self.document.recompute()
+
+        window = Arch.makeWindow(sketch, name=name)
+        window.Width = width
+        window.Height = height
+        window.HoleDepth = 0
+        window.WindowParts = ["DefaultFrame", "Frame", "Wire0,Wire1", "60", "0"]
+        Arch.addComponents(window, wall)
+        self.document.recompute()
+        return window
+
+    def test_wall_footprint_suppresses_hosted_3d_components(self):
+        """Wall Footprint mode should replace hosted 3D windows with the wall gap."""
+
+        wall = Arch.makeWall(length=3000, width=200, height=2500)
+        window = self._make_hosted_window(wall)
+        original_mode = window.ViewObject.DisplayMode
+        original_switch = int(window.ViewObject.SwitchNode.whichChild.getValue())
+        self.assertTrue(window.ViewObject.Visibility)
+
+        wall.ViewObject.DisplayMode = "Footprint"
+        self.pump_gui_events()
+        self.assertTrue(window.ViewObject.Visibility)
+        self.assertEqual(window.ViewObject.SwitchNode.whichChild.getValue(), -1)
+
+        wall.ViewObject.DisplayMode = "Flat Lines"
+        self.pump_gui_events()
+        self.assertTrue(window.ViewObject.Visibility)
+        self.assertEqual(window.ViewObject.DisplayMode, original_mode)
+        self.assertEqual(window.ViewObject.SwitchNode.whichChild.getValue(), original_switch)
+
+    def test_wall_footprint_preserves_hidden_hosted_components(self):
+        """Footprint mode must not make an intentionally hidden child visible."""
+
+        wall = Arch.makeWall(length=3000, width=200, height=2500)
+        window = self._make_hosted_window(wall)
+        window.ViewObject.Visibility = False
+
+        wall.ViewObject.DisplayMode = "Footprint"
+        self.pump_gui_events()
+        self.assertFalse(window.ViewObject.Visibility)
+        self.assertEqual(window.ViewObject.SwitchNode.whichChild.getValue(), -1)
+
+        wall.ViewObject.DisplayMode = "Flat Lines"
+        self.pump_gui_events()
+        self.assertFalse(window.ViewObject.Visibility)
+
     def test_create_baseless_wall_interactive_mode(self):
         """
         Tests the interactive creation of a baseless wall by simulating the

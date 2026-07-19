@@ -23,7 +23,19 @@ class TestArchPlanRepresentation(TestArchBase.TestArchBase):
 
         self.assertFalse(representation.isEmpty)
         self.assertIs(representation, ArchPlanRepresentation.get_plan_representation(wall))
-        self.assertEqual(representation.faces, tuple(wall.Proxy.getFootprint(wall)))
+        direct_faces = tuple(wall.Proxy.getPlanRepresentation(wall, representation.context))
+        self.assertEqual(len(representation.faces), len(direct_faces))
+        for cached_face, direct_face in zip(representation.faces, direct_faces):
+            self.assertAlmostEqual(cached_face.Area, direct_face.Area, places=6)
+            for cached, direct in (
+                (cached_face.BoundBox.XMin, direct_face.BoundBox.XMin),
+                (cached_face.BoundBox.XMax, direct_face.BoundBox.XMax),
+                (cached_face.BoundBox.YMin, direct_face.BoundBox.YMin),
+                (cached_face.BoundBox.YMax, direct_face.BoundBox.YMax),
+                (cached_face.BoundBox.ZMin, direct_face.BoundBox.ZMin),
+                (cached_face.BoundBox.ZMax, direct_face.BoundBox.ZMax),
+            ):
+                self.assertAlmostEqual(cached, direct, places=6)
         self.assertGreater(len(representation.edges), 0)
         self.assertIs(
             representation.edges,

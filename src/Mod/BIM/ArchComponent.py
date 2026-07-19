@@ -45,6 +45,7 @@ import math
 
 import FreeCAD
 import ArchCommands
+import ArchDisplayContext
 import ArchIFC
 import ArchPlanRepresentation
 import Draft
@@ -606,9 +607,8 @@ class Component(ArchIFC.IfcProduct):
 
         Contained objects use their parent Building Storey's `PlanCutHeight`,
         measured from the storey level. Standalone objects fall back to a simple
-        cut height above the object's base. `getFootprint()` wrappers use this
-        default context to preserve the existing display-mode API while
-        `getPlanRepresentation()` provides the view-aware extension point.
+        cut height above the object's base. The neutral plan-representation
+        service uses this context when no explicit context is supplied.
         """
 
         try:
@@ -1672,7 +1672,6 @@ class ViewProviderComponent:
 
     def __init__(self, vobj):
         self.Object = vobj.Object
-        self._footprint_representation = None
         self._footprint_dirty = True
         self.fcoords = None
         self.fset = None
@@ -1767,14 +1766,14 @@ class ViewProviderComponent:
             # placement-only change is cheap to invalidate and can wait until
             # Footprint mode or snapping actually needs the representation.
             self.refreshFootprint(obj.ViewObject, force=prop == "Shape")
+        if ArchDisplayContext.is_overridden(obj.ViewObject):
+            ArchDisplayContext.reapply(obj.ViewObject)
         return
 
     def getFootprintRepresentation(self):
         """Return the neutral representation used by Footprint Coin nodes."""
 
-        representation = ArchPlanRepresentation.get_plan_representation(self.Object)
-        self._footprint_representation = representation
-        return representation
+        return ArchPlanRepresentation.get_plan_representation(self.Object)
 
     def invalidateFootprint(self):
         """Mark neutral geometry and its Coin conversion stale."""
@@ -1984,7 +1983,6 @@ class ViewProviderComponent:
     def onDocumentRestored(self, vobj):
         """Discard transient derived geometry after document restoration."""
 
-        self._footprint_representation = None
         self._footprint_dirty = True
         ArchPlanRepresentation.invalidate_plan_representation(self.Object)
 
@@ -2044,7 +2042,12 @@ class ViewProviderComponent:
         elif prop == "LineColor":
             if self.flinecolor:
                 self.flinecolor.rgb.setValue(*vobj.LineColor[:3])
-        elif prop == "Visibility":
+        elif prop in ("Visibility", "DisplayMode"):
+            if ArchDisplayContext.is_overridden(vobj):
+                ArchDisplayContext.reapply(vobj)
+                return
+            if prop != "Visibility":
+                return
             # do nothing if object is an addition
             if not [parent for parent in obj.InList if obj in getattr(parent, "Additions", [])]:
                 hostedObjs = obj.Proxy.getHosts(obj)
@@ -2054,7 +2057,11 @@ class ViewProviderComponent:
                         hostedObjs.extend(addition.Proxy.getHosts(addition))
                 for hostedObj in hostedObjs:
                     if hasattr(hostedObj, "ViewObject"):
-                        hostedObj.ViewObject.Visibility = vobj.Visibility
+                        host_view = hostedObj.ViewObject
+                        if ArchDisplayContext.is_overridden(host_view):
+                            ArchDisplayContext.reapply(host_view)
+                            continue
+                        host_view.Visibility = vobj.Visibility
             if vobj.Visibility and vobj.DisplayMode == "Footprint" and self.isFootprintDirty():
                 self.refreshFootprint(vobj)
         return

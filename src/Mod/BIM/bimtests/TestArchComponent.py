@@ -26,6 +26,7 @@
 
 import Arch
 import ArchComponent
+import ArchPlanRepresentation
 import Draft
 import Part
 import FreeCAD as App
@@ -508,8 +509,12 @@ class TestArchComponent(TestArchBase.TestArchBase):
             initial_area, 0, f"Setup error: Wall should have vertical area, found {initial_area}"
         )
 
-        # Get the footprint to simulate a flat wall (valid shape, but 0 height)
-        footprint_faces = wall.Proxy.getFootprint(wall)
+        # Get a valid plan section to simulate a flat wall (valid shape, but 0 height)
+        context = ArchPlanRepresentation.PlanContext(
+            cut_z=wall.Shape.BoundBox.Center.z,
+            target_z=wall.Shape.BoundBox.ZMin,
+        )
+        footprint_faces = ArchPlanRepresentation.get_plan_representation(wall, context).faces
 
         # Exactly one face is expected for this particular footprint (straight wall)
         self.assertEqual(len(footprint_faces), 1, "Setup error: Expected exactly 1 footprint face")

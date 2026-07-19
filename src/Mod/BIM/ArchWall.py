@@ -49,6 +49,7 @@ import math
 import FreeCAD
 import ArchCommands
 import ArchComponent
+import ArchDisplayContext
 import ArchPlanRepresentation
 import ArchSketchObject
 import Draft
@@ -799,26 +800,6 @@ class _Wall(ArchComponent.Component):
 
         self.hideSubobjects(obj, prop)
         ArchComponent.Component.onChanged(self, obj, prop)
-
-    def getFootprint(self, obj):
-        """Get the plan faces that represent this wall in footprint mode.
-
-        The preferred representation is a horizontal section through the wall
-        solid at a standard plan cut height. If the wall belongs to a Building
-        Storey, use that level's PlanCutHeight relative to the storey elevation.
-        Otherwise, fall back to the default 1000 mm plan cut above the wall
-        base. This makes hosted openings appear naturally in footprint mode
-        because the wall shape has already been cut by them. If that section
-        cannot be computed, the wall has no derived footprint.
-        This is the default-preview wrapper for `getPlanRepresentation()`.
-
-        Returns
-        -------
-        list of <Part.Face>
-            The faces that make up the wall footprint.
-        """
-
-        return ArchPlanRepresentation.get_plan_representation(obj).faces
 
     def getPlanRepresentation(self, obj, context):
         """Return wall plan faces for the supplied plan context.
@@ -2057,8 +2038,31 @@ class _ViewProviderWall(ArchComponent.ViewProviderComponent):
     """
 
     def __init__(self, vobj):
+        self._footprint_display_context = ArchDisplayContext.DisplayOverrideContext(self)
         ArchComponent.ViewProviderComponent.__init__(self, vobj)
         vobj.ShapeColor = ArchCommands.getDefaultColor("Wall")
+
+    def _ensureFootprintDisplayContext(self):
+        """Create the runtime context when a ViewProvider was restored."""
+
+        context = self.__dict__.get("_footprint_display_context")
+        if context is None:
+            context = ArchDisplayContext.DisplayOverrideContext(self)
+            self._footprint_display_context = context
+        return context
+
+    def _activateHostedFootprintDisplay(self):
+        """Apply the runtime plan display policy to this wall's hosted objects."""
+
+        self._ensureFootprintDisplayContext().activate(
+            self.Object.Proxy.getHosts(self.Object),
+            self.Object.ViewObject.Visibility,
+        )
+
+    def _clearHostedFootprintDisplay(self):
+        """Release the runtime plan display policy for this wall."""
+
+        self._ensureFootprintDisplayContext().clear(self.Object.ViewObject.Visibility)
 
     def getIcon(self):
         """Return the path to the appropriate icon.
@@ -2183,6 +2187,8 @@ class _ViewProviderWall(ArchComponent.ViewProviderComponent):
                                 cols.extend([c for j in range(len(obj.Shape.Solids[i].Faces))])
                             obj.ViewObject.DiffuseColor = cols
         ArchComponent.ViewProviderComponent.updateData(self, obj, prop)
+        if self._ensureFootprintDisplayContext().is_active:
+            self._activateHostedFootprintDisplay()
         if len(obj.ViewObject.DiffuseColor) > 1:
             # force-reset colors if changed
             obj.ViewObject.DiffuseColor = obj.ViewObject.DiffuseColor
@@ -2226,8 +2232,32 @@ class _ViewProviderWall(ArchComponent.ViewProviderComponent):
         """
         if mode == "Footprint":
             if self.refreshFootprint(force=True):
-                return "Footprint"
-        return ArchComponent.ViewProviderComponent.setDisplayMode(self, mode)
+                result = ArchComponent.ViewProviderComponent.setDisplayMode(self, mode)
+                self._activateHostedFootprintDisplay()
+                return result
+            self._clearHostedFootprintDisplay()
+        result = ArchComponent.ViewProviderComponent.setDisplayMode(self, mode)
+        if mode != "Footprint":
+            self._clearHostedFootprintDisplay()
+        return result
+
+    def onDocumentRestored(self, vobj):
+        """Rebuild runtime hosted overrides for a saved Footprint wall."""
+
+        ArchComponent.ViewProviderComponent.onDocumentRestored(self, vobj)
+        self._ensureFootprintDisplayContext()
+        if vobj.DisplayMode == "Footprint":
+            self.refreshFootprint(vobj, force=True)
+            self._activateHostedFootprintDisplay()
+
+    def onChanged(self, vobj, prop):
+        """Reapply hosted display policy after wall visibility changes."""
+
+        context = self._ensureFootprintDisplayContext()
+        if prop == "Visibility" and context.is_active:
+            context.set_host_visibility(vobj.Visibility)
+            return
+        ArchComponent.ViewProviderComponent.onChanged(self, vobj, prop)
 
     def setEdit(self, vobj, mode):
         if mode != 0:

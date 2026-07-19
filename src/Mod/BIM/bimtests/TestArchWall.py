@@ -27,6 +27,7 @@
 import os
 import Arch
 import ArchComponent
+import ArchPlanRepresentation
 import Draft
 import Part
 import FreeCAD as App
@@ -37,12 +38,29 @@ class TestArchWall(TestArchBase.TestArchBase):
 
     def _make_hosted_window(self, wall, name, x_start, z_start, width=800.0, height=1200.0):
         sketch = self.document.addObject("Sketcher::SketchObject", name + "Sketch")
+        frame = 100.0
         sketch.addGeometry(
             [
                 Part.LineSegment(App.Vector(0, 0, 0), App.Vector(width, 0, 0)),
                 Part.LineSegment(App.Vector(width, 0, 0), App.Vector(width, height, 0)),
                 Part.LineSegment(App.Vector(width, height, 0), App.Vector(0, height, 0)),
                 Part.LineSegment(App.Vector(0, height, 0), App.Vector(0, 0, 0)),
+                Part.LineSegment(
+                    App.Vector(frame, frame, 0),
+                    App.Vector(frame, height - frame, 0),
+                ),
+                Part.LineSegment(
+                    App.Vector(frame, height - frame, 0),
+                    App.Vector(width - frame, height - frame, 0),
+                ),
+                Part.LineSegment(
+                    App.Vector(width - frame, height - frame, 0),
+                    App.Vector(width - frame, frame, 0),
+                ),
+                Part.LineSegment(
+                    App.Vector(width - frame, frame, 0),
+                    App.Vector(frame, frame, 0),
+                ),
             ]
         )
         sketch.Placement.Rotation = App.Rotation(App.Vector(1, 0, 0), 90)
@@ -53,7 +71,7 @@ class TestArchWall(TestArchBase.TestArchBase):
         window.Width = width
         window.Height = height
         window.HoleDepth = 0
-        window.WindowParts = ["DefaultFrame", "Frame", "Wire0", "60", "0"]
+        window.WindowParts = ["DefaultFrame", "Frame", "Wire0,Wire1", "60", "0"]
         self.document.recompute()
 
         Arch.addComponents(window, wall)
@@ -217,7 +235,7 @@ class TestArchWall(TestArchBase.TestArchBase):
         wall = Arch.makeWall(line, width=200, height=3000)
         self.document.recompute()
 
-        initial_faces = wall.Proxy.getFootprint(wall)
+        initial_faces = ArchPlanRepresentation.get_plan_representation(wall).faces
         self.assertEqual(
             len(initial_faces), 1, "Straight wall footprint should start as a single face."
         )
@@ -232,7 +250,7 @@ class TestArchWall(TestArchBase.TestArchBase):
             height=1200.0,
         )
 
-        footprint_faces = wall.Proxy.getFootprint(wall)
+        footprint_faces = ArchPlanRepresentation.get_plan_representation(wall).faces
         self.assertEqual(
             len(footprint_faces),
             2,
@@ -274,7 +292,7 @@ class TestArchWall(TestArchBase.TestArchBase):
             height=700.0,
         )
 
-        footprint_faces = wall.Proxy.getFootprint(wall)
+        footprint_faces = ArchPlanRepresentation.get_plan_representation(wall).faces
         self.assertEqual(
             len(footprint_faces),
             2,
@@ -376,7 +394,7 @@ class TestArchWall(TestArchBase.TestArchBase):
             storey,
             "The default wall plan context should record the parent storey source.",
         )
-        footprint_faces = wall.Proxy.getFootprint(wall)
+        footprint_faces = ArchPlanRepresentation.get_plan_representation(wall).faces
         self.assertEqual(
             len(footprint_faces),
             2,

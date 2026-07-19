@@ -21,6 +21,7 @@ SET(Arch_SRCS
     Init.py
     InitGui.py
     ArchComponent.py
+    ArchDisplayContext.py
     ArchPlanRepresentation.py
     ArchIFC.py
     ArchIFCView.py
