@@ -3209,7 +3209,38 @@ void View3DInventorViewer::renderFramebuffer()
     }
 
     static_cast<QOpenGLWidget*>(this->viewport())->makeCurrent();  // NOLINT
+
+    if (this->framebuffer->size() != QSize(viewportWidth, viewportHeight)) {
+        auto resizedFramebuffer = captureFramebuffer();
+        if (resizedFramebuffer) {
+            delete this->framebuffer;
+            this->framebuffer = resizedFramebuffer.release();
+        }
+        else {
+            Base::Console().warning(
+                "Failed to resize the frozen viewport; retaining the previous framebuffer\n"
+            );
+        }
+    }
+
+    QOpenGLFramebufferObject::bindDefault();
     glViewport(0, 0, viewportWidth, viewportHeight);
+
+    const GLboolean scissorEnabled = glIsEnabled(GL_SCISSOR_TEST);
+    glDisable(GL_SCISSOR_TEST);
+    GLboolean colorMask[4] = {};
+    glGetBooleanv(GL_COLOR_WRITEMASK, colorMask);
+    GLfloat clearColor[4] = {};
+    glGetFloatv(GL_COLOR_CLEAR_VALUE, clearColor);
+    glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+    const QColor col = this->backgroundColor();
+    glClearColor(float(col.redF()), float(col.greenF()), float(col.blueF()), 0.0F);
+    glClear(GL_COLOR_BUFFER_BIT);
+    glClearColor(clearColor[0], clearColor[1], clearColor[2], clearColor[3]);
+    glColorMask(colorMask[0], colorMask[1], colorMask[2], colorMask[3]);
+    if (scissorEnabled) {
+        glEnable(GL_SCISSOR_TEST);
+    }
 
     if (hasFramebufferBlitSupport()) {
         const QSize srcSize = this->framebuffer->size();

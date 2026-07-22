@@ -320,6 +320,82 @@ class TestRubberbandSelection(unittest.TestCase):
             "Native rendering did not resume after rubber-band selection",
         )
 
+    def test_frozen_frame_is_recreated_after_viewport_resize(self):
+        """Resizing a frozen viewport must not preserve old rubber-band pixels."""
+        self._ensure_selection_objects()
+        self.view.setNavigationType("Gui::CADNavigationStyle")
+        self.viewer.setGradientBackground("")
+        self.viewer.setBackgroundColor(1.0, 1.0, 1.0)
+        self._refresh_view()
+
+        original_view_size = self.graphics_view.size()
+        original_viewport_size = self.viewport.size()
+        smaller_view_size = QtCore.QSize(
+            max(240, int(original_view_size.width() * 0.85)),
+            max(180, int(original_view_size.height() * 0.85)),
+        )
+        if smaller_view_size == original_view_size:
+            self.skipTest("The test viewport is too small to exercise resizing")
+
+        selection_rect = self._selection_rect(self.left_box)
+        start = selection_rect.topLeft()
+        large_end = QtCore.QPoint(
+            original_viewport_size.width() - 20,
+            original_viewport_size.height() - 20,
+        )
+        release_position = large_end
+
+        self._send_mouse_event(MOUSE_MOVE, start, NO_BUTTON, NO_BUTTON, NO_MODIFIER)
+        self._process_events(10)
+        self._send_mouse_event(MOUSE_PRESS, start, LEFT_BUTTON, LEFT_BUTTON, NO_MODIFIER)
+        self._process_events(10)
+        self._send_mouse_event(MOUSE_MOVE, large_end, NO_BUTTON, LEFT_BUTTON, NO_MODIFIER)
+        self._process_events(10)
+
+        try:
+            self.graphics_view.resize(smaller_view_size)
+            self._process_events(100)
+            self._refresh_view_widgets()
+            if self.viewport.width() >= original_viewport_size.width():
+                self.skipTest("The test viewport could not be resized")
+
+            release_position = QtCore.QPoint(
+                self.viewport.width() - 80,
+                self.viewport.height() - 80,
+            )
+            self._send_mouse_event(
+                MOUSE_MOVE,
+                release_position,
+                NO_BUTTON,
+                LEFT_BUTTON,
+                NO_MODIFIER,
+            )
+            self._process_events(20)
+
+            image = self.viewer.grabFramebuffer()
+            stale_region = QtCore.QRect(
+                min(image.width() - 6, release_position.x() + 20),
+                max(0, start.y() - 2),
+                5,
+                5,
+            )
+            self.assertLessEqual(
+                self._non_background_pixel_count(image, stale_region),
+                1,
+                "Pixels from the larger rubber-band frame survived viewport resize",
+            )
+        finally:
+            self._send_mouse_event(
+                MOUSE_RELEASE,
+                release_position,
+                LEFT_BUTTON,
+                NO_BUTTON,
+                NO_MODIFIER,
+            )
+            self._process_events()
+            self.graphics_view.resize(original_view_size)
+            self._process_events(100)
+
     def test_box_select_does_not_swallow_next_viewer_press(self):
         for label, style in self.VIEWER_HANDOFF_STYLES:
             with self.subTest(style=label):
