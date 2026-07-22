@@ -257,6 +257,69 @@ class TestRubberbandSelection(unittest.TestCase):
                     "Box selection must not steal release after the scene graph handles press",
                 )
 
+    def test_view_remains_populated_during_rubberband_drag(self):
+        """The frozen FBO must preserve geometry and NaviCube during a drag."""
+        self._ensure_selection_objects()
+        self.view.setNavigationType("Gui::CADNavigationStyle")
+        self.viewer.setGradientBackground("")
+        self.viewer.setBackgroundColor(1.0, 1.0, 1.0)
+        self.viewer.setNaviCubeCorner(1)  # top right
+        self.viewer.setEnabledNaviCube(True)
+        self._refresh_view()
+
+        selection_rect = self._selection_rect(self.left_box)
+        start = selection_rect.topLeft()
+        center = selection_rect.center()
+        end = selection_rect.bottomRight()
+
+        baseline = self.viewer.grabFramebuffer()
+        self.assertFalse(baseline.isNull(), "Baseline viewport capture returned a null image")
+        geometry_region = self._image_rect(self._object_rect(self.left_box), baseline)
+        baseline_geometry_pixels = self._non_background_pixels(baseline, geometry_region)
+        self.assertGreater(
+            len(baseline_geometry_pixels),
+            50,
+            "Baseline capture did not contain enough visible geometry pixels",
+        )
+
+        self._send_mouse_event(MOUSE_MOVE, start, NO_BUTTON, NO_BUTTON, NO_MODIFIER)
+        self._process_events(10)
+        self._send_mouse_event(MOUSE_PRESS, start, LEFT_BUTTON, LEFT_BUTTON, NO_MODIFIER)
+        self._process_events(10)
+        self._send_mouse_event(MOUSE_MOVE, center, NO_BUTTON, LEFT_BUTTON, NO_MODIFIER)
+        self._process_events(10)
+
+        try:
+            image = self.viewer.grabFramebuffer()
+            self.assertFalse(image.isNull(), "Viewport capture during drag returned a null image")
+
+            cube_region = QtCore.QRect(
+                max(0, image.width() - 180),
+                0,
+                min(180, image.width()),
+                min(180, image.height()),
+            )
+            self.assertGreater(
+                self._remaining_non_background_pixels(image, baseline_geometry_pixels),
+                len(baseline_geometry_pixels) // 2,
+                "Geometry disappeared from the viewport during rubber-band selection",
+            )
+            self.assertGreater(
+                self._non_background_pixel_count(image, cube_region),
+                20,
+                "NaviCube disappeared from the viewport during rubber-band selection",
+            )
+        finally:
+            self._send_mouse_event(MOUSE_RELEASE, end, LEFT_BUTTON, NO_BUTTON, NO_MODIFIER)
+            self._process_events()
+
+        image = self.viewer.grabFramebuffer()
+        self.assertGreater(
+            self._remaining_non_background_pixels(image, baseline_geometry_pixels),
+            len(baseline_geometry_pixels) // 2,
+            "Native rendering did not resume after rubber-band selection",
+        )
+
     def test_box_select_does_not_swallow_next_viewer_press(self):
         for label, style in self.VIEWER_HANDOFF_STYLES:
             with self.subTest(style=label):
@@ -423,6 +486,49 @@ class TestRubberbandSelection(unittest.TestCase):
 
     def _selection_rect(self, obj):
         return self._object_rect(obj, pad=18)
+
+    def _image_rect(self, widget_rect, image):
+        scale_x = image.width() / self.viewport.width()
+        scale_y = image.height() / self.viewport.height()
+        left = int(widget_rect.left() * scale_x)
+        top = int(widget_rect.top() * scale_y)
+        right = min(image.width(), int((widget_rect.right() + 1) * scale_x))
+        bottom = min(image.height(), int((widget_rect.bottom() + 1) * scale_y))
+        return QtCore.QRect(left, top, max(1, right - left), max(1, bottom - top))
+
+    @staticmethod
+    def _non_background_pixels(image, rect):
+        background = image.pixelColor(0, 0)
+        pixels = set()
+        for y in range(rect.top(), rect.bottom()):
+            for x in range(rect.left(), rect.right()):
+                color = image.pixelColor(x, y)
+                if (
+                    abs(color.red() - background.red())
+                    + abs(color.green() - background.green())
+                    + abs(color.blue() - background.blue())
+                    > 30
+                ):
+                    pixels.add((x, y))
+        return pixels
+
+    @classmethod
+    def _non_background_pixel_count(cls, image, rect):
+        return len(cls._non_background_pixels(image, rect))
+
+    @staticmethod
+    def _remaining_non_background_pixels(image, pixels):
+        background = image.pixelColor(0, 0)
+        return sum(
+            1
+            for x, y in pixels
+            if (
+                abs(image.pixelColor(x, y).red() - background.red())
+                + abs(image.pixelColor(x, y).green() - background.green())
+                + abs(image.pixelColor(x, y).blue() - background.blue())
+                > 30
+            )
+        )
 
     def _annotation_label_bounds(self):
         self._process_events()

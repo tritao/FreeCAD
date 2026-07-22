@@ -2888,66 +2888,124 @@ GLenum View3DInventorViewer::getInternalTextureFormat()
     // NOLINTEND
 }
 
+std::unique_ptr<QOpenGLFramebufferObject> View3DInventorViewer::captureFramebuffer()
+{
+    const SbVec2s size = this->getSoRenderManager()->getViewportRegion().getViewportSizePixels();
+    const int width = size[0];
+    const int height = size[1];
+    if (width <= 0 || height <= 0) {
+        Base::Console().warning("Failed to freeze the viewport because it is empty\n");
+        return {};
+    }
+
+    auto gl = static_cast<QOpenGLWidget*>(this->viewport());  // NOLINT
+    if (!gl) {
+        Base::Console().warning("Failed to freeze the viewport because no GL widget is active\n");
+        return {};
+    }
+    gl->makeCurrent();
+    if (!QOpenGLContext::currentContext()) {
+        Base::Console().warning("Failed to freeze the viewport because no GL context is active\n");
+        return {};
+    }
+
+    QOpenGLFramebufferObjectFormat fboFormat;
+    fboFormat.setSamples(getNumSamples());
+    fboFormat.setAttachment(QOpenGLFramebufferObject::Depth);
+    auto fbo = std::make_unique<QOpenGLFramebufferObject>(width, height, fboFormat);
+    if (!fbo->isValid()) {
+        Base::Console().warning(
+            "Failed to create a %dx%d framebuffer for viewport freeze\n", width, height
+        );
+        return {};
+    }
+
+    const bool blitSupported = hasFramebufferBlitSupport();
+    if (fbo->format().samples() > 0 && !blitSupported) {
+        Base::Console().message(
+            "Viewport freeze: framebuffer blit unavailable; using a single-sample FBO "
+            "and CPU presentation fallback\n"
+        );
+        QOpenGLFramebufferObjectFormat fallbackFormat;
+        fallbackFormat.setAttachment(QOpenGLFramebufferObject::Depth);
+        fbo = std::make_unique<QOpenGLFramebufferObject>(width, height, fallbackFormat);
+        if (!fbo->isValid()) {
+            Base::Console().warning(
+                "Failed to create a single-sample framebuffer for viewport freeze\n"
+            );
+            return {};
+        }
+    }
+    else if (fbo->format().samples() > 0) {
+        Base::Console().message(
+            "Viewport freeze: resolving a %d-sample FBO with framebuffer blit\n",
+            fbo->format().samples()
+        );
+    }
+    else {
+        Base::Console().message(
+            "Viewport freeze: using a single-sample FBO; framebuffer blit support: %s\n",
+            blitSupported ? "available" : "unavailable"
+        );
+    }
+
+    if (!renderToFramebuffer(fbo.get())) {
+        Base::Console().warning("Failed to render the viewport freeze framebuffer\n");
+        return {};
+    }
+
+    if (fbo->format().samples() <= 0) {
+        return fbo;
+    }
+
+    auto resolved = std::make_unique<QOpenGLFramebufferObject>(fbo->size());
+    if (!resolved->isValid()) {
+        Base::Console().warning("Failed to create the resolved viewport freeze framebuffer\n");
+        return {};
+    }
+
+    QOpenGLFramebufferObject::blitFramebuffer(resolved.get(), fbo.get());
+    return resolved;
+}
+
 void View3DInventorViewer::setRenderType(RenderType type)
 {
-    renderType = type;
+    if (type == Framebuffer) {
+        auto capturedFramebuffer = captureFramebuffer();
+        if (!capturedFramebuffer) {
+            Base::Console().warning(
+                "Failed to freeze the viewport; keeping the current render mode\n"
+            );
+            return;
+        }
 
-    glImage = QImage();
-    if (type != Framebuffer) {
+        delete framebuffer;
+        framebuffer = capturedFramebuffer.release();
+        glImage = {};
+        renderType = Framebuffer;
+        return;
+    }
+
+    if (type == Native) {
         delete framebuffer;
         framebuffer = nullptr;
+        glImage = {};
+        renderType = Native;
+        return;
     }
 
-    switch (type) {
-        case Native:
-            break;
-        case Framebuffer:
-            if (!framebuffer) {
-                const SbViewportRegion vp = this->getSoRenderManager()->getViewportRegion();
-                SbVec2s size = vp.getViewportSizePixels();
-                int width = size[0];
-                int height = size[1];
-
-                auto gl = static_cast<QOpenGLWidget*>(this->viewport());  // NOLINT
-                gl->makeCurrent();
-                QOpenGLFramebufferObjectFormat fboFormat;
-                fboFormat.setSamples(getNumSamples());
-                fboFormat.setAttachment(QOpenGLFramebufferObject::Depth);
-                auto fbo = new QOpenGLFramebufferObject(width, height, fboFormat);
-                if (fbo->format().samples() > 0 && hasFramebufferBlitSupport()) {
-                    if (!renderToFramebuffer(fbo)) {
-                        delete fbo;
-                        break;
-                    }
-                    framebuffer = new QOpenGLFramebufferObject(fbo->size());
-                    // this is needed to be able to render the texture later
-                    QOpenGLFramebufferObject::blitFramebuffer(framebuffer, fbo);
-                    delete fbo;
-                }
-                else {
-                    if (fbo->format().samples() > 0 && !hasFramebufferBlitSupport()) {
-                        Base::Console().warning(
-                            "Framebuffer blit is unavailable; falling back to a single-sample "
-                            "offscreen buffer\n"
-                        );
-                        delete fbo;
-                        QOpenGLFramebufferObjectFormat fallbackFormat;
-                        fallbackFormat.setAttachment(QOpenGLFramebufferObject::Depth);
-                        fbo = new QOpenGLFramebufferObject(width, height, fallbackFormat);
-                    }
-                    if (!renderToFramebuffer(fbo)) {
-                        delete fbo;
-                        break;
-                    }
-                    framebuffer = fbo;
-                }
-            }
-            break;
-        case Image:
-            // renderOverlayImage() consumes OpenGL-oriented rows.
-            glImage = flipVertically(grabFramebuffer());
-            break;
+    QImage capturedImage = flipVertically(grabFramebuffer());
+    if (capturedImage.isNull()) {
+        Base::Console().warning(
+            "Failed to capture the viewport; keeping the current render mode\n"
+        );
+        return;
     }
+
+    delete framebuffer;
+    framebuffer = nullptr;
+    glImage = capturedImage;
+    renderType = Image;
 }
 
 View3DInventorViewer::RenderType View3DInventorViewer::getRenderType() const

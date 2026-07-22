@@ -578,7 +578,7 @@ void RubberbandSelection::initialize()
     rubberband.setWorking(false);
     _pcView3D->addGraphicsItem(&rubberband);
     if (QOpenGLFramebufferObject::hasOpenGLFramebufferObjects()) {
-        _pcView3D->setRenderType(View3DInventorViewer::Image);
+        _pcView3D->setRenderType(View3DInventorViewer::Framebuffer);
     }
     _pcView3D->redraw();
 }

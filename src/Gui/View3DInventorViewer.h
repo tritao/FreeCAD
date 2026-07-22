@@ -635,6 +635,7 @@ private:
     void recoverFromRenderMemoryException();
     void renderDelayedAnnotations(SoGLRenderAction* glra);
     void renderGLActionScene(const QColor& backgroundColor, SoGLRenderAction* glra);
+    std::unique_ptr<QOpenGLFramebufferObject> captureFramebuffer();
     bool renderToFramebuffer(QOpenGLFramebufferObject*, bool includeViewerLighting = true);
     void setCursorRepresentation(int mode);
     void aboutToDestroyGLContext();
