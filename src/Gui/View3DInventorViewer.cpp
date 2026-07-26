@@ -2914,9 +2914,8 @@ std::unique_ptr<QOpenGLFramebufferObject> View3DInventorViewer::captureFramebuff
     fboFormat.setAttachment(QOpenGLFramebufferObject::Depth);
     auto fbo = std::make_unique<QOpenGLFramebufferObject>(width, height, fboFormat);
     if (!fbo->isValid()) {
-        Base::Console().warning(
-            "Failed to create a %dx%d framebuffer for viewport freeze\n", width, height
-        );
+        Base::Console()
+            .warning("Failed to create a %dx%d framebuffer for viewport freeze\n", width, height);
         return {};
     }
 
@@ -2973,9 +2972,7 @@ void View3DInventorViewer::setRenderType(RenderType type)
     if (type == Framebuffer) {
         auto capturedFramebuffer = captureFramebuffer();
         if (!capturedFramebuffer) {
-            Base::Console().warning(
-                "Failed to freeze the viewport; keeping the current render mode\n"
-            );
+            Base::Console().warning("Failed to freeze the viewport; keeping the current render mode\n");
             return;
         }
 
@@ -2996,9 +2993,7 @@ void View3DInventorViewer::setRenderType(RenderType type)
 
     QImage capturedImage = flipVertically(grabFramebuffer());
     if (capturedImage.isNull()) {
-        Base::Console().warning(
-            "Failed to capture the viewport; keeping the current render mode\n"
-        );
+        Base::Console().warning("Failed to capture the viewport; keeping the current render mode\n");
         return;
     }
 
