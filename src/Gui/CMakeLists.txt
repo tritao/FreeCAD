@@ -961,6 +961,7 @@ SET(Navigation_SRCS
     ${Navigation_CPP_SRCS}
     Navigation/NavigationStateChart.h
     Navigation/NavigationStyle.h
+    Navigation/NavigationStyleBase.h
     Navigation/NavigationStyle.pyi
     Navigation/GestureNavigationStyle.h
     Navigation/NavigationAnimator.h
