@@ -2647,6 +2647,18 @@ std::string UserNavigationStyle::userFriendlyName() const
     return std::string {name};
 }
 
+NavigationInputState UserNavigationStyle::currentInputState() const
+{
+    return {
+        .left = static_cast<bool>(button1down),
+        .middle = static_cast<bool>(button3down),
+        .right = static_cast<bool>(button2down),
+        .ctrl = static_cast<bool>(ctrldown),
+        .shift = static_cast<bool>(shiftdown),
+        .alt = static_cast<bool>(altdown),
+    };
+}
+
 std::map<Base::Type, std::string> UserNavigationStyle::getUserFriendlyNames()
 {
     std::map<Base::Type, std::string> names;

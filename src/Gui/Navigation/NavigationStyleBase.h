@@ -38,6 +38,7 @@
 #include <Base/BaseClass.h>
 #include <Base/SmartPtrPy.h>
 #include <Gui/Namespace.h>
+#include <Gui/Navigation/NavigationInputState.h>
 #include <FCGlobal.h>
 #include <memory>
 #include <optional>
@@ -465,6 +466,9 @@ public:
     virtual const char* mouseButtons(ViewerMode) = 0;
     virtual std::string userFriendlyName() const;
     static std::map<Base::Type, std::string> getUserFriendlyNames();
+
+protected:
+    NavigationInputState currentInputState() const;
 };
 
 }  // namespace Gui
