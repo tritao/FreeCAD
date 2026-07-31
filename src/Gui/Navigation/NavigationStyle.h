@@ -115,56 +115,58 @@ protected:
     bool inGesture;           // a flag that is used to filter out mouse events during gestures.
 };
 
-class GuiExport TouchpadNavigationStyle: public UserNavigationStyle
+class GuiExport TouchpadNavigationStyle: public MappedNavigationStyle
 {
-    using inherited = UserNavigationStyle;
-
     TYPESYSTEM_HEADER_WITH_OVERRIDE();
 
 public:
     TouchpadNavigationStyle();
     ~TouchpadNavigationStyle() override;
-    const char* mouseButtons(ViewerMode) override;
 
 protected:
-    SbBool processSoEvent(const SoEvent* const ev) override;
+    const NavigationProfile& profile() const override;
+    bool shouldForceRotationWhenButtonAdded(const EventContext& context) const override;
+    bool shouldProcessMouseButtonEvent(const SoEvent* event) const override;
+    void processStyleButtonEvent(EventContext& context) override;
+    bool processStylePointerMotionEvent(EventContext& context) override;
+    void adjustResolvedMode(EventContext& context) override;
 
 private:
     SbBool blockPan {false};  // Used to block the first pan in a mouse movement to prevent big jumps
 };
 
-class GuiExport OpenCascadeNavigationStyle: public UserNavigationStyle
+class GuiExport OpenCascadeNavigationStyle: public MappedNavigationStyle
 {
-    using inherited = UserNavigationStyle;
-
     TYPESYSTEM_HEADER_WITH_OVERRIDE();
 
 public:
     OpenCascadeNavigationStyle();
     ~OpenCascadeNavigationStyle() override;
-    const char* mouseButtons(ViewerMode) override;
 
 protected:
-    SbBool processSoEvent(const SoEvent* const ev) override;
+    const NavigationProfile& profile() const override;
+    void processStyleButtonEvent(EventContext& context) override;
+    bool processStylePointerMotionEvent(EventContext& context) override;
+    void zoomByCursor(const SbVec2f& thispos, const SbVec2f& prevpos) override;
 };
 
-class GuiExport OpenSCADNavigationStyle: public UserNavigationStyle
+class GuiExport OpenSCADNavigationStyle: public MappedNavigationStyle
 {
-    using inherited = UserNavigationStyle;
-
     TYPESYSTEM_HEADER_WITH_OVERRIDE();
 
 public:
     OpenSCADNavigationStyle();
     ~OpenSCADNavigationStyle() override;
-    const char* mouseButtons(ViewerMode) override;
     ClarifySelectionMode clarifySelectionMode() const override
     {
         return ClarifySelectionMode::Ctrl;
     }
 
 protected:
-    SbBool processSoEvent(const SoEvent* const ev) override;
+    const NavigationProfile& profile() const override;
+    void processStyleButtonEvent(EventContext& context) override;
+    bool processStylePointerMotionEvent(EventContext& context) override;
+    void zoomByCursor(const SbVec2f& thispos, const SbVec2f& prevpos) override;
 };
 
 class GuiExport TinkerCADNavigationStyle: public MappedNavigationStyle
