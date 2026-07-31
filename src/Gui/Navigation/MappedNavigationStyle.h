@@ -104,12 +104,8 @@ protected:
      */
     virtual void adjustResolvedMode(EventContext& context);
 
-    /** Apply the style's editing-selection policy during shared selection handling. */
-    virtual void preserveEditingSelection(EventContext& context);
-
 private:
     EventContext createContext(const SoEvent* const ev);
-    NavigationInputState currentInputState() const;
 
     void processKeyboardEventCommon(EventContext& context);
     void processMouseButtonEventCommon(EventContext& context);

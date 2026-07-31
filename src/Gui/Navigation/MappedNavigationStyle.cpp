@@ -49,18 +49,6 @@ MappedNavigationStyle::EventContext MappedNavigationStyle::createContext(const S
     };
 }
 
-NavigationInputState MappedNavigationStyle::currentInputState() const
-{
-    return {
-        .left = static_cast<bool>(button1down),
-        .middle = static_cast<bool>(button3down),
-        .right = static_cast<bool>(button2down),
-        .ctrl = static_cast<bool>(ctrldown),
-        .shift = static_cast<bool>(shiftdown),
-        .alt = static_cast<bool>(altdown),
-    };
-}
-
 const char* MappedNavigationStyle::mouseButtons(ViewerMode mode)
 {
     const NavigationProfile& navigationProfile = profile();
@@ -324,7 +312,14 @@ void MappedNavigationStyle::applySelectionLockPolicy(EventContext& context)
 
     if (viewer->isEditing() && context.initialMode == NavigationStyle::SELECTION
         && context.resolvedMode != NavigationStyle::IDLE) {
-        preserveEditingSelection(context);
+        if (profile().editingSelectionPolicy == EditingSelectionPolicy::CancelOnLeftRightChord
+            && context.chord == (LeftDown | RightDown)) {
+            context.resolvedMode = NavigationStyle::IDLE;
+        }
+        else {
+            context.resolvedMode = NavigationStyle::SELECTION;
+        }
+        context.processed = false;
     }
 }
 
@@ -377,12 +372,6 @@ void MappedNavigationStyle::adjustResolvedMode(EventContext&)
 bool MappedNavigationStyle::shouldPropagate(const EventContext& context) const
 {
     return !context.selectionDragAttempted;
-}
-
-void MappedNavigationStyle::preserveEditingSelection(EventContext& context)
-{
-    context.resolvedMode = NavigationStyle::SELECTION;
-    context.processed = false;
 }
 
 void MappedNavigationStyle::applyModeEntryEffects(EventContext& context)
