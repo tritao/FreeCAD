@@ -3,6 +3,7 @@
 #pragma once
 
 #include <Gui/Navigation/NavigationStyleBase.h>
+#include <Gui/Navigation/MappedNavigationStyle.h>
 
 // NOLINTBEGIN(cppcoreguidelines-avoid*, readability-avoid-const-params-in-decls)
 namespace Gui
