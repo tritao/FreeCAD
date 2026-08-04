@@ -32,6 +32,8 @@
 #include <fmt/format.h>
 
 #include "Exception.h"
+#include "NumericFormatting.h"
+#include "NumericInput.h"
 #include "Quantity.h"
 #include "Tools.h"
 #include "UnitsApi.h"
@@ -299,7 +301,7 @@ std::string Quantity::getSafeUserString() const
     if (myValue != 0.0) {
         bool useFallback {false};
         try {
-            useFallback = (parse(userStr).getValue() == 0);
+            useFallback = (parseUserInput(userStr, currentNumericLocaleContext()).getValue() == 0);
         }
         catch (const Base::ParserError&) {
             useFallback = true;
@@ -605,6 +607,100 @@ private:
 #elif defined(__GNUC__)
 # pragma GCC diagnostic pop
 #endif
+
+namespace
+{
+bool isAsciiDigit(const char ch)
+{
+    return ch >= '0' && ch <= '9';
+}
+
+bool startsAt(std::string_view input, std::size_t position, std::string_view value)
+{
+    return !value.empty() && position + value.size() <= input.size()
+        && input.substr(position, value.size()) == value;
+}
+
+bool startsNumericToken(
+    std::string_view input,
+    const std::size_t position,
+    const Base::NumericLocaleContext& locale
+)
+{
+    if (position >= input.size()) {
+        return false;
+    }
+
+    if (isAsciiDigit(input[position])) {
+        return true;
+    }
+
+    const auto digitAfter = [&](const std::size_t offset) {
+        return offset < input.size() && isAsciiDigit(input[offset]);
+    };
+
+    if (input[position] == '.') {
+        return digitAfter(position + 1);
+    }
+    if (startsAt(input, position, locale.decimalSeparator)) {
+        return digitAfter(position + locale.decimalSeparator.size());
+    }
+    const std::string_view positiveSign {
+        locale.positiveSign.data(), locale.positiveSign.size()
+    };
+    const std::string_view negativeSign {
+        locale.negativeSign.data(), locale.negativeSign.size()
+    };
+    for (const auto sign : {std::string_view {"+"}, std::string_view {"-"}, positiveSign,
+                            negativeSign}) {
+        if (startsAt(input, position, sign)) {
+            const auto next = position + sign.size();
+            return digitAfter(next) || (next < input.size() && input[next] == '.')
+                || startsAt(input, next, locale.decimalSeparator);
+        }
+    }
+    return false;
+}
+
+std::string normalizeQuantityInput(
+    std::string_view input,
+    const Base::NumericLocaleContext& locale
+)
+{
+    std::string normalized;
+    normalized.reserve(input.size());
+
+    std::size_t position = 0;
+    while (position < input.size()) {
+        if (!startsNumericToken(input, position, locale)) {
+            normalized.push_back(input[position++]);
+            continue;
+        }
+
+        const auto result = scanLocalizedNumber(
+            input.substr(position), locale, Base::NumericSyntaxContext::Standalone
+        );
+        if (result.status != Base::LocalizedNumberResult::Status::Complete) {
+            const auto message = result.diagnostic ? result.diagnostic->message
+                                                    : "Invalid localized number";
+            throw Base::ParserError(message);
+        }
+
+        normalized += result.canonicalText;
+        position += result.consumedBytes;
+    }
+
+    return normalized;
+}
+}  // namespace
+
+Quantity Quantity::parseUserInput(
+    const std::string& string,
+    const NumericLocaleContext& locale
+)
+{
+    return Quantity::parse(normalizeQuantityInput(string, locale));
+}
 
 Quantity Quantity::parse(const std::string& string)
 {

@@ -31,16 +31,20 @@
 # pragma clang diagnostic ignored "-Wdelete-non-virtual-dtor"
 #endif
 
+#include <algorithm>
 #include <boost/algorithm/string/predicate.hpp>
 #include <boost/io/ios_state.hpp>
 #include <boost/math/special_functions/round.hpp>
 #include <boost/math/special_functions/trunc.hpp>
 
 #include <numbers>
+#include <cctype>
 #include <limits>
 #include <sstream>
 #include <stack>
 #include <string>
+#include <string_view>
+#include <vector>
 #include <fmt/format.h>
 
 #include <QObject>
@@ -51,6 +55,8 @@
 #include <App/PropertyUnits.h>
 #include <Base/Interpreter.h>
 #include <Base/MatrixPy.h>
+#include <Base/NumericFormatting.h>
+#include <Base/NumericInput.h>
 #include <Base/PlacementPy.h>
 #include <Base/QuantityPy.h>
 #include <Base/RotationPy.h>
@@ -3782,6 +3788,156 @@ ExpressionPtr App::ExpressionParser::parse(const App::DocumentObject* owner, con
     return std::exchange(ScanResult, nullptr);
 }
 
+namespace
+{
+bool expressionStartsAt(
+    std::string_view input,
+    const std::size_t position,
+    std::string_view value
+)
+{
+    return !value.empty() && position + value.size() <= input.size()
+        && input.substr(position, value.size()) == value;
+}
+
+bool expressionDigit(const char ch)
+{
+    return ch >= '0' && ch <= '9';
+}
+
+bool startsExpressionNumber(
+    std::string_view input,
+    const std::size_t position,
+    const NumericLocaleContext& locale,
+    const NumericSyntaxContext syntax
+)
+{
+    if (position >= input.size()) {
+        return false;
+    }
+
+    const auto digitAt = [&](const std::size_t offset) {
+        return offset < input.size() && expressionDigit(input[offset]);
+    };
+    const auto decimalAt = [&](const std::size_t offset) {
+        if (syntax == NumericSyntaxContext::FunctionArgument
+            && (locale.decimalSeparator == "," || locale.decimalSeparator == ";")) {
+            return false;
+        }
+        return (offset < input.size() && input[offset] == '.')
+            || expressionStartsAt(input, offset, locale.decimalSeparator);
+    };
+
+    if (expressionDigit(input[position])) {
+        return true;
+    }
+    if (decimalAt(position)) {
+        const auto separatorLength = input[position] == '.' ? 1 : locale.decimalSeparator.size();
+        return digitAt(position + separatorLength);
+    }
+
+    const std::string_view positiveSign {
+        locale.positiveSign.data(), locale.positiveSign.size()
+    };
+    const std::string_view negativeSign {
+        locale.negativeSign.data(), locale.negativeSign.size()
+    };
+    for (const auto sign : {std::string_view {"+"}, std::string_view {"-"}, positiveSign,
+                            negativeSign}) {
+        if (!expressionStartsAt(input, position, sign)) {
+            continue;
+        }
+        const auto next = position + sign.size();
+        return digitAt(next) || (decimalAt(next) && digitAt(next + 1));
+    }
+    return false;
+}
+
+bool isFunctionOpening(std::string_view input, const std::size_t position)
+{
+    if (position == 0) {
+        return false;
+    }
+    std::size_t previous = position;
+    while (previous > 0 && std::isspace(static_cast<unsigned char>(input[previous - 1]))) {
+        --previous;
+    }
+    return previous > 0
+        && (std::isalnum(static_cast<unsigned char>(input[previous - 1]))
+            || input[previous - 1] == '_');
+}
+
+std::string normalizeExpressionUserInput(
+    std::string_view input,
+    const NumericLocaleContext& locale
+)
+{
+    std::string normalized;
+    normalized.reserve(input.size());
+    std::vector<bool> functionParentheses;
+
+    std::size_t position = 0;
+    while (position < input.size()) {
+        // Expression string literals are opaque to numeric tokenization. This also preserves an
+        // unterminated literal so that the expression parser can report its normal syntax error.
+        if (position + 1 < input.size() && input[position] == '<' && input[position + 1] == '<') {
+            const auto end = input.find(">>", position + 2);
+            if (end == std::string_view::npos) {
+                normalized.append(input.substr(position));
+                break;
+            }
+            const auto length = end + 2 - position;
+            normalized.append(input.substr(position, length));
+            position += length;
+            continue;
+        }
+
+        if (input[position] == '(') {
+            functionParentheses.push_back(isFunctionOpening(input, position));
+            normalized.push_back(input[position++]);
+            continue;
+        }
+        if (input[position] == ')') {
+            if (!functionParentheses.empty()) {
+                functionParentheses.pop_back();
+            }
+            normalized.push_back(input[position++]);
+            continue;
+        }
+
+        const bool inFunction = std::find(functionParentheses.begin(), functionParentheses.end(), true)
+            != functionParentheses.end();
+        const auto syntax = inFunction ? NumericSyntaxContext::FunctionArgument
+                                       : NumericSyntaxContext::Expression;
+        if (startsExpressionNumber(input, position, locale, syntax)) {
+            const auto result = scanLocalizedNumber(input.substr(position), locale, syntax);
+            if (result.status != LocalizedNumberResult::Status::Complete) {
+                const auto message = result.diagnostic ? result.diagnostic->message
+                                                        : "Invalid localized number";
+                throw ParserError(message);
+            }
+            normalized += result.canonicalText;
+            position += result.consumedBytes;
+            continue;
+        }
+
+        normalized.push_back(input[position++]);
+    }
+
+    return normalized;
+}
+}  // namespace
+
+ExpressionPtr App::ExpressionParser::parseUserInput(
+    const App::DocumentObject* owner,
+    const char* buffer,
+    const Base::NumericLocaleContext& locale
+)
+{
+    const auto canonical = normalizeExpressionUserInput(buffer, locale);
+    return parse(owner, canonical.c_str());
+}
+
 std::unique_ptr<UnitExpression> ExpressionParser::parseUnit(
     const App::DocumentObject* owner,
     const char* buffer
@@ -3865,4 +4021,3 @@ bool ExpressionParser::isTokenAUnit(const std::string & str)
 #if defined(__clang__)
 # pragma clang diagnostic pop
 #endif
-
