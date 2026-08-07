@@ -23,6 +23,7 @@
 
 #pragma once
 
+#include <cstdint>
 #include <Inventor/fields/SoMFInt32.h>
 #include <Inventor/fields/SoSFColor.h>
 #include <Inventor/nodes/SoIndexedFaceSet.h>
@@ -150,6 +151,15 @@ private:
     std::vector<int32_t> matIndex;
     std::vector<uint32_t> packedColors;
     uint32_t packedColor;
+    const SbColor* baseDiffusePointer {nullptr};
+    const float* baseTransparencyPointer {nullptr};
+    const int32_t* basePartCountsPointer {nullptr};
+    uint64_t baseDiffuseNodeId {0};
+    uint64_t baseTransparencyNodeId {0};
+    int baseDiffuseCount {0};
+    int baseTransparencyCount {0};
+    int basePartCount {0};
+    bool baseMaterialCacheReady {false};
     Gui::SoFCSelectionCounter selCounter;
 
     SoIndexedFaceSet* overlayFaceSet {nullptr};

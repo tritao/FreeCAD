@@ -504,6 +504,67 @@ bool SoBrepFaceSet::overrideMaterialBinding(SoGLRenderAction* action, SelContext
         }
     }
 
+    const uint64_t diffuseNodeId = static_cast<uint64_t>(element->getDiffuseNodeId());
+    const uint64_t transparencyNodeId = static_cast<uint64_t>(element->getTransparencyNodeId());
+    const int32_t* partCounts = this->partIndex.getValues(0);
+    if (!hasPrimary && !hasSecondary && needsBasePerPartRemap && partCounts) {
+        const bool cacheHit = baseMaterialCacheReady
+            && baseDiffusePointer == diffuse
+            && baseTransparencyPointer == trans
+            && basePartCountsPointer == partCounts
+            && baseDiffuseNodeId == diffuseNodeId
+            && baseTransparencyNodeId == transparencyNodeId
+            && baseDiffuseCount == diffuseSize
+            && baseTransparencyCount == transSize
+            && basePartCount == partCount;
+        if (!cacheHit) {
+            packedColors.clear();
+            matIndex.clear();
+            packedColors.reserve(static_cast<size_t>(partCount));
+
+            size_t triangleCount = 0;
+            for (int part = 0; part < partCount; ++part) {
+                if (partCounts[part] < 0) {
+                    baseMaterialCacheReady = false;
+                    return false;
+                }
+                triangleCount += static_cast<size_t>(partCounts[part]);
+                const float transparency = part < transSize ? trans[part] : trans0;
+                packedColors.push_back(diffuse[part].getPackedValue(transparency));
+            }
+
+            matIndex.reserve(triangleCount);
+            for (int part = 0; part < partCount; ++part) {
+                matIndex.insert(matIndex.end(), partCounts[part], part);
+            }
+
+            baseDiffusePointer = diffuse;
+            baseTransparencyPointer = trans;
+            basePartCountsPointer = partCounts;
+            baseDiffuseNodeId = diffuseNodeId;
+            baseTransparencyNodeId = transparencyNodeId;
+            baseDiffuseCount = diffuseSize;
+            baseTransparencyCount = transSize;
+            basePartCount = partCount;
+            baseMaterialCacheReady = true;
+        }
+
+        state->push();
+        const size_t num = materialIndex.getNum();
+        if (num != matIndex.size() || materialIndex.getValues(0) != matIndex.data()) {
+            SbBool notify = enableNotify(FALSE);
+            materialIndex.setValuesPointer(matIndex.size(), matIndex.data());
+            if (notify) {
+                enableNotify(notify);
+            }
+        }
+        SoMaterialBindingElement::set(state, SoMaterialBindingElement::PER_FACE_INDEXED);
+        SoLazyElement::setPacked(state, this, packedColors.size(), packedColors.data(), hasBaseTransparency);
+        SoTextureEnabledElement::set(state, this, false);
+        return true;
+    }
+    baseMaterialCacheReady = false;
+
     state->push();
     packedColors.clear();
 
@@ -637,7 +698,6 @@ bool SoBrepFaceSet::overrideMaterialBinding(SoGLRenderAction* action, SelContext
         }
     }
 
-    const int32_t* partCounts = this->partIndex.getValues(0);
     // partIndex groups triangles into topological faces, while SoIndexedFaceSet
     // consumes one material index per rendered triangle face.
     expandPartMaterialIndexToFaceMaterialIndex(matIndex, partCounts, partCount, perPartMaterialIndex);
