@@ -1,0 +1,30 @@
+"""Run rendering fixture commands inside a normal FreeCAD GUI process.
+
+The companion shell wrapper supplies JSON arguments through an environment
+variable and optionally starts Xvfb. Keeping the dispatch in a macro is important: FreeCAD's
+console mode does not create GUI view providers, while a ``.py`` command-line
+file is imported as a module rather than executed as ``__main__``.
+"""
+
+import sys
+import traceback
+from pathlib import Path
+
+
+exit_code = 1
+try:
+    script_path = Path(sys.argv[1]).resolve()
+    if str(script_path.parent) not in sys.path:
+        sys.path.insert(0, str(script_path.parent))
+
+    from rendering_cli import main, script_arguments
+
+    exit_code = main(script_arguments(sys.argv))
+except SystemExit as exc:
+    exit_code = exc.code if isinstance(exc.code, int) else 1
+except Exception:
+    traceback.print_exc()
+finally:
+    from PySide import QtWidgets
+
+    QtWidgets.QApplication.quit()
