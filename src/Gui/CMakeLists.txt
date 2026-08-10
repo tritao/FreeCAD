@@ -967,6 +967,7 @@ SET(Navigation_SRCS
     Navigation/NavigationStyle.h
     Navigation/NavigationStyleBase.h
     Navigation/NavigationStyle.pyi
+    Navigation/MayaGestureNavigationStyle.h
     Navigation/GestureNavigationStyle.h
     Navigation/NavigationAnimator.h
     Navigation/NavigationAnimation.h
