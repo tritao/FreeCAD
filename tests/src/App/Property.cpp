@@ -145,7 +145,7 @@ TEST_F(PropertyAlias, nonDeprecatedAliasEmitsNoWarning)
 // Tests that a deprecated alias still resolves but emits a warning.
 TEST_F(PropertyAlias, deprecatedAliasEmitsWarningAndResolves)
 {
-    varSet->addPropertyAlias("NewName", "OldDeprecated", App::PropertyAliasType::Deprecated);
+    varSet->addPropertyAlias("NewName", "OldDeprecated", App::PropertyAliasType::Deprecated, "26.3", "27.2");
 
     WarningCapture capture;
     App::Property* prop = varSet->getPropertyByName("OldDeprecated");
@@ -155,6 +155,20 @@ TEST_F(PropertyAlias, deprecatedAliasEmitsWarningAndResolves)
     ASSERT_EQ(capture.warnings.size(), 1u);
     EXPECT_NE(capture.warnings[0].find("OldDeprecated"), std::string::npos);
     EXPECT_NE(capture.warnings[0].find("NewName"), std::string::npos);
+}
+
+TEST_F(PropertyAlias, deprecatedAliasRequiresOrderedReleaseLifecycle)
+{
+    varSet->addPropertyAlias("NewName", "InvalidAlias", App::PropertyAliasType::Deprecated, "27.2", "26.3");
+
+    EXPECT_FALSE(varSet->getPropertyAliases().contains("InvalidAlias"));
+}
+
+TEST_F(PropertyAlias, deprecatedAliasRejectsMalformedRelease)
+{
+    varSet->addPropertyAlias("NewName", "InvalidAlias", App::PropertyAliasType::Deprecated, "26.3.", "27.2");
+
+    EXPECT_FALSE(varSet->getPropertyAliases().contains("InvalidAlias"));
 }
 
 // Tests that an unknown name still returns nullptr (no regression).
@@ -267,14 +281,15 @@ TEST_F(PropertyAliasStatic, instanceAliasOverridesClassAlias)
     EXPECT_EQ(second->getPropertyByName("AliasPlain"), &second->AliasTarget);
 }
 
-// Tests that the deprecation warning names the version the alias was introduced in.
-TEST_F(PropertyAliasStatic, warningIncludesSinceVersion)
+// Tests that a deprecated alias reports its complete lifecycle.
+TEST_F(PropertyAliasStatic, warningIncludesLifecycle)
 {
     WarningCapture capture;
     first->getPropertyByName("AliasDeprecated");
 
     ASSERT_EQ(capture.warnings.size(), 1U);
-    EXPECT_NE(capture.warnings[0].find("since 1.1"), std::string::npos);
+    EXPECT_NE(capture.warnings[0].find("since FreeCAD 26.3"), std::string::npos);
+    EXPECT_NE(capture.warnings[0].find("removed in FreeCAD 27.2"), std::string::npos);
     EXPECT_NE(capture.warnings[0].find("AliasTarget"), std::string::npos);
 }
 
@@ -374,14 +389,15 @@ TEST_F(PropertyAliasExtension, aliasResolvesToExtensionProperty)
 // not silently lost for the case that motivated this fix.
 TEST_F(PropertyAliasExtension, deprecatedAliasToExtensionPropertyWarns)
 {
-    group->addPropertyAlias("Group", "OldGroup", App::PropertyAliasType::Deprecated, "1.1");
+    group->addPropertyAlias("Group", "OldGroup", App::PropertyAliasType::Deprecated, "26.3", "27.2");
 
     WarningCapture capture;
     App::Property* resolved = group->getPropertyByName("OldGroup");
 
     ASSERT_NE(resolved, nullptr);
     ASSERT_EQ(capture.warnings.size(), 1U);
-    EXPECT_NE(capture.warnings[0].find("since 1.1"), std::string::npos);
+    EXPECT_NE(capture.warnings[0].find("since FreeCAD 26.3"), std::string::npos);
+    EXPECT_NE(capture.warnings[0].find("removed in FreeCAD 27.2"), std::string::npos);
 }
 
 // Tests that PropertyLookupMode::WithoutAliases is honoured when the property is provided by an
@@ -1347,7 +1363,8 @@ TEST_F(PropertyAliasStatic, getPropertyAliasesMergesClassAndInstance)
 
     ASSERT_TRUE(aliases.contains("AliasDeprecated"));
     EXPECT_EQ(aliases["AliasDeprecated"].canonicalName, "AliasTarget");
-    EXPECT_EQ(aliases["AliasDeprecated"].since, "1.1");
+    EXPECT_EQ(aliases["AliasDeprecated"].since, "26.3");
+    EXPECT_EQ(aliases["AliasDeprecated"].removedIn, "27.2");
     EXPECT_EQ(aliases["AliasDeprecated"].type, App::PropertyAliasType::Deprecated);
 
     ASSERT_TRUE(aliases.contains("RuntimeAlias"));
@@ -1366,7 +1383,13 @@ TEST_F(PropertyAlias, registrationRenamesExistingDynamicProperty)
     ASSERT_NE(legacy, nullptr);
     legacy->setValue(17);
 
-    varSet->addPropertyAlias("CanonicalName", "LegacyName", App::PropertyAliasType::Deprecated, "1.1");
+    varSet->addPropertyAlias(
+        "CanonicalName",
+        "LegacyName",
+        App::PropertyAliasType::Deprecated,
+        "26.3",
+        "27.2"
+    );
 
     auto* migrated = freecad_cast<App::PropertyInteger*>(varSet->getPropertyByName("CanonicalName"));
     ASSERT_NE(migrated, nullptr);
