@@ -540,7 +540,10 @@ void TaskPatternParameters::apply()
             return;
         }
         else {
-            asyncRecompute->cancel();
+            // MultiTransform deliberately has no async coordinator.
+            if (asyncRecompute) {
+                asyncRecompute->cancel();
+            }
             recomputeFeature();
             updateSpacingLabels();
             updateUI();
