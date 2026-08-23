@@ -1,6 +1,12 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
 
-#include "../WasmGuest.h"
+#include <Wasm/Guest/freecad_wasm_api.hpp>
+
+using FreeCAD::Wasm::Generated::FreeCADDocumentHandle;
+using FreeCAD::Wasm::Generated::FreeCADDocumentObjectHandle;
+using FreeCAD::Wasm::Generated::FreeCADBaseVectorValue;
+using FreeCAD::Wasm::Generated::Host;
+using FreeCAD::Wasm::Generated::PartTopoShapeHandle;
 
 #if defined(__clang__) && defined(__wasm__)
 # define FREECAD_WASM_EXPORT(name) __attribute__((export_name(name)))
@@ -13,18 +19,42 @@ extern "C" unsigned long long freecad_addon_entry(const unsigned char*, unsigned
 
 extern "C" unsigned long long freecad_addon_entry(const unsigned char*, unsigned int)
 {
-    Wasm::Guest::Client host;
-    Wasm::Guest::Handle document = 0U;
+    Host host;
+    FreeCADBaseVectorValue left;
+    FreeCADBaseVectorValue right;
+    if (!host.vectorNew(1.0, 2.0, 3.0, &left)
+        || !host.vectorNew(4.0, 5.0, 6.0, &right)) {
+        return 0x100000000ULL;
+    }
+
+    FreeCADBaseVectorValue sum;
+    if (!host.vectorAdd(left, right, &sum)
+        || sum.x != 5.0 || sum.y != 7.0 || sum.z != 9.0) {
+        return 0x100000000ULL;
+    }
+
+    double dot = 0.0;
+    if (!host.vectorDot(left, right, &dot) || dot != 32.0) {
+        return 0x100000000ULL;
+    }
+
+    FreeCADBaseVectorValue cross;
+    if (!host.vectorCross(left, right, &cross)
+        || cross.x != -3.0 || cross.y != 6.0 || cross.z != -3.0) {
+        return 0x100000000ULL;
+    }
+
+    FreeCADDocumentHandle document;
     if (!host.documentNew("GuestCapabilityExample", &document)) {
         return 0x100000000ULL;
     }
 
-    Wasm::Guest::Handle box = 0U;
+    PartTopoShapeHandle box;
     if (!host.partMakeBox(10.0, 20.0, 30.0, &box)) {
         return 0x100000000ULL;
     }
 
-    Wasm::Guest::Handle object = 0U;
+    FreeCADDocumentObjectHandle object;
     if (!host.documentAddObject(document, box, "Box", &object)) {
         return 0x100000000ULL;
     }
@@ -33,11 +63,9 @@ extern "C" unsigned long long freecad_addon_entry(const unsigned char*, unsigned
     // geometry handle; document lifecycle remains a host policy decision.
     bool released = false;
 #if defined(FREECAD_WASM_FREESTANDING)
-    released = host.release(box);
+    released = host.release(box.value);
 #else
-    if (!host.release(box, &released)) {
-        return 0x100000000ULL;
-    }
+    released = host.release(box.value);
 #endif
     if (!released) {
         return 0x100000000ULL;

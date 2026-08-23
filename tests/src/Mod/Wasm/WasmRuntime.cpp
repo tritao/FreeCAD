@@ -115,6 +115,38 @@ std::string doublePayload(double first, double second, double third)
     return payload;
 }
 
+std::string vectorPairPayload(double first,
+                              double second,
+                              double third,
+                              double fourth,
+                              double fifth,
+                              double sixth)
+{
+    std::string payload = doublePayload(first, second, third);
+    std::uint64_t bits = 0U;
+    for (const auto value : {fourth, fifth, sixth}) {
+        std::memcpy(&bits, &value, sizeof(bits));
+        Wasm::Abi::appendU64(payload, bits);
+    }
+    return payload;
+}
+
+double doubleFromPayload(std::string_view payload, std::size_t offset = 0U)
+{
+    if (offset > payload.size() || payload.size() - offset < sizeof(double)) {
+        return 0.0;
+    }
+    std::uint64_t bits = 0U;
+    for (unsigned shift = 0U; shift < 64U; shift += 8U) {
+        bits |= static_cast<std::uint64_t>(
+                    static_cast<unsigned char>(payload[offset + shift / 8U]))
+            << shift;
+    }
+    double value = 0.0;
+    std::memcpy(&value, &bits, sizeof(value));
+    return value;
+}
+
 std::string handlePayload(Wasm::HandleId handle)
 {
     std::string payload;
@@ -585,6 +617,71 @@ TEST(WasmGuestTest, EncodesThePublishedHostProtocol)
     EXPECT_TRUE(released.ok);
     EXPECT_EQ(GuestCapture::lastRequest,
               binaryRequest(Wasm::Abi::Operation::HandleRelease, handlePayload(22U)));
+
+    Wasm::Guest::Vector3 vector;
+    EXPECT_FALSE(guest.vectorNew(1.0, 2.0, 3.0, &vector));
+    EXPECT_EQ(GuestCapture::lastRequest,
+              binaryRequest(Wasm::Abi::Operation::VectorNew,
+                            doublePayload(1.0, 2.0, 3.0)));
+
+    const Wasm::Guest::Vector3 left {1.0, 2.0, 3.0};
+    const Wasm::Guest::Vector3 right {4.0, 5.0, 6.0};
+    EXPECT_FALSE(guest.vectorAdd(left, right, &vector));
+    EXPECT_EQ(GuestCapture::lastRequest,
+              binaryRequest(Wasm::Abi::Operation::VectorAdd,
+                            vectorPairPayload(1.0, 2.0, 3.0, 4.0, 5.0, 6.0)));
+
+    double dot = 0.0;
+    EXPECT_FALSE(guest.vectorDot(left, right, &dot));
+    EXPECT_EQ(GuestCapture::lastRequest,
+              binaryRequest(Wasm::Abi::Operation::VectorDot,
+                            vectorPairPayload(1.0, 2.0, 3.0, 4.0, 5.0, 6.0)));
+}
+
+TEST(WasmHostApiTest, ExecutesVectorOperationsFromPyiSurface)
+{
+    Wasm::WasmHostApi hostApi;
+    hostApi.setPermissions({"geometry.compute"});
+    Wasm::WasmHandleTable handles;
+
+    const auto left = hostApi.dispatch(
+        asBytes(binaryRequest(Wasm::Abi::Operation::VectorNew,
+                              doublePayload(1.0, 2.0, 3.0))),
+        hostApi.permissions(),
+        handles);
+    ASSERT_TRUE(left.ok) << left.error;
+    EXPECT_EQ(left.payload.size(), sizeof(double) * 3U);
+    EXPECT_DOUBLE_EQ(doubleFromPayload(left.payload, 0U), 1.0);
+    EXPECT_DOUBLE_EQ(doubleFromPayload(left.payload, sizeof(double)), 2.0);
+    EXPECT_DOUBLE_EQ(doubleFromPayload(left.payload, sizeof(double) * 2U), 3.0);
+
+    const auto sum = hostApi.dispatch(
+        asBytes(binaryRequest(Wasm::Abi::Operation::VectorAdd,
+                              vectorPairPayload(1.0, 2.0, 3.0, 4.0, 5.0, 6.0))),
+        hostApi.permissions(),
+        handles);
+    ASSERT_TRUE(sum.ok) << sum.error;
+    EXPECT_DOUBLE_EQ(doubleFromPayload(sum.payload, 0U), 5.0);
+    EXPECT_DOUBLE_EQ(doubleFromPayload(sum.payload, sizeof(double)), 7.0);
+    EXPECT_DOUBLE_EQ(doubleFromPayload(sum.payload, sizeof(double) * 2U), 9.0);
+
+    const auto dot = hostApi.dispatch(
+        asBytes(binaryRequest(Wasm::Abi::Operation::VectorDot,
+                              vectorPairPayload(1.0, 2.0, 3.0, 4.0, 5.0, 6.0))),
+        hostApi.permissions(),
+        handles);
+    ASSERT_TRUE(dot.ok) << dot.error;
+    EXPECT_DOUBLE_EQ(doubleFromPayload(dot.payload), 32.0);
+
+    const auto cross = hostApi.dispatch(
+        asBytes(binaryRequest(Wasm::Abi::Operation::VectorCross,
+                              vectorPairPayload(1.0, 2.0, 3.0, 4.0, 5.0, 6.0))),
+        hostApi.permissions(),
+        handles);
+    ASSERT_TRUE(cross.ok) << cross.error;
+    EXPECT_DOUBLE_EQ(doubleFromPayload(cross.payload, 0U), -3.0);
+    EXPECT_DOUBLE_EQ(doubleFromPayload(cross.payload, sizeof(double)), 6.0);
+    EXPECT_DOUBLE_EQ(doubleFromPayload(cross.payload, sizeof(double) * 2U), -3.0);
 }
 
 #if defined(FREECAD_WASM_HAS_PART)
@@ -596,15 +693,20 @@ TEST(WamrRuntimeTest, ExecutesCompiledCapabilityGuest)
     tests::initApplication();
 
     TemporaryAddon files;
-    const auto wasmPath = files.addonDirectory / "capability.wasm";
+    const auto wasmPath = files.addonDirectory / "freecad-capability-addon.wasm";
     std::error_code copyError;
     std::filesystem::copy_file(FREECAD_WASM_CAPABILITY_FIXTURE,
                                 wasmPath,
                                 std::filesystem::copy_options::overwrite_existing,
                                 copyError);
     ASSERT_FALSE(copyError) << copyError.message();
-    const auto manifestPath = files.writeManifest(
-        R"({"name":"CapabilityExample","api":"org.freecad.wasm.api@0","entry":"capability.wasm","permissions":["document.create","document.modify","geometry.create"]})");
+    const auto manifestPath = files.addonDirectory / "manifest.json";
+    copyError.clear();
+    std::filesystem::copy_file(FREECAD_WASM_CAPABILITY_MANIFEST,
+                                manifestPath,
+                                std::filesystem::copy_options::overwrite_existing,
+                                copyError);
+    ASSERT_FALSE(copyError) << copyError.message();
 
     constexpr const char* documentName = "GuestCapabilityExample";
     if (App::GetApplication().getDocument(documentName) != nullptr) {
@@ -617,7 +719,7 @@ TEST(WamrRuntimeTest, ExecutesCompiledCapabilityGuest)
     limits.timeoutMs = 100U;
 
     Wasm::WasmAddonManager deniedManager;
-    const auto deniedLoad = deniedManager.load(manifestPath, {}, limits);
+    const auto deniedLoad = deniedManager.load(manifestPath, {"geometry.compute"}, limits);
     ASSERT_TRUE(deniedLoad.ok) << deniedLoad.error;
     const auto denied = deniedManager.invoke("CapabilityExample");
     EXPECT_FALSE(denied.ok);
@@ -626,7 +728,9 @@ TEST(WamrRuntimeTest, ExecutesCompiledCapabilityGuest)
 
     Wasm::WasmAddonManager manager;
     const auto load = manager.load(
-        manifestPath, {"document.create", "document.modify", "geometry.create"}, limits);
+        manifestPath,
+        {"document.create", "document.modify", "geometry.create", "geometry.compute"},
+        limits);
     ASSERT_TRUE(load.ok) << load.error;
     EXPECT_EQ(manager.loadedAddons(), std::vector<std::string> {"CapabilityExample"});
 
@@ -676,7 +780,9 @@ TEST(WamrRuntimeTest, ExecutesMatchingAotCapabilityGuest)
 
     Wasm::WasmAddonManager manager;
     const auto load = manager.load(
-        manifestPath, {"document.create", "document.modify", "geometry.create"}, limits);
+        manifestPath,
+        {"document.create", "document.modify", "geometry.create", "geometry.compute"},
+        limits);
     ASSERT_TRUE(load.ok) << load.error;
 
     const auto result = manager.invoke("AotCapabilityExample");

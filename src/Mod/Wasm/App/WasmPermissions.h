@@ -8,11 +8,12 @@
 namespace Wasm
 {
 
-inline constexpr std::array<std::string_view, 4> KnownPermissions {
+inline constexpr std::array<std::string_view, 5> KnownPermissions {
     "console.log",
     "document.create",
     "document.modify",
     "geometry.create",
+    "geometry.compute",
 };
 
 inline bool isKnownPermission(std::string_view permission)

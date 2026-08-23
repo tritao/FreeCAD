@@ -11,53 +11,47 @@ add_test(
 )
 
 if(FREECAD_USE_WAMR)
-    set(FREECAD_WASM_GUEST_COMPILER "" CACHE FILEPATH
-        "Clang++ compiler used to build the Wasm guest test fixture")
-    if(NOT FREECAD_WASM_GUEST_COMPILER)
-        unset(FREECAD_WASM_GUEST_COMPILER CACHE)
-        find_program(FREECAD_WASM_GUEST_COMPILER NAMES clang++ clang)
-    endif()
-    find_program(FREECAD_WASM_GUEST_LINKER NAMES wasm-ld)
+    include(${CMAKE_SOURCE_DIR}/src/Mod/Wasm/Guest/FreeCADWasmGuest.cmake)
+    freecad_wasm_generate_guest_sdk(WasmGuestApiFixture
+        OUTPUT_DIR ${CMAKE_CURRENT_BINARY_DIR}/generated
+        PYTHON_EXECUTABLE ${Python3_EXECUTABLE}
+        API_GENERATOR ${CMAKE_SOURCE_DIR}/src/Tools/bindings/generate_wasm_api.py
+        SDK_GENERATOR ${CMAKE_SOURCE_DIR}/src/Tools/bindings/generate_wasm_sdk.py
+        INPUTS
+            ${CMAKE_SOURCE_DIR}/src/Base/Vector.pyi
+            ${CMAKE_SOURCE_DIR}/src/App/Document.pyi
+            ${CMAKE_SOURCE_DIR}/src/Mod/Part/App/TopoShape.pyi
+        DEPENDS
+            ${CMAKE_SOURCE_DIR}/src/Mod/Wasm/WasmApiOperations.json
+    )
+    freecad_wasm_addon(WasmGuestFixture
+        OPTIONAL
+        FREESTANDING
+        SOURCE ${CMAKE_SOURCE_DIR}/examples/wasm/cpp/CapabilityAddon.cpp
+        INCLUDE_ROOT ${CMAKE_SOURCE_DIR}/src/Mod
+        INCLUDE_DIRS ${CMAKE_CURRENT_BINARY_DIR}/generated
+        OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/freecad-capability-addon.wasm
+        OUTPUT_VARIABLE FREECAD_WASM_CAPABILITY_FIXTURE
+        MANIFEST ${CMAKE_SOURCE_DIR}/examples/wasm/cpp/manifest.json
+        MANIFEST_OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/freecad-capability-addon-manifest.json
+        BUNDLE_TARGET_VARIABLE FREECAD_WASM_CAPABILITY_BUNDLE
+        DEPENDS
+            ${CMAKE_SOURCE_DIR}/src/Mod/Wasm/WasmAbi.h
+            ${CMAKE_SOURCE_DIR}/src/Mod/Wasm/Guest/WasmGuest.h
+            ${CMAKE_SOURCE_DIR}/src/Mod/Wasm/Guest/WasmGuestFreestanding.h
+            ${CMAKE_CURRENT_BINARY_DIR}/generated/Wasm/Guest/freecad_wasm_api.hpp
+    )
 
-    if(FREECAD_WASM_GUEST_COMPILER AND FREECAD_WASM_GUEST_LINKER)
-        get_filename_component(FREECAD_WASM_GUEST_LINKER_DIR
-            "${FREECAD_WASM_GUEST_LINKER}" DIRECTORY)
-        set(FREECAD_WASM_CAPABILITY_FIXTURE
-            ${CMAKE_CURRENT_BINARY_DIR}/freecad-capability-addon.wasm)
-        add_custom_command(
-            OUTPUT ${FREECAD_WASM_CAPABILITY_FIXTURE}
-            COMMAND ${FREECAD_WASM_GUEST_COMPILER}
-                    --target=wasm32-unknown-unknown
-                    -std=c++20
-                    -O0
-                    -ffreestanding
-                    -fno-exceptions
-                    -fno-rtti
-                    -nostdlib
-                    -DFREECAD_WASM_FREESTANDING=1
-                    -I${CMAKE_SOURCE_DIR}/src/Mod/Wasm
-                    -B${FREECAD_WASM_GUEST_LINKER_DIR}
-                    -Wl,--no-entry
-                    -Wl,--export=freecad_addon_entry
-                    -Wl,--export-memory
-                    -Wl,--initial-memory=131072
-                    -Wl,--max-memory=4194304
-                    -o ${FREECAD_WASM_CAPABILITY_FIXTURE}
-                    ${CMAKE_SOURCE_DIR}/src/Mod/Wasm/Guest/examples/CapabilityAddon.cpp
-            DEPENDS
-                ${CMAKE_SOURCE_DIR}/src/Mod/Wasm/WasmAbi.h
-                ${CMAKE_SOURCE_DIR}/src/Mod/Wasm/Guest/WasmGuest.h
-                ${CMAKE_SOURCE_DIR}/src/Mod/Wasm/Guest/WasmGuestFreestanding.h
-                ${CMAKE_SOURCE_DIR}/src/Mod/Wasm/Guest/examples/CapabilityAddon.cpp
-            COMMENT "Building the FreeCAD Wasm capability guest fixture"
-            VERBATIM
-        )
-        add_custom_target(WasmGuestFixture
-            DEPENDS ${FREECAD_WASM_CAPABILITY_FIXTURE}
-        )
-        add_dependencies(Wasm_tests_run WasmGuestFixture)
+    if(FREECAD_WASM_CAPABILITY_FIXTURE)
+        add_dependencies(WasmGuestFixture WasmGuestApiFixture)
+        if(FREECAD_WASM_CAPABILITY_BUNDLE)
+            add_dependencies(Wasm_tests_run ${FREECAD_WASM_CAPABILITY_BUNDLE})
+        else()
+            add_dependencies(Wasm_tests_run WasmGuestFixture)
+        endif()
         target_compile_definitions(Wasm_tests_run PRIVATE
             FREECAD_WASM_CAPABILITY_FIXTURE="${FREECAD_WASM_CAPABILITY_FIXTURE}"
+            FREECAD_WASM_CAPABILITY_MANIFEST="${CMAKE_CURRENT_BINARY_DIR}/freecad-capability-addon-manifest.json"
         )
 
         set(FREECAD_WASM_RUST_COMPILER "" CACHE FILEPATH
@@ -201,8 +195,7 @@ if(FREECAD_USE_WAMR)
             ENVIRONMENT "${_wasm_python_test_environment}"
         )
     else()
-        message(WARNING
-            "Skipping the compiled Wasm guest fixture: clang++ and wasm-ld are required")
+        message(WARNING "Skipping the compiled Wasm guest fixture")
     endif()
 endif()
 

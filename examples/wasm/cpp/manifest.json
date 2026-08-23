@@ -1,0 +1,11 @@
+{
+  "name": "CapabilityExample",
+  "api": "org.freecad.wasm.api@0",
+  "entry": "freecad-capability-addon.wasm",
+  "permissions": [
+    "document.create",
+    "document.modify",
+    "geometry.create",
+    "geometry.compute"
+  ]
+}

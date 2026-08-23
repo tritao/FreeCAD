@@ -1,6 +1,17 @@
 # SPDX-License-Identifier: LGPL-2.1-or-later
 
+include(CMakePackageConfigHelpers)
+
 add_subdirectory(App)
+
+set(Wasm_Guest_CONFIG
+    ${CMAKE_CURRENT_BINARY_DIR}/FreeCADWasmGuestConfig.cmake)
+configure_package_config_file(
+    Guest/FreeCADWasmGuestConfig.cmake.in
+    ${Wasm_Guest_CONFIG}
+    INSTALL_DESTINATION ${CMAKE_INSTALL_DATADIR}/cmake/FreeCADWasmGuest
+    PATH_VARS CMAKE_INSTALL_INCLUDEDIR CMAKE_INSTALL_DATADIR
+)
 
 set(Wasm_Scripts
     Init.py
@@ -8,9 +19,11 @@ set(Wasm_Scripts
 
 set(Wasm_Guest_SDK
     WasmAbi.h
+    WasmApiOperations.json
+    Guest/FreeCADWasmGuest.cmake
+    Guest/FreeCADWasmGuestConfig.cmake.in
     Guest/WasmGuest.h
     Guest/WasmGuestFreestanding.h
-    Guest/examples/CapabilityAddon.cpp
     ABI.md
 )
 
@@ -35,7 +48,22 @@ install(
     FILES
         WasmAbi.h
     DESTINATION
-        include/FreeCAD/Wasm
+        ${CMAKE_INSTALL_INCLUDEDIR}/FreeCAD/Wasm
+)
+
+install(
+    FILES
+        Guest/FreeCADWasmGuest.cmake
+        WasmApiOperations.json
+    DESTINATION
+        ${CMAKE_INSTALL_DATADIR}/FreeCAD/Wasm
+)
+
+install(
+    FILES
+        ${Wasm_Guest_CONFIG}
+    DESTINATION
+        ${CMAKE_INSTALL_DATADIR}/cmake/FreeCADWasmGuest
 )
 
 install(
@@ -43,7 +71,17 @@ install(
         Guest/WasmGuest.h
         Guest/WasmGuestFreestanding.h
     DESTINATION
-        include/FreeCAD/Wasm/Guest
+        ${CMAKE_INSTALL_INCLUDEDIR}/FreeCAD/Wasm/Guest
+)
+
+install(
+    FILES
+        ${CMAKE_SOURCE_DIR}/examples/wasm/cpp/CapabilityAddon.cpp
+        ${CMAKE_SOURCE_DIR}/examples/wasm/cpp/CMakeLists.txt
+        ${CMAKE_SOURCE_DIR}/examples/wasm/cpp/manifest.json
+        ${CMAKE_SOURCE_DIR}/examples/wasm/cpp/README.md
+    DESTINATION
+        ${CMAKE_INSTALL_DATADIR}/FreeCAD/Wasm/examples/cpp
 )
 
 install(

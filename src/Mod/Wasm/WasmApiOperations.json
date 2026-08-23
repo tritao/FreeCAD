@@ -1,0 +1,184 @@
+{
+  "operations": [
+    {
+      "name": "documentNew",
+      "wire_name": "document.new",
+      "id": 1,
+      "guest_method": "documentNew",
+      "permission": "document.create",
+      "mutates": true,
+      "requires": ["src/App/Document.pyi"],
+      "params": [
+        {"name": "name", "type": {"kind": "string", "annotation": "str"}}
+      ],
+      "returns": {"kind": "handle", "type": "FreeCAD.Document", "annotation": "Document"}
+    },
+    {
+      "name": "partMakeBox",
+      "wire_name": "part.make_box",
+      "id": 2,
+      "guest_method": "partMakeBox",
+      "permission": "geometry.create",
+      "mutates": true,
+      "requires": ["src/Mod/Part/App/TopoShape.pyi"],
+      "params": [
+        {"name": "length", "type": {"kind": "float64", "annotation": "float"}},
+        {"name": "width", "type": {"kind": "float64", "annotation": "float"}},
+        {"name": "height", "type": {"kind": "float64", "annotation": "float"}}
+      ],
+      "returns": {"kind": "handle", "type": "Part.TopoShape", "annotation": "TopoShape"}
+    },
+    {
+      "name": "documentAddObject",
+      "wire_name": "document.add_object",
+      "id": 3,
+      "guest_method": "documentAddObject",
+      "source": "FreeCAD.Document.addObject",
+      "permission": "document.modify",
+      "mutates": true,
+      "requires": ["src/App/Document.pyi", "src/Mod/Part/App/TopoShape.pyi"],
+      "params": [
+        {"name": "document", "type": {"kind": "handle", "type": "FreeCAD.Document", "annotation": "Document"}},
+        {"name": "shape", "type": {"kind": "handle", "type": "Part.TopoShape", "annotation": "TopoShape"}},
+        {"name": "name", "type": {"kind": "string", "annotation": "str"}}
+      ],
+      "returns": {"kind": "handle", "type": "FreeCAD.DocumentObject", "annotation": "DocumentObject"}
+    },
+    {
+      "name": "vectorNew",
+      "wire_name": "base.vector.new",
+      "id": 5,
+      "guest_method": "vectorNew",
+      "source": "FreeCAD.Base.Vector.__init__",
+      "permission": "geometry.compute",
+      "mutates": false,
+      "requires": ["src/Base/Vector.pyi"],
+      "params": [
+        {"name": "x", "type": {"kind": "float64", "annotation": "float"}},
+        {"name": "y", "type": {"kind": "float64", "annotation": "float"}},
+        {"name": "z", "type": {"kind": "float64", "annotation": "float"}}
+      ],
+      "returns": {
+        "kind": "value",
+        "type": "FreeCAD.Base.Vector",
+        "encoding": "vector3-f64",
+        "annotation": "Vector"
+      }
+    },
+    {
+      "name": "vectorAdd",
+      "wire_name": "base.vector.add",
+      "id": 6,
+      "guest_method": "vectorAdd",
+      "source": "FreeCAD.Base.Vector.add",
+      "permission": "geometry.compute",
+      "mutates": false,
+      "requires": ["src/Base/Vector.pyi"],
+      "params": [
+        {
+          "name": "left",
+          "type": {
+            "kind": "value",
+            "type": "FreeCAD.Base.Vector",
+            "encoding": "vector3-f64",
+            "annotation": "Vector"
+          }
+        },
+        {
+          "name": "right",
+          "type": {
+            "kind": "value",
+            "type": "FreeCAD.Base.Vector",
+            "encoding": "vector3-f64",
+            "annotation": "Vector"
+          }
+        }
+      ],
+      "returns": {
+        "kind": "value",
+        "type": "FreeCAD.Base.Vector",
+        "encoding": "vector3-f64",
+        "annotation": "Vector"
+      }
+    },
+    {
+      "name": "vectorDot",
+      "wire_name": "base.vector.dot",
+      "id": 7,
+      "guest_method": "vectorDot",
+      "source": "FreeCAD.Base.Vector.dot",
+      "permission": "geometry.compute",
+      "mutates": false,
+      "requires": ["src/Base/Vector.pyi"],
+      "params": [
+        {
+          "name": "left",
+          "type": {
+            "kind": "value",
+            "type": "FreeCAD.Base.Vector",
+            "encoding": "vector3-f64",
+            "annotation": "Vector"
+          }
+        },
+        {
+          "name": "right",
+          "type": {
+            "kind": "value",
+            "type": "FreeCAD.Base.Vector",
+            "encoding": "vector3-f64",
+            "annotation": "Vector"
+          }
+        }
+      ],
+      "returns": {"kind": "float64", "annotation": "float"}
+    },
+    {
+      "name": "vectorCross",
+      "wire_name": "base.vector.cross",
+      "id": 8,
+      "guest_method": "vectorCross",
+      "source": "FreeCAD.Base.Vector.cross",
+      "permission": "geometry.compute",
+      "mutates": false,
+      "requires": ["src/Base/Vector.pyi"],
+      "params": [
+        {
+          "name": "left",
+          "type": {
+            "kind": "value",
+            "type": "FreeCAD.Base.Vector",
+            "encoding": "vector3-f64",
+            "annotation": "Vector"
+          }
+        },
+        {
+          "name": "right",
+          "type": {
+            "kind": "value",
+            "type": "FreeCAD.Base.Vector",
+            "encoding": "vector3-f64",
+            "annotation": "Vector"
+          }
+        }
+      ],
+      "returns": {
+        "kind": "value",
+        "type": "FreeCAD.Base.Vector",
+        "encoding": "vector3-f64",
+        "annotation": "Vector"
+      }
+    },
+    {
+      "name": "release",
+      "wire_name": "handle.release",
+      "id": 4,
+      "guest_method": "release",
+      "permission": null,
+      "mutates": false,
+      "params": [
+        {"name": "handle", "type": {"kind": "handle", "type": "Wasm.Handle", "annotation": "Handle"}}
+      ],
+      "returns": {"kind": "bool", "annotation": "bool"}
+    }
+  ]
+}

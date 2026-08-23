@@ -35,6 +35,13 @@ namespace Guest
 
 using Handle = FreeCADWasmU64;
 
+struct Vector3
+{
+    double x = 0.0;
+    double y = 0.0;
+    double z = 0.0;
+};
+
 class ResponseBuffer
 {
 public:
@@ -167,6 +174,51 @@ public:
         return call(result);
     }
 
+    bool vectorNew(double x, double y, double z, Vector3* result) const
+    {
+        if (result == nullptr) {
+            return false;
+        }
+        resetRequest(5U, 24U);
+        appendDouble(x);
+        appendDouble(y);
+        appendDouble(z);
+        return call(result);
+    }
+
+    bool vectorAdd(Vector3 left, Vector3 right, Vector3* result) const
+    {
+        if (result == nullptr) {
+            return false;
+        }
+        resetRequest(6U, 48U);
+        appendVector(left);
+        appendVector(right);
+        return call(result);
+    }
+
+    bool vectorDot(Vector3 left, Vector3 right, double* result) const
+    {
+        if (result == nullptr) {
+            return false;
+        }
+        resetRequest(7U, 48U);
+        appendVector(left);
+        appendVector(right);
+        return call(result);
+    }
+
+    bool vectorCross(Vector3 left, Vector3 right, Vector3* result) const
+    {
+        if (result == nullptr) {
+            return false;
+        }
+        resetRequest(8U, 48U);
+        appendVector(left);
+        appendVector(right);
+        return call(result);
+    }
+
     bool release(Handle handle) const
     {
         resetRequest(4U, 8U);
@@ -245,6 +297,13 @@ private:
         appendU64(encoded.bits);
     }
 
+    static void appendVector(Vector3 value)
+    {
+        appendDouble(value.x);
+        appendDouble(value.y);
+        appendDouble(value.z);
+    }
+
     static bool call(Handle* result)
     {
         const auto response = freecad_dispatch(request, requestLength);
@@ -265,6 +324,68 @@ private:
         }
         freecad_release(address);
         return *result != 0U;
+    }
+
+    static bool call(Vector3* result)
+    {
+        const auto response = freecad_dispatch(request, requestLength);
+        const auto address = static_cast<FreeCADWasmU32>(response);
+        const auto length = static_cast<FreeCADWasmU32>(response >> 32U);
+        if (length != 24U || address == 0U) {
+            if (address != 0U) {
+                freecad_release(address);
+            }
+            return false;
+        }
+
+        const auto* bytes = reinterpret_cast<const FreeCADWasmU8*>(address);
+        FreeCADWasmU64 components[3] = {};
+        for (unsigned component = 0U; component < 3U; ++component) {
+            for (FreeCADWasmU32 shift = 0U; shift < 64U; shift += 8U) {
+                components[component] |=
+                    static_cast<FreeCADWasmU64>(bytes[component * 8U + shift / 8U]) << shift;
+            }
+        }
+        union
+        {
+            FreeCADWasmU64 bits;
+            double value;
+        } decoded {};
+        decoded.bits = components[0];
+        result->x = decoded.value;
+        decoded.bits = components[1];
+        result->y = decoded.value;
+        decoded.bits = components[2];
+        result->z = decoded.value;
+        freecad_release(address);
+        return true;
+    }
+
+    static bool call(double* result)
+    {
+        const auto response = freecad_dispatch(request, requestLength);
+        const auto address = static_cast<FreeCADWasmU32>(response);
+        const auto length = static_cast<FreeCADWasmU32>(response >> 32U);
+        if (length != 8U || address == 0U) {
+            if (address != 0U) {
+                freecad_release(address);
+            }
+            return false;
+        }
+
+        const auto* bytes = reinterpret_cast<const FreeCADWasmU8*>(address);
+        union
+        {
+            FreeCADWasmU64 bits;
+            double value;
+        } decoded {};
+        decoded.bits = 0U;
+        for (FreeCADWasmU32 shift = 0U; shift < 64U; shift += 8U) {
+            decoded.bits |= static_cast<FreeCADWasmU64>(bytes[shift / 8U]) << shift;
+        }
+        *result = decoded.value;
+        freecad_release(address);
+        return true;
     }
 
     inline static FreeCADWasmU8 request[MaxRequestSize] = {};

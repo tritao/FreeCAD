@@ -10,6 +10,7 @@
 #include <App/DocumentObject.h>
 #include <Base/Console.h>
 #include <Base/Exception.h>
+#include <Base/Vector3D.h>
 
 #ifdef FREECAD_WASM_HAS_PART
 # include <Mod/Part/App/PartFeature.h>
@@ -74,6 +75,12 @@ bool readDouble(ByteSpan bytes, std::size_t& offset, double& value)
     return true;
 }
 
+bool readVector(ByteSpan bytes, std::size_t& offset, Base::Vector3d& value)
+{
+    return readDouble(bytes, offset, value.x) && readDouble(bytes, offset, value.y)
+        && readDouble(bytes, offset, value.z);
+}
+
 bool readString(ByteSpan bytes, std::size_t& offset, std::string& value)
 {
     std::uint32_t length = 0U;
@@ -93,6 +100,32 @@ std::string handlePayload(Wasm::HandleId handle)
     std::string payload;
     payload.reserve(sizeof(handle));
     Wasm::Abi::appendU64(payload, handle);
+    return payload;
+}
+
+void appendDouble(std::string& output, double value)
+{
+    std::uint64_t bits = 0U;
+    static_assert(sizeof(bits) == sizeof(value));
+    std::memcpy(&bits, &value, sizeof(bits));
+    Wasm::Abi::appendU64(output, bits);
+}
+
+std::string vectorPayload(const Base::Vector3d& value)
+{
+    std::string payload;
+    payload.reserve(sizeof(double) * 3U);
+    appendDouble(payload, value.x);
+    appendDouble(payload, value.y);
+    appendDouble(payload, value.z);
+    return payload;
+}
+
+std::string doublePayload(double value)
+{
+    std::string payload;
+    payload.reserve(sizeof(double));
+    appendDouble(payload, value);
     return payload;
 }
 
@@ -210,6 +243,70 @@ HostCallResult WasmHostApi::dispatch(std::span<const std::byte> request,
 
     const auto payload = request.subspan(Abi::RequestHeaderSize);
     switch (operation) {
+    case Abi::Operation::VectorNew: {
+        if (!hasPermission(permissions, "geometry.compute")) {
+            return {false, {}, "host capability 'geometry.compute' is not granted"};
+        }
+        if (payload.size() != sizeof(double) * 3U) {
+            return malformedRequest("base.vector.new expects three f64 values");
+        }
+
+        std::size_t payloadOffset = 0U;
+        Base::Vector3d value;
+        if (!readVector(payload, payloadOffset, value) || !std::isfinite(value.x)
+            || !std::isfinite(value.y) || !std::isfinite(value.z)) {
+            return malformedRequest("base.vector.new expects finite f64 values");
+        }
+        return {true, vectorPayload(value), {}};
+    }
+    case Abi::Operation::VectorAdd: {
+        if (!hasPermission(permissions, "geometry.compute")) {
+            return {false, {}, "host capability 'geometry.compute' is not granted"};
+        }
+        if (payload.size() != sizeof(double) * 6U) {
+            return malformedRequest("base.vector.add expects two vector values");
+        }
+
+        std::size_t payloadOffset = 0U;
+        Base::Vector3d left;
+        Base::Vector3d right;
+        if (!readVector(payload, payloadOffset, left) || !readVector(payload, payloadOffset, right)) {
+            return malformedRequest("base.vector.add has an invalid vector payload");
+        }
+        return {true, vectorPayload(left + right), {}};
+    }
+    case Abi::Operation::VectorDot: {
+        if (!hasPermission(permissions, "geometry.compute")) {
+            return {false, {}, "host capability 'geometry.compute' is not granted"};
+        }
+        if (payload.size() != sizeof(double) * 6U) {
+            return malformedRequest("base.vector.dot expects two vector values");
+        }
+
+        std::size_t payloadOffset = 0U;
+        Base::Vector3d left;
+        Base::Vector3d right;
+        if (!readVector(payload, payloadOffset, left) || !readVector(payload, payloadOffset, right)) {
+            return malformedRequest("base.vector.dot has an invalid vector payload");
+        }
+        return {true, doublePayload(left.Dot(right)), {}};
+    }
+    case Abi::Operation::VectorCross: {
+        if (!hasPermission(permissions, "geometry.compute")) {
+            return {false, {}, "host capability 'geometry.compute' is not granted"};
+        }
+        if (payload.size() != sizeof(double) * 6U) {
+            return malformedRequest("base.vector.cross expects two vector values");
+        }
+
+        std::size_t payloadOffset = 0U;
+        Base::Vector3d left;
+        Base::Vector3d right;
+        if (!readVector(payload, payloadOffset, left) || !readVector(payload, payloadOffset, right)) {
+            return malformedRequest("base.vector.cross has an invalid vector payload");
+        }
+        return {true, vectorPayload(left.Cross(right)), {}};
+    }
     case Abi::Operation::DocumentNew: {
         if (!hasPermission(permissions, "document.create")) {
             return {false, {}, "host capability 'document.create' is not granted"};

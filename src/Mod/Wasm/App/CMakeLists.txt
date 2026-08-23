@@ -36,6 +36,7 @@ set(Wasm_API_GENERATOR_SOURCES
     ${CMAKE_SOURCE_DIR}/src/Tools/typing/stubgen/naming.py
     ${CMAKE_SOURCE_DIR}/src/Tools/typing/stubgen/parsing.py
     ${CMAKE_SOURCE_DIR}/src/Tools/typing/stubgen/source_inputs.py
+    ${CMAKE_SOURCE_DIR}/src/Mod/Wasm/WasmApiOperations.json
 )
 
 add_custom_command(
@@ -150,3 +151,7 @@ SET_PYTHON_PREFIX_SUFFIX(Wasm)
 install(TARGETS Wasm DESTINATION ${CMAKE_INSTALL_LIBDIR})
 install(FILES ${Wasm_API_MODEL} DESTINATION Mod/Wasm)
 install(FILES ${Wasm_API_CPP_SDK} ${Wasm_API_RUST_SDK} DESTINATION Mod/Wasm/Guest)
+install(
+    FILES ${Wasm_API_CPP_SDK} ${Wasm_API_RUST_SDK}
+    DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/FreeCAD/Wasm/Guest
+)

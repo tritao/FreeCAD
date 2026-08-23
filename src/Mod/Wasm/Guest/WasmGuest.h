@@ -44,6 +44,13 @@ using AllocFunction = std::uint32_t (*)(std::uint32_t);
 using DispatchFunction = std::uint64_t (*)(const std::uint8_t*, std::uint32_t);
 using ReleaseFunction = void (*)(std::uint32_t);
 
+struct Vector3
+{
+    double x = 0.0;
+    double y = 0.0;
+    double z = 0.0;
+};
+
 template<typename T>
 struct Result
 {
@@ -215,6 +222,91 @@ public:
         return true;
     }
 
+    Result<Vector3> vectorNew(double x, double y, double z) const
+    {
+        std::string payload;
+        appendDouble(payload, x);
+        appendDouble(payload, y);
+        appendDouble(payload, z);
+        return callVector(Abi::Operation::VectorNew, payload);
+    }
+
+    bool vectorNew(double x, double y, double z, Vector3* result) const
+    {
+        if (result == nullptr) {
+            return false;
+        }
+        const auto response = vectorNew(x, y, z);
+        if (!response.ok) {
+            return false;
+        }
+        *result = response.value;
+        return true;
+    }
+
+    Result<Vector3> vectorAdd(Vector3 left, Vector3 right) const
+    {
+        std::string payload;
+        appendVector(payload, left);
+        appendVector(payload, right);
+        return callVector(Abi::Operation::VectorAdd, payload);
+    }
+
+    bool vectorAdd(Vector3 left, Vector3 right, Vector3* result) const
+    {
+        if (result == nullptr) {
+            return false;
+        }
+        const auto response = vectorAdd(left, right);
+        if (!response.ok) {
+            return false;
+        }
+        *result = response.value;
+        return true;
+    }
+
+    Result<double> vectorDot(Vector3 left, Vector3 right) const
+    {
+        std::string payload;
+        appendVector(payload, left);
+        appendVector(payload, right);
+        return callDouble(Abi::Operation::VectorDot, payload);
+    }
+
+    bool vectorDot(Vector3 left, Vector3 right, double* result) const
+    {
+        if (result == nullptr) {
+            return false;
+        }
+        const auto response = vectorDot(left, right);
+        if (!response.ok) {
+            return false;
+        }
+        *result = response.value;
+        return true;
+    }
+
+    Result<Vector3> vectorCross(Vector3 left, Vector3 right) const
+    {
+        std::string payload;
+        appendVector(payload, left);
+        appendVector(payload, right);
+        return callVector(Abi::Operation::VectorCross, payload);
+    }
+
+    bool vectorCross(Vector3 left, Vector3 right, Vector3* result) const
+    {
+        if (result == nullptr) {
+            return false;
+        }
+        const auto response = vectorCross(left, right);
+        if (!response.ok) {
+            return false;
+        }
+        *result = response.value;
+        return true;
+    }
+
     Result<bool> release(Handle handle) const
     {
         std::string payload;
@@ -286,6 +378,13 @@ private:
         Abi::appendU64(output, bits);
     }
 
+    static void appendVector(std::string& output, Vector3 value)
+    {
+        appendDouble(output, value.x);
+        appendDouble(output, value.y);
+        appendDouble(output, value.z);
+    }
+
     Response call(Abi::Operation operation, std::string_view payload) const
     {
         if (dispatchFunction == nullptr || releaseFunction == nullptr) {
@@ -339,6 +438,47 @@ private:
             return failure<Handle>("WASM host returned an invalid handle");
         }
         return {true, handle, {}};
+    }
+
+    Result<Vector3> callVector(Abi::Operation operation, std::string_view payload) const
+    {
+        const auto result = call(operation, payload);
+        if (!result.ok) {
+            return failure<Vector3>(result.error);
+        }
+        if (result.payload.size() != sizeof(double) * 3U) {
+            return failure<Vector3>("WASM host returned an invalid vector payload");
+        }
+
+        Vector3 value;
+        std::size_t offset = 0U;
+        for (double* component : {&value.x, &value.y, &value.z}) {
+            std::uint64_t bits = 0U;
+            for (unsigned shift = 0U; shift < 64U; shift += 8U) {
+                bits |= static_cast<std::uint64_t>(result.payload[offset++]) << shift;
+            }
+            std::memcpy(component, &bits, sizeof(bits));
+        }
+        return {true, value, {}};
+    }
+
+    Result<double> callDouble(Abi::Operation operation, std::string_view payload) const
+    {
+        const auto result = call(operation, payload);
+        if (!result.ok) {
+            return failure<double>(result.error);
+        }
+        if (result.payload.size() != sizeof(double)) {
+            return failure<double>("WASM host returned an invalid double payload");
+        }
+
+        std::uint64_t bits = 0U;
+        for (unsigned shift = 0U; shift < 64U; shift += 8U) {
+            bits |= static_cast<std::uint64_t>(result.payload[shift / 8U]) << shift;
+        }
+        double value = 0.0;
+        std::memcpy(&value, &bits, sizeof(value));
+        return {true, value, {}};
     }
 
     DispatchFunction dispatchFunction;

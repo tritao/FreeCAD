@@ -29,6 +29,13 @@ from stubgen.api_extract import extract_curated_api_model_with_diagnostics  # no
 
 SCHEMA_VERSION = 0
 
+# These types are represented inline in the guest ABI rather than as host
+# object handles. Keep this list explicit until the API metadata has a first
+# class value-type annotation.
+WASM_VALUE_TYPES = {
+    "FreeCAD.Base.Vector": {"encoding": "vector3-f64"},
+}
+
 
 def _literal_kwargs(decorator: str, name: str) -> dict[str, Any]:
     try:
@@ -95,8 +102,15 @@ def _wasm_type(api_type: ApiType | None, annotation: str | None, module_name: st
     elif api_type.kind is ApiTypeKind.BOOLEAN:
         result["kind"] = "bool"
     elif api_type.kind is ApiTypeKind.HANDLE:
-        result["kind"] = "handle"
-        result["type"] = api_type.handle or api_type.annotation
+        handle_name = api_type.handle or api_type.annotation
+        value_type = WASM_VALUE_TYPES.get(handle_name)
+        if value_type:
+            result["kind"] = "value"
+            result["type"] = handle_name
+            result["encoding"] = value_type["encoding"]
+        else:
+            result["kind"] = "handle"
+            result["type"] = handle_name
     elif api_type.kind is ApiTypeKind.LIST:
         result["kind"] = "list"
         result["item"] = _wasm_type(api_type.item, None, module_name)
@@ -209,13 +223,19 @@ def _attribute_model(attribute: ApiAttribute, module_name: str) -> dict[str, Any
 
 
 def _class_model(api_class: ApiClass) -> dict[str, Any]:
+    value_type = WASM_VALUE_TYPES.get(api_class.qualified_name)
     return {
         "module": api_class.module_name,
         "name": api_class.name,
         "full_name": api_class.qualified_name,
         "source": api_class.location.path if api_class.location else None,
         "base": api_class.bases[0] if api_class.bases else None,
-        "handle_type": api_class.qualified_name,
+        "handle_type": None if value_type else api_class.qualified_name,
+        "representation": (
+            {"kind": "value", **value_type}
+            if value_type
+            else {"kind": "handle"}
+        ),
         "native": _native_metadata(api_class),
         "attributes": [
             _attribute_model(attribute, api_class.module_name)
@@ -228,6 +248,41 @@ def _class_model(api_class: ApiClass) -> dict[str, Any]:
 
 def _module_functions(module: ApiModule) -> list[dict[str, Any]]:
     return [_method_model(function, module.name) for function in module.functions]
+
+
+def _operation_sources(api_model: Any) -> set[str]:
+    sources: set[str] = set()
+    for module in api_model.modules:
+        for function in module.functions:
+            sources.add(f"{module.name}.{function.name}")
+        for api_class in module.classes:
+            sources.add(api_class.qualified_name)
+            for method in api_class.methods:
+                sources.add(f"{api_class.qualified_name}.{method.name}")
+    return sources
+
+
+def _load_operations(root: Path, inputs: list[Path], api_model: Any) -> list[dict[str, Any]]:
+    operations_path = root / "src/Mod/Wasm/WasmApiOperations.json"
+    if not operations_path.exists():
+        return []
+
+    model = json.loads(operations_path.read_text(encoding="utf-8"))
+    input_paths = {path.resolve().relative_to(root).as_posix() for path in inputs}
+    sources = _operation_sources(api_model)
+    operations = []
+    for operation in model.get("operations", []):
+        requirements = operation.get("requires", [])
+        if not all(requirement in input_paths for requirement in requirements):
+            continue
+        source = operation.get("source")
+        if source is not None and source not in sources:
+            raise ValueError(
+                f"WASM operation {operation.get('name', '<unnamed>')} references "
+                f"missing .pyi symbol '{source}'"
+            )
+        operations.append(operation)
+    return operations
 
 
 def build_model(root: Path, inputs: list[Path]) -> dict[str, Any]:
@@ -261,6 +316,7 @@ def build_model(root: Path, inputs: list[Path]) -> dict[str, Any]:
         "schema_version": SCHEMA_VERSION,
         "api": f"org.freecad.wasm.api@{SCHEMA_VERSION}",
         "permission_policy": "deny-by-default",
+        "operations": _load_operations(root, inputs, model),
         "classes": classes,
         "functions": functions,
         "aliases": aliases,

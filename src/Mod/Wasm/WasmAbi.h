@@ -30,6 +30,10 @@ enum class Operation : std::uint8_t
     PartMakeBox = 2,
     DocumentAddObject = 3,
     HandleRelease = 4,
+    VectorNew = 5,
+    VectorAdd = 6,
+    VectorDot = 7,
+    VectorCross = 8,
 };
 
 inline void appendU32(std::string& output, std::uint32_t value)

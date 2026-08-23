@@ -39,6 +39,12 @@ with tempfile.TemporaryDirectory(prefix="freecad-wasm-api-") as temporary_direct
 assert model["schema"] == "org.freecad.wasm.api"
 assert model["api"] == "org.freecad.wasm.api@0"
 assert model["permission_policy"] == "deny-by-default"
+operations = {operation["name"]: operation for operation in model["operations"]}
+assert operations["documentNew"]["permission"] == "document.create"
+assert operations["partMakeBox"]["id"] == 2
+assert operations["documentAddObject"]["mutates"] is True
+assert operations["documentAddObject"]["source"] == "FreeCAD.Document.addObject"
+assert operations["vectorDot"]["source"] == "FreeCAD.Base.Vector.dot"
 
 topo_shape = find_class(model, "TopoShape")
 for attribute_name in ("Faces", "Edges"):
@@ -60,5 +66,15 @@ document = find_class(model, "Document")
 save_as = find_method(document, "saveAs")["signatures"][0]
 assert save_as["exposed"] is False
 assert save_as["permission"] is None
+
+vector = find_class(model, "Vector")
+assert vector["representation"] == {"kind": "value", "encoding": "vector3-f64"}
+vector_add = find_method(vector, "add")["signatures"][0]
+assert vector_add["params"][0]["type"] == {
+    "kind": "value",
+    "annotation": "'Vector'",
+    "type": "FreeCAD.Base.Vector",
+    "encoding": "vector3-f64",
+}
 
 print("Wasm API generator regression test passed")
