@@ -842,7 +842,7 @@ TEST(WamrRuntimeTest, ExecutesRustCapabilityGuest)
                                 copyError);
     ASSERT_FALSE(copyError) << copyError.message();
     const auto manifestPath = files.writeManifest(
-        R"({"name":"RustCapabilityExample","api":"org.freecad.wasm.api@0","entry":"rust-capability.wasm","permissions":["document.create","document.modify","geometry.create"]})");
+        R"({"name":"RustCapabilityExample","api":"org.freecad.wasm.api@0","entry":"rust-capability.wasm","permissions":["document.create","document.read","document.modify","geometry.create","geometry.compute","geometry.read"]})");
 
     constexpr const char* documentName = "RustCapabilityExample";
     if (App::GetApplication().getDocument(documentName) != nullptr) {
@@ -864,7 +864,14 @@ TEST(WamrRuntimeTest, ExecutesRustCapabilityGuest)
 
     Wasm::WasmAddonManager manager;
     const auto load = manager.load(
-        manifestPath, {"document.create", "document.modify", "geometry.create"}, limits);
+        manifestPath,
+        {"document.create",
+         "document.read",
+         "document.modify",
+         "geometry.create",
+         "geometry.compute",
+         "geometry.read"},
+        limits);
     ASSERT_TRUE(load.ok) << load.error;
 
     const auto result = manager.invoke("RustCapabilityExample");

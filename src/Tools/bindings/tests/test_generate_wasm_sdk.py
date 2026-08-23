@@ -51,6 +51,20 @@ class GenerateWasmSdkTests(unittest.TestCase):
         self.assertIn("pub const DOCUMENT_NEW: u8 = 1", rust)
         self.assertIn("pub const VECTOR_DOT: u8 = 7", rust)
         self.assertIn("pub const TOPO_SHAPE_AREA: u8 = 14", rust)
+        self.assertIn("pub struct Client", rust)
+        self.assertIn(
+            "pub fn document_new(&self, name: &[u8]) -> Option<FreeCADDocumentHandle>",
+            rust,
+        )
+        self.assertIn(
+            "pub fn document_get_object(&self, document: FreeCADDocumentHandle, name: &[u8]) -> Option<FreeCADDocumentObjectHandle>",
+            rust,
+        )
+        self.assertIn(
+            "pub fn topo_shape_area(&self, shape: PartTopoShapeHandle) -> Option<f64>",
+            rust,
+        )
+        self.assertIn("freecad_dispatch", rust)
 
     def test_outputs_are_stable_for_a_model(self):
         model = {

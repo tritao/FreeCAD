@@ -17,6 +17,7 @@ if(FREECAD_USE_WAMR)
         PYTHON_EXECUTABLE ${Python3_EXECUTABLE}
         API_GENERATOR ${CMAKE_SOURCE_DIR}/src/Tools/bindings/generate_wasm_api.py
         SDK_GENERATOR ${CMAKE_SOURCE_DIR}/src/Tools/bindings/generate_wasm_sdk.py
+        API_RUST_VARIABLE FREECAD_WASM_RUST_API
         INPUTS
             ${CMAKE_SOURCE_DIR}/src/Base/Vector.pyi
             ${CMAKE_SOURCE_DIR}/src/App/Document.pyi
@@ -80,7 +81,9 @@ if(FREECAD_USE_WAMR)
                 ${CMAKE_CURRENT_BINARY_DIR}/freecad-rust-capability-addon.wasm)
             add_custom_command(
                 OUTPUT ${FREECAD_WASM_RUST_CAPABILITY_FIXTURE}
-                COMMAND ${FREECAD_WASM_RUST_COMPILER}
+                COMMAND ${CMAKE_COMMAND} -E env
+                        "FREECAD_WASM_API_RS=${FREECAD_WASM_RUST_API}"
+                        ${FREECAD_WASM_RUST_COMPILER}
                         --target wasm32-unknown-unknown
                         --edition 2021
                         --crate-type cdylib
@@ -97,6 +100,7 @@ if(FREECAD_USE_WAMR)
                         ${CMAKE_SOURCE_DIR}/src/Mod/Wasm/Guest/examples/CapabilityAddon.rs
                 DEPENDS
                     ${CMAKE_SOURCE_DIR}/src/Mod/Wasm/Guest/examples/CapabilityAddon.rs
+                    ${FREECAD_WASM_RUST_API}
                     ${_freecad_wasm_rust_core}
                 COMMENT "Building the FreeCAD Rust Wasm capability guest fixture"
                 VERBATIM

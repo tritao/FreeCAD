@@ -91,17 +91,18 @@ Clang and `wasm-ld` settings. The build generates
 consume either the source-tree SDK or an installed `FreeCADWasmGuest` package.
 
 `Guest/examples/CapabilityAddon.rs` is a matching `no_std` Rust guest. It uses
-the same imports, request envelope, handle lifecycle, and response ownership
-rules as the C++ example. The WAMR test build compiles it when
+the generated Rust client and therefore the same imports, request envelope,
+handle lifecycle, and response ownership rules as the C++ example. The WAMR
+test build compiles it when
 `rustc --target wasm32-unknown-unknown` is available, providing a language-
 neutral ABI regression test without enabling WASI.
 
 The build also emits `freecad_wasm_api.hpp` and `freecad_wasm_api.rs` from the
-same versioned API model. These files provide typed handle wrappers and the
-model version; transport and capability calls remain in the small guest
-clients above so generated declarations cannot bypass the host policy.
-The generated C++ header also provides a typed `Host` facade for the declared
-operations. It delegates to `Wasm::Guest::Client`, while operation IDs,
+same versioned API model. These files provide typed handle wrappers, model
+metadata, and typed transport facades for the declared operations. Both
+facades use the narrow host ABI, so generated declarations cannot bypass host
+policy. The generated C++ header delegates to `Wasm::Guest::Client`; the Rust
+SDK is a `no_std` client with bounded request buffers. Operation IDs,
 permissions, and mutation metadata remain in the neutral API model.
 Operations that reference a `.pyi` symbol are validated against the selected
 Python API model during generation. The initial value-type projection covers
