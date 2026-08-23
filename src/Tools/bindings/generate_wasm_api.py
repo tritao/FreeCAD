@@ -257,6 +257,8 @@ def _operation_sources(api_model: Any) -> set[str]:
             sources.add(f"{module.name}.{function.name}")
         for api_class in module.classes:
             sources.add(api_class.qualified_name)
+            for attribute in api_class.attributes:
+                sources.add(f"{api_class.qualified_name}.{attribute.name}")
             for method in api_class.methods:
                 sources.add(f"{api_class.qualified_name}.{method.name}")
     return sources

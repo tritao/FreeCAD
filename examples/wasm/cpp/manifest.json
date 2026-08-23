@@ -4,8 +4,10 @@
   "entry": "freecad-capability-addon.wasm",
   "permissions": [
     "document.create",
+    "document.read",
     "document.modify",
     "geometry.create",
-    "geometry.compute"
+    "geometry.compute",
+    "geometry.read"
   ]
 }

@@ -46,15 +46,22 @@ code must not continue using a failed call's result.
 | ---: | --- | --- | --- | --- |
 | 1 | `document.new` | `document.create` | `u32 name_length`, UTF-8 name | `u64` document handle |
 | 2 | `part.make_box` | `geometry.create` | three `f64` dimensions | `u64` shape handle |
-| 3 | `document.add_object` | `document.modify` | `u64` document handle, `u64` shape handle, `u32 name_length`, UTF-8 name | `u64` feature handle |
+| 3 | `document.add_object` | `document.modify` | `u64` document handle, `u64` shape handle, `u32 name_length`, UTF-8 name | `u64` document object handle |
 | 4 | `handle.release` | none | `u64` handle | empty |
 | 5 | `base.vector.new` | `geometry.compute` | three `f64` coordinates | three `f64` coordinates |
 | 6 | `base.vector.add` | `geometry.compute` | two inline vectors | one inline vector |
 | 7 | `base.vector.dot` | `geometry.compute` | two inline vectors | one `f64` |
 | 8 | `base.vector.cross` | `geometry.compute` | two inline vectors | one inline vector |
+| 9 | `document.is_saved` | `document.read` | `u64` document handle | one `u8` boolean (`0` or `1`) |
+| 10 | `document.get_object` | `document.read` | `u64` document handle, `u32` name length, UTF-8 name | `u64` document object handle |
+| 11 | `part.topo_shape.is_null` | `geometry.read` | `u64` shape handle | one `u8` boolean (`0` or `1`) |
+| 12 | `part.topo_shape.is_valid` | `geometry.read` | `u64` shape handle | one `u8` boolean (`0` or `1`) |
+| 13 | `part.topo_shape.length` | `geometry.read` | `u64` shape handle | one `f64` |
+| 14 | `part.topo_shape.area` | `geometry.read` | `u64` shape handle | one `f64` |
+| 15 | `part.topo_shape.volume` | `geometry.read` | `u64` shape handle | one `f64` |
 
 Handles are opaque and scoped to the instance that created them. Document and
-feature handles are borrowed references to host-owned objects. Shape handles
+document-object handles are borrowed references to host-owned objects. Shape handles
 created by `part.make_box` are owned by the instance until released or until
 the instance is destroyed.
 `Base.Vector` is an inline value encoded as three little-endian `f64` values;
@@ -98,7 +105,10 @@ operations. It delegates to `Wasm::Guest::Client`, while operation IDs,
 permissions, and mutation metadata remain in the neutral API model.
 Operations that reference a `.pyi` symbol are validated against the selected
 Python API model during generation. The initial value-type projection covers
-`Base.Vector`; host-owned classes remain explicit handles.
+`Base.Vector`; host-owned classes remain explicit handles. The current curated
+read-only slice includes document state/object lookup and basic `TopoShape`
+validity and mass-property queries, with `document.read` and `geometry.read`
+kept separate from mutation permissions.
 
 The host remains responsible for granting permissions from addon policy. The
 guest request cannot grant itself additional capabilities. `WasmAddon` loads
@@ -115,7 +125,8 @@ import Wasm
 
 metadata = Wasm.loadAddon(
     "/path/to/addon/manifest.json",
-    ["document.create", "document.modify", "geometry.create"],
+    ["document.create", "document.read", "document.modify",
+     "geometry.create", "geometry.compute", "geometry.read"],
 )
 response = Wasm.invokeAddon(metadata["name"], b"")
 Wasm.unloadAddon(metadata["name"])

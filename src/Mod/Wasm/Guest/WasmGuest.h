@@ -171,6 +171,49 @@ public:
         return true;
     }
 
+    Result<bool> documentIsSaved(Handle document) const
+    {
+        std::string payload;
+        Abi::appendU64(payload, document);
+        return callBool(Abi::Operation::DocumentIsSaved, payload);
+    }
+
+    bool documentIsSaved(Handle document, bool* result) const
+    {
+        if (result == nullptr) {
+            return false;
+        }
+        const auto response = documentIsSaved(document);
+        if (!response.ok) {
+            return false;
+        }
+        *result = response.value;
+        return true;
+    }
+
+    Result<Handle> documentGetObject(Handle document, std::string_view name) const
+    {
+        std::string payload;
+        Abi::appendU64(payload, document);
+        if (!appendString(payload, name)) {
+            return failure<Handle>("object name exceeds the ABI length limit");
+        }
+        return callHandle(Abi::Operation::DocumentGetObject, payload);
+    }
+
+    bool documentGetObject(Handle document, const char* name, Handle* result) const
+    {
+        if (name == nullptr || result == nullptr) {
+            return false;
+        }
+        const auto response = documentGetObject(document, std::string_view(name));
+        if (!response.ok) {
+            return false;
+        }
+        *result = response.value;
+        return true;
+    }
+
     Result<Handle> partMakeBox(double length, double width, double height) const
     {
         std::string payload;
@@ -300,6 +343,106 @@ public:
             return false;
         }
         const auto response = vectorCross(left, right);
+        if (!response.ok) {
+            return false;
+        }
+        *result = response.value;
+        return true;
+    }
+
+    Result<bool> topoShapeIsNull(Handle shape) const
+    {
+        std::string payload;
+        Abi::appendU64(payload, shape);
+        return callBool(Abi::Operation::TopoShapeIsNull, payload);
+    }
+
+    bool topoShapeIsNull(Handle shape, bool* result) const
+    {
+        if (result == nullptr) {
+            return false;
+        }
+        const auto response = topoShapeIsNull(shape);
+        if (!response.ok) {
+            return false;
+        }
+        *result = response.value;
+        return true;
+    }
+
+    Result<bool> topoShapeIsValid(Handle shape) const
+    {
+        std::string payload;
+        Abi::appendU64(payload, shape);
+        return callBool(Abi::Operation::TopoShapeIsValid, payload);
+    }
+
+    bool topoShapeIsValid(Handle shape, bool* result) const
+    {
+        if (result == nullptr) {
+            return false;
+        }
+        const auto response = topoShapeIsValid(shape);
+        if (!response.ok) {
+            return false;
+        }
+        *result = response.value;
+        return true;
+    }
+
+    Result<double> topoShapeLength(Handle shape) const
+    {
+        std::string payload;
+        Abi::appendU64(payload, shape);
+        return callDouble(Abi::Operation::TopoShapeLength, payload);
+    }
+
+    bool topoShapeLength(Handle shape, double* result) const
+    {
+        if (result == nullptr) {
+            return false;
+        }
+        const auto response = topoShapeLength(shape);
+        if (!response.ok) {
+            return false;
+        }
+        *result = response.value;
+        return true;
+    }
+
+    Result<double> topoShapeArea(Handle shape) const
+    {
+        std::string payload;
+        Abi::appendU64(payload, shape);
+        return callDouble(Abi::Operation::TopoShapeArea, payload);
+    }
+
+    bool topoShapeArea(Handle shape, double* result) const
+    {
+        if (result == nullptr) {
+            return false;
+        }
+        const auto response = topoShapeArea(shape);
+        if (!response.ok) {
+            return false;
+        }
+        *result = response.value;
+        return true;
+    }
+
+    Result<double> topoShapeVolume(Handle shape) const
+    {
+        std::string payload;
+        Abi::appendU64(payload, shape);
+        return callDouble(Abi::Operation::TopoShapeVolume, payload);
+    }
+
+    bool topoShapeVolume(Handle shape, double* result) const
+    {
+        if (result == nullptr) {
+            return false;
+        }
+        const auto response = topoShapeVolume(shape);
         if (!response.ok) {
             return false;
         }
@@ -479,6 +622,18 @@ private:
         double value = 0.0;
         std::memcpy(&value, &bits, sizeof(value));
         return {true, value, {}};
+    }
+
+    Result<bool> callBool(Abi::Operation operation, std::string_view payload) const
+    {
+        const auto result = call(operation, payload);
+        if (!result.ok) {
+            return failure<bool>(result.error);
+        }
+        if (result.payload.size() != 1U || result.payload.front() > 1U) {
+            return failure<bool>("WASM host returned an invalid bool payload");
+        }
+        return {true, result.payload.front() != 0U, {}};
     }
 
     DispatchFunction dispatchFunction;

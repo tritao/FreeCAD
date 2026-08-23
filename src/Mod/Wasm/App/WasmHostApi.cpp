@@ -15,7 +15,9 @@
 #ifdef FREECAD_WASM_HAS_PART
 # include <Mod/Part/App/PartFeature.h>
 # include <Mod/Part/App/TopoShape.h>
+# include <BRepGProp.hxx>
 # include <BRepPrimAPI_MakeBox.hxx>
+# include <GProp_GProps.hxx>
 # include <Standard_Failure.hxx>
 #endif
 
@@ -127,6 +129,11 @@ std::string doublePayload(double value)
     payload.reserve(sizeof(double));
     appendDouble(payload, value);
     return payload;
+}
+
+std::string boolPayload(bool value)
+{
+    return std::string(1, value ? '\1' : '\0');
 }
 
 HostCallResult malformedRequest(std::string error)
@@ -420,7 +427,7 @@ HostCallResult WasmHostApi::dispatch(std::span<const std::byte> request,
                 return {false, {}, "document.add_object could not create the feature"};
             }
             object->Shape.setValue(*shape);
-            const auto handle = handles.insert("Part::Feature",
+            const auto handle = handles.insert("FreeCAD.DocumentObject",
                                                object,
                                                true,
                                                nullptr,
@@ -440,6 +447,127 @@ HostCallResult WasmHostApi::dispatch(std::span<const std::byte> request,
             return {false,
                     {},
                     std::string("document.add_object failed: ") + exception.what()};
+        }
+#endif
+    }
+    case Abi::Operation::DocumentIsSaved: {
+        if (!hasPermission(permissions, "document.read")) {
+            return {false, {}, "host capability 'document.read' is not granted"};
+        }
+        if (payload.size() != sizeof(std::uint64_t)) {
+            return malformedRequest("document.is_saved expects one document handle");
+        }
+
+        std::size_t payloadOffset = 0U;
+        std::uint64_t documentHandle = InvalidHandle;
+        if (!readU64(payload, payloadOffset, documentHandle)) {
+            return malformedRequest("document.is_saved has an invalid handle payload");
+        }
+
+        std::string error;
+        auto* document = getHandle<App::Document>(
+            handles, documentHandle, "App::Document", error);
+        if (document == nullptr) {
+            return {false, {}, error};
+        }
+        return {true, boolPayload(document->isSaved()), {}};
+    }
+    case Abi::Operation::DocumentGetObject: {
+        if (!hasPermission(permissions, "document.read")) {
+            return {false, {}, "host capability 'document.read' is not granted"};
+        }
+
+        std::size_t payloadOffset = 0U;
+        std::uint64_t documentHandle = InvalidHandle;
+        std::string name;
+        if (!readU64(payload, payloadOffset, documentHandle)
+            || !readString(payload, payloadOffset, name)
+            || payloadOffset != payload.size() || name.empty()
+            || name.find('\0') != std::string::npos) {
+            return malformedRequest("document.get_object has an invalid payload");
+        }
+
+        std::string error;
+        auto* document = getHandle<App::Document>(
+            handles, documentHandle, "App::Document", error);
+        if (document == nullptr) {
+            return {false, {}, error};
+        }
+        auto* object = document->getObject(name.c_str());
+        if (object == nullptr) {
+            return {false, {}, "document.get_object could not find the object"};
+        }
+
+        const auto handle = handles.insert("FreeCAD.DocumentObject",
+                                           object,
+                                           true,
+                                           nullptr,
+                                           objectValidator(document->getName(),
+                                                           object->getNameInDocument()));
+        if (handle == InvalidHandle) {
+            return {false, {}, "document.get_object could not allocate a handle"};
+        }
+        return {true, handlePayload(handle), {}};
+    }
+    case Abi::Operation::TopoShapeIsNull:
+    case Abi::Operation::TopoShapeIsValid:
+    case Abi::Operation::TopoShapeLength:
+    case Abi::Operation::TopoShapeArea:
+    case Abi::Operation::TopoShapeVolume: {
+#ifndef FREECAD_WASM_HAS_PART
+        return {false, {}, "Part capability is not available in this build"};
+#else
+        if (!hasPermission(permissions, "geometry.read")) {
+            return {false, {}, "host capability 'geometry.read' is not granted"};
+        }
+        if (payload.size() != sizeof(std::uint64_t)) {
+            return malformedRequest("part.topo_shape query expects one shape handle");
+        }
+
+        std::size_t payloadOffset = 0U;
+        std::uint64_t shapeHandle = InvalidHandle;
+        if (!readU64(payload, payloadOffset, shapeHandle)) {
+            return malformedRequest("part.topo_shape query has an invalid handle payload");
+        }
+
+        std::string error;
+        auto* shape = getHandle<Part::TopoShape>(
+            handles, shapeHandle, "Part::TopoShape", error);
+        if (shape == nullptr) {
+            return {false, {}, error};
+        }
+
+        switch (operation) {
+        case Abi::Operation::TopoShapeIsNull:
+            return {true, boolPayload(shape->isNull()), {}};
+        case Abi::Operation::TopoShapeIsValid:
+            return {true, boolPayload(shape->isValid()), {}};
+        case Abi::Operation::TopoShapeLength: {
+            if (shape->isNull()) {
+                return {false, {}, "part.topo_shape.length cannot query a null shape"};
+            }
+            GProp_GProps properties;
+            BRepGProp::LinearProperties(shape->getShape(), properties);
+            return {true, doublePayload(properties.Mass()), {}};
+        }
+        case Abi::Operation::TopoShapeArea: {
+            if (shape->isNull()) {
+                return {false, {}, "part.topo_shape.area cannot query a null shape"};
+            }
+            GProp_GProps properties;
+            BRepGProp::SurfaceProperties(shape->getShape(), properties);
+            return {true, doublePayload(properties.Mass()), {}};
+        }
+        case Abi::Operation::TopoShapeVolume: {
+            if (shape->isNull()) {
+                return {false, {}, "part.topo_shape.volume cannot query a null shape"};
+            }
+            GProp_GProps properties;
+            BRepGProp::VolumeProperties(shape->getShape(), properties);
+            return {true, doublePayload(properties.Mass()), {}};
+        }
+        default:
+            return {false, {}, "unsupported Part query"};
         }
 #endif
     }

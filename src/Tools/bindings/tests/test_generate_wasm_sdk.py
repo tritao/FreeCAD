@@ -40,12 +40,17 @@ class GenerateWasmSdkTests(unittest.TestCase):
         self.assertIn("FreeCADDocumentHandle", rust)
         self.assertIn("class Host", cpp)
         self.assertIn("bool documentNew", cpp)
+        self.assertIn("bool documentIsSaved", cpp)
+        self.assertIn("bool documentGetObject", cpp)
         self.assertIn("bool partMakeBox", cpp)
         self.assertIn("bool vectorAdd", cpp)
         self.assertIn("bool vectorDot", cpp)
+        self.assertIn("bool topoShapeArea", cpp)
         self.assertIn('documentNewPermission[] = "document.create"', cpp)
+        self.assertIn('documentIsSavedPermission[] = "document.read"', cpp)
         self.assertIn("pub const DOCUMENT_NEW: u8 = 1", rust)
         self.assertIn("pub const VECTOR_DOT: u8 = 7", rust)
+        self.assertIn("pub const TOPO_SHAPE_AREA: u8 = 14", rust)
 
     def test_outputs_are_stable_for_a_model(self):
         model = {
@@ -75,7 +80,16 @@ class GenerateWasmSdkTests(unittest.TestCase):
         operation_names = {operation["name"] for operation in model["operations"]}
         self.assertEqual(
             operation_names,
-            {"documentNew", "vectorNew", "vectorAdd", "vectorDot", "vectorCross", "release"},
+            {
+                "documentNew",
+                "documentIsSaved",
+                "documentGetObject",
+                "vectorNew",
+                "vectorAdd",
+                "vectorDot",
+                "vectorCross",
+                "release",
+            },
         )
 
 

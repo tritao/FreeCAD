@@ -45,6 +45,8 @@ assert operations["partMakeBox"]["id"] == 2
 assert operations["documentAddObject"]["mutates"] is True
 assert operations["documentAddObject"]["source"] == "FreeCAD.Document.addObject"
 assert operations["vectorDot"]["source"] == "FreeCAD.Base.Vector.dot"
+assert operations["documentIsSaved"]["permission"] == "document.read"
+assert operations["topoShapeArea"]["source"] == "Part.TopoShape.Area"
 
 topo_shape = find_class(model, "TopoShape")
 for attribute_name in ("Faces", "Edges"):

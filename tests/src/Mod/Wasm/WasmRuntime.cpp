@@ -598,6 +598,19 @@ TEST(WasmGuestTest, EncodesThePublishedHostProtocol)
               binaryRequest(Wasm::Abi::Operation::DocumentNew,
                             stringPayload("GuestDocument")));
 
+    bool saved = false;
+    EXPECT_FALSE(guest.documentIsSaved(11U, &saved));
+    EXPECT_EQ(GuestCapture::lastRequest,
+              binaryRequest(Wasm::Abi::Operation::DocumentIsSaved,
+                            handlePayload(11U)));
+
+    Wasm::Guest::Handle queriedObject = 0U;
+    EXPECT_FALSE(guest.documentGetObject(11U, "Box", &queriedObject));
+    std::string getObjectPayload = handlePayload(11U);
+    getObjectPayload += stringPayload("Box");
+    EXPECT_EQ(GuestCapture::lastRequest,
+              binaryRequest(Wasm::Abi::Operation::DocumentGetObject, getObjectPayload));
+
     const auto box = guest.partMakeBox(1.0, 2.0, 3.0);
     EXPECT_FALSE(box.ok);
     EXPECT_EQ(GuestCapture::lastRequest,
@@ -636,6 +649,12 @@ TEST(WasmGuestTest, EncodesThePublishedHostProtocol)
     EXPECT_EQ(GuestCapture::lastRequest,
               binaryRequest(Wasm::Abi::Operation::VectorDot,
                             vectorPairPayload(1.0, 2.0, 3.0, 4.0, 5.0, 6.0)));
+
+    double length = 0.0;
+    EXPECT_FALSE(guest.topoShapeLength(22U, &length));
+    EXPECT_EQ(GuestCapture::lastRequest,
+              binaryRequest(Wasm::Abi::Operation::TopoShapeLength,
+                            handlePayload(22U)));
 }
 
 TEST(WasmHostApiTest, ExecutesVectorOperationsFromPyiSurface)
@@ -729,7 +748,12 @@ TEST(WamrRuntimeTest, ExecutesCompiledCapabilityGuest)
     Wasm::WasmAddonManager manager;
     const auto load = manager.load(
         manifestPath,
-        {"document.create", "document.modify", "geometry.create", "geometry.compute"},
+        {"document.create",
+         "document.read",
+         "document.modify",
+         "geometry.create",
+         "geometry.compute",
+         "geometry.read"},
         limits);
     ASSERT_TRUE(load.ok) << load.error;
     EXPECT_EQ(manager.loadedAddons(), std::vector<std::string> {"CapabilityExample"});
@@ -766,7 +790,7 @@ TEST(WamrRuntimeTest, ExecutesMatchingAotCapabilityGuest)
                                 copyError);
     ASSERT_FALSE(copyError) << copyError.message();
     const auto manifestPath = files.writeManifest(
-        R"({"name":"AotCapabilityExample","api":"org.freecad.wasm.api@0","entry":"capability.aot","permissions":["document.create","document.modify","geometry.create"]})");
+        R"({"name":"AotCapabilityExample","api":"org.freecad.wasm.api@0","entry":"capability.aot","permissions":["document.create","document.read","document.modify","geometry.create","geometry.compute","geometry.read"]})");
 
     constexpr const char* documentName = "GuestCapabilityExample";
     if (App::GetApplication().getDocument(documentName) != nullptr) {
@@ -781,7 +805,12 @@ TEST(WamrRuntimeTest, ExecutesMatchingAotCapabilityGuest)
     Wasm::WasmAddonManager manager;
     const auto load = manager.load(
         manifestPath,
-        {"document.create", "document.modify", "geometry.create", "geometry.compute"},
+        {"document.create",
+         "document.read",
+         "document.modify",
+         "geometry.create",
+         "geometry.compute",
+         "geometry.read"},
         limits);
     ASSERT_TRUE(load.ok) << load.error;
 
@@ -862,7 +891,12 @@ TEST(WasmHostApiTest, CreatesDocumentsShapesAndFeaturesWithInstanceHandles)
     tests::initApplication();
 
     Wasm::WasmHostApi hostApi;
-    hostApi.setPermissions({"document.create", "document.modify", "geometry.create"});
+    hostApi.setPermissions({"document.create",
+                            "document.read",
+                            "document.modify",
+                            "geometry.create",
+                            "geometry.compute",
+                            "geometry.read"});
     Wasm::WasmHandleTable handles;
 
     const auto proposedName = App::GetApplication().getUniqueDocumentName("WasmCapability");
@@ -874,6 +908,15 @@ TEST(WasmHostApiTest, CreatesDocumentsShapesAndFeaturesWithInstanceHandles)
     ASSERT_TRUE(documentResult.ok) << documentResult.error;
     const auto documentHandle = handleFromPayload(documentResult.payload);
     ASSERT_NE(documentHandle, Wasm::InvalidHandle);
+
+    const auto savedResult = hostApi.dispatch(
+        asBytes(binaryRequest(Wasm::Abi::Operation::DocumentIsSaved,
+                              handlePayload(documentHandle))),
+        hostApi.permissions(),
+        handles);
+    ASSERT_TRUE(savedResult.ok) << savedResult.error;
+    ASSERT_EQ(savedResult.payload.size(), 1U);
+    EXPECT_EQ(static_cast<unsigned char>(savedResult.payload.front()), 0U);
 
     const auto boxResult = hostApi.dispatch(
         asBytes(binaryRequest(Wasm::Abi::Operation::PartMakeBox,
@@ -895,6 +938,76 @@ TEST(WasmHostApiTest, CreatesDocumentsShapesAndFeaturesWithInstanceHandles)
     ASSERT_TRUE(objectResult.ok) << objectResult.error;
     const auto objectHandle = handleFromPayload(objectResult.payload);
     ASSERT_NE(objectHandle, Wasm::InvalidHandle);
+
+    std::string getObjectPayload = handlePayload(documentHandle);
+    getObjectPayload += stringPayload("Box");
+    const auto queriedObjectResult = hostApi.dispatch(
+        asBytes(binaryRequest(Wasm::Abi::Operation::DocumentGetObject, getObjectPayload)),
+        hostApi.permissions(),
+        handles);
+    ASSERT_TRUE(queriedObjectResult.ok) << queriedObjectResult.error;
+    const auto queriedObjectHandle = handleFromPayload(queriedObjectResult.payload);
+    ASSERT_NE(queriedObjectHandle, Wasm::InvalidHandle);
+
+    const auto shapeNullResult = hostApi.dispatch(
+        asBytes(binaryRequest(Wasm::Abi::Operation::TopoShapeIsNull,
+                              handlePayload(shapeHandle))),
+        hostApi.permissions(),
+        handles);
+    ASSERT_TRUE(shapeNullResult.ok) << shapeNullResult.error;
+    ASSERT_EQ(shapeNullResult.payload.size(), 1U);
+    EXPECT_EQ(static_cast<unsigned char>(shapeNullResult.payload.front()), 0U);
+
+    const auto shapeValidResult = hostApi.dispatch(
+        asBytes(binaryRequest(Wasm::Abi::Operation::TopoShapeIsValid,
+                              handlePayload(shapeHandle))),
+        hostApi.permissions(),
+        handles);
+    ASSERT_TRUE(shapeValidResult.ok) << shapeValidResult.error;
+    ASSERT_EQ(shapeValidResult.payload.size(), 1U);
+    EXPECT_EQ(static_cast<unsigned char>(shapeValidResult.payload.front()), 1U);
+
+    const auto shapeLengthResult = hostApi.dispatch(
+        asBytes(binaryRequest(Wasm::Abi::Operation::TopoShapeLength,
+                              handlePayload(shapeHandle))),
+        hostApi.permissions(),
+        handles);
+    ASSERT_TRUE(shapeLengthResult.ok) << shapeLengthResult.error;
+    EXPECT_DOUBLE_EQ(doubleFromPayload(shapeLengthResult.payload), 72.0);
+
+    const auto shapeAreaResult = hostApi.dispatch(
+        asBytes(binaryRequest(Wasm::Abi::Operation::TopoShapeArea,
+                              handlePayload(shapeHandle))),
+        hostApi.permissions(),
+        handles);
+    ASSERT_TRUE(shapeAreaResult.ok) << shapeAreaResult.error;
+    EXPECT_DOUBLE_EQ(doubleFromPayload(shapeAreaResult.payload), 52.0);
+
+    const auto shapeVolumeResult = hostApi.dispatch(
+        asBytes(binaryRequest(Wasm::Abi::Operation::TopoShapeVolume,
+                              handlePayload(shapeHandle))),
+        hostApi.permissions(),
+        handles);
+    ASSERT_TRUE(shapeVolumeResult.ok) << shapeVolumeResult.error;
+    EXPECT_DOUBLE_EQ(doubleFromPayload(shapeVolumeResult.payload), 24.0);
+
+    Wasm::WasmHostApi deniedHost;
+    deniedHost.setPermissions({"document.create", "geometry.create"});
+    const auto deniedDocumentRead = deniedHost.dispatch(
+        asBytes(binaryRequest(Wasm::Abi::Operation::DocumentIsSaved,
+                              handlePayload(documentHandle))),
+        deniedHost.permissions(),
+        handles);
+    EXPECT_FALSE(deniedDocumentRead.ok);
+    EXPECT_NE(deniedDocumentRead.error.find("document.read"), std::string::npos);
+
+    const auto deniedGeometryRead = deniedHost.dispatch(
+        asBytes(binaryRequest(Wasm::Abi::Operation::TopoShapeIsValid,
+                              handlePayload(shapeHandle))),
+        deniedHost.permissions(),
+        handles);
+    EXPECT_FALSE(deniedGeometryRead.ok);
+    EXPECT_NE(deniedGeometryRead.error.find("geometry.read"), std::string::npos);
 
     const auto objectEntry = handles.get(objectHandle);
     ASSERT_TRUE(objectEntry.has_value());
@@ -926,6 +1039,7 @@ TEST(WasmHostApiTest, CreatesDocumentsShapesAndFeaturesWithInstanceHandles)
     EXPECT_FALSE(handles.get(documentHandle).has_value());
     EXPECT_FALSE(handles.get(objectHandle).has_value());
     EXPECT_TRUE(handles.erase(objectHandle));
+    EXPECT_TRUE(handles.erase(queriedObjectHandle));
     EXPECT_TRUE(handles.erase(documentHandle));
 }
 

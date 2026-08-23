@@ -34,6 +34,13 @@ enum class Operation : std::uint8_t
     VectorAdd = 6,
     VectorDot = 7,
     VectorCross = 8,
+    DocumentIsSaved = 9,
+    DocumentGetObject = 10,
+    TopoShapeIsNull = 11,
+    TopoShapeIsValid = 12,
+    TopoShapeLength = 13,
+    TopoShapeArea = 14,
+    TopoShapeVolume = 15,
 };
 
 inline void appendU32(std::string& output, std::uint32_t value)

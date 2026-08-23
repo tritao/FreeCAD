@@ -169,6 +169,105 @@
       }
     },
     {
+      "name": "documentIsSaved",
+      "wire_name": "document.is_saved",
+      "id": 9,
+      "guest_method": "documentIsSaved",
+      "source": "FreeCAD.Document.isSaved",
+      "permission": "document.read",
+      "mutates": false,
+      "requires": ["src/App/Document.pyi"],
+      "params": [
+        {"name": "document", "type": {"kind": "handle", "type": "FreeCAD.Document", "annotation": "Document"}}
+      ],
+      "returns": {"kind": "bool", "annotation": "bool"}
+    },
+    {
+      "name": "documentGetObject",
+      "wire_name": "document.get_object",
+      "id": 10,
+      "guest_method": "documentGetObject",
+      "source": "FreeCAD.Document.getObject",
+      "permission": "document.read",
+      "mutates": false,
+      "requires": ["src/App/Document.pyi"],
+      "params": [
+        {"name": "document", "type": {"kind": "handle", "type": "FreeCAD.Document", "annotation": "Document"}},
+        {"name": "name", "type": {"kind": "string", "annotation": "str"}}
+      ],
+      "returns": {"kind": "handle", "type": "FreeCAD.DocumentObject", "annotation": "DocumentObject"}
+    },
+    {
+      "name": "topoShapeIsNull",
+      "wire_name": "part.topo_shape.is_null",
+      "id": 11,
+      "guest_method": "topoShapeIsNull",
+      "source": "Part.TopoShape.isNull",
+      "permission": "geometry.read",
+      "mutates": false,
+      "requires": ["src/Mod/Part/App/TopoShape.pyi"],
+      "params": [
+        {"name": "shape", "type": {"kind": "handle", "type": "Part.TopoShape", "annotation": "TopoShape"}}
+      ],
+      "returns": {"kind": "bool", "annotation": "bool"}
+    },
+    {
+      "name": "topoShapeIsValid",
+      "wire_name": "part.topo_shape.is_valid",
+      "id": 12,
+      "guest_method": "topoShapeIsValid",
+      "source": "Part.TopoShape.isValid",
+      "permission": "geometry.read",
+      "mutates": false,
+      "requires": ["src/Mod/Part/App/TopoShape.pyi"],
+      "params": [
+        {"name": "shape", "type": {"kind": "handle", "type": "Part.TopoShape", "annotation": "TopoShape"}}
+      ],
+      "returns": {"kind": "bool", "annotation": "bool"}
+    },
+    {
+      "name": "topoShapeLength",
+      "wire_name": "part.topo_shape.length",
+      "id": 13,
+      "guest_method": "topoShapeLength",
+      "source": "Part.TopoShape.Length",
+      "permission": "geometry.read",
+      "mutates": false,
+      "requires": ["src/Mod/Part/App/TopoShape.pyi"],
+      "params": [
+        {"name": "shape", "type": {"kind": "handle", "type": "Part.TopoShape", "annotation": "TopoShape"}}
+      ],
+      "returns": {"kind": "float64", "annotation": "float"}
+    },
+    {
+      "name": "topoShapeArea",
+      "wire_name": "part.topo_shape.area",
+      "id": 14,
+      "guest_method": "topoShapeArea",
+      "source": "Part.TopoShape.Area",
+      "permission": "geometry.read",
+      "mutates": false,
+      "requires": ["src/Mod/Part/App/TopoShape.pyi"],
+      "params": [
+        {"name": "shape", "type": {"kind": "handle", "type": "Part.TopoShape", "annotation": "TopoShape"}}
+      ],
+      "returns": {"kind": "float64", "annotation": "float"}
+    },
+    {
+      "name": "topoShapeVolume",
+      "wire_name": "part.topo_shape.volume",
+      "id": 15,
+      "guest_method": "topoShapeVolume",
+      "source": "Part.TopoShape.Volume",
+      "permission": "geometry.read",
+      "mutates": false,
+      "requires": ["src/Mod/Part/App/TopoShape.pyi"],
+      "params": [
+        {"name": "shape", "type": {"kind": "handle", "type": "Part.TopoShape", "annotation": "TopoShape"}}
+      ],
+      "returns": {"kind": "float64", "annotation": "float"}
+    },
+    {
       "name": "release",
       "wire_name": "handle.release",
       "id": 4,

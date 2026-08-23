@@ -141,6 +141,33 @@ public:
         return call(result);
     }
 
+    bool documentIsSaved(Handle document, bool* result) const
+    {
+        if (result == nullptr) {
+            return false;
+        }
+        resetRequest(9U, 8U);
+        appendU64(document);
+        return call(result);
+    }
+
+    bool documentGetObject(Handle document, const char* name, Handle* result) const
+    {
+        if (result == nullptr) {
+            return false;
+        }
+
+        const auto nameLength = stringLength(name);
+        if (name == nullptr || nameLength > MaxStringLength) {
+            return false;
+        }
+        resetRequest(10U, 12U + nameLength);
+        appendU64(document);
+        appendU32(nameLength);
+        appendBytes(reinterpret_cast<const FreeCADWasmU8*>(name), nameLength);
+        return call(result);
+    }
+
     bool partMakeBox(double length, double width, double height, Handle* result) const
     {
         if (result == nullptr) {
@@ -216,6 +243,56 @@ public:
         resetRequest(8U, 48U);
         appendVector(left);
         appendVector(right);
+        return call(result);
+    }
+
+    bool topoShapeIsNull(Handle shape, bool* result) const
+    {
+        if (result == nullptr) {
+            return false;
+        }
+        resetRequest(11U, 8U);
+        appendU64(shape);
+        return call(result);
+    }
+
+    bool topoShapeIsValid(Handle shape, bool* result) const
+    {
+        if (result == nullptr) {
+            return false;
+        }
+        resetRequest(12U, 8U);
+        appendU64(shape);
+        return call(result);
+    }
+
+    bool topoShapeLength(Handle shape, double* result) const
+    {
+        if (result == nullptr) {
+            return false;
+        }
+        resetRequest(13U, 8U);
+        appendU64(shape);
+        return call(result);
+    }
+
+    bool topoShapeArea(Handle shape, double* result) const
+    {
+        if (result == nullptr) {
+            return false;
+        }
+        resetRequest(14U, 8U);
+        appendU64(shape);
+        return call(result);
+    }
+
+    bool topoShapeVolume(Handle shape, double* result) const
+    {
+        if (result == nullptr) {
+            return false;
+        }
+        resetRequest(15U, 8U);
+        appendU64(shape);
         return call(result);
     }
 
@@ -384,6 +461,28 @@ private:
             decoded.bits |= static_cast<FreeCADWasmU64>(bytes[shift / 8U]) << shift;
         }
         *result = decoded.value;
+        freecad_release(address);
+        return true;
+    }
+
+    static bool call(bool* result)
+    {
+        const auto response = freecad_dispatch(request, requestLength);
+        const auto address = static_cast<FreeCADWasmU32>(response);
+        const auto length = static_cast<FreeCADWasmU32>(response >> 32U);
+        if (length != 1U || address == 0U) {
+            if (address != 0U) {
+                freecad_release(address);
+            }
+            return false;
+        }
+
+        const auto* bytes = reinterpret_cast<const FreeCADWasmU8*>(address);
+        if (bytes[0] > 1U) {
+            freecad_release(address);
+            return false;
+        }
+        *result = bytes[0] != 0U;
         freecad_release(address);
         return true;
     }

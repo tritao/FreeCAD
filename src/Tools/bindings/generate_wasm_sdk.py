@@ -314,7 +314,15 @@ def render_cpp(model: dict[str, Any]) -> str:
                     ]
                 )
             else:
-                lines.append(f"        return client_.{method}({', '.join(call_arguments)});")
+                lines.extend(
+                    [
+                        "        bool value = false;",
+                        f"        if (!client_.{method}({', '.join(call_arguments + ['&value'])})) {{",
+                        "            return false;",
+                        "        }",
+                        "        return value;",
+                    ]
+                )
             lines.extend(["    }", ""])
 
     lines.extend(

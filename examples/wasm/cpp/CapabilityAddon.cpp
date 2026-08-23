@@ -59,6 +59,25 @@ extern "C" unsigned long long freecad_addon_entry(const unsigned char*, unsigned
         return 0x100000000ULL;
     }
 
+    FreeCADDocumentObjectHandle queriedObject;
+    if (!host.documentGetObject(document, "Box", &queriedObject)) {
+        return 0x100000000ULL;
+    }
+
+    double shapeLength = 0.0;
+    double shapeArea = 0.0;
+    double shapeVolume = 0.0;
+    if (host.topoShapeIsNull(box)
+        || !host.topoShapeIsValid(box)
+        || !host.topoShapeLength(box, &shapeLength)
+        || shapeLength != 480.0
+        || !host.topoShapeArea(box, &shapeArea)
+        || shapeArea != 2200.0
+        || !host.topoShapeVolume(box, &shapeVolume)
+        || shapeVolume != 6000.0) {
+        return 0x100000000ULL;
+    }
+
     // The document and feature are host-owned. Release only the temporary
     // geometry handle; document lifecycle remains a host policy decision.
     bool released = false;
