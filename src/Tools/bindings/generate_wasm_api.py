@@ -324,8 +324,25 @@ def _validate_operation_catalog(operations: list[dict[str, Any]]) -> None:
             raise ValueError(f"WASM operation '{name}' has invalid requirements")
         if not isinstance(operation.get("params"), list):
             raise ValueError(f"WASM operation '{name}' has invalid parameters")
+        for parameter in operation["params"]:
+            parameter_type = parameter.get("type", {})
+            if parameter_type.get("kind") == "handle":
+                ownership = parameter.get("ownership", "borrowed")
+                if ownership not in {"owned", "borrowed"}:
+                    raise ValueError(
+                        f"WASM operation '{name}' has invalid parameter ownership"
+                    )
         if not isinstance(operation.get("returns"), dict):
             raise ValueError(f"WASM operation '{name}' has invalid return metadata")
+        returns = operation["returns"]
+        if returns.get("kind") == "handle":
+            ownership = returns.get("ownership", "borrowed")
+            if ownership not in {"owned", "borrowed"}:
+                raise ValueError(f"WASM operation '{name}' has invalid handle ownership")
+        if "nullable" in returns and not isinstance(returns["nullable"], bool):
+            raise ValueError(f"WASM operation '{name}' has invalid nullability")
+        if "consumes" in operation and not isinstance(operation["consumes"], bool):
+            raise ValueError(f"WASM operation '{name}' has invalid consumes flag")
 
 
 def _load_operations(root: Path, inputs: list[Path], api_model: Any) -> list[dict[str, Any]]:
@@ -337,6 +354,7 @@ def _load_operations(root: Path, inputs: list[Path], api_model: Any) -> list[dic
     input_paths = {path.resolve().relative_to(root).as_posix() for path in inputs}
     sources = _operation_sources(api_model)
     operations = model.get("operations", [])
+    defaults = model.get("defaults", {})
     if not isinstance(operations, list):
         raise ValueError("WASM operation catalog must contain an operations list")
     _validate_operation_catalog(operations)
@@ -352,6 +370,16 @@ def _load_operations(root: Path, inputs: list[Path], api_model: Any) -> list[dic
                 f"WASM operation {operation.get('name', '<unnamed>')} references "
                 f"missing .pyi symbol '{source}'"
             )
+        operation.setdefault("fallible", defaults.get("fallible", True))
+        returns = operation.setdefault("returns", {})
+        returns.setdefault("nullable", defaults.get("nullable", False))
+        if returns.get("kind") == "handle":
+            returns.setdefault(
+                "ownership", defaults.get("handle_ownership", "borrowed")
+            )
+        for parameter in operation.get("params", []):
+            if parameter.get("type", {}).get("kind") == "handle":
+                parameter.setdefault("ownership", "borrowed")
         selected_operations.append(operation)
     return selected_operations
 
@@ -387,6 +415,24 @@ def build_model(root: Path, inputs: list[Path]) -> dict[str, Any]:
         "schema_version": SCHEMA_VERSION,
         "api": f"org.freecad.wasm.api@{SCHEMA_VERSION}",
         "permission_policy": "deny-by-default",
+        "abi": {
+            "request_magic": "FCWA",
+            "response_magic": "FCWR",
+            "request_version": 1,
+            "response_version": 1,
+            "request_header_size": 12,
+            "response_header_size": 12,
+            "error_codes": {
+                "none": 0,
+                "invalid_request": 1,
+                "permission_denied": 2,
+                "invalid_handle": 3,
+                "unsupported": 4,
+                "limit_exceeded": 5,
+                "host_failure": 6,
+                "protocol": 7,
+            },
+        },
         "operations": _load_operations(root, inputs, model),
         "classes": classes,
         "functions": functions,

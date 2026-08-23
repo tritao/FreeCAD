@@ -3,6 +3,7 @@
 #pragma once
 
 #include "WasmHandleTable.h"
+#include "../WasmAbi.h"
 #include "WasmPermissions.h"
 
 #include <cstddef>
@@ -10,6 +11,7 @@
 #include <string>
 #include <string_view>
 #include <thread>
+#include <utility>
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
@@ -24,9 +26,41 @@ namespace Wasm
 
 struct HostCallResult
 {
+    HostCallResult() = default;
+
+    HostCallResult(bool success,
+                   std::string responsePayload,
+                   std::string errorMessage,
+                   Abi::ErrorCode code = Abi::ErrorCode::None)
+        : ok(success)
+        , payload(std::move(responsePayload))
+        , error(std::move(errorMessage))
+        , errorCode(success || code != Abi::ErrorCode::None ? code : inferErrorCode(error))
+    {
+    }
+
+    static Abi::ErrorCode inferErrorCode(std::string_view errorMessage)
+    {
+        if (errorMessage.find("not granted") != std::string_view::npos) {
+            return Abi::ErrorCode::PermissionDenied;
+        }
+        if (errorMessage.find("handle") != std::string_view::npos) {
+            return Abi::ErrorCode::InvalidHandle;
+        }
+        if (errorMessage.find("unsupported") != std::string_view::npos
+            || errorMessage.find("not available") != std::string_view::npos) {
+            return Abi::ErrorCode::Unsupported;
+        }
+        if (errorMessage.find("exceeds") != std::string_view::npos) {
+            return Abi::ErrorCode::LimitExceeded;
+        }
+        return Abi::ErrorCode::HostFailure;
+    }
+
     bool ok = false;
     std::string payload;
     std::string error;
+    Abi::ErrorCode errorCode = Abi::ErrorCode::None;
 };
 
 class WasmHostApi

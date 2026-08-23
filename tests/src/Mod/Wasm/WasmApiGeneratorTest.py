@@ -41,6 +41,8 @@ with tempfile.TemporaryDirectory(prefix="freecad-wasm-api-") as temporary_direct
 assert model["schema"] == "org.freecad.wasm.api"
 assert model["api"] == "org.freecad.wasm.api@0"
 assert model["permission_policy"] == "deny-by-default"
+assert model["abi"]["response_magic"] == "FCWR"
+assert model["abi"]["error_codes"]["permission_denied"] == 2
 operations = {operation["name"]: operation for operation in model["operations"]}
 assert operations["documentNew"]["permission"] == "document.create"
 assert operations["partMakeBox"]["id"] == 2
@@ -56,6 +58,9 @@ assert operations["documentCommitTransaction"]["transaction"] == "commit"
 assert operations["documentAbortTransaction"]["transaction"] == "abort"
 assert operations["documentObjectGetLabel"]["source"] == "FreeCAD.DocumentObject.Label"
 assert operations["documentObjectSetLabel"]["transaction"] == "required"
+assert operations["documentNew"]["returns"]["ownership"] == "owned"
+assert operations["documentNew"]["returns"]["nullable"] is False
+assert operations["documentNew"]["fallible"] is True
 
 abi_header = (ROOT / "src/Mod/Wasm/WasmAbi.h").read_text(encoding="utf-8")
 abi_enum = re.search(

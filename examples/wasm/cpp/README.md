@@ -30,7 +30,7 @@ build-wasm-cpp/
 ```
 
 The source-tree build generates the typed C++ SDK header and the addon uses
-the generated `FreeCAD::Wasm::Generated::Host` wrapper rather than encoding
+the generated `FreeCAD::Wasm::Generated::Client` wrapper rather than encoding
 ABI operations directly.
 
 To build the installed example against an installed SDK:

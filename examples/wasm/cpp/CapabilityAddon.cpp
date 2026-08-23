@@ -5,7 +5,7 @@
 using FreeCAD::Wasm::Generated::FreeCADDocumentHandle;
 using FreeCAD::Wasm::Generated::FreeCADDocumentObjectHandle;
 using FreeCAD::Wasm::Generated::FreeCADBaseVectorValue;
-using FreeCAD::Wasm::Generated::Host;
+using FreeCAD::Wasm::Generated::Client;
 using FreeCAD::Wasm::Generated::PartTopoShapeHandle;
 
 #if defined(__clang__) && defined(__wasm__)
@@ -19,7 +19,7 @@ extern "C" unsigned long long freecad_addon_entry(const unsigned char*, unsigned
 
 extern "C" unsigned long long freecad_addon_entry(const unsigned char*, unsigned int)
 {
-    Host host;
+    Client host;
     FreeCADBaseVectorValue left;
     FreeCADBaseVectorValue right;
     if (!host.vectorNew(1.0, 2.0, 3.0, &left)
@@ -53,6 +53,7 @@ extern "C" unsigned long long freecad_addon_entry(const unsigned char*, unsigned
     if (!host.partMakeBox(10.0, 20.0, 30.0, &box)) {
         return 0x100000000ULL;
     }
+    auto ownedBox = host.own(box.value);
 
     FreeCADDocumentObjectHandle object;
     if (!host.documentOpenTransaction(document, "Add object")
@@ -102,17 +103,9 @@ extern "C" unsigned long long freecad_addon_entry(const unsigned char*, unsigned
         return 0x100000000ULL;
     }
 
-    // The document and feature are host-owned. Release only the temporary
-    // geometry handle; document lifecycle remains a host policy decision.
-    bool released = false;
-#if defined(FREECAD_WASM_FREESTANDING)
-    released = host.release(box.value);
-#else
-    released = host.release(box.value);
-#endif
-    if (!released) {
-        return 0x100000000ULL;
-    }
+    // The document and feature are host-owned. The temporary geometry token
+    // is released deterministically by the generated ownership wrapper.
+    ownedBox.reset();
 
 #if defined(FREECAD_WASM_FREESTANDING)
     auto response = host.allocateResponse(2U);

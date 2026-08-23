@@ -21,23 +21,23 @@ pub extern "C" fn freecad_addon_entry(_input: *const u8, _input_length: u32) -> 
     unsafe {
         let client = Client::new();
         let document_name = b"RustCapabilityExample";
-        let Some(document) = client.document_new(document_name) else {
+        let Ok(document) = client.document_new(document_name) else {
             return FAILURE;
         };
 
-        let Some(left) = client.vector_new(1.0, 2.0, 3.0) else {
+        let Ok(left) = client.vector_new(1.0, 2.0, 3.0) else {
             return FAILURE;
         };
-        let Some(right) = client.vector_new(4.0, 5.0, 6.0) else {
+        let Ok(right) = client.vector_new(4.0, 5.0, 6.0) else {
             return FAILURE;
         };
-        let Some(sum) = client.vector_add(left, right) else {
+        let Ok(sum) = client.vector_add(left, right) else {
             return FAILURE;
         };
-        let Some(dot) = client.vector_dot(left, right) else {
+        let Ok(dot) = client.vector_dot(left, right) else {
             return FAILURE;
         };
-        let Some(cross) = client.vector_cross(left, right) else {
+        let Ok(cross) = client.vector_cross(left, right) else {
             return FAILURE;
         };
         let expected_sum = freecad_wasm_api::FreeCADBaseVectorValue {
@@ -54,75 +54,75 @@ pub extern "C" fn freecad_addon_entry(_input: *const u8, _input_length: u32) -> 
             return FAILURE;
         }
 
-        let Some(shape) = client.part_make_box(10.0, 20.0, 30.0) else {
+        let Ok(shape) = client.part_make_box(10.0, 20.0, 30.0) else {
             return FAILURE;
         };
 
         let object_name = b"RustBox";
-        if client.document_open_transaction(document, b"Add object") != Some(true) {
+        if client.document_open_transaction(document, b"Add object") != Ok(true) {
             return FAILURE;
         }
-        let Some(object) = client.document_add_object(document, shape, object_name) else {
+        let Ok(object) = client.document_add_object(document, shape, object_name) else {
             return FAILURE;
         };
-        if client.document_commit_transaction(document) != Some(true) {
+        if client.document_commit_transaction(document) != Ok(true) {
             return FAILURE;
         }
 
         let mut label = [0u8; 128];
-        let Some(label_length) = client.document_object_get_label(object, &mut label) else {
+        let Ok(label_length) = client.document_object_get_label(object, &mut label) else {
             return FAILURE;
         };
         if &label[..label_length] != b"RustBox"
-            || client.document_open_transaction(document, b"Set label") != Some(true)
-            || client.document_object_set_label(object, b"ConfiguredBox") != Some(true)
-            || client.document_commit_transaction(document) != Some(true)
-            || client.document_open_transaction(document, b"Rollback label") != Some(true)
-            || client.document_object_set_label(object, b"TemporaryBox") != Some(true)
-            || client.document_abort_transaction(document) != Some(true)
+            || client.document_open_transaction(document, b"Set label") != Ok(true)
+            || client.document_object_set_label(object, b"ConfiguredBox") != Ok(true)
+            || client.document_commit_transaction(document) != Ok(true)
+            || client.document_open_transaction(document, b"Rollback label") != Ok(true)
+            || client.document_object_set_label(object, b"TemporaryBox") != Ok(true)
+            || client.document_abort_transaction(document) != Ok(true)
         {
             return FAILURE;
         }
-        let Some(label_length) = client.document_object_get_label(object, &mut label) else {
+        let Ok(label_length) = client.document_object_get_label(object, &mut label) else {
             return FAILURE;
         };
         if &label[..label_length] != b"ConfiguredBox" {
             return FAILURE;
         }
 
-        let Some(saved) = client.document_is_saved(document) else {
+        let Ok(saved) = client.document_is_saved(document) else {
             return FAILURE;
         };
         if saved {
             return FAILURE;
         }
 
-        let Some(queried_object) = client.document_get_object(document, object_name) else {
+        let Ok(queried_object) = client.document_get_object(document, object_name) else {
             return FAILURE;
         };
-        let Some(is_null) = client.topo_shape_is_null(shape) else {
+        let Ok(is_null) = client.topo_shape_is_null(shape) else {
             return FAILURE;
         };
-        let Some(is_valid) = client.topo_shape_is_valid(shape) else {
+        let Ok(is_valid) = client.topo_shape_is_valid(shape) else {
             return FAILURE;
         };
-        let Some(length) = client.topo_shape_length(shape) else {
+        let Ok(length) = client.topo_shape_length(shape) else {
             return FAILURE;
         };
-        let Some(area) = client.topo_shape_area(shape) else {
+        let Ok(area) = client.topo_shape_area(shape) else {
             return FAILURE;
         };
-        let Some(volume) = client.topo_shape_volume(shape) else {
+        let Ok(volume) = client.topo_shape_volume(shape) else {
             return FAILURE;
         };
         if is_null || !is_valid || length != 480.0 || area != 2200.0 || volume != 6000.0 {
             return FAILURE;
         }
 
-        if !client.release(queried_object.0)
-            || !client.release(object.0)
-            || !client.release(shape.0)
-            || !client.release(document.0)
+        if client.release(queried_object.0).is_err()
+            || client.release(object.0).is_err()
+            || client.release(shape.0).is_err()
+            || client.release(document.0).is_err()
         {
             return FAILURE;
         }

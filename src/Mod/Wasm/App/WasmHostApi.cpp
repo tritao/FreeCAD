@@ -147,7 +147,7 @@ std::string stringPayload(std::string_view value)
 
 HostCallResult malformedRequest(std::string error)
 {
-    return {false, {}, std::move(error)};
+    return {false, {}, std::move(error), Wasm::Abi::ErrorCode::InvalidRequest};
 }
 
 #ifdef FREECAD_WASM_HAS_PART

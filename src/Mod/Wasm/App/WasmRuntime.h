@@ -2,6 +2,8 @@
 
 #pragma once
 
+#include "../WasmAbi.h"
+
 #include <cstddef>
 #include <cstdint>
 #include <filesystem>
@@ -55,6 +57,7 @@ struct CallResult
     bool ok = false;
     std::vector<std::byte> payload;
     std::string error;
+    Abi::ErrorCode errorCode = Abi::ErrorCode::None;
 };
 
 class IWasmInstance

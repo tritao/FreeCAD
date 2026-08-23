@@ -563,6 +563,7 @@ TEST(WasmHostApiTest, DeniesCapabilitiesByDefault)
     const auto denied = hostApi.dispatch("freecad.log:hello");
     EXPECT_FALSE(denied.ok);
     EXPECT_NE(denied.error.find("console.log"), std::string::npos);
+    EXPECT_EQ(denied.errorCode, Wasm::Abi::ErrorCode::PermissionDenied);
 
     hostApi.setPermissions({"console.log"});
     EXPECT_TRUE(hostApi.dispatch("freecad.log:hello").ok);
@@ -580,6 +581,7 @@ TEST(WasmHostApiTest, ValidatesVersionedBinaryRequests)
     const auto denied = hostApi.dispatch(bytes, hostApi.permissions(), handles);
     EXPECT_FALSE(denied.ok);
     EXPECT_NE(denied.error.find("document.create"), std::string::npos);
+    EXPECT_EQ(denied.errorCode, Wasm::Abi::ErrorCode::PermissionDenied);
 
     auto unsupportedVersion = request;
     unsupportedVersion[4] = static_cast<char>(Wasm::Abi::RequestVersion + 1U);
@@ -587,6 +589,7 @@ TEST(WasmHostApiTest, ValidatesVersionedBinaryRequests)
         asBytes(unsupportedVersion), hostApi.permissions(), handles);
     EXPECT_FALSE(malformed.ok);
     EXPECT_NE(malformed.error.find("version"), std::string::npos);
+    EXPECT_EQ(malformed.errorCode, Wasm::Abi::ErrorCode::InvalidRequest);
 }
 
 TEST(WasmHostApiTest, RejectsCallsFromNonOwnerThreads)
@@ -674,7 +677,8 @@ TEST(WasmGuestTest, EncodesThePublishedHostProtocol)
               binaryRequest(Wasm::Abi::Operation::DocumentAddObject, objectPayload));
 
     const auto released = guest.release(22U);
-    EXPECT_TRUE(released.ok);
+    EXPECT_FALSE(released.ok);
+    EXPECT_EQ(released.errorCode, Wasm::Abi::ErrorCode::Protocol);
     EXPECT_EQ(GuestCapture::lastRequest,
               binaryRequest(Wasm::Abi::Operation::HandleRelease, handlePayload(22U)));
 
@@ -789,7 +793,7 @@ TEST(WamrRuntimeTest, ExecutesCompiledCapabilityGuest)
     ASSERT_TRUE(deniedLoad.ok) << deniedLoad.error;
     const auto denied = deniedManager.invoke("CapabilityExample");
     EXPECT_FALSE(denied.ok);
-    EXPECT_NE(denied.error.find("document.create"), std::string::npos);
+    EXPECT_NE(denied.error.find("failed host operation"), std::string::npos);
     EXPECT_EQ(App::GetApplication().getDocument(documentName), nullptr);
 
     Wasm::WasmAddonManager manager;
@@ -906,7 +910,7 @@ TEST(WamrRuntimeTest, ExecutesRustCapabilityGuest)
     ASSERT_TRUE(deniedLoad.ok) << deniedLoad.error;
     const auto denied = deniedManager.invoke("RustCapabilityExample");
     EXPECT_FALSE(denied.ok);
-    EXPECT_NE(denied.error.find("document.create"), std::string::npos);
+    EXPECT_NE(denied.error.find("failed host operation"), std::string::npos);
     EXPECT_EQ(App::GetApplication().getDocument(documentName), nullptr);
 
     Wasm::WasmAddonManager manager;
@@ -1507,6 +1511,7 @@ TEST(WamrRuntimeTest, DispatchesVersionedCapabilitiesWithInstanceLocalHandles)
     const auto denied = deniedInstance->call("dispatch", asBytes(documentRequest));
     EXPECT_FALSE(denied.ok);
     EXPECT_NE(denied.error.find("document.create"), std::string::npos);
+    EXPECT_EQ(denied.errorCode, Wasm::Abi::ErrorCode::PermissionDenied);
 
     Wasm::WasmHostApi hostApi;
     hostApi.setPermissions({"document.create", "document.modify", "geometry.create"});
@@ -1516,6 +1521,7 @@ TEST(WamrRuntimeTest, DispatchesVersionedCapabilitiesWithInstanceLocalHandles)
     const auto malformed = instance->call("dispatch", asBytes("not-a-wasm-request"));
     EXPECT_FALSE(malformed.ok);
     EXPECT_NE(malformed.error.find("magic"), std::string::npos);
+    EXPECT_EQ(malformed.errorCode, Wasm::Abi::ErrorCode::InvalidRequest);
 
     const auto documentResult = instance->call("dispatch", asBytes(documentRequest));
     ASSERT_TRUE(documentResult.ok) << documentResult.error;

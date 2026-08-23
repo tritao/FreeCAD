@@ -6,6 +6,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <string>
+#include <string_view>
 
 namespace Wasm
 {
@@ -23,6 +24,28 @@ inline constexpr const char* AddonEntryExport = "freecad_addon_entry";
 inline constexpr std::array<std::uint8_t, 4> RequestMagic {'F', 'C', 'W', 'A'};
 inline constexpr std::uint8_t RequestVersion = 1U;
 inline constexpr std::size_t RequestHeaderSize = 12U;
+
+inline constexpr std::array<std::uint8_t, 4> ResponseMagic {'F', 'C', 'W', 'R'};
+inline constexpr std::uint8_t ResponseVersion = 1U;
+inline constexpr std::size_t ResponseHeaderSize = 12U;
+
+enum class ResponseStatus : std::uint8_t
+{
+    Success = 0,
+    Error = 1,
+};
+
+enum class ErrorCode : std::uint8_t
+{
+    None = 0,
+    InvalidRequest = 1,
+    PermissionDenied = 2,
+    InvalidHandle = 3,
+    Unsupported = 4,
+    LimitExceeded = 5,
+    HostFailure = 6,
+    Protocol = 7,
+};
 
 enum class Operation : std::uint8_t
 {
@@ -70,6 +93,33 @@ inline void appendHeader(std::string& output, Operation operation, std::uint32_t
     output.push_back('\0');
     output.push_back('\0');
     appendU32(output, payloadSize);
+}
+
+inline void appendResponseHeader(std::string& output,
+                                 ResponseStatus status,
+                                 ErrorCode errorCode,
+                                 std::uint32_t payloadSize)
+{
+    output.append(reinterpret_cast<const char*>(ResponseMagic.data()), ResponseMagic.size());
+    output.push_back(static_cast<char>(ResponseVersion));
+    output.push_back(static_cast<char>(status));
+    output.push_back(static_cast<char>(errorCode));
+    output.push_back('\0');
+    appendU32(output, payloadSize);
+}
+
+inline std::string makeResponse(ResponseStatus status,
+                                ErrorCode errorCode,
+                                std::string_view payload)
+{
+    std::string response;
+    response.reserve(ResponseHeaderSize + payload.size());
+    appendResponseHeader(response,
+                         status,
+                         errorCode,
+                         static_cast<std::uint32_t>(payload.size()));
+    response.append(payload);
+    return response;
 }
 
 // Exported addon calls use (i32 input_ptr, i32 input_len) -> i64. The low

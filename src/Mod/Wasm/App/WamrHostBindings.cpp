@@ -37,6 +37,26 @@ void setHostException(wasm_exec_env_t execEnv, const std::string& error)
     }
 }
 
+Wasm::Abi::ErrorCode errorCodeFor(const Wasm::HostCallResult& result)
+{
+    if (result.errorCode != Wasm::Abi::ErrorCode::None) {
+        return result.errorCode;
+    }
+
+    const std::string_view error = result.error;
+    if (error.find("not granted") != std::string_view::npos) {
+        return Wasm::Abi::ErrorCode::PermissionDenied;
+    }
+    if (error.find("handle") != std::string_view::npos) {
+        return Wasm::Abi::ErrorCode::InvalidHandle;
+    }
+    if (error.find("unsupported") != std::string_view::npos
+        || error.find("not available") != std::string_view::npos) {
+        return Wasm::Abi::ErrorCode::Unsupported;
+    }
+    return Wasm::Abi::ErrorCode::HostFailure;
+}
+
 void freecadLog(wasm_exec_env_t execEnv, const std::uint8_t* text, std::uint32_t length)
 {
     if (length != 0U && text == nullptr) {
@@ -122,25 +142,25 @@ std::int64_t freecadDispatch(wasm_exec_env_t execEnv,
         : std::span<const std::byte>(reinterpret_cast<const std::byte*>(request), requestLength);
     const auto result = context->hostApi.dispatch(
         requestBytes, context->permissions, context->handles);
-    if (!result.ok) {
-        setHostException(execEnv, result.error);
-        return 0;
-    }
-
-    if (result.payload.size() > context->maxResponseBytes) {
+    const auto errorCode = result.ok ? Wasm::Abi::ErrorCode::None : errorCodeFor(result);
+    const std::string response = Wasm::Abi::makeResponse(
+        result.ok ? Wasm::Abi::ResponseStatus::Success : Wasm::Abi::ResponseStatus::Error,
+        errorCode,
+        result.ok ? std::string_view(result.payload) : std::string_view(result.error));
+    if (response.size() > context->maxResponseBytes) {
         setHostException(execEnv, "freecad_dispatch response exceeds the configured limit");
         return 0;
     }
-    if (result.payload.size() > std::numeric_limits<std::uint32_t>::max()) {
+    if (response.size() > std::numeric_limits<std::uint32_t>::max()) {
         setHostException(execEnv, "freecad_dispatch response is too large");
         return 0;
     }
 
     const auto moduleInstance = wasm_runtime_get_module_inst(execEnv);
     std::uint32_t responseAddress = 0U;
-    if (!result.payload.empty()) {
+    if (!response.empty()) {
         const auto rawResponseAddress = wasm_runtime_module_dup_data(
-            moduleInstance, result.payload.data(), result.payload.size());
+            moduleInstance, response.data(), response.size());
         if (rawResponseAddress == 0U) {
             setHostException(execEnv, "freecad_dispatch could not allocate its response");
             return 0;
@@ -154,7 +174,7 @@ std::int64_t freecadDispatch(wasm_exec_env_t execEnv,
     }
 
     if (responseAddress != 0U
-        && !context->responseAllocations.emplace(responseAddress, result.payload.size()).second) {
+        && !context->responseAllocations.emplace(responseAddress, response.size()).second) {
         wasm_runtime_module_free(moduleInstance, responseAddress);
         setHostException(execEnv, "freecad_dispatch returned a duplicate response address");
         return 0;
@@ -162,7 +182,7 @@ std::int64_t freecadDispatch(wasm_exec_env_t execEnv,
 
     return static_cast<std::int64_t>(Wasm::Abi::packResponse(
         static_cast<std::uint32_t>(responseAddress),
-        static_cast<std::uint32_t>(result.payload.size())));
+        static_cast<std::uint32_t>(response.size())));
 }
 
 void freecadRelease(wasm_exec_env_t execEnv, std::uint32_t address)

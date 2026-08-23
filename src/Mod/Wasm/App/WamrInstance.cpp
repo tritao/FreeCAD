@@ -10,6 +10,7 @@
 #include <wasm_export.h>
 
 #include <atomic>
+#include <algorithm>
 #include <chrono>
 #include <condition_variable>
 #include <cstring>
@@ -48,9 +49,10 @@ std::string runtimeException(wasm_module_inst_t moduleInstance, std::string fall
     return fallback;
 }
 
-Wasm::CallResult failure(std::string error)
+Wasm::CallResult failure(std::string error,
+                         Wasm::Abi::ErrorCode errorCode = Wasm::Abi::ErrorCode::HostFailure)
 {
-    return {false, {}, std::move(error)};
+    return {false, {}, std::move(error), errorCode};
 }
 
 }  // namespace
@@ -271,6 +273,12 @@ Wasm::CallResult Wasm::WamrInstance::call(std::string_view exportName,
     const auto packedResponse = static_cast<std::uint64_t>(results[0].of.i64);
     const auto responseAddress = Abi::responseAddress(packedResponse);
     const auto responseLength = Abi::responseLength(packedResponse);
+    if (responseAddress == 0U && responseLength == 1U) {
+        if (inputAddress != 0U) {
+            releaseInput(inputAddress);
+        }
+        return failure("WASM guest reported a failed host operation");
+    }
     if (responseLength > impl->maxResponseBytes) {
         if (inputAddress != 0U) {
             releaseInput(inputAddress);
@@ -337,6 +345,34 @@ Wasm::CallResult Wasm::WamrInstance::call(std::string_view exportName,
     }
     if (inputAddress != 0U) {
         releaseInput(inputAddress);
+    }
+
+    if (payload.size() >= Abi::ResponseHeaderSize
+        && std::equal(Abi::ResponseMagic.begin(),
+                      Abi::ResponseMagic.end(),
+                      reinterpret_cast<const std::uint8_t*>(payload.data()))) {
+        const auto* bytes = reinterpret_cast<const std::uint8_t*>(payload.data());
+        std::uint32_t payloadSize = 0U;
+        for (unsigned shift = 0U; shift < 32U; shift += 8U) {
+            payloadSize |= static_cast<std::uint32_t>(bytes[8U + shift / 8U]) << shift;
+        }
+        const auto status = static_cast<Abi::ResponseStatus>(bytes[5]);
+        if (bytes[4] != Abi::ResponseVersion || bytes[7] != 0U
+            || payloadSize != payload.size() - Abi::ResponseHeaderSize
+            || (status != Abi::ResponseStatus::Success
+                && status != Abi::ResponseStatus::Error)) {
+            return failure("WASM dispatch returned an invalid response envelope");
+        }
+        std::vector<std::byte> operationPayload(
+            payload.begin() + Abi::ResponseHeaderSize, payload.end());
+        if (status == Abi::ResponseStatus::Error) {
+            return {false,
+                    {},
+                    std::string(reinterpret_cast<const char*>(operationPayload.data()),
+                                operationPayload.size()),
+                    static_cast<Abi::ErrorCode>(bytes[6])};
+        }
+        payload = std::move(operationPayload);
     }
 
     return {true, std::move(payload), {}};

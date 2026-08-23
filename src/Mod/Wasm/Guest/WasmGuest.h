@@ -8,6 +8,7 @@
 
 #include "../WasmAbi.h"
 
+#include <algorithm>
 #include <cstdint>
 #include <cstring>
 #include <limits>
@@ -57,6 +58,7 @@ struct Result
     bool ok = false;
     T value {};
     std::string error;
+    Abi::ErrorCode errorCode = Abi::ErrorCode::None;
 };
 
 class ResponseBuffer
@@ -568,7 +570,7 @@ public:
         Abi::appendU64(payload, handle);
         const auto result = call(Abi::Operation::HandleRelease, payload);
         if (!result.ok) {
-            return {false, false, result.error};
+            return {false, false, result.error, result.errorCode};
         }
         if (!result.payload.empty()) {
             return {false, false, "handle.release returned an unexpected payload"};
@@ -607,6 +609,7 @@ private:
         bool ok = false;
         std::vector<std::uint8_t> payload;
         std::string error;
+        Abi::ErrorCode errorCode = Abi::ErrorCode::None;
     };
 
     template<typename T>
@@ -643,10 +646,10 @@ private:
     Response call(Abi::Operation operation, std::string_view payload) const
     {
         if (dispatchFunction == nullptr || releaseFunction == nullptr) {
-            return {false, {}, "WASM host callbacks are unavailable"};
+            return {false, {}, "WASM host callbacks are unavailable", Abi::ErrorCode::HostFailure};
         }
         if (payload.size() > std::numeric_limits<std::uint32_t>::max()) {
-            return {false, {}, "WASM host request exceeds the u32 ABI limit"};
+            return {false, {}, "WASM host request exceeds the u32 ABI limit", Abi::ErrorCode::LimitExceeded};
         }
 
         std::string request;
@@ -660,10 +663,14 @@ private:
         const auto address = Abi::responseAddress(response);
         const auto length = Abi::responseLength(response);
         if (length != 0U && address == 0U) {
-            return {false, {}, "WASM host returned a null response address"};
+            return {false, {}, "WASM host returned a null response address", Abi::ErrorCode::Protocol};
         }
 
-        Response result {true, {}, {}};
+        if (address == 0U && length == 0U) {
+            return {false, {}, "WASM host returned no response", Abi::ErrorCode::Protocol};
+        }
+
+        Response result {true, {}, {}, Abi::ErrorCode::None};
         if (length != 0U) {
             const auto* responseBytes = reinterpret_cast<const std::uint8_t*>(
                 static_cast<std::uintptr_t>(address));
@@ -672,6 +679,39 @@ private:
         if (address != 0U) {
             releaseFunction(address);
         }
+
+        if (result.payload.size() < Abi::ResponseHeaderSize
+            || !std::equal(Abi::ResponseMagic.begin(),
+                           Abi::ResponseMagic.end(),
+                           result.payload.begin())) {
+            return result;
+        }
+
+        const auto version = result.payload[4];
+        const auto status = static_cast<Abi::ResponseStatus>(result.payload[5]);
+        const auto errorCode = static_cast<Abi::ErrorCode>(result.payload[6]);
+        const auto flags = static_cast<std::uint16_t>(result.payload[7]);
+        std::uint32_t payloadSize = 0U;
+        for (unsigned shift = 0U; shift < 32U; shift += 8U) {
+            payloadSize |= static_cast<std::uint32_t>(result.payload[8U + shift / 8U]) << shift;
+        }
+        if (version != Abi::ResponseVersion || flags != 0U
+            || payloadSize != result.payload.size() - Abi::ResponseHeaderSize
+            || (status != Abi::ResponseStatus::Success
+                && status != Abi::ResponseStatus::Error)) {
+            return {false, {}, "WASM host returned an invalid response envelope", Abi::ErrorCode::Protocol};
+        }
+
+        std::vector<std::uint8_t> payloadBytes(
+            result.payload.begin() + Abi::ResponseHeaderSize, result.payload.end());
+        result.payload = std::move(payloadBytes);
+        if (status == Abi::ResponseStatus::Error) {
+            result.ok = false;
+            result.error.assign(reinterpret_cast<const char*>(result.payload.data()),
+                                result.payload.size());
+            result.errorCode = errorCode;
+            result.payload.clear();
+        }
         return result;
     }
 
@@ -679,7 +719,7 @@ private:
     {
         const auto result = call(operation, payload);
         if (!result.ok) {
-            return failure<Handle>(result.error);
+            return {false, {}, result.error, result.errorCode};
         }
         if (result.payload.size() != sizeof(Handle)) {
             return failure<Handle>("WASM host returned an invalid handle payload");
@@ -699,7 +739,7 @@ private:
     {
         const auto result = call(operation, payload);
         if (!result.ok) {
-            return failure<Vector3>(result.error);
+            return {false, {}, result.error, result.errorCode};
         }
         if (result.payload.size() != sizeof(double) * 3U) {
             return failure<Vector3>("WASM host returned an invalid vector payload");
@@ -721,7 +761,7 @@ private:
     {
         const auto result = call(operation, payload);
         if (!result.ok) {
-            return failure<double>(result.error);
+            return {false, {}, result.error, result.errorCode};
         }
         if (result.payload.size() != sizeof(double)) {
             return failure<double>("WASM host returned an invalid double payload");
@@ -740,7 +780,7 @@ private:
     {
         const auto result = call(operation, payload);
         if (!result.ok) {
-            return failure<bool>(result.error);
+            return {false, {}, result.error, result.errorCode};
         }
         if (result.payload.size() != 1U || result.payload.front() > 1U) {
             return failure<bool>("WASM host returned an invalid bool payload");
@@ -752,7 +792,7 @@ private:
     {
         const auto result = call(operation, payload);
         if (!result.ok) {
-            return failure<std::string>(result.error);
+            return {false, {}, result.error, result.errorCode};
         }
         if (result.payload.size() < sizeof(std::uint32_t)) {
             return failure<std::string>("WASM host returned an invalid string payload");

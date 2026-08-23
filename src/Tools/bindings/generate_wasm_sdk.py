@@ -136,6 +136,7 @@ def value_types(model: dict[str, Any]) -> list[tuple[str, str, str]]:
 
 def render_cpp(model: dict[str, Any]) -> str:
     api = model.get("api", "org.freecad.wasm.api@0")
+    abi = model.get("abi", {})
     class_names = dict(classes(model))
     value_names = {full_name: name for full_name, name, _ in value_types(model)}
     lines = [
@@ -147,6 +148,9 @@ def render_cpp(model: dict[str, Any]) -> str:
         "namespace FreeCAD::Wasm::Generated",
         "{",
         f'inline constexpr char ApiVersion[] = "{api}";',
+        f'inline constexpr char ResponseMagic[] = "{abi.get("response_magic", "FCWR")}";',
+        f"inline constexpr unsigned char ResponseVersion = {int(abi.get('response_version', 1))}U;",
+        f"inline constexpr unsigned char ResponseHeaderSize = {int(abi.get('response_header_size', 12))}U;",
         "using Handle = unsigned long long;",
         "",
     ]
@@ -179,12 +183,65 @@ def render_cpp(model: dict[str, Any]) -> str:
 
     lines.extend(
         [
-            "class Host",
+            "class OwnedHandle",
             "{",
             "public:",
-            "    Host() = default;",
+            "    OwnedHandle() = default;",
             "",
-            "    explicit Host(::Wasm::Guest::Client client)",
+            "    OwnedHandle(::Wasm::Guest::Client client, Handle value)",
+            "        : client_(client)",
+            "        , value(value)",
+            "    {",
+            "    }",
+            "",
+            "    ~OwnedHandle()",
+            "    {",
+            "        reset();",
+            "    }",
+            "",
+            "    OwnedHandle(const OwnedHandle&) = delete;",
+            "    OwnedHandle& operator=(const OwnedHandle&) = delete;",
+            "",
+            "    OwnedHandle(OwnedHandle&& other) noexcept",
+            "        : client_(other.client_)",
+            "        , value(other.value)",
+            "    {",
+            "        other.value = 0U;",
+            "    }",
+            "",
+            "    OwnedHandle& operator=(OwnedHandle&& other) noexcept",
+            "    {",
+            "        if (this != &other) {",
+            "            reset();",
+            "            client_ = other.client_;",
+            "            value = other.value;",
+            "            other.value = 0U;",
+            "        }",
+            "        return *this;",
+            "    }",
+            "",
+            "    explicit operator bool() const { return value != 0U; }",
+            "    Handle get() const { return value; }",
+            "",
+            "    void reset()",
+            "    {",
+            "        if (value != 0U) {",
+            "            static_cast<void>(client_.release(value));",
+            "        }",
+            "        value = 0U;",
+            "    }",
+            "",
+            "private:",
+            "    ::Wasm::Guest::Client client_;",
+            "    Handle value = 0U;",
+            "};",
+            "",
+            "class Client",
+            "{",
+            "public:",
+            "    Client() = default;",
+            "",
+            "    explicit Client(::Wasm::Guest::Client client)",
             "        : client_(client)",
             "    {",
             "    }",
@@ -192,6 +249,11 @@ def render_cpp(model: dict[str, Any]) -> str:
             "    auto allocateResponse(unsigned int size) const",
             "    {",
             "        return client_.allocateResponse(size);",
+            "    }",
+            "",
+            "    OwnedHandle own(Handle value)",
+            "    {",
+            "        return OwnedHandle(client_, value);",
             "    }",
             "",
         ]
@@ -207,9 +269,30 @@ def render_cpp(model: dict[str, Any]) -> str:
             lines.append(
                 f'    inline static constexpr char {name}Permission[] = "{permission}";'
             )
+        returns_metadata = return_type
+        if returns_metadata.get("kind") == "handle":
+            lines.append(
+                f'    inline static constexpr char {name}Ownership[] = "{returns_metadata.get("ownership", "borrowed")}";'
+            )
+        if operation.get("transaction"):
+            lines.append(
+                f'    inline static constexpr char {name}Transaction[] = "{operation["transaction"]}";'
+            )
         lines.append(
             f"    inline static constexpr unsigned char {name}Operation = "
             f"{int(operation.get('id', 0))}U;"
+        )
+        lines.append(
+            f"    inline static constexpr bool {name}Fallible = "
+            f"{'true' if operation.get('fallible', True) else 'false'};"
+        )
+        lines.append(
+            f"    inline static constexpr bool {name}Nullable = "
+            f"{'true' if return_type.get('nullable', False) else 'false'};"
+        )
+        lines.append(
+            f"    inline static constexpr bool {name}Consumes = "
+            f"{'true' if operation.get('consumes', False) else 'false'};"
         )
 
         parameter_declarations = []
@@ -241,6 +324,8 @@ def render_cpp(model: dict[str, Any]) -> str:
                 )
             else:
                 call_arguments.append(parameter_name)
+
+        result_parameter_declarations = list(parameter_declarations)
 
         if return_type.get("kind") == "string":
             parameter_declarations.extend(
@@ -355,6 +440,46 @@ def render_cpp(model: dict[str, Any]) -> str:
                 )
             lines.extend(["    }", ""])
 
+        # Hosted guests can use the structured transport result directly. Keep
+        # the bool/out-parameter adapters above for freestanding guests.
+        result_kinds = {
+            "handle": "::Wasm::Guest::Handle",
+            "value": "::Wasm::Guest::Vector3",
+            "float64": "double",
+            "bool": "bool",
+            "string": "std::string",
+        }
+        result_cpp_type = result_kinds.get(return_type.get("kind"))
+        if result_cpp_type is None:
+            raise ValueError(f"unsupported C++ Wasm result type: {return_type.get('kind')}")
+        result_call_arguments = [
+            f"std::string_view({argument})"
+            if parameter.get("type", {}).get("kind") == "string"
+            else argument
+            for parameter, argument in zip(params, call_arguments)
+        ]
+        lines.extend(
+            [
+                "#if !defined(FREECAD_WASM_FREESTANDING)",
+                f"    ::Wasm::Guest::Result<{result_cpp_type}> {name}Result({', '.join(result_parameter_declarations)}) const",
+                "    {",
+            ]
+        )
+        for parameter in params:
+            if parameter.get("type", {}).get("kind") == "string":
+                parameter_name = parameter.get("name", "value")
+                lines.extend(
+                    [
+                        f"        if ({parameter_name} == nullptr) {{",
+                        f"            return {{false, {{}}, \"string parameter is null\"}};",
+                        "        }",
+                    ]
+                )
+        lines.append(
+            f"        return client_.{method}({', '.join(result_call_arguments)});"
+        )
+        lines.extend(["    }", "#endif", ""])
+
     lines.extend(
         [
             "private:",
@@ -369,6 +494,9 @@ def render_cpp(model: dict[str, Any]) -> str:
 
 def render_python(model: dict[str, Any]) -> str:
     api = model.get("api", "org.freecad.wasm.api@0")
+    abi = model.get("abi", {})
+    request_magic = abi.get("request_magic", "FCWA")
+    request_version = int(abi.get("request_version", 1))
     class_names = dict(classes(model))
     value_names = {full_name: name for full_name, name, _ in value_types(model)}
     operations = model.get("operations", [])
@@ -378,12 +506,13 @@ def render_python(model: dict[str, Any]) -> str:
         "from __future__ import annotations",
         "",
         "from dataclasses import dataclass",
-        "from typing import Callable, NewType, Optional",
+        "from typing import Callable, NewType",
         "import struct",
         "",
         f'API_VERSION = "{api}"',
         "Handle = int",
-        "REQUEST_HEADER_SIZE = 12",
+        f"REQUEST_HEADER_SIZE = {int(abi.get('request_header_size', 12))}",
+        f"RESPONSE_HEADER_SIZE = {int(abi.get('response_header_size', 12))}",
         "REQUEST_CAPACITY = 512",
         "MAX_STRING_LENGTH = 128",
         "",
@@ -394,6 +523,10 @@ def render_python(model: dict[str, Any]) -> str:
         "",
         "class WasmHostError(WasmGuestError):",
         "    \"\"\"A capability or host-side operation rejected the request.\"\"\"",
+        "",
+        "    def __init__(self, message: str, code: int = 6):",
+        "        super().__init__(message)",
+        "        self.code = code",
         "",
         "",
         "class WasmProtocolError(WasmGuestError):",
@@ -426,6 +559,24 @@ def render_python(model: dict[str, Any]) -> str:
             permission = operation.get("permission")
             if permission:
                 lines.append(f'    {constant}_PERMISSION = "{permission}"')
+            returns = operation.get("returns", {})
+            if returns.get("kind") == "handle":
+                lines.append(
+                    f'    {constant}_OWNERSHIP = "{returns.get("ownership", "borrowed")}"'
+                )
+            if operation.get("transaction"):
+                lines.append(
+                    f'    {constant}_TRANSACTION = "{operation["transaction"]}"'
+                )
+            lines.append(
+                f"    {constant}_FALLIBLE = {bool(operation.get('fallible', True))!r}"
+            )
+            lines.append(
+                f"    {constant}_NULLABLE = {bool(operation.get('returns', {}).get('nullable', False))!r}"
+            )
+            lines.append(
+                f"    {constant}_CONSUMES = {bool(operation.get('consumes', False))!r}"
+            )
     else:
         lines.append("    pass")
     lines.extend(
@@ -464,7 +615,7 @@ def render_python(model: dict[str, Any]) -> str:
             "        if len(self._payload) > REQUEST_CAPACITY - REQUEST_HEADER_SIZE:",
             "            raise WasmGuestError(\"request exceeds the ABI capacity\")",
             "        return struct.pack(",
-            "            \"<4sBBHI\", b\"FCWA\", 1, self._operation, 0, len(self._payload)",
+            f"            \"<4sBBHI\", b\"{request_magic}\", {request_version}, self._operation, 0, len(self._payload)",
             "        ) + bytes(self._payload)",
             "",
             "",
@@ -473,6 +624,9 @@ def render_python(model: dict[str, Any]) -> str:
             "",
             "    def __init__(self, dispatch: Callable[[bytes], bytes]):",
             "        self._dispatch = dispatch",
+            "",
+            "    def own(self, handle: int) -> OwnedHandle:",
+            "        return OwnedHandle(self, handle)",
             "",
             "    def _response(self, request: _Request) -> bytes:",
             "        try:",
@@ -483,34 +637,49 @@ def render_python(model: dict[str, Any]) -> str:
             "            raise WasmHostError(str(error)) from error",
             "        if not isinstance(response, (bytes, bytearray, memoryview)):",
             "            raise WasmProtocolError(\"host dispatch did not return bytes\")",
-            "        return bytes(response)",
+            "        response = bytes(response)",
+            "        if len(response) < RESPONSE_HEADER_SIZE:",
+            "            raise WasmProtocolError(\"host returned a truncated response envelope\")",
+            "        magic, version, status, error_code, flags, payload_length = struct.unpack_from(\"<4sBBBBI\", response)",
+            "        if magic != b\"FCWR\" or version != 1 or flags != 0:",
+            "            raise WasmProtocolError(\"host returned an invalid response envelope\")",
+            "        if payload_length != len(response) - RESPONSE_HEADER_SIZE:",
+            "            raise WasmProtocolError(\"host returned an invalid response length\")",
+            "        payload = response[RESPONSE_HEADER_SIZE:]",
+            "        if status == 1:",
+            "            raise WasmHostError(payload.decode(\"utf-8\", errors=\"replace\"), error_code)",
+            "        if status != 0 or error_code != 0:",
+            "            raise WasmProtocolError(\"host returned an invalid response status\")",
+            "        return payload",
             "",
-            "    def _call_handle(self, request: _Request) -> Optional[int]:",
+            "    def _call_handle(self, request: _Request) -> int:",
             "        response = self._response(request)",
             "        if len(response) != 8:",
             "            raise WasmProtocolError(\"host returned an invalid handle response\")",
             "        value = struct.unpack(\"<Q\", response)[0]",
-            "        return value or None",
+            "        if value == 0:",
+            "            raise WasmProtocolError(\"host returned an invalid handle response\")",
+            "        return value",
             "",
-            "    def _call_value(self, request: _Request) -> Optional[FreeCADBaseVectorValue]:",
+            "    def _call_value(self, request: _Request) -> FreeCADBaseVectorValue:",
             "        response = self._response(request)",
             "        if len(response) != 24:",
             "            raise WasmProtocolError(\"host returned an invalid vector response\")",
             "        return FreeCADBaseVectorValue(*struct.unpack(\"<ddd\", response))",
             "",
-            "    def _call_f64(self, request: _Request) -> Optional[float]:",
+            "    def _call_f64(self, request: _Request) -> float:",
             "        response = self._response(request)",
             "        if len(response) != 8:",
             "            raise WasmProtocolError(\"host returned an invalid f64 response\")",
             "        return struct.unpack(\"<d\", response)[0]",
             "",
-            "    def _call_bool(self, request: _Request) -> Optional[bool]:",
+            "    def _call_bool(self, request: _Request) -> bool:",
             "        response = self._response(request)",
             "        if len(response) != 1 or response[0] not in (0, 1):",
             "            raise WasmProtocolError(\"host returned an invalid boolean response\")",
             "        return bool(response[0])",
             "",
-            "    def _call_string(self, request: _Request) -> Optional[str]:",
+            "    def _call_string(self, request: _Request) -> str:",
             "        response = self._response(request)",
             "        if len(response) < 4:",
             "            raise WasmProtocolError(\"host returned an invalid string response\")",
@@ -527,7 +696,6 @@ def render_python(model: dict[str, Any]) -> str:
             "        if response:",
             "            raise WasmProtocolError(\"host returned a non-empty release response\")",
             "        return True",
-            "",
         ]
     )
 
@@ -556,15 +724,15 @@ def render_python(model: dict[str, Any]) -> str:
         if return_kind == "handle":
             result_type = return_type.get("type")
             result_name = "Handle" if result_type == "Wasm.Handle" else class_names[result_type]
-            result_signature = f"Optional[{result_name}]"
+            result_signature = result_name
         elif return_kind == "value":
-            result_signature = f"Optional[{value_names[return_type['type']]}]"
+            result_signature = value_names[return_type["type"]]
         elif return_kind == "float64":
-            result_signature = "Optional[float]"
+            result_signature = "float"
         elif return_kind == "string":
-            result_signature = "Optional[str]"
+            result_signature = "str"
         elif return_kind == "bool":
-            result_signature = "bool" if name == "release" else "Optional[bool]"
+            result_signature = "bool"
         else:
             raise ValueError(f"unsupported Python return type: {return_kind}")
 
@@ -600,7 +768,7 @@ def render_python(model: dict[str, Any]) -> str:
             lines.extend(
                 [
                     "        value = self._call_handle(request)",
-                    f"        return None if value is None else {result_name}(value)",
+                    f"        return {result_name}(value)",
                     "",
                 ]
             )
@@ -615,12 +783,43 @@ def render_python(model: dict[str, Any]) -> str:
         elif return_kind == "bool":
             lines.extend(["        return self._call_bool(request)", ""])
 
-    lines.append("")
+    lines.extend(
+        [
+            "",
+            "",
+            "class OwnedHandle:",
+            "    \"\"\"Explicitly owned guest handle with deterministic release.\"\"\"",
+            "",
+            "    def __init__(self, client: Client, value: int):",
+            "        self._client = client",
+            "        self.value = int(value)",
+            "        self._closed = False",
+            "",
+            "    def close(self) -> None:",
+            "        if not self._closed:",
+            "            self._client.release(self.value)",
+            "            self._closed = True",
+            "",
+            "    def __enter__(self) -> int:",
+            "        return self.value",
+            "",
+            "    def __exit__(self, _type, _value, _traceback) -> None:",
+            "        self.close()",
+            "",
+        ]
+    )
     return "\n".join(lines)
 
 
 def render_rust(model: dict[str, Any]) -> str:
     api = model.get("api", "org.freecad.wasm.api@0")
+    abi = model.get("abi", {})
+    request_magic = abi.get("request_magic", "FCWA")
+    request_version = int(abi.get("request_version", 1))
+    error_codes = abi.get("error_codes", {})
+
+    def error_code(name: str, default: int) -> int:
+        return int(error_codes.get(name, default))
     class_names = dict(classes(model))
     value_names = {full_name: name for full_name, name, _ in value_types(model)}
     lines = [
@@ -635,6 +834,7 @@ def render_rust(model: dict[str, Any]) -> str:
         "    fn freecad_release(response_address: u32);",
         "}",
         "",
+        "#[allow(dead_code)]",
         f'pub const API_VERSION: &str = "{api}";',
         "pub type Handle = u64;",
         "",
@@ -666,7 +866,7 @@ def render_rust(model: dict[str, Any]) -> str:
         )
     operations = model.get("operations", [])
     if operations:
-        lines.extend(["pub mod operations {", ""])
+        lines.extend(["#[allow(dead_code)]", "pub mod operations {", ""])
         for operation in operations:
             constant = re.sub(
                 r"[^A-Za-z0-9]+",
@@ -679,11 +879,30 @@ def render_rust(model: dict[str, Any]) -> str:
                 lines.append(
                     f'    pub const {constant}_PERMISSION: &str = "{permission}";'
                 )
+            returns = operation.get("returns", {})
+            if returns.get("kind") == "handle":
+                lines.append(
+                    f'    pub const {constant}_OWNERSHIP: &str = "{returns.get("ownership", "borrowed")}";'
+                )
+            if operation.get("transaction"):
+                lines.append(
+                    f'    pub const {constant}_TRANSACTION: &str = "{operation["transaction"]}";'
+                )
+            lines.append(
+                f"    pub const {constant}_FALLIBLE: bool = {'true' if operation.get('fallible', True) else 'false'};"
+            )
+            lines.append(
+                f"    pub const {constant}_NULLABLE: bool = {'true' if operation.get('returns', {}).get('nullable', False) else 'false'};"
+            )
+            lines.append(
+                f"    pub const {constant}_CONSUMES: bool = {'true' if operation.get('consumes', False) else 'false'};"
+            )
         lines.extend(["", "}", ""])
 
     lines.extend(
         [
-            "const REQUEST_HEADER_SIZE: usize = 12;",
+            f"const REQUEST_HEADER_SIZE: usize = {int(abi.get('request_header_size', 12))};",
+            f"const RESPONSE_HEADER_SIZE: usize = {int(abi.get('response_header_size', 12))};",
             "const REQUEST_CAPACITY: usize = 512;",
             "const MAX_STRING_LENGTH: usize = 128;",
             "",
@@ -706,8 +925,8 @@ def render_rust(model: dict[str, Any]) -> str:
             "            bytes: [0; REQUEST_CAPACITY],",
             "            length: REQUEST_HEADER_SIZE,",
             "        };",
-            "        request.bytes[0..4].copy_from_slice(b\"FCWA\");",
-            "        request.bytes[4] = 1;",
+            f"        request.bytes[0..4].copy_from_slice(b\"{request_magic}\");",
+            f"        request.bytes[4] = {request_version};",
             "        request.bytes[5] = operation;",
             "        request.bytes[8..12].copy_from_slice(&(payload_length as u32).to_le_bytes());",
             "        Some(request)",
@@ -724,6 +943,7 @@ def render_rust(model: dict[str, Any]) -> str:
             "        Some(())",
             "    }",
             "",
+            "    #[allow(dead_code)]",
             "    fn push_u8(&mut self, value: u8) -> Option<()>",
             "    {",
             "        self.push_bytes(&[value])",
@@ -761,14 +981,67 @@ def render_rust(model: dict[str, Any]) -> str:
             "    }",
             "}",
             "",
+            "#[allow(dead_code)]",
+            "#[repr(u8)]",
+            "#[derive(Clone, Copy, Debug, Eq, PartialEq)]",
+            "pub enum ErrorCode",
+            "{",
+            f"    None = {error_code('none', 0)},",
+            f"    InvalidRequest = {error_code('invalid_request', 1)},",
+            f"    PermissionDenied = {error_code('permission_denied', 2)},",
+            f"    InvalidHandle = {error_code('invalid_handle', 3)},",
+            f"    Unsupported = {error_code('unsupported', 4)},",
+            f"    LimitExceeded = {error_code('limit_exceeded', 5)},",
+            f"    HostFailure = {error_code('host_failure', 6)},",
+            f"    Protocol = {error_code('protocol', 7)},",
+            "}",
+            "",
+            "#[derive(Clone, Copy, Debug, Eq, PartialEq)]",
+            "pub struct Error { pub code: ErrorCode }",
+            "",
+            "impl Error",
+            "{",
+            "    const fn protocol() -> Self { Self { code: ErrorCode::Protocol } }",
+            "}",
+            "",
+            "pub type Result<T> = core::result::Result<T, Error>;",
+            "",
             "#[derive(Clone, Copy, Debug, Default)]",
             "pub struct Client;",
             "",
+            "#[allow(dead_code)]",
+            "pub struct OwnedHandle",
+            "{",
+            "    client: Client,",
+            "    value: Handle,",
+            "    closed: bool,",
+            "}",
+            "",
+            "#[allow(dead_code)]",
+            "impl OwnedHandle",
+            "{",
+            "    pub fn value(&self) -> Handle { self.value }",
+            "",
+            "    pub fn close(&mut self) -> Result<()> ",
+            "    {",
+            "        if self.closed { return Ok(()); }",
+            "        self.client.release(self.value).map(|_| ())?;",
+            "        self.closed = true;",
+            "        Ok(())",
+            "    }",
+            "}",
+            "",
+            "#[allow(dead_code)]",
             "impl Client",
             "{",
             "    pub const fn new() -> Self",
             "    {",
             "        Self",
+            "    }",
+            "",
+            "    pub fn own(&self, value: Handle) -> OwnedHandle",
+            "    {",
+            "        OwnedHandle { client: *self, value, closed: false }",
             "    }",
             "",
             "    pub fn allocate_response(&self, size: u32) -> u32",
@@ -783,90 +1056,114 @@ def render_rust(model: dict[str, Any]) -> str:
             "        }",
             "    }",
             "",
-            "    fn call_handle(&self, request: &Request) -> Option<Handle>",
+            "    fn response(&self, request: &Request) -> Result<(u32, u32, u32)>",
             "    {",
             "        let response = unsafe { freecad_dispatch(request.bytes.as_ptr(), request.length as u32) };",
             "        let address = response as u32;",
             "        let length = (response >> 32) as u32;",
-            "        if address == 0 || length != 8 {",
+            "        if address == 0 || length < RESPONSE_HEADER_SIZE as u32 {",
             "            Self::release_response(address);",
-            "            return None;",
+            "            return Err(Error::protocol());",
             "        }",
-            "        let mut bytes = [0u8; 8];",
+            "        let bytes = address as *const u8;",
+            "        let mut payload_length = 0u32;",
             "        unsafe {",
-            "            ptr::copy_nonoverlapping(address as *const u8, bytes.as_mut_ptr(), bytes.len());",
+            "            if *bytes.add(0) != b'F' || *bytes.add(1) != b'C' || *bytes.add(2) != b'W' || *bytes.add(3) != b'R' || *bytes.add(4) != 1 || *bytes.add(7) != 0 {",
+            "                Self::release_response(address);",
+            "                return Err(Error::protocol());",
+            "            }",
+            "            for shift in 0..4 { payload_length |= (*bytes.add(8 + shift) as u32) << (shift * 8); }",
+            "            if payload_length != length - RESPONSE_HEADER_SIZE as u32 {",
+            "                Self::release_response(address);",
+            "                return Err(Error::protocol());",
+            "            }",
+            "            if *bytes.add(5) == 1 {",
+            "                let code = match *bytes.add(6) {",
+            "                    1 => ErrorCode::InvalidRequest,",
+            "                    2 => ErrorCode::PermissionDenied,",
+            "                    3 => ErrorCode::InvalidHandle,",
+            "                    4 => ErrorCode::Unsupported,",
+            "                    5 => ErrorCode::LimitExceeded,",
+            "                    6 => ErrorCode::HostFailure,",
+            "                    7 => ErrorCode::Protocol,",
+            "                    _ => ErrorCode::Protocol,",
+            "                };",
+            "                Self::release_response(address);",
+            "                return Err(Error { code });",
+            "            }",
+            "            if *bytes.add(5) != 0 || *bytes.add(6) != 0 {",
+            "                Self::release_response(address);",
+            "                return Err(Error::protocol());",
+            "            }",
             "        }",
-            "        Self::release_response(address);",
-            "        let value = u64::from_le_bytes(bytes);",
-            "        (value != 0).then_some(value)",
+            "        Ok((address, address + RESPONSE_HEADER_SIZE as u32, payload_length))",
             "    }",
             "",
-            "    fn call_value(&self, request: &Request) -> Option<FreeCADBaseVectorValue>",
+            "    fn call_handle(&self, request: &Request) -> Result<Handle>",
             "    {",
-            "        let response = unsafe { freecad_dispatch(request.bytes.as_ptr(), request.length as u32) };",
-            "        let address = response as u32;",
-            "        let length = (response >> 32) as u32;",
-            "        if address == 0 || length != 24 {",
-            "            Self::release_response(address);",
-            "            return None;",
-            "        }",
+            "        let (address, payload, length) = self.response(request)?;",
+            "        if length != 8 { Self::release_response(address); return Err(Error::protocol()); }",
+            "        let mut bytes = [0u8; 8];",
+            "        unsafe { ptr::copy_nonoverlapping(payload as *const u8, bytes.as_mut_ptr(), bytes.len()); }",
+            "        Self::release_response(address);",
+            "        let value = u64::from_le_bytes(bytes);",
+            "        if value == 0 { Err(Error::protocol()) } else { Ok(value) }",
+            "    }",
+            "",
+            "    fn call_value(&self, request: &Request) -> Result<FreeCADBaseVectorValue>",
+            "    {",
+            "        let (address, payload, length) = self.response(request)?;",
+            "        if length != 24 { Self::release_response(address); return Err(Error::protocol()); }",
             "        let mut bytes = [0u8; 24];",
             "        unsafe {",
-            "            ptr::copy_nonoverlapping(address as *const u8, bytes.as_mut_ptr(), bytes.len());",
+            "            ptr::copy_nonoverlapping(payload as *const u8, bytes.as_mut_ptr(), bytes.len());",
             "        }",
             "        Self::release_response(address);",
-            "        Some(FreeCADBaseVectorValue {",
-            "            x: f64::from_bits(u64::from_le_bytes(bytes[0..8].try_into().ok()?)),",
-            "            y: f64::from_bits(u64::from_le_bytes(bytes[8..16].try_into().ok()?)),",
-            "            z: f64::from_bits(u64::from_le_bytes(bytes[16..24].try_into().ok()?)),",
+            "        Ok(FreeCADBaseVectorValue {",
+            "            x: f64::from_bits(u64::from_le_bytes(bytes[0..8].try_into().map_err(|_| Error::protocol())?)),",
+            "            y: f64::from_bits(u64::from_le_bytes(bytes[8..16].try_into().map_err(|_| Error::protocol())?)),",
+            "            z: f64::from_bits(u64::from_le_bytes(bytes[16..24].try_into().map_err(|_| Error::protocol())?)),",
             "        })",
             "    }",
             "",
-            "    fn call_f64(&self, request: &Request) -> Option<f64>",
+            "    fn call_f64(&self, request: &Request) -> Result<f64>",
             "    {",
-            "        let response = unsafe { freecad_dispatch(request.bytes.as_ptr(), request.length as u32) };",
-            "        let address = response as u32;",
-            "        let length = (response >> 32) as u32;",
-            "        if address == 0 || length != 8 {",
-            "            Self::release_response(address);",
-            "            return None;",
-            "        }",
+            "        let (address, payload, length) = self.response(request)?;",
+            "        if length != 8 { Self::release_response(address); return Err(Error::protocol()); }",
             "        let mut bytes = [0u8; 8];",
             "        unsafe {",
-            "            ptr::copy_nonoverlapping(address as *const u8, bytes.as_mut_ptr(), bytes.len());",
+            "            ptr::copy_nonoverlapping(payload as *const u8, bytes.as_mut_ptr(), bytes.len());",
             "        }",
             "        Self::release_response(address);",
-            "        Some(f64::from_bits(u64::from_le_bytes(bytes)))",
+            "        Ok(f64::from_bits(u64::from_le_bytes(bytes)))",
             "    }",
             "",
-            "    fn call_bool(&self, request: &Request) -> Option<bool>",
+            "    fn call_bool(&self, request: &Request) -> Result<bool>",
             "    {",
-            "        let response = unsafe { freecad_dispatch(request.bytes.as_ptr(), request.length as u32) };",
-            "        let address = response as u32;",
-            "        let length = (response >> 32) as u32;",
-            "        if address == 0 || length != 1 {",
-            "            Self::release_response(address);",
-            "            return None;",
-            "        }",
-            "        let value = unsafe { *(address as *const u8) };",
+            "        let (address, payload, length) = self.response(request)?;",
+            "        if length != 1 { Self::release_response(address); return Err(Error::protocol()); }",
+            "        let value = unsafe { *(payload as *const u8) };",
             "        Self::release_response(address);",
             "        match value {",
-            "            0 => Some(false),",
-            "            1 => Some(true),",
-            "            _ => None,",
+            "            0 => Ok(false),",
+            "            1 => Ok(true),",
+            "            _ => Err(Error::protocol()),",
             "        }",
             "    }",
             "",
-            "    fn call_string(&self, request: &Request, output: &mut [u8]) -> Option<usize>",
+            "    fn call_empty(&self, request: &Request) -> Result<()> ",
             "    {",
-            "        let response = unsafe { freecad_dispatch(request.bytes.as_ptr(), request.length as u32) };",
-            "        let address = response as u32;",
-            "        let length = (response >> 32) as u32;",
-            "        if address == 0 || length < 4 {",
-            "            Self::release_response(address);",
-            "            return None;",
-            "        }",
-            "        let bytes = address as *const u8;",
+            "        let (address, _payload, length) = self.response(request)?;",
+            "        if length != 0 { Self::release_response(address); return Err(Error::protocol()); }",
+            "        Self::release_response(address);",
+            "        Ok(())",
+            "    }",
+            "",
+            "    fn call_string(&self, request: &Request, output: &mut [u8]) -> Result<usize>",
+            "    {",
+            "        let (address, payload, length) = self.response(request)?;",
+            "        if length < 4 { Self::release_response(address); return Err(Error::protocol()); }",
+            "        let bytes = payload as *const u8;",
             "        let mut value_length = 0u32;",
             "        unsafe {",
             "            for shift in 0..4 {",
@@ -875,13 +1172,13 @@ def render_rust(model: dict[str, Any]) -> str:
             "        }",
             "        if value_length != length - 4 || value_length as usize > output.len() {",
             "            Self::release_response(address);",
-            "            return None;",
+            "            return Err(Error::protocol());",
             "        }",
             "        unsafe {",
             "            ptr::copy_nonoverlapping(bytes.add(4), output.as_mut_ptr(), value_length as usize);",
             "        }",
             "        Self::release_response(address);",
-            "        Some(value_length as usize)",
+            "        Ok(value_length as usize)",
             "    }",
             "",
         ]
@@ -920,42 +1217,25 @@ def render_rust(model: dict[str, Any]) -> str:
                 raise ValueError(f"unsupported Rust payload type: {kind}")
         return " + ".join(sizes) if sizes else "0usize"
 
-    def append_parameter(parameter: dict[str, Any], release_method: bool) -> list[str]:
+    def append_parameter(parameter: dict[str, Any]) -> list[str]:
         parameter_type = parameter.get("type", {})
         kind = parameter_type.get("kind")
         name = parameter.get("name", "value")
-        failure = "return false;" if release_method else "return None;"
         if kind == "string":
-            return [f"        request.push_string({name})?;"]
+            return [f"        request.push_string({name}).ok_or(Error::protocol())?;"]
         if kind == "float64":
-            return [
-                f"        if request.push_f64({name}).is_none() {{ {failure} }}"
-                if release_method
-                else f"        request.push_f64({name})?;"
-            ]
+            return [f"        request.push_f64({name}).ok_or(Error::protocol())?;"]
         if kind == "bool":
-            return [
-                f"        if request.push_u8({name} as u8).is_none() {{ {failure} }}"
-                if release_method
-                else f"        request.push_u8({name} as u8)?;"
-            ]
+            return [f"        request.push_u8({name} as u8).ok_or(Error::protocol())?;"]
         if kind == "value":
             if parameter_type.get("encoding") != "vector3-f64":
                 raise ValueError(
                     f"unsupported Rust Wasm value encoding: {parameter_type.get('encoding')}"
                 )
-            return [
-                f"        if request.push_vector({name}).is_none() {{ {failure} }}"
-                if release_method
-                else f"        request.push_vector({name})?;"
-            ]
+            return [f"        request.push_vector({name}).ok_or(Error::protocol())?;"]
         if kind == "handle":
             value = name if parameter_type.get("type") == "Wasm.Handle" else f"{name}.0"
-            return [
-                f"        if request.push_u64({value}).is_none() {{ {failure} }}"
-                if release_method
-                else f"        request.push_u64({value})?;"
-            ]
+            return [f"        request.push_u64({value}).ok_or(Error::protocol())?;"]
         raise ValueError(f"unsupported Rust parameter type: {kind}")
 
     for operation in operations:
@@ -967,15 +1247,15 @@ def render_rust(model: dict[str, Any]) -> str:
         if return_kind == "handle":
             result_type = return_type.get("type")
             result_name = "Handle" if result_type == "Wasm.Handle" else class_names[result_type]
-            result_signature = f"Option<{result_name}>"
+            result_signature = f"Result<{result_name}>"
         elif return_kind == "value":
-            result_signature = "Option<{}>".format(value_names[return_type["type"]])
+            result_signature = "Result<{}>".format(value_names[return_type["type"]])
         elif return_kind == "float64":
-            result_signature = "Option<f64>"
+            result_signature = "Result<f64>"
         elif return_kind == "string":
-            result_signature = "Option<usize>"
+            result_signature = "Result<usize>"
         elif return_kind == "bool":
-            result_signature = "bool" if name == "release" else "Option<bool>"
+            result_signature = "Result<bool>"
         else:
             raise ValueError(f"unsupported Rust return type: {return_kind}")
         declarations = [
@@ -993,30 +1273,19 @@ def render_rust(model: dict[str, Any]) -> str:
                     lines.append(
                         f"        if {parameter.get('name', 'value')}.len() > MAX_STRING_LENGTH {{"
                     )
-                    lines.append("            return " + ("false" if name == "release" else "None") + ";")
+                    lines.append("            return Err(Error::protocol());")
                     lines.append("        }")
         operation_constant = re.sub(
             r"[^A-Za-z0-9]+",
             "_",
             re.sub(r"([a-z0-9])([A-Z])", r"\1_\2", name),
         ).upper()
-        if return_kind == "bool" and name == "release":
-            lines.extend(
-                [
-                    f"        let mut request = match Request::new(operations::{operation_constant}, "
-                    f"{payload_size_expression(params)}) {{",
-                    "            Some(request) => request,",
-                    "            None => return false,",
-                    "        };",
-                ]
-            )
-        else:
-            lines.append(
-                f"        let mut request = Request::new(operations::{operation_constant}, "
-                f"{payload_size_expression(params)})?;"
-            )
+        lines.append(
+            f"        let mut request = Request::new(operations::{operation_constant}, "
+            f"{payload_size_expression(params)}).ok_or(Error::protocol())?;"
+        )
         for parameter in params:
-            lines.extend(append_parameter(parameter, return_kind == "bool" and name == "release"))
+            lines.extend(append_parameter(parameter))
         if return_kind == "handle":
             lines.extend(
                 [
@@ -1034,11 +1303,7 @@ def render_rust(model: dict[str, Any]) -> str:
         elif return_kind == "bool" and name == "release":
             lines.extend(
                 [
-                    "        let response = unsafe { freecad_dispatch(request.bytes.as_ptr(), request.length as u32) };",
-                    "        let address = response as u32;",
-                    "        let length = (response >> 32) as u32;",
-                    "        Self::release_response(address);",
-                    "        address == 0 && length == 0",
+                    "        self.call_empty(&request).map(|_| true)",
                     "    }",
                     "",
                 ]

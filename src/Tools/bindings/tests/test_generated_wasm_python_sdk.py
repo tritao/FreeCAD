@@ -46,6 +46,14 @@ class MockHost:
         return value
 
     def __call__(self, request: bytes) -> bytes:
+        try:
+            payload = self._dispatch_raw(request)
+        except self.host_error as error:
+            message = str(error).encode("utf-8")
+            return struct.pack("<4sBBBBI", b"FCWR", 1, 1, getattr(error, "code", 6), 0, len(message)) + message
+        return struct.pack("<4sBBBBI", b"FCWR", 1, 0, 0, 0, len(payload)) + payload
+
+    def _dispatch_raw(self, request: bytes) -> bytes:
         magic, version, operation, flags, payload_length = struct.unpack(
             "<4sBBHI", request[:12]
         )
@@ -64,6 +72,12 @@ class MockHost:
             self.documents[handle] = name
             self.transactions[handle] = []
             return struct.pack("<Q", handle)
+
+        if operation == self.operations.DOCUMENT_IS_SAVED:
+            document, offset = _read_u64(payload)
+            if offset != len(payload) or document not in self.documents:
+                raise self.host_error("invalid document")
+            return b"\x00"
 
         if operation == self.operations.PART_MAKE_BOX:
             if len(payload) != 24:
@@ -127,6 +141,13 @@ class MockHost:
             self.objects[object_handle] = label
             return b"\x01"
 
+        if operation == self.operations.RELEASE:
+            handle, offset = _read_u64(payload)
+            if offset != len(payload):
+                raise AssertionError("unexpected release payload")
+            del handle
+            return b""
+
         if operation == self.operations.VECTOR_ADD:
             left = struct.unpack_from("<ddd", payload, 0)
             right = struct.unpack_from("<ddd", payload, 24)
@@ -175,6 +196,7 @@ class GeneratedWasmPythonSdkTests(unittest.TestCase):
         self.assertEqual((vector.x, vector.y, vector.z), (5.0, 7.0, 9.0))
 
         document = client.document_new("PythonExample")
+        self.assertFalse(client.document_is_saved(document))
         shape = client.part_make_box(10.0, 20.0, 30.0)
         with self.assertRaisesRegex(self.WasmHostError, "active transaction"):
             client.document_add_object(document, shape, "Box")
@@ -193,17 +215,19 @@ class GeneratedWasmPythonSdkTests(unittest.TestCase):
         self.assertTrue(client.document_object_set_label(object_handle, "Temporary"))
         self.assertTrue(client.document_abort_transaction(document))
         self.assertEqual(client.document_object_get_label(object_handle), "ConfiguredBox")
+        with client.own(shape) as owned_shape:
+            self.assertEqual(owned_shape, shape)
         self.assertIn(operations.DOCUMENT_ADD_OBJECT, host.requests)
 
     def test_host_capability_errors_and_protocol_errors_are_preserved(self):
         def denied(_request: bytes) -> bytes:
-            raise self.WasmHostError(
-                "host capability 'document.modify' is not granted"
-            )
+            message = b"host capability 'document.modify' is not granted"
+            return struct.pack("<4sBBBBI", b"FCWR", 1, 1, 2, 0, len(message)) + message
 
         client = self.Client(denied)
-        with self.assertRaisesRegex(self.WasmHostError, "document.modify"):
+        with self.assertRaisesRegex(self.WasmHostError, "document.modify") as context:
             client.document_open_transaction(1, "Denied")
+        self.assertEqual(context.exception.code, 2)
 
         malformed = self.Client(lambda _request: b"bad")
         with self.assertRaises(self.WasmProtocolError):

@@ -378,17 +378,17 @@ public:
         resetRequest(4U, 8U);
         appendU64(handle);
         const auto response = freecad_dispatch(request, requestLength);
-        const auto address = static_cast<FreeCADWasmU32>(response);
-        const auto length = static_cast<FreeCADWasmU32>(response >> 32U);
-        if (address != 0U) {
-            freecad_release(address);
+        const auto* payload = responsePayload(response, 0U);
+        if (payload != nullptr) {
+            freecad_release(static_cast<FreeCADWasmU32>(response));
         }
-        return length == 0U;
+        return payload != nullptr;
     }
 
 private:
     static constexpr FreeCADWasmU32 MaxRequestSize = 512U;
     static constexpr FreeCADWasmU32 MaxStringLength = 128U;
+    static constexpr FreeCADWasmU32 ResponseHeaderSize = 12U;
 
     static FreeCADWasmU32 stringLength(const char* value)
     {
@@ -461,38 +461,27 @@ private:
     static bool call(Handle* result)
     {
         const auto response = freecad_dispatch(request, requestLength);
-        const auto address = static_cast<FreeCADWasmU32>(response);
-        const auto length = static_cast<FreeCADWasmU32>(response >> 32U);
-        if (length != 8U || address == 0U) {
-            if (address != 0U) {
-                freecad_release(address);
-            }
+        const auto* bytes = responsePayload(response, 8U);
+        if (bytes == nullptr) {
             return false;
         }
 
-        const auto* bytes = reinterpret_cast<const FreeCADWasmU8*>(
-            static_cast<FreeCADWasmU32>(address));
         *result = 0U;
         for (FreeCADWasmU32 shift = 0U; shift < 64U; shift += 8U) {
             *result |= static_cast<Handle>(bytes[shift / 8U]) << shift;
         }
-        freecad_release(address);
+        freecad_release(static_cast<FreeCADWasmU32>(response));
         return *result != 0U;
     }
 
     static bool call(Vector3* result)
     {
         const auto response = freecad_dispatch(request, requestLength);
-        const auto address = static_cast<FreeCADWasmU32>(response);
-        const auto length = static_cast<FreeCADWasmU32>(response >> 32U);
-        if (length != 24U || address == 0U) {
-            if (address != 0U) {
-                freecad_release(address);
-            }
+        const auto* bytes = responsePayload(response, 24U);
+        if (bytes == nullptr) {
             return false;
         }
 
-        const auto* bytes = reinterpret_cast<const FreeCADWasmU8*>(address);
         FreeCADWasmU64 components[3] = {};
         for (unsigned component = 0U; component < 3U; ++component) {
             for (FreeCADWasmU32 shift = 0U; shift < 64U; shift += 8U) {
@@ -511,23 +500,18 @@ private:
         result->y = decoded.value;
         decoded.bits = components[2];
         result->z = decoded.value;
-        freecad_release(address);
+        freecad_release(static_cast<FreeCADWasmU32>(response));
         return true;
     }
 
     static bool call(double* result)
     {
         const auto response = freecad_dispatch(request, requestLength);
-        const auto address = static_cast<FreeCADWasmU32>(response);
-        const auto length = static_cast<FreeCADWasmU32>(response >> 32U);
-        if (length != 8U || address == 0U) {
-            if (address != 0U) {
-                freecad_release(address);
-            }
+        const auto* bytes = responsePayload(response, 8U);
+        if (bytes == nullptr) {
             return false;
         }
 
-        const auto* bytes = reinterpret_cast<const FreeCADWasmU8*>(address);
         union
         {
             FreeCADWasmU64 bits;
@@ -538,29 +522,24 @@ private:
             decoded.bits |= static_cast<FreeCADWasmU64>(bytes[shift / 8U]) << shift;
         }
         *result = decoded.value;
-        freecad_release(address);
+        freecad_release(static_cast<FreeCADWasmU32>(response));
         return true;
     }
 
     static bool call(bool* result)
     {
         const auto response = freecad_dispatch(request, requestLength);
-        const auto address = static_cast<FreeCADWasmU32>(response);
-        const auto length = static_cast<FreeCADWasmU32>(response >> 32U);
-        if (length != 1U || address == 0U) {
-            if (address != 0U) {
-                freecad_release(address);
-            }
+        const auto* bytes = responsePayload(response, 1U);
+        if (bytes == nullptr) {
             return false;
         }
 
-        const auto* bytes = reinterpret_cast<const FreeCADWasmU8*>(address);
         if (bytes[0] > 1U) {
-            freecad_release(address);
+            freecad_release(static_cast<FreeCADWasmU32>(response));
             return false;
         }
         *result = bytes[0] != 0U;
-        freecad_release(address);
+        freecad_release(static_cast<FreeCADWasmU32>(response));
         return true;
     }
 
@@ -569,31 +548,59 @@ private:
                            FreeCADWasmU32* length)
     {
         const auto response = freecad_dispatch(request, requestLength);
-        const auto address = static_cast<FreeCADWasmU32>(response);
         const auto responseLength = static_cast<FreeCADWasmU32>(response >> 32U);
-        if (address == 0U || responseLength < 4U) {
+        if (responseLength < ResponseHeaderSize + 4U) {
+            const auto address = static_cast<FreeCADWasmU32>(response);
             if (address != 0U) {
                 freecad_release(address);
             }
             return false;
         }
+        const auto* bytes = responsePayload(response, responseLength - ResponseHeaderSize);
+        if (bytes == nullptr) {
+            return false;
+        }
 
-        const auto* bytes = reinterpret_cast<const FreeCADWasmU8*>(address);
         FreeCADWasmU32 valueLength = 0U;
         for (FreeCADWasmU32 shift = 0U; shift < 32U; shift += 8U) {
             valueLength |= static_cast<FreeCADWasmU32>(bytes[shift / 8U]) << shift;
         }
-        if (valueLength != responseLength - 4U || valueLength > capacity
+        if (valueLength != responseLength - ResponseHeaderSize - 4U || valueLength > capacity
             || (valueLength != 0U && result == nullptr)) {
-            freecad_release(address);
+            freecad_release(static_cast<FreeCADWasmU32>(response));
             return false;
         }
         for (FreeCADWasmU32 index = 0U; index < valueLength; ++index) {
             result[index] = static_cast<char>(bytes[4U + index]);
         }
         *length = valueLength;
-        freecad_release(address);
+        freecad_release(static_cast<FreeCADWasmU32>(response));
         return true;
+    }
+
+    static const FreeCADWasmU8* responsePayload(FreeCADWasmU64 response,
+                                                 FreeCADWasmU32 expectedLength)
+    {
+        const auto address = static_cast<FreeCADWasmU32>(response);
+        const auto length = static_cast<FreeCADWasmU32>(response >> 32U);
+        if (address == 0U || length < ResponseHeaderSize) {
+            if (address != 0U) {
+                freecad_release(address);
+            }
+            return nullptr;
+        }
+        const auto* bytes = reinterpret_cast<const FreeCADWasmU8*>(address);
+        if (bytes[0] != 'F' || bytes[1] != 'C' || bytes[2] != 'W' || bytes[3] != 'R'
+            || bytes[4] != 1U || bytes[5] != 0U || bytes[7] != 0U
+            || bytes[8] != static_cast<FreeCADWasmU8>(length - ResponseHeaderSize)
+            || bytes[9] != static_cast<FreeCADWasmU8>((length - ResponseHeaderSize) >> 8U)
+            || bytes[10] != static_cast<FreeCADWasmU8>((length - ResponseHeaderSize) >> 16U)
+            || bytes[11] != static_cast<FreeCADWasmU8>((length - ResponseHeaderSize) >> 24U)
+            || expectedLength != length - ResponseHeaderSize) {
+            freecad_release(address);
+            return nullptr;
+        }
+        return bytes + ResponseHeaderSize;
     }
 
     inline static FreeCADWasmU8 request[MaxRequestSize] = {};

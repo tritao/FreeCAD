@@ -22,6 +22,32 @@ Addon entrypoints may return either the input buffer or a buffer obtained from
 `freecad_alloc`. Returning an arbitrary guest-memory address is rejected. The
 host copies the response and releases tracked allocations after the call.
 
+`freecad_dispatch` returns a response envelope for operation calls. The
+envelope keeps capability failures separate from valid values such as boolean
+`false`; infrastructure failures such as invalid guest pointers still trap
+the Wasm call.
+
+## Response Envelope
+
+All dispatch responses use little-endian fields:
+
+| Offset | Size | Field |
+| ---: | ---: | --- |
+| 0 | 4 | Magic bytes `FCWR` |
+| 4 | 1 | ABI version, currently `1` |
+| 5 | 1 | Status: `0` success, `1` error |
+| 6 | 1 | Error code |
+| 7 | 1 | Flags, currently `0` |
+| 8 | 4 | Payload length in bytes |
+| 12 | n | Operation payload or UTF-8 error message |
+
+Error codes are `invalid request`, `permission denied`, `invalid handle`,
+`unsupported`, `limit exceeded`, `host failure`, and `protocol`. Generated
+Python raises `WasmHostError` with the code, Rust returns `Result<T, Error>`
+with the code, and hosted C++ exposes `*Result()` methods. Freestanding C++
+adapters retain their compact boolean/output-pointer form and report failed
+host operations through the addon call result.
+
 ## Request Envelope
 
 All `freecad_dispatch` requests use little-endian fields:
@@ -36,9 +62,9 @@ All `freecad_dispatch` requests use little-endian fields:
 | 12 | n | Operation payload |
 
 The payload length must exactly match the remaining request size. Unknown
-versions, flags, operations, malformed payloads, and denied capabilities fail
-the host call. In WAMR these failures are surfaced as a Wasm exception; guest
-code must not continue using a failed call's result.
+versions, flags, operations, and malformed payloads produce an error response.
+Denied capabilities and host operation failures also produce an error response;
+guest code must not continue using a failed call's result.
 
 ## Operations
 
@@ -106,16 +132,22 @@ neutral ABI regression test without enabling WASI.
 
 The build also emits `freecad_wasm_api.hpp`, `freecad_wasm_api.rs`, and
 `freecad_wasm_api.py` from the same versioned API model. These files provide
-typed handle wrappers, model metadata, and typed transport facades for the
-declared operations. All facades use the narrow host ABI, so generated
-declarations cannot bypass host policy. The generated C++ header delegates to
-`Wasm::Guest::Client`; the Rust SDK is a `no_std` client with bounded request
-buffers; and the Python SDK exposes `Client(dispatch)`, where `dispatch` is a
-host-provided callback accepting and returning the binary request/response
-payloads. Python hosts therefore reuse the same protocol, capability errors,
-and transaction rules instead of receiving a second unrestricted API.
-Operation IDs, permissions, and mutation metadata remain in the neutral API
-model.
+typed handle wrappers, ownership/transaction metadata, and thin operation
+declarations over shared transport code. All facades use the narrow host ABI,
+so generated declarations cannot bypass host policy. The generated C++ header
+delegates wire handling to `Wasm::Guest::Client` and is named `Client`; the
+Rust SDK is a `no_std` client with bounded request buffers and structured
+`Result<T, Error>` values; and the Python SDK exposes `Client(dispatch)`, where
+`dispatch` is a host-provided callback accepting and returning the binary
+request/response payloads. Operation IDs, permissions, failure semantics, and
+mutation metadata remain in the neutral API model.
+
+Handle values returned by the API are owned guest-side tokens unless the
+operation metadata says otherwise. Every SDK provides an explicit lifecycle
+helper: C++ `Client::own()` returns a move-only RAII handle, Rust
+`Client::own()` returns a handle requiring explicit `close()`, and Python
+`Client.own()` supports `close()` and context-manager use. Releasing a handle
+consumes that token; native document objects may still remain host-owned.
 Operations that reference a `.pyi` symbol are validated against the selected
 Python API model during generation. The initial value-type projection covers
 `Base.Vector`; host-owned classes remain explicit handles. The current curated
@@ -203,15 +235,9 @@ The portable addon artifact is a `.wasm` module. AOT and JIT are host policy
 choices, not manifest fields or guest-visible runtime choices. `.aot` entries
 are accepted only for an explicitly trusted AOT policy.
 
-## Python Boundary
+## Python SDK Boundary
 
-The native `Wasm` Python module manages FreeCAD addon instances; it does not
-embed Pyodide. Pyodide is a separate browser/web adapter concern and should
-reuse this capability contract rather than gain direct filesystem, process, or
-WASI access. The generated `freecad_wasm_api.py` module is suitable for such an
-adapter: its `Client` can be given a Pyodide-to-host dispatch callback, while
-the host remains responsible for validating permissions and executing the
-FreeCAD operation. It does not embed Pyodide in WAMR or make Python execution
-available inside a native Wasm addon. Native Python execution inside WAMR would
-be a separate backend and must not weaken the existing host permission
-boundary.
+The generated Python SDK is a transport client, not a second host API. It
+accepts a callback supplied by the embedding environment, emits the same
+versioned binary requests as C++ and Rust, and applies the same response/error
+validation and explicit handle lifecycle rules.

@@ -41,7 +41,9 @@ class GenerateWasmSdkTests(unittest.TestCase):
         self.assertIn("FreeCADBaseVectorValue", rust)
         self.assertIn("FreeCADDocumentHandle", cpp)
         self.assertIn("FreeCADDocumentHandle", rust)
-        self.assertIn("class Host", cpp)
+        self.assertIn("class Client", cpp)
+        self.assertIn("class OwnedHandle", cpp)
+        self.assertIn("documentIsSavedResult", cpp)
         self.assertIn("bool documentNew", cpp)
         self.assertIn("bool documentIsSaved", cpp)
         self.assertIn("bool documentGetObject", cpp)
@@ -60,30 +62,30 @@ class GenerateWasmSdkTests(unittest.TestCase):
         self.assertIn("pub const TOPO_SHAPE_AREA: u8 = 14", rust)
         self.assertIn("pub struct Client", rust)
         self.assertIn("class Client:", python)
+        self.assertIn("class OwnedHandle:", python)
         self.assertIn("class WasmHostError", python)
-        self.assertIn(
-            "def document_new(self, name: str) -> Optional[FreeCADDocumentHandle]:",
-            python,
-        )
+        self.assertIn("def document_new(self, name: str) -> FreeCADDocumentHandle:", python)
         self.assertIn(
             "def document_object_get_label(self, object: FreeCADDocumentObjectHandle)",
             python,
         )
         self.assertIn("DOCUMENT_OPEN_TRANSACTION_PERMISSION = \"document.modify\"", python)
         self.assertIn(
-            "pub fn document_new(&self, name: &[u8]) -> Option<FreeCADDocumentHandle>",
+            "pub fn document_new(&self, name: &[u8]) -> Result<FreeCADDocumentHandle>",
+            rust,
+        )
+        self.assertIn("pub struct Error", rust)
+        self.assertIn("pub fn own(&self, value: Handle) -> OwnedHandle", rust)
+        self.assertIn(
+            "pub fn document_get_object(&self, document: FreeCADDocumentHandle, name: &[u8]) -> Result<FreeCADDocumentObjectHandle>",
             rust,
         )
         self.assertIn(
-            "pub fn document_get_object(&self, document: FreeCADDocumentHandle, name: &[u8]) -> Option<FreeCADDocumentObjectHandle>",
+            "pub fn topo_shape_area(&self, shape: PartTopoShapeHandle) -> Result<f64>",
             rust,
         )
         self.assertIn(
-            "pub fn topo_shape_area(&self, shape: PartTopoShapeHandle) -> Option<f64>",
-            rust,
-        )
-        self.assertIn(
-            "pub fn document_object_get_label(&self, object: FreeCADDocumentObjectHandle, output: &mut [u8]) -> Option<usize>",
+            "pub fn document_object_get_label(&self, object: FreeCADDocumentObjectHandle, output: &mut [u8]) -> Result<usize>",
             rust,
         )
         self.assertIn("freecad_dispatch", rust)
