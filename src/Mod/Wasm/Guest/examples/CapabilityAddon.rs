@@ -59,9 +59,15 @@ pub extern "C" fn freecad_addon_entry(_input: *const u8, _input_length: u32) -> 
         };
 
         let object_name = b"RustBox";
+        if client.document_open_transaction(document, b"Add object") != Some(true) {
+            return FAILURE;
+        }
         let Some(object) = client.document_add_object(document, shape, object_name) else {
             return FAILURE;
         };
+        if client.document_commit_transaction(document) != Some(true) {
+            return FAILURE;
+        }
 
         let mut label = [0u8; 128];
         let Some(label_length) = client.document_object_get_label(object, &mut label) else {

@@ -985,6 +985,23 @@ TEST(WasmHostApiTest, CreatesDocumentsShapesAndFeaturesWithInstanceHandles)
     Wasm::Abi::appendU64(addObjectPayload, documentHandle);
     Wasm::Abi::appendU64(addObjectPayload, shapeHandle);
     addObjectPayload += stringPayload("Box");
+
+    const auto addOutsideTransactionResult = hostApi.dispatch(
+        asBytes(binaryRequest(Wasm::Abi::Operation::DocumentAddObject, addObjectPayload)),
+        hostApi.permissions(),
+        handles);
+    EXPECT_FALSE(addOutsideTransactionResult.ok);
+    EXPECT_NE(addOutsideTransactionResult.error.find("active transaction"), std::string::npos);
+
+    std::string addTransactionPayload = handlePayload(documentHandle);
+    addTransactionPayload += stringPayload("Add object");
+    const auto addTransactionResult = hostApi.dispatch(
+        asBytes(binaryRequest(Wasm::Abi::Operation::DocumentOpenTransaction,
+                              addTransactionPayload)),
+        hostApi.permissions(),
+        handles);
+    ASSERT_TRUE(addTransactionResult.ok) << addTransactionResult.error;
+
     const auto objectResult = hostApi.dispatch(
         asBytes(binaryRequest(Wasm::Abi::Operation::DocumentAddObject, addObjectPayload)),
         hostApi.permissions(),
@@ -992,6 +1009,21 @@ TEST(WasmHostApiTest, CreatesDocumentsShapesAndFeaturesWithInstanceHandles)
     ASSERT_TRUE(objectResult.ok) << objectResult.error;
     const auto objectHandle = handleFromPayload(objectResult.payload);
     ASSERT_NE(objectHandle, Wasm::InvalidHandle);
+
+    const auto addCommitResult = hostApi.dispatch(
+        asBytes(binaryRequest(Wasm::Abi::Operation::DocumentCommitTransaction,
+                              handlePayload(documentHandle))),
+        hostApi.permissions(),
+        handles);
+    ASSERT_TRUE(addCommitResult.ok) << addCommitResult.error;
+
+    const auto duplicateCommitResult = hostApi.dispatch(
+        asBytes(binaryRequest(Wasm::Abi::Operation::DocumentCommitTransaction,
+                              handlePayload(documentHandle))),
+        hostApi.permissions(),
+        handles);
+    EXPECT_FALSE(duplicateCommitResult.ok);
+    EXPECT_NE(duplicateCommitResult.error.find("active transaction"), std::string::npos);
 
     std::string getObjectPayload = handlePayload(documentHandle);
     getObjectPayload += stringPayload("Box");
@@ -1011,6 +1043,16 @@ TEST(WasmHostApiTest, CreatesDocumentsShapesAndFeaturesWithInstanceHandles)
     ASSERT_TRUE(labelResult.ok) << labelResult.error;
     EXPECT_EQ(stringFromPayload(labelResult.payload), "Box");
 
+    std::string setLabelPayload = handlePayload(objectHandle);
+    setLabelPayload += stringPayload("ConfiguredBox");
+    const auto setLabelOutsideTransactionResult = hostApi.dispatch(
+        asBytes(binaryRequest(Wasm::Abi::Operation::DocumentObjectSetLabel,
+                              setLabelPayload)),
+        hostApi.permissions(),
+        handles);
+    EXPECT_FALSE(setLabelOutsideTransactionResult.ok);
+    EXPECT_NE(setLabelOutsideTransactionResult.error.find("active transaction"), std::string::npos);
+
     std::string openTransactionPayload = handlePayload(documentHandle);
     openTransactionPayload += stringPayload("Set label");
     const auto openTransactionResult = hostApi.dispatch(
@@ -1021,8 +1063,15 @@ TEST(WasmHostApiTest, CreatesDocumentsShapesAndFeaturesWithInstanceHandles)
     ASSERT_TRUE(openTransactionResult.ok) << openTransactionResult.error;
     ASSERT_EQ(static_cast<unsigned char>(openTransactionResult.payload.front()), 1U);
 
-    std::string setLabelPayload = handlePayload(objectHandle);
-    setLabelPayload += stringPayload("ConfiguredBox");
+    std::string nestedTransactionPayload = handlePayload(documentHandle);
+    nestedTransactionPayload += stringPayload("Nested label");
+    const auto nestedOpenResult = hostApi.dispatch(
+        asBytes(binaryRequest(Wasm::Abi::Operation::DocumentOpenTransaction,
+                              nestedTransactionPayload)),
+        hostApi.permissions(),
+        handles);
+    ASSERT_TRUE(nestedOpenResult.ok) << nestedOpenResult.error;
+
     const auto setLabelResult = hostApi.dispatch(
         asBytes(binaryRequest(Wasm::Abi::Operation::DocumentObjectSetLabel,
                               setLabelPayload)),
@@ -1038,6 +1087,13 @@ TEST(WasmHostApiTest, CreatesDocumentsShapesAndFeaturesWithInstanceHandles)
         handles);
     ASSERT_TRUE(commitTransactionResult.ok) << commitTransactionResult.error;
     ASSERT_EQ(static_cast<unsigned char>(commitTransactionResult.payload.front()), 1U);
+
+    const auto outerCommitTransactionResult = hostApi.dispatch(
+        asBytes(binaryRequest(Wasm::Abi::Operation::DocumentCommitTransaction,
+                              handlePayload(documentHandle))),
+        hostApi.permissions(),
+        handles);
+    ASSERT_TRUE(outerCommitTransactionResult.ok) << outerCommitTransactionResult.error;
 
     std::string rollbackPayload = handlePayload(documentHandle);
     rollbackPayload += stringPayload("Rollback label");
@@ -1063,6 +1119,14 @@ TEST(WasmHostApiTest, CreatesDocumentsShapesAndFeaturesWithInstanceHandles)
         hostApi.permissions(),
         handles);
     ASSERT_TRUE(abortTransactionResult.ok) << abortTransactionResult.error;
+
+    const auto duplicateAbortResult = hostApi.dispatch(
+        asBytes(binaryRequest(Wasm::Abi::Operation::DocumentAbortTransaction,
+                              handlePayload(documentHandle))),
+        hostApi.permissions(),
+        handles);
+    EXPECT_FALSE(duplicateAbortResult.ok);
+    EXPECT_NE(duplicateAbortResult.error.find("active transaction"), std::string::npos);
 
     const auto rolledBackLabelResult = hostApi.dispatch(
         asBytes(binaryRequest(Wasm::Abi::Operation::DocumentObjectGetLabel,
@@ -1139,6 +1203,23 @@ TEST(WasmHostApiTest, CreatesDocumentsShapesAndFeaturesWithInstanceHandles)
         handles);
     EXPECT_FALSE(deniedDocumentModify.ok);
     EXPECT_NE(deniedDocumentModify.error.find("document.modify"), std::string::npos);
+
+    std::string cleanupTransactionPayload = handlePayload(documentHandle);
+    cleanupTransactionPayload += stringPayload("Cleanup");
+    const auto cleanupOpenResult = hostApi.dispatch(
+        asBytes(binaryRequest(Wasm::Abi::Operation::DocumentOpenTransaction,
+                              cleanupTransactionPayload)),
+        hostApi.permissions(),
+        handles);
+    ASSERT_TRUE(cleanupOpenResult.ok) << cleanupOpenResult.error;
+    hostApi.clearTransactions();
+    const auto cleanupLabelResult = hostApi.dispatch(
+        asBytes(binaryRequest(Wasm::Abi::Operation::DocumentObjectSetLabel,
+                              setLabelPayload)),
+        hostApi.permissions(),
+        handles);
+    EXPECT_FALSE(cleanupLabelResult.ok);
+    EXPECT_NE(cleanupLabelResult.error.find("active transaction"), std::string::npos);
 
     const auto objectEntry = handles.get(objectHandle);
     ASSERT_TRUE(objectEntry.has_value());
@@ -1452,6 +1533,14 @@ TEST(WamrRuntimeTest, DispatchesVersionedCapabilitiesWithInstanceLocalHandles)
                          boxResult.payload.size()));
     ASSERT_NE(shapeHandle, Wasm::InvalidHandle);
 
+    std::string transactionPayload = handlePayload(documentHandle);
+    transactionPayload += stringPayload("Add object");
+    const auto transactionRequest = binaryRequest(
+        Wasm::Abi::Operation::DocumentOpenTransaction, transactionPayload);
+    const auto transactionResult = instance->call(
+        "dispatch", asBytes(transactionRequest));
+    ASSERT_TRUE(transactionResult.ok) << transactionResult.error;
+
     std::string addObjectPayload;
     Wasm::Abi::appendU64(addObjectPayload, documentHandle);
     Wasm::Abi::appendU64(addObjectPayload, shapeHandle);
@@ -1460,6 +1549,11 @@ TEST(WamrRuntimeTest, DispatchesVersionedCapabilitiesWithInstanceLocalHandles)
         Wasm::Abi::Operation::DocumentAddObject, addObjectPayload);
     const auto objectResult = instance->call("dispatch", asBytes(objectRequest));
     ASSERT_TRUE(objectResult.ok) << objectResult.error;
+
+    const auto commitRequest = binaryRequest(
+        Wasm::Abi::Operation::DocumentCommitTransaction, handlePayload(documentHandle));
+    const auto commitResult = instance->call("dispatch", asBytes(commitRequest));
+    ASSERT_TRUE(commitResult.ok) << commitResult.error;
 
     auto isolatedInstance = runtime->instantiate(wasmPath, limits, hostApi);
     ASSERT_TRUE(isolatedInstance);

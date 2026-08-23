@@ -10,8 +10,14 @@
 #include <string>
 #include <string_view>
 #include <thread>
+#include <unordered_map>
 #include <unordered_set>
 #include <vector>
+
+namespace App
+{
+class Document;
+}
 
 namespace Wasm
 {
@@ -41,12 +47,24 @@ public:
     void setPermissions(const std::vector<std::string>& permissions);
     const PermissionSet& permissions() const;
     bool isOnOwnerThread() const;
+    void clearTransactions();
 
 private:
+    struct TransactionState
+    {
+        std::string name;
+        std::size_t depth = 0U;
+    };
+
     static bool hasPermission(const PermissionSet& permissions, std::string_view permission);
+    bool hasActiveTransaction(const App::Document* document) const;
+    void beginTransaction(App::Document* document);
+    void endTransaction(App::Document* document);
+    void clearTransactionsFor(App::Document* document);
 
     std::thread::id ownerThread;
     PermissionSet allowedPermissions;
+    std::unordered_map<const App::Document*, TransactionState> transactions;
 };
 
 }  // namespace Wasm

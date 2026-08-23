@@ -264,6 +264,70 @@ def _operation_sources(api_model: Any) -> set[str]:
     return sources
 
 
+def _validate_operation_catalog(operations: list[dict[str, Any]]) -> None:
+    seen_names: set[str] = set()
+    seen_wire_names: set[str] = set()
+    seen_guest_methods: set[str] = set()
+    seen_ids: dict[int, str] = {}
+    required_string_fields = ("name", "wire_name", "guest_method")
+
+    for operation in operations:
+        for field in required_string_fields:
+            value = operation.get(field)
+            if not isinstance(value, str) or not value:
+                raise ValueError(f"WASM operation has an invalid '{field}'")
+
+        name = operation["name"]
+        wire_name = operation["wire_name"]
+        guest_method = operation["guest_method"]
+        if name in seen_names:
+            raise ValueError(f"WASM operation '{name}' is duplicated")
+        if wire_name in seen_wire_names:
+            raise ValueError(f"WASM wire name '{wire_name}' is duplicated")
+        if guest_method in seen_guest_methods:
+            raise ValueError(f"WASM guest method '{guest_method}' is duplicated")
+        seen_names.add(name)
+        seen_wire_names.add(wire_name)
+        seen_guest_methods.add(guest_method)
+
+        operation_id = operation.get("id")
+        if (
+            isinstance(operation_id, bool)
+            or not isinstance(operation_id, int)
+            or not 0 < operation_id <= 0xFF
+        ):
+            raise ValueError(f"WASM operation '{name}' has an invalid id")
+        previous_name = seen_ids.get(operation_id)
+        if previous_name is not None:
+            raise ValueError(
+                f"WASM operation id {operation_id} is used by both "
+                f"'{previous_name}' and '{name}'"
+            )
+        seen_ids[operation_id] = name
+
+        permission = operation.get("permission")
+        if permission is not None and (not isinstance(permission, str) or not permission):
+            raise ValueError(f"WASM operation '{name}' has an invalid permission")
+        mutates = operation.get("mutates")
+        if not isinstance(mutates, bool):
+            raise ValueError(f"WASM operation '{name}' has an invalid mutates flag")
+        transaction = operation.get("transaction")
+        if transaction is not None and transaction not in {"required", "open", "commit", "abort"}:
+            raise ValueError(f"WASM operation '{name}' has an invalid transaction policy")
+        if transaction is not None and not mutates:
+            raise ValueError(f"WASM operation '{name}' transaction policy must mutate")
+
+        requirements = operation.get("requires", [])
+        if not isinstance(requirements, list) or not all(
+            isinstance(requirement, str) and requirement for requirement in requirements
+        ):
+            raise ValueError(f"WASM operation '{name}' has invalid requirements")
+        if not isinstance(operation.get("params"), list):
+            raise ValueError(f"WASM operation '{name}' has invalid parameters")
+        if not isinstance(operation.get("returns"), dict):
+            raise ValueError(f"WASM operation '{name}' has invalid return metadata")
+
+
 def _load_operations(root: Path, inputs: list[Path], api_model: Any) -> list[dict[str, Any]]:
     operations_path = root / "src/Mod/Wasm/WasmApiOperations.json"
     if not operations_path.exists():
@@ -272,8 +336,13 @@ def _load_operations(root: Path, inputs: list[Path], api_model: Any) -> list[dic
     model = json.loads(operations_path.read_text(encoding="utf-8"))
     input_paths = {path.resolve().relative_to(root).as_posix() for path in inputs}
     sources = _operation_sources(api_model)
-    operations = []
-    for operation in model.get("operations", []):
+    operations = model.get("operations", [])
+    if not isinstance(operations, list):
+        raise ValueError("WASM operation catalog must contain an operations list")
+    _validate_operation_catalog(operations)
+
+    selected_operations = []
+    for operation in operations:
         requirements = operation.get("requires", [])
         if not all(requirement in input_paths for requirement in requirements):
             continue
@@ -283,8 +352,8 @@ def _load_operations(root: Path, inputs: list[Path], api_model: Any) -> list[dic
                 f"WASM operation {operation.get('name', '<unnamed>')} references "
                 f"missing .pyi symbol '{source}'"
             )
-        operations.append(operation)
-    return operations
+        selected_operations.append(operation)
+    return selected_operations
 
 
 def build_model(root: Path, inputs: list[Path]) -> dict[str, Any]:

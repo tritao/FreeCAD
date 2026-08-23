@@ -36,6 +36,7 @@
       "source": "FreeCAD.Document.addObject",
       "permission": "document.modify",
       "mutates": true,
+      "transaction": "required",
       "requires": ["src/App/Document.pyi", "src/Mod/Part/App/TopoShape.pyi"],
       "params": [
         {"name": "document", "type": {"kind": "handle", "type": "FreeCAD.Document", "annotation": "Document"}},
@@ -275,6 +276,7 @@
       "source": "FreeCAD.Document.openTransaction",
       "permission": "document.modify",
       "mutates": true,
+      "transaction": "open",
       "requires": ["src/App/Document.pyi"],
       "params": [
         {"name": "document", "type": {"kind": "handle", "type": "FreeCAD.Document", "annotation": "Document"}},
@@ -290,6 +292,7 @@
       "source": "FreeCAD.Document.commitTransaction",
       "permission": "document.modify",
       "mutates": true,
+      "transaction": "commit",
       "requires": ["src/App/Document.pyi"],
       "params": [
         {"name": "document", "type": {"kind": "handle", "type": "FreeCAD.Document", "annotation": "Document"}}
@@ -304,6 +307,7 @@
       "source": "FreeCAD.Document.abortTransaction",
       "permission": "document.modify",
       "mutates": true,
+      "transaction": "abort",
       "requires": ["src/App/Document.pyi"],
       "params": [
         {"name": "document", "type": {"kind": "handle", "type": "FreeCAD.Document", "annotation": "Document"}}
@@ -315,7 +319,7 @@
       "wire_name": "document.object.get_label",
       "id": 19,
       "guest_method": "documentObjectGetLabel",
-      "source": "FreeCAD.DocumentObject",
+      "source": "FreeCAD.DocumentObject.Label",
       "permission": "document.read",
       "mutates": false,
       "requires": ["src/App/DocumentObject.pyi"],
@@ -329,9 +333,10 @@
       "wire_name": "document.object.set_label",
       "id": 20,
       "guest_method": "documentObjectSetLabel",
-      "source": "FreeCAD.DocumentObject",
+      "source": "FreeCAD.DocumentObject.Label",
       "permission": "document.modify",
       "mutates": true,
+      "transaction": "required",
       "requires": ["src/App/DocumentObject.pyi"],
       "params": [
         {"name": "object", "type": {"kind": "handle", "type": "FreeCAD.DocumentObject", "annotation": "DocumentObject"}},

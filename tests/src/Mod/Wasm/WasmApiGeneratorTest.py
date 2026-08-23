@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: LGPL-2.1-or-later
 
 import json
+import re
 import subprocess
 import sys
 import tempfile
@@ -44,12 +45,58 @@ operations = {operation["name"]: operation for operation in model["operations"]}
 assert operations["documentNew"]["permission"] == "document.create"
 assert operations["partMakeBox"]["id"] == 2
 assert operations["documentAddObject"]["mutates"] is True
+assert operations["documentAddObject"]["transaction"] == "required"
 assert operations["documentAddObject"]["source"] == "FreeCAD.Document.addObject"
 assert operations["vectorDot"]["source"] == "FreeCAD.Base.Vector.dot"
 assert operations["documentIsSaved"]["permission"] == "document.read"
 assert operations["topoShapeArea"]["source"] == "Part.TopoShape.Area"
 assert operations["documentOpenTransaction"]["permission"] == "document.modify"
-assert operations["documentObjectGetLabel"]["source"] == "FreeCAD.DocumentObject"
+assert operations["documentOpenTransaction"]["transaction"] == "open"
+assert operations["documentCommitTransaction"]["transaction"] == "commit"
+assert operations["documentAbortTransaction"]["transaction"] == "abort"
+assert operations["documentObjectGetLabel"]["source"] == "FreeCAD.DocumentObject.Label"
+assert operations["documentObjectSetLabel"]["transaction"] == "required"
+
+abi_header = (ROOT / "src/Mod/Wasm/WasmAbi.h").read_text(encoding="utf-8")
+abi_enum = re.search(
+    r"enum class Operation : std::uint8_t\s*\{(?P<body>.*?)\};",
+    abi_header,
+    re.DOTALL,
+)
+assert abi_enum is not None
+abi_operations = {
+    name: int(operation_id)
+    for name, operation_id in re.findall(
+        r"^\s*(\w+)\s*=\s*(\d+),", abi_enum.group("body"), re.MULTILINE
+    )
+}
+host_source = (ROOT / "src/Mod/Wasm/App/WasmHostApi.cpp").read_text(encoding="utf-8")
+known_permissions = set(
+    re.findall(
+        r'"([^"\n]+)"',
+        (ROOT / "src/Mod/Wasm/App/WasmPermissions.h").read_text(encoding="utf-8"),
+    )
+)
+
+
+def operation_enum_name(operation_name):
+    return (
+        "HandleRelease"
+        if operation_name == "release"
+        else operation_name[0].upper() + operation_name[1:]
+    )
+
+
+assert set(abi_operations) == {
+    operation_enum_name(operation["name"]) for operation in model["operations"]
+}
+for operation in model["operations"]:
+    enum_name = operation_enum_name(operation["name"])
+    assert abi_operations[enum_name] == operation["id"]
+    assert f"case Abi::Operation::{enum_name}:" in host_source
+    permission = operation["permission"]
+    if permission is not None:
+        assert permission in known_permissions
 
 topo_shape = find_class(model, "TopoShape")
 for attribute_name in ("Faces", "Edges"):

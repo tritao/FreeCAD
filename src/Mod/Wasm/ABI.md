@@ -123,6 +123,12 @@ guest request cannot grant itself additional capabilities. `WasmAddon` loads
 the manifest and grants the intersection of requested permissions and the
 host policy, then invokes the fixed `freecad_addon_entry` export.
 
+Document mutations are transaction-scoped. An addon must open a transaction
+before calling document.add_object or document.object.set_label. Transaction
+depth is tracked per addon instance, so nested transactions must be committed
+or aborted in matching order. Any transactions still active when an instance
+is unloaded are aborted by the host.
+
 ## Python Module
 
 The experimental `Wasm` module keeps loaded addons alive in a process-local

@@ -172,6 +172,24 @@ def attribute_from_assignment(
     )
 
 
+def is_type_checking_guard(test: ast.expr) -> bool:
+    return (isinstance(test, ast.Name) and test.id == "TYPE_CHECKING") or (
+        isinstance(test, ast.Attribute) and test.attr == "TYPE_CHECKING"
+    )
+
+
+def class_api_body(body: list[ast.stmt]) -> list[ast.stmt]:
+    """Include declarations guarded by a positive TYPE_CHECKING condition."""
+
+    result: list[ast.stmt] = []
+    for node in body:
+        if isinstance(node, ast.If) and is_type_checking_guard(node.test):
+            result.extend(class_api_body(node.body))
+        else:
+            result.append(node)
+    return result
+
+
 def attributes_from_body(
     root: Path,
     path: Path,
@@ -185,7 +203,7 @@ def attributes_from_body(
 
     deprecated_messages = deprecated_messages or {}
     attributes: list[ApiAttribute] = []
-    for index, node in enumerate(body):
+    for index, node in enumerate(class_api_body(body)):
         if not isinstance(node, (ast.Assign, ast.AnnAssign)):
             continue
         doc = None
@@ -220,7 +238,7 @@ def class_methods(
     origin: ApiOrigin,
 ) -> tuple[ApiCallableGroup, ...]:
     methods: list[ApiCallableGroup] = []
-    for _, group in sorted(group_callable_definitions(body).items()):
+    for _, group in sorted(group_callable_definitions(class_api_body(body)).items()):
         callable_group = callable_group_from_nodes(
             root,
             path,

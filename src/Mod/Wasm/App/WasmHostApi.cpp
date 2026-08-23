@@ -429,6 +429,9 @@ HostCallResult WasmHostApi::dispatch(std::span<const std::byte> request,
         if (shape == nullptr) {
             return {false, {}, error};
         }
+        if (!hasActiveTransaction(document)) {
+            return {false, {}, "document.add_object requires an active transaction"};
+        }
 
         try {
             auto* object = document->addObject<Part::Feature>(name.c_str());
@@ -540,7 +543,12 @@ HostCallResult WasmHostApi::dispatch(std::span<const std::byte> request,
             return {false, {}, error};
         }
         try {
-            return {true, boolPayload(document->openTransaction(name) != 0), {}};
+            const auto transactionId = document->openTransaction(name);
+            if (transactionId == 0) {
+                return {true, boolPayload(false), {}};
+            }
+            beginTransaction(document);
+            return {true, boolPayload(true), {}};
         }
         catch (const Base::Exception& exception) {
             return {false,
@@ -569,6 +577,13 @@ HostCallResult WasmHostApi::dispatch(std::span<const std::byte> request,
         if (document == nullptr) {
             return {false, {}, error};
         }
+        if (!hasActiveTransaction(document)) {
+            return {false,
+                    {},
+                    operation == Abi::Operation::DocumentCommitTransaction
+                        ? "document.commit_transaction requires an active transaction"
+                        : "document.abort_transaction requires an active transaction"};
+        }
         try {
             if (operation == Abi::Operation::DocumentCommitTransaction) {
                 document->commitTransaction();
@@ -576,6 +591,7 @@ HostCallResult WasmHostApi::dispatch(std::span<const std::byte> request,
             else {
                 document->abortTransaction();
             }
+            endTransaction(document);
             return {true, boolPayload(true), {}};
         }
         catch (const Base::Exception& exception) {
@@ -621,6 +637,10 @@ HostCallResult WasmHostApi::dispatch(std::span<const std::byte> request,
             handles, objectHandle, "FreeCAD.DocumentObject", error);
         if (object == nullptr) {
             return {false, {}, error};
+        }
+        auto* document = object->getDocument();
+        if (document == nullptr || !hasActiveTransaction(document)) {
+            return {false, {}, "document.object.set_label requires an active transaction"};
         }
         try {
             object->Label.setValue(label);
@@ -700,7 +720,17 @@ HostCallResult WasmHostApi::dispatch(std::span<const std::byte> request,
         }
         std::size_t payloadOffset = 0U;
         std::uint64_t handle = InvalidHandle;
-        if (!readU64(payload, payloadOffset, handle) || !handles.erase(handle)) {
+        if (!readU64(payload, payloadOffset, handle)) {
+            return {false, {}, "invalid or expired handle"};
+        }
+        const auto entry = handles.get(handle);
+        if (!entry.has_value()) {
+            return {false, {}, "invalid or expired handle"};
+        }
+        if (entry->typeName == "App::Document") {
+            clearTransactionsFor(static_cast<App::Document*>(entry->pointer));
+        }
+        if (!handles.erase(handle)) {
             return {false, {}, "invalid or expired handle"};
         }
         return {true, {}, {}};
@@ -727,6 +757,75 @@ HostCallResult WasmHostApi::log(std::string_view message, const PermissionSet& p
 
     Base::Console().message("%.*s\n", static_cast<int>(message.size()), message.data());
     return {true, "null", {}};
+}
+
+bool WasmHostApi::hasActiveTransaction(const App::Document* document) const
+{
+    const auto transaction = transactions.find(document);
+    return transaction != transactions.end() && transaction->second.depth != 0U;
+}
+
+void WasmHostApi::beginTransaction(App::Document* document)
+{
+    auto& transaction = transactions[document];
+    transaction.name = document->getName();
+    ++transaction.depth;
+}
+
+void WasmHostApi::endTransaction(App::Document* document)
+{
+    const auto transaction = transactions.find(document);
+    if (transaction == transactions.end()) {
+        return;
+    }
+    if (transaction->second.depth > 1U) {
+        --transaction->second.depth;
+    }
+    else {
+        transactions.erase(transaction);
+    }
+}
+
+void WasmHostApi::clearTransactionsFor(App::Document* document)
+{
+    const auto transaction = transactions.find(document);
+    if (transaction == transactions.end()) {
+        return;
+    }
+
+    const auto* currentDocument = App::GetApplication().getDocument(
+        transaction->second.name.c_str());
+    if (currentDocument == document) {
+        for (std::size_t index = 0U; index < transaction->second.depth; ++index) {
+            try {
+                document->abortTransaction();
+            }
+            catch (...) {
+                break;
+            }
+        }
+    }
+    transactions.erase(transaction);
+}
+
+void WasmHostApi::clearTransactions()
+{
+    for (const auto& [document, transaction] : transactions) {
+        const auto* currentDocument = App::GetApplication().getDocument(
+            transaction.name.c_str());
+        if (currentDocument != document) {
+            continue;
+        }
+        for (std::size_t index = 0U; index < transaction.depth; ++index) {
+            try {
+                document->abortTransaction();
+            }
+            catch (...) {
+                break;
+            }
+        }
+    }
+    transactions.clear();
 }
 
 void WasmHostApi::setPermissions(const std::vector<std::string>& permissions)

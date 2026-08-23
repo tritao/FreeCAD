@@ -66,6 +66,7 @@ Wasm::WamrInstance::~WamrInstance()
         return;
     }
 
+    impl->context.hostApi.clearTransactions();
     if (impl->execEnv != nullptr) {
         wasm_runtime_destroy_exec_env(impl->execEnv);
     }

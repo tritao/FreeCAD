@@ -60,12 +60,39 @@ class GenerateWasmApiTests(unittest.TestCase):
         self.assertEqual(literal_model["kind"], "literal")
         self.assertEqual(literal_model["values"], ["read", "write"])
 
+    def test_operation_catalog_rejects_duplicate_ids(self):
+        operations = [
+            {
+                "name": "first",
+                "wire_name": "test.first",
+                "id": 1,
+                "guest_method": "first",
+                "permission": None,
+                "mutates": False,
+                "params": [],
+                "returns": {"kind": "none"},
+            },
+            {
+                "name": "second",
+                "wire_name": "test.second",
+                "id": 1,
+                "guest_method": "second",
+                "permission": None,
+                "mutates": False,
+                "params": [],
+                "returns": {"kind": "none"},
+            },
+        ]
+        with self.assertRaisesRegex(ValueError, "operation id 1"):
+            generate_wasm_api._validate_operation_catalog(operations)
+
     def test_projection_uses_the_canonical_api_model(self):
         model = generate_wasm_api.build_model(
             ROOT,
             [
                 ROOT / "src/Base/Vector.pyi",
                 ROOT / "src/App/Document.pyi",
+                ROOT / "src/App/DocumentObject.pyi",
                 ROOT / "src/Mod/Part/App/TopoShape.pyi",
             ],
         )
@@ -82,6 +109,13 @@ class GenerateWasmApiTests(unittest.TestCase):
         document = next(item for item in model["classes"] if item["name"] == "Document")
         save_as = next(item for item in document["methods"] if item["name"] == "saveAs")
         self.assertFalse(save_as["signatures"][0]["exposed"])
+
+        document_object = next(
+            item for item in model["classes"] if item["name"] == "DocumentObject"
+        )
+        label = next(item for item in document_object["attributes"] if item["name"] == "Label")
+        self.assertEqual(label["annotation"], "str")
+        self.assertEqual(label["type"]["kind"], "string")
 
 
 if __name__ == "__main__":

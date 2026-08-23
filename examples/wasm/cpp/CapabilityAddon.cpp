@@ -55,7 +55,9 @@ extern "C" unsigned long long freecad_addon_entry(const unsigned char*, unsigned
     }
 
     FreeCADDocumentObjectHandle object;
-    if (!host.documentAddObject(document, box, "Box", &object)) {
+    if (!host.documentOpenTransaction(document, "Add object")
+        || !host.documentAddObject(document, box, "Box", &object)
+        || !host.documentCommitTransaction(document)) {
         return 0x100000000ULL;
     }
 
