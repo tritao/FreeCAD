@@ -176,6 +176,22 @@ macro(InitializeFreeCADBuildOptions)
     option(BUILD_TECHDRAW "Build the FreeCAD Technical Drawing module" ON)
     option(BUILD_TUX "Build the FreeCAD Tux module" ON)
     option(BUILD_WEB "Build the FreeCAD Web module" ON)
+    option(BUILD_WASM "Build the experimental FreeCAD WebAssembly addon runtime module" OFF)
+    option(FREECAD_USE_WAMR "Build the experimental Wasm module with the WAMR runtime" OFF)
+    set(FREECAD_WAMR_PROVIDER "AUTO" CACHE STRING
+        "WAMR provisioning provider: AUTO, PACKAGE, SOURCE, or FETCH")
+    set_property(CACHE FREECAD_WAMR_PROVIDER PROPERTY STRINGS AUTO PACKAGE SOURCE FETCH SYSTEM)
+    set(FREECAD_WAMR_ROOT "" CACHE PATH
+        "WAMR install prefix or source root when using PACKAGE or SOURCE")
+    if(DEFINED ENV{FREECAD_WAMR_PROFILE}
+       AND NOT "$ENV{FREECAD_WAMR_PROFILE}" STREQUAL "")
+        set(FREECAD_WAMR_PROFILE "$ENV{FREECAD_WAMR_PROFILE}" CACHE STRING
+            "WAMR execution profile: INTERP, AOT, or JIT" FORCE)
+    else()
+        set(FREECAD_WAMR_PROFILE "INTERP" CACHE STRING
+            "WAMR execution profile: INTERP, AOT, or JIT")
+    endif()
+    set_property(CACHE FREECAD_WAMR_PROFILE PROPERTY STRINGS INTERP AOT JIT)
     option(BUILD_SURFACE "Build the FreeCAD surface module" ON)
     option(ENABLE_DEVELOPER_TESTS "Build the FreeCAD unit tests suit" ON)
 

@@ -5,7 +5,8 @@ description = "pixi instructions for FreeCAD"
 authors = ["looooo <sppedflyer@gmail.com>"]
 channels = ["conda-forge"]
 platforms = [ "linux-64", "linux-aarch64", "osx-64", "osx-arm64", "win-64" ]
-requires-pixi = ">=0.48"
+requires-pixi = ">=0.58"
+preview = ["pixi-build"]
 
 [dependencies]
 av = "*"
@@ -166,6 +167,41 @@ pthreads-win32 = "*"
 
 [pypi-dependencies]
 freecad-stubs = "*"
+
+# Keep profile packages separate for Pixi solving; their build implementation
+# is shared by the wrappers in package/{wamr,wamr-aot,wamr-jit,wamr-compiler}.
+[feature.wasm.dependencies]
+lld = "*"
+rust = "*"
+rust-std-wasm32-unknown-unknown = "*"
+wamr = { path = "package/wamr/recipe.yaml" }
+
+[feature.wasm.activation.env]
+FREECAD_WAMR_PROFILE = "INTERP"
+
+[feature.wasm-aot.dependencies]
+lld = "*"
+rust = "*"
+rust-std-wasm32-unknown-unknown = "*"
+wamr-aot = { path = "package/wamr-aot/recipe.yaml" }
+wamr-compiler = { path = "package/wamr-compiler/recipe.yaml" }
+
+[feature.wasm-aot.activation.env]
+FREECAD_WAMR_PROFILE = "AOT"
+
+[feature.wasm-jit.dependencies]
+lld = "*"
+rust = "*"
+rust-std-wasm32-unknown-unknown = "*"
+wamr-jit = { path = "package/wamr-jit/recipe.yaml" }
+
+[feature.wasm-jit.activation.env]
+FREECAD_WAMR_PROFILE = "JIT"
+
+[environments]
+wasm = { features = ["wasm"], solve-group = "default" }
+wasm-aot = { features = ["wasm-aot"], solve-group = "default" }
+wasm-jit = { features = ["wasm-jit"], solve-group = "default" }
 
 ## Qt 6 Configuration Presets
 [target.linux-64.tasks]
