@@ -44,6 +44,7 @@ else()
     set(_freecad_wasm_api_inputs
         "${FREECAD_SOURCE_DIR}/src/Base/Vector.pyi"
         "${FREECAD_SOURCE_DIR}/src/App/Document.pyi"
+        "${FREECAD_SOURCE_DIR}/src/App/DocumentObject.pyi"
         "${FREECAD_SOURCE_DIR}/src/Mod/Part/App/TopoShape.pyi"
     )
     set(_freecad_wasm_guest_api_dir

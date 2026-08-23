@@ -10,6 +10,12 @@ add_test(
             ${CMAKE_CURRENT_SOURCE_DIR}/WasmApiGeneratorTest.py
 )
 
+add_test(
+    NAME WasmPythonGuestSdkTest
+    COMMAND ${Python3_EXECUTABLE}
+            ${CMAKE_SOURCE_DIR}/src/Tools/bindings/tests/test_generated_wasm_python_sdk.py
+)
+
 if(FREECAD_USE_WAMR)
     include(${CMAKE_SOURCE_DIR}/src/Mod/Wasm/Guest/FreeCADWasmGuest.cmake)
     freecad_wasm_generate_guest_sdk(WasmGuestApiFixture

@@ -57,19 +57,27 @@ add_custom_target(WasmApiModel ALL
 
 set(Wasm_API_CPP_SDK ${CMAKE_CURRENT_BINARY_DIR}/freecad_wasm_api.hpp)
 set(Wasm_API_RUST_SDK ${CMAKE_CURRENT_BINARY_DIR}/freecad_wasm_api.rs)
+set(Wasm_API_PYTHON_SDK ${CMAKE_CURRENT_BINARY_DIR}/freecad_wasm_api.py)
 
 add_custom_command(
-    OUTPUT ${Wasm_API_CPP_SDK} ${Wasm_API_RUST_SDK}
+    OUTPUT
+        ${Wasm_API_CPP_SDK}
+        ${Wasm_API_RUST_SDK}
+        ${Wasm_API_PYTHON_SDK}
     COMMAND ${Python3_EXECUTABLE} ${Wasm_API_SDK_GENERATOR}
             --api-json ${Wasm_API_MODEL}
             --cpp-output ${Wasm_API_CPP_SDK}
             --rust-output ${Wasm_API_RUST_SDK}
+            --python-output ${Wasm_API_PYTHON_SDK}
     DEPENDS ${Wasm_API_MODEL} ${Wasm_API_SDK_GENERATOR}
     COMMENT "Generating experimental FreeCAD Wasm guest SDK types"
 )
 
 add_custom_target(WasmApiSdk ALL
-    DEPENDS ${Wasm_API_CPP_SDK} ${Wasm_API_RUST_SDK}
+    DEPENDS
+        ${Wasm_API_CPP_SDK}
+        ${Wasm_API_RUST_SDK}
+        ${Wasm_API_PYTHON_SDK}
 )
 
 set(Wasm_SRCS
@@ -151,7 +159,14 @@ SET_PYTHON_PREFIX_SUFFIX(Wasm)
 
 install(TARGETS Wasm DESTINATION ${CMAKE_INSTALL_LIBDIR})
 install(FILES ${Wasm_API_MODEL} DESTINATION Mod/Wasm)
-install(FILES ${Wasm_API_CPP_SDK} ${Wasm_API_RUST_SDK} DESTINATION Mod/Wasm/Guest)
+install(
+    FILES
+        ${Wasm_API_CPP_SDK}
+        ${Wasm_API_RUST_SDK}
+        ${Wasm_API_PYTHON_SDK}
+    DESTINATION
+        Mod/Wasm/Guest
+)
 install(
     FILES ${Wasm_API_CPP_SDK} ${Wasm_API_RUST_SDK}
     DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/FreeCAD/Wasm/Guest

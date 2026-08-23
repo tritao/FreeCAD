@@ -94,6 +94,8 @@ FreeCAD configure using `examples/wasm/cpp`; see its README for the required
 Clang and `wasm-ld` settings. The build generates
 `freecad_wasm_api.hpp`, stages `manifest.json` beside the Wasm module, and can
 consume either the source-tree SDK or an installed `FreeCADWasmGuest` package.
+The generated Python transport is installed beside these guest artifacts as
+`freecad_wasm_api.py`.
 
 `Guest/examples/CapabilityAddon.rs` is a matching `no_std` Rust guest. It uses
 the generated Rust client and therefore the same imports, request envelope,
@@ -102,13 +104,18 @@ test build compiles it when
 `rustc --target wasm32-unknown-unknown` is available, providing a language-
 neutral ABI regression test without enabling WASI.
 
-The build also emits `freecad_wasm_api.hpp` and `freecad_wasm_api.rs` from the
-same versioned API model. These files provide typed handle wrappers, model
-metadata, and typed transport facades for the declared operations. Both
-facades use the narrow host ABI, so generated declarations cannot bypass host
-policy. The generated C++ header delegates to `Wasm::Guest::Client`; the Rust
-SDK is a `no_std` client with bounded request buffers. Operation IDs,
-permissions, and mutation metadata remain in the neutral API model.
+The build also emits `freecad_wasm_api.hpp`, `freecad_wasm_api.rs`, and
+`freecad_wasm_api.py` from the same versioned API model. These files provide
+typed handle wrappers, model metadata, and typed transport facades for the
+declared operations. All facades use the narrow host ABI, so generated
+declarations cannot bypass host policy. The generated C++ header delegates to
+`Wasm::Guest::Client`; the Rust SDK is a `no_std` client with bounded request
+buffers; and the Python SDK exposes `Client(dispatch)`, where `dispatch` is a
+host-provided callback accepting and returning the binary request/response
+payloads. Python hosts therefore reuse the same protocol, capability errors,
+and transaction rules instead of receiving a second unrestricted API.
+Operation IDs, permissions, and mutation metadata remain in the neutral API
+model.
 Operations that reference a `.pyi` symbol are validated against the selected
 Python API model during generation. The initial value-type projection covers
 `Base.Vector`; host-owned classes remain explicit handles. The current curated
@@ -201,5 +208,10 @@ are accepted only for an explicitly trusted AOT policy.
 The native `Wasm` Python module manages FreeCAD addon instances; it does not
 embed Pyodide. Pyodide is a separate browser/web adapter concern and should
 reuse this capability contract rather than gain direct filesystem, process, or
-WASI access. Native Python execution inside WAMR would be a separate backend
-and must not weaken the existing host permission boundary.
+WASI access. The generated `freecad_wasm_api.py` module is suitable for such an
+adapter: its `Client` can be given a Pyodide-to-host dispatch callback, while
+the host remains responsible for validating permissions and executing the
+FreeCAD operation. It does not embed Pyodide in WAMR or make Python execution
+available inside a native Wasm addon. Native Python execution inside WAMR would
+be a separate backend and must not weaken the existing host permission
+boundary.

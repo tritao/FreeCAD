@@ -32,9 +32,11 @@ class GenerateWasmSdkTests(unittest.TestCase):
         )
         cpp = generate_wasm_sdk.render_cpp(model)
         rust = generate_wasm_sdk.render_rust(model)
+        python = generate_wasm_sdk.render_python(model)
 
         self.assertIn('ApiVersion[] = "org.freecad.wasm.api@0"', cpp)
         self.assertIn('API_VERSION: &str = "org.freecad.wasm.api@0"', rust)
+        self.assertIn('API_VERSION = "org.freecad.wasm.api@0"', python)
         self.assertIn("FreeCADBaseVectorValue", cpp)
         self.assertIn("FreeCADBaseVectorValue", rust)
         self.assertIn("FreeCADDocumentHandle", cpp)
@@ -57,6 +59,17 @@ class GenerateWasmSdkTests(unittest.TestCase):
         self.assertIn("pub const VECTOR_DOT: u8 = 7", rust)
         self.assertIn("pub const TOPO_SHAPE_AREA: u8 = 14", rust)
         self.assertIn("pub struct Client", rust)
+        self.assertIn("class Client:", python)
+        self.assertIn("class WasmHostError", python)
+        self.assertIn(
+            "def document_new(self, name: str) -> Optional[FreeCADDocumentHandle]:",
+            python,
+        )
+        self.assertIn(
+            "def document_object_get_label(self, object: FreeCADDocumentObjectHandle)",
+            python,
+        )
+        self.assertIn("DOCUMENT_OPEN_TRANSACTION_PERMISSION = \"document.modify\"", python)
         self.assertIn(
             "pub fn document_new(&self, name: &[u8]) -> Option<FreeCADDocumentHandle>",
             rust,
@@ -84,9 +97,11 @@ class GenerateWasmSdkTests(unittest.TestCase):
             api_path = Path(directory) / "api.json"
             cpp_path = Path(directory) / "freecad_wasm_api.hpp"
             rust_path = Path(directory) / "freecad_wasm_api.rs"
+            python_path = Path(directory) / "freecad_wasm_api.py"
             api_path.write_text(json.dumps(model), encoding="utf-8")
             cpp_path.write_text(generate_wasm_sdk.render_cpp(model), encoding="utf-8")
             rust_path.write_text(generate_wasm_sdk.render_rust(model), encoding="utf-8")
+            python_path.write_text(generate_wasm_sdk.render_python(model), encoding="utf-8")
 
             self.assertEqual(
                 cpp_path.read_text(encoding="utf-8").count("struct PartTopoShapeHandle"), 1
@@ -94,6 +109,7 @@ class GenerateWasmSdkTests(unittest.TestCase):
             self.assertEqual(
                 rust_path.read_text(encoding="utf-8").count("pub struct PartTopoShapeHandle"), 1
             )
+            compile(python_path.read_text(encoding="utf-8"), str(python_path), "exec")
 
     def test_operations_follow_selected_api_inputs(self):
         model = generate_wasm_api.build_model(

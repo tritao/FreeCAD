@@ -17,7 +17,7 @@ endif()
 function(freecad_wasm_generate_guest_sdk target)
     set(_one_value_args
         OUTPUT_DIR PYTHON_EXECUTABLE API_GENERATOR SDK_GENERATOR
-        API_MODEL_VARIABLE API_CPP_VARIABLE API_RUST_VARIABLE
+        API_MODEL_VARIABLE API_CPP_VARIABLE API_RUST_VARIABLE API_PYTHON_VARIABLE
     )
     set(_multi_value_args INPUTS DEPENDS)
     cmake_parse_arguments(
@@ -45,12 +45,15 @@ function(freecad_wasm_generate_guest_sdk target)
         "${_FREECAD_WASM_SDK_OUTPUT_DIR}/Wasm/Guest/freecad_wasm_api.hpp")
     set(_FREECAD_WASM_SDK_RUST
         "${_FREECAD_WASM_SDK_OUTPUT_DIR}/Wasm/Guest/freecad_wasm_api.rs")
+    set(_FREECAD_WASM_SDK_PYTHON
+        "${_FREECAD_WASM_SDK_OUTPUT_DIR}/Wasm/Guest/freecad_wasm_api.py")
 
     add_custom_command(
         OUTPUT
             "${_FREECAD_WASM_SDK_MODEL}"
             "${_FREECAD_WASM_SDK_CPP}"
             "${_FREECAD_WASM_SDK_RUST}"
+            "${_FREECAD_WASM_SDK_PYTHON}"
         COMMAND ${CMAKE_COMMAND} -E make_directory
                 "${_FREECAD_WASM_SDK_OUTPUT_DIR}/Wasm/Guest"
         COMMAND ${_FREECAD_WASM_SDK_PYTHON_EXECUTABLE}
@@ -62,6 +65,7 @@ function(freecad_wasm_generate_guest_sdk target)
                 --api-json "${_FREECAD_WASM_SDK_MODEL}"
                 --cpp-output "${_FREECAD_WASM_SDK_CPP}"
                 --rust-output "${_FREECAD_WASM_SDK_RUST}"
+                --python-output "${_FREECAD_WASM_SDK_PYTHON}"
         DEPENDS
             "${_FREECAD_WASM_SDK_API_GENERATOR}"
             "${_FREECAD_WASM_SDK_SDK_GENERATOR}"
@@ -75,6 +79,7 @@ function(freecad_wasm_generate_guest_sdk target)
             "${_FREECAD_WASM_SDK_MODEL}"
             "${_FREECAD_WASM_SDK_CPP}"
             "${_FREECAD_WASM_SDK_RUST}"
+            "${_FREECAD_WASM_SDK_PYTHON}"
     )
 
     if(_FREECAD_WASM_SDK_API_MODEL_VARIABLE)
@@ -88,6 +93,10 @@ function(freecad_wasm_generate_guest_sdk target)
     if(_FREECAD_WASM_SDK_API_RUST_VARIABLE)
         set(${_FREECAD_WASM_SDK_API_RUST_VARIABLE}
             "${_FREECAD_WASM_SDK_RUST}" PARENT_SCOPE)
+    endif()
+    if(_FREECAD_WASM_SDK_API_PYTHON_VARIABLE)
+        set(${_FREECAD_WASM_SDK_API_PYTHON_VARIABLE}
+            "${_FREECAD_WASM_SDK_PYTHON}" PARENT_SCOPE)
     endif()
 endfunction()
 
