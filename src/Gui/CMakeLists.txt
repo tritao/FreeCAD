@@ -1331,6 +1331,8 @@ SET(FreeCADGui_CPP_SRCS
     ${FreeCADGui_MODULE_GENERATED_SRCS}
     ${PySideUic_MODULE_GENERATED_SRCS}
     Application.cpp
+    AsyncPreviewStatus.cpp
+    AsyncTaskRecompute.cpp
     ApplicationPy.cpp
     AutoSaver.cpp
     BitmapFactory.cpp
@@ -1376,6 +1378,8 @@ SET(FreeCADGui_CPP_SRCS
 )
 SET(FreeCADGui_SRCS
     Application.h
+    AsyncPreviewStatus.h
+    AsyncTaskRecompute.h
     AutoSaver.h
     BitmapFactory.h
     Document.h
