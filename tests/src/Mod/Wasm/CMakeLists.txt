@@ -21,6 +21,7 @@ if(FREECAD_USE_WAMR)
         INPUTS
             ${CMAKE_SOURCE_DIR}/src/Base/Vector.pyi
             ${CMAKE_SOURCE_DIR}/src/App/Document.pyi
+            ${CMAKE_SOURCE_DIR}/src/App/DocumentObject.pyi
             ${CMAKE_SOURCE_DIR}/src/Mod/Part/App/TopoShape.pyi
         DEPENDS
             ${CMAKE_SOURCE_DIR}/src/Mod/Wasm/WasmApiOperations.json

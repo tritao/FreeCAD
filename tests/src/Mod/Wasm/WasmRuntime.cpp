@@ -104,6 +104,23 @@ std::string stringPayload(std::string_view value)
     return payload;
 }
 
+std::string stringFromPayload(std::string_view payload)
+{
+    if (payload.size() < sizeof(std::uint32_t)) {
+        return {};
+    }
+    std::uint32_t length = 0U;
+    for (unsigned shift = 0U; shift < 32U; shift += 8U) {
+        length |= static_cast<std::uint32_t>(
+                      static_cast<unsigned char>(payload[shift / 8U]))
+            << shift;
+    }
+    if (length != payload.size() - sizeof(std::uint32_t)) {
+        return {};
+    }
+    return std::string(payload.substr(sizeof(std::uint32_t)));
+}
+
 std::string doublePayload(double first, double second, double third)
 {
     std::string payload;
@@ -611,6 +628,36 @@ TEST(WasmGuestTest, EncodesThePublishedHostProtocol)
     EXPECT_EQ(GuestCapture::lastRequest,
               binaryRequest(Wasm::Abi::Operation::DocumentGetObject, getObjectPayload));
 
+    bool transaction = false;
+    EXPECT_FALSE(guest.documentOpenTransaction(11U, "Edit", &transaction));
+    std::string transactionPayload = handlePayload(11U);
+    transactionPayload += stringPayload("Edit");
+    EXPECT_EQ(GuestCapture::lastRequest,
+              binaryRequest(Wasm::Abi::Operation::DocumentOpenTransaction, transactionPayload));
+
+    EXPECT_FALSE(guest.documentCommitTransaction(11U, &transaction));
+    EXPECT_EQ(GuestCapture::lastRequest,
+              binaryRequest(Wasm::Abi::Operation::DocumentCommitTransaction,
+                            handlePayload(11U)));
+
+    EXPECT_FALSE(guest.documentAbortTransaction(11U, &transaction));
+    EXPECT_EQ(GuestCapture::lastRequest,
+              binaryRequest(Wasm::Abi::Operation::DocumentAbortTransaction,
+                            handlePayload(11U)));
+
+    char label[32] = {};
+    std::uint32_t labelLength = 0U;
+    EXPECT_FALSE(guest.documentObjectGetLabel(22U, label, sizeof(label), &labelLength));
+    EXPECT_EQ(GuestCapture::lastRequest,
+              binaryRequest(Wasm::Abi::Operation::DocumentObjectGetLabel,
+                            handlePayload(22U)));
+
+    EXPECT_FALSE(guest.documentObjectSetLabel(22U, "Edited", &transaction));
+    std::string setLabelPayload = handlePayload(22U);
+    setLabelPayload += stringPayload("Edited");
+    EXPECT_EQ(GuestCapture::lastRequest,
+              binaryRequest(Wasm::Abi::Operation::DocumentObjectSetLabel, setLabelPayload));
+
     const auto box = guest.partMakeBox(1.0, 2.0, 3.0);
     EXPECT_FALSE(box.ok);
     EXPECT_EQ(GuestCapture::lastRequest,
@@ -956,6 +1003,75 @@ TEST(WasmHostApiTest, CreatesDocumentsShapesAndFeaturesWithInstanceHandles)
     const auto queriedObjectHandle = handleFromPayload(queriedObjectResult.payload);
     ASSERT_NE(queriedObjectHandle, Wasm::InvalidHandle);
 
+    const auto labelResult = hostApi.dispatch(
+        asBytes(binaryRequest(Wasm::Abi::Operation::DocumentObjectGetLabel,
+                              handlePayload(objectHandle))),
+        hostApi.permissions(),
+        handles);
+    ASSERT_TRUE(labelResult.ok) << labelResult.error;
+    EXPECT_EQ(stringFromPayload(labelResult.payload), "Box");
+
+    std::string openTransactionPayload = handlePayload(documentHandle);
+    openTransactionPayload += stringPayload("Set label");
+    const auto openTransactionResult = hostApi.dispatch(
+        asBytes(binaryRequest(Wasm::Abi::Operation::DocumentOpenTransaction,
+                              openTransactionPayload)),
+        hostApi.permissions(),
+        handles);
+    ASSERT_TRUE(openTransactionResult.ok) << openTransactionResult.error;
+    ASSERT_EQ(static_cast<unsigned char>(openTransactionResult.payload.front()), 1U);
+
+    std::string setLabelPayload = handlePayload(objectHandle);
+    setLabelPayload += stringPayload("ConfiguredBox");
+    const auto setLabelResult = hostApi.dispatch(
+        asBytes(binaryRequest(Wasm::Abi::Operation::DocumentObjectSetLabel,
+                              setLabelPayload)),
+        hostApi.permissions(),
+        handles);
+    ASSERT_TRUE(setLabelResult.ok) << setLabelResult.error;
+    ASSERT_EQ(static_cast<unsigned char>(setLabelResult.payload.front()), 1U);
+
+    const auto commitTransactionResult = hostApi.dispatch(
+        asBytes(binaryRequest(Wasm::Abi::Operation::DocumentCommitTransaction,
+                              handlePayload(documentHandle))),
+        hostApi.permissions(),
+        handles);
+    ASSERT_TRUE(commitTransactionResult.ok) << commitTransactionResult.error;
+    ASSERT_EQ(static_cast<unsigned char>(commitTransactionResult.payload.front()), 1U);
+
+    std::string rollbackPayload = handlePayload(documentHandle);
+    rollbackPayload += stringPayload("Rollback label");
+    const auto rollbackOpenResult = hostApi.dispatch(
+        asBytes(binaryRequest(Wasm::Abi::Operation::DocumentOpenTransaction,
+                              rollbackPayload)),
+        hostApi.permissions(),
+        handles);
+    ASSERT_TRUE(rollbackOpenResult.ok) << rollbackOpenResult.error;
+
+    std::string temporaryLabelPayload = handlePayload(objectHandle);
+    temporaryLabelPayload += stringPayload("TemporaryBox");
+    const auto temporaryLabelResult = hostApi.dispatch(
+        asBytes(binaryRequest(Wasm::Abi::Operation::DocumentObjectSetLabel,
+                              temporaryLabelPayload)),
+        hostApi.permissions(),
+        handles);
+    ASSERT_TRUE(temporaryLabelResult.ok) << temporaryLabelResult.error;
+
+    const auto abortTransactionResult = hostApi.dispatch(
+        asBytes(binaryRequest(Wasm::Abi::Operation::DocumentAbortTransaction,
+                              handlePayload(documentHandle))),
+        hostApi.permissions(),
+        handles);
+    ASSERT_TRUE(abortTransactionResult.ok) << abortTransactionResult.error;
+
+    const auto rolledBackLabelResult = hostApi.dispatch(
+        asBytes(binaryRequest(Wasm::Abi::Operation::DocumentObjectGetLabel,
+                              handlePayload(objectHandle))),
+        hostApi.permissions(),
+        handles);
+    ASSERT_TRUE(rolledBackLabelResult.ok) << rolledBackLabelResult.error;
+    EXPECT_EQ(stringFromPayload(rolledBackLabelResult.payload), "ConfiguredBox");
+
     const auto shapeNullResult = hostApi.dispatch(
         asBytes(binaryRequest(Wasm::Abi::Operation::TopoShapeIsNull,
                               handlePayload(shapeHandle))),
@@ -1015,6 +1131,14 @@ TEST(WasmHostApiTest, CreatesDocumentsShapesAndFeaturesWithInstanceHandles)
         handles);
     EXPECT_FALSE(deniedGeometryRead.ok);
     EXPECT_NE(deniedGeometryRead.error.find("geometry.read"), std::string::npos);
+
+    const auto deniedDocumentModify = deniedHost.dispatch(
+        asBytes(binaryRequest(Wasm::Abi::Operation::DocumentObjectSetLabel,
+                              setLabelPayload)),
+        deniedHost.permissions(),
+        handles);
+    EXPECT_FALSE(deniedDocumentModify.ok);
+    EXPECT_NE(deniedDocumentModify.error.find("document.modify"), std::string::npos);
 
     const auto objectEntry = handles.get(objectHandle);
     ASSERT_TRUE(objectEntry.has_value());

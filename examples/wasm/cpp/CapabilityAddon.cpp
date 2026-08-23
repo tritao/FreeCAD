@@ -64,6 +64,28 @@ extern "C" unsigned long long freecad_addon_entry(const unsigned char*, unsigned
         return 0x100000000ULL;
     }
 
+    char label[128];
+    unsigned int labelLength = 0U;
+    if (!host.documentObjectGetLabel(object, label, sizeof(label), &labelLength)
+        || labelLength != 3U || label[0] != 'B' || label[1] != 'o' || label[2] != 'x') {
+        return 0x100000000ULL;
+    }
+    if (!host.documentOpenTransaction(document, "Set label")
+        || !host.documentObjectSetLabel(object, "ConfiguredBox")
+        || !host.documentCommitTransaction(document)) {
+        return 0x100000000ULL;
+    }
+    if (!host.documentOpenTransaction(document, "Rollback label")
+        || !host.documentObjectSetLabel(object, "TemporaryBox")
+        || !host.documentAbortTransaction(document)
+        || !host.documentObjectGetLabel(object, label, sizeof(label), &labelLength)
+        || labelLength != 13U || label[0] != 'C' || label[1] != 'o' || label[2] != 'n'
+        || label[3] != 'f' || label[4] != 'i' || label[5] != 'g' || label[6] != 'u'
+        || label[7] != 'r' || label[8] != 'e' || label[9] != 'd' || label[10] != 'B'
+        || label[11] != 'o' || label[12] != 'x') {
+        return 0x100000000ULL;
+    }
+
     double shapeLength = 0.0;
     double shapeArea = 0.0;
     double shapeVolume = 0.0;

@@ -12,6 +12,7 @@ GENERATOR = ROOT / "src/Tools/bindings/generate_wasm_api.py"
 INPUTS = [
     ROOT / "src/Base/Vector.pyi",
     ROOT / "src/App/Document.pyi",
+    ROOT / "src/App/DocumentObject.pyi",
     ROOT / "src/Mod/Part/App/TopoShape.pyi",
 ]
 
@@ -47,6 +48,8 @@ assert operations["documentAddObject"]["source"] == "FreeCAD.Document.addObject"
 assert operations["vectorDot"]["source"] == "FreeCAD.Base.Vector.dot"
 assert operations["documentIsSaved"]["permission"] == "document.read"
 assert operations["topoShapeArea"]["source"] == "Part.TopoShape.Area"
+assert operations["documentOpenTransaction"]["permission"] == "document.modify"
+assert operations["documentObjectGetLabel"]["source"] == "FreeCAD.DocumentObject"
 
 topo_shape = find_class(model, "TopoShape")
 for attribute_name in ("Faces", "Edges"):

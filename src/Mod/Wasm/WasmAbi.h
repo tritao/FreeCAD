@@ -41,6 +41,11 @@ enum class Operation : std::uint8_t
     TopoShapeLength = 13,
     TopoShapeArea = 14,
     TopoShapeVolume = 15,
+    DocumentOpenTransaction = 16,
+    DocumentCommitTransaction = 17,
+    DocumentAbortTransaction = 18,
+    DocumentObjectGetLabel = 19,
+    DocumentObjectSetLabel = 20,
 };
 
 inline void appendU32(std::string& output, std::uint32_t value)

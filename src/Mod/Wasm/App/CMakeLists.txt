@@ -7,6 +7,7 @@ set(Wasm_LIBS
 set(Wasm_API_INPUTS
     ${CMAKE_SOURCE_DIR}/src/Base/Vector.pyi
     ${CMAKE_SOURCE_DIR}/src/App/Document.pyi
+    ${CMAKE_SOURCE_DIR}/src/App/DocumentObject.pyi
 )
 
 if(BUILD_PART)

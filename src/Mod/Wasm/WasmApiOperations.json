@@ -268,6 +268,78 @@
       "returns": {"kind": "float64", "annotation": "float"}
     },
     {
+      "name": "documentOpenTransaction",
+      "wire_name": "document.open_transaction",
+      "id": 16,
+      "guest_method": "documentOpenTransaction",
+      "source": "FreeCAD.Document.openTransaction",
+      "permission": "document.modify",
+      "mutates": true,
+      "requires": ["src/App/Document.pyi"],
+      "params": [
+        {"name": "document", "type": {"kind": "handle", "type": "FreeCAD.Document", "annotation": "Document"}},
+        {"name": "name", "type": {"kind": "string", "annotation": "str"}}
+      ],
+      "returns": {"kind": "bool", "annotation": "bool"}
+    },
+    {
+      "name": "documentCommitTransaction",
+      "wire_name": "document.commit_transaction",
+      "id": 17,
+      "guest_method": "documentCommitTransaction",
+      "source": "FreeCAD.Document.commitTransaction",
+      "permission": "document.modify",
+      "mutates": true,
+      "requires": ["src/App/Document.pyi"],
+      "params": [
+        {"name": "document", "type": {"kind": "handle", "type": "FreeCAD.Document", "annotation": "Document"}}
+      ],
+      "returns": {"kind": "bool", "annotation": "bool"}
+    },
+    {
+      "name": "documentAbortTransaction",
+      "wire_name": "document.abort_transaction",
+      "id": 18,
+      "guest_method": "documentAbortTransaction",
+      "source": "FreeCAD.Document.abortTransaction",
+      "permission": "document.modify",
+      "mutates": true,
+      "requires": ["src/App/Document.pyi"],
+      "params": [
+        {"name": "document", "type": {"kind": "handle", "type": "FreeCAD.Document", "annotation": "Document"}}
+      ],
+      "returns": {"kind": "bool", "annotation": "bool"}
+    },
+    {
+      "name": "documentObjectGetLabel",
+      "wire_name": "document.object.get_label",
+      "id": 19,
+      "guest_method": "documentObjectGetLabel",
+      "source": "FreeCAD.DocumentObject",
+      "permission": "document.read",
+      "mutates": false,
+      "requires": ["src/App/DocumentObject.pyi"],
+      "params": [
+        {"name": "object", "type": {"kind": "handle", "type": "FreeCAD.DocumentObject", "annotation": "DocumentObject"}}
+      ],
+      "returns": {"kind": "string", "annotation": "str"}
+    },
+    {
+      "name": "documentObjectSetLabel",
+      "wire_name": "document.object.set_label",
+      "id": 20,
+      "guest_method": "documentObjectSetLabel",
+      "source": "FreeCAD.DocumentObject",
+      "permission": "document.modify",
+      "mutates": true,
+      "requires": ["src/App/DocumentObject.pyi"],
+      "params": [
+        {"name": "object", "type": {"kind": "handle", "type": "FreeCAD.DocumentObject", "annotation": "DocumentObject"}},
+        {"name": "label", "type": {"kind": "string", "annotation": "str"}}
+      ],
+      "returns": {"kind": "bool", "annotation": "bool"}
+    },
+    {
       "name": "release",
       "wire_name": "handle.release",
       "id": 4,

@@ -238,7 +238,25 @@ def render_cpp(model: dict[str, Any]) -> str:
             else:
                 call_arguments.append(parameter_name)
 
-        if return_type.get("kind") == "handle":
+        if return_type.get("kind") == "string":
+            parameter_declarations.extend(
+                ["char* result", "unsigned int capacity", "unsigned int* length"]
+            )
+            lines.append(
+                f"    bool {name}({', '.join(parameter_declarations)}) const"
+            )
+            lines.extend(
+                [
+                    "    {",
+                    "        if (length == nullptr || (capacity != 0U && result == nullptr)) {",
+                    "            return false;",
+                    "        }",
+                    f"        return client_.{method}({', '.join(call_arguments + ['result', 'capacity', 'length'])});",
+                    "    }",
+                    "",
+                ]
+            )
+        elif return_type.get("kind") == "handle":
             result_type = return_type.get("type")
             result_cpp_type = "Handle" if result_type == "Wasm.Handle" else class_names[result_type]
             parameter_declarations.append(f"{result_cpp_type}* result")
@@ -583,6 +601,33 @@ def render_rust(model: dict[str, Any]) -> str:
             "        }",
             "    }",
             "",
+            "    fn call_string(&self, request: &Request, output: &mut [u8]) -> Option<usize>",
+            "    {",
+            "        let response = unsafe { freecad_dispatch(request.bytes.as_ptr(), request.length as u32) };",
+            "        let address = response as u32;",
+            "        let length = (response >> 32) as u32;",
+            "        if address == 0 || length < 4 {",
+            "            Self::release_response(address);",
+            "            return None;",
+            "        }",
+            "        let bytes = address as *const u8;",
+            "        let mut value_length = 0u32;",
+            "        unsafe {",
+            "            for shift in 0..4 {",
+            "                value_length |= (*bytes.add(shift) as u32) << (shift * 8);",
+            "            }",
+            "        }",
+            "        if value_length != length - 4 || value_length as usize > output.len() {",
+            "            Self::release_response(address);",
+            "            return None;",
+            "        }",
+            "        unsafe {",
+            "            ptr::copy_nonoverlapping(bytes.add(4), output.as_mut_ptr(), value_length as usize);",
+            "        }",
+            "        Self::release_response(address);",
+            "        Some(value_length as usize)",
+            "    }",
+            "",
         ]
     )
 
@@ -671,6 +716,8 @@ def render_rust(model: dict[str, Any]) -> str:
             result_signature = "Option<{}>".format(value_names[return_type["type"]])
         elif return_kind == "float64":
             result_signature = "Option<f64>"
+        elif return_kind == "string":
+            result_signature = "Option<usize>"
         elif return_kind == "bool":
             result_signature = "bool" if name == "release" else "Option<bool>"
         else:
@@ -679,6 +726,8 @@ def render_rust(model: dict[str, Any]) -> str:
             f"{parameter.get('name', 'value')}: {rust_parameter_type(parameter)}"
             for parameter in params
         ]
+        if return_kind == "string":
+            declarations.append("output: &mut [u8]")
         signature = ", ".join(["&self", *declarations])
         lines.append(f"    pub fn {method}({signature}) -> {result_signature}")
         lines.extend(["    {"])
@@ -724,6 +773,8 @@ def render_rust(model: dict[str, Any]) -> str:
             lines.extend(["        self.call_value(&request)", "    }", ""])
         elif return_kind == "float64":
             lines.extend(["        self.call_f64(&request)", "    }", ""])
+        elif return_kind == "string":
+            lines.extend(["        self.call_string(&request, output)", "    }", ""])
         elif return_kind == "bool" and name == "release":
             lines.extend(
                 [

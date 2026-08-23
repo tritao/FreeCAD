@@ -131,8 +131,11 @@ public:
             return false;
         }
 
+        if (name == nullptr) {
+            return false;
+        }
         const auto nameLength = stringLength(name);
-        if (name == nullptr || nameLength > MaxStringLength) {
+        if (nameLength > MaxStringLength) {
             return false;
         }
         resetRequest(1U, 4U + nameLength);
@@ -157,14 +160,88 @@ public:
             return false;
         }
 
+        if (name == nullptr) {
+            return false;
+        }
         const auto nameLength = stringLength(name);
-        if (name == nullptr || nameLength > MaxStringLength) {
+        if (nameLength > MaxStringLength) {
             return false;
         }
         resetRequest(10U, 12U + nameLength);
         appendU64(document);
         appendU32(nameLength);
         appendBytes(reinterpret_cast<const FreeCADWasmU8*>(name), nameLength);
+        return call(result);
+    }
+
+    bool documentOpenTransaction(Handle document, const char* name, bool* result) const
+    {
+        if (result == nullptr) {
+            return false;
+        }
+        if (name == nullptr) {
+            return false;
+        }
+        const auto nameLength = stringLength(name);
+        if (nameLength > MaxStringLength) {
+            return false;
+        }
+        resetRequest(16U, 12U + nameLength);
+        appendU64(document);
+        appendU32(nameLength);
+        appendBytes(reinterpret_cast<const FreeCADWasmU8*>(name), nameLength);
+        return call(result);
+    }
+
+    bool documentCommitTransaction(Handle document, bool* result) const
+    {
+        if (result == nullptr) {
+            return false;
+        }
+        resetRequest(17U, 8U);
+        appendU64(document);
+        return call(result);
+    }
+
+    bool documentAbortTransaction(Handle document, bool* result) const
+    {
+        if (result == nullptr) {
+            return false;
+        }
+        resetRequest(18U, 8U);
+        appendU64(document);
+        return call(result);
+    }
+
+    bool documentObjectGetLabel(Handle object,
+                                char* result,
+                                FreeCADWasmU32 capacity,
+                                FreeCADWasmU32* length) const
+    {
+        if (length == nullptr || (capacity != 0U && result == nullptr)) {
+            return false;
+        }
+        resetRequest(19U, 8U);
+        appendU64(object);
+        return callString(result, capacity, length);
+    }
+
+    bool documentObjectSetLabel(Handle object, const char* label, bool* result) const
+    {
+        if (result == nullptr) {
+            return false;
+        }
+        if (label == nullptr) {
+            return false;
+        }
+        const auto labelLength = stringLength(label);
+        if (labelLength > MaxStringLength) {
+            return false;
+        }
+        resetRequest(20U, 12U + labelLength);
+        appendU64(object);
+        appendU32(labelLength);
+        appendBytes(reinterpret_cast<const FreeCADWasmU8*>(label), labelLength);
         return call(result);
     }
 
@@ -483,6 +560,38 @@ private:
             return false;
         }
         *result = bytes[0] != 0U;
+        freecad_release(address);
+        return true;
+    }
+
+    static bool callString(char* result,
+                           FreeCADWasmU32 capacity,
+                           FreeCADWasmU32* length)
+    {
+        const auto response = freecad_dispatch(request, requestLength);
+        const auto address = static_cast<FreeCADWasmU32>(response);
+        const auto responseLength = static_cast<FreeCADWasmU32>(response >> 32U);
+        if (address == 0U || responseLength < 4U) {
+            if (address != 0U) {
+                freecad_release(address);
+            }
+            return false;
+        }
+
+        const auto* bytes = reinterpret_cast<const FreeCADWasmU8*>(address);
+        FreeCADWasmU32 valueLength = 0U;
+        for (FreeCADWasmU32 shift = 0U; shift < 32U; shift += 8U) {
+            valueLength |= static_cast<FreeCADWasmU32>(bytes[shift / 8U]) << shift;
+        }
+        if (valueLength != responseLength - 4U || valueLength > capacity
+            || (valueLength != 0U && result == nullptr)) {
+            freecad_release(address);
+            return false;
+        }
+        for (FreeCADWasmU32 index = 0U; index < valueLength; ++index) {
+            result[index] = static_cast<char>(bytes[4U + index]);
+        }
+        *length = valueLength;
         freecad_release(address);
         return true;
     }

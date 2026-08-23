@@ -136,6 +136,15 @@ std::string boolPayload(bool value)
     return std::string(1, value ? '\1' : '\0');
 }
 
+std::string stringPayload(std::string_view value)
+{
+    std::string payload;
+    payload.reserve(sizeof(std::uint32_t) + value.size());
+    Abi::appendU32(payload, static_cast<std::uint32_t>(value.size()));
+    payload.append(value);
+    return payload;
+}
+
 HostCallResult malformedRequest(std::string error)
 {
     return {false, {}, std::move(error)};
@@ -508,6 +517,120 @@ HostCallResult WasmHostApi::dispatch(std::span<const std::byte> request,
             return {false, {}, "document.get_object could not allocate a handle"};
         }
         return {true, handlePayload(handle), {}};
+    }
+    case Abi::Operation::DocumentOpenTransaction: {
+        if (!hasPermission(permissions, "document.modify")) {
+            return {false, {}, "host capability 'document.modify' is not granted"};
+        }
+
+        std::size_t payloadOffset = 0U;
+        std::uint64_t documentHandle = InvalidHandle;
+        std::string name;
+        if (!readU64(payload, payloadOffset, documentHandle)
+            || !readString(payload, payloadOffset, name)
+            || payloadOffset != payload.size() || name.empty()
+            || name.find('\0') != std::string::npos) {
+            return malformedRequest("document.open_transaction has an invalid payload");
+        }
+
+        std::string error;
+        auto* document = getHandle<App::Document>(
+            handles, documentHandle, "App::Document", error);
+        if (document == nullptr) {
+            return {false, {}, error};
+        }
+        try {
+            return {true, boolPayload(document->openTransaction(name) != 0), {}};
+        }
+        catch (const Base::Exception& exception) {
+            return {false,
+                    {},
+                    std::string("document.open_transaction failed: ") + exception.what()};
+        }
+    }
+    case Abi::Operation::DocumentCommitTransaction:
+    case Abi::Operation::DocumentAbortTransaction: {
+        if (!hasPermission(permissions, "document.modify")) {
+            return {false, {}, "host capability 'document.modify' is not granted"};
+        }
+        if (payload.size() != sizeof(std::uint64_t)) {
+            return malformedRequest("document transaction control expects one document handle");
+        }
+
+        std::size_t payloadOffset = 0U;
+        std::uint64_t documentHandle = InvalidHandle;
+        if (!readU64(payload, payloadOffset, documentHandle)) {
+            return malformedRequest("document transaction control has an invalid handle payload");
+        }
+
+        std::string error;
+        auto* document = getHandle<App::Document>(
+            handles, documentHandle, "App::Document", error);
+        if (document == nullptr) {
+            return {false, {}, error};
+        }
+        try {
+            if (operation == Abi::Operation::DocumentCommitTransaction) {
+                document->commitTransaction();
+            }
+            else {
+                document->abortTransaction();
+            }
+            return {true, boolPayload(true), {}};
+        }
+        catch (const Base::Exception& exception) {
+            return {false, {}, std::string("document transaction control failed: ") + exception.what()};
+        }
+    }
+    case Abi::Operation::DocumentObjectGetLabel: {
+        if (!hasPermission(permissions, "document.read")) {
+            return {false, {}, "host capability 'document.read' is not granted"};
+        }
+        if (payload.size() != sizeof(std::uint64_t)) {
+            return malformedRequest("document.object.get_label expects one object handle");
+        }
+
+        std::size_t payloadOffset = 0U;
+        std::uint64_t objectHandle = InvalidHandle;
+        if (!readU64(payload, payloadOffset, objectHandle)) {
+            return malformedRequest("document.object.get_label has an invalid handle payload");
+        }
+        std::string error;
+        auto* object = getHandle<App::DocumentObject>(
+            handles, objectHandle, "FreeCAD.DocumentObject", error);
+        if (object == nullptr) {
+            return {false, {}, error};
+        }
+        return {true, stringPayload(object->Label.getValue()), {}};
+    }
+    case Abi::Operation::DocumentObjectSetLabel: {
+        if (!hasPermission(permissions, "document.modify")) {
+            return {false, {}, "host capability 'document.modify' is not granted"};
+        }
+
+        std::size_t payloadOffset = 0U;
+        std::uint64_t objectHandle = InvalidHandle;
+        std::string label;
+        if (!readU64(payload, payloadOffset, objectHandle)
+            || !readString(payload, payloadOffset, label)
+            || payloadOffset != payload.size() || label.find('\0') != std::string::npos) {
+            return malformedRequest("document.object.set_label has an invalid payload");
+        }
+        std::string error;
+        auto* object = getHandle<App::DocumentObject>(
+            handles, objectHandle, "FreeCAD.DocumentObject", error);
+        if (object == nullptr) {
+            return {false, {}, error};
+        }
+        try {
+            object->Label.setValue(label);
+            return {true, boolPayload(true), {}};
+        }
+        catch (const Base::Exception& exception) {
+            return {false,
+                    {},
+                    std::string("document.object.set_label failed: ") + exception.what()};
+        }
     }
     case Abi::Operation::TopoShapeIsNull:
     case Abi::Operation::TopoShapeIsValid:

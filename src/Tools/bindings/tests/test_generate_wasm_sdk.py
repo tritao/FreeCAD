@@ -26,6 +26,7 @@ class GenerateWasmSdkTests(unittest.TestCase):
             [
                 ROOT / "src/Base/Vector.pyi",
                 ROOT / "src/App/Document.pyi",
+                ROOT / "src/App/DocumentObject.pyi",
                 ROOT / "src/Mod/Part/App/TopoShape.pyi",
             ],
         )
@@ -42,6 +43,10 @@ class GenerateWasmSdkTests(unittest.TestCase):
         self.assertIn("bool documentNew", cpp)
         self.assertIn("bool documentIsSaved", cpp)
         self.assertIn("bool documentGetObject", cpp)
+        self.assertIn("bool documentOpenTransaction", cpp)
+        self.assertIn("bool documentCommitTransaction", cpp)
+        self.assertIn("bool documentObjectGetLabel", cpp)
+        self.assertIn("bool documentObjectSetLabel", cpp)
         self.assertIn("bool partMakeBox", cpp)
         self.assertIn("bool vectorAdd", cpp)
         self.assertIn("bool vectorDot", cpp)
@@ -62,6 +67,10 @@ class GenerateWasmSdkTests(unittest.TestCase):
         )
         self.assertIn(
             "pub fn topo_shape_area(&self, shape: PartTopoShapeHandle) -> Option<f64>",
+            rust,
+        )
+        self.assertIn(
+            "pub fn document_object_get_label(&self, object: FreeCADDocumentObjectHandle, output: &mut [u8]) -> Option<usize>",
             rust,
         )
         self.assertIn("freecad_dispatch", rust)
@@ -98,6 +107,9 @@ class GenerateWasmSdkTests(unittest.TestCase):
                 "documentNew",
                 "documentIsSaved",
                 "documentGetObject",
+                "documentOpenTransaction",
+                "documentCommitTransaction",
+                "documentAbortTransaction",
                 "vectorNew",
                 "vectorAdd",
                 "vectorDot",

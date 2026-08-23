@@ -63,6 +63,27 @@ pub extern "C" fn freecad_addon_entry(_input: *const u8, _input_length: u32) -> 
             return FAILURE;
         };
 
+        let mut label = [0u8; 128];
+        let Some(label_length) = client.document_object_get_label(object, &mut label) else {
+            return FAILURE;
+        };
+        if &label[..label_length] != b"RustBox"
+            || client.document_open_transaction(document, b"Set label") != Some(true)
+            || client.document_object_set_label(object, b"ConfiguredBox") != Some(true)
+            || client.document_commit_transaction(document) != Some(true)
+            || client.document_open_transaction(document, b"Rollback label") != Some(true)
+            || client.document_object_set_label(object, b"TemporaryBox") != Some(true)
+            || client.document_abort_transaction(document) != Some(true)
+        {
+            return FAILURE;
+        }
+        let Some(label_length) = client.document_object_get_label(object, &mut label) else {
+            return FAILURE;
+        };
+        if &label[..label_length] != b"ConfiguredBox" {
+            return FAILURE;
+        }
+
         let Some(saved) = client.document_is_saved(document) else {
             return FAILURE;
         };

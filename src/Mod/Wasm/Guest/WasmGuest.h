@@ -214,6 +214,118 @@ public:
         return true;
     }
 
+    Result<bool> documentOpenTransaction(Handle document, std::string_view name) const
+    {
+        std::string payload;
+        Abi::appendU64(payload, document);
+        if (!appendString(payload, name)) {
+            return failure<bool>("transaction name exceeds the ABI length limit");
+        }
+        return callBool(Abi::Operation::DocumentOpenTransaction, payload);
+    }
+
+    bool documentOpenTransaction(Handle document, const char* name, bool* result) const
+    {
+        if (name == nullptr || result == nullptr) {
+            return false;
+        }
+        const auto response = documentOpenTransaction(document, std::string_view(name));
+        if (!response.ok) {
+            return false;
+        }
+        *result = response.value;
+        return true;
+    }
+
+    Result<bool> documentCommitTransaction(Handle document) const
+    {
+        std::string payload;
+        Abi::appendU64(payload, document);
+        return callBool(Abi::Operation::DocumentCommitTransaction, payload);
+    }
+
+    bool documentCommitTransaction(Handle document, bool* result) const
+    {
+        if (result == nullptr) {
+            return false;
+        }
+        const auto response = documentCommitTransaction(document);
+        if (!response.ok) {
+            return false;
+        }
+        *result = response.value;
+        return true;
+    }
+
+    Result<bool> documentAbortTransaction(Handle document) const
+    {
+        std::string payload;
+        Abi::appendU64(payload, document);
+        return callBool(Abi::Operation::DocumentAbortTransaction, payload);
+    }
+
+    bool documentAbortTransaction(Handle document, bool* result) const
+    {
+        if (result == nullptr) {
+            return false;
+        }
+        const auto response = documentAbortTransaction(document);
+        if (!response.ok) {
+            return false;
+        }
+        *result = response.value;
+        return true;
+    }
+
+    Result<std::string> documentObjectGetLabel(Handle object) const
+    {
+        std::string payload;
+        Abi::appendU64(payload, object);
+        return callString(Abi::Operation::DocumentObjectGetLabel, payload);
+    }
+
+    bool documentObjectGetLabel(Handle object,
+                                char* buffer,
+                                std::uint32_t capacity,
+                                std::uint32_t* length) const
+    {
+        if (length == nullptr || (capacity != 0U && buffer == nullptr)) {
+            return false;
+        }
+        const auto response = documentObjectGetLabel(object);
+        if (!response.ok || response.value.size() > capacity) {
+            return false;
+        }
+        if (!response.value.empty()) {
+            std::memcpy(buffer, response.value.data(), response.value.size());
+        }
+        *length = static_cast<std::uint32_t>(response.value.size());
+        return true;
+    }
+
+    Result<bool> documentObjectSetLabel(Handle object, std::string_view label) const
+    {
+        std::string payload;
+        Abi::appendU64(payload, object);
+        if (!appendString(payload, label)) {
+            return failure<bool>("label exceeds the ABI length limit");
+        }
+        return callBool(Abi::Operation::DocumentObjectSetLabel, payload);
+    }
+
+    bool documentObjectSetLabel(Handle object, const char* label, bool* result) const
+    {
+        if (label == nullptr || result == nullptr) {
+            return false;
+        }
+        const auto response = documentObjectSetLabel(object, std::string_view(label));
+        if (!response.ok) {
+            return false;
+        }
+        *result = response.value;
+        return true;
+    }
+
     Result<Handle> partMakeBox(double length, double width, double height) const
     {
         std::string payload;
@@ -634,6 +746,29 @@ private:
             return failure<bool>("WASM host returned an invalid bool payload");
         }
         return {true, result.payload.front() != 0U, {}};
+    }
+
+    Result<std::string> callString(Abi::Operation operation, std::string_view payload) const
+    {
+        const auto result = call(operation, payload);
+        if (!result.ok) {
+            return failure<std::string>(result.error);
+        }
+        if (result.payload.size() < sizeof(std::uint32_t)) {
+            return failure<std::string>("WASM host returned an invalid string payload");
+        }
+
+        std::uint32_t length = 0U;
+        for (unsigned shift = 0U; shift < 32U; shift += 8U) {
+            length |= static_cast<std::uint32_t>(result.payload[shift / 8U]) << shift;
+        }
+        if (length != result.payload.size() - sizeof(std::uint32_t)) {
+            return failure<std::string>("WASM host returned an invalid string length");
+        }
+        return {true,
+                std::string(reinterpret_cast<const char*>(result.payload.data() + sizeof(length)),
+                            length),
+                {}};
     }
 
     DispatchFunction dispatchFunction;
