@@ -98,6 +98,9 @@ endif()
 if(BUILD_TECHDRAW)
     list (APPEND TestExecutables TechDraw_tests_run)
 endif(BUILD_TECHDRAW)
+if(BUILD_WASM)
+    list (APPEND TestExecutables Wasm_tests_run)
+endif(BUILD_WASM)
 
 # -------------------------
 

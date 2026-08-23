@@ -131,3 +131,7 @@ endif(BUILD_TUX)
 if(BUILD_WEB)
     add_subdirectory(Web)
 endif(BUILD_WEB)
+
+if(BUILD_WASM)
+    add_subdirectory(Wasm)
+endif(BUILD_WASM)
