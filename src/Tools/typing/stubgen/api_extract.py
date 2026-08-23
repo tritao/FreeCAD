@@ -38,8 +38,9 @@ from python_api_model.signatures import (
     group_callable_definitions,
     parse_callable_group,
 )
+from python_api_model.types import parse_annotation
 
-from .model import BindingClass
+from .model import MODULE_STUB_PYI_SUFFIX, BindingClass
 from .decorators import public_decorators, strip_binding_decorators
 from .module_merge import overlay_module_name
 from .naming import valid_identifier
@@ -79,6 +80,7 @@ def callable_group_from_nodes(
     nodes: list[ast.FunctionDef | ast.AsyncFunctionDef],
     *,
     module_name: str,
+    is_method: bool = False,
     origin: ApiOrigin,
 ) -> ApiCallableGroup | None:
     signature_list: list[CallableSignature] = []
@@ -98,6 +100,7 @@ def callable_group_from_nodes(
         name=nodes[0].name,
         signatures=signatures,
         doc=doc,
+        is_method=is_method,
         origin=origin,
         location=source_location(root, path, nodes[0].lineno),
     )
@@ -124,6 +127,21 @@ def assignment_name(node: ast.Assign | ast.AnnAssign) -> str | None:
     return target.id if isinstance(target, ast.Name) else None
 
 
+def annotation_is_final(annotation: str | None) -> bool:
+    if annotation is None:
+        return False
+    try:
+        node = ast.parse(annotation, mode="eval").body
+    except SyntaxError:
+        return False
+    if not isinstance(node, ast.Subscript):
+        return False
+    base = node.value
+    return isinstance(base, ast.Name) and base.id == "Final" or (
+        isinstance(base, ast.Attribute) and base.attr == "Final"
+    )
+
+
 def attribute_from_assignment(
     root: Path,
     path: Path,
@@ -141,8 +159,13 @@ def attribute_from_assignment(
     return ApiAttribute(
         name=name,
         annotation=normalize_source_type(annotation, module_name),
+        annotation_type=parse_annotation(
+            normalize_source_type(annotation, module_name),
+            module_name,
+        ),
         value=value,
         doc=doc,
+        readonly=annotation_is_final(annotation),
         deprecated_message=deprecated_message,
         origin=origin,
         location=source_location(root, path, node.lineno),
@@ -203,6 +226,7 @@ def class_methods(
             path,
             group,
             module_name=module_name,
+            is_method=True,
             origin=origin,
         )
         if callable_group is not None:
@@ -436,6 +460,7 @@ def extract_curated_api_model_with_diagnostics(
     source_dir: Path,
     binding_classes: Iterable[BindingClass] = (),
     overlay_dir: Path | None = None,
+    source_paths: Iterable[Path] | None = None,
 ) -> tuple[PythonApiModel, tuple[MergeDiagnostic, ...]]:
     """Build an API model and report conflicts between its input layers."""
 
@@ -443,7 +468,19 @@ def extract_curated_api_model_with_diagnostics(
     diagnostics: list[MergeDiagnostic] = []
     binding_classes = tuple(binding_classes)
 
-    for path in sorted(iter_module_stub_pyi_files(root, source_dir)):
+    selected_paths = tuple(sorted(source_paths)) if source_paths is not None else None
+    module_paths = (
+        (path for path in selected_paths if path.name.endswith(MODULE_STUB_PYI_SUFFIX))
+        if selected_paths is not None
+        else iter_module_stub_pyi_files(root, source_dir)
+    )
+    type_paths = (
+        (path for path in selected_paths if not path.name.endswith(MODULE_STUB_PYI_SUFFIX))
+        if selected_paths is not None
+        else iter_type_stub_pyi_files(root, source_dir)
+    )
+
+    for path in sorted(module_paths):
         piece = module_from_stub_file(
             root,
             path,
@@ -470,7 +507,7 @@ def extract_curated_api_model_with_diagnostics(
             diagnostics,
         )
 
-    for path in sorted(iter_type_stub_pyi_files(root, source_dir)):
+    for path in sorted(type_paths):
         target = parse_type_stub_target(path)
         module_name = target.module_name
         class_symbol = target.class_name
@@ -518,6 +555,7 @@ def extract_curated_api_model(
     root: Path,
     source_dir: Path,
     binding_classes: Iterable[BindingClass] = (),
+    source_paths: Iterable[Path] | None = None,
 ) -> PythonApiModel:
     """Build a neutral API model from curated source-adjacent stub inputs."""
 
@@ -525,5 +563,6 @@ def extract_curated_api_model(
         root,
         source_dir,
         binding_classes=binding_classes,
+        source_paths=source_paths,
     )
     return model

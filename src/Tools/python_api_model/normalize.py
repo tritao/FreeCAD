@@ -9,6 +9,7 @@ from dataclasses import replace
 from typing import cast
 
 from .signatures import CallableSignature
+from .types import parse_annotation
 
 SOURCE_TYPE_ALIASES = {
     "AxisPy": "FreeCAD.Base.Axis",
@@ -136,9 +137,13 @@ def normalize_signature_types(
         parameters=tuple(
             replace(
                 parameter,
-                annotation=normalize_source_type(parameter.annotation, module_name),
+                annotation=(normalized := normalize_source_type(parameter.annotation, module_name)),
+                annotation_type=parse_annotation(normalized, module_name),
             )
             for parameter in signature.parameters
         ),
-        return_annotation=normalize_source_type(signature.return_annotation, module_name),
+        return_annotation=(normalized_return := normalize_source_type(
+            signature.return_annotation, module_name
+        )),
+        return_type=parse_annotation(normalized_return, module_name),
     )

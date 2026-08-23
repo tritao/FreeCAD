@@ -18,6 +18,25 @@ endif()
 
 set(Wasm_API_MODEL ${CMAKE_BINARY_DIR}/Mod/Wasm/freecad_wasm_api.json)
 set(Wasm_API_GENERATOR ${CMAKE_SOURCE_DIR}/src/Tools/bindings/generate_wasm_api.py)
+set(Wasm_API_SDK_GENERATOR ${CMAKE_SOURCE_DIR}/src/Tools/bindings/generate_wasm_sdk.py)
+set(Wasm_API_GENERATOR_SOURCES
+    ${Wasm_API_GENERATOR}
+    ${CMAKE_SOURCE_DIR}/src/Tools/python_api_model/diagnostics.py
+    ${CMAKE_SOURCE_DIR}/src/Tools/python_api_model/model.py
+    ${CMAKE_SOURCE_DIR}/src/Tools/python_api_model/normalize.py
+    ${CMAKE_SOURCE_DIR}/src/Tools/python_api_model/resolve.py
+    ${CMAKE_SOURCE_DIR}/src/Tools/python_api_model/signatures.py
+    ${CMAKE_SOURCE_DIR}/src/Tools/python_api_model/types.py
+    ${CMAKE_SOURCE_DIR}/src/Tools/typing/stubgen/api_extract.py
+    ${CMAKE_SOURCE_DIR}/src/Tools/typing/stubgen/decorators.py
+    ${CMAKE_SOURCE_DIR}/src/Tools/typing/stubgen/deprecation.py
+    ${CMAKE_SOURCE_DIR}/src/Tools/typing/stubgen/discovery.py
+    ${CMAKE_SOURCE_DIR}/src/Tools/typing/stubgen/model.py
+    ${CMAKE_SOURCE_DIR}/src/Tools/typing/stubgen/module_merge.py
+    ${CMAKE_SOURCE_DIR}/src/Tools/typing/stubgen/naming.py
+    ${CMAKE_SOURCE_DIR}/src/Tools/typing/stubgen/parsing.py
+    ${CMAKE_SOURCE_DIR}/src/Tools/typing/stubgen/source_inputs.py
+)
 
 add_custom_command(
     OUTPUT ${Wasm_API_MODEL}
@@ -26,12 +45,29 @@ add_custom_command(
             --output ${Wasm_API_MODEL}
             ${Wasm_API_INPUTS}
     MAIN_DEPENDENCY ${Wasm_API_GENERATOR}
-    DEPENDS ${Wasm_API_INPUTS}
+    DEPENDS ${Wasm_API_INPUTS} ${Wasm_API_GENERATOR_SOURCES}
     COMMENT "Generating experimental FreeCAD Wasm API model"
 )
 
 add_custom_target(WasmApiModel ALL
     DEPENDS ${Wasm_API_MODEL}
+)
+
+set(Wasm_API_CPP_SDK ${CMAKE_CURRENT_BINARY_DIR}/freecad_wasm_api.hpp)
+set(Wasm_API_RUST_SDK ${CMAKE_CURRENT_BINARY_DIR}/freecad_wasm_api.rs)
+
+add_custom_command(
+    OUTPUT ${Wasm_API_CPP_SDK} ${Wasm_API_RUST_SDK}
+    COMMAND ${Python3_EXECUTABLE} ${Wasm_API_SDK_GENERATOR}
+            --api-json ${Wasm_API_MODEL}
+            --cpp-output ${Wasm_API_CPP_SDK}
+            --rust-output ${Wasm_API_RUST_SDK}
+    DEPENDS ${Wasm_API_MODEL} ${Wasm_API_SDK_GENERATOR}
+    COMMENT "Generating experimental FreeCAD Wasm guest SDK types"
+)
+
+add_custom_target(WasmApiSdk ALL
+    DEPENDS ${Wasm_API_CPP_SDK} ${Wasm_API_RUST_SDK}
 )
 
 set(Wasm_SRCS
@@ -68,7 +104,7 @@ if(FREECAD_USE_WAMR)
 endif()
 
 add_library(Wasm SHARED ${Wasm_SRCS})
-add_dependencies(Wasm WasmApiModel)
+add_dependencies(Wasm WasmApiModel WasmApiSdk)
 
 if(BUILD_PART)
     target_compile_definitions(Wasm PRIVATE FREECAD_WASM_HAS_PART=1)
@@ -113,3 +149,4 @@ SET_PYTHON_PREFIX_SUFFIX(Wasm)
 
 install(TARGETS Wasm DESTINATION ${CMAKE_INSTALL_LIBDIR})
 install(FILES ${Wasm_API_MODEL} DESTINATION Mod/Wasm)
+install(FILES ${Wasm_API_CPP_SDK} ${Wasm_API_RUST_SDK} DESTINATION Mod/Wasm/Guest)

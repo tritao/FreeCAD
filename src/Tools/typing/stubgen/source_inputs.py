@@ -451,6 +451,26 @@ class TypeStubTarget:
 def parse_type_stub_target(path: Path) -> TypeStubTarget:
     target = path.stem
     if not target or "." not in target:
+        parts = path.parts
+        try:
+            src_index = len(parts) - 1 - list(reversed(parts)).index("src")
+        except ValueError as exc:
+            raise ValueError(f"{path}: invalid type stub filename") from exc
+
+        relative = parts[src_index + 1 : -1]
+        if not relative:
+            raise ValueError(f"{path}: invalid type stub filename")
+        if relative[0] == "Base":
+            return TypeStubTarget(module_name="FreeCAD.Base", class_name=path.stem)
+        if relative[0] == "App":
+            return TypeStubTarget(module_name="FreeCAD", class_name=path.stem)
+        if relative[0] == "Gui":
+            return TypeStubTarget(module_name="FreeCADGui", class_name=path.stem)
+        if relative[0] == "Mod" and len(relative) >= 2:
+            module_name = relative[1]
+            if len(relative) >= 3 and relative[2] == "Gui":
+                module_name += "Gui"
+            return TypeStubTarget(module_name=module_name, class_name=path.stem)
         raise ValueError(f"{path}: invalid type stub filename")
     module_name, class_symbol = target.rsplit(".", 1)
     if not module_name or not class_symbol:

@@ -12,12 +12,30 @@ TYPING_DIR = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(TYPING_DIR))
 
 from stubgen.model import BindingMethod
-from stubgen.source_inputs import supplement_module_methods_from_stub_signatures
+from stubgen.source_inputs import (
+    TypeStubTarget,
+    parse_type_stub_target,
+    supplement_module_methods_from_stub_signatures,
+)
 
 ROOT_DIR = Path(__file__).resolve().parents[4]
 
 
 class SourceInputsTests(unittest.TestCase):
+    def test_source_adjacent_type_stub_targets_use_public_module_layout(self):
+        self.assertEqual(
+            parse_type_stub_target(ROOT_DIR / "src/Base/Vector.pyi"),
+            TypeStubTarget(module_name="FreeCAD.Base", class_name="Vector"),
+        )
+        self.assertEqual(
+            parse_type_stub_target(ROOT_DIR / "src/App/Document.pyi"),
+            TypeStubTarget(module_name="FreeCAD", class_name="Document"),
+        )
+        self.assertEqual(
+            parse_type_stub_target(ROOT_DIR / "src/Mod/Part/App/TopoShape.pyi"),
+            TypeStubTarget(module_name="Part", class_name="TopoShape"),
+        )
+
     def test_module_stub_signatures_supplement_missing_module_methods(self):
         source = textwrap.dedent("""
             from __future__ import annotations

@@ -134,6 +134,7 @@ def _callable_group_from_methods(
         name=first.python_name,
         signatures=tuple(signatures),
         doc=doc,
+        is_method=class_symbol is not None,
         origin=ApiOrigin.GENERATED,
         location=ApiSourceLocation(first.source, first.line),
     )

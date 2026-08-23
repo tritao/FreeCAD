@@ -22,6 +22,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 
 from .signatures import CallableSignature
+from .types import ApiType
 
 
 class ApiOrigin(str, Enum):
@@ -50,9 +51,11 @@ class ApiAttribute:
     annotation: str | None = None
     value: str | None = None
     doc: str | None = None
+    readonly: bool = False
     deprecated_message: str | None = None
     origin: ApiOrigin = ApiOrigin.GENERATED
     location: ApiSourceLocation | None = None
+    annotation_type: ApiType | None = None
 
 
 @dataclass(frozen=True)
@@ -72,6 +75,7 @@ class ApiCallableGroup:
     name: str
     signatures: tuple[CallableSignature, ...]
     doc: str | None = None
+    is_method: bool = False
     origin: ApiOrigin = ApiOrigin.GENERATED
     location: ApiSourceLocation | None = None
 

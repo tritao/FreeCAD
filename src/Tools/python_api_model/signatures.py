@@ -20,6 +20,8 @@ import ast
 from dataclasses import dataclass, replace
 from enum import Enum
 
+from .types import ApiType
+
 
 class ArgumentKind(str, Enum):
     """Structured Python parameter kinds in declaration order."""
@@ -50,6 +52,7 @@ class SignatureParameter:
     annotation: str | None
     kind: ArgumentKind
     default: str | None = None
+    annotation_type: ApiType | None = None
 
 
 @dataclass(frozen=True)
@@ -64,6 +67,7 @@ class CallableSignature:
     is_async: bool = False
     deprecated_message: str | None = None
     decorators: tuple[str, ...] = ()
+    return_type: ApiType | None = None
 
 
 def callable_shape(signature: CallableSignature) -> tuple[object, ...]:

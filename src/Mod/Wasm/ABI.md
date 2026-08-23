@@ -76,6 +76,11 @@ rules as the C++ example. The WAMR test build compiles it when
 `rustc --target wasm32-unknown-unknown` is available, providing a language-
 neutral ABI regression test without enabling WASI.
 
+The build also emits `freecad_wasm_api.hpp` and `freecad_wasm_api.rs` from the
+same versioned API model. These files provide typed handle wrappers and the
+model version; transport and capability calls remain in the small guest
+clients above so generated declarations cannot bypass the host policy.
+
 The host remains responsible for granting permissions from addon policy. The
 guest request cannot grant itself additional capabilities. `WasmAddon` loads
 the manifest and grants the intersection of requested permissions and the
