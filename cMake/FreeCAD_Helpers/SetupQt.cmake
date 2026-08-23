@@ -139,6 +139,16 @@ else()
     set (HAVE_Q_DISABLE_COPY_MOVE 1)
 endif()
 
+# Qt6 exposes the versioned translation helper, while FreeCAD uses the
+# version-neutral name below. Keep the compatibility wrapper used for Qt5.
+if (FREECAD_QT_MAJOR_VERSION EQUAL 6 AND NOT COMMAND qt_add_translation)
+    find_package(Qt6LinguistTools CONFIG REQUIRED)
+    function(qt_add_translation _qm_files)
+        qt6_add_translation("${_qm_files}" ${ARGN})
+        set("${_qm_files}" "${${_qm_files}}" PARENT_SCOPE)
+    endfunction()
+endif()
+
 configure_file(${CMAKE_SOURCE_DIR}/src/QtCore.h.cmake ${CMAKE_BINARY_DIR}/src/QtCore.h)
 configure_file(${CMAKE_SOURCE_DIR}/src/QtWidgets.h.cmake ${CMAKE_BINARY_DIR}/src/QtWidgets.h)
 
