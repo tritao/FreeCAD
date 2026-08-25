@@ -21,6 +21,7 @@ import subprocess
 import sys
 
 from .doc_lint import lint_curated_stub_docs
+from python_api_model.diagnostics import MergeDiagnostics
 from .discovery import collect_methods, collect_type_registrations
 from .generator import (
     markdown_report,
@@ -212,6 +213,16 @@ def run_generate(args: argparse.Namespace) -> int:
             stub_signature_overrides,
             overlay_dir,
         )
+        if result.diagnostics:
+            diagnostic_output = MergeDiagnostics(result.diagnostics).render() + "\n"
+            print_stderr(diagnostic_output)
+            if args.log_dir:
+                write_log(
+                    args.log_dir.resolve() / "python-stubs-diagnostics.log",
+                    diagnostic_output,
+                )
+        if result.errors:
+            return 1
         overlay_count = result.overlay_count
         summary = (
             f"Wrote {len(methods)} registrations and {len(classes)} class bindings to {out_dir} "

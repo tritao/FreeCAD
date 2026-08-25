@@ -23,7 +23,7 @@ from .model import BindingClass, BindingMethod, StubSignatureOverrides
 from .module_merge import ensure_parent_package_stubs, module_stub_path, public_module_names
 from .render import write_stub_file
 from .stub_support import StubSupport, collect_stub_support
-from .validation import validate_public_class_aliases
+from .validation import validate_discovered_bindings, validate_public_class_aliases
 
 
 @dataclass(frozen=True)
@@ -106,6 +106,7 @@ def write_outputs(
     """Generate stubs from one resolved ``PythonApiModel``."""
 
     validate_public_class_aliases(classes)
+    validate_discovered_bindings(methods, type_registrations)
     module_names = public_module_names(methods, classes, type_registrations, overlay_dir)
     api_model, diagnostics = extract_curated_api_model_with_diagnostics(
         root,
