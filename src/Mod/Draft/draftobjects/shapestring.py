@@ -24,6 +24,8 @@
 # ***************************************************************************
 """Provides the object code for the ShapeString object."""
 
+from __future__ import annotations
+
 ## @package shapestring
 # \ingroup draftobjects
 # \brief Provides the object code for the ShapeString object.
@@ -32,15 +34,51 @@
 # @{
 import os
 import math
+from typing import TYPE_CHECKING, Protocol
+
 from PySide.QtCore import QT_TRANSLATE_NOOP
 
 import FreeCAD as App
 import Part
 from draftgeoutils import faces
 from draftobjects.base import DraftObject
+from draftobjects.type_hints import QuantityInput, QuantityValueInput
 from draftutils import gui_utils
 from draftutils.messages import _err, _log
 from draftutils.translate import translate
+
+if TYPE_CHECKING:
+    from FreeCAD.Base import Quantity
+
+
+class ShapeStringViewObject(Protocol):
+    """View object shape used by Draft ShapeString creation."""
+
+    PropertiesList: list[str]
+    PointSize: object
+
+
+class ShapeStringObject(Protocol):
+    """Document object with properties added by the ShapeString proxy."""
+
+    String: str
+    FontFile: str
+
+    @property
+    def Size(self) -> Quantity: ...
+
+    @Size.setter
+    def Size(self, value: QuantityValueInput) -> None: ...
+
+    @property
+    def Tracking(self) -> Quantity: ...
+
+    @Tracking.setter
+    def Tracking(self, value: QuantityInput) -> None: ...
+
+    ViewObject: ShapeStringViewObject | None
+
+    def recompute(self, recursive: bool = False, /) -> None: ...
 
 
 class ShapeString(DraftObject):
@@ -213,7 +251,7 @@ class ShapeString(DraftObject):
                 shapes.extend(self.make_faces(char))
         if shapes:
             if fill and obj.Fuse:
-                ss_shape = shapes[0].fuse(shapes[1:])
+                ss_shape = shapes[0].fuse(tuple(shapes[1:]))
                 ss_shape = faces.concatenate(ss_shape)
                 # Concatenate returns a Face or a Compound. We always
                 # need a Compound as we use ss_shape.SubShapes later.
