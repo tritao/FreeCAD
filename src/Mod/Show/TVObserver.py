@@ -49,7 +49,8 @@ class TVObserver(object):
 
 
 # handle module reload
-if "observer_singleton" in vars():
+observer_singleton = vars().get("observer_singleton")
+if observer_singleton is not None:
     observer_singleton.stop()
 
 observer_singleton = TVObserver()

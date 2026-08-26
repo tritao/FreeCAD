@@ -37,6 +37,7 @@ Err = lambda msg: App.Console.PrintError(msg + "\n")
 Log = lambda msg: App.Console.PrintLog(msg + "\n")
 
 from copy import copy
+from typing import cast
 
 S_EMPTY = 0  # TV is initialized, but no changes were done through it
 S_ACTIVE = 1  # TV has something to be undone
@@ -107,10 +108,9 @@ class TempoVis(object):
         if stack is MAINSTACK:
             stack = TVStack.mainStack(document)
 
-        if stack is None:
-            pass
-        else:
-            stack.insert(self)
+        if stack is not None:
+            assert stack is not MAINSTACK
+            cast("TVStack.TVStack", stack).insert(self)
 
         for key, val in kwargs.items():
             setattr(self, key, val)

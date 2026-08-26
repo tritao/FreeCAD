@@ -22,9 +22,14 @@
 # *                                                                         *
 # ***************************************************************************/
 
+from typing import TYPE_CHECKING, cast
+
 from Show.SceneDetail import SceneDetail
 
 import FreeCAD as App
+
+if TYPE_CHECKING:
+    from pivy import coin
 
 
 class ObjectClipPlane(SceneDetail):
@@ -83,7 +88,7 @@ class ObjectClipPlane(SceneDetail):
         return (enable, pldef if enable else None)
 
 
-def getClipPlaneNode(viewprovider, make_if_missing=True):
+def getClipPlaneNode(viewprovider, make_if_missing=True) -> "coin.SoClipPlane | None":
     from pivy import coin
 
     sa = coin.SoSearchAction()
@@ -91,7 +96,7 @@ def getClipPlaneNode(viewprovider, make_if_missing=True):
     sa.setName("TVClipPlane")
     sa.traverse(viewprovider.RootNode)
     if sa.isFound() and sa.getPath().getLength() == 1:
-        return sa.getPath().getTail()
+        return cast("coin.SoClipPlane", sa.getPath().getTail())
     elif not sa.isFound():
         if not make_if_missing:
             return None

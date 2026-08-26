@@ -22,7 +22,12 @@
 # *                                                                         *
 # ***************************************************************************/
 
+from typing import TYPE_CHECKING, cast
+
 from Show.SceneDetail import SceneDetail
+
+if TYPE_CHECKING:
+    from pivy import coin
 
 
 class Pickability(SceneDetail):
@@ -56,14 +61,14 @@ PS_BOUNDBOX = 1
 PS_UNPICKABLE = 2
 
 
-def getPickStyleNode(viewprovider, make_if_missing=True):
+def getPickStyleNode(viewprovider, make_if_missing=True) -> "coin.SoPickStyle | None":
     from pivy import coin
 
     sa = coin.SoSearchAction()
     sa.setType(coin.SoPickStyle.getClassTypeId())
     sa.traverse(viewprovider.RootNode)
     if sa.isFound() and sa.getPath().getLength() == 1:
-        return sa.getPath().getTail()
+        return cast("coin.SoPickStyle", sa.getPath().getTail())
     else:
         if not make_if_missing:
             return None
