@@ -1,2 +1,2 @@
-project-includes = ["smoke.py"]
-search-path = ["../generated/stubs"]
+project-includes = ["smoke.py", "property_protocols.py"]
+search-path = ["../generated/stubs", "../../../Mod/Draft", "../../../Mod/BIM"]

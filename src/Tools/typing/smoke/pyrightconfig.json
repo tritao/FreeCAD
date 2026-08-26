@@ -1,9 +1,12 @@
 {
     "include": [
-        "smoke.py"
+        "smoke.py",
+        "property_protocols.py"
     ],
     "extraPaths": [
-        "../generated/stubs"
+        "../generated/stubs",
+        "../../../Mod/Draft",
+        "../../../Mod/BIM"
     ],
     "reportMissingImports": "error",
     "reportMissingModuleSource": "none",
