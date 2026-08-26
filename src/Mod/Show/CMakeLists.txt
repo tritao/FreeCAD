@@ -9,6 +9,7 @@ SET(Show_SRCS
     TVObserver.py
     TVStack.py
     ShowUtils.py
+    TestShow.py
 )
 
 SET(Show_SceneDetails_SRCS

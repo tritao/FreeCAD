@@ -182,7 +182,7 @@ class TempoVis(object):
         """
         if not self.has(detail):
             return
-        self._restore_detail(detail)
+        self._restoreDetail(detail)
         if ultimate:
             self.forgetDetail(detail)
 
@@ -300,7 +300,7 @@ class TempoVis(object):
                 except Exception as err:
                     Err(
                         "TempoVis.restore: failed to restore detail {key}: {err}".format(
-                            key=key, err=str(err)
+                            key=prop_name, err=str(err)
                         )
                     )
                     _printTraceback(err)

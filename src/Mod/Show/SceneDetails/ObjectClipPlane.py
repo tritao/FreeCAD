@@ -54,7 +54,7 @@ class ObjectClipPlane(SceneDetail):
             return self.val(False)
         else:
             enable = cp.on.getValue()
-            pln = cp.plane
+            pln = cp.plane.getValue()
             D = pln.getDistanceFromOrigin()
             normal = tuple(pln.getNormal())
             return enable, (normal, D)
@@ -119,5 +119,5 @@ def clipPlane(obj, enable, placement=None, offset=0, tv=None):
         from Show import TempoVis
 
         tv = TempoVis(obj.Document)
-    tv.modify(ClipPlane(obj, enable, placement, offset))
+    tv.modify(ObjectClipPlane(obj, enable, placement, offset))
     return tv
