@@ -1,7 +1,8 @@
 {
     "include": [
         "smoke.py",
-        "property_protocols.py"
+        "property_protocols.py",
+        "../../../Mod/BIM/ArchEquipment.py"
     ],
     "extraPaths": [
         "../generated/stubs",

@@ -1,2 +1,7 @@
-project-includes = ["smoke.py", "property_protocols.py"]
+project-includes = [
+    "smoke.py",
+    "property_protocols.py",
+    "../../../Mod/BIM/ArchEquipment.py",
+]
 search-path = ["../generated/stubs", "../../../Mod/Draft", "../../../Mod/BIM"]
+ignore-missing-imports = ["Arch_rc", "pivy"]
