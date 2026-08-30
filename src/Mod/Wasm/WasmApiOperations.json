@@ -47,6 +47,24 @@
         "name": "topoShapeIsValid",
         "wire_name": "part.topo_shape.is_valid",
         "guest_method": "topoShapeIsValid"
+      },
+      "org.freecad.part@1/shape_length": {
+        "id": 13,
+        "name": "topoShapeLength",
+        "wire_name": "part.topo_shape.length",
+        "guest_method": "topoShapeLength"
+      },
+      "org.freecad.part@1/shape_area": {
+        "id": 14,
+        "name": "topoShapeArea",
+        "wire_name": "part.topo_shape.area",
+        "guest_method": "topoShapeArea"
+      },
+      "org.freecad.part@1/shape_volume": {
+        "id": 15,
+        "name": "topoShapeVolume",
+        "wire_name": "part.topo_shape.volume",
+        "guest_method": "topoShapeVolume"
       }
     }
   },
@@ -124,48 +142,6 @@
         {"name": "z", "type": {"kind": "float64", "annotation": "float"}}
       ],
       "returns": {"kind": "value", "type": "FreeCAD.Base.Vector", "encoding": "vector3-f64", "annotation": "Vector"}
-    },
-    {
-      "name": "topoShapeLength",
-      "wire_name": "part.topo_shape.length",
-      "id": 13,
-      "guest_method": "topoShapeLength",
-      "source": "Part.TopoShape.Length",
-      "permission": "geometry.read",
-      "mutates": false,
-      "requires": ["src/Mod/Part/App/TopoShape.pyi"],
-      "params": [
-        {"name": "shape", "type": {"kind": "handle", "type": "Part.TopoShape", "annotation": "TopoShape"}}
-      ],
-      "returns": {"kind": "float64", "annotation": "float"}
-    },
-    {
-      "name": "topoShapeArea",
-      "wire_name": "part.topo_shape.area",
-      "id": 14,
-      "guest_method": "topoShapeArea",
-      "source": "Part.TopoShape.Area",
-      "permission": "geometry.read",
-      "mutates": false,
-      "requires": ["src/Mod/Part/App/TopoShape.pyi"],
-      "params": [
-        {"name": "shape", "type": {"kind": "handle", "type": "Part.TopoShape", "annotation": "TopoShape"}}
-      ],
-      "returns": {"kind": "float64", "annotation": "float"}
-    },
-    {
-      "name": "topoShapeVolume",
-      "wire_name": "part.topo_shape.volume",
-      "id": 15,
-      "guest_method": "topoShapeVolume",
-      "source": "Part.TopoShape.Volume",
-      "permission": "geometry.read",
-      "mutates": false,
-      "requires": ["src/Mod/Part/App/TopoShape.pyi"],
-      "params": [
-        {"name": "shape", "type": {"kind": "handle", "type": "Part.TopoShape", "annotation": "TopoShape"}}
-      ],
-      "returns": {"kind": "float64", "annotation": "float"}
     },
     {
       "name": "documentOpenTransaction",

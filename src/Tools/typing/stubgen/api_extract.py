@@ -157,6 +157,11 @@ def attribute_from_assignment(
     if name is None or name.startswith("_"):
         return None
     annotation, value = annotation_value_text(node)
+    metadata = parse_api_metadata(
+        (),
+        subject=f"{module_name}.{name}",
+        annotation=node.annotation if isinstance(node, ast.AnnAssign) else None,
+    )
     return ApiAttribute(
         name=name,
         annotation=normalize_source_type(annotation, module_name),
@@ -170,6 +175,7 @@ def attribute_from_assignment(
         deprecated_message=deprecated_message,
         origin=origin,
         location=source_location(root, path, node.lineno),
+        metadata=metadata,
     )
 
 

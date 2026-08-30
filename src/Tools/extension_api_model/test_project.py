@@ -53,6 +53,9 @@ class ExtensionProjectTests(unittest.TestCase):
                 "org.freecad.geometry@1/vector_dot",
                 "org.freecad.part@1/shape_is_null",
                 "org.freecad.part@1/shape_is_valid",
+                "org.freecad.part@1/shape_length",
+                "org.freecad.part@1/shape_area",
+                "org.freecad.part@1/shape_volume",
             },
         )
         is_saved = operations["org.freecad.document@1/is_saved"]
@@ -60,6 +63,11 @@ class ExtensionProjectTests(unittest.TestCase):
         self.assertEqual(is_saved.parameters, ())
         self.assertEqual(is_saved.returns.annotation, "bool")
         self.assertEqual(is_saved.permission, "document.read")
+        shape_area = operations["org.freecad.part@1/shape_area"]
+        self.assertEqual(shape_area.receiver, "Part.TopoShape")
+        self.assertEqual(shape_area.parameters, ())
+        self.assertEqual(shape_area.returns.kind.value, "float")
+        self.assertEqual(shape_area.effect.value, "read")
         self.assertEqual(extension.type_representations["FreeCAD.Base.Vector"].value, "value")
 
     def test_namespace_manifest_is_validated(self) -> None:

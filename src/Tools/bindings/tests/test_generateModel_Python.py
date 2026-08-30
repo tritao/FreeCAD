@@ -15,6 +15,7 @@ sys.path.insert(0, str(BINDINGS_DIR))
 
 from generate import generate
 from model.generateModel_Python import parse, parse_python_code
+from model.typedModel import ParameterType
 
 C_STRING_LITERAL = re.compile(r'"(?:\\.|[^"\\])*"')
 PYMETHOD_ENTRY = re.compile(r'\{\s*"([A-Za-z_][A-Za-z0-9_]*)"\s*,')
@@ -102,6 +103,28 @@ def _invalid_text_signatures(path: Path) -> list[str]:
 
 
 class GenerateModelPythonTests(unittest.TestCase):
+    def test_annotated_final_attribute_keeps_its_binding_type(self):
+        source = textwrap.dedent("""
+            from typing import Annotated, Final
+
+            from Base.Metadata import extension_api, export
+            from Base.PyObjectBase import PyObjectBase
+
+
+            @export
+            class Example(PyObjectBase):
+                value: Final[Annotated[float, extension_api(id="value")]] = 0.0
+            """)
+
+        with tempfile.TemporaryDirectory(dir=SRC_DIR / "Mod") as temp_dir:
+            path = Path(temp_dir) / "Example.pyi"
+            path.write_text(source, encoding="utf-8")
+            model = parse_python_code(str(path))
+
+        attribute = model.PythonExport[0].Attribute[0]
+        self.assertEqual(attribute.Parameter.Type, ParameterType.FLOAT)
+        self.assertTrue(attribute.ReadOnly)
+
     def test_overload_only_constructor_docs_are_merged_into_class_doc(self):
         source = textwrap.dedent("""
             from __future__ import annotations

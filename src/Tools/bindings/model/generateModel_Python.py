@@ -595,6 +595,13 @@ def _get_type_str(node):
             return f"{_get_type_str(val)}.{attr}"
         case ast.Subscript(value=val, slice=slice_node):
             value_str = _get_type_str(val)
+            if value_str.rsplit(".", 1)[-1] == "Annotated":
+                annotated_args = (
+                    slice_node.elts
+                    if isinstance(slice_node, ast.Tuple)
+                    else (slice_node,)
+                )
+                return _get_type_str(annotated_args[0]) if annotated_args else "object"
             slice_str = _get_type_str(slice_node)
             return f"{value_str}[{slice_str}]"
         case ast.Tuple(elts=elts):

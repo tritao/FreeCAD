@@ -155,6 +155,9 @@ class GenerateWasmApiTests(unittest.TestCase):
                 "org.freecad.geometry@1/vector_cross",
                 "org.freecad.part@1/shape_is_null",
                 "org.freecad.part@1/shape_is_valid",
+                "org.freecad.part@1/shape_length",
+                "org.freecad.part@1/shape_area",
+                "org.freecad.part@1/shape_volume",
             },
         )
 
@@ -164,12 +167,27 @@ class GenerateWasmApiTests(unittest.TestCase):
             for operation in interface["operations"]
             if operation["id"] == "org.freecad.geometry@1/vector_add"
         )
+        vector_add_catalog = next(
+            operation for operation in model["operations"] if operation["name"] == "vectorAdd"
+        )
         self.assertEqual(
-            [parameter["name"] for parameter in model["operations"][5]["params"]],
+            [parameter["name"] for parameter in vector_add_catalog["params"]],
             ["left", "right"],
         )
         self.assertEqual(vector_add["params"][0]["name"], "vector2")
         self.assertEqual(vector_add["returns"]["kind"], "value")
+
+        shape_area = next(
+            operation
+            for interface in extension["interfaces"]
+            for operation in interface["operations"]
+            if operation["id"] == "org.freecad.part@1/shape_area"
+        )
+        self.assertEqual(shape_area["returns"]["kind"], "float64")
+        shape_area_catalog = next(
+            operation for operation in model["operations"] if operation["name"] == "topoShapeArea"
+        )
+        self.assertEqual(shape_area_catalog["params"][0]["name"], "shape")
 
 
 if __name__ == "__main__":

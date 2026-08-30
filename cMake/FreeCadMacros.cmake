@@ -177,6 +177,7 @@ macro(generate_from_py_impl BASE_NAME SUFFIX)
         MAIN_DEPENDENCY "${CMAKE_CURRENT_SOURCE_DIR}/${BASE_NAME}.pyi"
         DEPENDS
             "${CMAKE_SOURCE_DIR}/src/Tools/bindings/templates/templateClassPyExport.py"
+            "${CMAKE_SOURCE_DIR}/src/Tools/bindings/model/generateModel_Python.py"
             "${TOOL_PATH}"
         WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
         COMMENT "Building ${BASE_NAME}Py${SUFFIX}.h/.cpp out of ${BASE_NAME}.pyi"
@@ -231,6 +232,7 @@ function(generate_module_from_py BASE_NAME OUT_VAR)
         DEPENDS
             "${GENERATOR}"
             "${TEMPLATE}"
+            "${CMAKE_SOURCE_DIR}/src/Tools/bindings/model/generateModel_Python.py"
         COMMENT
             "Generating ${OUTPUT_NAME}ModulePy.h/.cpp"
         VERBATIM

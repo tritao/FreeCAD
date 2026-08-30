@@ -14,7 +14,7 @@ from Base.Vector import Vector
 from Base.Matrix import Matrix
 from Base.BoundBox import BoundBox
 from App.ComplexGeoData import ComplexGeoData
-from typing import Final, List, Tuple, Union, overload
+from typing import Annotated, Final, List, Tuple, Union, overload
 
 @extension_interface(name="part", version=1)
 @extension_type(representation="resource")
@@ -67,13 +67,40 @@ class TopoShape(ComplexGeoData):
     SubShapes: Final[List] = []
     """List of sub-shapes in this shape."""
 
-    Length: Final[float] = 0.0
+    Length: Final[
+        Annotated[
+            float,
+            extension_api(
+                id="shape_length",
+                permission="geometry.read",
+                effect="read",
+            ),
+        ]
+    ] = 0.0
     """Total length of the edges of the shape."""
 
-    Area: Final[float] = 0.0
+    Area: Final[
+        Annotated[
+            float,
+            extension_api(
+                id="shape_area",
+                permission="geometry.read",
+                effect="read",
+            ),
+        ]
+    ] = 0.0
     """Total area of the faces of the shape."""
 
-    Volume: Final[float] = 0.0
+    Volume: Final[
+        Annotated[
+            float,
+            extension_api(
+                id="shape_volume",
+                permission="geometry.read",
+                effect="read",
+            ),
+        ]
+    ] = 0.0
     """Total volume of the solids of the shape."""
 
     @constmethod

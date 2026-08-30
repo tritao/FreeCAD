@@ -54,6 +54,21 @@ class ExtensionMetadataTests(unittest.TestCase):
         self.assertEqual(metadata.extension_interface.name, "document")
         self.assertEqual(metadata.extension_interface.version, 1)
 
+    def test_parses_callable_metadata_from_annotated_attribute(self) -> None:
+        node = ast.parse(
+            "Length: Final[Annotated[float, "
+            "extension_api(id='shape_length', effect='read')]] = 0.0"
+        ).body[0]
+        assert isinstance(node, ast.AnnAssign)
+        metadata = parse_api_metadata(
+            (),
+            subject="Part.TopoShape.Length",
+            annotation=node.annotation,
+        )
+        assert metadata.extension_api is not None
+        self.assertEqual(metadata.extension_api.local_id, "shape_length")
+        self.assertIs(metadata.extension_api.effect, ExtensionEffect.READ)
+
     def test_rejects_invalid_metadata(self) -> None:
         cases = (
             "@extension_api(id='')\ndef f(): ...",

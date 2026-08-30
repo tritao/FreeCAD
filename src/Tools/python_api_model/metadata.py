@@ -51,8 +51,14 @@ class ExtensionInterfaceMetadata:
             raise ExtensionMetadataError(
                 "extension_interface name must contain lowercase identifier segments"
             )
-        if isinstance(self.version, bool) or not isinstance(self.version, int) or self.version < 1:
-            raise ExtensionMetadataError("extension_interface version must be a positive integer")
+        if (
+            isinstance(self.version, bool)
+            or not isinstance(self.version, int)
+            or self.version < 1
+        ):
+            raise ExtensionMetadataError(
+                "extension_interface version must be a positive integer"
+            )
 
 
 @dataclass(frozen=True)
@@ -74,8 +80,13 @@ class ExtensionApiMetadata:
             raise ExtensionMetadataError("extension_api permission must not be empty")
         if self.since is not None and not self.since.strip():
             raise ExtensionMetadataError("extension_api since must not be empty")
-        if self.effect is ExtensionEffect.READ and self.transaction is not TransactionPolicy.NONE:
-            raise ExtensionMetadataError("read-only extension_api cannot require a transaction")
+        if (
+            self.effect is ExtensionEffect.READ
+            and self.transaction is not TransactionPolicy.NONE
+        ):
+            raise ExtensionMetadataError(
+                "read-only extension_api cannot require a transaction"
+            )
 
 
 @dataclass(frozen=True)
@@ -119,6 +130,30 @@ def _decorator_call(
             raise ExtensionMetadataError(f"{subject}: duplicate @{name} decorator")
         match = decorator
     return match
+
+
+def _annotation_metadata_nodes(annotation: ast.expr | None) -> tuple[ast.expr, ...]:
+    """Return metadata expressions carried by an ``Annotated`` type."""
+
+    node = annotation
+    while isinstance(node, ast.Subscript):
+        base = _decorator_name(node.value)
+        if base != "Final":
+            break
+        if isinstance(node.slice, ast.Tuple):
+            if not node.slice.elts:
+                return ()
+            node = node.slice.elts[0]
+        else:
+            node = node.slice
+    if (
+        not isinstance(node, ast.Subscript)
+        or _decorator_name(node.value) != "Annotated"
+    ):
+        return ()
+    if isinstance(node.slice, ast.Tuple):
+        return tuple(node.slice.elts[1:])
+    return ()
 
 
 def _literal_keyword_values(call: ast.Call, subject: str) -> dict[str, object]:
@@ -253,11 +288,24 @@ def parse_api_metadata(
     decorators: Iterable[ast.expr],
     *,
     subject: str,
+    annotation: ast.expr | None = None,
 ) -> ApiMetadata:
     """Parse all extension metadata decorators on one declaration."""
 
+    annotation_decorators = _annotation_metadata_nodes(annotation)
+    parsed_decorators = tuple(decorators)
+    for metadata_node in annotation_decorators:
+        if _decorator_name(metadata_node) in {
+            "extension_api",
+            "extension_type",
+            "extension_interface",
+        }:
+            parsed_decorators += (metadata_node,)
     return ApiMetadata(
-        extension_api=parse_extension_api_metadata(decorators, subject=subject),
-        extension_type=parse_extension_type_metadata(decorators, subject=subject),
-        extension_interface=parse_extension_interface_metadata(decorators, subject=subject),
+        extension_api=parse_extension_api_metadata(parsed_decorators, subject=subject),
+        extension_type=parse_extension_type_metadata(parsed_decorators, subject=subject),
+        extension_interface=parse_extension_interface_metadata(
+            parsed_decorators,
+            subject=subject,
+        ),
     )

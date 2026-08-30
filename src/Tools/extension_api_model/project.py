@@ -12,7 +12,12 @@ from typing import Iterable
 from python_api_model.metadata import (
     ExtensionInterfaceMetadata,
 )
-from python_api_model.model import ApiCallableGroup, ApiClass, PythonApiModel
+from python_api_model.model import (
+    ApiAttribute,
+    ApiCallableGroup,
+    ApiClass,
+    PythonApiModel,
+)
 from python_api_model.signatures import CallableSignature, SignatureParameter
 from python_api_model.types import ApiType, parse_annotation
 
@@ -113,6 +118,7 @@ def _project_operation(
         )
         for parameter in parameters
     )
+
     interface_id = _interface_identifier(namespace, interface)
     source_symbol = (
         f"{api_class.qualified_name}.{group.name}"
@@ -133,6 +139,45 @@ def _project_operation(
         effect=first.effect,
         transaction=first.transaction,
         since=first.since,
+    )
+
+
+def _project_attribute(
+    attribute: ApiAttribute,
+    api_class: ApiClass,
+    module_name: str,
+    interface: ExtensionInterfaceMetadata,
+    namespace: str,
+) -> ExtensionOperation:
+    metadata = attribute.metadata.extension_api
+    if metadata is None:
+        raise ExtensionProjectionError(
+            f"{api_class.qualified_name}.{attribute.name}: missing extension metadata"
+        )
+    return_type = attribute.annotation_type or parse_annotation(
+        attribute.annotation,
+        module_name,
+    )
+    if return_type is None:
+        raise ExtensionProjectionError(
+            f"{api_class.qualified_name}.{attribute.name}: no usable annotation"
+        )
+    interface_id = _interface_identifier(namespace, interface)
+    source_symbol = f"{api_class.qualified_name}.{attribute.name}"
+    return ExtensionOperation(
+        stable_id=f"{interface_id}/{metadata.local_id}",
+        interface_id=interface_id,
+        local_id=metadata.local_id,
+        source=attribute,
+        source_symbol=source_symbol,
+        source_location=attribute.location,
+        receiver=api_class.qualified_name,
+        parameters=(),
+        returns=return_type,
+        permission=metadata.permission,
+        effect=metadata.effect,
+        transaction=metadata.transaction,
+        since=metadata.since,
     )
 
 
@@ -172,6 +217,21 @@ def _iter_operations(
                     )
                 yield interface, _project_operation(
                     method,
+                    api_class,
+                    module.name,
+                    interface,
+                    namespace,
+                )
+            for attribute in api_class.attributes:
+                if attribute.metadata.extension_api is None:
+                    continue
+                if interface is None:
+                    raise ExtensionProjectionError(
+                        f"{api_class.qualified_name}.{attribute.name}: "
+                        "no extension interface scope"
+                    )
+                yield interface, _project_attribute(
+                    attribute,
                     api_class,
                     module.name,
                     interface,

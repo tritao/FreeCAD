@@ -11,7 +11,7 @@ from python_api_model.metadata import (
     ExtensionRepresentation,
     TransactionPolicy,
 )
-from python_api_model.model import ApiCallableGroup, ApiSourceLocation
+from python_api_model.model import ApiAttribute, ApiCallableGroup, ApiSourceLocation
 from python_api_model.signatures import ArgumentKind
 from python_api_model.types import ApiType
 
@@ -43,7 +43,7 @@ class ExtensionOperation:
     stable_id: str
     interface_id: str
     local_id: str
-    source: ApiCallableGroup
+    source: ApiCallableGroup | ApiAttribute
     source_symbol: str
     source_location: ApiSourceLocation | None
     receiver: str | None
