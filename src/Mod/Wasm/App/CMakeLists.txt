@@ -23,11 +23,15 @@ set(Wasm_API_SDK_GENERATOR ${CMAKE_SOURCE_DIR}/src/Tools/bindings/generate_wasm_
 set(Wasm_API_GENERATOR_SOURCES
     ${Wasm_API_GENERATOR}
     ${CMAKE_SOURCE_DIR}/src/Tools/python_api_model/diagnostics.py
+    ${CMAKE_SOURCE_DIR}/src/Tools/python_api_model/metadata.py
     ${CMAKE_SOURCE_DIR}/src/Tools/python_api_model/model.py
     ${CMAKE_SOURCE_DIR}/src/Tools/python_api_model/normalize.py
     ${CMAKE_SOURCE_DIR}/src/Tools/python_api_model/resolve.py
     ${CMAKE_SOURCE_DIR}/src/Tools/python_api_model/signatures.py
     ${CMAKE_SOURCE_DIR}/src/Tools/python_api_model/types.py
+    ${CMAKE_SOURCE_DIR}/src/Tools/extension_api_model/__init__.py
+    ${CMAKE_SOURCE_DIR}/src/Tools/extension_api_model/model.py
+    ${CMAKE_SOURCE_DIR}/src/Tools/extension_api_model/project.py
     ${CMAKE_SOURCE_DIR}/src/Tools/typing/stubgen/api_extract.py
     ${CMAKE_SOURCE_DIR}/src/Tools/typing/stubgen/decorators.py
     ${CMAKE_SOURCE_DIR}/src/Tools/typing/stubgen/deprecation.py
@@ -38,6 +42,7 @@ set(Wasm_API_GENERATOR_SOURCES
     ${CMAKE_SOURCE_DIR}/src/Tools/typing/stubgen/parsing.py
     ${CMAKE_SOURCE_DIR}/src/Tools/typing/stubgen/source_inputs.py
     ${CMAKE_SOURCE_DIR}/src/Mod/Wasm/WasmApiOperations.json
+    ${CMAKE_SOURCE_DIR}/src/Mod/Wasm/WasmExtensionApi.json
 )
 
 add_custom_command(

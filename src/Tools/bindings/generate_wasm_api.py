@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import argparse
 import ast
+from collections.abc import Mapping
 import json
 from pathlib import Path
 import sys
@@ -24,16 +25,21 @@ from python_api_model.signatures import (  # noqa: E402
     SignatureParameter,
 )
 from python_api_model.types import ApiType, ApiTypeKind, parse_annotation  # noqa: E402
+from extension_api_model import (  # noqa: E402
+    ExtensionApiModel,
+    load_extension_namespace,
+    project_api_model,
+)
 from stubgen.api_extract import extract_curated_api_model_with_diagnostics  # noqa: E402
 
 
 SCHEMA_VERSION = 0
 
-# These types are represented inline in the guest ABI rather than as host
-# object handles. Keep this list explicit until the API metadata has a first
-# class value-type annotation.
-WASM_VALUE_TYPES = {
-    "FreeCAD.Base.Vector": {"encoding": "vector3-f64"},
+# This is ABI lowering, not API classification. The extension model decides
+# whether a type is a value or resource; this table decides how a value is
+# encoded on the current WASM wire format.
+WASM_VALUE_ENCODINGS = {
+    "FreeCAD.Base.Vector": "vector3-f64",
 }
 
 
@@ -88,7 +94,13 @@ def _json_literal(value: object) -> object:
     return value
 
 
-def _wasm_type(api_type: ApiType | None, annotation: str | None, module_name: str) -> dict[str, Any]:
+def _wasm_type(
+    api_type: ApiType | None,
+    annotation: str | None,
+    module_name: str,
+    *,
+    value_type_encodings: Mapping[str, str] | None = None,
+) -> dict[str, Any]:
     if api_type is None:
         api_type = parse_annotation(annotation, module_name)
     if api_type is None:
@@ -103,32 +115,63 @@ def _wasm_type(api_type: ApiType | None, annotation: str | None, module_name: st
         result["kind"] = "bool"
     elif api_type.kind is ApiTypeKind.HANDLE:
         handle_name = api_type.handle or api_type.annotation
-        value_type = WASM_VALUE_TYPES.get(handle_name)
-        if value_type:
+        value_encoding = (value_type_encodings or {}).get(handle_name)
+        if value_encoding:
             result["kind"] = "value"
             result["type"] = handle_name
-            result["encoding"] = value_type["encoding"]
+            result["encoding"] = value_encoding
         else:
             result["kind"] = "handle"
             result["type"] = handle_name
     elif api_type.kind is ApiTypeKind.LIST:
         result["kind"] = "list"
-        result["item"] = _wasm_type(api_type.item, None, module_name)
+        result["item"] = _wasm_type(
+            api_type.item,
+            None,
+            module_name,
+            value_type_encodings=value_type_encodings,
+        )
     elif api_type.kind is ApiTypeKind.TUPLE:
         result["kind"] = "tuple"
-        result["items"] = [_wasm_type(item, None, module_name) for item in api_type.items]
-        result["item"] = _wasm_type(api_type.item, None, module_name)
+        result["items"] = [
+            _wasm_type(item, None, module_name, value_type_encodings=value_type_encodings)
+            for item in api_type.items
+        ]
+        result["item"] = _wasm_type(
+            api_type.item,
+            None,
+            module_name,
+            value_type_encodings=value_type_encodings,
+        )
         result["variadic"] = api_type.variadic
     elif api_type.kind is ApiTypeKind.DICT:
         result["kind"] = "dict"
-        result["key"] = _wasm_type(api_type.key, None, module_name)
-        result["value"] = _wasm_type(api_type.value, None, module_name)
+        result["key"] = _wasm_type(
+            api_type.key,
+            None,
+            module_name,
+            value_type_encodings=value_type_encodings,
+        )
+        result["value"] = _wasm_type(
+            api_type.value,
+            None,
+            module_name,
+            value_type_encodings=value_type_encodings,
+        )
     elif api_type.kind is ApiTypeKind.OPTIONAL:
         result["kind"] = "optional"
-        result["item"] = _wasm_type(api_type.item, None, module_name)
+        result["item"] = _wasm_type(
+            api_type.item,
+            None,
+            module_name,
+            value_type_encodings=value_type_encodings,
+        )
     elif api_type.kind is ApiTypeKind.UNION:
         result["kind"] = "union"
-        result["items"] = [_wasm_type(item, None, module_name) for item in api_type.items]
+        result["items"] = [
+            _wasm_type(item, None, module_name, value_type_encodings=value_type_encodings)
+            for item in api_type.items
+        ]
     elif api_type.kind is ApiTypeKind.LITERAL:
         result["kind"] = "literal"
         result["values"] = [_json_literal(value) for value in api_type.literal_values]
@@ -141,14 +184,18 @@ def _wasm_type(api_type: ApiType | None, annotation: str | None, module_name: st
     return result
 
 
-def _parameter_kind(parameter: SignatureParameter) -> str:
+def _argument_kind(kind: ArgumentKind) -> str:
     return {
         ArgumentKind.POSITION_ONLY: "positional_only",
         ArgumentKind.POSITIONAL_OR_KEYWORD: "positional_or_keyword",
         ArgumentKind.VAR_POSITIONAL: "varargs",
         ArgumentKind.KEYWORD_ONLY: "keyword_only",
         ArgumentKind.VAR_KEYWORD: "kwargs",
-    }[parameter.kind]
+    }[kind]
+
+
+def _parameter_kind(parameter: SignatureParameter) -> str:
+    return _argument_kind(parameter.kind)
 
 
 def _binding_metadata(signature: CallableSignature) -> dict[str, Any]:
@@ -159,12 +206,22 @@ def _binding_metadata(signature: CallableSignature) -> dict[str, Any]:
     return {}
 
 
-def _parameter_model(parameter: SignatureParameter, module_name: str) -> dict[str, Any]:
+def _parameter_model(
+    parameter: SignatureParameter,
+    module_name: str,
+    *,
+    value_type_encodings: Mapping[str, str] | None = None,
+) -> dict[str, Any]:
     return {
         "name": parameter.name,
         "kind": _parameter_kind(parameter),
         "annotation": parameter.annotation,
-        "type": _wasm_type(parameter.annotation_type, parameter.annotation, module_name),
+        "type": _wasm_type(
+            parameter.annotation_type,
+            parameter.annotation,
+            module_name,
+            value_type_encodings=value_type_encodings,
+        ),
         "default": parameter.default,
     }
 
@@ -174,6 +231,7 @@ def _signature_model(
     module_name: str,
     *,
     is_method: bool,
+    value_type_encodings: Mapping[str, str] | None = None,
 ) -> dict[str, Any]:
     parameters = signature.parameters
     if is_method and parameters and parameters[0].name in {"self", "cls"}:
@@ -182,8 +240,20 @@ def _signature_model(
     permission = metadata.get("permission")
     return {
         "name": signature.name,
-        "params": [_parameter_model(parameter, module_name) for parameter in parameters],
-        "returns": _wasm_type(signature.return_type, signature.return_annotation, module_name),
+        "params": [
+            _parameter_model(
+                parameter,
+                module_name,
+                value_type_encodings=value_type_encodings,
+            )
+            for parameter in parameters
+        ],
+        "returns": _wasm_type(
+            signature.return_type,
+            signature.return_annotation,
+            module_name,
+            value_type_encodings=value_type_encodings,
+        ),
         "return_annotation": signature.return_annotation,
         "const": any(
             decorator.rsplit(".", 1)[-1] == "constmethod"
@@ -199,21 +269,41 @@ def _signature_model(
     }
 
 
-def _method_model(group: ApiCallableGroup, module_name: str) -> dict[str, Any]:
+def _method_model(
+    group: ApiCallableGroup,
+    module_name: str,
+    *,
+    value_type_encodings: Mapping[str, str] | None = None,
+) -> dict[str, Any]:
     return {
         "name": group.name,
         "signatures": [
-            _signature_model(signature, module_name, is_method=group.is_method)
+            _signature_model(
+                signature,
+                module_name,
+                is_method=group.is_method,
+                value_type_encodings=value_type_encodings,
+            )
             for signature in group.signatures
         ],
     }
 
 
-def _attribute_model(attribute: ApiAttribute, module_name: str) -> dict[str, Any]:
+def _attribute_model(
+    attribute: ApiAttribute,
+    module_name: str,
+    *,
+    value_type_encodings: Mapping[str, str] | None = None,
+) -> dict[str, Any]:
     return {
         "name": attribute.name,
         "annotation": attribute.annotation,
-        "type": _wasm_type(attribute.annotation_type, attribute.annotation, module_name),
+        "type": _wasm_type(
+            attribute.annotation_type,
+            attribute.annotation,
+            module_name,
+            value_type_encodings=value_type_encodings,
+        ),
         "readonly": attribute.readonly,
         "default": attribute.value,
         "permission": None,
@@ -222,32 +312,64 @@ def _attribute_model(attribute: ApiAttribute, module_name: str) -> dict[str, Any
     }
 
 
-def _class_model(api_class: ApiClass) -> dict[str, Any]:
-    value_type = WASM_VALUE_TYPES.get(api_class.qualified_name)
+def _class_model(
+    api_class: ApiClass,
+    *,
+    value_type_encodings: Mapping[str, str] | None = None,
+) -> dict[str, Any]:
+    type_metadata = api_class.metadata.extension_type
+    is_value_type = type_metadata is not None and type_metadata.representation.value == "value"
+    value_encoding = (value_type_encodings or {}).get(api_class.qualified_name)
+    if is_value_type and value_encoding is None:
+        raise ValueError(
+            f"no WASM value encoding is registered for '{api_class.qualified_name}'"
+        )
     return {
         "module": api_class.module_name,
         "name": api_class.name,
         "full_name": api_class.qualified_name,
         "source": api_class.location.path if api_class.location else None,
         "base": api_class.bases[0] if api_class.bases else None,
-        "handle_type": None if value_type else api_class.qualified_name,
+        "handle_type": None if is_value_type else api_class.qualified_name,
         "representation": (
-            {"kind": "value", **value_type}
-            if value_type
+            {"kind": "value", "encoding": value_encoding}
+            if is_value_type
             else {"kind": "handle"}
         ),
         "native": _native_metadata(api_class),
         "attributes": [
-            _attribute_model(attribute, api_class.module_name)
+            _attribute_model(
+                attribute,
+                api_class.module_name,
+                value_type_encodings=value_type_encodings,
+            )
             for attribute in api_class.attributes
         ],
-        "methods": [_method_model(method, api_class.module_name) for method in api_class.methods],
+        "methods": [
+            _method_model(
+                method,
+                api_class.module_name,
+                value_type_encodings=value_type_encodings,
+            )
+            for method in api_class.methods
+        ],
         "doc": api_class.doc or "",
     }
 
 
-def _module_functions(module: ApiModule) -> list[dict[str, Any]]:
-    return [_method_model(function, module.name) for function in module.functions]
+def _module_functions(
+    module: ApiModule,
+    *,
+    value_type_encodings: Mapping[str, str] | None = None,
+) -> list[dict[str, Any]]:
+    return [
+        _method_model(
+            function,
+            module.name,
+            value_type_encodings=value_type_encodings,
+        )
+        for function in module.functions
+    ]
 
 
 def _operation_sources(api_model: Any) -> set[str]:
@@ -345,7 +467,156 @@ def _validate_operation_catalog(operations: list[dict[str, Any]]) -> None:
             raise ValueError(f"WASM operation '{name}' has invalid consumes flag")
 
 
-def _load_operations(root: Path, inputs: list[Path], api_model: Any) -> list[dict[str, Any]]:
+def _validate_abi_lock(lock: Mapping[str, Any]) -> None:
+    seen_ids: dict[int, str] = {}
+    seen_names: set[str] = set()
+    seen_wire_names: set[str] = set()
+    seen_guest_methods: set[str] = set()
+    for stable_id, entry in lock.items():
+        if not isinstance(stable_id, str) or not stable_id:
+            raise ValueError("WASM ABI lock contains an invalid operation identity")
+        if not isinstance(entry, dict):
+            raise ValueError(f"WASM ABI lock entry '{stable_id}' is not an object")
+        for field in ("id", "name", "wire_name", "guest_method"):
+            value = entry.get(field)
+            if field == "id":
+                if (
+                    isinstance(value, bool)
+                    or not isinstance(value, int)
+                    or not 0 < value <= 0xFF
+                ):
+                    raise ValueError(f"WASM ABI lock entry '{stable_id}' has an invalid id")
+                previous = seen_ids.get(value)
+                if previous is not None:
+                    raise ValueError(
+                        f"WASM operation id {value} is used by both '{previous}' and '{stable_id}'"
+                    )
+                seen_ids[value] = stable_id
+            elif not isinstance(value, str) or not value:
+                raise ValueError(
+                    f"WASM ABI lock entry '{stable_id}' has an invalid '{field}'"
+                )
+        for field, seen in (
+            ("name", seen_names),
+            ("wire_name", seen_wire_names),
+            ("guest_method", seen_guest_methods),
+        ):
+            value = entry[field]
+            if value in seen:
+                raise ValueError(f"WASM ABI lock field '{field}' is duplicated: '{value}'")
+            seen.add(value)
+
+
+def _receiver_parameter(
+    operation: Any,
+    value_type_encodings: Mapping[str, str],
+) -> dict[str, Any]:
+    receiver = operation.receiver
+    if receiver is None:
+        raise ValueError(f"extension operation '{operation.stable_id}' has no receiver")
+    receiver_name = receiver.rsplit(".", 1)[-1]
+    parameter_name = {
+        "Document": "document",
+        "DocumentObject": "object",
+        "TopoShape": "shape",
+        "Vector": "left",
+    }.get(receiver_name, receiver_name[:1].lower() + receiver_name[1:])
+    annotation = receiver_name
+    module_name = receiver.rsplit(".", 1)[0]
+    api_type = parse_annotation(annotation, module_name)
+    return {
+        "name": parameter_name,
+        "type": _wasm_type(
+            api_type,
+            annotation,
+            module_name,
+            value_type_encodings=value_type_encodings,
+        ),
+    }
+
+
+def _extension_operation_catalog(
+    operation: Any,
+    lock_entry: Mapping[str, Any],
+    value_type_encodings: Mapping[str, str],
+) -> dict[str, Any]:
+    module_name = (
+        operation.receiver.rsplit(".", 1)[0]
+        if operation.receiver is not None
+        else operation.source_symbol.rsplit(".", 1)[0]
+    )
+    parameters: list[dict[str, Any]] = []
+    if operation.receiver is not None:
+        parameters.append(_receiver_parameter(operation, value_type_encodings))
+    for parameter in operation.parameters:
+        parameter_name = parameter.name
+        if operation.receiver == "FreeCAD.Base.Vector" and len(operation.parameters) == 1:
+            parameter_name = "right"
+        parameters.append(
+            {
+                "name": parameter_name,
+                "kind": _argument_kind(parameter.kind),
+                "annotation": parameter.annotation,
+                "type": _wasm_type(
+                    parameter.type,
+                    parameter.annotation,
+                    module_name,
+                    value_type_encodings=value_type_encodings,
+                ),
+                "default": parameter.default,
+            }
+        )
+    effect = operation.effect.value if operation.effect is not None else None
+    return {
+        "name": lock_entry["name"],
+        "wire_name": lock_entry["wire_name"],
+        "id": lock_entry["id"],
+        "guest_method": lock_entry["guest_method"],
+        "source": operation.source_symbol,
+        "permission": operation.permission,
+        "mutates": effect in {"create", "modify"},
+        "requires": [
+            operation.source_location.path
+            if operation.source_location is not None
+            else ""
+        ],
+        "params": parameters,
+        "returns": _wasm_type(
+            operation.returns,
+            operation.returns.annotation,
+            module_name,
+            value_type_encodings=value_type_encodings,
+        ),
+        **(
+            {"transaction": operation.transaction.value}
+            if operation.transaction.value != "none"
+            else {}
+        ),
+    }
+
+
+def _prepare_catalog_operation(
+    operation: dict[str, Any],
+    defaults: Mapping[str, Any],
+) -> dict[str, Any]:
+    operation.setdefault("fallible", defaults.get("fallible", True))
+    returns = operation.setdefault("returns", {})
+    returns.setdefault("nullable", defaults.get("nullable", False))
+    if returns.get("kind") == "handle":
+        returns.setdefault("ownership", defaults.get("handle_ownership", "borrowed"))
+    for parameter in operation.get("params", []):
+        if parameter.get("type", {}).get("kind") == "handle":
+            parameter.setdefault("ownership", "borrowed")
+    return operation
+
+
+def _load_operations(
+    root: Path,
+    inputs: list[Path],
+    api_model: Any,
+    extension_model: ExtensionApiModel,
+    value_type_encodings: Mapping[str, str],
+) -> list[dict[str, Any]]:
     operations_path = root / "src/Mod/Wasm/WasmApiOperations.json"
     if not operations_path.exists():
         return []
@@ -353,14 +624,37 @@ def _load_operations(root: Path, inputs: list[Path], api_model: Any) -> list[dic
     model = json.loads(operations_path.read_text(encoding="utf-8"))
     input_paths = {path.resolve().relative_to(root).as_posix() for path in inputs}
     sources = _operation_sources(api_model)
-    operations = model.get("operations", [])
+    abi = model.get("abi", {})
+    lock = abi.get("operations", {})
+    adapters = model.get("adapters", [])
     defaults = model.get("defaults", {})
-    if not isinstance(operations, list):
-        raise ValueError("WASM operation catalog must contain an operations list")
-    _validate_operation_catalog(operations)
+    if not isinstance(abi, dict) or not isinstance(lock, dict):
+        raise ValueError("WASM operation catalog must contain an ABI operation lock")
+    if not isinstance(adapters, list):
+        raise ValueError("WASM operation catalog must contain an adapters list")
+    _validate_abi_lock(lock)
+    _validate_operation_catalog(adapters)
 
-    selected_operations = []
-    for operation in operations:
+    selected_operations: list[dict[str, Any]] = []
+    for extension_operation in extension_model.operations:
+        lock_entry = lock.get(extension_operation.stable_id)
+        if lock_entry is None:
+            continue
+        source_location = extension_operation.source_location
+        if source_location is None or source_location.path not in input_paths:
+            continue
+        selected_operations.append(
+            _prepare_catalog_operation(
+                _extension_operation_catalog(
+                    extension_operation,
+                    lock_entry,
+                    value_type_encodings,
+                ),
+                defaults,
+            )
+        )
+
+    for operation in adapters:
         requirements = operation.get("requires", [])
         if not all(requirement in input_paths for requirement in requirements):
             continue
@@ -370,18 +664,100 @@ def _load_operations(root: Path, inputs: list[Path], api_model: Any) -> list[dic
                 f"WASM operation {operation.get('name', '<unnamed>')} references "
                 f"missing .pyi symbol '{source}'"
             )
-        operation.setdefault("fallible", defaults.get("fallible", True))
-        returns = operation.setdefault("returns", {})
-        returns.setdefault("nullable", defaults.get("nullable", False))
-        if returns.get("kind") == "handle":
-            returns.setdefault(
-                "ownership", defaults.get("handle_ownership", "borrowed")
-            )
-        for parameter in operation.get("params", []):
-            if parameter.get("type", {}).get("kind") == "handle":
-                parameter.setdefault("ownership", "borrowed")
-        selected_operations.append(operation)
+        selected_operations.append(_prepare_catalog_operation(operation, defaults))
+    selected_operations.sort(key=lambda operation: operation["id"])
+    _validate_operation_catalog(selected_operations)
     return selected_operations
+
+
+def _extension_type_encodings(extension_model: ExtensionApiModel) -> dict[str, str]:
+    encodings: dict[str, str] = {}
+    for api_type in extension_model.types:
+        if api_type.representation.value != "value":
+            continue
+        encoding = WASM_VALUE_ENCODINGS.get(api_type.qualified_name)
+        if encoding is None:
+            raise ValueError(
+                f"no WASM value encoding is registered for '{api_type.qualified_name}'"
+            )
+        encodings[api_type.qualified_name] = encoding
+    return encodings
+
+
+def _extension_model_json(
+    extension_model: ExtensionApiModel,
+    value_type_encodings: Mapping[str, str],
+) -> dict[str, Any]:
+    interfaces: list[dict[str, Any]] = []
+    for interface in extension_model.interfaces:
+        operations: list[dict[str, Any]] = []
+        for operation in interface.operations:
+            module_name = (
+                operation.receiver.rsplit(".", 1)[0]
+                if operation.receiver is not None
+                else operation.source_symbol.rsplit(".", 1)[0]
+            )
+            operations.append(
+                {
+                    "id": operation.stable_id,
+                    "local_id": operation.local_id,
+                    "source": operation.source_symbol,
+                    "source_location": (
+                        operation.source_location.path
+                        if operation.source_location is not None
+                        else None
+                    ),
+                    "receiver": operation.receiver,
+                    "params": [
+                        {
+                            "name": parameter.name,
+                            "kind": _argument_kind(parameter.kind),
+                            "annotation": parameter.annotation,
+                            "type": _wasm_type(
+                                parameter.type,
+                                parameter.annotation,
+                                module_name,
+                                value_type_encodings=value_type_encodings,
+                            ),
+                            "default": parameter.default,
+                        }
+                        for parameter in operation.parameters
+                    ],
+                    "returns": _wasm_type(
+                        operation.returns,
+                        operation.returns.annotation,
+                        module_name,
+                        value_type_encodings=value_type_encodings,
+                    ),
+                    "permission": operation.permission,
+                    "effect": operation.effect.value if operation.effect else None,
+                    "transaction": (
+                        operation.transaction.value
+                        if operation.transaction.value != "none"
+                        else None
+                    ),
+                    "since": operation.since,
+                }
+            )
+        interfaces.append(
+            {
+                "id": interface.identifier,
+                "name": interface.name,
+                "version": interface.version,
+                "operations": operations,
+            }
+        )
+    return {
+        "namespace": extension_model.namespace,
+        "types": [
+            {
+                "name": api_type.qualified_name,
+                "representation": api_type.representation.value,
+            }
+            for api_type in extension_model.types
+        ],
+        "interfaces": interfaces,
+    }
 
 
 def build_model(root: Path, inputs: list[Path]) -> dict[str, Any]:
@@ -395,15 +771,24 @@ def build_model(root: Path, inputs: list[Path]) -> dict[str, Any]:
         rendered = "\n".join(f"error: {diagnostic.message}" for diagnostic in errors)
         raise ValueError(rendered)
 
+    extension_namespace = load_extension_namespace(
+        root / "src/Mod/Wasm/WasmExtensionApi.json"
+    )
+    extension_model = project_api_model(model, namespace=extension_namespace)
+    value_type_encodings = _extension_type_encodings(extension_model)
+
     classes = [
-        _class_model(api_class)
+        _class_model(api_class, value_type_encodings=value_type_encodings)
         for module in model.modules
         for api_class in module.classes
     ]
     functions = [
         function
         for module in model.modules
-        for function in _module_functions(module)
+        for function in _module_functions(
+            module,
+            value_type_encodings=value_type_encodings,
+        )
     ]
     aliases = [
         {"public_path": alias.public_path, "target_path": alias.target_path}
@@ -415,6 +800,7 @@ def build_model(root: Path, inputs: list[Path]) -> dict[str, Any]:
         "schema_version": SCHEMA_VERSION,
         "api": f"org.freecad.wasm.api@{SCHEMA_VERSION}",
         "permission_policy": "deny-by-default",
+        "extension_api": _extension_model_json(extension_model, value_type_encodings),
         "abi": {
             "request_magic": "FCWA",
             "response_magic": "FCWR",
@@ -433,7 +819,13 @@ def build_model(root: Path, inputs: list[Path]) -> dict[str, Any]:
                 "protocol": 7,
             },
         },
-        "operations": _load_operations(root, inputs, model),
+        "operations": _load_operations(
+            root,
+            inputs,
+            model,
+            extension_model,
+            value_type_encodings,
+        ),
         "classes": classes,
         "functions": functions,
         "aliases": aliases,

@@ -86,6 +86,25 @@ class GenerateWasmApiTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "operation id 1"):
             generate_wasm_api._validate_operation_catalog(operations)
 
+    def test_abi_lock_rejects_duplicate_ids(self):
+        with self.assertRaisesRegex(ValueError, "operation id 1"):
+            generate_wasm_api._validate_abi_lock(
+                {
+                    "org.freecad.test@1/first": {
+                        "id": 1,
+                        "name": "first",
+                        "wire_name": "test.first",
+                        "guest_method": "first",
+                    },
+                    "org.freecad.test@1/second": {
+                        "id": 1,
+                        "name": "second",
+                        "wire_name": "test.second",
+                        "guest_method": "second",
+                    },
+                }
+            )
+
     def test_projection_uses_the_canonical_api_model(self):
         model = generate_wasm_api.build_model(
             ROOT,
@@ -116,6 +135,41 @@ class GenerateWasmApiTests(unittest.TestCase):
         label = next(item for item in document_object["attributes"] if item["name"] == "Label")
         self.assertEqual(label["annotation"], "str")
         self.assertEqual(label["type"]["kind"], "string")
+
+        extension = model["extension_api"]
+        self.assertEqual(extension["namespace"], "org.freecad")
+        self.assertEqual(
+            {
+                operation["id"]
+                for interface in extension["interfaces"]
+                for operation in interface["operations"]
+            },
+            {
+                "org.freecad.document@1/is_saved",
+                "org.freecad.document@1/get_object",
+                "org.freecad.document@1/open_transaction",
+                "org.freecad.document@1/commit_transaction",
+                "org.freecad.document@1/abort_transaction",
+                "org.freecad.geometry@1/vector_add",
+                "org.freecad.geometry@1/vector_dot",
+                "org.freecad.geometry@1/vector_cross",
+                "org.freecad.part@1/shape_is_null",
+                "org.freecad.part@1/shape_is_valid",
+            },
+        )
+
+        vector_add = next(
+            operation
+            for interface in extension["interfaces"]
+            for operation in interface["operations"]
+            if operation["id"] == "org.freecad.geometry@1/vector_add"
+        )
+        self.assertEqual(
+            [parameter["name"] for parameter in model["operations"][5]["params"]],
+            ["left", "right"],
+        )
+        self.assertEqual(vector_add["params"][0]["name"], "vector2")
+        self.assertEqual(vector_add["returns"]["kind"], "value")
 
 
 if __name__ == "__main__":

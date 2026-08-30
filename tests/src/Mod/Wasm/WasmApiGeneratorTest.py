@@ -62,6 +62,17 @@ assert operations["documentNew"]["returns"]["ownership"] == "owned"
 assert operations["documentNew"]["returns"]["nullable"] is False
 assert operations["documentNew"]["fallible"] is True
 
+extension = model["extension_api"]
+assert extension["namespace"] == "org.freecad"
+extension_operations = {
+    operation["id"]: operation
+    for interface in extension["interfaces"]
+    for operation in interface["operations"]
+}
+assert extension_operations["org.freecad.document@1/is_saved"]["source"] == "FreeCAD.Document.isSaved"
+assert extension_operations["org.freecad.geometry@1/vector_dot"]["returns"]["kind"] == "float64"
+assert extension_operations["org.freecad.part@1/shape_is_valid"]["permission"] == "geometry.read"
+
 abi_header = (ROOT / "src/Mod/Wasm/WasmAbi.h").read_text(encoding="utf-8")
 abi_enum = re.search(
     r"enum class Operation : std::uint8_t\s*\{(?P<body>.*?)\};",
