@@ -225,10 +225,11 @@ class GenerateWasmApiTests(unittest.TestCase):
             'Abi::Operation::DocumentOpenTransaction, 16U',
             metadata,
         )
+        self.assertIn("WireType::Vector3F64", metadata)
         self.assertIn('"projection"', metadata)
         self.assertIn('"adapter"', metadata)
-        self.assertIn("parametersJson", metadata)
-        self.assertIn("returnsJson", metadata)
+        self.assertIn("std::span<const ParameterMetadata> parameters", metadata)
+        self.assertIn("WireType returnType", metadata)
 
     def test_projection_uses_the_canonical_api_model(self):
         model = generate_wasm_api.build_model(

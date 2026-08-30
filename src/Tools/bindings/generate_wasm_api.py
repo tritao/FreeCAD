@@ -1046,6 +1046,25 @@ def _operation_enum_name(name: str) -> str:
     return name[:1].upper() + name[1:]
 
 
+def _wire_type_name(type_model: Mapping[str, Any], label: str) -> str:
+    kind = type_model.get("kind")
+    if kind == "bool":
+        return "Bool"
+    if kind == "int64":
+        return "Int64"
+    if kind == "float64":
+        return "Float64"
+    if kind == "string":
+        return "String"
+    if kind == "handle":
+        return "Handle"
+    if kind == "value" and type_model.get("encoding") == "vector3-f64":
+        return "Vector3F64"
+    if kind == "none":
+        return "None"
+    raise ValueError(f"{label} uses an unsupported WASM wire type")
+
+
 def render_dispatch_metadata(model: Mapping[str, Any]) -> str:
     """Render host dispatch metadata from the merged operation model."""
 
@@ -1061,10 +1080,28 @@ def render_dispatch_metadata(model: Mapping[str, Any]) -> str:
         "",
         "#include <array>",
         "#include <cstdint>",
+        "#include <span>",
         "#include <string_view>",
         "",
         "namespace Wasm::Generated",
         "{",
+        "",
+        "enum class WireType : std::uint8_t",
+        "{",
+        "    None,",
+        "    Bool,",
+        "    Int64,",
+        "    Float64,",
+        "    String,",
+        "    Handle,",
+        "    Vector3F64,",
+        "};",
+        "",
+        "struct ParameterMetadata",
+        "{",
+        "    std::string_view name;",
+        "    WireType type;",
+        "};",
         "",
         "struct OperationMetadata",
         "{",
@@ -1076,12 +1113,10 @@ def render_dispatch_metadata(model: Mapping[str, Any]) -> str:
         "    bool mutates;",
         "    std::string_view transaction;",
         "    std::string_view origin;",
-        "    std::string_view parametersJson;",
-        "    std::string_view returnsJson;",
+        "    std::span<const ParameterMetadata> parameters;",
+        "    WireType returnType;",
         "};",
         "",
-        f"inline constexpr std::array<OperationMetadata, {len(operations)}>"
-        " OperationMetadataTable = {{",
     ]
     for operation in operations:
         name = operation.get("name")
@@ -1099,18 +1134,76 @@ def render_dispatch_metadata(model: Mapping[str, Any]) -> str:
             raise ValueError(f"WASM operation '{name}' has an invalid id")
         if origin not in {"projection", "adapter"}:
             raise ValueError(f"WASM operation '{name}' has an invalid origin")
+        parameters = operation.get("params", [])
+        if not isinstance(parameters, list):
+            raise ValueError(f"WASM operation '{name}' has invalid parameters")
+        parameter_name = f"{_operation_enum_name(name)}Parameters"
+        if parameters:
+            lines.extend(
+                [
+                    f"inline constexpr std::array<ParameterMetadata, {len(parameters)}> "
+                    f"{parameter_name} = {{ {{",
+                ]
+            )
+            for parameter in parameters:
+                if not isinstance(parameter, dict):
+                    raise ValueError(f"WASM operation '{name}' has an invalid parameter")
+                parameter_name_value = parameter.get("name")
+                parameter_type = parameter.get("type")
+                if not isinstance(parameter_name_value, str) or not parameter_name_value:
+                    raise ValueError(f"WASM operation '{name}' has an invalid parameter name")
+                if not isinstance(parameter_type, dict):
+                    raise ValueError(f"WASM operation '{name}' has an invalid parameter type")
+                wire_type = _wire_type_name(
+                    parameter_type,
+                    f"WASM operation '{name}' parameter '{parameter_name_value}'",
+                )
+                lines.append(
+                    f"    {{{json.dumps(parameter_name_value)}, WireType::{wire_type}}},"
+                )
+            lines.extend(["}};", ""])
+        else:
+            lines.extend(
+                [
+                    f"inline constexpr std::array<ParameterMetadata, 0> "
+                    f"{parameter_name} = {{}};",
+                    "",
+                ]
+            )
+        returns = operation.get("returns")
+        if not isinstance(returns, dict):
+            raise ValueError(f"WASM operation '{name}' has invalid returns")
+        return_type = _wire_type_name(returns, f"WASM operation '{name}' return")
+
+    lines.extend(
+        [
+            f"inline constexpr std::array<OperationMetadata, {len(operations)}>"
+            " OperationMetadataTable = {{",
+        ]
+    )
+    for operation in operations:
+        name = operation["name"]
+        operation_id = operation["id"]
+        permission = operation.get("permission") or ""
+        transaction = operation.get("transaction") or ""
+        origin = operation["origin"]
+        parameter_name = f"{_operation_enum_name(name)}Parameters"
+        return_type = _wire_type_name(
+            operation["returns"],
+            f"WASM operation '{name}' return",
+        )
         lines.append(
             "    {"
             f"Abi::Operation::{_operation_enum_name(name)}, "
             f"{operation_id}U, "
-            f"{json.dumps(name)}, "
-            f"{json.dumps(operation.get('wire_name', ''))}, "
-            f"{json.dumps(permission)}, "
+            f"{json.dumps(name, ensure_ascii=True)}, "
+            f"{json.dumps(operation.get('wire_name', ''), ensure_ascii=True)}, "
+            f"{json.dumps(permission, ensure_ascii=True)}, "
             f"{'true' if operation.get('mutates') else 'false'}, "
-            f"{json.dumps(transaction)}, "
-            f"{json.dumps(origin)}, "
-            f"{json.dumps(json.dumps(operation.get('params', []), separators=(',', ':')))}, "
-            f"{json.dumps(json.dumps(operation.get('returns', {}), separators=(',', ':')))}"
+            f"{json.dumps(transaction, ensure_ascii=True)}, "
+            f"{json.dumps(origin, ensure_ascii=True)}, "
+            f"{parameter_name}, "
+            f"WireType::{return_type}"
             "},"
         )
     lines.extend(

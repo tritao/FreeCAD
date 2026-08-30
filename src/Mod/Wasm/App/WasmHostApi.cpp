@@ -151,6 +151,79 @@ HostCallResult malformedRequest(std::string error)
     return {false, {}, std::move(error), Wasm::Abi::ErrorCode::InvalidRequest};
 }
 
+bool validateWireValue(ByteSpan payload,
+                       Generated::WireType type,
+                       std::size_t& offset,
+                       std::string_view label,
+                       std::string& error)
+{
+    if (type == Generated::WireType::None) {
+        return true;
+    }
+
+    if (type == Generated::WireType::String) {
+        std::uint32_t length = 0U;
+        if (!readU32(payload, offset, length)
+            || length > payload.size() - offset) {
+            error = std::string(label) + " has an invalid string length";
+            return false;
+        }
+        offset += length;
+        return true;
+    }
+
+    std::size_t valueSize = 0U;
+    switch (type) {
+    case Generated::WireType::Bool:
+        valueSize = sizeof(std::uint8_t);
+        break;
+    case Generated::WireType::Int64:
+    case Generated::WireType::Float64:
+    case Generated::WireType::Handle:
+        valueSize = sizeof(std::uint64_t);
+        break;
+    case Generated::WireType::Vector3F64:
+        valueSize = sizeof(double) * 3U;
+        break;
+    case Generated::WireType::None:
+    case Generated::WireType::String:
+        break;
+    }
+
+    if (valueSize == 0U || offset > payload.size()
+        || valueSize > payload.size() - offset) {
+        error = std::string(label) + " is truncated";
+        return false;
+    }
+    if (type == Generated::WireType::Bool
+        && std::to_integer<std::uint8_t>(payload[offset]) > 1U) {
+        error = std::string(label) + " is not a canonical boolean";
+        return false;
+    }
+    offset += valueSize;
+    return true;
+}
+
+bool validateRequestPayload(const Generated::OperationMetadata& metadata,
+                            ByteSpan payload,
+                            std::string& error)
+{
+    std::size_t offset = 0U;
+    for (const auto& parameter : metadata.parameters) {
+        std::string valueError;
+        if (!validateWireValue(payload, parameter.type, offset, parameter.name, valueError)) {
+            error = std::string(metadata.wireName) + " parameter '"
+                + std::string(parameter.name) + "': " + valueError;
+            return false;
+        }
+    }
+    if (offset != payload.size()) {
+        error = std::string(metadata.wireName) + " has trailing payload bytes";
+        return false;
+    }
+    return true;
+}
+
 #ifdef FREECAD_WASM_HAS_PART
 void releaseTopoShape(void* pointer)
 {
@@ -283,6 +356,10 @@ HostCallResult WasmHostApi::dispatch(std::span<const std::byte> request,
                 "WASM operation has no registered host handler",
                 Abi::ErrorCode::Unsupported};
     }
+    std::string payloadError;
+    if (!validateRequestPayload(*metadata, payload, payloadError)) {
+        return malformedRequest(std::move(payloadError));
+    }
     return (this->*handler)(operation, payload, handles);
 }
 
@@ -329,10 +406,6 @@ HostCallResult WasmHostApi::dispatchVectorOperation(Abi::Operation operation,
                                                     WasmHandleTable&)
 {
     if (operation == Abi::Operation::VectorNew) {
-        if (payload.size() != sizeof(double) * 3U) {
-            return malformedRequest("base.vector.new expects three f64 values");
-        }
-
         std::size_t payloadOffset = 0U;
         Base::Vector3d value;
         if (!readVector(payload, payloadOffset, value) || !std::isfinite(value.x)
@@ -340,10 +413,6 @@ HostCallResult WasmHostApi::dispatchVectorOperation(Abi::Operation operation,
             return malformedRequest("base.vector.new expects finite f64 values");
         }
         return {true, vectorPayload(value), {}};
-    }
-
-    if (payload.size() != sizeof(double) * 6U) {
-        return malformedRequest("base.vector operation expects two vector values");
     }
 
     std::size_t payloadOffset = 0U;
@@ -372,8 +441,8 @@ HostCallResult WasmHostApi::dispatchDocumentOperation(Abi::Operation operation,
     case Abi::Operation::DocumentNew: {
         std::size_t payloadOffset = 0U;
         std::string name;
-        if (!readString(payload, payloadOffset, name) || payloadOffset != payload.size()
-            || name.empty() || name.find('\0') != std::string::npos) {
+        if (!readString(payload, payloadOffset, name) || name.empty()
+            || name.find('\0') != std::string::npos) {
             return malformedRequest("document.new has an invalid name payload");
         }
 
@@ -410,8 +479,7 @@ HostCallResult WasmHostApi::dispatchDocumentOperation(Abi::Operation operation,
         std::string name;
         if (!readU64(payload, payloadOffset, documentHandle)
             || !readU64(payload, payloadOffset, shapeHandle)
-            || !readString(payload, payloadOffset, name)
-            || payloadOffset != payload.size() || name.empty()
+            || !readString(payload, payloadOffset, name) || name.empty()
             || name.find('\0') != std::string::npos) {
             return malformedRequest("document.add_object has an invalid payload");
         }
@@ -461,10 +529,6 @@ HostCallResult WasmHostApi::dispatchDocumentOperation(Abi::Operation operation,
 #endif
     }
     case Abi::Operation::DocumentIsSaved: {
-        if (payload.size() != sizeof(std::uint64_t)) {
-            return malformedRequest("document.is_saved expects one document handle");
-        }
-
         std::size_t payloadOffset = 0U;
         std::uint64_t documentHandle = InvalidHandle;
         if (!readU64(payload, payloadOffset, documentHandle)) {
@@ -484,8 +548,7 @@ HostCallResult WasmHostApi::dispatchDocumentOperation(Abi::Operation operation,
         std::uint64_t documentHandle = InvalidHandle;
         std::string name;
         if (!readU64(payload, payloadOffset, documentHandle)
-            || !readString(payload, payloadOffset, name)
-            || payloadOffset != payload.size() || name.empty()
+            || !readString(payload, payloadOffset, name) || name.empty()
             || name.find('\0') != std::string::npos) {
             return malformedRequest("document.get_object has an invalid payload");
         }
@@ -517,8 +580,7 @@ HostCallResult WasmHostApi::dispatchDocumentOperation(Abi::Operation operation,
         std::uint64_t documentHandle = InvalidHandle;
         std::string name;
         if (!readU64(payload, payloadOffset, documentHandle)
-            || !readString(payload, payloadOffset, name)
-            || payloadOffset != payload.size() || name.empty()
+            || !readString(payload, payloadOffset, name) || name.empty()
             || name.find('\0') != std::string::npos) {
             return malformedRequest("document.open_transaction has an invalid payload");
         }
@@ -545,10 +607,6 @@ HostCallResult WasmHostApi::dispatchDocumentOperation(Abi::Operation operation,
     }
     case Abi::Operation::DocumentCommitTransaction:
     case Abi::Operation::DocumentAbortTransaction: {
-        if (payload.size() != sizeof(std::uint64_t)) {
-            return malformedRequest("document transaction control expects one document handle");
-        }
-
         std::size_t payloadOffset = 0U;
         std::uint64_t documentHandle = InvalidHandle;
         if (!readU64(payload, payloadOffset, documentHandle)) {
@@ -594,10 +652,6 @@ HostCallResult WasmHostApi::dispatchDocumentObjectOperation(
 {
     switch (operation) {
     case Abi::Operation::DocumentObjectGetLabel: {
-        if (payload.size() != sizeof(std::uint64_t)) {
-            return malformedRequest("document.object.get_label expects one object handle");
-        }
-
         std::size_t payloadOffset = 0U;
         std::uint64_t objectHandle = InvalidHandle;
         if (!readU64(payload, payloadOffset, objectHandle)) {
@@ -617,7 +671,7 @@ HostCallResult WasmHostApi::dispatchDocumentObjectOperation(
         std::string label;
         if (!readU64(payload, payloadOffset, objectHandle)
             || !readString(payload, payloadOffset, label)
-            || payloadOffset != payload.size() || label.find('\0') != std::string::npos) {
+            || label.find('\0') != std::string::npos) {
             return malformedRequest("document.object.set_label has an invalid payload");
         }
         std::string error;
@@ -656,10 +710,6 @@ HostCallResult WasmHostApi::dispatchTopoShapeOperation(Abi::Operation operation,
     return {false, {}, "Part capability is not available in this build"};
 #else
     if (operation == Abi::Operation::PartMakeBox) {
-        if (payload.size() != sizeof(double) * 3U) {
-            return malformedRequest("part.make_box expects three f64 values");
-        }
-
         std::size_t payloadOffset = 0U;
         double length = 0.0;
         double width = 0.0;
@@ -687,10 +737,6 @@ HostCallResult WasmHostApi::dispatchTopoShapeOperation(Abi::Operation operation,
         catch (const Standard_Failure& error) {
             return {false, {}, std::string("part.make_box failed: ") + error.GetMessageString()};
         }
-    }
-
-    if (payload.size() != sizeof(std::uint64_t)) {
-        return malformedRequest("part.topo_shape query expects one shape handle");
     }
 
     std::size_t payloadOffset = 0U;
@@ -747,9 +793,6 @@ HostCallResult WasmHostApi::dispatchHandleOperation(Abi::Operation operation,
 {
     if (operation != Abi::Operation::HandleRelease) {
         return {false, {}, "unsupported handle operation", Abi::ErrorCode::Unsupported};
-    }
-    if (payload.size() != sizeof(std::uint64_t)) {
-        return malformedRequest("handle.release expects one u64 handle");
     }
     std::size_t payloadOffset = 0U;
     std::uint64_t handle = InvalidHandle;

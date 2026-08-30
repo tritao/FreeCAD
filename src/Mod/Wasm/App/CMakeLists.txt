@@ -136,6 +136,7 @@ target_include_directories(
     Wasm
     SYSTEM
     PRIVATE
+    ${CMAKE_BINARY_DIR}/Mod/Wasm
     ${CMAKE_CURRENT_BINARY_DIR}
     ${CMAKE_CURRENT_SOURCE_DIR}
     ${CMAKE_SOURCE_DIR}/src/3rdParty/json/single_include/

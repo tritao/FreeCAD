@@ -593,6 +593,43 @@ TEST(WasmHostApiTest, ValidatesVersionedBinaryRequests)
     EXPECT_EQ(malformed.errorCode, Wasm::Abi::ErrorCode::InvalidRequest);
 }
 
+TEST(WasmHostApiTest, ValidatesPayloadsFromGeneratedDescriptors)
+{
+    Wasm::WasmHostApi hostApi;
+    hostApi.setPermissions({"document.create", "geometry.compute"});
+    Wasm::WasmHandleTable handles;
+
+    std::string invalidString;
+    Wasm::Abi::appendU32(invalidString, 4U);
+    invalidString.push_back('x');
+    const auto invalidStringResult = hostApi.dispatch(
+        asBytes(binaryRequest(Wasm::Abi::Operation::DocumentNew, invalidString)),
+        hostApi.permissions(),
+        handles);
+    EXPECT_FALSE(invalidStringResult.ok);
+    EXPECT_NE(invalidStringResult.error.find("invalid string length"), std::string::npos);
+    EXPECT_EQ(invalidStringResult.errorCode, Wasm::Abi::ErrorCode::InvalidRequest);
+
+    const auto truncatedResult = hostApi.dispatch(
+        asBytes(binaryRequest(Wasm::Abi::Operation::VectorAdd,
+                              doublePayload(1.0, 2.0, 3.0))),
+        hostApi.permissions(),
+        handles);
+    EXPECT_FALSE(truncatedResult.ok);
+    EXPECT_NE(truncatedResult.error.find("right is truncated"), std::string::npos);
+    EXPECT_EQ(truncatedResult.errorCode, Wasm::Abi::ErrorCode::InvalidRequest);
+
+    auto trailingPayload = doublePayload(1.0, 2.0, 3.0);
+    trailingPayload.push_back('\0');
+    const auto trailingResult = hostApi.dispatch(
+        asBytes(binaryRequest(Wasm::Abi::Operation::VectorNew, trailingPayload)),
+        hostApi.permissions(),
+        handles);
+    EXPECT_FALSE(trailingResult.ok);
+    EXPECT_NE(trailingResult.error.find("trailing payload bytes"), std::string::npos);
+    EXPECT_EQ(trailingResult.errorCode, Wasm::Abi::ErrorCode::InvalidRequest);
+}
+
 TEST(WasmHostApiTest, UsesGeneratedOperationMetadataForDispatch)
 {
     ASSERT_FALSE(Wasm::Generated::OperationMetadataTable.empty());
@@ -602,11 +639,17 @@ TEST(WasmHostApiTest, UsesGeneratedOperationMetadataForDispatch)
         EXPECT_FALSE(metadata.name.empty());
         EXPECT_FALSE(metadata.wireName.empty());
         EXPECT_FALSE(metadata.origin.empty());
-        EXPECT_FALSE(metadata.parametersJson.empty());
-        EXPECT_FALSE(metadata.returnsJson.empty());
+        for (const auto& parameter : metadata.parameters) {
+            EXPECT_FALSE(parameter.name.empty());
+        }
         EXPECT_EQ(Wasm::Generated::findOperationMetadata(metadata.id), &metadata);
         EXPECT_TRUE(Wasm::WasmHostApi::hasOperationHandler(metadata.operation));
     }
+    const auto* documentNew = Wasm::Generated::findOperationMetadata(1U);
+    ASSERT_NE(documentNew, nullptr);
+    ASSERT_EQ(documentNew->parameters.size(), 1U);
+    EXPECT_EQ(documentNew->parameters[0].type, Wasm::Generated::WireType::String);
+    EXPECT_EQ(documentNew->returnType, Wasm::Generated::WireType::Handle);
     EXPECT_EQ(Wasm::Generated::findOperationMetadata(0xffU), nullptr);
 }
 

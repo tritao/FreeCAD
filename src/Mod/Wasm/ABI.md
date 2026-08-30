@@ -191,9 +191,10 @@ guest methods remain reserved and cannot be reused.
 
 The generator also emits host dispatch metadata from the merged operation list.
 It includes the stable operation identity, wire name, capability, mutation and
-transaction policy, origin, and serialized parameter/return descriptions. The
-host uses this table for operation lookup and capability checks; native handler
-implementations remain handwritten and keyed by the published operation ID.
+transaction policy, origin, and typed parameter/return wire descriptors. The
+host uses this table for operation lookup, capability checks, and centralized
+request payload validation; native handler implementations remain handwritten
+and keyed by the published operation ID.
 
 Readable and writable Python attributes use `extension_property` metadata with
 separate local operation IDs. The property type supplies the getter result and
