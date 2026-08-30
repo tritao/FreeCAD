@@ -179,7 +179,10 @@ class Document:
 The generator derives `org.freecad.document@1/is_saved` and projects the
 signature, types, permissions, effects, and transaction policy from the
 canonical Python API model. `WasmApiOperations.json` contains only the
-published ABI lock (numeric codes and compatibility names). The separate
+published ABI lock (numeric codes, compatibility names, and wire-shape
+signatures). Each `wire_signature` is a SHA-256 fingerprint of the compact
+parameter and effective return wire descriptors; changing a published wire
+shape requires an explicit ABI-lock update. The separate
 `WasmApiAdapters.json` catalog contains typed host adapters for operations that
 are not direct projections. Neither catalog may duplicate projected parameter
 or return signatures.

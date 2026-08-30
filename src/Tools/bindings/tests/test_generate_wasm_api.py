@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import copy
 import json
 import sys
 import unittest
@@ -12,6 +13,7 @@ TOOLS_DIR = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(TOOLS_DIR))
 
 import generate_wasm_api  # noqa: E402
+import generate_wasm_sdk  # noqa: E402
 from extension_api_model import project_api_model  # noqa: E402
 from stubgen.api_extract import extract_curated_api_model  # noqa: E402
 from python_api_model.types import parse_annotation  # noqa: E402
@@ -100,6 +102,8 @@ class GenerateWasmApiTests(unittest.TestCase):
                 "returns": {"kind": "none"},
             },
         ]
+        for operation in operations:
+            operation["wire_signature"] = generate_wasm_api._wire_signature(operation)
         with self.assertRaisesRegex(ValueError, "operation id 1"):
             generate_wasm_api._validate_operation_catalog(operations)
 
@@ -112,12 +116,14 @@ class GenerateWasmApiTests(unittest.TestCase):
                         "name": "first",
                         "wire_name": "test.first",
                         "guest_method": "first",
+                        "wire_signature": "sha256:" + "0" * 64,
                     },
                     "org.freecad.test@1/second": {
                         "id": 1,
                         "name": "second",
                         "wire_name": "test.second",
                         "guest_method": "second",
+                        "wire_signature": "sha256:" + "0" * 64,
                     },
                 }
             )
@@ -212,6 +218,93 @@ class GenerateWasmApiTests(unittest.TestCase):
             (ROOT / "src/Mod/Wasm/WasmApiOperations.json").read_text(encoding="utf-8")
         )
         self.assertNotIn("adapters", operations)
+
+    def test_published_operations_match_the_wire_compatibility_lock(self):
+        model = generate_wasm_api.build_model(
+            ROOT,
+            [
+                ROOT / "src/Base/Vector.pyi",
+                ROOT / "src/App/Document.pyi",
+                ROOT / "src/App/DocumentObject.pyi",
+                ROOT / "src/Mod/Part/App/TopoShape.pyi",
+            ],
+        )
+        lock = json.loads(
+            (ROOT / "src/Mod/Wasm/WasmApiOperations.json").read_text(encoding="utf-8")
+        )["abi"]["operations"]
+        published = {entry["name"]: entry for entry in lock.values()}
+        published.update(
+            {
+                adapter.name: adapter.as_catalog_operation()
+                for adapter in load_wasm_extension_adapters(
+                    ROOT / "src/Mod/Wasm/WasmApiAdapters.json"
+                )
+            }
+        )
+
+        self.assertEqual(
+            {operation["name"] for operation in model["operations"]},
+            set(published),
+        )
+        for operation in model["operations"]:
+            expected = published[operation["name"]]
+            for field in ("id", "name", "wire_name", "guest_method", "wire_signature"):
+                self.assertEqual(operation[field], expected[field], field)
+            self.assertEqual(
+                operation["wire_signature"],
+                generate_wasm_api._wire_signature(operation),
+            )
+
+    def test_wire_signature_rejects_payload_shape_drift(self):
+        model = generate_wasm_api.build_model(
+            ROOT,
+            [
+                ROOT / "src/Base/Vector.pyi",
+                ROOT / "src/App/Document.pyi",
+                ROOT / "src/App/DocumentObject.pyi",
+                ROOT / "src/Mod/Part/App/TopoShape.pyi",
+            ],
+        )
+        operations = copy.deepcopy(model["operations"])
+        vector_add = next(
+            operation for operation in operations if operation["name"] == "vectorAdd"
+        )
+        vector_add["params"][0]["type"] = {"kind": "float64"}
+
+        with self.assertRaisesRegex(ValueError, "wire signature changed"):
+            generate_wasm_api._validate_operation_catalog(operations)
+
+    def test_published_operations_are_emitted_to_all_abi_consumers(self):
+        model = generate_wasm_api.build_model(
+            ROOT,
+            [
+                ROOT / "src/Base/Vector.pyi",
+                ROOT / "src/App/Document.pyi",
+                ROOT / "src/App/DocumentObject.pyi",
+                ROOT / "src/Mod/Part/App/TopoShape.pyi",
+            ],
+        )
+        cpp = generate_wasm_sdk.render_cpp(model)
+        rust = generate_wasm_sdk.render_rust(model)
+        python = generate_wasm_sdk.render_python(model)
+        metadata = generate_wasm_api.render_dispatch_metadata(model)
+
+        for operation in model["operations"]:
+            name = operation["name"]
+            operation_id = operation["id"]
+            constant = generate_wasm_sdk.operation_constant_name(name)
+            enum_name = generate_wasm_api._operation_enum_name(name)
+            self.assertIn(
+                f"inline static constexpr unsigned char {name}Operation = {operation_id}U;",
+                cpp,
+            )
+            self.assertIn(f"pub const {constant}: u8 = {operation_id};", rust)
+            self.assertIn(f"    {constant} = {operation_id}", python)
+            self.assertIn(
+                f'Abi::Operation::{enum_name}, {operation_id}U, '
+                f'"{name}", "{operation["wire_name"]}"',
+                metadata,
+            )
 
     def test_dispatch_metadata_is_rendered_from_merged_operations(self):
         model = generate_wasm_api.build_model(

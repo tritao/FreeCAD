@@ -8,6 +8,7 @@ from __future__ import annotations
 import argparse
 import ast
 from collections.abc import Mapping
+import hashlib
 import json
 from pathlib import Path
 import sys
@@ -475,6 +476,13 @@ def _validate_operation_catalog(operations: list[dict[str, Any]]) -> None:
         wire_returns = operation.get("wire_returns")
         if wire_returns is not None and not isinstance(wire_returns, dict):
             raise ValueError(f"WASM operation '{name}' has invalid wire return metadata")
+        wire_signature = operation.get("wire_signature")
+        if not isinstance(wire_signature, str) or not wire_signature:
+            raise ValueError(f"WASM operation '{name}' has no wire signature")
+        if wire_signature != _wire_signature(operation):
+            raise ValueError(
+                f"WASM operation '{name}' wire signature changed; update the ABI lock"
+            )
         if "consumes" in operation and not isinstance(operation["consumes"], bool):
             raise ValueError(f"WASM operation '{name}' has invalid consumes flag")
 
@@ -489,7 +497,7 @@ def _validate_abi_lock(lock: Mapping[str, Any]) -> None:
             raise ValueError("WASM ABI lock contains an invalid operation identity")
         if not isinstance(entry, dict):
             raise ValueError(f"WASM ABI lock entry '{stable_id}' is not an object")
-        for field in ("id", "name", "wire_name", "guest_method"):
+        for field in ("id", "name", "wire_name", "guest_method", "wire_signature"):
             value = entry.get(field)
             if field == "id":
                 if (
@@ -747,6 +755,7 @@ def _extension_operation_catalog(
         "id": lock_entry["id"],
         "guest_method": lock_entry["guest_method"],
         "origin": "projection",
+        "wire_signature": lock_entry["wire_signature"],
         "source": operation.source_symbol,
         "permission": operation.permission,
         "mutates": effect in {"create", "modify"},
@@ -1066,6 +1075,36 @@ def _wire_type_name(type_model: Mapping[str, Any], label: str) -> str:
     if kind == "none":
         return "None"
     raise ValueError(f"{label} uses an unsupported WASM wire type")
+
+
+def _wire_signature(operation: Mapping[str, Any]) -> str:
+    """Return the stable fingerprint for an operation's wire payload shape."""
+
+    name = operation.get("name", "<unnamed>")
+    parameters = operation.get("params", [])
+    descriptor = {
+        "params": [
+            {
+                "name": parameter["name"],
+                "type": _wire_type_name(
+                    parameter["type"],
+                    f"WASM operation '{name}' parameter '{parameter['name']}'",
+                ),
+            }
+            for parameter in parameters
+        ],
+        "return": _wire_type_name(
+            operation.get("wire_returns", operation["returns"]),
+            f"WASM operation '{name}' return",
+        ),
+    }
+    canonical = json.dumps(
+        descriptor,
+        sort_keys=True,
+        separators=(",", ":"),
+        ensure_ascii=True,
+    )
+    return "sha256:" + hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
 
 def render_dispatch_metadata(model: Mapping[str, Any]) -> str:

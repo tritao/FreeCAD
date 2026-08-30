@@ -11,6 +11,7 @@
         "name": "vectorAdd",
         "wire_name": "base.vector.add",
         "guest_method": "vectorAdd",
+        "wire_signature": "sha256:ef7a8b9e22fea7343e8f066a7db3da95d1decb941ed192a5b83881c60f3fec8a",
         "requires": ["src/Base/Vector.pyi"]
       },
       "org.freecad.geometry@1/vector_dot": {
@@ -18,6 +19,7 @@
         "name": "vectorDot",
         "wire_name": "base.vector.dot",
         "guest_method": "vectorDot",
+        "wire_signature": "sha256:008fe40722bd711e28a289da72d3630c864eb4931463513391807c55c32ff555",
         "requires": ["src/Base/Vector.pyi"]
       },
       "org.freecad.geometry@1/vector_cross": {
@@ -25,6 +27,7 @@
         "name": "vectorCross",
         "wire_name": "base.vector.cross",
         "guest_method": "vectorCross",
+        "wire_signature": "sha256:ef7a8b9e22fea7343e8f066a7db3da95d1decb941ed192a5b83881c60f3fec8a",
         "requires": ["src/Base/Vector.pyi"]
       },
       "org.freecad.document@1/is_saved": {
@@ -32,6 +35,7 @@
         "name": "documentIsSaved",
         "wire_name": "document.is_saved",
         "guest_method": "documentIsSaved",
+        "wire_signature": "sha256:1ba1bb9245fb3aef184fb354332bac1fcc75c21ded06bb280cc615097209caeb",
         "requires": ["src/App/Document.pyi"]
       },
       "org.freecad.document@1/get_object": {
@@ -39,6 +43,7 @@
         "name": "documentGetObject",
         "wire_name": "document.get_object",
         "guest_method": "documentGetObject",
+        "wire_signature": "sha256:47287245fbf8e9459000cdb13c29018f210784743c2b6eda21387526bf918896",
         "requires": ["src/App/Document.pyi"]
       },
       "org.freecad.document@1/open_transaction": {
@@ -46,6 +51,7 @@
         "name": "documentOpenTransaction",
         "wire_name": "document.open_transaction",
         "guest_method": "documentOpenTransaction",
+        "wire_signature": "sha256:01f40d55b5c9455e01caf47a01a96b94d610f280ef32720e0ffe371e319fe8fa",
         "requires": ["src/App/Document.pyi"]
       },
       "org.freecad.document@1/commit_transaction": {
@@ -53,6 +59,7 @@
         "name": "documentCommitTransaction",
         "wire_name": "document.commit_transaction",
         "guest_method": "documentCommitTransaction",
+        "wire_signature": "sha256:1ba1bb9245fb3aef184fb354332bac1fcc75c21ded06bb280cc615097209caeb",
         "requires": ["src/App/Document.pyi"]
       },
       "org.freecad.document@1/abort_transaction": {
@@ -60,6 +67,7 @@
         "name": "documentAbortTransaction",
         "wire_name": "document.abort_transaction",
         "guest_method": "documentAbortTransaction",
+        "wire_signature": "sha256:1ba1bb9245fb3aef184fb354332bac1fcc75c21ded06bb280cc615097209caeb",
         "requires": ["src/App/Document.pyi"]
       },
       "org.freecad.document@1/object_get_label": {
@@ -67,6 +75,7 @@
         "name": "documentObjectGetLabel",
         "wire_name": "document.object.get_label",
         "guest_method": "documentObjectGetLabel",
+        "wire_signature": "sha256:385172c00fc65ce5507035bd18fbcbdaf6f065f4e168b3626e22c678c80c9d70",
         "requires": ["src/App/DocumentObject.pyi"]
       },
       "org.freecad.document@1/object_set_label": {
@@ -74,6 +83,7 @@
         "name": "documentObjectSetLabel",
         "wire_name": "document.object.set_label",
         "guest_method": "documentObjectSetLabel",
+        "wire_signature": "sha256:1cf6ca19341ebd21dd2783f2b9d12d1ec8607df20f9aa4b10773f150a0d59821",
         "requires": ["src/App/DocumentObject.pyi"]
       },
       "org.freecad.part@1/shape_is_null": {
@@ -81,6 +91,7 @@
         "name": "topoShapeIsNull",
         "wire_name": "part.topo_shape.is_null",
         "guest_method": "topoShapeIsNull",
+        "wire_signature": "sha256:89ab28d33fa4baeb111e8fe6a98701a6402c182cf1a06dcd19073d516d68d59f",
         "requires": ["src/Mod/Part/App/TopoShape.pyi"]
       },
       "org.freecad.part@1/shape_is_valid": {
@@ -88,6 +99,7 @@
         "name": "topoShapeIsValid",
         "wire_name": "part.topo_shape.is_valid",
         "guest_method": "topoShapeIsValid",
+        "wire_signature": "sha256:89ab28d33fa4baeb111e8fe6a98701a6402c182cf1a06dcd19073d516d68d59f",
         "requires": ["src/Mod/Part/App/TopoShape.pyi"]
       },
       "org.freecad.part@1/shape_length": {
@@ -95,6 +107,7 @@
         "name": "topoShapeLength",
         "wire_name": "part.topo_shape.length",
         "guest_method": "topoShapeLength",
+        "wire_signature": "sha256:a1382338ebe8c2fafa70f7894a0fd3bc81024ab8d91de6257d3c5902f20c63b6",
         "requires": ["src/Mod/Part/App/TopoShape.pyi"]
       },
       "org.freecad.part@1/shape_area": {
@@ -102,6 +115,7 @@
         "name": "topoShapeArea",
         "wire_name": "part.topo_shape.area",
         "guest_method": "topoShapeArea",
+        "wire_signature": "sha256:a1382338ebe8c2fafa70f7894a0fd3bc81024ab8d91de6257d3c5902f20c63b6",
         "requires": ["src/Mod/Part/App/TopoShape.pyi"]
       },
       "org.freecad.part@1/shape_volume": {
@@ -109,6 +123,7 @@
         "name": "topoShapeVolume",
         "wire_name": "part.topo_shape.volume",
         "guest_method": "topoShapeVolume",
+        "wire_signature": "sha256:a1382338ebe8c2fafa70f7894a0fd3bc81024ab8d91de6257d3c5902f20c63b6",
         "requires": ["src/Mod/Part/App/TopoShape.pyi"]
       }
     },
