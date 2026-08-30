@@ -31,6 +31,7 @@ from python_api_model.model import (
     ApiSourceLocation,
 )
 from python_api_model.diagnostics import MergeDiagnostic
+from python_api_model.metadata import parse_api_metadata
 from python_api_model.normalize import normalize_signature_types, normalize_source_type
 from python_api_model.resolve import merge_api_module
 from python_api_model.signatures import (
@@ -298,6 +299,10 @@ def class_from_node(
         ),
         origin=origin,
         location=source_location(root, path, node.lineno),
+        metadata=parse_api_metadata(
+            node.decorator_list,
+            subject=f"{module_name}.{node.name}",
+        ),
     )
 
 

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from Base.Metadata import constmethod
+from Base.Metadata import constmethod, extension_api, extension_interface, extension_type
 from PropertyContainer import PropertyContainer
 from DocumentObject import DocumentObject
 from DocumentSettings import DocumentSettings
@@ -12,6 +12,8 @@ if TYPE_CHECKING:
     from Part import Feature as _PartFeature
 
 
+@extension_interface(name="document", version=1)
+@extension_type(representation="resource")
 class Document(PropertyContainer):
     """
     This is the Document class.
@@ -129,6 +131,11 @@ class Document(PropertyContainer):
         """
         ...
 
+    @extension_api(
+        id="is_saved",
+        permission="document.read",
+        effect="read",
+    )
     def isSaved(self) -> bool:
         """
         Checks if the document is saved
@@ -184,6 +191,12 @@ class Document(PropertyContainer):
         """
         ...
 
+    @extension_api(
+        id="open_transaction",
+        permission="document.modify",
+        effect="modify",
+        transaction="open",
+    )
     def openTransaction(self, name: str, /) -> None:
         """
         Open a new Undo/Redo transaction.
@@ -196,12 +209,24 @@ class Document(PropertyContainer):
         """
         ...
 
+    @extension_api(
+        id="abort_transaction",
+        permission="document.modify",
+        effect="modify",
+        transaction="abort",
+    )
     def abortTransaction(self) -> None:
         """
         Abort an Undo/Redo transaction (rollback)
         """
         ...
 
+    @extension_api(
+        id="commit_transaction",
+        permission="document.modify",
+        effect="modify",
+        transaction="commit",
+    )
     def commitTransaction(self) -> None:
         """
         Commit an Undo/Redo transaction
@@ -448,6 +473,11 @@ class Document(PropertyContainer):
         """
         ...
 
+    @extension_api(
+        id="get_object",
+        permission="document.read",
+        effect="read",
+    )
     def getObject(self, name: str, /) -> DocumentObject:
         """
         Return the object with the given name

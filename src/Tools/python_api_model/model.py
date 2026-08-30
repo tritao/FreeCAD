@@ -23,6 +23,7 @@ from enum import Enum
 
 from .signatures import CallableSignature
 from .types import ApiType
+from .metadata import ApiMetadata
 
 
 class ApiOrigin(str, Enum):
@@ -56,6 +57,7 @@ class ApiAttribute:
     origin: ApiOrigin = ApiOrigin.GENERATED
     location: ApiSourceLocation | None = None
     annotation_type: ApiType | None = None
+    metadata: ApiMetadata = field(default_factory=ApiMetadata)
 
 
 @dataclass(frozen=True)
@@ -104,6 +106,7 @@ class ApiClass:
     decorators: tuple[str, ...] = ()
     origin: ApiOrigin = ApiOrigin.GENERATED
     location: ApiSourceLocation | None = None
+    metadata: ApiMetadata = field(default_factory=ApiMetadata)
 
     @property
     def qualified_name(self) -> str:
@@ -122,6 +125,7 @@ class ApiModule:
     aliases: tuple[ApiAlias, ...] = ()
     origin: ApiOrigin = ApiOrigin.GENERATED
     location: ApiSourceLocation | None = None
+    metadata: ApiMetadata = field(default_factory=ApiMetadata)
 
 
 @dataclass(frozen=True)

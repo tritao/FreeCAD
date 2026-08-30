@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from Base.Metadata import constmethod
+from Base.Metadata import constmethod, extension_type
 from Base.Matrix import Matrix
 from DepEdge import DepEdge
 from Document import Document
@@ -11,6 +11,7 @@ from ExtensionContainer import ExtensionContainer
 from typing import TYPE_CHECKING, Any, Final, List, Optional, Union, Tuple
 
 
+@extension_type(representation="resource")
 class DocumentObject(ExtensionContainer):
     """
     This is the father of all classes handled by the document

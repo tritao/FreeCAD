@@ -2,13 +2,22 @@
 
 from __future__ import annotations
 
-from Base.Metadata import deprecated, export, constmethod
+from Base.Metadata import (
+    deprecated,
+    export,
+    constmethod,
+    extension_api,
+    extension_interface,
+    extension_type,
+)
 from Base.Vector import Vector
 from Base.Matrix import Matrix
 from Base.BoundBox import BoundBox
 from App.ComplexGeoData import ComplexGeoData
 from typing import Final, List, Tuple, Union, overload
 
+@extension_interface(name="part", version=1)
+@extension_type(representation="resource")
 @export(
     PythonName="Part.Shape",
     Include="Mod/Part/App/TopoShape.h",
@@ -770,6 +779,11 @@ class TopoShape(ComplexGeoData):
         ...
 
     @constmethod
+    @extension_api(
+        id="shape_is_null",
+        permission="geometry.read",
+        effect="read",
+    )
     def isNull(self) -> bool:
         """
         Checks if the shape is null.
@@ -778,6 +792,11 @@ class TopoShape(ComplexGeoData):
         ...
 
     @constmethod
+    @extension_api(
+        id="shape_is_valid",
+        permission="geometry.read",
+        effect="read",
+    )
     def isValid(self) -> bool:
         """
         Checks if the shape is valid, i.e. neither null, nor empty nor corrupted.

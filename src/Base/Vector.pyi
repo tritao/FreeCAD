@@ -2,10 +2,21 @@
 
 from __future__ import annotations
 
-from Metadata import export, constmethod, sequence_protocol, class_declarations, typing_only
+from Metadata import (
+    constmethod,
+    class_declarations,
+    export,
+    extension_api,
+    extension_interface,
+    extension_type,
+    sequence_protocol,
+    typing_only,
+)
 from PyObjectBase import PyObjectBase
 from typing import overload, Sequence
 
+@extension_interface(name="geometry", version=1)
+@extension_type(representation="value")
 @export(
     TwinPointer="Vector3d",
     Include="Base/Vector3D.h",
@@ -105,6 +116,11 @@ class Vector(PyObjectBase):
         ...
 
     @constmethod
+    @extension_api(
+        id="vector_add",
+        permission="geometry.compute",
+        effect="compute",
+    )
     def add(self, vector2: "Vector", /) -> "Vector":
         """
         Returns the sum of this vector and `vector2`.
@@ -152,6 +168,11 @@ class Vector(PyObjectBase):
         ...
 
     @constmethod
+    @extension_api(
+        id="vector_dot",
+        permission="geometry.compute",
+        effect="compute",
+    )
     def dot(self, vector2: "Vector", /) -> float:
         """
         Returns the scalar product (dot product) between this vector and `vector2`.
@@ -161,6 +182,11 @@ class Vector(PyObjectBase):
         ...
 
     @constmethod
+    @extension_api(
+        id="vector_cross",
+        permission="geometry.compute",
+        effect="compute",
+    )
     def cross(self, vector2: "Vector", /) -> "Vector":
         """
         Returns the vector product (cross product) between this vector and `vector2`.

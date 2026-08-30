@@ -4,7 +4,34 @@ from __future__ import annotations
 
 from Base.Metadata import export, class_declarations
 from Base.PyObjectBase import PyObjectBase
-from typing import Any, List, Dict, overload, Optional
+from typing import Any, Callable, Dict, List, Literal, Optional, TypeVar, overload
+
+
+_FuncT = TypeVar("_FuncT", bound=Callable[..., Any])
+_ClassT = TypeVar("_ClassT", bound=type)
+
+
+def extension_api(
+    *,
+    id: str,
+    permission: str | None = None,
+    effect: Literal["read", "compute", "create", "modify"] | None = None,
+    transaction: Literal["required", "open", "commit", "abort"] | None = None,
+    since: str | None = None,
+) -> Callable[[_FuncT], _FuncT]: ...
+
+
+def extension_type(
+    *,
+    representation: Literal["value", "resource"],
+) -> Callable[[_ClassT], _ClassT]: ...
+
+
+def extension_interface(
+    *,
+    name: str,
+    version: int,
+) -> Callable[[_ClassT], _ClassT]: ...
 
 
 @export(

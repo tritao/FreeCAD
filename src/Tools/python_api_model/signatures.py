@@ -17,10 +17,11 @@ decorator-flag handling across multiple pipelines.
 from __future__ import annotations
 
 import ast
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from enum import Enum
 
 from .types import ApiType
+from .metadata import ApiMetadata, parse_api_metadata
 
 
 class ArgumentKind(str, Enum):
@@ -68,6 +69,7 @@ class CallableSignature:
     deprecated_message: str | None = None
     decorators: tuple[str, ...] = ()
     return_type: ApiType | None = None
+    metadata: ApiMetadata = field(default_factory=ApiMetadata)
 
 
 def callable_shape(signature: CallableSignature) -> tuple[object, ...]:
@@ -238,6 +240,7 @@ def parse_callable_signature(node: ast.FunctionDef | ast.AsyncFunctionDef) -> Ca
         is_async=isinstance(node, ast.AsyncFunctionDef),
         deprecated_message=deprecated_message,
         decorators=tuple(ast.unparse(decorator) for decorator in node.decorator_list),
+        metadata=parse_api_metadata(node.decorator_list, subject=node.name),
     )
 
 
