@@ -81,14 +81,37 @@ public:
     void setPermissions(const std::vector<std::string>& permissions);
     const PermissionSet& permissions() const;
     bool isOnOwnerThread() const;
+    static bool hasOperationHandler(Abi::Operation operation);
     void clearTransactions();
 
 private:
+    using OperationHandler = HostCallResult (WasmHostApi::*)(
+        Abi::Operation,
+        std::span<const std::byte>,
+        WasmHandleTable&);
+
     struct TransactionState
     {
         std::string name;
         std::size_t depth = 0U;
     };
+
+    static OperationHandler handlerFor(Abi::Operation operation);
+    HostCallResult dispatchVectorOperation(Abi::Operation operation,
+                                           std::span<const std::byte> payload,
+                                           WasmHandleTable& handles);
+    HostCallResult dispatchDocumentOperation(Abi::Operation operation,
+                                              std::span<const std::byte> payload,
+                                              WasmHandleTable& handles);
+    HostCallResult dispatchDocumentObjectOperation(Abi::Operation operation,
+                                                    std::span<const std::byte> payload,
+                                                    WasmHandleTable& handles);
+    HostCallResult dispatchTopoShapeOperation(Abi::Operation operation,
+                                              std::span<const std::byte> payload,
+                                              WasmHandleTable& handles);
+    HostCallResult dispatchHandleOperation(Abi::Operation operation,
+                                           std::span<const std::byte> payload,
+                                           WasmHandleTable& handles);
 
     static bool hasPermission(const PermissionSet& permissions, std::string_view permission);
     bool hasActiveTransaction(const App::Document* document) const;

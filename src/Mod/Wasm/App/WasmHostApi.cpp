@@ -276,8 +276,59 @@ HostCallResult WasmHostApi::dispatch(std::span<const std::byte> request,
     }
 
     const auto payload = request.subspan(Abi::RequestHeaderSize);
+    const auto handler = handlerFor(operation);
+    if (handler == nullptr) {
+        return {false,
+                {},
+                "WASM operation has no registered host handler",
+                Abi::ErrorCode::Unsupported};
+    }
+    return (this->*handler)(operation, payload, handles);
+}
+
+WasmHostApi::OperationHandler WasmHostApi::handlerFor(Abi::Operation operation)
+{
     switch (operation) {
-    case Abi::Operation::VectorNew: {
+    case Abi::Operation::VectorNew:
+    case Abi::Operation::VectorAdd:
+    case Abi::Operation::VectorDot:
+    case Abi::Operation::VectorCross:
+        return &WasmHostApi::dispatchVectorOperation;
+    case Abi::Operation::DocumentNew:
+    case Abi::Operation::DocumentAddObject:
+    case Abi::Operation::DocumentIsSaved:
+    case Abi::Operation::DocumentGetObject:
+    case Abi::Operation::DocumentOpenTransaction:
+    case Abi::Operation::DocumentCommitTransaction:
+    case Abi::Operation::DocumentAbortTransaction:
+        return &WasmHostApi::dispatchDocumentOperation;
+    case Abi::Operation::DocumentObjectGetLabel:
+    case Abi::Operation::DocumentObjectSetLabel:
+        return &WasmHostApi::dispatchDocumentObjectOperation;
+    case Abi::Operation::PartMakeBox:
+    case Abi::Operation::TopoShapeIsNull:
+    case Abi::Operation::TopoShapeIsValid:
+    case Abi::Operation::TopoShapeLength:
+    case Abi::Operation::TopoShapeArea:
+    case Abi::Operation::TopoShapeVolume:
+        return &WasmHostApi::dispatchTopoShapeOperation;
+    case Abi::Operation::HandleRelease:
+        return &WasmHostApi::dispatchHandleOperation;
+    default:
+        return nullptr;
+    }
+}
+
+bool WasmHostApi::hasOperationHandler(Abi::Operation operation)
+{
+    return handlerFor(operation) != nullptr;
+}
+
+HostCallResult WasmHostApi::dispatchVectorOperation(Abi::Operation operation,
+                                                    std::span<const std::byte> payload,
+                                                    WasmHandleTable&)
+{
+    if (operation == Abi::Operation::VectorNew) {
         if (payload.size() != sizeof(double) * 3U) {
             return malformedRequest("base.vector.new expects three f64 values");
         }
@@ -290,45 +341,34 @@ HostCallResult WasmHostApi::dispatch(std::span<const std::byte> request,
         }
         return {true, vectorPayload(value), {}};
     }
-    case Abi::Operation::VectorAdd: {
-        if (payload.size() != sizeof(double) * 6U) {
-            return malformedRequest("base.vector.add expects two vector values");
-        }
 
-        std::size_t payloadOffset = 0U;
-        Base::Vector3d left;
-        Base::Vector3d right;
-        if (!readVector(payload, payloadOffset, left) || !readVector(payload, payloadOffset, right)) {
-            return malformedRequest("base.vector.add has an invalid vector payload");
-        }
+    if (payload.size() != sizeof(double) * 6U) {
+        return malformedRequest("base.vector operation expects two vector values");
+    }
+
+    std::size_t payloadOffset = 0U;
+    Base::Vector3d left;
+    Base::Vector3d right;
+    if (!readVector(payload, payloadOffset, left) || !readVector(payload, payloadOffset, right)) {
+        return malformedRequest("base.vector operation has an invalid vector payload");
+    }
+    switch (operation) {
+    case Abi::Operation::VectorAdd:
         return {true, vectorPayload(left + right), {}};
-    }
-    case Abi::Operation::VectorDot: {
-        if (payload.size() != sizeof(double) * 6U) {
-            return malformedRequest("base.vector.dot expects two vector values");
-        }
-
-        std::size_t payloadOffset = 0U;
-        Base::Vector3d left;
-        Base::Vector3d right;
-        if (!readVector(payload, payloadOffset, left) || !readVector(payload, payloadOffset, right)) {
-            return malformedRequest("base.vector.dot has an invalid vector payload");
-        }
+    case Abi::Operation::VectorDot:
         return {true, doublePayload(left.Dot(right)), {}};
-    }
-    case Abi::Operation::VectorCross: {
-        if (payload.size() != sizeof(double) * 6U) {
-            return malformedRequest("base.vector.cross expects two vector values");
-        }
-
-        std::size_t payloadOffset = 0U;
-        Base::Vector3d left;
-        Base::Vector3d right;
-        if (!readVector(payload, payloadOffset, left) || !readVector(payload, payloadOffset, right)) {
-            return malformedRequest("base.vector.cross has an invalid vector payload");
-        }
+    case Abi::Operation::VectorCross:
         return {true, vectorPayload(left.Cross(right)), {}};
+    default:
+        return {false, {}, "unsupported vector operation", Abi::ErrorCode::Unsupported};
     }
+}
+
+HostCallResult WasmHostApi::dispatchDocumentOperation(Abi::Operation operation,
+                                                       std::span<const std::byte> payload,
+                                                       WasmHandleTable& handles)
+{
+    switch (operation) {
     case Abi::Operation::DocumentNew: {
         std::size_t payloadOffset = 0U;
         std::string name;
@@ -359,43 +399,6 @@ HostCallResult WasmHostApi::dispatch(std::span<const std::byte> request,
         catch (const Base::Exception& error) {
             return {false, {}, std::string("document.new failed: ") + error.what()};
         }
-    }
-    case Abi::Operation::PartMakeBox: {
-#ifndef FREECAD_WASM_HAS_PART
-        return {false, {}, "Part capability is not available in this build"};
-#else
-        if (payload.size() != sizeof(double) * 3U) {
-            return malformedRequest("part.make_box expects three f64 values");
-        }
-
-        std::size_t payloadOffset = 0U;
-        double length = 0.0;
-        double width = 0.0;
-        double height = 0.0;
-        if (!readDouble(payload, payloadOffset, length)
-            || !readDouble(payload, payloadOffset, width)
-            || !readDouble(payload, payloadOffset, height)
-            || !std::isfinite(length) || !std::isfinite(width) || !std::isfinite(height)
-            || length <= 0.0 || width <= 0.0 || height <= 0.0) {
-            return malformedRequest("part.make_box dimensions must be finite and positive");
-        }
-
-        try {
-            const auto shape = BRepPrimAPI_MakeBox(length, width, height).Shape();
-            auto ownedShape = std::make_unique<Part::TopoShape>(shape);
-            auto* shapePointer = ownedShape.get();
-            const auto handle = handles.insert(
-                "Part::TopoShape", shapePointer, false, releaseTopoShape);
-            if (handle == InvalidHandle) {
-                return {false, {}, "part.make_box could not allocate a handle"};
-            }
-            ownedShape.release();
-            return {true, handlePayload(handle), {}};
-        }
-        catch (const Standard_Failure& error) {
-            return {false, {}, std::string("part.make_box failed: ") + error.GetMessageString()};
-        }
-#endif
     }
     case Abi::Operation::DocumentAddObject: {
 #ifndef FREECAD_WASM_HAS_PART
@@ -579,6 +582,17 @@ HostCallResult WasmHostApi::dispatch(std::span<const std::byte> request,
             return {false, {}, std::string("document transaction control failed: ") + exception.what()};
         }
     }
+    default:
+        return {false, {}, "unsupported document operation", Abi::ErrorCode::Unsupported};
+    }
+}
+
+HostCallResult WasmHostApi::dispatchDocumentObjectOperation(
+    Abi::Operation operation,
+    std::span<const std::byte> payload,
+    WasmHandleTable& handles)
+{
+    switch (operation) {
     case Abi::Operation::DocumentObjectGetLabel: {
         if (payload.size() != sizeof(std::uint64_t)) {
             return malformedRequest("document.object.get_label expects one object handle");
@@ -626,89 +640,133 @@ HostCallResult WasmHostApi::dispatch(std::span<const std::byte> request,
                     std::string("document.object.set_label failed: ") + exception.what()};
         }
     }
-    case Abi::Operation::TopoShapeIsNull:
-    case Abi::Operation::TopoShapeIsValid:
-    case Abi::Operation::TopoShapeLength:
-    case Abi::Operation::TopoShapeArea:
-    case Abi::Operation::TopoShapeVolume: {
-#ifndef FREECAD_WASM_HAS_PART
-        return {false, {}, "Part capability is not available in this build"};
-#else
-        if (payload.size() != sizeof(std::uint64_t)) {
-            return malformedRequest("part.topo_shape query expects one shape handle");
-        }
-
-        std::size_t payloadOffset = 0U;
-        std::uint64_t shapeHandle = InvalidHandle;
-        if (!readU64(payload, payloadOffset, shapeHandle)) {
-            return malformedRequest("part.topo_shape query has an invalid handle payload");
-        }
-
-        std::string error;
-        auto* shape = getHandle<Part::TopoShape>(
-            handles, shapeHandle, "Part::TopoShape", error);
-        if (shape == nullptr) {
-            return {false, {}, error};
-        }
-
-        switch (operation) {
-        case Abi::Operation::TopoShapeIsNull:
-            return {true, boolPayload(shape->isNull()), {}};
-        case Abi::Operation::TopoShapeIsValid:
-            return {true, boolPayload(shape->isValid()), {}};
-        case Abi::Operation::TopoShapeLength: {
-            if (shape->isNull()) {
-                return {false, {}, "part.topo_shape.length cannot query a null shape"};
-            }
-            GProp_GProps properties;
-            BRepGProp::LinearProperties(shape->getShape(), properties);
-            return {true, doublePayload(properties.Mass()), {}};
-        }
-        case Abi::Operation::TopoShapeArea: {
-            if (shape->isNull()) {
-                return {false, {}, "part.topo_shape.area cannot query a null shape"};
-            }
-            GProp_GProps properties;
-            BRepGProp::SurfaceProperties(shape->getShape(), properties);
-            return {true, doublePayload(properties.Mass()), {}};
-        }
-        case Abi::Operation::TopoShapeVolume: {
-            if (shape->isNull()) {
-                return {false, {}, "part.topo_shape.volume cannot query a null shape"};
-            }
-            GProp_GProps properties;
-            BRepGProp::VolumeProperties(shape->getShape(), properties);
-            return {true, doublePayload(properties.Mass()), {}};
-        }
-        default:
-            return {false, {}, "unsupported Part query"};
-        }
-#endif
+    default:
+        return {false,
+                {},
+                "unsupported document object operation",
+                Abi::ErrorCode::Unsupported};
     }
-    case Abi::Operation::HandleRelease: {
-        if (payload.size() != sizeof(std::uint64_t)) {
-            return malformedRequest("handle.release expects one u64 handle");
+}
+
+HostCallResult WasmHostApi::dispatchTopoShapeOperation(Abi::Operation operation,
+                                                        std::span<const std::byte> payload,
+                                                        WasmHandleTable& handles)
+{
+#ifndef FREECAD_WASM_HAS_PART
+    return {false, {}, "Part capability is not available in this build"};
+#else
+    if (operation == Abi::Operation::PartMakeBox) {
+        if (payload.size() != sizeof(double) * 3U) {
+            return malformedRequest("part.make_box expects three f64 values");
         }
+
         std::size_t payloadOffset = 0U;
-        std::uint64_t handle = InvalidHandle;
-        if (!readU64(payload, payloadOffset, handle)) {
-            return {false, {}, "invalid or expired handle"};
+        double length = 0.0;
+        double width = 0.0;
+        double height = 0.0;
+        if (!readDouble(payload, payloadOffset, length)
+            || !readDouble(payload, payloadOffset, width)
+            || !readDouble(payload, payloadOffset, height)
+            || !std::isfinite(length) || !std::isfinite(width) || !std::isfinite(height)
+            || length <= 0.0 || width <= 0.0 || height <= 0.0) {
+            return malformedRequest("part.make_box dimensions must be finite and positive");
         }
-        const auto entry = handles.get(handle);
-        if (!entry.has_value()) {
-            return {false, {}, "invalid or expired handle"};
+
+        try {
+            const auto shape = BRepPrimAPI_MakeBox(length, width, height).Shape();
+            auto ownedShape = std::make_unique<Part::TopoShape>(shape);
+            auto* shapePointer = ownedShape.get();
+            const auto handle = handles.insert(
+                "Part::TopoShape", shapePointer, false, releaseTopoShape);
+            if (handle == InvalidHandle) {
+                return {false, {}, "part.make_box could not allocate a handle"};
+            }
+            ownedShape.release();
+            return {true, handlePayload(handle), {}};
         }
-        if (entry->typeName == "App::Document") {
-            clearTransactionsFor(static_cast<App::Document*>(entry->pointer));
+        catch (const Standard_Failure& error) {
+            return {false, {}, std::string("part.make_box failed: ") + error.GetMessageString()};
         }
-        if (!handles.erase(handle)) {
-            return {false, {}, "invalid or expired handle"};
+    }
+
+    if (payload.size() != sizeof(std::uint64_t)) {
+        return malformedRequest("part.topo_shape query expects one shape handle");
+    }
+
+    std::size_t payloadOffset = 0U;
+    std::uint64_t shapeHandle = InvalidHandle;
+    if (!readU64(payload, payloadOffset, shapeHandle)) {
+        return malformedRequest("part.topo_shape query has an invalid handle payload");
+    }
+
+    std::string error;
+    auto* shape = getHandle<Part::TopoShape>(
+        handles, shapeHandle, "Part::TopoShape", error);
+    if (shape == nullptr) {
+        return {false, {}, error};
+    }
+
+    switch (operation) {
+    case Abi::Operation::TopoShapeIsNull:
+        return {true, boolPayload(shape->isNull()), {}};
+    case Abi::Operation::TopoShapeIsValid:
+        return {true, boolPayload(shape->isValid()), {}};
+    case Abi::Operation::TopoShapeLength: {
+        if (shape->isNull()) {
+            return {false, {}, "part.topo_shape.length cannot query a null shape"};
         }
-        return {true, {}, {}};
+        GProp_GProps properties;
+        BRepGProp::LinearProperties(shape->getShape(), properties);
+        return {true, doublePayload(properties.Mass()), {}};
+    }
+    case Abi::Operation::TopoShapeArea: {
+        if (shape->isNull()) {
+            return {false, {}, "part.topo_shape.area cannot query a null shape"};
+        }
+        GProp_GProps properties;
+        BRepGProp::SurfaceProperties(shape->getShape(), properties);
+        return {true, doublePayload(properties.Mass()), {}};
+    }
+    case Abi::Operation::TopoShapeVolume: {
+        if (shape->isNull()) {
+            return {false, {}, "part.topo_shape.volume cannot query a null shape"};
+        }
+        GProp_GProps properties;
+        BRepGProp::VolumeProperties(shape->getShape(), properties);
+        return {true, doublePayload(properties.Mass()), {}};
     }
     default:
-        return {false, {}, "unsupported WASM host operation"};
+        return {false, {}, "unsupported Part query", Abi::ErrorCode::Unsupported};
     }
+#endif
+}
+
+HostCallResult WasmHostApi::dispatchHandleOperation(Abi::Operation operation,
+                                                    std::span<const std::byte> payload,
+                                                    WasmHandleTable& handles)
+{
+    if (operation != Abi::Operation::HandleRelease) {
+        return {false, {}, "unsupported handle operation", Abi::ErrorCode::Unsupported};
+    }
+    if (payload.size() != sizeof(std::uint64_t)) {
+        return malformedRequest("handle.release expects one u64 handle");
+    }
+    std::size_t payloadOffset = 0U;
+    std::uint64_t handle = InvalidHandle;
+    if (!readU64(payload, payloadOffset, handle)) {
+        return {false, {}, "invalid or expired handle"};
+    }
+    const auto entry = handles.get(handle);
+    if (!entry.has_value()) {
+        return {false, {}, "invalid or expired handle"};
+    }
+    if (entry->typeName == "App::Document") {
+        clearTransactionsFor(static_cast<App::Document*>(entry->pointer));
+    }
+    if (!handles.erase(handle)) {
+        return {false, {}, "invalid or expired handle"};
+    }
+    return {true, {}, {}};
 }
 
 HostCallResult WasmHostApi::log(std::string_view message)

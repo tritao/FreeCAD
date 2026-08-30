@@ -605,6 +605,7 @@ TEST(WasmHostApiTest, UsesGeneratedOperationMetadataForDispatch)
         EXPECT_FALSE(metadata.parametersJson.empty());
         EXPECT_FALSE(metadata.returnsJson.empty());
         EXPECT_EQ(Wasm::Generated::findOperationMetadata(metadata.id), &metadata);
+        EXPECT_TRUE(Wasm::WasmHostApi::hasOperationHandler(metadata.operation));
     }
     EXPECT_EQ(Wasm::Generated::findOperationMetadata(0xffU), nullptr);
 }
