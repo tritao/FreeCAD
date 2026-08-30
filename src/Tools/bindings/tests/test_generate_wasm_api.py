@@ -437,7 +437,7 @@ class GenerateWasmApiTests(unittest.TestCase):
             if operation["name"] == "documentObjectSetLabel"
         )
         self.assertEqual(label_set_catalog["property_access"], "write")
-        self.assertEqual(label_set_catalog["returns"]["kind"], "bool")
+        self.assertEqual(label_set_catalog["returns"]["kind"], "none")
         self.assertEqual(label_set_catalog["params"][-1]["name"], "label")
         self.assertEqual(label_set_catalog["params"][-1]["annotation"], "str")
 

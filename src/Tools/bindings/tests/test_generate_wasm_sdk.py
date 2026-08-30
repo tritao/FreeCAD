@@ -55,6 +55,18 @@ class GenerateWasmSdkTests(unittest.TestCase):
         self.assertIn("bool documentCommitTransaction", cpp)
         self.assertIn("bool documentObjectGetLabel", cpp)
         self.assertIn("bool documentObjectSetLabel", cpp)
+        self.assertIn(
+            "Result<void> documentObjectSetLabelResult(FreeCADDocumentObjectHandle object, const char* label)",
+            cpp,
+        )
+        self.assertIn(
+            "def document_object_set_label(self, object: FreeCADDocumentObjectHandle, label: str) -> None:",
+            python,
+        )
+        self.assertIn(
+            "pub fn document_object_set_label(&self, object: FreeCADDocumentObjectHandle, label: &[u8]) -> Result<()>",
+            rust,
+        )
         self.assertIn("bool partMakeBox", cpp)
         self.assertIn("bool vectorAdd", cpp)
         self.assertIn("bool vectorDot", cpp)

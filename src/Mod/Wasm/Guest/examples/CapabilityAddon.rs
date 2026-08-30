@@ -75,10 +75,10 @@ pub extern "C" fn freecad_addon_entry(_input: *const u8, _input_length: u32) -> 
         };
         if &label[..label_length] != b"RustBox"
             || client.document_open_transaction(document, b"Set label") != Ok(true)
-            || client.document_object_set_label(object, b"ConfiguredBox") != Ok(true)
+            || client.document_object_set_label(object, b"ConfiguredBox") != Ok(())
             || client.document_commit_transaction(document) != Ok(true)
             || client.document_open_transaction(document, b"Rollback label") != Ok(true)
-            || client.document_object_set_label(object, b"TemporaryBox") != Ok(true)
+            || client.document_object_set_label(object, b"TemporaryBox") != Ok(())
             || client.document_abort_transaction(document) != Ok(true)
         {
             return FAILURE;

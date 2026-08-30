@@ -173,7 +173,7 @@ def _project_attribute_operation(
                 default=None,
             ),
         )
-        operation_return_type = parse_annotation("bool", module_name)
+        operation_return_type = parse_annotation("None", module_name)
         assert operation_return_type is not None
     interface_id = _interface_identifier(namespace, interface)
     source_symbol = f"{api_class.qualified_name}.{attribute.name}"

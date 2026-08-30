@@ -14,6 +14,7 @@
 #include <limits>
 #include <string>
 #include <string_view>
+#include <type_traits>
 #include <utility>
 #include <vector>
 
@@ -57,6 +58,14 @@ struct Result
 {
     bool ok = false;
     T value {};
+    std::string error;
+    Abi::ErrorCode errorCode = Abi::ErrorCode::None;
+};
+
+template<>
+struct Result<void>
+{
+    bool ok = false;
     std::string error;
     Abi::ErrorCode errorCode = Abi::ErrorCode::None;
 };
@@ -305,27 +314,22 @@ public:
         return true;
     }
 
-    Result<bool> documentObjectSetLabel(Handle object, std::string_view label) const
+    Result<void> documentObjectSetLabel(Handle object, std::string_view label) const
     {
         std::string payload;
         Abi::appendU64(payload, object);
         if (!appendString(payload, label)) {
-            return failure<bool>("label exceeds the ABI length limit");
+            return failure<void>("label exceeds the ABI length limit");
         }
-        return callBool(Abi::Operation::DocumentObjectSetLabel, payload);
+        return callEmpty(Abi::Operation::DocumentObjectSetLabel, payload);
     }
 
-    bool documentObjectSetLabel(Handle object, const char* label, bool* result) const
+    bool documentObjectSetLabel(Handle object, const char* label) const
     {
-        if (label == nullptr || result == nullptr) {
+        if (label == nullptr) {
             return false;
         }
-        const auto response = documentObjectSetLabel(object, std::string_view(label));
-        if (!response.ok) {
-            return false;
-        }
-        *result = response.value;
-        return true;
+        return documentObjectSetLabel(object, std::string_view(label)).ok;
     }
 
     Result<Handle> partMakeBox(double length, double width, double height) const
@@ -615,7 +619,12 @@ private:
     template<typename T>
     static Result<T> failure(std::string error)
     {
-        return {false, {}, std::move(error)};
+        if constexpr (std::is_void_v<T>) {
+            return {false, std::move(error), Abi::ErrorCode::Protocol};
+        }
+        else {
+            return {false, {}, std::move(error)};
+        }
     }
 
     static bool appendString(std::string& output, std::string_view value)
@@ -786,6 +795,18 @@ private:
             return failure<bool>("WASM host returned an invalid bool payload");
         }
         return {true, result.payload.front() != 0U, {}};
+    }
+
+    Result<void> callEmpty(Abi::Operation operation, std::string_view payload) const
+    {
+        const auto result = call(operation, payload);
+        if (!result.ok) {
+            return {false, result.error, result.errorCode};
+        }
+        if (!result.payload.empty()) {
+            return failure<void>("WASM host returned an unexpected payload");
+        }
+        return {true, {}, Abi::ErrorCode::None};
     }
 
     Result<std::string> callString(Abi::Operation operation, std::string_view payload) const

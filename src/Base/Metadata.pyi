@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-from typing import Any, TypeVar
+from typing import Any, Literal, TypeVar
 
 """
 This file keeps auxiliary metadata to be used by the Python API stubs.
@@ -12,6 +12,36 @@ This file keeps auxiliary metadata to be used by the Python API stubs.
 _ClassT = TypeVar("_ClassT")
 _FuncT = TypeVar("_FuncT", bound=Callable[..., Any])
 _T = TypeVar("_T")
+
+
+def extension_api(
+    *,
+    id: str,
+    permission: str | None = None,
+    effect: Literal["read", "compute", "create", "modify"] | None = None,
+    transaction: Literal["required", "open", "commit", "abort"] | None = None,
+    since: str | None = None,
+) -> Callable[[_FuncT], _FuncT]: ...
+
+
+def extension_type(
+    *,
+    representation: Literal["value", "resource"],
+) -> Callable[[_ClassT], _ClassT]: ...
+
+
+def extension_interface(
+    *,
+    name: str,
+    version: int,
+) -> Callable[[_ClassT], _ClassT]: ...
+
+
+def extension_property(
+    *,
+    read: Callable[..., Any] | None = None,
+    write: Callable[..., Any] | None = None,
+) -> object: ...
 
 def export(**kwargs: Any) -> Callable[[_ClassT], _ClassT]:
     """

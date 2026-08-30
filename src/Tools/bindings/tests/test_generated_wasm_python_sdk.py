@@ -139,7 +139,7 @@ class MockHost:
                     "document.object.set_label requires an active transaction"
                 )
             self.objects[object_handle] = label
-            return b"\x01"
+            return b""
 
         if operation == self.operations.RELEASE:
             handle, offset = _read_u64(payload)
@@ -207,12 +207,12 @@ class GeneratedWasmPythonSdkTests(unittest.TestCase):
         self.assertEqual(client.document_object_get_label(object_handle), "Box")
 
         self.assertTrue(client.document_open_transaction(document, "Configure"))
-        self.assertTrue(client.document_object_set_label(object_handle, "ConfiguredBox"))
+        self.assertIsNone(client.document_object_set_label(object_handle, "ConfiguredBox"))
         self.assertTrue(client.document_commit_transaction(document))
         self.assertEqual(client.document_object_get_label(object_handle), "ConfiguredBox")
 
         self.assertTrue(client.document_open_transaction(document, "Rollback"))
-        self.assertTrue(client.document_object_set_label(object_handle, "Temporary"))
+        self.assertIsNone(client.document_object_set_label(object_handle, "Temporary"))
         self.assertTrue(client.document_abort_transaction(document))
         self.assertEqual(client.document_object_get_label(object_handle), "ConfiguredBox")
         with client.own(shape) as owned_shape:

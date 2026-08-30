@@ -82,7 +82,7 @@ class ExtensionProjectTests(unittest.TestCase):
         self.assertEqual(label_set.property_access.value, "write")
         self.assertEqual([item.name for item in label_set.parameters], ["label"])
         self.assertEqual(label_set.parameters[0].type.kind.value, "string")
-        self.assertEqual(label_set.returns.kind.value, "boolean")
+        self.assertEqual(label_set.returns.kind.value, "none")
         self.assertEqual(label_set.transaction.value, "required")
         self.assertEqual(extension.type_representations["FreeCAD.Base.Vector"].value, "value")
 

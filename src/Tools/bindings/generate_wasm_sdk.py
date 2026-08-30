@@ -440,6 +440,18 @@ def render_cpp(model: dict[str, Any]) -> str:
                     ]
                 )
             lines.extend(["    }", ""])
+        elif return_type.get("kind") == "none":
+            lines.append(
+                f"    bool {name}({', '.join(parameter_declarations)}) const"
+            )
+            lines.extend(
+                [
+                    "    {",
+                    f"        return client_.{method}({', '.join(call_arguments)});",
+                    "    }",
+                    "",
+                ]
+            )
 
         # Hosted guests can use the structured transport result directly. Keep
         # the bool/out-parameter adapters above for freestanding guests.
@@ -449,6 +461,7 @@ def render_cpp(model: dict[str, Any]) -> str:
             "float64": "double",
             "bool": "bool",
             "string": "std::string",
+            "none": "void",
         }
         result_cpp_type = result_kinds.get(return_type.get("kind"))
         if result_cpp_type is None:
@@ -472,7 +485,12 @@ def render_cpp(model: dict[str, Any]) -> str:
                 lines.extend(
                     [
                         f"        if ({parameter_name} == nullptr) {{",
-                        f"            return {{false, {{}}, \"string parameter is null\"}};",
+                        (
+                            '            return {false, "string parameter is null", '
+                            '::Wasm::Abi::ErrorCode::InvalidRequest};'
+                            if return_type.get("kind") == "none"
+                            else '            return {false, {}, "string parameter is null"};'
+                        ),
                         "        }",
                     ]
                 )
@@ -681,6 +699,12 @@ def render_python(model: dict[str, Any]) -> str:
             "            raise WasmProtocolError(\"host returned an invalid boolean response\")",
             "        return bool(response[0])",
             "",
+            "    def _call_empty(self, request: _Request) -> None:",
+            "        response = self._response(request)",
+            "        if response:",
+            '            raise WasmProtocolError("host returned a non-empty response for a void operation")',
+            "        return None",
+            "",
             "    def _call_string(self, request: _Request) -> str:",
             "        response = self._response(request)",
             "        if len(response) < 4:",
@@ -735,6 +759,8 @@ def render_python(model: dict[str, Any]) -> str:
             result_signature = "str"
         elif return_kind == "bool":
             result_signature = "bool"
+        elif return_kind == "none":
+            result_signature = "None"
         else:
             raise ValueError(f"unsupported Python return type: {return_kind}")
 
@@ -784,6 +810,8 @@ def render_python(model: dict[str, Any]) -> str:
             lines.extend(["        return self._call_release(request)", ""])
         elif return_kind == "bool":
             lines.extend(["        return self._call_bool(request)", ""])
+        elif return_kind == "none":
+            lines.extend(["        return self._call_empty(request)", ""])
 
     lines.extend(
         [
@@ -1259,6 +1287,8 @@ def render_rust(model: dict[str, Any]) -> str:
             result_signature = "Result<usize>"
         elif return_kind == "bool":
             result_signature = "Result<bool>"
+        elif return_kind == "none":
+            result_signature = "Result<()>"
         else:
             raise ValueError(f"unsupported Rust return type: {return_kind}")
         declarations = [
@@ -1313,6 +1343,8 @@ def render_rust(model: dict[str, Any]) -> str:
             )
         elif return_kind == "bool":
             lines.extend(["        self.call_bool(&request)", "    }", ""])
+        elif return_kind == "none":
+            lines.extend(["        self.call_empty(&request)", "    }", ""])
         else:
             raise ValueError(f"unsupported Rust return type: {return_type.get('kind')}")
 

@@ -226,11 +226,8 @@ public:
         return callString(result, capacity, length);
     }
 
-    bool documentObjectSetLabel(Handle object, const char* label, bool* result) const
+    bool documentObjectSetLabel(Handle object, const char* label) const
     {
-        if (result == nullptr) {
-            return false;
-        }
         if (label == nullptr) {
             return false;
         }
@@ -242,7 +239,7 @@ public:
         appendU64(object);
         appendU32(labelLength);
         appendBytes(reinterpret_cast<const FreeCADWasmU8*>(label), labelLength);
-        return call(result);
+        return call();
     }
 
     bool partMakeBox(double length, double width, double height, Handle* result) const
@@ -539,6 +536,17 @@ private:
             return false;
         }
         *result = bytes[0] != 0U;
+        freecad_release(static_cast<FreeCADWasmU32>(response));
+        return true;
+    }
+
+    static bool call()
+    {
+        const auto response = freecad_dispatch(request, requestLength);
+        const auto* bytes = responsePayload(response, 0U);
+        if (bytes == nullptr) {
+            return false;
+        }
         freecad_release(static_cast<FreeCADWasmU32>(response));
         return true;
     }

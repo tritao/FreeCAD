@@ -89,7 +89,7 @@ guest code must not continue using a failed call's result.
 | 17 | `document.commit_transaction` | `document.modify` | `u64` document handle | one `u8` boolean (`0` or `1`) |
 | 18 | `document.abort_transaction` | `document.modify` | `u64` document handle | one `u8` boolean (`0` or `1`) |
 | 19 | `document.object.get_label` | `document.read` | `u64` document object handle | `u32` length, UTF-8 label |
-| 20 | `document.object.set_label` | `document.modify` | `u64` document object handle, `u32` label length, UTF-8 label | one `u8` boolean (`0` or `1`) |
+| 20 | `document.object.set_label` | `document.modify` | `u64` document object handle, `u32` label length, UTF-8 label | empty |
 
 Handles are opaque and scoped to the instance that created them. Document and
 document-object handles are borrowed references to host-owned objects. Shape handles
@@ -97,6 +97,10 @@ created by `part.make_box` are owned by the instance until released or until
 the instance is destroyed.
 `Base.Vector` is an inline value encoded as three little-endian `f64` values;
 it is not represented by a host handle.
+
+Property writes preserve the Python semantic return type of `None` and therefore
+use an empty successful response. Transport failures remain represented by the
+response envelope; they are not part of the projected Python return type.
 
 ## Guest SDK
 

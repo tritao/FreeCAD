@@ -771,7 +771,7 @@ TEST(WasmGuestTest, EncodesThePublishedHostProtocol)
               binaryRequest(Wasm::Abi::Operation::DocumentObjectGetLabel,
                             handlePayload(22U)));
 
-    EXPECT_FALSE(guest.documentObjectSetLabel(22U, "Edited", &transaction));
+    EXPECT_FALSE(guest.documentObjectSetLabel(22U, "Edited"));
     std::string setLabelPayload = handlePayload(22U);
     setLabelPayload += stringPayload("Edited");
     EXPECT_EQ(GuestCapture::lastRequest,
@@ -1198,7 +1198,7 @@ TEST(WasmHostApiTest, CreatesDocumentsShapesAndFeaturesWithInstanceHandles)
         hostApi.permissions(),
         handles);
     ASSERT_TRUE(setLabelResult.ok) << setLabelResult.error;
-    ASSERT_EQ(static_cast<unsigned char>(setLabelResult.payload.front()), 1U);
+    ASSERT_TRUE(setLabelResult.payload.empty());
 
     const auto commitTransactionResult = hostApi.dispatch(
         asBytes(binaryRequest(Wasm::Abi::Operation::DocumentCommitTransaction,

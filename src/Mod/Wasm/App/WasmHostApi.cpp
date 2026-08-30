@@ -723,7 +723,7 @@ HostCallResult WasmHostApi::dispatchDocumentObjectOperation(
         }
         try {
             object->Label.setValue(label);
-            return {true, boolPayload(true), {}};
+            return {true, {}, {}};
         }
         catch (const Base::Exception& exception) {
             return {false,

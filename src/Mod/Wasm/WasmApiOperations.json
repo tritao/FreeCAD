@@ -83,7 +83,7 @@
         "name": "documentObjectSetLabel",
         "wire_name": "document.object.set_label",
         "guest_method": "documentObjectSetLabel",
-        "wire_signature": "sha256:1cf6ca19341ebd21dd2783f2b9d12d1ec8607df20f9aa4b10773f150a0d59821",
+        "wire_signature": "sha256:c6142d6d707f9bd5829eb21306df3648b422501be35b85f94303791e40df9002",
         "requires": ["src/App/DocumentObject.pyi"]
       },
       "org.freecad.part@1/shape_is_null": {
