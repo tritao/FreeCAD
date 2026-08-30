@@ -193,8 +193,10 @@ The generator also emits host dispatch metadata from the merged operation list.
 It includes the stable operation identity, wire name, capability, mutation and
 transaction policy, origin, and typed parameter/return wire descriptors. The
 host uses this table for operation lookup, capability checks, and centralized
-request payload validation; native handler implementations remain handwritten
-and keyed by the published operation ID.
+request/response payload validation; native handler implementations remain
+handwritten and keyed by the published operation ID. An adapter may expose a
+logical result to SDKs while declaring a different `wire_returns` payload, such
+as the empty successful response for `handle.release`.
 
 Readable and writable Python attributes use `extension_property` metadata with
 separate local operation IDs. The property type supplies the getter result and

@@ -131,6 +131,7 @@ class WasmExtensionAdapter:
     mutates: bool
     parameters: tuple[WasmAdapterParameter, ...]
     returns: WasmAbiType
+    wire_returns: WasmAbiType | None = None
     source: str | None = None
     transaction: str | None = None
     requires: tuple[str, ...] = ()
@@ -153,6 +154,7 @@ class WasmExtensionAdapter:
             "requires",
             "params",
             "returns",
+            "wire_returns",
             "consumes",
         }
         if unknown_fields:
@@ -208,6 +210,9 @@ class WasmExtensionAdapter:
         returns = value.get("returns")
         if not isinstance(returns, dict):
             raise ValueError(f"{label} has invalid returns")
+        wire_returns = value.get("wire_returns")
+        if wire_returns is not None and not isinstance(wire_returns, dict):
+            raise ValueError(f"{label} has invalid wire_returns")
 
         consumes = value.get("consumes", False)
         if not isinstance(consumes, bool):
@@ -222,6 +227,11 @@ class WasmExtensionAdapter:
             mutates=mutates,
             parameters=parsed_parameters,
             returns=WasmAbiType.from_json(returns, f"{label} returns"),
+            wire_returns=(
+                WasmAbiType.from_json(wire_returns, f"{label} wire_returns")
+                if wire_returns is not None
+                else None
+            ),
             source=source,
             transaction=transaction,
             requires=tuple(requires),
@@ -242,6 +252,8 @@ class WasmExtensionAdapter:
             "params": [parameter.as_json() for parameter in self.parameters],
             "returns": self.returns.as_json(),
         }
+        if self.wire_returns is not None:
+            operation["wire_returns"] = self.wire_returns.as_json()
         if self.source is not None:
             operation["source"] = self.source
         if self.transaction is not None:

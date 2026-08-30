@@ -650,6 +650,9 @@ TEST(WasmHostApiTest, UsesGeneratedOperationMetadataForDispatch)
     ASSERT_EQ(documentNew->parameters.size(), 1U);
     EXPECT_EQ(documentNew->parameters[0].type, Wasm::Generated::WireType::String);
     EXPECT_EQ(documentNew->returnType, Wasm::Generated::WireType::Handle);
+    const auto* release = Wasm::Generated::findOperationMetadata(4U);
+    ASSERT_NE(release, nullptr);
+    EXPECT_EQ(release->returnType, Wasm::Generated::WireType::None);
     EXPECT_EQ(Wasm::Generated::findOperationMetadata(0xffU), nullptr);
 }
 

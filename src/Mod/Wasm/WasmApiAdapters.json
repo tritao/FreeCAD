@@ -58,6 +58,7 @@
         {"name": "handle", "ownership": "borrowed", "type": {"kind": "handle", "type": "Wasm.Handle", "annotation": "Handle"}}
       ],
       "returns": {"kind": "bool", "annotation": "bool", "nullable": false},
+      "wire_returns": {"kind": "none"},
       "consumes": true
     },
     {

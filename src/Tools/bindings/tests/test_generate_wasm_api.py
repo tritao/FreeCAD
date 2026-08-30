@@ -200,6 +200,10 @@ class GenerateWasmApiTests(unittest.TestCase):
         self.assertEqual(document_new.requires, ("src/App/Document.pyi",))
         self.assertEqual(document_new.parameters[0].type.kind, "string")
         self.assertEqual(document_new.returns.ownership, "owned")
+        release = next(adapter for adapter in adapters if adapter.name == "release")
+        self.assertEqual(release.returns.kind, "bool")
+        self.assertEqual(release.wire_returns.kind, "none")
+        self.assertEqual(release.as_catalog_operation()["wire_returns"]["kind"], "none")
         self.assertEqual(
             document_new.as_catalog_operation()["origin"],
             "adapter",
@@ -226,6 +230,10 @@ class GenerateWasmApiTests(unittest.TestCase):
             metadata,
         )
         self.assertIn("WireType::Vector3F64", metadata)
+        self.assertIn(
+            'Abi::Operation::HandleRelease, 4U, "release", "handle.release", "", false, "", "adapter", HandleReleaseParameters, WireType::None',
+            metadata,
+        )
         self.assertIn('"projection"', metadata)
         self.assertIn('"adapter"', metadata)
         self.assertIn("std::span<const ParameterMetadata> parameters", metadata)

@@ -472,6 +472,9 @@ def _validate_operation_catalog(operations: list[dict[str, Any]]) -> None:
                 raise ValueError(f"WASM operation '{name}' has invalid handle ownership")
         if "nullable" in returns and not isinstance(returns["nullable"], bool):
             raise ValueError(f"WASM operation '{name}' has invalid nullability")
+        wire_returns = operation.get("wire_returns")
+        if wire_returns is not None and not isinstance(wire_returns, dict):
+            raise ValueError(f"WASM operation '{name}' has invalid wire return metadata")
         if "consumes" in operation and not isinstance(operation["consumes"], bool):
             raise ValueError(f"WASM operation '{name}' has invalid consumes flag")
 
@@ -1170,10 +1173,10 @@ def render_dispatch_metadata(model: Mapping[str, Any]) -> str:
                     "",
                 ]
             )
-        returns = operation.get("returns")
+        returns = operation.get("wire_returns", operation.get("returns"))
         if not isinstance(returns, dict):
             raise ValueError(f"WASM operation '{name}' has invalid returns")
-        return_type = _wire_type_name(returns, f"WASM operation '{name}' return")
+        _wire_type_name(returns, f"WASM operation '{name}' return")
 
     lines.extend(
         [
@@ -1189,7 +1192,7 @@ def render_dispatch_metadata(model: Mapping[str, Any]) -> str:
         origin = operation["origin"]
         parameter_name = f"{_operation_enum_name(name)}Parameters"
         return_type = _wire_type_name(
-            operation["returns"],
+            operation.get("wire_returns", operation["returns"]),
             f"WASM operation '{name}' return",
         )
         lines.append(

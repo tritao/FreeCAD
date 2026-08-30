@@ -151,6 +151,11 @@ HostCallResult malformedRequest(std::string error)
     return {false, {}, std::move(error), Wasm::Abi::ErrorCode::InvalidRequest};
 }
 
+HostCallResult malformedResponse(std::string error)
+{
+    return {false, {}, std::move(error), Wasm::Abi::ErrorCode::Protocol};
+}
+
 bool validateWireValue(ByteSpan payload,
                        Generated::WireType type,
                        std::size_t& offset,
@@ -219,6 +224,27 @@ bool validateRequestPayload(const Generated::OperationMetadata& metadata,
     }
     if (offset != payload.size()) {
         error = std::string(metadata.wireName) + " has trailing payload bytes";
+        return false;
+    }
+    return true;
+}
+
+bool validateResponsePayload(const Generated::OperationMetadata& metadata,
+                             ByteSpan payload,
+                             std::string& error)
+{
+    std::size_t offset = 0U;
+    std::string valueError;
+    if (!validateWireValue(payload,
+                           metadata.returnType,
+                           offset,
+                           "response",
+                           valueError)) {
+        error = std::string(metadata.wireName) + " response: " + valueError;
+        return false;
+    }
+    if (offset != payload.size()) {
+        error = std::string(metadata.wireName) + " response has trailing payload bytes";
         return false;
     }
     return true;
@@ -360,7 +386,18 @@ HostCallResult WasmHostApi::dispatch(std::span<const std::byte> request,
     if (!validateRequestPayload(*metadata, payload, payloadError)) {
         return malformedRequest(std::move(payloadError));
     }
-    return (this->*handler)(operation, payload, handles);
+    auto result = (this->*handler)(operation, payload, handles);
+    if (!result.ok) {
+        return result;
+    }
+
+    const auto responsePayload = ByteSpan(
+        reinterpret_cast<const std::byte*>(result.payload.data()), result.payload.size());
+    std::string responseError;
+    if (!validateResponsePayload(*metadata, responsePayload, responseError)) {
+        return malformedResponse(std::move(responseError));
+    }
+    return result;
 }
 
 WasmHostApi::OperationHandler WasmHostApi::handlerFor(Abi::Operation operation)

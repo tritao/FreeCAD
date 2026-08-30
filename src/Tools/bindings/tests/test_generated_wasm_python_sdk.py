@@ -233,6 +233,17 @@ class GeneratedWasmPythonSdkTests(unittest.TestCase):
         with self.assertRaises(self.WasmProtocolError):
             malformed.document_new("Broken")
 
+        def success(payload: bytes) -> bytes:
+            return struct.pack("<4sBBBBI", b"FCWR", 1, 0, 0, 0, len(payload)) + payload
+
+        truncated_handle = self.Client(lambda _request: success(b"short"))
+        with self.assertRaises(self.WasmProtocolError):
+            truncated_handle.document_new("Truncated")
+
+        invalid_release = self.Client(lambda _request: success(b"\x01"))
+        with self.assertRaises(self.WasmProtocolError):
+            invalid_release.release(1)
+
 
 if __name__ == "__main__":
     unittest.main()
