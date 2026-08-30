@@ -109,6 +109,36 @@ if(NOT _freecad_wamr_source_dir
 endif()
 
 if(_freecad_wamr_source_dir STREQUAL "PACKAGED")
+    set(_freecad_wamr_profile_file "")
+    foreach(_freecad_wamr_prefix IN LISTS CMAKE_PREFIX_PATH)
+        if(EXISTS "${_freecad_wamr_prefix}/share/wamr/FreeCADWamrProfile.cmake")
+            set(_freecad_wamr_profile_file
+                "${_freecad_wamr_prefix}/share/wamr/FreeCADWamrProfile.cmake")
+            break()
+        endif()
+    endforeach()
+    if(NOT _freecad_wamr_profile_file)
+        message(FATAL_ERROR
+            "The packaged WAMR runtime does not provide profile metadata. "
+            "Install a FreeCAD WAMR profile package matching '${_freecad_wamr_profile}'.")
+    endif()
+    include("${_freecad_wamr_profile_file}")
+    if(NOT DEFINED FREECAD_WAMR_PACKAGE_PROFILE
+       OR NOT DEFINED FREECAD_WAMR_PACKAGE_SUPPORTS_AOT
+       OR NOT DEFINED FREECAD_WAMR_PACKAGE_SUPPORTS_JIT
+       OR NOT DEFINED FREECAD_WAMR_PACKAGE_SUPPORTS_INSTRUCTION_METERING)
+        message(FATAL_ERROR
+            "Packaged WAMR profile metadata is incomplete: ${_freecad_wamr_profile_file}")
+    endif()
+    if(NOT "${FREECAD_WAMR_PACKAGE_PROFILE}" STREQUAL "${_freecad_wamr_profile}"
+       OR NOT "${FREECAD_WAMR_PACKAGE_SUPPORTS_AOT}" STREQUAL "${FREECAD_WAMR_SUPPORTS_AOT}"
+       OR NOT "${FREECAD_WAMR_PACKAGE_SUPPORTS_JIT}" STREQUAL "${FREECAD_WAMR_SUPPORTS_JIT}"
+       OR NOT "${FREECAD_WAMR_PACKAGE_SUPPORTS_INSTRUCTION_METERING}" STREQUAL "${FREECAD_WAMR_SUPPORTS_INSTRUCTION_METERING}")
+        message(FATAL_ERROR
+            "WAMR package profile '${FREECAD_WAMR_PACKAGE_PROFILE}' does not match "
+            "requested profile '${_freecad_wamr_profile}'")
+    endif()
+
     # Some WAMR package exports list LLVM dependencies as bare -l names but
     # omit the package lib directory from the imported target interface.
     if(_freecad_wamr_package_target)

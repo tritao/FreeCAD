@@ -24,6 +24,7 @@ struct RuntimeInfo
     bool supportsSandbox = false;
     bool supportsAot = false;
     bool supportsJit = false;
+    bool supportsInstructionMetering = false;
     // True when the runtime can enforce a hard execution deadline for
     // sandboxed bytecode calls. Native AOT/JIT calls do not provide this.
     bool supportsHardTimeout = false;

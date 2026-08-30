@@ -36,6 +36,7 @@ else()
 endif()
 
 if(FREECAD_USE_WAMR)
+    string(TOUPPER "${FREECAD_WAMR_PROFILE}" _freecad_wamr_test_profile)
     include(${CMAKE_SOURCE_DIR}/src/Mod/Wasm/Guest/FreeCADWasmGuest.cmake)
     freecad_wasm_generate_guest_sdk(WasmGuestApiFixture
         OUTPUT_DIR ${CMAKE_CURRENT_BINARY_DIR}/generated
@@ -148,7 +149,7 @@ if(FREECAD_USE_WAMR)
                 "wasm32-unknown-unknown target is required")
         endif()
 
-        if(FREECAD_WAMR_PROFILE STREQUAL "AOT")
+        if(_freecad_wamr_test_profile STREQUAL "AOT")
             set(FREECAD_WASM_AOT_COMPILER "" CACHE FILEPATH
                 "WAMR compiler used to build the AOT guest test fixture")
             if(NOT FREECAD_WASM_AOT_COMPILER)
@@ -241,14 +242,16 @@ target_include_directories(Wasm_tests_run PRIVATE
 
 if(FREECAD_USE_WAMR)
     target_compile_definitions(Wasm_tests_run PRIVATE FREECAD_HAS_WAMR=1)
-    if(FREECAD_WAMR_PROFILE STREQUAL "AOT"
-       OR FREECAD_WAMR_PROFILE STREQUAL "JIT")
+    if(_freecad_wamr_test_profile STREQUAL "AOT"
+       OR _freecad_wamr_test_profile STREQUAL "JIT")
         target_compile_definitions(Wasm_tests_run PRIVATE FREECAD_WAMR_SUPPORTS_AOT=1)
     endif()
-    if(FREECAD_WAMR_PROFILE STREQUAL "JIT")
+    if(_freecad_wamr_test_profile STREQUAL "JIT")
         target_compile_definitions(Wasm_tests_run PRIVATE FREECAD_WAMR_SUPPORTS_JIT=1)
     endif()
-    target_compile_definitions(Wasm_tests_run PRIVATE FREECAD_WAMR_SUPPORTS_INSTRUCTION_METERING=1)
+    if(FREECAD_WAMR_SUPPORTS_INSTRUCTION_METERING)
+        target_compile_definitions(Wasm_tests_run PRIVATE FREECAD_WAMR_SUPPORTS_INSTRUCTION_METERING=1)
+    endif()
 endif()
 
 if(BUILD_PART)

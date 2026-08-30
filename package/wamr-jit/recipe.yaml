@@ -58,6 +58,8 @@ tests:
         - wasm_c_api.h
         - wasm_export.h
         - lib_export.h
+      files:
+        - share/wamr/FreeCADWamrProfile.cmake
 
 about:
   homepage: https://github.com/wasm-micro-runtime/wasm-micro-runtime

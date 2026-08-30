@@ -112,3 +112,34 @@ else
 fi
 
 cmake --build build --target install --parallel
+
+if [[ "${profile}" != compiler ]]; then
+  case "${profile}" in
+    interp)
+      package_profile=INTERP
+      supports_aot=FALSE
+      supports_jit=FALSE
+      supports_instruction_metering=TRUE
+      ;;
+    aot)
+      package_profile=AOT
+      supports_aot=TRUE
+      supports_jit=FALSE
+      supports_instruction_metering=FALSE
+      ;;
+    jit)
+      package_profile=JIT
+      supports_aot=TRUE
+      supports_jit=TRUE
+      supports_instruction_metering=FALSE
+      ;;
+  esac
+  profile_dir="${PREFIX}/share/wamr"
+  mkdir -p "${profile_dir}"
+  printf '%s\n' \
+    "set(FREECAD_WAMR_PACKAGE_PROFILE \"${package_profile}\")" \
+    "set(FREECAD_WAMR_PACKAGE_SUPPORTS_AOT ${supports_aot})" \
+    "set(FREECAD_WAMR_PACKAGE_SUPPORTS_JIT ${supports_jit})" \
+    "set(FREECAD_WAMR_PACKAGE_SUPPORTS_INSTRUCTION_METERING ${supports_instruction_metering})" \
+    > "${profile_dir}/FreeCADWamrProfile.cmake"
+fi

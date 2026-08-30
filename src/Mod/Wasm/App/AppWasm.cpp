@@ -79,6 +79,8 @@ private:
         dict.setItem("supports_sandbox", Py::Boolean(info.supportsSandbox));
         dict.setItem("supports_aot", Py::Boolean(info.supportsAot));
         dict.setItem("supports_jit", Py::Boolean(info.supportsJit));
+        dict.setItem("supports_instruction_metering",
+                     Py::Boolean(info.supportsInstructionMetering));
         dict.setItem("supports_hard_timeout", Py::Boolean(info.supportsHardTimeout));
         dict.setItem(
             "api_catalog_signature",

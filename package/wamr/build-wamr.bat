@@ -9,6 +9,10 @@ if not defined WAMR_PROFILE (
   echo Unsupported WAMR output: %PKG_NAME%
   exit /b 1
 )
+if not "%WAMR_PROFILE%"=="interp" if not "%WAMR_PROFILE%"=="aot" if not "%WAMR_PROFILE%"=="jit" if not "%WAMR_PROFILE%"=="compiler" (
+  echo Unsupported WAMR profile: %WAMR_PROFILE%
+  exit /b 1
+)
 
 if "%WAMR_PROFILE%"=="compiler" goto compiler
 
@@ -79,3 +83,28 @@ if errorlevel 1 exit /b 1
 
 :build
 cmake --build build --target install --parallel
+if "%WAMR_PROFILE%"=="compiler" exit /b 0
+
+if "%WAMR_PROFILE%"=="interp" (
+  set PACKAGE_PROFILE=INTERP
+  set PACKAGE_SUPPORTS_AOT=FALSE
+  set PACKAGE_SUPPORTS_JIT=FALSE
+  set PACKAGE_SUPPORTS_INSTRUCTION_METERING=TRUE
+)
+if "%WAMR_PROFILE%"=="aot" (
+  set PACKAGE_PROFILE=AOT
+  set PACKAGE_SUPPORTS_AOT=TRUE
+  set PACKAGE_SUPPORTS_JIT=FALSE
+  set PACKAGE_SUPPORTS_INSTRUCTION_METERING=FALSE
+)
+if "%WAMR_PROFILE%"=="jit" (
+  set PACKAGE_PROFILE=JIT
+  set PACKAGE_SUPPORTS_AOT=TRUE
+  set PACKAGE_SUPPORTS_JIT=TRUE
+  set PACKAGE_SUPPORTS_INSTRUCTION_METERING=FALSE
+)
+if not exist "%PREFIX%\share\wamr" mkdir "%PREFIX%\share\wamr"
+> "%PREFIX%\share\wamr\FreeCADWamrProfile.cmake" echo set(FREECAD_WAMR_PACKAGE_PROFILE "%PACKAGE_PROFILE%")
+>> "%PREFIX%\share\wamr\FreeCADWamrProfile.cmake" echo set(FREECAD_WAMR_PACKAGE_SUPPORTS_AOT %PACKAGE_SUPPORTS_AOT%)
+>> "%PREFIX%\share\wamr\FreeCADWamrProfile.cmake" echo set(FREECAD_WAMR_PACKAGE_SUPPORTS_JIT %PACKAGE_SUPPORTS_JIT%)
+>> "%PREFIX%\share\wamr\FreeCADWamrProfile.cmake" echo set(FREECAD_WAMR_PACKAGE_SUPPORTS_INSTRUCTION_METERING %PACKAGE_SUPPORTS_INSTRUCTION_METERING%)

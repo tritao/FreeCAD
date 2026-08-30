@@ -189,8 +189,13 @@ Wasm::RuntimeInfo Wasm::WamrRuntime::info() const
 #else
     constexpr bool supportsJit = false;
 #endif
+#if defined(FREECAD_WAMR_SUPPORTS_INSTRUCTION_METERING)
+    constexpr bool supportsInstructionMetering = true;
+#else
+    constexpr bool supportsInstructionMetering = false;
+#endif
     return {"wamr", runtimeLease != nullptr, runtimeLease != nullptr, supportsAot, supportsJit,
-            runtimeLease != nullptr};
+            supportsInstructionMetering, runtimeLease != nullptr};
 }
 
 std::unique_ptr<Wasm::IWasmInstance> Wasm::WamrRuntime::instantiate(

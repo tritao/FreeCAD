@@ -353,7 +353,7 @@ class FakeRuntime final: public Wasm::IWasmRuntime
 public:
     Wasm::RuntimeInfo info() const override
     {
-        return {"fake", true, sandboxed, false, false, hardTimeout};
+        return {"fake", true, sandboxed, false, false, false, hardTimeout};
     }
 
     std::unique_ptr<Wasm::IWasmInstance> instantiate(const std::filesystem::path& path,
@@ -1418,6 +1418,30 @@ TEST(WamrRuntimeTest, RejectsInstantiationFromNonOwnerThread)
     worker.join();
 
     EXPECT_TRUE(instantiateRejected);
+}
+
+TEST(WamrRuntimeTest, ReportsConfiguredProfileCapabilities)
+{
+    auto runtime = Wasm::createWasmRuntime();
+    ASSERT_TRUE(runtime);
+
+    const auto info = runtime->info();
+    ASSERT_TRUE(info.available);
+    EXPECT_TRUE(info.supportsSandbox);
+    EXPECT_TRUE(info.supportsHardTimeout);
+#if defined(FREECAD_WAMR_SUPPORTS_JIT)
+    EXPECT_TRUE(info.supportsAot);
+    EXPECT_TRUE(info.supportsJit);
+    EXPECT_FALSE(info.supportsInstructionMetering);
+#elif defined(FREECAD_WAMR_SUPPORTS_AOT)
+    EXPECT_TRUE(info.supportsAot);
+    EXPECT_FALSE(info.supportsJit);
+    EXPECT_FALSE(info.supportsInstructionMetering);
+#else
+    EXPECT_FALSE(info.supportsAot);
+    EXPECT_FALSE(info.supportsJit);
+    EXPECT_TRUE(info.supportsInstructionMetering);
+#endif
 }
 
 TEST(WamrRuntimeTest, RejectsImportsOutsideTheFreeCadHostAbi)

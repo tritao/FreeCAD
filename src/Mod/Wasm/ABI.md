@@ -287,17 +287,25 @@ non-Pixi build can use an installed package with
 `-DFREECAD_WAMR_PROVIDER=SOURCE -DFREECAD_WAMR_ROOT=...`, or use the verified
 `FETCH` fallback.
 
+Runtime packages install `share/wamr/FreeCADWamrProfile.cmake`. FreeCAD checks
+that metadata against `FREECAD_WAMR_PROFILE` before linking the package, so an
+interpreter package cannot be accidentally used as an AOT or JIT runtime.
+`Wasm.getRuntimeInfo()` reports the resulting `supports_aot`, `supports_jit`,
+and `supports_instruction_metering` capabilities.
+
 All profiles disable WASI, multi-module loading, shared memory, threads, and
 the mini-loader. The runtime rejects imports outside the explicitly registered
 `freecad.*` function allowlist. WAMR's memory isolation is therefore combined
 with FreeCAD's deny-by-default capability policy; it is not a general-purpose
-WASI environment. All profiles compile instruction metering, and sandboxed
-calls use the metered interpreter path. Native AOT/JIT execution cannot be
-hard-interrupted in-process, so `.aot` artifacts and opt-in JIT calls are
-outside the hard sandbox boundary and require an explicitly non-sandboxed
-policy. Guest calls and host capability operations are confined to the
-addon's owner thread; thread marshalling is a host integration responsibility,
-not a guest escape hatch.
+WASI environment. The `INTERP` profile compiles instruction metering and uses
+it for sandboxed calls. The AOT/JIT profiles retain portable `.wasm` execution
+through their interpreter path and use WAMR termination for the hard watchdog,
+but do not compile instruction metering; native `.aot` and JIT execution cannot
+be hard-interrupted in-process. Those native paths are therefore outside the
+hard sandbox boundary and require an explicitly non-sandboxed policy. Guest
+calls and host capability operations are confined to the addon's owner thread;
+thread marshalling is a host integration responsibility, not a guest escape
+hatch.
 
 The portable addon artifact is a `.wasm` module. AOT and JIT are host policy
 choices, not manifest fields or guest-visible runtime choices. `.aot` entries

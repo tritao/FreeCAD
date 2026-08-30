@@ -7,7 +7,7 @@ using namespace Wasm;
 
 RuntimeInfo NullWasmRuntime::info() const
 {
-    return {"none", false, false, false, false};
+    return {"none", false, false, false, false, false, false};
 }
 
 std::unique_ptr<IWasmInstance> NullWasmRuntime::instantiate(const std::filesystem::path&,

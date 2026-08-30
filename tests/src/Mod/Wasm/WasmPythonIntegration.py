@@ -21,6 +21,10 @@ require(fixture.is_file(), f"missing Wasm fixture: {fixture}")
 runtime_info = Wasm.getRuntimeInfo()
 require(runtime_info["available"], "WAMR is not available")
 require(runtime_info["supports_sandbox"], "WAMR sandbox support is unavailable")
+require(
+    "supports_instruction_metering" in runtime_info,
+    "runtime metering capability is missing",
+)
 require(Wasm.listAddons() == [], "Wasm addon manager must start empty")
 
 with tempfile.TemporaryDirectory(prefix="freecad-wasm-python-") as temporary_directory:
