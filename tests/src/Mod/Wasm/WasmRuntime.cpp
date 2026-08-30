@@ -5,6 +5,7 @@
 #include "WasmAddon.h"
 #include "WasmAddonManager.h"
 #include "WasmAbi.h"
+#include "freecad_wasm_dispatch_metadata.hpp"
 #include "Guest/WasmGuest.h"
 #include "WasmHandleTable.h"
 #include "WasmHostApi.h"
@@ -590,6 +591,36 @@ TEST(WasmHostApiTest, ValidatesVersionedBinaryRequests)
     EXPECT_FALSE(malformed.ok);
     EXPECT_NE(malformed.error.find("version"), std::string::npos);
     EXPECT_EQ(malformed.errorCode, Wasm::Abi::ErrorCode::InvalidRequest);
+}
+
+TEST(WasmHostApiTest, UsesGeneratedOperationMetadataForDispatch)
+{
+    ASSERT_FALSE(Wasm::Generated::OperationMetadataTable.empty());
+    for (const auto& metadata : Wasm::Generated::OperationMetadataTable) {
+        EXPECT_EQ(metadata.operation,
+                  static_cast<Wasm::Abi::Operation>(metadata.id));
+        EXPECT_FALSE(metadata.name.empty());
+        EXPECT_FALSE(metadata.wireName.empty());
+        EXPECT_FALSE(metadata.origin.empty());
+        EXPECT_FALSE(metadata.parametersJson.empty());
+        EXPECT_FALSE(metadata.returnsJson.empty());
+        EXPECT_EQ(Wasm::Generated::findOperationMetadata(metadata.id), &metadata);
+    }
+    EXPECT_EQ(Wasm::Generated::findOperationMetadata(0xffU), nullptr);
+}
+
+TEST(WasmHostApiTest, RejectsOperationsMissingFromGeneratedMetadata)
+{
+    Wasm::WasmHostApi hostApi;
+    Wasm::WasmHandleTable handles;
+
+    const auto result = hostApi.dispatch(
+        asBytes(binaryRequest(static_cast<Wasm::Abi::Operation>(0xffU))),
+        hostApi.permissions(),
+        handles);
+    EXPECT_FALSE(result.ok);
+    EXPECT_NE(result.error.find("unsupported WASM host operation"), std::string::npos);
+    EXPECT_EQ(result.errorCode, Wasm::Abi::ErrorCode::Unsupported);
 }
 
 TEST(WasmHostApiTest, RejectsCallsFromNonOwnerThreads)

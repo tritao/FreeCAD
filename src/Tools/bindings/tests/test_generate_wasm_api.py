@@ -209,6 +209,27 @@ class GenerateWasmApiTests(unittest.TestCase):
         )
         self.assertNotIn("adapters", operations)
 
+    def test_dispatch_metadata_is_rendered_from_merged_operations(self):
+        model = generate_wasm_api.build_model(
+            ROOT,
+            [
+                ROOT / "src/Base/Vector.pyi",
+                ROOT / "src/App/Document.pyi",
+                ROOT / "src/App/DocumentObject.pyi",
+                ROOT / "src/Mod/Part/App/TopoShape.pyi",
+            ],
+        )
+        metadata = generate_wasm_api.render_dispatch_metadata(model)
+        self.assertIn("OperationMetadataTable", metadata)
+        self.assertIn(
+            'Abi::Operation::DocumentOpenTransaction, 16U',
+            metadata,
+        )
+        self.assertIn('"projection"', metadata)
+        self.assertIn('"adapter"', metadata)
+        self.assertIn("parametersJson", metadata)
+        self.assertIn("returnsJson", metadata)
+
     def test_projection_uses_the_canonical_api_model(self):
         model = generate_wasm_api.build_model(
             ROOT,

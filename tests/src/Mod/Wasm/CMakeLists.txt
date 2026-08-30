@@ -215,6 +215,7 @@ endif()
 target_include_directories(Wasm_tests_run PRIVATE
     ${CMAKE_SOURCE_DIR}/src/Mod/Wasm/App
     ${CMAKE_SOURCE_DIR}/src/Mod/Wasm
+    ${CMAKE_BINARY_DIR}/Mod/Wasm
 )
 
 if(FREECAD_USE_WAMR)

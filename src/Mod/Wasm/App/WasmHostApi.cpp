@@ -4,6 +4,7 @@
 #include "WasmHostApi.h"
 
 #include "WasmAbi.h"
+#include "freecad_wasm_dispatch_metadata.hpp"
 
 #include <App/Application.h>
 #include <App/Document.h>
@@ -243,7 +244,15 @@ HostCallResult WasmHostApi::dispatch(std::span<const std::byte> request,
         return malformedRequest("unsupported WASM host ABI version");
     }
 
-    const auto operation = static_cast<Abi::Operation>(std::to_integer<std::uint8_t>(request[5]));
+    const auto operationId = std::to_integer<std::uint8_t>(request[5]);
+    const auto operation = static_cast<Abi::Operation>(operationId);
+    const auto* metadata = Generated::findOperationMetadata(operationId);
+    if (metadata == nullptr) {
+        return {false,
+                {},
+                "unsupported WASM host operation",
+                Abi::ErrorCode::Unsupported};
+    }
     const auto flags = std::to_integer<std::uint8_t>(request[6])
         | (static_cast<std::uint16_t>(std::to_integer<std::uint8_t>(request[7])) << 8U);
     if (flags != 0U) {
@@ -257,12 +266,18 @@ HostCallResult WasmHostApi::dispatch(std::span<const std::byte> request,
         return malformedRequest("WASM host request has an invalid payload length");
     }
 
+    if (!metadata->permission.empty()
+        && !hasPermission(permissions, metadata->permission)) {
+        return {false,
+                {},
+                "host capability '" + std::string(metadata->permission)
+                    + "' is not granted",
+                Abi::ErrorCode::PermissionDenied};
+    }
+
     const auto payload = request.subspan(Abi::RequestHeaderSize);
     switch (operation) {
     case Abi::Operation::VectorNew: {
-        if (!hasPermission(permissions, "geometry.compute")) {
-            return {false, {}, "host capability 'geometry.compute' is not granted"};
-        }
         if (payload.size() != sizeof(double) * 3U) {
             return malformedRequest("base.vector.new expects three f64 values");
         }
@@ -276,9 +291,6 @@ HostCallResult WasmHostApi::dispatch(std::span<const std::byte> request,
         return {true, vectorPayload(value), {}};
     }
     case Abi::Operation::VectorAdd: {
-        if (!hasPermission(permissions, "geometry.compute")) {
-            return {false, {}, "host capability 'geometry.compute' is not granted"};
-        }
         if (payload.size() != sizeof(double) * 6U) {
             return malformedRequest("base.vector.add expects two vector values");
         }
@@ -292,9 +304,6 @@ HostCallResult WasmHostApi::dispatch(std::span<const std::byte> request,
         return {true, vectorPayload(left + right), {}};
     }
     case Abi::Operation::VectorDot: {
-        if (!hasPermission(permissions, "geometry.compute")) {
-            return {false, {}, "host capability 'geometry.compute' is not granted"};
-        }
         if (payload.size() != sizeof(double) * 6U) {
             return malformedRequest("base.vector.dot expects two vector values");
         }
@@ -308,9 +317,6 @@ HostCallResult WasmHostApi::dispatch(std::span<const std::byte> request,
         return {true, doublePayload(left.Dot(right)), {}};
     }
     case Abi::Operation::VectorCross: {
-        if (!hasPermission(permissions, "geometry.compute")) {
-            return {false, {}, "host capability 'geometry.compute' is not granted"};
-        }
         if (payload.size() != sizeof(double) * 6U) {
             return malformedRequest("base.vector.cross expects two vector values");
         }
@@ -324,10 +330,6 @@ HostCallResult WasmHostApi::dispatch(std::span<const std::byte> request,
         return {true, vectorPayload(left.Cross(right)), {}};
     }
     case Abi::Operation::DocumentNew: {
-        if (!hasPermission(permissions, "document.create")) {
-            return {false, {}, "host capability 'document.create' is not granted"};
-        }
-
         std::size_t payloadOffset = 0U;
         std::string name;
         if (!readString(payload, payloadOffset, name) || payloadOffset != payload.size()
@@ -362,9 +364,6 @@ HostCallResult WasmHostApi::dispatch(std::span<const std::byte> request,
 #ifndef FREECAD_WASM_HAS_PART
         return {false, {}, "Part capability is not available in this build"};
 #else
-        if (!hasPermission(permissions, "geometry.create")) {
-            return {false, {}, "host capability 'geometry.create' is not granted"};
-        }
         if (payload.size() != sizeof(double) * 3U) {
             return malformedRequest("part.make_box expects three f64 values");
         }
@@ -402,10 +401,6 @@ HostCallResult WasmHostApi::dispatch(std::span<const std::byte> request,
 #ifndef FREECAD_WASM_HAS_PART
         return {false, {}, "Part capability is not available in this build"};
 #else
-        if (!hasPermission(permissions, "document.modify")) {
-            return {false, {}, "host capability 'document.modify' is not granted"};
-        }
-
         std::size_t payloadOffset = 0U;
         std::uint64_t documentHandle = InvalidHandle;
         std::uint64_t shapeHandle = InvalidHandle;
@@ -463,9 +458,6 @@ HostCallResult WasmHostApi::dispatch(std::span<const std::byte> request,
 #endif
     }
     case Abi::Operation::DocumentIsSaved: {
-        if (!hasPermission(permissions, "document.read")) {
-            return {false, {}, "host capability 'document.read' is not granted"};
-        }
         if (payload.size() != sizeof(std::uint64_t)) {
             return malformedRequest("document.is_saved expects one document handle");
         }
@@ -485,10 +477,6 @@ HostCallResult WasmHostApi::dispatch(std::span<const std::byte> request,
         return {true, boolPayload(document->isSaved()), {}};
     }
     case Abi::Operation::DocumentGetObject: {
-        if (!hasPermission(permissions, "document.read")) {
-            return {false, {}, "host capability 'document.read' is not granted"};
-        }
-
         std::size_t payloadOffset = 0U;
         std::uint64_t documentHandle = InvalidHandle;
         std::string name;
@@ -522,10 +510,6 @@ HostCallResult WasmHostApi::dispatch(std::span<const std::byte> request,
         return {true, handlePayload(handle), {}};
     }
     case Abi::Operation::DocumentOpenTransaction: {
-        if (!hasPermission(permissions, "document.modify")) {
-            return {false, {}, "host capability 'document.modify' is not granted"};
-        }
-
         std::size_t payloadOffset = 0U;
         std::uint64_t documentHandle = InvalidHandle;
         std::string name;
@@ -558,9 +542,6 @@ HostCallResult WasmHostApi::dispatch(std::span<const std::byte> request,
     }
     case Abi::Operation::DocumentCommitTransaction:
     case Abi::Operation::DocumentAbortTransaction: {
-        if (!hasPermission(permissions, "document.modify")) {
-            return {false, {}, "host capability 'document.modify' is not granted"};
-        }
         if (payload.size() != sizeof(std::uint64_t)) {
             return malformedRequest("document transaction control expects one document handle");
         }
@@ -599,9 +580,6 @@ HostCallResult WasmHostApi::dispatch(std::span<const std::byte> request,
         }
     }
     case Abi::Operation::DocumentObjectGetLabel: {
-        if (!hasPermission(permissions, "document.read")) {
-            return {false, {}, "host capability 'document.read' is not granted"};
-        }
         if (payload.size() != sizeof(std::uint64_t)) {
             return malformedRequest("document.object.get_label expects one object handle");
         }
@@ -620,10 +598,6 @@ HostCallResult WasmHostApi::dispatch(std::span<const std::byte> request,
         return {true, stringPayload(object->Label.getValue()), {}};
     }
     case Abi::Operation::DocumentObjectSetLabel: {
-        if (!hasPermission(permissions, "document.modify")) {
-            return {false, {}, "host capability 'document.modify' is not granted"};
-        }
-
         std::size_t payloadOffset = 0U;
         std::uint64_t objectHandle = InvalidHandle;
         std::string label;
@@ -660,9 +634,6 @@ HostCallResult WasmHostApi::dispatch(std::span<const std::byte> request,
 #ifndef FREECAD_WASM_HAS_PART
         return {false, {}, "Part capability is not available in this build"};
 #else
-        if (!hasPermission(permissions, "geometry.read")) {
-            return {false, {}, "host capability 'geometry.read' is not granted"};
-        }
         if (payload.size() != sizeof(std::uint64_t)) {
             return malformedRequest("part.topo_shape query expects one shape handle");
         }
