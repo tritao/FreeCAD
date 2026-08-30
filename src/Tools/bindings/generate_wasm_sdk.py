@@ -148,6 +148,7 @@ def render_cpp(model: dict[str, Any]) -> str:
         "namespace FreeCAD::Wasm::Generated",
         "{",
         f'inline constexpr char ApiVersion[] = "{api}";',
+        f'inline constexpr char ApiCatalogSignature[] = "{abi.get("catalog_signature", "")}";',
         f'inline constexpr char ResponseMagic[] = "{abi.get("response_magic", "FCWR")}";',
         f"inline constexpr unsigned char ResponseVersion = {int(abi.get('response_version', 1))}U;",
         f"inline constexpr unsigned char ResponseHeaderSize = {int(abi.get('response_header_size', 12))}U;",
@@ -510,6 +511,7 @@ def render_python(model: dict[str, Any]) -> str:
         "import struct",
         "",
         f'API_VERSION = "{api}"',
+        f'API_CATALOG_SIGNATURE = "{abi.get("catalog_signature", "")}"',
         "Handle = int",
         f"REQUEST_HEADER_SIZE = {int(abi.get('request_header_size', 12))}",
         f"RESPONSE_HEADER_SIZE = {int(abi.get('response_header_size', 12))}",
@@ -836,6 +838,7 @@ def render_rust(model: dict[str, Any]) -> str:
         "",
         "#[allow(dead_code)]",
         f'pub const API_VERSION: &str = "{api}";',
+        f'pub const API_CATALOG_SIGNATURE: &str = "{abi.get("catalog_signature", "")}";',
         "pub type Handle = u64;",
         "",
     ]

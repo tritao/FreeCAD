@@ -18,6 +18,7 @@ function(freecad_wasm_generate_guest_sdk target)
     set(_one_value_args
         OUTPUT_DIR PYTHON_EXECUTABLE API_GENERATOR SDK_GENERATOR
         API_MODEL_VARIABLE API_CPP_VARIABLE API_RUST_VARIABLE API_PYTHON_VARIABLE
+        API_SIGNATURE_VARIABLE
     )
     set(_multi_value_args INPUTS DEPENDS)
     cmake_parse_arguments(
@@ -41,6 +42,8 @@ function(freecad_wasm_generate_guest_sdk target)
 
     set(_FREECAD_WASM_SDK_MODEL
         "${_FREECAD_WASM_SDK_OUTPUT_DIR}/freecad_wasm_api.json")
+    set(_FREECAD_WASM_SDK_SIGNATURE
+        "${_FREECAD_WASM_SDK_OUTPUT_DIR}/freecad_wasm_api.signature")
     set(_FREECAD_WASM_SDK_CPP
         "${_FREECAD_WASM_SDK_OUTPUT_DIR}/Wasm/Guest/freecad_wasm_api.hpp")
     set(_FREECAD_WASM_SDK_RUST
@@ -51,6 +54,7 @@ function(freecad_wasm_generate_guest_sdk target)
     add_custom_command(
         OUTPUT
             "${_FREECAD_WASM_SDK_MODEL}"
+            "${_FREECAD_WASM_SDK_SIGNATURE}"
             "${_FREECAD_WASM_SDK_CPP}"
             "${_FREECAD_WASM_SDK_RUST}"
             "${_FREECAD_WASM_SDK_PYTHON}"
@@ -59,6 +63,7 @@ function(freecad_wasm_generate_guest_sdk target)
         COMMAND ${_FREECAD_WASM_SDK_PYTHON_EXECUTABLE}
                 "${_FREECAD_WASM_SDK_API_GENERATOR}"
                 --output "${_FREECAD_WASM_SDK_MODEL}"
+                --catalog-signature-output "${_FREECAD_WASM_SDK_SIGNATURE}"
                 ${_FREECAD_WASM_SDK_INPUTS}
         COMMAND ${_FREECAD_WASM_SDK_PYTHON_EXECUTABLE}
                 "${_FREECAD_WASM_SDK_SDK_GENERATOR}"
@@ -77,6 +82,7 @@ function(freecad_wasm_generate_guest_sdk target)
     add_custom_target(${target}
         DEPENDS
             "${_FREECAD_WASM_SDK_MODEL}"
+            "${_FREECAD_WASM_SDK_SIGNATURE}"
             "${_FREECAD_WASM_SDK_CPP}"
             "${_FREECAD_WASM_SDK_RUST}"
             "${_FREECAD_WASM_SDK_PYTHON}"
@@ -98,13 +104,17 @@ function(freecad_wasm_generate_guest_sdk target)
         set(${_FREECAD_WASM_SDK_API_PYTHON_VARIABLE}
             "${_FREECAD_WASM_SDK_PYTHON}" PARENT_SCOPE)
     endif()
+    if(_FREECAD_WASM_SDK_API_SIGNATURE_VARIABLE)
+        set(${_FREECAD_WASM_SDK_API_SIGNATURE_VARIABLE}
+            "${_FREECAD_WASM_SDK_SIGNATURE}" PARENT_SCOPE)
+    endif()
 endfunction()
 
 function(freecad_wasm_addon target)
     set(_options ALL FREESTANDING OPTIONAL)
     set(_one_value_args
         SOURCE OUTPUT INCLUDE_ROOT OUTPUT_VARIABLE MANIFEST MANIFEST_OUTPUT
-        BUNDLE_TARGET_VARIABLE
+        BUNDLE_TARGET_VARIABLE MANIFEST_ABI_HASH_FILE
     )
     set(_multi_value_args DEPENDS INCLUDE_DIRS)
     cmake_parse_arguments(
@@ -228,15 +238,31 @@ function(freecad_wasm_addon target)
             set(_FREECAD_WASM_MANIFEST_OUTPUT
                 "${CMAKE_CURRENT_BINARY_DIR}/manifest.json")
         endif()
-        add_custom_command(
-            OUTPUT "${_FREECAD_WASM_MANIFEST_OUTPUT}"
-            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        if(_FREECAD_WASM_MANIFEST_ABI_HASH_FILE)
+            add_custom_command(
+                OUTPUT "${_FREECAD_WASM_MANIFEST_OUTPUT}"
+                COMMAND ${CMAKE_COMMAND}
+                        -DINPUT=${_FREECAD_WASM_MANIFEST}
+                        -DOUTPUT=${_FREECAD_WASM_MANIFEST_OUTPUT}
+                        -DABI_HASH_FILE=${_FREECAD_WASM_MANIFEST_ABI_HASH_FILE}
+                        -P "${_FREECAD_WASM_GUEST_MODULE_DIR}/ConfigureWasmManifest.cmake"
+                DEPENDS
                     "${_FREECAD_WASM_MANIFEST}"
-                    "${_FREECAD_WASM_MANIFEST_OUTPUT}"
-            DEPENDS "${_FREECAD_WASM_MANIFEST}"
-            COMMENT "Staging the FreeCAD Wasm addon manifest for ${target}"
-            VERBATIM
-        )
+                    "${_FREECAD_WASM_MANIFEST_ABI_HASH_FILE}"
+                COMMENT "Staging the FreeCAD Wasm addon manifest for ${target}"
+                VERBATIM
+            )
+        else()
+            add_custom_command(
+                OUTPUT "${_FREECAD_WASM_MANIFEST_OUTPUT}"
+                COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                        "${_FREECAD_WASM_MANIFEST}"
+                        "${_FREECAD_WASM_MANIFEST_OUTPUT}"
+                DEPENDS "${_FREECAD_WASM_MANIFEST}"
+                COMMENT "Staging the FreeCAD Wasm addon manifest for ${target}"
+                VERBATIM
+            )
+        endif()
 
         set(_FREECAD_WASM_BUNDLE_TARGET "${target}Bundle")
         if(_FREECAD_WASM_ALL)

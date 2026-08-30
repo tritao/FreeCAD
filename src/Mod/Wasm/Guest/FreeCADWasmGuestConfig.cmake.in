@@ -8,6 +8,8 @@ set(FREECAD_WASM_GUEST_INCLUDE_ROOT
     "${FreeCADWasmGuest_INCLUDE_DIR}")
 set(FreeCADWasmGuest_CMAKE_MODULE
     "@PACKAGE_CMAKE_INSTALL_DATADIR@/FreeCAD/Wasm/FreeCADWasmGuest.cmake")
+set(FreeCADWasmGuest_API_SIGNATURE_FILE
+    "@PACKAGE_CMAKE_INSTALL_DATADIR@/FreeCAD/Wasm/freecad_wasm_api.signature")
 set(FreeCADWasmGuest_EXAMPLES_DIR
     "@PACKAGE_CMAKE_INSTALL_DATADIR@/FreeCAD/Wasm/examples/cpp")
 
@@ -22,6 +24,13 @@ if(NOT EXISTS "${FreeCADWasmGuest_CMAKE_MODULE}")
     set(FreeCADWasmGuest_FOUND FALSE)
     set(FreeCADWasmGuest_NOT_FOUND_MESSAGE
         "FreeCAD Wasm guest CMake helper was not found")
+    return()
+endif()
+
+if(NOT EXISTS "${FreeCADWasmGuest_API_SIGNATURE_FILE}")
+    set(FreeCADWasmGuest_FOUND FALSE)
+    set(FreeCADWasmGuest_NOT_FOUND_MESSAGE
+        "FreeCAD Wasm guest ABI signature was not found")
     return()
 endif()
 

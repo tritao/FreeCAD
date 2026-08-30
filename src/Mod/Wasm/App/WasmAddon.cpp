@@ -5,6 +5,7 @@
 
 #include "WasmAbi.h"
 #include "WasmHostApi.h"
+#include "freecad_wasm_dispatch_metadata.hpp"
 
 #include <exception>
 #include <sstream>
@@ -27,6 +28,11 @@ AddonLoadResult WasmAddon::load(WasmManifest manifest,
             out << error;
         }
         return {false, out.str()};
+    }
+
+    if (manifest.abiHash() != Generated::ApiCatalogSignature) {
+        return {false,
+                "addon ABI hash does not match the host catalog signature"};
     }
 
     const auto runtimeInfo = runtime.info();

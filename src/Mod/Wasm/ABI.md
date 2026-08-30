@@ -159,8 +159,25 @@ must be enclosed in a host-approved `document.modify` capability.
 
 The host remains responsible for granting permissions from addon policy. The
 guest request cannot grant itself additional capabilities. `WasmAddon` loads
-the manifest and grants the intersection of requested permissions and the
-host policy, then invokes the fixed `freecad_addon_entry` export.
+the manifest, verifies its `abi_hash` against the generated host catalog, and
+only then grants the intersection of requested permissions and the host
+policy. A missing or mismatched `abi_hash` is rejected before module
+instantiation; a matching hash then invokes the fixed `freecad_addon_entry`
+export.
+
+Manifests must therefore include both the API family/version and the exact
+generated catalog signature:
+
+```json
+{
+  "api": "org.freecad.wasm.api@0",
+  "abi_hash": "sha256:<64 lowercase hexadecimal characters>"
+}
+```
+
+The generated C++ SDK exposes `ApiCatalogSignature`; Rust and Python expose
+`API_CATALOG_SIGNATURE`. These values must match the manifest used to package
+the guest module.
 
 ## API Source Of Truth
 

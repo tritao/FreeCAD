@@ -25,7 +25,23 @@ struct ParseState
 
 bool isAllowedKey(std::string_view key)
 {
-    return key == "name" || key == "api" || key == "entry" || key == "permissions";
+    return key == "name" || key == "api" || key == "abi_hash" || key == "entry"
+        || key == "permissions";
+}
+
+bool isSha256Digest(std::string_view value)
+{
+    constexpr std::size_t PrefixSize = 7U;
+    if (value.size() != PrefixSize + 64U || value.substr(0, PrefixSize) != "sha256:") {
+        return false;
+    }
+    for (const char character : value.substr(PrefixSize)) {
+        if (!((character >= '0' && character <= '9')
+              || (character >= 'a' && character <= 'f'))) {
+            return false;
+        }
+    }
+    return true;
 }
 
 std::string lowerExtension(const std::filesystem::path& path)
@@ -122,6 +138,7 @@ WasmManifest WasmManifest::loadFromFile(const std::filesystem::path& path)
 
     readString("name", manifest.manifestName);
     readString("api", manifest.manifestApi);
+    readString("abi_hash", manifest.manifestAbiHash);
     readString("entry", manifest.manifestEntry);
 
     const auto permissions = source.find("permissions");
@@ -161,6 +178,11 @@ const std::string& WasmManifest::name() const
 const std::string& WasmManifest::api() const
 {
     return manifestApi;
+}
+
+const std::string& WasmManifest::abiHash() const
+{
+    return manifestAbiHash;
 }
 
 const std::string& WasmManifest::entry() const
@@ -253,6 +275,12 @@ std::vector<std::string> WasmManifest::validate() const
     } else if (manifestApi != SupportedApi) {
         errors.emplace_back(
             "manifest declares unsupported API '" + manifestApi + "' (expected '" + SupportedApi + "')");
+    }
+
+    if (manifestAbiHash.empty()) {
+        errors.emplace_back("manifest is missing string field 'abi_hash'");
+    } else if (!isSha256Digest(manifestAbiHash)) {
+        errors.emplace_back("manifest field 'abi_hash' must be a SHA-256 digest");
     }
 
     if (manifestEntry.empty()) {

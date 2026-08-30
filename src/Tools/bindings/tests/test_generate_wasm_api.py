@@ -319,6 +319,10 @@ class GenerateWasmApiTests(unittest.TestCase):
         metadata = generate_wasm_api.render_dispatch_metadata(model)
         self.assertIn("OperationMetadataTable", metadata)
         self.assertIn(
+            f'ApiCatalogSignature = "{model["abi"]["catalog_signature"]}"',
+            metadata,
+        )
+        self.assertIn(
             'Abi::Operation::DocumentOpenTransaction, 16U',
             metadata,
         )

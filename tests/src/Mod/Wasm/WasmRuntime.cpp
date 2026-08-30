@@ -72,7 +72,18 @@ public:
     std::filesystem::path writeManifest(const std::string& contents)
     {
         const auto path = addonDirectory / "manifest.json";
-        writeFile(path, contents);
+        std::string manifest = contents;
+        const std::string apiMarker =
+            std::string("\"api\":\"") + Wasm::WasmManifest::SupportedApi + "\",";
+        const auto apiPosition = manifest.find(apiMarker);
+        if (apiPosition != std::string::npos && manifest.find("\"abi_hash\"") == std::string::npos) {
+            const auto insertPosition = apiPosition + apiMarker.size();
+            manifest.insert(
+                insertPosition,
+                std::string("\"abi_hash\":\"")
+                    + std::string(Wasm::Generated::ApiCatalogSignature) + "\",");
+        }
+        writeFile(path, manifest);
         return path;
     }
 
@@ -410,6 +421,7 @@ TEST(WasmManifestTest, ParsesAndValidatesStrictManifest)
     EXPECT_TRUE(manifest.validate().empty());
     EXPECT_EQ(manifest.name(), "Example");
     EXPECT_EQ(manifest.api(), Wasm::WasmManifest::SupportedApi);
+    EXPECT_EQ(manifest.abiHash(), Wasm::Generated::ApiCatalogSignature);
     ASSERT_EQ(manifest.permissions().size(), 1U);
     EXPECT_EQ(manifest.permissions().front(), "console.log");
     ASSERT_TRUE(manifest.resolveEntryPath());
@@ -432,6 +444,13 @@ TEST(WasmManifestTest, RejectsMalformedDuplicateAndWrongTypeFields)
     const auto wrongType = Wasm::WasmManifest::loadFromFile(files.writeManifest(
         R"({"name":"Example","api":"org.freecad.wasm.api@0","entry":42})"));
     EXPECT_TRUE(containsError(wrongType.validate(), "field 'entry' must be a string"));
+
+    const auto missingAbiPath = files.addonDirectory / "missing-abi.json";
+    files.writeFile(
+        missingAbiPath,
+        R"({"name":"Example","api":"org.freecad.wasm.api@0","entry":"entry.wasm"})");
+    const auto missingAbi = Wasm::WasmManifest::loadFromFile(missingAbiPath);
+    EXPECT_TRUE(containsError(missingAbi.validate(), "missing string field 'abi_hash'"));
 
     const auto unsupportedPermission = Wasm::WasmManifest::loadFromFile(files.writeManifest(
         R"({"name":"Example","api":"org.freecad.wasm.api@0","entry":"entry.wasm","permissions":["filesystem.read"]})"));
@@ -500,6 +519,25 @@ TEST(WasmAddonTest, InvokeRequiresLoadedAddon)
     const auto result = addon.invoke();
     EXPECT_FALSE(result.ok);
     EXPECT_NE(result.error.find("not loaded"), std::string::npos);
+}
+
+TEST(WasmAddonTest, RejectsMismatchedAbiHashBeforeInstantiation)
+{
+    TemporaryAddon files;
+    files.writeFile(files.addonDirectory / "entry.wasm", "wasm");
+    const auto manifestPath = files.addonDirectory / "manifest.json";
+    files.writeFile(
+        manifestPath,
+        R"({"name":"Example","api":"org.freecad.wasm.api@0","abi_hash":"sha256:0000000000000000000000000000000000000000000000000000000000000000","entry":"entry.wasm"})");
+
+    Wasm::WasmAddon addon;
+    Wasm::WasmHostApi hostApi;
+    FakeRuntime runtime;
+
+    const auto result = addon.load(manifestPath, runtime, hostApi);
+    EXPECT_FALSE(result.ok);
+    EXPECT_NE(result.error.find("ABI hash"), std::string::npos);
+    EXPECT_TRUE(runtime.instantiatedPath.empty());
 }
 
 TEST(WasmAddonManagerTest, LoadsInvokesListsAndUnloadsAddons)

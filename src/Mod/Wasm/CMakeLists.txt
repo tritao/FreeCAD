@@ -24,6 +24,7 @@ set(Wasm_Guest_SDK
     WasmExtensionApi.json
     Guest/FreeCADWasmGuest.cmake
     Guest/FreeCADWasmGuestConfig.cmake.in
+    Guest/ConfigureWasmManifest.cmake
     Guest/WasmGuest.h
     Guest/WasmGuestFreestanding.h
     ABI.md
@@ -56,6 +57,7 @@ install(
 install(
     FILES
         Guest/FreeCADWasmGuest.cmake
+        Guest/ConfigureWasmManifest.cmake
         WasmApiOperations.json
         WasmApiAdapters.json
         WasmExtensionApi.json

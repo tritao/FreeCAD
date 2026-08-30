@@ -18,6 +18,7 @@ if(BUILD_PART)
 endif()
 
 set(Wasm_API_MODEL ${CMAKE_BINARY_DIR}/Mod/Wasm/freecad_wasm_api.json)
+set(Wasm_API_SIGNATURE ${CMAKE_BINARY_DIR}/Mod/Wasm/freecad_wasm_api.signature)
 set(Wasm_API_DISPATCH_METADATA
     ${CMAKE_BINARY_DIR}/Mod/Wasm/freecad_wasm_dispatch_metadata.hpp)
 set(Wasm_API_GENERATOR ${CMAKE_SOURCE_DIR}/src/Tools/bindings/generate_wasm_api.py)
@@ -52,11 +53,13 @@ set(Wasm_API_GENERATOR_SOURCES
 add_custom_command(
     OUTPUT
         ${Wasm_API_MODEL}
+        ${Wasm_API_SIGNATURE}
         ${Wasm_API_DISPATCH_METADATA}
     COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_BINARY_DIR}/Mod/Wasm
     COMMAND ${Python3_EXECUTABLE} ${Wasm_API_GENERATOR}
             --output ${Wasm_API_MODEL}
             --dispatch-metadata-output ${Wasm_API_DISPATCH_METADATA}
+            --catalog-signature-output ${Wasm_API_SIGNATURE}
             ${Wasm_API_INPUTS}
     MAIN_DEPENDENCY ${Wasm_API_GENERATOR}
     DEPENDS ${Wasm_API_INPUTS} ${Wasm_API_GENERATOR_SOURCES}
@@ -64,7 +67,7 @@ add_custom_command(
 )
 
 add_custom_target(WasmApiModel ALL
-    DEPENDS ${Wasm_API_MODEL} ${Wasm_API_DISPATCH_METADATA}
+    DEPENDS ${Wasm_API_MODEL} ${Wasm_API_SIGNATURE} ${Wasm_API_DISPATCH_METADATA}
 )
 
 set(Wasm_API_CPP_SDK ${CMAKE_CURRENT_BINARY_DIR}/freecad_wasm_api.hpp)
@@ -172,6 +175,7 @@ SET_PYTHON_PREFIX_SUFFIX(Wasm)
 
 install(TARGETS Wasm DESTINATION ${CMAKE_INSTALL_LIBDIR})
 install(FILES ${Wasm_API_MODEL} DESTINATION Mod/Wasm)
+install(FILES ${Wasm_API_SIGNATURE} DESTINATION ${CMAKE_INSTALL_DATADIR}/FreeCAD/Wasm)
 install(
     FILES
         ${Wasm_API_CPP_SDK}

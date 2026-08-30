@@ -24,6 +24,7 @@ if(FREECAD_USE_WAMR)
         API_GENERATOR ${CMAKE_SOURCE_DIR}/src/Tools/bindings/generate_wasm_api.py
         SDK_GENERATOR ${CMAKE_SOURCE_DIR}/src/Tools/bindings/generate_wasm_sdk.py
         API_RUST_VARIABLE FREECAD_WASM_RUST_API
+        API_SIGNATURE_VARIABLE FREECAD_WASM_API_SIGNATURE
         INPUTS
             ${CMAKE_SOURCE_DIR}/src/Base/Vector.pyi
             ${CMAKE_SOURCE_DIR}/src/App/Document.pyi
@@ -44,6 +45,7 @@ if(FREECAD_USE_WAMR)
         OUTPUT_VARIABLE FREECAD_WASM_CAPABILITY_FIXTURE
         MANIFEST ${CMAKE_SOURCE_DIR}/examples/wasm/cpp/manifest.json
         MANIFEST_OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/freecad-capability-addon-manifest.json
+        MANIFEST_ABI_HASH_FILE ${FREECAD_WASM_API_SIGNATURE}
         BUNDLE_TARGET_VARIABLE FREECAD_WASM_CAPABILITY_BUNDLE
         DEPENDS
             ${CMAKE_SOURCE_DIR}/src/Mod/Wasm/WasmAbi.h

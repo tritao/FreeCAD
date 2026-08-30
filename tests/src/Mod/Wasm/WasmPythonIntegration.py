@@ -32,6 +32,7 @@ with tempfile.TemporaryDirectory(prefix="freecad-wasm-python-") as temporary_dir
             {
                 "name": "PythonCapability",
                 "api": "org.freecad.wasm.api@0",
+                "abi_hash": runtime_info["api_catalog_signature"],
                 "entry": "capability.wasm",
                 "permissions": [
                     "document.create",

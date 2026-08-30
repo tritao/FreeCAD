@@ -17,6 +17,8 @@ if(FREECAD_WASM_USE_INSTALLED_SDK)
         "${FreeCADWasmGuest_CMAKE_MODULE}")
     set(_freecad_wasm_guest_include_root
         "${FreeCADWasmGuest_INCLUDE_DIR}")
+    set(_freecad_wasm_guest_api_signature
+        "${FreeCADWasmGuest_API_SIGNATURE_FILE}")
 else()
     set(FREECAD_SOURCE_DIR "${_freecad_source_dir}" CACHE PATH
         "FreeCAD source tree containing the Wasm guest SDK")
@@ -56,6 +58,7 @@ else()
             "${FREECAD_SOURCE_DIR}/src/Tools/bindings/generate_wasm_api.py"
         SDK_GENERATOR
             "${FREECAD_SOURCE_DIR}/src/Tools/bindings/generate_wasm_sdk.py"
+        API_SIGNATURE_VARIABLE _freecad_wasm_guest_api_signature
         INPUTS ${_freecad_wasm_api_inputs}
         DEPENDS
             "${FREECAD_SOURCE_DIR}/src/Mod/Wasm/WasmApiOperations.json"
@@ -75,6 +78,7 @@ freecad_wasm_addon(FreeCADCapabilityAddon
     OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/freecad-capability-addon.wasm"
     MANIFEST "${CMAKE_CURRENT_LIST_DIR}/manifest.json"
     MANIFEST_OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/manifest.json"
+    MANIFEST_ABI_HASH_FILE "${_freecad_wasm_guest_api_signature}"
     BUNDLE_TARGET_VARIABLE _freecad_wasm_bundle_target
     DEPENDS
         "${CMAKE_CURRENT_LIST_DIR}/manifest.json"

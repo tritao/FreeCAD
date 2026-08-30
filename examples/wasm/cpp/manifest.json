@@ -1,6 +1,7 @@
 {
   "name": "CapabilityExample",
   "api": "org.freecad.wasm.api@0",
+  "abi_hash": "@FREECAD_WASM_ABI_HASH@",
   "entry": "freecad-capability-addon.wasm",
   "permissions": [
     "document.create",

@@ -10,6 +10,7 @@
 #include "WasmAddonManager.h"
 #include "WasmRuntimeFactory.h"
 #include "WasmRuntime.h"
+#include "freecad_wasm_dispatch_metadata.hpp"
 
 #include <cstring>
 #include <vector>
@@ -79,6 +80,9 @@ private:
         dict.setItem("supports_aot", Py::Boolean(info.supportsAot));
         dict.setItem("supports_jit", Py::Boolean(info.supportsJit));
         dict.setItem("supports_hard_timeout", Py::Boolean(info.supportsHardTimeout));
+        dict.setItem(
+            "api_catalog_signature",
+            Py::String(std::string(Generated::ApiCatalogSignature)));
         dict.setItem("api_model", Py::String("freecad_wasm_api.json"));
         return dict;
     }
@@ -102,6 +106,7 @@ private:
         dict.setItem("valid", Py::Boolean(errors.empty()));
         dict.setItem("name", Py::String(manifest.name()));
         dict.setItem("api", Py::String(manifest.api()));
+        dict.setItem("abi_hash", Py::String(manifest.abiHash()));
         dict.setItem("entry", Py::String(manifest.entry()));
         dict.setItem("errors", pyErrors);
         return dict;
@@ -125,6 +130,7 @@ private:
         Py::Dict dict;
         dict.setItem("name", Py::String(manifest.name()));
         dict.setItem("api", Py::String(manifest.api()));
+        dict.setItem("abi_hash", Py::String(manifest.abiHash()));
         dict.setItem("entry", Py::String(manifest.entry()));
         return dict;
     }

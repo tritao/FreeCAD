@@ -41,6 +41,8 @@ with tempfile.TemporaryDirectory(prefix="freecad-wasm-api-") as temporary_direct
 assert model["schema"] == "org.freecad.wasm.api"
 assert model["api"] == "org.freecad.wasm.api@0"
 assert model["permission_policy"] == "deny-by-default"
+assert model["abi"]["catalog_signature"].startswith("sha256:")
+assert len(model["abi"]["catalog_signature"]) == len("sha256:") + 64
 assert model["abi"]["response_magic"] == "FCWR"
 assert model["abi"]["error_codes"]["permission_denied"] == 2
 operations = {operation["name"]: operation for operation in model["operations"]}

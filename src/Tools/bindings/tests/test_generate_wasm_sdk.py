@@ -33,10 +33,14 @@ class GenerateWasmSdkTests(unittest.TestCase):
         cpp = generate_wasm_sdk.render_cpp(model)
         rust = generate_wasm_sdk.render_rust(model)
         python = generate_wasm_sdk.render_python(model)
+        catalog_signature = model["abi"]["catalog_signature"]
 
         self.assertIn('ApiVersion[] = "org.freecad.wasm.api@0"', cpp)
+        self.assertIn(f'ApiCatalogSignature[] = "{catalog_signature}"', cpp)
         self.assertIn('API_VERSION: &str = "org.freecad.wasm.api@0"', rust)
+        self.assertIn(f'API_CATALOG_SIGNATURE: &str = "{catalog_signature}"', rust)
         self.assertIn('API_VERSION = "org.freecad.wasm.api@0"', python)
+        self.assertIn(f'API_CATALOG_SIGNATURE = "{catalog_signature}"', python)
         self.assertIn("FreeCADBaseVectorValue", cpp)
         self.assertIn("FreeCADBaseVectorValue", rust)
         self.assertIn("FreeCADDocumentHandle", cpp)
