@@ -159,7 +159,7 @@ def _parse_node(node: ast.AST, module_name: str | None, annotation: str) -> ApiT
         if base == "Final":
             if not args:
                 return _value(annotation)
-            return _with_annotation(_parse_node(args[0], module_name, _name(args[0])), annotation)
+            return _parse_node(args[0], module_name, _name(args[0]))
         if base in {"list", "List", "Sequence", "Iterable"}:
             item = _parse_node(args[0], module_name, _name(args[0])) if args else _value("object")
             return ApiType(kind=ApiTypeKind.LIST, annotation=annotation, item=item)
@@ -202,7 +202,7 @@ def _parse_node(node: ast.AST, module_name: str | None, annotation: str) -> ApiT
                 literal_values=tuple(values),
             )
         if base == "Annotated" and args:
-            return _with_annotation(_parse_node(args[0], module_name, _name(args[0])), annotation)
+            return _parse_node(args[0], module_name, _name(args[0]))
 
     return _value(annotation)
 

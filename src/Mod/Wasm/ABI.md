@@ -183,6 +183,13 @@ published ABI lock (numeric codes and compatibility names) plus explicit host
 adapters for operations that are not direct projections. It must not duplicate
 the projected parameter or return signatures.
 
+Readable and writable Python attributes use `extension_property` metadata with
+separate local operation IDs. The property type supplies the getter result and
+setter value parameter; access-specific permissions and transaction policy are
+declared on the nested operations. For example, `DocumentObject.Label` derives
+both `object_get_label` and `object_set_label` without duplicating its `str`
+type in the ABI catalog.
+
 Document mutations are transaction-scoped. An addon must open a transaction
 before calling document.add_object or document.object.set_label. Transaction
 depth is tracked per addon instance, so nested transactions must be committed

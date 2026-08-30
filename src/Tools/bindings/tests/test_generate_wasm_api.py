@@ -150,6 +150,8 @@ class GenerateWasmApiTests(unittest.TestCase):
                 "org.freecad.document@1/open_transaction",
                 "org.freecad.document@1/commit_transaction",
                 "org.freecad.document@1/abort_transaction",
+                "org.freecad.document@1/object_get_label",
+                "org.freecad.document@1/object_set_label",
                 "org.freecad.geometry@1/vector_add",
                 "org.freecad.geometry@1/vector_dot",
                 "org.freecad.geometry@1/vector_cross",
@@ -188,6 +190,25 @@ class GenerateWasmApiTests(unittest.TestCase):
             operation for operation in model["operations"] if operation["name"] == "topoShapeArea"
         )
         self.assertEqual(shape_area_catalog["params"][0]["name"], "shape")
+
+        label_set = next(
+            operation
+            for interface in extension["interfaces"]
+            for operation in interface["operations"]
+            if operation["id"] == "org.freecad.document@1/object_set_label"
+        )
+        self.assertEqual(label_set["property_access"], "write")
+        self.assertEqual(label_set["params"][0]["name"], "label")
+        self.assertEqual(label_set["params"][0]["type"]["kind"], "string")
+        label_set_catalog = next(
+            operation
+            for operation in model["operations"]
+            if operation["name"] == "documentObjectSetLabel"
+        )
+        self.assertEqual(label_set_catalog["property_access"], "write")
+        self.assertEqual(label_set_catalog["returns"]["kind"], "bool")
+        self.assertEqual(label_set_catalog["params"][-1]["name"], "label")
+        self.assertEqual(label_set_catalog["params"][-1]["annotation"], "str")
 
 
 if __name__ == "__main__":

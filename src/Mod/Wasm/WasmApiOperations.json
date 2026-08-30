@@ -36,6 +36,18 @@
         "wire_name": "document.get_object",
         "guest_method": "documentGetObject"
       },
+      "org.freecad.document@1/object_get_label": {
+        "id": 19,
+        "name": "documentObjectGetLabel",
+        "wire_name": "document.object.get_label",
+        "guest_method": "documentObjectGetLabel"
+      },
+      "org.freecad.document@1/object_set_label": {
+        "id": 20,
+        "name": "documentObjectSetLabel",
+        "wire_name": "document.object.set_label",
+        "guest_method": "documentObjectSetLabel"
+      },
       "org.freecad.part@1/shape_is_null": {
         "id": 11,
         "name": "topoShapeIsNull",
@@ -186,36 +198,6 @@
       "requires": ["src/App/Document.pyi"],
       "params": [
         {"name": "document", "type": {"kind": "handle", "type": "FreeCAD.Document", "annotation": "Document"}}
-      ],
-      "returns": {"kind": "bool", "annotation": "bool"}
-    },
-    {
-      "name": "documentObjectGetLabel",
-      "wire_name": "document.object.get_label",
-      "id": 19,
-      "guest_method": "documentObjectGetLabel",
-      "source": "FreeCAD.DocumentObject.Label",
-      "permission": "document.read",
-      "mutates": false,
-      "requires": ["src/App/DocumentObject.pyi"],
-      "params": [
-        {"name": "object", "type": {"kind": "handle", "type": "FreeCAD.DocumentObject", "annotation": "DocumentObject"}}
-      ],
-      "returns": {"kind": "string", "annotation": "str"}
-    },
-    {
-      "name": "documentObjectSetLabel",
-      "wire_name": "document.object.set_label",
-      "id": 20,
-      "guest_method": "documentObjectSetLabel",
-      "source": "FreeCAD.DocumentObject.Label",
-      "permission": "document.modify",
-      "mutates": true,
-      "transaction": "required",
-      "requires": ["src/App/DocumentObject.pyi"],
-      "params": [
-        {"name": "object", "type": {"kind": "handle", "type": "FreeCAD.DocumentObject", "annotation": "DocumentObject"}},
-        {"name": "label", "type": {"kind": "string", "annotation": "str"}}
       ],
       "returns": {"kind": "bool", "annotation": "bool"}
     }

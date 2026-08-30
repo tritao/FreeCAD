@@ -35,6 +35,11 @@ class ExtensionRepresentation(str, Enum):
     RESOURCE = "resource"
 
 
+class ExtensionPropertyAccess(str, Enum):
+    READ = "read"
+    WRITE = "write"
+
+
 _LOCAL_ID_PATTERN = re.compile(r"[a-z][a-z0-9_]*\Z")
 _INTERFACE_NAME_PATTERN = re.compile(r"[a-z][a-z0-9_.-]*\Z")
 
@@ -97,12 +102,38 @@ class ExtensionTypeMetadata:
 
 
 @dataclass(frozen=True)
+class ExtensionPropertyMetadata:
+    """Extension-facing operations for a readable and/or writable attribute."""
+
+    read: ExtensionApiMetadata | None = None
+    write: ExtensionApiMetadata | None = None
+
+    def __post_init__(self) -> None:
+        if self.read is None and self.write is None:
+            raise ExtensionMetadataError(
+                "extension_property requires a read or write operation"
+            )
+        if self.read is not None and self.write is not None:
+            if self.read.local_id == self.write.local_id:
+                raise ExtensionMetadataError(
+                    "extension_property read and write operations must have distinct IDs"
+                )
+
+
+@dataclass(frozen=True)
 class ApiMetadata:
     """Typed metadata shared by all neutral API model declarations."""
 
     extension_api: ExtensionApiMetadata | None = None
     extension_type: ExtensionTypeMetadata | None = None
+    extension_property: ExtensionPropertyMetadata | None = None
     extension_interface: ExtensionInterfaceMetadata | None = None
+
+    def __post_init__(self) -> None:
+        if self.extension_api is not None and self.extension_property is not None:
+            raise ExtensionMetadataError(
+                "a declaration cannot use both extension_api and extension_property"
+            )
 
 
 def _decorator_name(node: ast.expr) -> str | None:
@@ -284,6 +315,57 @@ def parse_extension_interface_metadata(
     return ExtensionInterfaceMetadata(name=name, version=version)
 
 
+def parse_extension_property_metadata(
+    decorators: Iterable[ast.expr],
+    *,
+    subject: str,
+) -> ExtensionPropertyMetadata | None:
+    """Parse read/write extension operations attached to one attribute."""
+
+    call = _decorator_call(decorators, "extension_property", subject)
+    if call is None:
+        return None
+    if call.args:
+        raise ExtensionMetadataError(f"{subject}: extension_property is keyword-only")
+
+    values: dict[str, ast.expr] = {}
+    for keyword in call.keywords:
+        if keyword.arg is None:
+            raise ExtensionMetadataError(
+                f"{subject}: **kwargs are not valid extension_property metadata"
+            )
+        if keyword.arg in values:
+            raise ExtensionMetadataError(
+                f"{subject}: duplicate extension_property field '{keyword.arg}'"
+            )
+        values[keyword.arg] = keyword.value
+
+    unknown = sorted(set(values) - {"read", "write"})
+    if unknown:
+        raise ExtensionMetadataError(
+            f"{subject}: unknown extension_property field '{unknown[0]}'"
+        )
+
+    operations: dict[str, ExtensionApiMetadata | None] = {"read": None, "write": None}
+    for access in operations:
+        value = values.get(access)
+        if value is None:
+            continue
+        if not isinstance(value, ast.Call) or _decorator_name(value) != "extension_api":
+            raise ExtensionMetadataError(
+                f"{subject}: extension_property {access} must use extension_api"
+            )
+        operations[access] = parse_extension_api_metadata(
+            (value,),
+            subject=f"{subject}.{access}",
+        )
+
+    return ExtensionPropertyMetadata(
+        read=operations["read"],
+        write=operations["write"],
+    )
+
+
 def parse_api_metadata(
     decorators: Iterable[ast.expr],
     *,
@@ -299,11 +381,16 @@ def parse_api_metadata(
             "extension_api",
             "extension_type",
             "extension_interface",
+            "extension_property",
         }:
             parsed_decorators += (metadata_node,)
     return ApiMetadata(
         extension_api=parse_extension_api_metadata(parsed_decorators, subject=subject),
         extension_type=parse_extension_type_metadata(parsed_decorators, subject=subject),
+        extension_property=parse_extension_property_metadata(
+            parsed_decorators,
+            subject=subject,
+        ),
         extension_interface=parse_extension_interface_metadata(
             parsed_decorators,
             subject=subject,

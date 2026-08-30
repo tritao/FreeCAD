@@ -40,6 +40,13 @@ class ApiTypeTests(unittest.TestCase):
         self.assertEqual(literal.kind, ApiTypeKind.LITERAL)
         self.assertEqual(literal.literal_values, ("read", "write"))
 
+    def test_metadata_wrappers_do_not_change_the_semantic_annotation(self) -> None:
+        value = parse_annotation("Final[Annotated[float, object]]")
+        self.assertIsNotNone(value)
+        assert value is not None
+        self.assertEqual(value.kind, ApiTypeKind.FLOAT)
+        self.assertEqual(value.annotation, "float")
+
 
 if __name__ == "__main__":
     unittest.main()

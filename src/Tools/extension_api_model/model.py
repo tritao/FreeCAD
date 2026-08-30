@@ -8,6 +8,7 @@ from dataclasses import dataclass
 
 from python_api_model.metadata import (
     ExtensionEffect,
+    ExtensionPropertyAccess,
     ExtensionRepresentation,
     TransactionPolicy,
 )
@@ -53,6 +54,7 @@ class ExtensionOperation:
     effect: ExtensionEffect | None
     transaction: TransactionPolicy
     since: str | None
+    property_access: ExtensionPropertyAccess | None = None
 
 
 @dataclass(frozen=True)

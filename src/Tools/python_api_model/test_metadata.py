@@ -57,7 +57,9 @@ class ExtensionMetadataTests(unittest.TestCase):
     def test_parses_callable_metadata_from_annotated_attribute(self) -> None:
         node = ast.parse(
             "Length: Final[Annotated[float, "
-            "extension_api(id='shape_length', effect='read')]] = 0.0"
+            "extension_property(read=extension_api(id='shape_length', effect='read'), "
+            "write=extension_api(id='shape_length_set', effect='modify', "
+            "transaction='required'))]] = 0.0"
         ).body[0]
         assert isinstance(node, ast.AnnAssign)
         metadata = parse_api_metadata(
@@ -65,9 +67,33 @@ class ExtensionMetadataTests(unittest.TestCase):
             subject="Part.TopoShape.Length",
             annotation=node.annotation,
         )
-        assert metadata.extension_api is not None
-        self.assertEqual(metadata.extension_api.local_id, "shape_length")
-        self.assertIs(metadata.extension_api.effect, ExtensionEffect.READ)
+        assert metadata.extension_property is not None
+        assert metadata.extension_property.read is not None
+        assert metadata.extension_property.write is not None
+        self.assertEqual(metadata.extension_property.read.local_id, "shape_length")
+        self.assertIs(metadata.extension_property.read.effect, ExtensionEffect.READ)
+        self.assertEqual(metadata.extension_property.write.local_id, "shape_length_set")
+        self.assertEqual(
+            metadata.extension_property.write.transaction.value,
+            "required",
+        )
+
+    def test_rejects_invalid_property_metadata(self) -> None:
+        cases = (
+            "Annotated[str, extension_property()]",
+            "Annotated[str, extension_property(read=extension_api(id='same'), "
+            "write=extension_api(id='same'))]",
+            "Annotated[str, extension_property(read='not_an_operation')]",
+        )
+        for annotation in cases:
+            node = ast.parse(f"value: {annotation} = ...").body[0]
+            assert isinstance(node, ast.AnnAssign)
+            with self.subTest(annotation=annotation), self.assertRaises(ExtensionMetadataError):
+                parse_api_metadata(
+                    (),
+                    subject="Demo.value",
+                    annotation=node.annotation,
+                )
 
     def test_rejects_invalid_metadata(self) -> None:
         cases = (

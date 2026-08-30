@@ -297,7 +297,11 @@ def _attribute_model(
 ) -> dict[str, Any]:
     return {
         "name": attribute.name,
-        "annotation": attribute.annotation,
+        "annotation": (
+            attribute.annotation_type.annotation
+            if attribute.annotation_type is not None
+            else attribute.annotation
+        ),
         "type": _wasm_type(
             attribute.annotation_type,
             attribute.annotation,
@@ -556,7 +560,7 @@ def _extension_operation_catalog(
             {
                 "name": parameter_name,
                 "kind": _argument_kind(parameter.kind),
-                "annotation": parameter.annotation,
+                "annotation": parameter.type.annotation,
                 "type": _wasm_type(
                     parameter.type,
                     parameter.annotation,
@@ -575,6 +579,11 @@ def _extension_operation_catalog(
         "source": operation.source_symbol,
         "permission": operation.permission,
         "mutates": effect in {"create", "modify"},
+        "property_access": (
+            operation.property_access.value
+            if operation.property_access is not None
+            else None
+        ),
         "requires": [
             operation.source_location.path
             if operation.source_location is not None
@@ -731,6 +740,11 @@ def _extension_model_json(
                     ),
                     "permission": operation.permission,
                     "effect": operation.effect.value if operation.effect else None,
+                    "property_access": (
+                        operation.property_access.value
+                        if operation.property_access is not None
+                        else None
+                    ),
                     "transaction": (
                         operation.transaction.value
                         if operation.transaction.value != "none"

@@ -2,15 +2,22 @@
 
 from __future__ import annotations
 
-from Base.Metadata import constmethod, extension_type
+from Base.Metadata import (
+    constmethod,
+    extension_api,
+    extension_interface,
+    extension_property,
+    extension_type,
+)
 from Base.Matrix import Matrix
 from DepEdge import DepEdge
 from Document import Document
 from DocumentObjectGroup import DocumentObjectGroup
 from ExtensionContainer import ExtensionContainer
-from typing import TYPE_CHECKING, Any, Final, List, Optional, Union, Tuple
+from typing import Annotated, TYPE_CHECKING, Any, Final, List, Optional, Union, Tuple
 
 
+@extension_interface(name="document", version=1)
 @extension_type(representation="resource")
 class DocumentObject(ExtensionContainer):
     """
@@ -20,7 +27,22 @@ class DocumentObject(ExtensionContainer):
     """
 
     if TYPE_CHECKING:
-        Label: str = ...
+        Label: Annotated[
+            str,
+            extension_property(
+                read=extension_api(
+                    id="object_get_label",
+                    permission="document.read",
+                    effect="read",
+                ),
+                write=extension_api(
+                    id="object_set_label",
+                    permission="document.modify",
+                    effect="modify",
+                    transaction="required",
+                ),
+            ),
+        ] = ...
         Label2: str = ...
 
     OutListProp: Final[List[DepEdge]] = []

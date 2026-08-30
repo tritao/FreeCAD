@@ -72,6 +72,8 @@ extension_operations = {
 assert extension_operations["org.freecad.document@1/is_saved"]["source"] == "FreeCAD.Document.isSaved"
 assert extension_operations["org.freecad.geometry@1/vector_dot"]["returns"]["kind"] == "float64"
 assert extension_operations["org.freecad.part@1/shape_is_valid"]["permission"] == "geometry.read"
+assert extension_operations["org.freecad.document@1/object_get_label"]["property_access"] == "read"
+assert extension_operations["org.freecad.document@1/object_set_label"]["property_access"] == "write"
 
 abi_header = (ROOT / "src/Mod/Wasm/WasmAbi.h").read_text(encoding="utf-8")
 abi_enum = re.search(

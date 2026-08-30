@@ -48,6 +48,8 @@ class ExtensionProjectTests(unittest.TestCase):
                 "org.freecad.document@1/get_object",
                 "org.freecad.document@1/is_saved",
                 "org.freecad.document@1/open_transaction",
+                "org.freecad.document@1/object_get_label",
+                "org.freecad.document@1/object_set_label",
                 "org.freecad.geometry@1/vector_add",
                 "org.freecad.geometry@1/vector_cross",
                 "org.freecad.geometry@1/vector_dot",
@@ -68,6 +70,16 @@ class ExtensionProjectTests(unittest.TestCase):
         self.assertEqual(shape_area.parameters, ())
         self.assertEqual(shape_area.returns.kind.value, "float")
         self.assertEqual(shape_area.effect.value, "read")
+        label_get = operations["org.freecad.document@1/object_get_label"]
+        self.assertEqual(label_get.property_access.value, "read")
+        self.assertEqual(label_get.returns.kind.value, "string")
+        self.assertEqual(label_get.parameters, ())
+        label_set = operations["org.freecad.document@1/object_set_label"]
+        self.assertEqual(label_set.property_access.value, "write")
+        self.assertEqual([item.name for item in label_set.parameters], ["label"])
+        self.assertEqual(label_set.parameters[0].type.kind.value, "string")
+        self.assertEqual(label_set.returns.kind.value, "boolean")
+        self.assertEqual(label_set.transaction.value, "required")
         self.assertEqual(extension.type_representations["FreeCAD.Base.Vector"].value, "value")
 
     def test_namespace_manifest_is_validated(self) -> None:

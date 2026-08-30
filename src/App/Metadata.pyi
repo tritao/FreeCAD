@@ -34,6 +34,13 @@ def extension_interface(
 ) -> Callable[[_ClassT], _ClassT]: ...
 
 
+def extension_property(
+    *,
+    read: Callable[..., Any] | None = None,
+    write: Callable[..., Any] | None = None,
+) -> object: ...
+
+
 @export(
     Constructor=True,
     Delete=True,

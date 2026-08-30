@@ -10,7 +10,9 @@ import re
 from typing import Iterable
 
 from python_api_model.metadata import (
+    ExtensionApiMetadata,
     ExtensionInterfaceMetadata,
+    ExtensionPropertyAccess,
 )
 from python_api_model.model import (
     ApiAttribute,
@@ -18,7 +20,7 @@ from python_api_model.model import (
     ApiClass,
     PythonApiModel,
 )
-from python_api_model.signatures import CallableSignature, SignatureParameter
+from python_api_model.signatures import ArgumentKind, CallableSignature, SignatureParameter
 from python_api_model.types import ApiType, parse_annotation
 
 from .model import (
@@ -142,18 +144,15 @@ def _project_operation(
     )
 
 
-def _project_attribute(
+def _project_attribute_operation(
     attribute: ApiAttribute,
     api_class: ApiClass,
     module_name: str,
     interface: ExtensionInterfaceMetadata,
     namespace: str,
+    metadata: ExtensionApiMetadata,
+    property_access: ExtensionPropertyAccess | None = None,
 ) -> ExtensionOperation:
-    metadata = attribute.metadata.extension_api
-    if metadata is None:
-        raise ExtensionProjectionError(
-            f"{api_class.qualified_name}.{attribute.name}: missing extension metadata"
-        )
     return_type = attribute.annotation_type or parse_annotation(
         attribute.annotation,
         module_name,
@@ -162,6 +161,20 @@ def _project_attribute(
         raise ExtensionProjectionError(
             f"{api_class.qualified_name}.{attribute.name}: no usable annotation"
         )
+    parameters: tuple[ExtensionParameter, ...] = ()
+    operation_return_type = return_type
+    if property_access is ExtensionPropertyAccess.WRITE:
+        parameters = (
+            ExtensionParameter(
+                name=attribute.name[:1].lower() + attribute.name[1:],
+                kind=ArgumentKind.POSITIONAL_OR_KEYWORD,
+                type=return_type,
+                annotation=attribute.annotation,
+                default=None,
+            ),
+        )
+        operation_return_type = parse_annotation("bool", module_name)
+        assert operation_return_type is not None
     interface_id = _interface_identifier(namespace, interface)
     source_symbol = f"{api_class.qualified_name}.{attribute.name}"
     return ExtensionOperation(
@@ -172,13 +185,64 @@ def _project_attribute(
         source_symbol=source_symbol,
         source_location=attribute.location,
         receiver=api_class.qualified_name,
-        parameters=(),
-        returns=return_type,
+        parameters=parameters,
+        returns=operation_return_type,
         permission=metadata.permission,
         effect=metadata.effect,
         transaction=metadata.transaction,
         since=metadata.since,
+        property_access=property_access,
     )
+
+
+def _project_attribute(
+    attribute: ApiAttribute,
+    api_class: ApiClass,
+    module_name: str,
+    interface: ExtensionInterfaceMetadata,
+    namespace: str,
+) -> tuple[ExtensionOperation, ...]:
+    metadata = attribute.metadata
+    if metadata.extension_api is not None:
+        return (
+            _project_attribute_operation(
+                attribute,
+                api_class,
+                module_name,
+                interface,
+                namespace,
+                metadata.extension_api,
+            ),
+        )
+    property_metadata = metadata.extension_property
+    if property_metadata is None:
+        return ()
+    operations: list[ExtensionOperation] = []
+    if property_metadata.read is not None:
+        operations.append(
+            _project_attribute_operation(
+                attribute,
+                api_class,
+                module_name,
+                interface,
+                namespace,
+                property_metadata.read,
+                ExtensionPropertyAccess.READ,
+            )
+        )
+    if property_metadata.write is not None:
+        operations.append(
+            _project_attribute_operation(
+                attribute,
+                api_class,
+                module_name,
+                interface,
+                namespace,
+                property_metadata.write,
+                ExtensionPropertyAccess.WRITE,
+            )
+        )
+    return tuple(operations)
 
 
 def _iter_operations(
@@ -223,20 +287,24 @@ def _iter_operations(
                     namespace,
                 )
             for attribute in api_class.attributes:
-                if attribute.metadata.extension_api is None:
+                if (
+                    attribute.metadata.extension_api is None
+                    and attribute.metadata.extension_property is None
+                ):
                     continue
                 if interface is None:
                     raise ExtensionProjectionError(
                         f"{api_class.qualified_name}.{attribute.name}: "
                         "no extension interface scope"
                     )
-                yield interface, _project_attribute(
+                for operation in _project_attribute(
                     attribute,
                     api_class,
                     module.name,
                     interface,
                     namespace,
-                )
+                ):
+                    yield interface, operation
 
 
 def project_api_model(model: PythonApiModel, *, namespace: str) -> ExtensionApiModel:
