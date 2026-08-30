@@ -509,6 +509,159 @@ def _validate_abi_lock(lock: Mapping[str, Any]) -> None:
             if value in seen:
                 raise ValueError(f"WASM ABI lock field '{field}' is duplicated: '{value}'")
             seen.add(value)
+        requirements = entry.get("requires", [])
+        if not isinstance(requirements, list) or not all(
+            isinstance(requirement, str) and requirement for requirement in requirements
+        ):
+            raise ValueError(
+                f"WASM ABI lock entry '{stable_id}' has invalid requirements"
+            )
+
+
+def _validate_retired_abi_lock(
+    retired: Mapping[str, Any],
+    lock: Mapping[str, Any],
+) -> set[int]:
+    """Validate retired ABI entries and return their permanently reserved IDs."""
+
+    active_ids = {
+        entry["id"]
+        for entry in lock.values()
+        if isinstance(entry, dict) and isinstance(entry.get("id"), int)
+    }
+    seen_ids = set(active_ids)
+    seen_names = {
+        entry["name"]
+        for entry in lock.values()
+        if isinstance(entry, dict) and isinstance(entry.get("name"), str)
+    }
+    seen_wire_names = {
+        entry["wire_name"]
+        for entry in lock.values()
+        if isinstance(entry, dict) and isinstance(entry.get("wire_name"), str)
+    }
+    seen_guest_methods = {
+        entry["guest_method"]
+        for entry in lock.values()
+        if isinstance(entry, dict) and isinstance(entry.get("guest_method"), str)
+    }
+    retired_ids: set[int] = set()
+
+    for stable_id, entry in retired.items():
+        if not isinstance(stable_id, str) or not stable_id:
+            raise ValueError("WASM retired ABI lock contains an invalid operation identity")
+        if stable_id in lock:
+            raise ValueError(
+                f"WASM ABI operation '{stable_id}' cannot be both active and retired"
+            )
+        if not isinstance(entry, dict):
+            raise ValueError(f"WASM retired ABI entry '{stable_id}' is not an object")
+        for field in ("id", "name", "wire_name", "guest_method", "reason"):
+            value = entry.get(field)
+            if field == "id":
+                if (
+                    isinstance(value, bool)
+                    or not isinstance(value, int)
+                    or not 0 < value <= 0xFF
+                ):
+                    raise ValueError(
+                        f"WASM retired ABI entry '{stable_id}' has an invalid id"
+                    )
+                if value in seen_ids:
+                    raise ValueError(
+                        f"WASM operation id {value} is reused by retired operation "
+                        f"'{stable_id}'"
+                    )
+                seen_ids.add(value)
+                retired_ids.add(value)
+            elif not isinstance(value, str) or not value:
+                raise ValueError(
+                    f"WASM retired ABI entry '{stable_id}' has an invalid '{field}'"
+                )
+        for field, seen in (
+            ("name", seen_names),
+            ("wire_name", seen_wire_names),
+            ("guest_method", seen_guest_methods),
+        ):
+            value = entry[field]
+            if value in seen:
+                raise ValueError(
+                    f"WASM retired ABI field '{field}' is reused: '{value}'"
+                )
+            seen.add(value)
+
+    return retired_ids
+
+
+def _validate_projected_abi_lock(
+    lock: Mapping[str, Any],
+    extension_model: ExtensionApiModel,
+    input_paths: set[str],
+    adapter_sources: Mapping[str, str],
+) -> None:
+    """Require every selected extension operation to have one ABI owner."""
+
+    projected: dict[str, Any] = {}
+    for operation in extension_model.operations:
+        location = operation.source_location
+        if location is None or location.path in input_paths:
+            projected[operation.stable_id] = operation
+
+    missing: list[str] = []
+    for stable_id, operation in projected.items():
+        adapter_name = adapter_sources.get(operation.source_symbol)
+        lock_entry = lock.get(stable_id)
+        lock_requirements = (
+            lock_entry.get("requires", [])
+            if isinstance(lock_entry, dict)
+            else []
+        )
+        lock_selected = stable_id in lock and all(
+            requirement in input_paths for requirement in lock_requirements
+        )
+        source_selected = (
+            operation.source_location is None
+            or not lock_requirements
+            or operation.source_location.path in lock_requirements
+        )
+        if stable_id in lock and adapter_name is not None:
+            raise ValueError(
+                f"WASM extension operation '{stable_id}' is covered by both the ABI lock "
+                f"and adapter '{adapter_name}'"
+            )
+        if (not lock_selected or not source_selected) and adapter_name is None:
+            missing.append(stable_id)
+    if missing:
+        raise ValueError(
+            "WASM ABI lock is missing projected operation(s): "
+            + ", ".join(sorted(missing))
+        )
+
+    selected_lock = {
+        stable_id
+        for stable_id, entry in lock.items()
+        if all(requirement in input_paths for requirement in entry.get("requires", []))
+    }
+    stale = sorted(selected_lock - set(projected))
+    if stale:
+        raise ValueError(
+            "WASM ABI lock contains stale active operation(s); move removed operations "
+            "to abi.retired: "
+            + ", ".join(stale)
+        )
+
+
+def _validate_reserved_catalog_ids(
+    operations: list[dict[str, Any]],
+    reserved_ids: set[int],
+) -> None:
+    for operation in operations:
+        operation_id = operation.get("id")
+        if operation_id in reserved_ids:
+            raise ValueError(
+                f"WASM operation '{operation.get('name', '<unnamed>')}' reuses reserved "
+                f"operation id {operation_id}"
+            )
 
 
 def _receiver_parameter(
@@ -634,15 +787,47 @@ def _load_operations(
     input_paths = {path.resolve().relative_to(root).as_posix() for path in inputs}
     sources = _operation_sources(api_model)
     abi = model.get("abi", {})
+    if not isinstance(abi, dict):
+        raise ValueError("WASM operation catalog must contain an ABI operation lock")
     lock = abi.get("operations", {})
+    retired = abi.get("retired", {})
     adapters = model.get("adapters", [])
     defaults = model.get("defaults", {})
-    if not isinstance(abi, dict) or not isinstance(lock, dict):
+    if not isinstance(lock, dict):
         raise ValueError("WASM operation catalog must contain an ABI operation lock")
+    if not isinstance(retired, dict):
+        raise ValueError("WASM operation catalog ABI retired entries must be an object")
     if not isinstance(adapters, list):
         raise ValueError("WASM operation catalog must contain an adapters list")
     _validate_abi_lock(lock)
+    retired_ids = _validate_retired_abi_lock(retired, lock)
     _validate_operation_catalog(adapters)
+    active_ids = {entry["id"] for entry in lock.values()}
+    _validate_reserved_catalog_ids(adapters, active_ids | retired_ids)
+
+    selected_adapters: list[dict[str, Any]] = []
+    adapter_sources: dict[str, str] = {}
+    for operation in adapters:
+        requirements = operation.get("requires", [])
+        if not all(requirement in input_paths for requirement in requirements):
+            continue
+        source = operation.get("source")
+        if source is not None:
+            if source not in sources:
+                raise ValueError(
+                    f"WASM operation {operation.get('name', '<unnamed>')} references "
+                    f"missing .pyi symbol '{source}'"
+                )
+            previous = adapter_sources.get(source)
+            if previous is not None:
+                raise ValueError(
+                    f"WASM source '{source}' is covered by adapters '{previous}' and "
+                    f"'{operation.get('name', '<unnamed>')}'"
+                )
+            adapter_sources[source] = operation.get("name", "<unnamed>")
+        selected_adapters.append(operation)
+
+    _validate_projected_abi_lock(lock, extension_model, input_paths, adapter_sources)
 
     selected_operations: list[dict[str, Any]] = []
     for extension_operation in extension_model.operations:
@@ -663,19 +848,11 @@ def _load_operations(
             )
         )
 
-    for operation in adapters:
-        requirements = operation.get("requires", [])
-        if not all(requirement in input_paths for requirement in requirements):
-            continue
-        source = operation.get("source")
-        if source is not None and source not in sources:
-            raise ValueError(
-                f"WASM operation {operation.get('name', '<unnamed>')} references "
-                f"missing .pyi symbol '{source}'"
-            )
+    for operation in selected_adapters:
         selected_operations.append(_prepare_catalog_operation(operation, defaults))
     selected_operations.sort(key=lambda operation: operation["id"])
     _validate_operation_catalog(selected_operations)
+    _validate_reserved_catalog_ids(selected_operations, retired_ids)
     return selected_operations
 
 

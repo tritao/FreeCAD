@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import sys
 import unittest
 from pathlib import Path
@@ -11,6 +12,8 @@ TOOLS_DIR = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(TOOLS_DIR))
 
 import generate_wasm_api  # noqa: E402
+from extension_api_model import project_api_model  # noqa: E402
+from stubgen.api_extract import extract_curated_api_model  # noqa: E402
 from python_api_model.types import parse_annotation  # noqa: E402
 
 
@@ -26,6 +29,19 @@ def model_for(annotation: str) -> dict:
 
 
 class GenerateWasmApiTests(unittest.TestCase):
+    def extension_model(self):
+        api_model = extract_curated_api_model(
+            ROOT,
+            ROOT / "src",
+            source_paths=[
+                ROOT / "src/Base/Vector.pyi",
+                ROOT / "src/App/Document.pyi",
+                ROOT / "src/App/DocumentObject.pyi",
+                ROOT / "src/Mod/Part/App/TopoShape.pyi",
+            ],
+        )
+        return project_api_model(api_model, namespace="org.freecad")
+
     def test_unparameterized_collections_are_not_handles(self):
         self.assertEqual(model_for("List")["kind"], "list")
         self.assertEqual(model_for("List")["item"]["kind"], "value")
@@ -103,6 +119,78 @@ class GenerateWasmApiTests(unittest.TestCase):
                         "guest_method": "second",
                     },
                 }
+            )
+
+    def test_projected_operations_require_lock_or_adapter(self):
+        with self.assertRaisesRegex(ValueError, "missing projected operation"):
+            generate_wasm_api._validate_projected_abi_lock(
+                {
+                    "org.freecad.geometry@1/vector_add": {
+                        "id": 6,
+                        "name": "vectorAdd",
+                        "wire_name": "base.vector.add",
+                        "guest_method": "vectorAdd",
+                    }
+                },
+                self.extension_model(),
+                {
+                    "src/Base/Vector.pyi",
+                    "src/App/Document.pyi",
+                    "src/App/DocumentObject.pyi",
+                    "src/Mod/Part/App/TopoShape.pyi",
+                },
+                {
+                    "FreeCAD.Document.openTransaction": "documentOpenTransaction",
+                    "FreeCAD.Document.commitTransaction": "documentCommitTransaction",
+                    "FreeCAD.Document.abortTransaction": "documentAbortTransaction",
+                },
+            )
+
+    def test_stale_lock_entries_must_be_retired(self):
+        lock = json.loads(
+            (ROOT / "src/Mod/Wasm/WasmApiOperations.json").read_text(encoding="utf-8")
+        )["abi"]["operations"]
+        lock["org.freecad.geometry@1/not_published"] = {
+            "id": 21,
+            "name": "notPublished",
+            "wire_name": "test.not_published",
+            "guest_method": "notPublished",
+        }
+        with self.assertRaisesRegex(ValueError, "stale active operation"):
+            generate_wasm_api._validate_projected_abi_lock(
+                lock,
+                self.extension_model(),
+                {
+                    "src/Base/Vector.pyi",
+                    "src/App/Document.pyi",
+                    "src/App/DocumentObject.pyi",
+                    "src/Mod/Part/App/TopoShape.pyi",
+                },
+                {
+                    "FreeCAD.Document.openTransaction": "documentOpenTransaction",
+                    "FreeCAD.Document.commitTransaction": "documentCommitTransaction",
+                    "FreeCAD.Document.abortTransaction": "documentAbortTransaction",
+                },
+            )
+
+    def test_retired_ids_cannot_be_reused(self):
+        retired_ids = generate_wasm_api._validate_retired_abi_lock(
+            {
+                "org.freecad.geometry@1/removed": {
+                    "id": 21,
+                    "name": "removed",
+                    "wire_name": "geometry.removed",
+                    "guest_method": "removed",
+                    "reason": "removed from the experimental surface",
+                }
+            },
+            {},
+        )
+        self.assertEqual(retired_ids, {21})
+        with self.assertRaisesRegex(ValueError, "reserved operation id 21"):
+            generate_wasm_api._validate_reserved_catalog_ids(
+                [{"id": 21, "name": "newOperation"}],
+                retired_ids,
             )
 
     def test_projection_uses_the_canonical_api_model(self):

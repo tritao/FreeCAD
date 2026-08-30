@@ -10,75 +10,88 @@
         "id": 6,
         "name": "vectorAdd",
         "wire_name": "base.vector.add",
-        "guest_method": "vectorAdd"
+        "guest_method": "vectorAdd",
+        "requires": ["src/Base/Vector.pyi"]
       },
       "org.freecad.geometry@1/vector_dot": {
         "id": 7,
         "name": "vectorDot",
         "wire_name": "base.vector.dot",
-        "guest_method": "vectorDot"
+        "guest_method": "vectorDot",
+        "requires": ["src/Base/Vector.pyi"]
       },
       "org.freecad.geometry@1/vector_cross": {
         "id": 8,
         "name": "vectorCross",
         "wire_name": "base.vector.cross",
-        "guest_method": "vectorCross"
+        "guest_method": "vectorCross",
+        "requires": ["src/Base/Vector.pyi"]
       },
       "org.freecad.document@1/is_saved": {
         "id": 9,
         "name": "documentIsSaved",
         "wire_name": "document.is_saved",
-        "guest_method": "documentIsSaved"
+        "guest_method": "documentIsSaved",
+        "requires": ["src/App/Document.pyi"]
       },
       "org.freecad.document@1/get_object": {
         "id": 10,
         "name": "documentGetObject",
         "wire_name": "document.get_object",
-        "guest_method": "documentGetObject"
+        "guest_method": "documentGetObject",
+        "requires": ["src/App/Document.pyi"]
       },
       "org.freecad.document@1/object_get_label": {
         "id": 19,
         "name": "documentObjectGetLabel",
         "wire_name": "document.object.get_label",
-        "guest_method": "documentObjectGetLabel"
+        "guest_method": "documentObjectGetLabel",
+        "requires": ["src/App/DocumentObject.pyi"]
       },
       "org.freecad.document@1/object_set_label": {
         "id": 20,
         "name": "documentObjectSetLabel",
         "wire_name": "document.object.set_label",
-        "guest_method": "documentObjectSetLabel"
+        "guest_method": "documentObjectSetLabel",
+        "requires": ["src/App/DocumentObject.pyi"]
       },
       "org.freecad.part@1/shape_is_null": {
         "id": 11,
         "name": "topoShapeIsNull",
         "wire_name": "part.topo_shape.is_null",
-        "guest_method": "topoShapeIsNull"
+        "guest_method": "topoShapeIsNull",
+        "requires": ["src/Mod/Part/App/TopoShape.pyi"]
       },
       "org.freecad.part@1/shape_is_valid": {
         "id": 12,
         "name": "topoShapeIsValid",
         "wire_name": "part.topo_shape.is_valid",
-        "guest_method": "topoShapeIsValid"
+        "guest_method": "topoShapeIsValid",
+        "requires": ["src/Mod/Part/App/TopoShape.pyi"]
       },
       "org.freecad.part@1/shape_length": {
         "id": 13,
         "name": "topoShapeLength",
         "wire_name": "part.topo_shape.length",
-        "guest_method": "topoShapeLength"
+        "guest_method": "topoShapeLength",
+        "requires": ["src/Mod/Part/App/TopoShape.pyi"]
       },
       "org.freecad.part@1/shape_area": {
         "id": 14,
         "name": "topoShapeArea",
         "wire_name": "part.topo_shape.area",
-        "guest_method": "topoShapeArea"
+        "guest_method": "topoShapeArea",
+        "requires": ["src/Mod/Part/App/TopoShape.pyi"]
       },
       "org.freecad.part@1/shape_volume": {
         "id": 15,
         "name": "topoShapeVolume",
         "wire_name": "part.topo_shape.volume",
-        "guest_method": "topoShapeVolume"
+        "guest_method": "topoShapeVolume",
+        "requires": ["src/Mod/Part/App/TopoShape.pyi"]
       }
-    }
+    },
+    "retired": {}
   },
   "adapters": [
     {
