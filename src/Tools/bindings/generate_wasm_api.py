@@ -432,6 +432,10 @@ def _validate_operation_catalog(operations: list[dict[str, Any]]) -> None:
             )
         seen_ids[operation_id] = name
 
+        origin = operation.get("origin")
+        if origin is not None and origin not in {"projection", "adapter"}:
+            raise ValueError(f"WASM operation '{name}' has an invalid origin")
+
         permission = operation.get("permission")
         if permission is not None and (not isinstance(permission, str) or not permission):
             raise ValueError(f"WASM operation '{name}' has an invalid permission")
@@ -725,11 +729,21 @@ def _extension_operation_catalog(
             }
         )
     effect = operation.effect.value if operation.effect is not None else None
+    wire_returns = operation.returns
+    if (
+        wire_returns.kind is ApiTypeKind.NONE
+        and operation.transaction.value in {"open", "commit", "abort"}
+    ):
+        # These Python methods return None, while the established host ABI
+        # exposes transaction status as a boolean payload.
+        wire_returns = parse_annotation("bool", module_name)
+        assert wire_returns is not None
     return {
         "name": lock_entry["name"],
         "wire_name": lock_entry["wire_name"],
         "id": lock_entry["id"],
         "guest_method": lock_entry["guest_method"],
+        "origin": "projection",
         "source": operation.source_symbol,
         "permission": operation.permission,
         "mutates": effect in {"create", "modify"},
@@ -745,8 +759,8 @@ def _extension_operation_catalog(
         ],
         "params": parameters,
         "returns": _wasm_type(
-            operation.returns,
-            operation.returns.annotation,
+            wire_returns,
+            wire_returns.annotation,
             module_name,
             value_type_encodings=value_type_encodings,
         ),

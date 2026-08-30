@@ -75,52 +75,6 @@
         {"name": "z", "type": {"kind": "float64", "annotation": "float"}}
       ],
       "returns": {"kind": "value", "type": "FreeCAD.Base.Vector", "encoding": "vector3-f64", "annotation": "Vector"}
-    },
-    {
-      "name": "documentOpenTransaction",
-      "wire_name": "document.open_transaction",
-      "id": 16,
-      "guest_method": "documentOpenTransaction",
-      "source": "FreeCAD.Document.openTransaction",
-      "permission": "document.modify",
-      "mutates": true,
-      "transaction": "open",
-      "requires": ["src/App/Document.pyi"],
-      "params": [
-        {"name": "document", "type": {"kind": "handle", "type": "FreeCAD.Document", "annotation": "Document"}},
-        {"name": "name", "type": {"kind": "string", "annotation": "str"}}
-      ],
-      "returns": {"kind": "bool", "annotation": "bool"}
-    },
-    {
-      "name": "documentCommitTransaction",
-      "wire_name": "document.commit_transaction",
-      "id": 17,
-      "guest_method": "documentCommitTransaction",
-      "source": "FreeCAD.Document.commitTransaction",
-      "permission": "document.modify",
-      "mutates": true,
-      "transaction": "commit",
-      "requires": ["src/App/Document.pyi"],
-      "params": [
-        {"name": "document", "type": {"kind": "handle", "type": "FreeCAD.Document", "annotation": "Document"}}
-      ],
-      "returns": {"kind": "bool", "annotation": "bool"}
-    },
-    {
-      "name": "documentAbortTransaction",
-      "wire_name": "document.abort_transaction",
-      "id": 18,
-      "guest_method": "documentAbortTransaction",
-      "source": "FreeCAD.Document.abortTransaction",
-      "permission": "document.modify",
-      "mutates": true,
-      "transaction": "abort",
-      "requires": ["src/App/Document.pyi"],
-      "params": [
-        {"name": "document", "type": {"kind": "handle", "type": "FreeCAD.Document", "annotation": "Document"}}
-      ],
-      "returns": {"kind": "bool", "annotation": "bool"}
     }
   ]
 }

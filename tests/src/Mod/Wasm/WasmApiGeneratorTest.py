@@ -54,11 +54,15 @@ assert operations["documentIsSaved"]["permission"] == "document.read"
 assert operations["topoShapeArea"]["source"] == "Part.TopoShape.Area"
 assert operations["documentOpenTransaction"]["permission"] == "document.modify"
 assert operations["documentOpenTransaction"]["transaction"] == "open"
+assert operations["documentOpenTransaction"]["source"] == "FreeCAD.Document.openTransaction"
+assert operations["documentOpenTransaction"]["origin"] == "projection"
+assert operations["documentOpenTransaction"]["returns"]["kind"] == "bool"
 assert operations["documentCommitTransaction"]["transaction"] == "commit"
 assert operations["documentAbortTransaction"]["transaction"] == "abort"
 assert operations["documentObjectGetLabel"]["source"] == "FreeCAD.DocumentObject.Label"
 assert operations["documentObjectSetLabel"]["transaction"] == "required"
 assert operations["documentNew"]["returns"]["ownership"] == "owned"
+assert operations["documentNew"]["origin"] == "adapter"
 assert operations["documentNew"]["returns"]["nullable"] is False
 assert operations["documentNew"]["fallible"] is True
 

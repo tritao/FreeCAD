@@ -41,6 +41,27 @@
         "guest_method": "documentGetObject",
         "requires": ["src/App/Document.pyi"]
       },
+      "org.freecad.document@1/open_transaction": {
+        "id": 16,
+        "name": "documentOpenTransaction",
+        "wire_name": "document.open_transaction",
+        "guest_method": "documentOpenTransaction",
+        "requires": ["src/App/Document.pyi"]
+      },
+      "org.freecad.document@1/commit_transaction": {
+        "id": 17,
+        "name": "documentCommitTransaction",
+        "wire_name": "document.commit_transaction",
+        "guest_method": "documentCommitTransaction",
+        "requires": ["src/App/Document.pyi"]
+      },
+      "org.freecad.document@1/abort_transaction": {
+        "id": 18,
+        "name": "documentAbortTransaction",
+        "wire_name": "document.abort_transaction",
+        "guest_method": "documentAbortTransaction",
+        "requires": ["src/App/Document.pyi"]
+      },
       "org.freecad.document@1/object_get_label": {
         "id": 19,
         "name": "documentObjectGetLabel",

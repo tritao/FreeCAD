@@ -13,6 +13,113 @@ from typing import Any
 
 
 @dataclass(frozen=True)
+class WasmAbiType:
+    """A typed ABI value description used by an explicit adapter."""
+
+    kind: str
+    annotation: str | None = None
+    type_name: str | None = None
+    encoding: str | None = None
+    ownership: str | None = None
+    nullable: bool | None = None
+
+    @classmethod
+    def from_json(cls, value: Mapping[str, Any], label: str) -> "WasmAbiType":
+        unknown_fields = set(value) - {
+            "kind",
+            "annotation",
+            "type",
+            "encoding",
+            "ownership",
+            "nullable",
+        }
+        if unknown_fields:
+            raise ValueError(
+                f"{label} has unknown fields: {', '.join(sorted(unknown_fields))}"
+            )
+        kind = value.get("kind")
+        if not isinstance(kind, str) or not kind:
+            raise ValueError(f"{label} has an invalid type kind")
+        annotation = value.get("annotation")
+        type_name = value.get("type")
+        encoding = value.get("encoding")
+        ownership = value.get("ownership")
+        for field, field_value in (
+            ("annotation", annotation),
+            ("type", type_name),
+            ("encoding", encoding),
+            ("ownership", ownership),
+        ):
+            if field_value is not None and not isinstance(field_value, str):
+                raise ValueError(f"{label} has an invalid '{field}'")
+        nullable = value.get("nullable")
+        if nullable is not None and not isinstance(nullable, bool):
+            raise ValueError(f"{label} has an invalid 'nullable' flag")
+        return cls(
+            kind=kind,
+            annotation=annotation,
+            type_name=type_name,
+            encoding=encoding,
+            ownership=ownership,
+            nullable=nullable,
+        )
+
+    def as_json(self) -> dict[str, Any]:
+        value: dict[str, Any] = {"kind": self.kind}
+        for field, field_value in (
+            ("annotation", self.annotation),
+            ("type", self.type_name),
+            ("encoding", self.encoding),
+            ("ownership", self.ownership),
+            ("nullable", self.nullable),
+        ):
+            if field_value is not None:
+                value[field] = field_value
+        return value
+
+
+@dataclass(frozen=True)
+class WasmAdapterParameter:
+    """One explicitly authored adapter parameter."""
+
+    name: str
+    type: WasmAbiType
+    ownership: str | None = None
+
+    @classmethod
+    def from_json(
+        cls,
+        value: Mapping[str, Any],
+        label: str,
+    ) -> "WasmAdapterParameter":
+        unknown_fields = set(value) - {"name", "type", "ownership"}
+        if unknown_fields:
+            raise ValueError(
+                f"{label} has unknown fields: {', '.join(sorted(unknown_fields))}"
+            )
+        name = value.get("name")
+        if not isinstance(name, str) or not name:
+            raise ValueError(f"{label} has an invalid name")
+        type_value = value.get("type")
+        if not isinstance(type_value, dict):
+            raise ValueError(f"{label} has an invalid type")
+        ownership = value.get("ownership")
+        if ownership is not None and not isinstance(ownership, str):
+            raise ValueError(f"{label} has an invalid ownership")
+        return cls(
+            name=name,
+            type=WasmAbiType.from_json(type_value, f"{label} type"),
+            ownership=ownership,
+        )
+
+    def as_json(self) -> dict[str, Any]:
+        value: dict[str, Any] = {"name": self.name, "type": self.type.as_json()}
+        if self.ownership is not None:
+            value["ownership"] = self.ownership
+        return value
+
+
+@dataclass(frozen=True)
 class WasmExtensionAdapter:
     """One explicit host operation outside the canonical Python projection."""
 
@@ -22,8 +129,8 @@ class WasmExtensionAdapter:
     guest_method: str
     permission: str | None
     mutates: bool
-    parameters: tuple[dict[str, Any], ...]
-    returns: dict[str, Any]
+    parameters: tuple[WasmAdapterParameter, ...]
+    returns: WasmAbiType
     source: str | None = None
     transaction: str | None = None
     requires: tuple[str, ...] = ()
@@ -31,9 +138,27 @@ class WasmExtensionAdapter:
 
     @classmethod
     def from_json(cls, value: Mapping[str, Any], index: int) -> "WasmExtensionAdapter":
-        """Parse one adapter while preserving ABI-specific type metadata."""
+        """Parse one adapter into typed ABI metadata."""
 
         label = f"WASM adapter at index {index}"
+        unknown_fields = set(value) - {
+            "name",
+            "wire_name",
+            "id",
+            "guest_method",
+            "permission",
+            "mutates",
+            "transaction",
+            "source",
+            "requires",
+            "params",
+            "returns",
+            "consumes",
+        }
+        if unknown_fields:
+            raise ValueError(
+                f"{label} has unknown fields: {', '.join(sorted(unknown_fields))}"
+            )
         required_strings = ("name", "wire_name", "guest_method")
         for field in required_strings:
             field_value = value.get(field)
@@ -69,23 +194,16 @@ class WasmExtensionAdapter:
         parameters = value.get("params")
         if not isinstance(parameters, list):
             raise ValueError(f"{label} has invalid parameters")
-        parsed_parameters: list[dict[str, Any]] = []
-        for parameter_index, parameter in enumerate(parameters):
-            if not isinstance(parameter, dict):
-                raise ValueError(
-                    f"{label} parameter at index {parameter_index} is not an object"
-                )
-            parameter_name = parameter.get("name")
-            parameter_type = parameter.get("type")
-            if not isinstance(parameter_name, str) or not parameter_name:
-                raise ValueError(
-                    f"{label} parameter at index {parameter_index} has an invalid name"
-                )
-            if not isinstance(parameter_type, dict):
-                raise ValueError(
-                    f"{label} parameter '{parameter_name}' has an invalid type"
-                )
-            parsed_parameters.append(dict(parameter))
+        parsed_parameters = tuple(
+            WasmAdapterParameter.from_json(
+                parameter,
+                f"{label} parameter at index {parameter_index}",
+            )
+            for parameter_index, parameter in enumerate(parameters)
+            if isinstance(parameter, dict)
+        )
+        if len(parsed_parameters) != len(parameters):
+            raise ValueError(f"{label} contains a non-object parameter")
 
         returns = value.get("returns")
         if not isinstance(returns, dict):
@@ -102,8 +220,8 @@ class WasmExtensionAdapter:
             guest_method=value["guest_method"],
             permission=permission,
             mutates=mutates,
-            parameters=tuple(parsed_parameters),
-            returns=dict(returns),
+            parameters=parsed_parameters,
+            returns=WasmAbiType.from_json(returns, f"{label} returns"),
             source=source,
             transaction=transaction,
             requires=tuple(requires),
@@ -118,10 +236,11 @@ class WasmExtensionAdapter:
             "wire_name": self.wire_name,
             "id": self.operation_id,
             "guest_method": self.guest_method,
+            "origin": "adapter",
             "permission": self.permission,
             "mutates": self.mutates,
-            "params": [dict(parameter) for parameter in self.parameters],
-            "returns": dict(self.returns),
+            "params": [parameter.as_json() for parameter in self.parameters],
+            "returns": self.returns.as_json(),
         }
         if self.source is not None:
             operation["source"] = self.source

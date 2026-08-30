@@ -65,6 +65,10 @@ class ExtensionProjectTests(unittest.TestCase):
         self.assertEqual(is_saved.parameters, ())
         self.assertEqual(is_saved.returns.annotation, "bool")
         self.assertEqual(is_saved.permission, "document.read")
+        open_transaction = operations["org.freecad.document@1/open_transaction"]
+        self.assertEqual([item.name for item in open_transaction.parameters], ["name"])
+        self.assertEqual(open_transaction.returns.kind.value, "none")
+        self.assertEqual(open_transaction.transaction.value, "open")
         shape_area = operations["org.freecad.part@1/shape_area"]
         self.assertEqual(shape_area.receiver, "Part.TopoShape")
         self.assertEqual(shape_area.parameters, ())

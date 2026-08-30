@@ -196,6 +196,11 @@ declared on the nested operations. For example, `DocumentObject.Label` derives
 both `object_get_label` and `object_set_label` without duplicating its `str`
 type in the ABI catalog.
 
+The transaction methods are direct projections from `Document.pyi`. Their
+Python return type is `None`, but the established WASM wire contract returns a
+boolean transaction-status payload; this is an explicit ABI lowering rule, not
+a second authored signature.
+
 Document mutations are transaction-scoped. An addon must open a transaction
 before calling document.add_object or document.object.set_label. Transaction
 depth is tracked per addon instance, so nested transactions must be committed

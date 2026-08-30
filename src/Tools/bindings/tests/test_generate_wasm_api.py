@@ -141,9 +141,7 @@ class GenerateWasmApiTests(unittest.TestCase):
                     "src/Mod/Part/App/TopoShape.pyi",
                 },
                 {
-                    "FreeCAD.Document.openTransaction": "documentOpenTransaction",
-                    "FreeCAD.Document.commitTransaction": "documentCommitTransaction",
-                    "FreeCAD.Document.abortTransaction": "documentAbortTransaction",
+                    "FreeCAD.Base.Vector.__init__": "vectorNew",
                 },
             )
 
@@ -168,9 +166,7 @@ class GenerateWasmApiTests(unittest.TestCase):
                     "src/Mod/Part/App/TopoShape.pyi",
                 },
                 {
-                    "FreeCAD.Document.openTransaction": "documentOpenTransaction",
-                    "FreeCAD.Document.commitTransaction": "documentCommitTransaction",
-                    "FreeCAD.Document.abortTransaction": "documentAbortTransaction",
+                    "FreeCAD.Base.Vector.__init__": "vectorNew",
                 },
             )
 
@@ -198,11 +194,16 @@ class GenerateWasmApiTests(unittest.TestCase):
         adapters = load_wasm_extension_adapters(
             ROOT / "src/Mod/Wasm/WasmApiAdapters.json"
         )
-        self.assertEqual(len(adapters), 8)
+        self.assertEqual(len(adapters), 5)
         document_new = next(adapter for adapter in adapters if adapter.name == "documentNew")
         self.assertEqual(document_new.operation_id, 1)
         self.assertEqual(document_new.requires, ("src/App/Document.pyi",))
-        self.assertEqual(document_new.returns["ownership"], "owned")
+        self.assertEqual(document_new.parameters[0].type.kind, "string")
+        self.assertEqual(document_new.returns.ownership, "owned")
+        self.assertEqual(
+            document_new.as_catalog_operation()["origin"],
+            "adapter",
+        )
         operations = json.loads(
             (ROOT / "src/Mod/Wasm/WasmApiOperations.json").read_text(encoding="utf-8")
         )
@@ -312,6 +313,15 @@ class GenerateWasmApiTests(unittest.TestCase):
         self.assertEqual(label_set_catalog["returns"]["kind"], "bool")
         self.assertEqual(label_set_catalog["params"][-1]["name"], "label")
         self.assertEqual(label_set_catalog["params"][-1]["annotation"], "str")
+
+        transaction_catalog = next(
+            operation
+            for operation in model["operations"]
+            if operation["name"] == "documentOpenTransaction"
+        )
+        self.assertEqual(transaction_catalog["source"], "FreeCAD.Document.openTransaction")
+        self.assertEqual(transaction_catalog["origin"], "projection")
+        self.assertEqual(transaction_catalog["returns"]["kind"], "bool")
 
 
 if __name__ == "__main__":
