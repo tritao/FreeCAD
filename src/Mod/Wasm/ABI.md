@@ -268,8 +268,15 @@ code-generation policy:
 | Profile | Behavior |
 | --- | --- |
 | `INTERP` | Classic interpreter with instruction metering |
-| `AOT` | Metered interpreter for sandboxed `.wasm`; trusted `.aot` execution is performance-only |
-| `JIT` | Metered interpreter for sandboxed calls; trusted LLVM JIT is performance-only |
+| `AOT` | Portable `.wasm` interpreter fallback plus optional trusted `.aot` execution |
+| `JIT` | Portable `.wasm` interpreter fallback plus optional trusted LLVM JIT execution |
+
+These profile semantics are frozen for the current ABI. `INTERP` is the
+default and only profile that compiles WAMR instruction metering. `AOT` and
+`JIT` retain the interpreter so portable `.wasm` addons remain usable, but
+their native execution paths are performance modes rather than hard-sandbox
+modes. A profile is selected by the deployment and build configuration, never
+by an addon manifest.
 
 Pixi provisions these profiles as separate environments:
 
@@ -292,6 +299,33 @@ that metadata against `FREECAD_WAMR_PROFILE` before linking the package, so an
 interpreter package cannot be accidentally used as an AOT or JIT runtime.
 `Wasm.getRuntimeInfo()` reports the resulting `supports_aot`, `supports_jit`,
 and `supports_instruction_metering` capabilities.
+
+The package contract is:
+
+| Package | Runtime capability | Additional use |
+| --- | --- | --- |
+| `wamr` | `INTERP`, classic interpreter and metering | Default FreeCAD runtime |
+| `wamr-aot` | `AOT`, fast interpreter and AOT support | `wamrc`-produced trusted artifacts |
+| `wamr-jit` | `JIT`, LLVM ORC JIT support | Explicit trusted JIT execution |
+| `wamr-compiler` | No embedded runtime | `wamrc` used to produce AOT artifacts |
+
+The three runtime packages and the compiler package are built from the same
+pinned WAMR source release. Runtime packages must install the descriptor with
+these exact CMake variables:
+
+```cmake
+set(FREECAD_WAMR_PACKAGE_PROFILE "INTERP|AOT|JIT")
+set(FREECAD_WAMR_PACKAGE_SUPPORTS_AOT TRUE|FALSE)
+set(FREECAD_WAMR_PACKAGE_SUPPORTS_JIT TRUE|FALSE)
+set(FREECAD_WAMR_PACKAGE_SUPPORTS_INSTRUCTION_METERING TRUE|FALSE)
+```
+
+`FREECAD_WAMR_PROVIDER=PACKAGE` is strict: missing or incomplete metadata,
+or a capability mismatch, is a configure-time error. `AUTO` may use an
+installed package when its metadata matches and otherwise falls back to the
+verified source archive. `SOURCE` requires a WAMR source tree, while `FETCH`
+always uses the pinned archive. None of these providers silently changes the
+requested execution profile.
 
 All profiles disable WASI, multi-module loading, shared memory, threads, and
 the mini-loader. The runtime rejects imports outside the explicitly registered
