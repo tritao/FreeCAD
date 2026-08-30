@@ -162,6 +162,27 @@ guest request cannot grant itself additional capabilities. `WasmAddon` loads
 the manifest and grants the intersection of requested permissions and the
 host policy, then invokes the fixed `freecad_addon_entry` export.
 
+## API Source Of Truth
+
+Extension identities are scoped instead of repeated on every declaration. The
+package namespace is declared once in `WasmExtensionApi.json`, each interface
+declares its local name and major version with `extension_interface`, and
+operations use only a local ID with `extension_api`:
+
+```python
+@extension_interface(name="document", version=1)
+class Document:
+    @extension_api(id="is_saved", permission="document.read", effect="read")
+    def isSaved(self) -> bool: ...
+```
+
+The generator derives `org.freecad.document@1/is_saved` and projects the
+signature, types, permissions, effects, and transaction policy from the
+canonical Python API model. `WasmApiOperations.json` contains only the
+published ABI lock (numeric codes and compatibility names) plus explicit host
+adapters for operations that are not direct projections. It must not duplicate
+the projected parameter or return signatures.
+
 Document mutations are transaction-scoped. An addon must open a transaction
 before calling document.add_object or document.object.set_label. Transaction
 depth is tracked per addon instance, so nested transactions must be committed
