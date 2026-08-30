@@ -16,6 +16,25 @@ add_test(
             ${CMAKE_SOURCE_DIR}/src/Tools/bindings/tests/test_generated_wasm_python_sdk.py
 )
 
+find_program(FREECAD_WASM_TEST_GUEST_COMPILER NAMES clang++ clang)
+find_program(FREECAD_WASM_TEST_GUEST_LINKER NAMES wasm-ld)
+if(FREECAD_WASM_TEST_GUEST_COMPILER AND FREECAD_WASM_TEST_GUEST_LINKER)
+    add_test(
+        NAME WasmInstalledGuestSdkTest
+        COMMAND ${CMAKE_COMMAND}
+                -DTEST_BINARY_DIR=${CMAKE_BINARY_DIR}
+                -DTEST_GENERATOR=${CMAKE_GENERATOR}
+                -DTEST_MAKE_PROGRAM=${CMAKE_MAKE_PROGRAM}
+                -DTEST_BUILD_TYPE=${CMAKE_BUILD_TYPE}
+                -DTEST_GUEST_COMPILER=${FREECAD_WASM_TEST_GUEST_COMPILER}
+                -DTEST_GUEST_LINKER=${FREECAD_WASM_TEST_GUEST_LINKER}
+                -P ${CMAKE_CURRENT_SOURCE_DIR}/InstalledGuestSdkTest.cmake
+    )
+else()
+    message(WARNING
+        "Skipping the installed Wasm guest SDK test: clang++ and wasm-ld are required")
+endif()
+
 if(FREECAD_USE_WAMR)
     include(${CMAKE_SOURCE_DIR}/src/Mod/Wasm/Guest/FreeCADWasmGuest.cmake)
     freecad_wasm_generate_guest_sdk(WasmGuestApiFixture

@@ -174,8 +174,11 @@ SET_BIN_DIR(Wasm Wasm /Mod/Wasm)
 SET_PYTHON_PREFIX_SUFFIX(Wasm)
 
 install(TARGETS Wasm DESTINATION ${CMAKE_INSTALL_LIBDIR})
-install(FILES ${Wasm_API_MODEL} DESTINATION Mod/Wasm)
-install(FILES ${Wasm_API_SIGNATURE} DESTINATION ${CMAKE_INSTALL_DATADIR}/FreeCAD/Wasm)
+install(FILES ${Wasm_API_MODEL} DESTINATION Mod/Wasm COMPONENT WasmGuestSDK)
+install(FILES ${Wasm_API_SIGNATURE}
+    DESTINATION ${CMAKE_INSTALL_DATADIR}/FreeCAD/Wasm
+    COMPONENT WasmGuestSDK
+)
 install(
     FILES
         ${Wasm_API_CPP_SDK}
@@ -183,8 +186,10 @@ install(
         ${Wasm_API_PYTHON_SDK}
     DESTINATION
         Mod/Wasm/Guest
+    COMPONENT WasmGuestSDK
 )
 install(
     FILES ${Wasm_API_CPP_SDK} ${Wasm_API_RUST_SDK}
     DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/FreeCAD/Wasm/Guest
+    COMPONENT WasmGuestSDK
 )

@@ -52,6 +52,7 @@ install(
         WasmAbi.h
     DESTINATION
         ${CMAKE_INSTALL_INCLUDEDIR}/FreeCAD/Wasm
+    COMPONENT WasmGuestSDK
 )
 
 install(
@@ -63,6 +64,7 @@ install(
         WasmExtensionApi.json
     DESTINATION
         ${CMAKE_INSTALL_DATADIR}/FreeCAD/Wasm
+    COMPONENT WasmGuestSDK
 )
 
 install(
@@ -70,6 +72,7 @@ install(
         ${Wasm_Guest_CONFIG}
     DESTINATION
         ${CMAKE_INSTALL_DATADIR}/cmake/FreeCADWasmGuest
+    COMPONENT WasmGuestSDK
 )
 
 install(
@@ -78,6 +81,7 @@ install(
         Guest/WasmGuestFreestanding.h
     DESTINATION
         ${CMAKE_INSTALL_INCLUDEDIR}/FreeCAD/Wasm/Guest
+    COMPONENT WasmGuestSDK
 )
 
 install(
@@ -88,6 +92,7 @@ install(
         ${CMAKE_SOURCE_DIR}/examples/wasm/cpp/README.md
     DESTINATION
         ${CMAKE_INSTALL_DATADIR}/FreeCAD/Wasm/examples/cpp
+    COMPONENT WasmGuestSDK
 )
 
 install(
