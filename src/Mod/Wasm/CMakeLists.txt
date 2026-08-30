@@ -20,6 +20,7 @@ set(Wasm_Scripts
 set(Wasm_Guest_SDK
     WasmAbi.h
     WasmApiOperations.json
+    WasmApiAdapters.json
     WasmExtensionApi.json
     Guest/FreeCADWasmGuest.cmake
     Guest/FreeCADWasmGuestConfig.cmake.in
@@ -56,6 +57,7 @@ install(
     FILES
         Guest/FreeCADWasmGuest.cmake
         WasmApiOperations.json
+        WasmApiAdapters.json
         WasmExtensionApi.json
     DESTINATION
         ${CMAKE_INSTALL_DATADIR}/FreeCAD/Wasm

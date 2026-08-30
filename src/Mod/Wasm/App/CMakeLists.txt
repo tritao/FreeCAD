@@ -42,7 +42,9 @@ set(Wasm_API_GENERATOR_SOURCES
     ${CMAKE_SOURCE_DIR}/src/Tools/typing/stubgen/parsing.py
     ${CMAKE_SOURCE_DIR}/src/Tools/typing/stubgen/source_inputs.py
     ${CMAKE_SOURCE_DIR}/src/Mod/Wasm/WasmApiOperations.json
+    ${CMAKE_SOURCE_DIR}/src/Mod/Wasm/WasmApiAdapters.json
     ${CMAKE_SOURCE_DIR}/src/Mod/Wasm/WasmExtensionApi.json
+    ${CMAKE_SOURCE_DIR}/src/Tools/bindings/wasm_api_model.py
 )
 
 add_custom_command(

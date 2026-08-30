@@ -31,6 +31,7 @@ from extension_api_model import (  # noqa: E402
     project_api_model,
 )
 from stubgen.api_extract import extract_curated_api_model_with_diagnostics  # noqa: E402
+from wasm_api_model import load_wasm_extension_adapters  # noqa: E402
 
 
 SCHEMA_VERSION = 0
@@ -780,6 +781,7 @@ def _load_operations(
     value_type_encodings: Mapping[str, str],
 ) -> list[dict[str, Any]]:
     operations_path = root / "src/Mod/Wasm/WasmApiOperations.json"
+    adapters_path = root / "src/Mod/Wasm/WasmApiAdapters.json"
     if not operations_path.exists():
         return []
 
@@ -791,14 +793,15 @@ def _load_operations(
         raise ValueError("WASM operation catalog must contain an ABI operation lock")
     lock = abi.get("operations", {})
     retired = abi.get("retired", {})
-    adapters = model.get("adapters", [])
+    adapters = [
+        adapter.as_catalog_operation()
+        for adapter in load_wasm_extension_adapters(adapters_path)
+    ]
     defaults = model.get("defaults", {})
     if not isinstance(lock, dict):
         raise ValueError("WASM operation catalog must contain an ABI operation lock")
     if not isinstance(retired, dict):
         raise ValueError("WASM operation catalog ABI retired entries must be an object")
-    if not isinstance(adapters, list):
-        raise ValueError("WASM operation catalog must contain an adapters list")
     _validate_abi_lock(lock)
     retired_ids = _validate_retired_abi_lock(retired, lock)
     _validate_operation_catalog(adapters)

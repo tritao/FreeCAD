@@ -15,6 +15,7 @@ import generate_wasm_api  # noqa: E402
 from extension_api_model import project_api_model  # noqa: E402
 from stubgen.api_extract import extract_curated_api_model  # noqa: E402
 from python_api_model.types import parse_annotation  # noqa: E402
+from wasm_api_model import load_wasm_extension_adapters  # noqa: E402
 
 
 ROOT = TOOLS_DIR.parents[2]
@@ -192,6 +193,20 @@ class GenerateWasmApiTests(unittest.TestCase):
                 [{"id": 21, "name": "newOperation"}],
                 retired_ids,
             )
+
+    def test_adapters_are_loaded_from_the_separate_typed_catalog(self):
+        adapters = load_wasm_extension_adapters(
+            ROOT / "src/Mod/Wasm/WasmApiAdapters.json"
+        )
+        self.assertEqual(len(adapters), 8)
+        document_new = next(adapter for adapter in adapters if adapter.name == "documentNew")
+        self.assertEqual(document_new.operation_id, 1)
+        self.assertEqual(document_new.requires, ("src/App/Document.pyi",))
+        self.assertEqual(document_new.returns["ownership"], "owned")
+        operations = json.loads(
+            (ROOT / "src/Mod/Wasm/WasmApiOperations.json").read_text(encoding="utf-8")
+        )
+        self.assertNotIn("adapters", operations)
 
     def test_projection_uses_the_canonical_api_model(self):
         model = generate_wasm_api.build_model(

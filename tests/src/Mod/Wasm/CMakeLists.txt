@@ -31,6 +31,7 @@ if(FREECAD_USE_WAMR)
             ${CMAKE_SOURCE_DIR}/src/Mod/Part/App/TopoShape.pyi
         DEPENDS
             ${CMAKE_SOURCE_DIR}/src/Mod/Wasm/WasmApiOperations.json
+            ${CMAKE_SOURCE_DIR}/src/Mod/Wasm/WasmApiAdapters.json
             ${CMAKE_SOURCE_DIR}/src/Mod/Wasm/WasmExtensionApi.json
     )
     freecad_wasm_addon(WasmGuestFixture
