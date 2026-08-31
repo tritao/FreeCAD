@@ -135,7 +135,7 @@ neutral ABI regression test without enabling WASI.
 
 The generated language SDKs have two layers. The advanced/raw layer is
 `FreeCAD::Extension::Raw::RawClient`, Rust `RawClient`, and Python
-`RawClient`; the old `Client` names remain aliases. The public layer is
+`RawClient`. There are no compatibility aliases for the raw layer. The public layer is
 `FreeCAD::Extension::Extension`, Rust `Extension`, and Python `Extension`,
 which exposes `documents()`, `part()`, and `geometry()` modules plus resource
 objects and scoped transactions. It keeps handles, packets, and operation IDs
@@ -145,9 +145,9 @@ bypass host policy.
 
 Handle values returned by the API are owned guest-side tokens unless the
 operation metadata says otherwise. Every SDK provides an explicit lifecycle
-helper: C++ `Client::own()` returns a move-only RAII handle, Rust
-`Client::own()` returns a handle requiring explicit `close()`, and Python
-`Client.own()` supports `close()` and context-manager use. Releasing a handle
+helper: C++ `RawClient::own()` returns a move-only RAII handle, Rust
+`RawClient::own()` returns a handle requiring explicit `close()`, and Python
+`RawClient.own()` supports `close()` and context-manager use. Releasing a handle
 consumes that token; native document objects may still remain host-owned.
 Operations that reference a `.pyi` symbol are validated against the selected
 Python API model during generation. The initial value-type projection covers

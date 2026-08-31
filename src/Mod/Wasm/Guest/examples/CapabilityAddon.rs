@@ -7,7 +7,7 @@ mod freecad_wasm_api {
     include!(env!("FREECAD_WASM_API_RS"));
 }
 
-use freecad_wasm_api::Client;
+use freecad_wasm_api::RawClient;
 
 #[panic_handler]
 fn panic(_info: &PanicInfo<'_>) -> ! {
@@ -19,7 +19,7 @@ const FAILURE: u64 = 0x1_0000_0000;
 #[no_mangle]
 pub extern "C" fn freecad_addon_entry(_input: *const u8, _input_length: u32) -> u64 {
     unsafe {
-        let client = Client::new();
+        let client = RawClient::new();
         let document_name = b"RustCapabilityExample";
         let Ok(document) = client.document_new(document_name) else {
             return FAILURE;

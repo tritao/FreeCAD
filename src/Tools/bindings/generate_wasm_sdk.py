@@ -6,6 +6,8 @@
 from __future__ import annotations
 
 import argparse
+from collections.abc import Iterator
+from dataclasses import dataclass
 import json
 from pathlib import Path
 import re
@@ -41,38 +43,248 @@ RUST_KEYWORDS = {
     "type",
     "use",
 }
+SDK_INTERFACE_SERVICES = {
+    "document": "documents",
+}
 
-_EXTENSION_FACADE_OPERATIONS = frozenset(
-    {
-        "documentNew",
-        "documentGetObject",
-        "documentAddObject",
-        "documentIsSaved",
-        "documentOpenTransaction",
-        "documentCommitTransaction",
-        "documentAbortTransaction",
-        "documentObjectGetLabel",
-        "documentObjectSetLabel",
-        "partMakeBox",
-        "topoShapeIsNull",
-        "topoShapeIsValid",
-        "topoShapeLength",
-        "topoShapeArea",
-        "topoShapeVolume",
-        "vectorNew",
-        "vectorAdd",
-        "vectorSub",
-        "vectorDot",
-        "vectorCross",
+
+@dataclass(frozen=True)
+class SdkOperation:
+    """Semantic SDK view of one projected or adapter operation."""
+
+    stable_id: str
+    local_id: str
+    raw_method: str
+    source: str | None
+    receiver: str | None
+    kind: str
+    service: str | None
+    public_name: str
+    params: tuple[dict[str, Any], ...]
+    returns: dict[str, Any]
+    property_access: str | None
+    transaction: str | None
+
+
+@dataclass(frozen=True)
+class SemanticSdkModel:
+    """Language-neutral facade surface derived from ExtensionApiModel metadata."""
+
+    operations: tuple[SdkOperation, ...]
+    resources: tuple[str, ...]
+    values: tuple[str, ...]
+    services: tuple[str, ...]
+
+    def for_receiver(self, receiver: str) -> tuple[SdkOperation, ...]:
+        return tuple(item for item in self.operations if item.receiver == receiver)
+
+    def for_service(self, service: str) -> tuple[SdkOperation, ...]:
+        return tuple(item for item in self.operations if item.service == service)
+
+    def transaction(self, role: str) -> SdkOperation | None:
+        return next(
+            (item for item in self.operations if item.transaction == role),
+            None,
+        )
+
+    def transaction_owner(self) -> str | None:
+        operation = self.transaction("open")
+        return operation.receiver if operation else None
+
+
+def _snake_case(value: str) -> str:
+    return re.sub(
+        r"[^a-zA-Z0-9]+",
+        "_",
+        re.sub(r"([a-z0-9])([A-Z])", r"\1_\2", value),
+    ).strip("_").lower()
+
+
+def _camel_case(value: str) -> str:
+    parts = [part for part in _snake_case(value).split("_") if part]
+    return parts[0] + "".join(part[:1].upper() + part[1:] for part in parts[1:])
+
+
+def _pascal_case(value: str) -> str:
+    return "".join(part[:1].upper() + part[1:] for part in _snake_case(value).split("_"))
+
+
+def _short_type(full_name: str | None) -> str | None:
+    return full_name.rsplit(".", 1)[-1] if full_name else None
+
+
+def _operation_scope(stable_id: str) -> str:
+    scope = stable_id.split("/", 1)[0]
+    return scope.rsplit("@", 1)[0].rsplit(".", 1)[-1]
+
+
+def _interface_service(interface_name: str) -> str:
+    return SDK_INTERFACE_SERVICES.get(interface_name, interface_name)
+
+
+def _operation_receiver(
+    semantic: dict[str, Any],
+    operation: dict[str, Any],
+) -> str | None:
+    if "receiver" in semantic:
+        receiver = semantic["receiver"]
+        return receiver if isinstance(receiver, str) and receiver else None
+    source = semantic.get("source") or operation.get("source")
+    if not isinstance(source, str) or not source or source.endswith(".__init__"):
+        return None
+    parts = source.split(".")
+    return ".".join(parts[:-1]) if len(parts) >= 3 else None
+
+
+def _remove_receiver_parameter(
+    receiver: str | None,
+    params: list[dict[str, Any]],
+) -> tuple[dict[str, Any], ...]:
+    if receiver is None or not params:
+        return tuple(params)
+    receiver_name = _short_type(receiver)
+    first_type = params[0].get("type", {})
+    if _short_type(first_type.get("type")) == receiver_name:
+        return tuple(params[1:])
+    return tuple(params)
+
+
+def _operation_public_name(
+    local_id: str,
+    source: str | None,
+    receiver: str | None,
+    kind: str,
+    property_access: str | None,
+    returns: dict[str, Any],
+) -> str:
+    if kind == "constructor":
+        return _snake_case(_short_type(returns.get("type")) or local_id.removesuffix("_new"))
+    member = source.rsplit(".", 1)[-1] if source else local_id
+    name = _snake_case(member)
+    if receiver is None and local_id.endswith("_new"):
+        return "create" if returns.get("kind") == "handle" else name.removesuffix("_new")
+    if property_access == "write":
+        return f"set_{name}"
+    return name
+
+
+def _operation_service(
+    stable_id: str,
+    receiver: str | None,
+    kind: str,
+    interface_service: str | None,
+    sdk_service: str | None,
+) -> str | None:
+    if receiver is not None or kind == "transaction":
+        return None
+    if sdk_service is not None and (
+        not isinstance(sdk_service, str) or not sdk_service
+    ):
+        raise ValueError(f"operation '{stable_id}' has an invalid SDK service")
+    return sdk_service or interface_service or _operation_scope(stable_id)
+
+
+def _operation_types(operation: dict[str, Any]) -> Iterator[dict[str, Any]]:
+    """Yield logical parameter and return types from one catalog operation."""
+
+    for parameter in operation.get("params", []):
+        type_model = parameter.get("type")
+        if isinstance(type_model, dict):
+            yield type_model
+    returns = operation.get("returns")
+    if isinstance(returns, dict):
+        yield returns
+
+
+def semantic_sdk_model(model: dict[str, Any]) -> SemanticSdkModel:
+    """Build the facade surface from ExtensionApiModel and ABI metadata."""
+
+    semantic_operations: dict[str, dict[str, Any]] = {}
+    interface_services: dict[str, str] = {}
+    for interface in model.get("extension_api", {}).get("interfaces", []):
+        interface_name = interface.get("name")
+        for operation in interface.get("operations", []):
+            stable_id = operation.get("id")
+            if not isinstance(stable_id, str):
+                continue
+            semantic_operations[stable_id] = operation
+            if isinstance(interface_name, str) and interface_name:
+                interface_services[stable_id] = _interface_service(interface_name)
+    operations: list[SdkOperation] = []
+    for operation in model.get("operations", []):
+        stable_id = operation.get("stable_id")
+        if not isinstance(stable_id, str) or stable_id.endswith("/handle_release"):
+            continue
+        semantic = semantic_operations.get(stable_id, {})
+        source = semantic.get("source") or operation.get("source")
+        receiver = _operation_receiver(semantic, operation)
+        property_access = semantic.get("property_access") or operation.get("property_access")
+        transaction = semantic.get("transaction") or operation.get("transaction")
+        if transaction in {"open", "commit", "abort"}:
+            kind = "transaction"
+        elif property_access in {"read", "write"}:
+            kind = f"property_{property_access}"
+        elif isinstance(source, str) and source.endswith(".__init__"):
+            kind = "constructor"
+        elif receiver is not None:
+            kind = "method"
+        else:
+            kind = "function"
+        returns = operation.get("returns", {})
+        operations.append(
+            SdkOperation(
+                stable_id=stable_id,
+                local_id=stable_id.split("/", 1)[1],
+                raw_method=operation.get("guest_method", operation.get("name", "")),
+                source=source,
+                receiver=receiver,
+                kind=kind,
+                service=_operation_service(
+                    stable_id,
+                    receiver,
+                    kind,
+                    interface_services.get(stable_id),
+                    operation.get("sdk_service"),
+                ),
+                public_name=_operation_public_name(
+                    stable_id.split("/", 1)[1],
+                    source,
+                    receiver,
+                    kind,
+                    property_access,
+                    returns,
+                ),
+                params=_remove_receiver_parameter(receiver, operation.get("params", [])),
+                returns=returns,
+                property_access=property_access,
+                transaction=transaction,
+            )
+        )
+
+    resources = {
+        type_model.get("type")
+        for operation in model.get("operations", [])
+        for type_model in _operation_types(operation)
+        if type_model.get("kind") == "handle"
+        and isinstance(type_model.get("type"), str)
+        and type_model.get("type") != "Wasm.Handle"
     }
-)
-
-
-def has_extension_facade(model: dict[str, Any]) -> bool:
-    """Return whether the current model contains the complete facade slice."""
-
-    operation_names = {operation.get("name") for operation in model.get("operations", [])}
-    return _EXTENSION_FACADE_OPERATIONS.issubset(operation_names)
+    values = {
+        type_model.get("type")
+        for operation in model.get("operations", [])
+        for type_model in _operation_types(operation)
+        if type_model.get("kind") == "value"
+        and isinstance(type_model.get("type"), str)
+        and type_model.get("type")
+    }
+    resources.discard(None)
+    values.discard(None)
+    return SemanticSdkModel(
+        operations=tuple(operations),
+        resources=tuple(sorted(resources)),
+        values=tuple(sorted(values)),
+        services=tuple(sorted({item.service for item in operations if item.service})),
+    )
 
 
 def type_name(full_name: str, keywords: set[str]) -> str:
@@ -537,31 +749,353 @@ def render_cpp(model: dict[str, Any]) -> str:
             "    ::Wasm::Guest::Client client_;",
             "};",
             "",
-            "using Client = RawClient;",
-            "",
         ]
     )
     lines.extend(
         [
             "}  // namespace FreeCAD::Extension::Raw",
             "",
-            "// Compatibility namespace for existing experimental addons.",
-            "namespace FreeCAD::Wasm::Generated",
-            "{",
-            "using namespace ::FreeCAD::Extension::Raw;",
-            "}  // namespace FreeCAD::Wasm::Generated",
-            "",
         ]
     )
-    if has_extension_facade(model):
-        lines.extend(_cpp_extension_facade())
+    sdk = semantic_sdk_model(model)
+    if sdk.operations:
+        lines.extend(_cpp_extension_facade(sdk))
     return "\n".join(lines)
 
 
-def _cpp_extension_facade() -> list[str]:
-    """Render the hosted C++ facade over the generated raw client."""
 
+def _cpp_value_expression(type_model: dict[str, Any], name: str) -> str:
+    kind = type_model.get("kind")
+    if kind == "string":
+        return f"{name}Value.c_str()"
+    if kind == "value":
+        return f"{name}.rawValue()"
+    if kind == "handle":
+        full_name = type_model.get("type")
+        if full_name == "Wasm.Handle":
+            return name
+        return f"Raw::{type_name(full_name, CPP_KEYWORDS | RUST_KEYWORDS)}{{{name}.value()}}"
+    return name
+
+
+def _cpp_result_type(type_model: dict[str, Any]) -> str:
+    kind = type_model.get("kind")
+    if kind == "handle":
+        full_name = type_model.get("type")
+        return "Raw::Handle" if full_name == "Wasm.Handle" else (_short_type(full_name) or "Handle")
+    if kind == "value":
+        return _short_type(type_model.get("type")) or "Value"
+    return {
+        "bool": "bool",
+        "float64": "double",
+        "string": "std::string",
+        "none": "void",
+    }.get(kind, "void")
+
+
+def _cpp_parameter_declaration(parameter: dict[str, Any]) -> str:
+    type_model = parameter.get("type", {})
+    kind = type_model.get("kind")
+    if kind == "string":
+        cpp_type = "std::string_view"
+    elif kind == "value":
+        cpp_type = f"const {_short_type(type_model.get('type')) or 'Value'}&"
+    elif kind == "handle":
+        full_name = type_model.get("type")
+        cpp_type = "Raw::Handle" if full_name == "Wasm.Handle" else f"const {_short_type(full_name) or 'Resource'}&"
+    else:
+        cpp_type = {"float64": "double", "bool": "bool"}.get(kind, "double")
+    return f"{cpp_type} {parameter.get('name', 'value')}"
+
+
+def _cpp_operation_call(
+    sdk: SemanticSdkModel,
+    operation: SdkOperation,
+    target: str,
+    receiver_expression: str | None = None,
+) -> tuple[list[str], str]:
+    call_arguments: list[str] = []
+    setup: list[str] = []
+    if operation.receiver is not None:
+        if receiver_expression is None:
+            raise ValueError(f"missing receiver expression for '{operation.stable_id}'")
+        receiver_type = (
+            receiver_expression
+            if operation.receiver in sdk.values
+            else f"Raw::{type_name(operation.receiver, CPP_KEYWORDS | RUST_KEYWORDS)}{{{receiver_expression}}}"
+        )
+        call_arguments.append(receiver_type)
+    for parameter in operation.params:
+        name = parameter.get("name", "value")
+        if parameter.get("type", {}).get("kind") == "string":
+            setup.append(f"        auto {name}Value = extensionString({name});")
+        call_arguments.append(_cpp_value_expression(parameter.get("type", {}), name))
+    return setup, f"{target}.{operation.raw_method}Result({', '.join(call_arguments)})"
+
+
+def _cpp_operation_result(
+    operation: SdkOperation,
+    call: str,
+    wrapper_client: str,
+) -> list[str]:
+    kind = operation.returns.get("kind")
+    if kind not in {"handle", "value"}:
+        return [f"        return {call};"]
+    result_type = _short_type(operation.returns.get("type")) or "Value"
+    owned = "true" if operation.returns.get("ownership") == "owned" else "false"
+    if kind == "value":
+        value = f"{result_type}({wrapper_client}, Raw::{value_type_name(operation.returns.get('type'), CPP_KEYWORDS | RUST_KEYWORDS)}{{result.value.x, result.value.y, result.value.z}})"
+    else:
+        value = f"{result_type}({wrapper_client}, result.value, {owned})"
     return [
+        f"        auto result = {call};",
+        "        if (!result.ok) {",
+        "            return {false, {}, std::move(result.error), result.errorCode};",
+        "        }",
+        f"        return {{true, {value}, {{}}, ::Wasm::Abi::ErrorCode::None}};",
+    ]
+
+
+def _cpp_operation_method(
+    sdk: SemanticSdkModel,
+    operation: SdkOperation,
+    *,
+    receiver_expression: str | None,
+    target: str,
+) -> list[str]:
+    method = _camel_case(operation.public_name)
+    result_type = _cpp_result_type(operation.returns)
+    declarations = [_cpp_parameter_declaration(parameter) for parameter in operation.params]
+    lines = [f"    Result<{result_type}> {method}({', '.join(declarations)}) const", "    {"]
+    setup, call = _cpp_operation_call(sdk, operation, target, receiver_expression)
+    lines.extend(setup)
+    lines.extend(_cpp_operation_result(operation, call, "client_"))
+    lines.extend(["    }", ""])
+    return lines
+
+
+def _cpp_value_class(sdk: SemanticSdkModel, full_name: str, wrapper_names: list[str]) -> list[str]:
+    public_name = _short_type(full_name) or "Value"
+    lines = [
+        f"class {public_name} final",
+        "{",
+        "public:",
+        f"    {public_name}() = default;",
+        "    double x() const { return value_.x; }",
+        "    double y() const { return value_.y; }",
+        "    double z() const { return value_.z; }",
+        "    Raw::" + value_type_name(full_name, CPP_KEYWORDS | RUST_KEYWORDS) + " rawValue() const { return value_; }",
+        "",
+    ]
+    for operation in sdk.for_receiver(full_name):
+        if operation.kind == "transaction":
+            continue
+        lines.extend(_cpp_operation_method(sdk, operation, receiver_expression="value_", target="client_"))
+    lines.extend(
+        [
+            "private:",
+            f"    friend class {public_name};",
+        ]
+    )
+    for wrapper in wrapper_names:
+        lines.append(f"    friend class {wrapper};")
+    lines.extend(
+        [
+            f"    {public_name}(RawClient client, Raw::{value_type_name(full_name, CPP_KEYWORDS | RUST_KEYWORDS)} value)",
+            "        : client_(client)",
+            "        , value_(value)",
+            "    {",
+            "    }",
+            "",
+            "    RawClient client_;",
+            f"    Raw::{value_type_name(full_name, CPP_KEYWORDS | RUST_KEYWORDS)} value_{{}};",
+            "};",
+            "",
+        ]
+    )
+    return lines
+
+
+def _cpp_resource_class(
+    sdk: SemanticSdkModel,
+    full_name: str,
+    wrapper_names: list[str],
+) -> list[str]:
+    public_name = _short_type(full_name) or "Resource"
+    lines = [
+        f"class {public_name} final: public Resource",
+        "{",
+        "public:",
+        f"    {public_name}() = default;",
+        "",
+    ]
+    for operation in sdk.for_receiver(full_name):
+        if operation.kind == "transaction":
+            continue
+        lines.extend(
+            _cpp_operation_method(
+                sdk,
+                operation,
+                receiver_expression="value_",
+                target="client_",
+            )
+        )
+    open_transaction = (
+        sdk.transaction("open")
+        if full_name == sdk.transaction_owner()
+        else None
+    )
+    if open_transaction is not None:
+        setup, call = _cpp_operation_call(sdk, open_transaction, "client_", "value_")
+        lines.extend(
+            [
+                "    Result<Transaction> transaction(std::string_view name) const",
+                "    {",
+                *setup,
+                f"        auto result = {call};",
+                "        auto checked = checkResult(std::move(result), \"host rejected document transaction\");",
+                "        if (!checked.ok) {",
+                "            return {false, {}, std::move(checked.error), checked.errorCode};",
+                "        }",
+                f"        return {{true, Transaction(client_, Raw::{type_name(full_name, CPP_KEYWORDS | RUST_KEYWORDS)}{{value_}}), {{}},",
+                "                ::Wasm::Abi::ErrorCode::None};",
+                "    }",
+                "",
+            ]
+        )
+    lines.extend(["private:"])
+    for wrapper in wrapper_names:
+        lines.append(f"    friend class {wrapper};")
+    lines.extend(
+        [
+            f"    {public_name}(RawClient client, Raw::Handle value, bool owned)",
+            "        : Resource(client, value, owned)",
+            "    {",
+            "    }",
+            "};",
+            "",
+        ]
+    )
+    return lines
+
+
+def _cpp_transaction_class(sdk: SemanticSdkModel) -> list[str]:
+    commit = sdk.transaction("commit")
+    abort = sdk.transaction("abort")
+    if commit is None or abort is None:
+        return []
+    owner = sdk.transaction_owner()
+    if owner is None:
+        return []
+    owner_name = _short_type(owner) or "Resource"
+    owner_handle = type_name(owner, CPP_KEYWORDS | RUST_KEYWORDS)
+    commit_call = f"client_.{commit.raw_method}Result(document_)"
+    abort_call = f"client_.{abort.raw_method}Result(document_)"
+    return [
+        "class Transaction final",
+        "{",
+        "public:",
+        "    Transaction() = default;",
+        "    ~Transaction()",
+        "    {",
+        "        if (active_) {",
+        f"            static_cast<void>({abort_call});",
+        "        }",
+        "    }",
+        "    Transaction(const Transaction&) = delete;",
+        "    Transaction& operator=(const Transaction&) = delete;",
+        "",
+        "    Transaction(Transaction&& other) noexcept",
+        "        : client_(other.client_)",
+        "        , document_(other.document_)",
+        "        , active_(other.active_)",
+        "    {",
+        "        other.active_ = false;",
+        "    }",
+        "",
+        "    Result<void> commit()",
+        "    {",
+        "        if (!active_) {",
+        "            return {true, {}, ::Wasm::Abi::ErrorCode::None};",
+        "        }",
+        f"        auto result = checkResult(client_.{commit.raw_method}Result(document_), \"host rejected transaction commit\");",
+        "        if (result.ok) {",
+        "            active_ = false;",
+        "        }",
+        "        return result;",
+        "    }",
+        "",
+        "    Result<void> abort()",
+        "    {",
+        "        if (!active_) {",
+        "            return {true, {}, ::Wasm::Abi::ErrorCode::None};",
+        "        }",
+        f"        auto result = checkResult(client_.{abort.raw_method}Result(document_), \"host rejected transaction abort\");",
+        "        if (result.ok) {",
+        "            active_ = false;",
+        "        }",
+        "        return result;",
+        "    }",
+        "",
+        "private:",
+        f"    friend class {owner_name};",
+        f"    Transaction(RawClient client, Raw::{owner_handle} document)",
+        "        : client_(client)",
+        "        , document_(document)",
+        "        , active_(true)",
+        "    {",
+        "    }",
+        "",
+        "    RawClient client_;",
+        f"    Raw::{owner_handle} document_;",
+        "    bool active_ = false;",
+        "};",
+        "",
+    ]
+
+
+def _cpp_service_class(sdk: SemanticSdkModel, service: str) -> list[str]:
+    public_name = _pascal_case(service)
+    lines = [
+        f"class {public_name} final",
+        "{",
+        "public:",
+        f"    explicit {public_name}(RawClient client)",
+        "        : client_(client)",
+        "    {",
+        "    }",
+        "",
+    ]
+    for operation in sdk.for_service(service):
+        lines.extend(
+            _cpp_operation_method(
+                sdk,
+                operation,
+                receiver_expression=None,
+                target="client_",
+            )
+        )
+    lines.extend(
+        [
+            "private:",
+            "    RawClient client_;",
+            "};",
+            "",
+        ]
+    )
+    return lines
+
+
+def _cpp_extension_facade(sdk: SemanticSdkModel) -> list[str]:
+    """Render the hosted C++ facade from semantic SDK descriptors."""
+
+    wrapper_names = [
+        *[_short_type(item) or "Value" for item in sdk.values],
+        *[_short_type(item) or "Resource" for item in sdk.resources],
+        *[_pascal_case(item) for item in sdk.services],
+        "Transaction",
+    ]
+    lines = [
         "",
         "#if !defined(FREECAD_WASM_FREESTANDING)",
         "namespace FreeCAD::Extension",
@@ -641,420 +1175,160 @@ def _cpp_extension_facade() -> list[str]:
         "    bool owned_ = false;",
         "};",
         "",
-        "class DocumentObject final: public Resource",
-        "{",
-        "public:",
-        "    DocumentObject() = default;",
-        "",
-        "    Result<std::string> label() const",
-        "    {",
-        "        return client_.documentObjectGetLabelResult(Raw::FreeCADDocumentObjectHandle{value_});",
-        "    }",
-        "",
-        "    Result<void> setLabel(std::string_view label) const",
-        "    {",
-        "        auto value = extensionString(label);",
-        "        return client_.documentObjectSetLabelResult(Raw::FreeCADDocumentObjectHandle{value_}, value.c_str());",
-        "    }",
-        "",
-        "private:",
-        "    friend class Document;",
-        "    DocumentObject(RawClient client, Raw::Handle value, bool owned)",
-        "        : Resource(client, value, owned)",
-        "    {",
-        "    }",
-        "};",
-        "",
-        "class TopoShape final: public Resource",
-        "{",
-        "public:",
-        "    TopoShape() = default;",
-        "",
-        "    Result<bool> isNull() const",
-        "    {",
-        "        return client_.topoShapeIsNullResult(Raw::PartTopoShapeHandle{value_});",
-        "    }",
-        "",
-        "    Result<bool> isValid() const",
-        "    {",
-        "        return client_.topoShapeIsValidResult(Raw::PartTopoShapeHandle{value_});",
-        "    }",
-        "",
-        "    Result<double> length() const",
-        "    {",
-        "        return client_.topoShapeLengthResult(Raw::PartTopoShapeHandle{value_});",
-        "    }",
-        "",
-        "    Result<double> area() const",
-        "    {",
-        "        return client_.topoShapeAreaResult(Raw::PartTopoShapeHandle{value_});",
-        "    }",
-        "",
-        "    Result<double> volume() const",
-        "    {",
-        "        return client_.topoShapeVolumeResult(Raw::PartTopoShapeHandle{value_});",
-        "    }",
-        "",
-        "private:",
-        "    friend class Document;",
-        "    friend class Part;",
-        "    TopoShape(RawClient client, Raw::Handle value, bool owned)",
-        "        : Resource(client, value, owned)",
-        "    {",
-        "    }",
-        "};",
-        "",
-        "class Transaction final",
-        "{",
-        "public:",
-        "    Transaction() = default;",
-        "    ~Transaction()",
-        "    {",
-        "        if (active_) {",
-        "            static_cast<void>(client_.documentAbortTransactionResult(document_));",
-        "        }",
-        "    }",
-        "    Transaction(const Transaction&) = delete;",
-        "    Transaction& operator=(const Transaction&) = delete;",
-        "",
-        "    Transaction(Transaction&& other) noexcept",
-        "        : client_(other.client_)",
-        "        , document_(other.document_)",
-        "        , active_(other.active_)",
-        "    {",
-        "        other.active_ = false;",
-        "    }",
-        "",
-        "    Result<void> commit()",
-        "    {",
-        "        if (!active_) {",
-        "            return {true, {}, ::Wasm::Abi::ErrorCode::None};",
-        "        }",
-        "        auto result = checkResult(client_.documentCommitTransactionResult(document_),",
-        "                                   \"host rejected transaction commit\");",
-        "        if (result.ok) {",
-        "            active_ = false;",
-        "        }",
-        "        return result;",
-        "    }",
-        "",
-        "    Result<void> abort()",
-        "    {",
-        "        if (!active_) {",
-        "            return {true, {}, ::Wasm::Abi::ErrorCode::None};",
-        "        }",
-        "        auto result = checkResult(client_.documentAbortTransactionResult(document_),",
-        "                                   \"host rejected transaction abort\");",
-        "        if (result.ok) {",
-        "            active_ = false;",
-        "        }",
-        "        return result;",
-        "    }",
-        "",
-        "private:",
-        "    friend class Document;",
-        "    Transaction(RawClient client, Raw::FreeCADDocumentHandle document)",
-        "        : client_(client)",
-        "        , document_(document)",
-        "        , active_(true)",
-        "    {",
-        "    }",
-        "",
-        "    RawClient client_;",
-        "    Raw::FreeCADDocumentHandle document_;",
-        "    bool active_ = false;",
-        "};",
-        "",
-        "class Document final: public Resource",
-        "{",
-        "public:",
-        "    Document() = default;",
-        "",
-        "    Result<bool> isSaved() const",
-        "    {",
-        "        return client_.documentIsSavedResult(Raw::FreeCADDocumentHandle{value_});",
-        "    }",
-        "",
-        "    Result<DocumentObject> getObject(std::string_view name) const",
-        "    {",
-        "        auto value = extensionString(name);",
-        "        auto result = client_.documentGetObjectResult(Raw::FreeCADDocumentHandle{value_}, value.c_str());",
-        "        if (!result.ok) {",
-        "            return {false, {}, std::move(result.error), result.errorCode};",
-        "        }",
-        "        return {true, DocumentObject(client_, result.value, true), {}, ::Wasm::Abi::ErrorCode::None};",
-        "    }",
-        "",
-        "    Result<DocumentObject> addObject(const TopoShape& shape, std::string_view name) const",
-        "    {",
-        "        auto value = extensionString(name);",
-        "        auto result = client_.documentAddObjectResult(",
-        "            Raw::FreeCADDocumentHandle{value_},",
-        "            Raw::PartTopoShapeHandle{shape.value()},",
-        "            value.c_str());",
-        "        if (!result.ok) {",
-        "            return {false, {}, std::move(result.error), result.errorCode};",
-        "        }",
-        "        return {true, DocumentObject(client_, result.value, true), {}, ::Wasm::Abi::ErrorCode::None};",
-        "    }",
-        "",
-        "    Result<Transaction> transaction(std::string_view name) const",
-        "    {",
-        "        auto value = extensionString(name);",
-        "        auto result = client_.documentOpenTransactionResult(",
-        "            Raw::FreeCADDocumentHandle{value_}, value.c_str());",
-        "        auto checked = checkResult(std::move(result), \"host rejected document transaction\");",
-        "        if (!checked.ok) {",
-        "            return {false, {}, std::move(checked.error), checked.errorCode};",
-        "        }",
-        "        return {true, Transaction(client_, Raw::FreeCADDocumentHandle{value_}), {},",
-        "                ::Wasm::Abi::ErrorCode::None};",
-        "    }",
-        "",
-        "private:",
-        "    friend class Documents;",
-        "    Document(RawClient client, Raw::Handle value, bool owned)",
-        "        : Resource(client, value, owned)",
-        "    {",
-        "    }",
-        "};",
-        "",
-        "class Part final",
-        "{",
-        "public:",
-        "    explicit Part(RawClient client)",
-        "        : client_(client)",
-        "    {",
-        "    }",
-        "",
-        "    Result<TopoShape> makeBox(double length, double width, double height) const",
-        "    {",
-        "        auto result = client_.partMakeBoxResult(length, width, height);",
-        "        if (!result.ok) {",
-        "            return {false, {}, std::move(result.error), result.errorCode};",
-        "        }",
-        "        return {true, TopoShape(client_, result.value, true), {}, ::Wasm::Abi::ErrorCode::None};",
-        "    }",
-        "",
-        "private:",
-        "    RawClient client_;",
-        "};",
-        "",
-        "class Vector final",
-        "{",
-        "public:",
-        "    Vector() = default;",
-        "    double x() const { return value_.x; }",
-        "    double y() const { return value_.y; }",
-        "    double z() const { return value_.z; }",
-        "",
-        "    Result<Vector> add(const Vector& other) const;",
-        "    Result<Vector> sub(const Vector& other) const;",
-        "    Result<double> dot(const Vector& other) const;",
-        "    Result<Vector> cross(const Vector& other) const;",
-        "",
-        "private:",
-        "    friend class Geometry;",
-        "    Vector(RawClient client, Raw::FreeCADBaseVectorValue value)",
-        "        : client_(client)",
-        "        , value_(value)",
-        "    {",
-        "    }",
-        "",
-        "    RawClient client_;",
-        "    Raw::FreeCADBaseVectorValue value_;",
-        "};",
-        "",
-        "inline Result<Vector> Vector::add(const Vector& other) const",
-        "{",
-        "    auto result = client_.vectorAddResult(value_, other.value_);",
-        "    if (!result.ok) {",
-        "        return {false, {}, std::move(result.error), result.errorCode};",
-        "    }",
-        "    return {true, Vector(client_, Raw::FreeCADBaseVectorValue{result.value.x, result.value.y, result.value.z}), {},",
-        "            ::Wasm::Abi::ErrorCode::None};",
-        "}",
-        "",
-        "inline Result<Vector> Vector::sub(const Vector& other) const",
-        "{",
-        "    auto result = client_.vectorSubResult(value_, other.value_);",
-        "    if (!result.ok) {",
-        "        return {false, {}, std::move(result.error), result.errorCode};",
-        "    }",
-        "    return {true, Vector(client_, Raw::FreeCADBaseVectorValue{result.value.x, result.value.y, result.value.z}), {},",
-        "            ::Wasm::Abi::ErrorCode::None};",
-        "}",
-        "",
-        "inline Result<double> Vector::dot(const Vector& other) const",
-        "{",
-        "    return client_.vectorDotResult(value_, other.value_);",
-        "}",
-        "",
-        "inline Result<Vector> Vector::cross(const Vector& other) const",
-        "{",
-        "    auto result = client_.vectorCrossResult(value_, other.value_);",
-        "    if (!result.ok) {",
-        "        return {false, {}, std::move(result.error), result.errorCode};",
-        "    }",
-        "    return {true, Vector(client_, Raw::FreeCADBaseVectorValue{result.value.x, result.value.y, result.value.z}), {},",
-        "            ::Wasm::Abi::ErrorCode::None};",
-        "}",
-        "",
-        "class Documents final",
-        "{",
-        "public:",
-        "    explicit Documents(RawClient client)",
-        "        : client_(client)",
-        "    {",
-        "    }",
-        "",
-        "    Result<Document> create(std::string_view name) const",
-        "    {",
-        "        auto value = extensionString(name);",
-        "        auto result = client_.documentNewResult(value.c_str());",
-        "        if (!result.ok) {",
-        "            return {false, {}, std::move(result.error), result.errorCode};",
-        "        }",
-        "        return {true, Document(client_, result.value, true), {}, ::Wasm::Abi::ErrorCode::None};",
-        "    }",
-        "",
-        "private:",
-        "    RawClient client_;",
-        "};",
-        "",
-        "class Geometry final",
-        "{",
-        "public:",
-        "    explicit Geometry(RawClient client)",
-        "        : client_(client)",
-        "    {",
-        "    }",
-        "",
-        "    Result<Vector> vector(double x, double y, double z) const",
-        "    {",
-        "        auto result = client_.vectorNewResult(x, y, z);",
-        "        if (!result.ok) {",
-        "            return {false, {}, std::move(result.error), result.errorCode};",
-        "        }",
-        "        return {true, Vector(client_, Raw::FreeCADBaseVectorValue{result.value.x, result.value.y, result.value.z}), {},",
-        "                ::Wasm::Abi::ErrorCode::None};",
-        "    }",
-        "",
-        "private:",
-        "    RawClient client_;",
-        "};",
-        "",
-        "class Extension final",
-        "{",
-        "public:",
-        "    explicit Extension(RawClient client = RawClient())",
-        "        : client_(client)",
-        "    {",
-        "    }",
-        "",
-        "    RawClient& raw() { return client_; }",
-        "    const RawClient& raw() const { return client_; }",
-        "    Documents documents() const { return Documents(client_); }",
-        "    Part part() const { return Part(client_); }",
-        "    Geometry geometry() const { return Geometry(client_); }",
-        "",
-        "private:",
-        "    RawClient client_;",
-        "};",
-        "",
-        "}  // namespace FreeCAD::Extension",
-        "#endif",
-        "",
     ]
+    for full_name in sdk.values:
+        lines.extend(_cpp_value_class(sdk, full_name, wrapper_names))
+    transaction_owner = sdk.transaction_owner()
+    resource_order = sorted(sdk.resources)
+    for full_name in resource_order:
+        if full_name != transaction_owner:
+            lines.extend(_cpp_resource_class(sdk, full_name, wrapper_names))
+    lines.extend(_cpp_transaction_class(sdk))
+    if transaction_owner is not None:
+        lines.extend(_cpp_resource_class(sdk, transaction_owner, wrapper_names))
+    for service in sdk.services:
+        lines.extend(_cpp_service_class(sdk, service))
+    lines.extend(
+        [
+            "class Extension final",
+            "{",
+            "public:",
+            "    explicit Extension(RawClient client = RawClient())",
+            "        : client_(client)",
+            "    {",
+            "    }",
+            "",
+            "    RawClient& raw() { return client_; }",
+            "    const RawClient& raw() const { return client_; }",
+        ]
+    )
+    for service in sdk.services:
+        lines.extend(
+            [
+                f"    {_pascal_case(service)} {service}() const {{ return {_pascal_case(service)}(client_); }}",
+            ]
+        )
+    lines.extend(
+        [
+            "",
+            "private:",
+            "    RawClient client_;",
+            "};",
+            "",
+            "}  // namespace FreeCAD::Extension",
+            "#endif",
+            "",
+        ]
+    )
+    return lines
 
 
-def _python_extension_facade() -> list[str]:
-    """Render the public Python facade over the generated raw client."""
+def _python_type_name(type_model: dict[str, Any]) -> str:
+    kind = type_model.get("kind")
+    if kind == "string":
+        return "str"
+    if kind == "float64":
+        return "float"
+    if kind == "bool":
+        return "bool"
+    if kind in {"handle", "value"}:
+        return _short_type(type_model.get("type")) or "Handle"
+    if kind == "none":
+        return "None"
+    raise ValueError(f"unsupported Python facade type: {kind}")
 
-    return [
-        "",
-        "",
-        "class _Resource:",
-        "    \"\"\"Opaque extension resource with optional host ownership.\"\"\"",
-        "",
-        "    def __init__(self, client: RawClient, value: int, owned: bool = False):",
-        "        self._client = client",
-        "        self._value = int(value)",
-        "        self._owned = owned",
-        "        self._closed = False",
-        "",
-        "    @property",
-        "    def value(self) -> int:",
-        "        return self._value",
-        "",
-        "    def close(self) -> None:",
-        "        if self._owned and not self._closed:",
-        "            self._client.release(self._value)",
-        "            self._closed = True",
-        "",
-        "    def __enter__(self):",
-        "        return self",
-        "",
-        "    def __exit__(self, _type, _value, _traceback) -> None:",
-        "        self.close()",
-        "",
-        "",
-        "class Document(_Resource):",
-        "    def is_saved(self) -> bool:",
-        "        return self._client.document_is_saved(FreeCADDocumentHandle(self._value))",
-        "",
-        "    def get_object(self, name: str) -> DocumentObject:",
-        "        value = self._client.document_get_object(FreeCADDocumentHandle(self._value), name)",
-        "        return DocumentObject(self._client, value, owned=True)",
-        "",
-        "    def add_object(self, shape: TopoShape, name: str) -> DocumentObject:",
-        "        value = self._client.document_add_object(",
-        "            FreeCADDocumentHandle(self._value),",
-        "            PartTopoShapeHandle(shape.value),",
-        "            name,",
-        "        )",
-        "        return DocumentObject(self._client, value, owned=True)",
-        "",
-        "    def transaction(self, name: str) -> Transaction:",
-        "        return Transaction(self, name)",
-        "",
-        "",
-        "class DocumentObject(_Resource):",
-        "    @property",
-        "    def label(self) -> str:",
-        "        return self._client.document_object_get_label(",
-        "            FreeCADDocumentObjectHandle(self._value)",
-        "        )",
-        "",
-        "    @label.setter",
-        "    def label(self, value: str) -> None:",
-        "        self._client.document_object_set_label(",
-        "            FreeCADDocumentObjectHandle(self._value), value",
-        "        )",
-        "",
-        "",
-        "class TopoShape(_Resource):",
-        "    def is_null(self) -> bool:",
-        "        return self._client.topo_shape_is_null(PartTopoShapeHandle(self._value))",
-        "",
-        "    def is_valid(self) -> bool:",
-        "        return self._client.topo_shape_is_valid(PartTopoShapeHandle(self._value))",
-        "",
-        "    @property",
-        "    def length(self) -> float:",
-        "        return self._client.topo_shape_length(PartTopoShapeHandle(self._value))",
-        "",
-        "    @property",
-        "    def area(self) -> float:",
-        "        return self._client.topo_shape_area(PartTopoShapeHandle(self._value))",
-        "",
-        "    @property",
-        "    def volume(self) -> float:",
-        "        return self._client.topo_shape_volume(PartTopoShapeHandle(self._value))",
-        "",
-        "",
-        "@dataclass",
-        "class Vector:",
+
+def _python_parameter_declaration(parameter: dict[str, Any]) -> str:
+    return f"{parameter.get('name', 'value')}: {_python_type_name(parameter.get('type', {}))}"
+
+
+def _python_raw_argument(type_model: dict[str, Any], name: str) -> str:
+    kind = type_model.get("kind")
+    if kind == "handle":
+        full_name = type_model.get("type")
+        if full_name == "Wasm.Handle":
+            return f"int({name})"
+        return f"{type_name(full_name, CPP_KEYWORDS | RUST_KEYWORDS)}({name}.value)"
+    if kind == "value":
+        return f"{name}._value()"
+    return name
+
+
+def _python_raw_method(operation: SdkOperation) -> str:
+    return rust_method_name(operation.raw_method)
+
+
+def _python_operation_call(
+    sdk: SemanticSdkModel,
+    operation: SdkOperation,
+    target: str,
+    receiver_expression: str | None,
+) -> tuple[list[str], str]:
+    setup: list[str] = []
+    arguments: list[str] = []
+    if operation.receiver is not None:
+        if receiver_expression is None:
+            raise ValueError(f"missing receiver expression for '{operation.stable_id}'")
+        receiver_type = (
+            f"{type_name(operation.receiver, CPP_KEYWORDS | RUST_KEYWORDS)}({receiver_expression})"
+            if operation.receiver not in sdk.values
+            else f"{receiver_expression}._value()"
+        )
+        arguments.append(receiver_type)
+    for parameter in operation.params:
+        name = parameter.get("name", "value")
+        arguments.append(_python_raw_argument(parameter.get("type", {}), name))
+    return setup, f"{target}.{_python_raw_method(operation)}({', '.join(arguments)})"
+
+
+def _python_result_lines(operation: SdkOperation, call: str) -> list[str]:
+    kind = operation.returns.get("kind")
+    if kind == "handle":
+        public_name = _short_type(operation.returns.get("type")) or "Resource"
+        owned = "True" if operation.returns.get("ownership") == "owned" else "False"
+        return [
+            f"        value = {call}",
+            f"        return {public_name}(self._client, value, owned={owned})",
+        ]
+    if kind == "value":
+        return [
+            f"        return {_short_type(operation.returns.get('type')) or 'Value'}._from_value(self._client, {call})",
+        ]
+    return [f"        return {call}"]
+
+
+def _python_operation_method(
+    sdk: SemanticSdkModel,
+    operation: SdkOperation,
+    *,
+    receiver_expression: str | None,
+    target: str,
+) -> list[str]:
+    method = operation.public_name
+    result_type = _python_type_name(operation.returns)
+    declarations = [_python_parameter_declaration(parameter) for parameter in operation.params]
+    if operation.returns.get("kind") == "string":
+        result_type = "str"
+    signature = "self" if not declarations else f"self, {', '.join(declarations)}"
+    lines = [f"    def {method}({signature}) -> {result_type}:"]
+    if operation.kind == "property_read":
+        lines[0] = f"    @property\n    def {method}(self) -> {result_type}:"
+    if operation.kind == "property_write":
+        property_name = operation.public_name.removeprefix("set_")
+        setter_signature = "self" if not declarations else f"self, {', '.join(declarations)}"
+        lines[0] = f"    @{property_name}.setter\n    def {property_name}({setter_signature}) -> None:"
+    setup, call = _python_operation_call(sdk, operation, target, receiver_expression)
+    lines.extend(setup)
+    lines.extend(_python_result_lines(operation, call))
+    lines.append("")
+    return lines
+
+
+def _python_value_class(sdk: SemanticSdkModel, full_name: str) -> list[str]:
+    public_name = _short_type(full_name) or "Value"
+    lines = [
+        "@dataclass(frozen=True)",
+        f"class {public_name}:",
         "    _client: RawClient",
         "    x: float",
         "    y: float",
@@ -1064,43 +1338,85 @@ def _python_extension_facade() -> list[str]:
         "        return FreeCADBaseVectorValue(self.x, self.y, self.z)",
         "",
         "    @classmethod",
-        "    def _from_value(cls, client: RawClient, value: FreeCADBaseVectorValue):",
+        f"    def _from_value(cls, client: RawClient, value: FreeCADBaseVectorValue) -> {public_name}:",
         "        return cls(client, value.x, value.y, value.z)",
         "",
-        "    def add(self, other: Vector) -> Vector:",
-        "        return self._from_value(self._client, self._client.vector_add(self._value(), other._value()))",
-        "",
-        "    def sub(self, other: Vector) -> Vector:",
-        "        return self._from_value(self._client, self._client.vector_sub(self._value(), other._value()))",
-        "",
-        "    def dot(self, other: Vector) -> float:",
-        "        return self._client.vector_dot(self._value(), other._value())",
-        "",
-        "    def cross(self, other: Vector) -> Vector:",
-        "        return self._from_value(self._client, self._client.vector_cross(self._value(), other._value()))",
-        "",
-        "",
+    ]
+    for operation in sdk.for_receiver(full_name):
+        if operation.kind != "transaction":
+            lines.extend(
+                _python_operation_method(
+                    sdk,
+                    operation,
+                    receiver_expression="self",
+                    target="self._client",
+                )
+            )
+    return lines
+
+
+def _python_resource_class(sdk: SemanticSdkModel, full_name: str) -> list[str]:
+    public_name = _short_type(full_name) or "Resource"
+    lines = [
+        f"class {public_name}(_Resource):",
+    ]
+    operations = [item for item in sdk.for_receiver(full_name) if item.kind != "transaction"]
+    if not operations:
+        lines.append("    pass")
+    for operation in operations:
+        lines.extend(
+            _python_operation_method(
+                sdk,
+                operation,
+                receiver_expression="self.value",
+                target="self._client",
+            )
+        )
+    open_transaction = (
+        sdk.transaction("open")
+        if full_name == sdk.transaction_owner()
+        else None
+    )
+    if open_transaction is not None:
+        lines.extend(
+            [
+                "    def transaction(self, name: str) -> Transaction:",
+                "        return Transaction(self, name)",
+                "",
+            ]
+        )
+    return lines
+
+
+def _python_transaction_class(sdk: SemanticSdkModel) -> list[str]:
+    open_operation = sdk.transaction("open")
+    commit = sdk.transaction("commit")
+    abort = sdk.transaction("abort")
+    if open_operation is None or commit is None or abort is None:
+        return []
+    owner = sdk.transaction_owner()
+    if owner is None:
+        return []
+    owner_name = _short_type(owner) or "Resource"
+    owner_handle = type_name(owner, CPP_KEYWORDS | RUST_KEYWORDS)
+    return [
         "class Transaction:",
-        "    def __init__(self, document: Document, name: str):",
+        f"    def __init__(self, document: {owner_name}, name: str):",
         "        self._document = document",
         "        self._active = False",
-        "        if not document._client.document_open_transaction(FreeCADDocumentHandle(document.value), name):",
+        f"        if not document._client.{_python_raw_method(open_operation)}({owner_handle}(document.value), name):",
         '            raise WasmHostError("host rejected document transaction")',
         "        self._active = True",
         "",
         "    def commit(self) -> None:",
         "        if self._active:",
-        "            if not self._document._client.document_commit_transaction(",
-        "                FreeCADDocumentHandle(self._document.value)",
-        "            ):",
+        f"            if not self._document._client.{_python_raw_method(commit)}({owner_handle}(self._document.value)):",
         '                raise WasmHostError("host rejected transaction commit")',
         "            self._active = False",
         "",
         "    def abort(self) -> None:",
         "        if self._active:",
-        "            if not self._document._client.document_abort_transaction(",
-        "                FreeCADDocumentHandle(self._document.value)",
-        "            ):",
+        f"            if not self._document._client.{_python_raw_method(abort)}({owner_handle}(self._document.value)):",
         '                raise WasmHostError("host rejected transaction abort")',
         "            self._active = False",
         "",
@@ -1113,56 +1429,100 @@ def _python_extension_facade() -> list[str]:
         "        else:",
         "            self.abort()",
         "",
-        "",
-        "class Documents:",
-        "    def __init__(self, client: RawClient):",
-        "        self._client = client",
-        "",
-        "    def create(self, name: str) -> Document:",
-        "        return Document(self._client, self._client.document_new(name), owned=True)",
-        "",
-        "",
-        "class Part:",
-        "    def __init__(self, client: RawClient):",
-        "        self._client = client",
-        "",
-        "    def make_box(self, length: float, width: float, height: float) -> TopoShape:",
-        "        value = self._client.part_make_box(length, width, height)",
-        "        return TopoShape(self._client, value, owned=True)",
-        "",
-        "",
-        "class Geometry:",
-        "    def __init__(self, client: RawClient):",
-        "        self._client = client",
-        "",
-        "    def vector(self, x: float, y: float, z: float) -> Vector:",
-        "        return Vector._from_value(self._client, self._client.vector_new(x, y, z))",
-        "",
-        "",
-        "class Extension:",
-        "    \"\"\"Public FreeCAD Extension API facade.\"\"\"",
-        "",
-        "    def __init__(self, dispatch: Callable[[bytes], bytes]):",
-        "        self._raw = RawClient(dispatch)",
-        "        self._documents = Documents(self._raw)",
-        "        self._part = Part(self._raw)",
-        "        self._geometry = Geometry(self._raw)",
-        "",
-        "    @property",
-        "    def raw(self) -> RawClient:",
-        "        return self._raw",
-        "",
-        "    def documents(self) -> Documents:",
-        "        return self._documents",
-        "",
-        "    def part(self) -> Part:",
-        "        return self._part",
-        "",
-        "    def geometry(self) -> Geometry:",
-        "        return self._geometry",
-        "",
     ]
 
+
+def _python_service_class(sdk: SemanticSdkModel, service: str) -> list[str]:
+    public_name = _pascal_case(service)
+    lines = [
+        f"class {public_name}:",
+        "    def __init__(self, client: RawClient):",
+        "        self._client = client",
+        "",
+    ]
+    for operation in sdk.for_service(service):
+        lines.extend(
+            _python_operation_method(
+                sdk,
+                operation,
+                receiver_expression=None,
+                target="self._client",
+            )
+        )
+    return lines
+
+
+def _python_extension_facade(sdk: SemanticSdkModel) -> list[str]:
+    """Render the Python facade from semantic SDK descriptors."""
+
+    lines = [
+        "",
+        "",
+        "class _Resource:",
+        "    \"\"\"Opaque extension resource with deterministic lifetime.\"\"\"",
+        "",
+        "    def __init__(self, client: RawClient, value: int, owned: bool = False):",
+        "        self._client = client",
+        "        self.value = int(value)",
+        "        self._owned = owned",
+        "        self._closed = False",
+        "",
+        "    def close(self) -> None:",
+        "        if self._owned and not self._closed:",
+        "            self._client.release(self.value)",
+        "            self._closed = True",
+        "",
+        "    def __enter__(self):",
+        "        return self",
+        "",
+        "    def __exit__(self, _type, _value, _traceback) -> None:",
+        "        self.close()",
+        "",
+    ]
+    for full_name in sdk.values:
+        lines.extend(_python_value_class(sdk, full_name))
+    resource_order = sorted(
+        sdk.resources,
+        key=lambda item: (1 if _short_type(item) == "Document" else 0, item),
+    )
+    for full_name in resource_order:
+        lines.extend(_python_resource_class(sdk, full_name))
+    lines.extend(_python_transaction_class(sdk))
+    for service in sdk.services:
+        lines.extend(_python_service_class(sdk, service))
+    lines.extend(
+        [
+            "class Extension:",
+            "    \"\"\"Public FreeCAD Extension API facade.\"\"\"",
+            "",
+            "    def __init__(self, dispatch: Callable[[bytes], bytes]):",
+            "        self._raw = RawClient(dispatch)",
+        ]
+    )
+    for service in sdk.services:
+        lines.extend(
+            [
+                f"        self._{service} = {_pascal_case(service)}(self._raw)",
+            ]
+        )
+    lines.extend(
+        [
+            "",
+            "    @property",
+            "    def raw(self) -> RawClient:",
+            "        return self._raw",
+            "",
+        ]
+    )
+    for service in sdk.services:
+        lines.extend(
+            [
+                f"    def {service}(self) -> {_pascal_case(service)}:",
+                f"        return self._{service}",
+                "",
+            ]
+        )
+    return lines
 
 def render_python(model: dict[str, Any]) -> str:
     api = model.get("api", "org.freecad.wasm.api@0")
@@ -1470,9 +1830,6 @@ def render_python(model: dict[str, Any]) -> str:
         [
             "",
             "",
-            "Client = RawClient",
-            "",
-            "",
             "class OwnedHandle:",
             "    \"\"\"Explicitly owned guest handle with deterministic release.\"\"\"",
             "",
@@ -1494,16 +1851,260 @@ def render_python(model: dict[str, Any]) -> str:
             "",
         ]
     )
-    if has_extension_facade(model):
-        lines.extend(_python_extension_facade())
+    sdk = semantic_sdk_model(model)
+    if sdk.operations:
+        lines.extend(_python_extension_facade(sdk))
     return "\n".join(lines)
 
 
-def _rust_extension_facade() -> list[str]:
-    """Render the public Rust facade over the generated raw client."""
 
-    return [
+def _rust_type_name(type_model: dict[str, Any]) -> str:
+    kind = type_model.get("kind")
+    if kind == "string":
+        return "&[u8]"
+    if kind == "float64":
+        return "f64"
+    if kind == "bool":
+        return "bool"
+    if kind in {"handle", "value"}:
+        return _short_type(type_model.get("type")) or "Handle"
+    if kind == "none":
+        return "()"
+    raise ValueError(f"unsupported Rust facade type: {kind}")
+
+
+def _rust_result_type_name(type_model: dict[str, Any]) -> str:
+    if type_model.get("kind") == "string":
+        return "usize"
+    return _rust_type_name(type_model)
+
+
+def _rust_parameter_declaration(parameter: dict[str, Any]) -> str:
+    type_model = parameter.get("type", {})
+    name = parameter.get("name", "value")
+    if type_model.get("kind") == "handle" and type_model.get("type") != "Wasm.Handle":
+        return f"{name}: &{_short_type(type_model.get('type')) or 'Resource'}"
+    if type_model.get("kind") == "value":
+        return f"{name}: &{_short_type(type_model.get('type')) or 'Value'}"
+    return f"{name}: {_rust_type_name(type_model)}"
+
+
+def _rust_raw_argument(type_model: dict[str, Any], name: str) -> str:
+    kind = type_model.get("kind")
+    if kind == "handle":
+        if type_model.get("type") == "Wasm.Handle":
+            return name
+        return f"{name}.handle"
+    if kind == "value":
+        return f"{name}.raw_value()"
+    return name
+
+
+def _rust_operation_call(
+    sdk: SemanticSdkModel,
+    operation: SdkOperation,
+    receiver_expression: str | None,
+    target: str,
+) -> str:
+    arguments: list[str] = []
+    if operation.receiver is not None:
+        if receiver_expression is None:
+            raise ValueError(f"missing receiver expression for '{operation.stable_id}'")
+        arguments.append(receiver_expression)
+    arguments.extend(
+        _rust_raw_argument(parameter.get("type", {}), parameter.get("name", "value"))
+        for parameter in operation.params
+    )
+    return f"{target}.{rust_method_name(operation.raw_method)}({', '.join(arguments)})"
+
+
+def _rust_return_expression(operation: SdkOperation, call: str) -> str:
+    kind = operation.returns.get("kind")
+    if kind == "handle":
+        public_name = _short_type(operation.returns.get("type")) or "Resource"
+        owned = "true" if operation.returns.get("ownership") == "owned" else "false"
+        return (
+            f"{call}.map(|handle| {public_name} {{ raw: self.raw, handle, owned: {owned} }})"
+        )
+    if kind == "value":
+        public_name = _short_type(operation.returns.get("type")) or "Value"
+        return f"{call}.map(|value| {public_name} {{ raw: self.raw, value }})"
+    return call
+
+
+def _rust_operation_method(
+    sdk: SemanticSdkModel,
+    operation: SdkOperation,
+    *,
+    receiver_expression: str | None,
+    target: str,
+) -> list[str]:
+    method = operation.public_name
+    declarations = [_rust_parameter_declaration(parameter) for parameter in operation.params]
+    if operation.returns.get("kind") == "string":
+        declarations.append("output: &mut [u8]")
+    result_type = _rust_result_type_name(operation.returns)
+    signature = "&self" if not declarations else f"&self, {', '.join(declarations)}"
+    lines = [f"    pub fn {method}({signature}) -> Result<{result_type}>", "{"]
+    call = _rust_operation_call(sdk, operation, receiver_expression, target)
+    if operation.returns.get("kind") == "string":
+        call = f"{call[:-1]}, output)"
+    lines.extend([f"        {_rust_return_expression(operation, call)}", "    }", ""])
+    return lines
+
+
+def _rust_value_class(sdk: SemanticSdkModel, full_name: str) -> list[str]:
+    public_name = _short_type(full_name) or "Value"
+    raw_name = value_type_name(full_name, CPP_KEYWORDS | RUST_KEYWORDS)
+    lines = [
+        "pub struct " + public_name,
+        "{",
+        "    raw: RawClient,",
+        f"    value: {raw_name},",
+        "}",
         "",
+        f"impl {public_name}",
+        "{",
+        "    pub fn x(&self) -> f64 { self.value.x }",
+        "    pub fn y(&self) -> f64 { self.value.y }",
+        "    pub fn z(&self) -> f64 { self.value.z }",
+        f"    fn raw_value(&self) -> {raw_name} {{ self.value }}",
+        "",
+    ]
+    for operation in sdk.for_receiver(full_name):
+        if operation.kind != "transaction":
+            lines.extend(
+                _rust_operation_method(
+                    sdk,
+                    operation,
+                    receiver_expression="self.value",
+                    target="self.raw",
+                )
+            )
+    lines.extend(["}", ""])
+    return lines
+
+
+def _rust_resource_class(sdk: SemanticSdkModel, full_name: str) -> list[str]:
+    public_name = _short_type(full_name) or "Resource"
+    raw_name = type_name(full_name, CPP_KEYWORDS | RUST_KEYWORDS)
+    lines = [
+        "pub struct " + public_name,
+        "{",
+        "    raw: RawClient,",
+        f"    handle: {raw_name},",
+        "    owned: bool,",
+        "}",
+        "",
+        f"impl {public_name}",
+        "{",
+    ]
+    for operation in sdk.for_receiver(full_name):
+        if operation.kind != "transaction":
+            lines.extend(
+                _rust_operation_method(
+                    sdk,
+                    operation,
+                    receiver_expression="self.handle",
+                    target="self.raw",
+                )
+            )
+    if full_name == sdk.transaction_owner() and sdk.transaction("open") is not None:
+        open_operation = sdk.transaction("open")
+        lines.extend(
+            [
+                "    pub fn transaction(&self, name: &[u8]) -> Result<Transaction>",
+                "    {",
+                f"        if !self.raw.{rust_method_name(open_operation.raw_method)}(self.handle, name)? {{",
+                "            return Err(Error { code: ErrorCode::HostFailure });",
+                "        }",
+                "        Ok(Transaction { raw: self.raw, handle: self.handle, active: true })",
+                "    }",
+                "",
+            ]
+        )
+    lines.extend(["}", "", f"impl Drop for {public_name}", "{", "    fn drop(&mut self)", "    {", "        if self.owned {", "            let _ = self.raw.release(self.handle.0);", "        }", "    }", "}", ""])
+    return lines
+
+
+def _rust_transaction_class(sdk: SemanticSdkModel) -> list[str]:
+    commit = sdk.transaction("commit")
+    abort = sdk.transaction("abort")
+    if commit is None or abort is None:
+        return []
+    owner = sdk.transaction_owner()
+    if owner is None:
+        return []
+    owner_handle = type_name(owner, CPP_KEYWORDS | RUST_KEYWORDS)
+    return [
+        "pub struct Transaction",
+        "{",
+        "    raw: RawClient,",
+        f"    handle: {owner_handle},",
+        "    active: bool,",
+        "}",
+        "",
+        "impl Transaction",
+        "{",
+        "    pub fn commit(&mut self) -> Result<()>",
+        "    {",
+        f"        if self.active && !self.raw.{rust_method_name(commit.raw_method)}(self.handle)? {{",
+        "            return Err(Error { code: ErrorCode::HostFailure });",
+        "        }",
+        "        self.active = false;",
+        "        Ok(())",
+        "    }",
+        "",
+        "    pub fn abort(&mut self) -> Result<()>",
+        "    {",
+        f"        if self.active && !self.raw.{rust_method_name(abort.raw_method)}(self.handle)? {{",
+        "            return Err(Error { code: ErrorCode::HostFailure });",
+        "        }",
+        "        self.active = false;",
+        "        Ok(())",
+        "    }",
+        "}",
+        "",
+        "impl Drop for Transaction",
+        "{",
+        "    fn drop(&mut self)",
+        "    {",
+        f"        if self.active {{ let _ = self.raw.{rust_method_name(abort.raw_method)}(self.handle); }}",
+        "    }",
+        "}",
+        "",
+    ]
+
+
+def _rust_service_class(sdk: SemanticSdkModel, service: str) -> list[str]:
+    public_name = _pascal_case(service)
+    lines = [
+        "#[derive(Clone, Copy)]",
+        f"pub struct {public_name}",
+        "{",
+        "    raw: RawClient,",
+        "}",
+        "",
+        f"impl {public_name}",
+        "{",
+    ]
+    for operation in sdk.for_service(service):
+        lines.extend(
+            _rust_operation_method(
+                sdk,
+                operation,
+                receiver_expression=None,
+                target="self.raw",
+            )
+        )
+    lines.extend(["}", ""])
+    return lines
+
+
+def _rust_extension_facade(sdk: SemanticSdkModel) -> list[str]:
+    """Render the Rust facade from semantic SDK descriptors."""
+
+    lines: list[str] = [
         "",
         "#[derive(Clone, Copy)]",
         "pub struct Extension",
@@ -1523,271 +2124,30 @@ def _rust_extension_facade() -> list[str]:
         "        self.raw",
         "    }",
         "",
-        "    pub const fn documents(&self) -> Documents",
-        "    {",
-        "        Documents { raw: self.raw }",
-        "    }",
-        "",
-        "    pub const fn part(&self) -> Part",
-        "    {",
-        "        Part { raw: self.raw }",
-        "    }",
-        "",
-        "    pub const fn geometry(&self) -> Geometry",
-        "    {",
-        "        Geometry { raw: self.raw }",
-        "    }",
-        "}",
-        "",
-        "#[derive(Clone, Copy)]",
-        "pub struct Documents",
-        "{",
-        "    raw: RawClient,",
-        "}",
-        "",
-        "impl Documents",
-        "{",
-        "    pub fn create(&self, name: &[u8]) -> Result<Document>",
-        "    {",
-        "        self.raw.document_new(name).map(|handle| Document {",
-        "            raw: self.raw,",
-        "            handle,",
-        "            owned: true,",
-        "        })",
-        "    }",
-        "}",
-        "",
-        "pub struct Document",
-        "{",
-        "    raw: RawClient,",
-        "    handle: FreeCADDocumentHandle,",
-        "    owned: bool,",
-        "}",
-        "",
-        "impl Document",
-        "{",
-        "    pub fn is_saved(&self) -> Result<bool>",
-        "    {",
-        "        self.raw.document_is_saved(self.handle)",
-        "    }",
-        "",
-        "    pub fn get_object(&self, name: &[u8]) -> Result<DocumentObject>",
-        "    {",
-        "        self.raw.document_get_object(self.handle, name).map(|handle| DocumentObject {",
-        "            raw: self.raw,",
-        "            handle,",
-        "            owned: true,",
-        "        })",
-        "    }",
-        "",
-        "    pub fn add_object(&self, shape: &TopoShape, name: &[u8]) -> Result<DocumentObject>",
-        "    {",
-        "        self.raw.document_add_object(self.handle, shape.handle, name).map(|handle| DocumentObject {",
-        "            raw: self.raw,",
-        "            handle,",
-        "            owned: true,",
-        "        })",
-        "    }",
-        "",
-        "    pub fn transaction(&self, name: &[u8]) -> Result<Transaction>",
-        "    {",
-        "        if !self.raw.document_open_transaction(self.handle, name)? {",
-        "            return Err(Error { code: ErrorCode::HostFailure });",
-        "        }",
-        "        Ok(Transaction { raw: self.raw, handle: self.handle, active: true })",
-        "    }",
-        "}",
-        "",
-        "impl Drop for Document",
-        "{",
-        "    fn drop(&mut self)",
-        "    {",
-        "        if self.owned {",
-        "            let _ = self.raw.release(self.handle.0);",
-        "        }",
-        "    }",
-        "}",
-        "",
-        "pub struct DocumentObject",
-        "{",
-        "    raw: RawClient,",
-        "    handle: FreeCADDocumentObjectHandle,",
-        "    owned: bool,",
-        "}",
-        "",
-        "impl DocumentObject",
-        "{",
-        "    pub fn label(&self, output: &mut [u8]) -> Result<usize>",
-        "    {",
-        "        self.raw.document_object_get_label(self.handle, output)",
-        "    }",
-        "",
-        "    pub fn set_label(&self, label: &[u8]) -> Result<()>",
-        "    {",
-        "        self.raw.document_object_set_label(self.handle, label)",
-        "    }",
-        "}",
-        "",
-        "impl Drop for DocumentObject",
-        "{",
-        "    fn drop(&mut self)",
-        "    {",
-        "        if self.owned {",
-        "            let _ = self.raw.release(self.handle.0);",
-        "        }",
-        "    }",
-        "}",
-        "",
-        "pub struct TopoShape",
-        "{",
-        "    raw: RawClient,",
-        "    handle: PartTopoShapeHandle,",
-        "    owned: bool,",
-        "}",
-        "",
-        "impl TopoShape",
-        "{",
-        "    pub fn is_null(&self) -> Result<bool>",
-        "    {",
-        "        self.raw.topo_shape_is_null(self.handle)",
-        "    }",
-        "",
-        "    pub fn is_valid(&self) -> Result<bool>",
-        "    {",
-        "        self.raw.topo_shape_is_valid(self.handle)",
-        "    }",
-        "",
-        "    pub fn length(&self) -> Result<f64>",
-        "    {",
-        "        self.raw.topo_shape_length(self.handle)",
-        "    }",
-        "",
-        "    pub fn area(&self) -> Result<f64>",
-        "    {",
-        "        self.raw.topo_shape_area(self.handle)",
-        "    }",
-        "",
-        "    pub fn volume(&self) -> Result<f64>",
-        "    {",
-        "        self.raw.topo_shape_volume(self.handle)",
-        "    }",
-        "}",
-        "",
-        "impl Drop for TopoShape",
-        "{",
-        "    fn drop(&mut self)",
-        "    {",
-        "        if self.owned {",
-        "            let _ = self.raw.release(self.handle.0);",
-        "        }",
-        "    }",
-        "}",
-        "",
-        "pub struct Transaction",
-        "{",
-        "    raw: RawClient,",
-        "    handle: FreeCADDocumentHandle,",
-        "    active: bool,",
-        "}",
-        "",
-        "impl Transaction",
-        "{",
-        "    pub fn commit(&mut self) -> Result<()> ",
-        "    {",
-        "        if self.active && !self.raw.document_commit_transaction(self.handle)? {",
-        "            return Err(Error { code: ErrorCode::HostFailure });",
-        "        }",
-        "        self.active = false;",
-        "        Ok(())",
-        "    }",
-        "",
-        "    pub fn abort(&mut self) -> Result<()> ",
-        "    {",
-        "        if self.active && !self.raw.document_abort_transaction(self.handle)? {",
-        "            return Err(Error { code: ErrorCode::HostFailure });",
-        "        }",
-        "        self.active = false;",
-        "        Ok(())",
-        "    }",
-        "}",
-        "",
-        "impl Drop for Transaction",
-        "{",
-        "    fn drop(&mut self)",
-        "    {",
-        "        if self.active {",
-        "            let _ = self.raw.document_abort_transaction(self.handle);",
-        "        }",
-        "    }",
-        "}",
-        "",
-        "#[derive(Clone, Copy)]",
-        "pub struct Part",
-        "{",
-        "    raw: RawClient,",
-        "}",
-        "",
-        "impl Part",
-        "{",
-        "    pub fn make_box(&self, length: f64, width: f64, height: f64) -> Result<TopoShape>",
-        "    {",
-        "        self.raw.part_make_box(length, width, height).map(|handle| TopoShape {",
-        "            raw: self.raw,",
-        "            handle,",
-        "            owned: true,",
-        "        })",
-        "    }",
-        "}",
-        "",
-        "pub struct Vector",
-        "{",
-        "    raw: RawClient,",
-        "    value: FreeCADBaseVectorValue,",
-        "}",
-        "",
-        "impl Vector",
-        "{",
-        "    pub fn x(&self) -> f64 { self.value.x }",
-        "    pub fn y(&self) -> f64 { self.value.y }",
-        "    pub fn z(&self) -> f64 { self.value.z }",
-        "",
-        "    pub fn add(&self, other: &Vector) -> Result<Vector>",
-        "    {",
-        "        self.raw.vector_add(self.value, other.value).map(|value| Vector { raw: self.raw, value })",
-        "    }",
-        "",
-        "    pub fn sub(&self, other: &Vector) -> Result<Vector>",
-        "    {",
-        "        self.raw.vector_sub(self.value, other.value).map(|value| Vector { raw: self.raw, value })",
-        "    }",
-        "",
-        "    pub fn dot(&self, other: &Vector) -> Result<f64>",
-        "    {",
-        "        self.raw.vector_dot(self.value, other.value)",
-        "    }",
-        "",
-        "    pub fn cross(&self, other: &Vector) -> Result<Vector>",
-        "    {",
-        "        self.raw.vector_cross(self.value, other.value).map(|value| Vector { raw: self.raw, value })",
-        "    }",
-        "}",
-        "",
-        "#[derive(Clone, Copy)]",
-        "pub struct Geometry",
-        "{",
-        "    raw: RawClient,",
-        "}",
-        "",
-        "impl Geometry",
-        "{",
-        "    pub fn vector(&self, x: f64, y: f64, z: f64) -> Result<Vector>",
-        "    {",
-        "        self.raw.vector_new(x, y, z).map(|value| Vector { raw: self.raw, value })",
-        "    }",
-        "}",
-        "",
     ]
-
+    for service in sdk.services:
+        lines.extend(
+            [
+                f"    pub const fn {service}(&self) -> {_pascal_case(service)}",
+                "    {",
+                f"        {_pascal_case(service)} {{ raw: self.raw }}",
+                "    }",
+                "",
+            ]
+        )
+    lines.extend(["}", ""])
+    for full_name in sdk.values:
+        lines.extend(_rust_value_class(sdk, full_name))
+    resource_order = sorted(
+        sdk.resources,
+        key=lambda item: (1 if _short_type(item) == "Document" else 0, item),
+    )
+    for full_name in resource_order:
+        lines.extend(_rust_resource_class(sdk, full_name))
+    lines.extend(_rust_transaction_class(sdk))
+    for service in sdk.services:
+        lines.extend(_rust_service_class(sdk, service))
+    return lines
 
 def render_rust(model: dict[str, Any]) -> str:
     api = model.get("api", "org.freecad.wasm.api@0")
@@ -1803,6 +2163,7 @@ def render_rust(model: dict[str, Any]) -> str:
     lines = [
         "// Generated by generate_wasm_sdk.py. Do not edit.",
         "",
+        "use core::convert::TryInto;",
         "use core::ptr;",
         "",
         "#[link(wasm_import_module = \"freecad\")]",
@@ -2300,12 +2661,11 @@ def render_rust(model: dict[str, Any]) -> str:
         [
             "}",
             "",
-            "pub type Client = RawClient;",
-            "",
         ]
     )
-    if has_extension_facade(model):
-        lines.extend(_rust_extension_facade())
+    sdk = semantic_sdk_model(model)
+    if sdk.operations:
+        lines.extend(_rust_extension_facade(sdk))
     return "\n".join(lines)
 
 

@@ -179,6 +179,7 @@ class GenerateWasmApiTests(unittest.TestCase):
         self.assertIs(document_new.parameters[0].type.kind, WireKind.STRING)
         self.assertIs(document_new.returns.ownership, Ownership.OWNED)
         self.assertIs(document_new.returns.kind, WireKind.HANDLE)
+        self.assertEqual(document_new.sdk_service, "documents")
         release = next(adapter for adapter in adapters if adapter.name == "release")
         self.assertIs(release.parameters[0].ownership, Ownership.CONSUMED)
         self.assertIs(release.returns.kind, WireKind.BOOL)
@@ -213,8 +214,128 @@ class GenerateWasmApiTests(unittest.TestCase):
             operation for operation in model["operations"] if operation["name"] == "release"
         )
         self.assertEqual(release_operation["adapter_kind"], "host")
+        document_new_operation = next(
+            operation
+            for operation in model["operations"]
+            if operation["name"] == "documentNew"
+        )
+        self.assertEqual(document_new_operation["sdk_service"], "documents")
         self.assertTrue(release_operation["consumes"])
         self.assertEqual(lock.reserved_opcodes, frozenset(range(1, 22)))
+
+    def test_semantic_sdk_collects_parameter_only_types(self):
+        model = {
+            "extension_api": {"interfaces": []},
+            "operations": [
+                {
+                    "stable_id": "org.freecad.test@1/use_resource",
+                    "guest_method": "useResource",
+                    "params": [
+                        {
+                            "name": "resource",
+                            "type": {
+                                "kind": "handle",
+                                "type": "FreeCAD.InputOnlyResource",
+                            },
+                        }
+                    ],
+                    "returns": {"kind": "none"},
+                },
+                {
+                    "stable_id": "org.freecad.test@1/use_value",
+                    "guest_method": "useValue",
+                    "params": [
+                        {
+                            "name": "value",
+                            "type": {
+                                "kind": "value",
+                                "type": "FreeCAD.InputOnlyValue",
+                            },
+                        }
+                    ],
+                    "returns": {"kind": "none"},
+                },
+            ],
+        }
+
+        sdk = generate_wasm_sdk.semantic_sdk_model(model)
+
+        self.assertEqual(sdk.resources, ("FreeCAD.InputOnlyResource",))
+        self.assertEqual(sdk.values, ("FreeCAD.InputOnlyValue",))
+
+    def test_semantic_sdk_groups_functions_by_interface(self):
+        stable_id = "org.freecad.selection@1/active_document"
+        document_stable_id = "org.freecad.document@1/active_count"
+        model = {
+            "extension_api": {
+                "interfaces": [
+                    {
+                        "id": "org.freecad.selection@1",
+                        "name": "selection",
+                        "version": 1,
+                        "operations": [
+                            {
+                                "id": stable_id,
+                                "source": "FreeCAD.Selection.activeDocument",
+                                "receiver": None,
+                            }
+                        ],
+                    },
+                    {
+                        "id": "org.freecad.document@1",
+                        "name": "document",
+                        "version": 1,
+                        "operations": [
+                            {
+                                "id": document_stable_id,
+                                "source": "FreeCAD.activeDocumentCount",
+                                "receiver": None,
+                            }
+                        ],
+                    },
+                ]
+            },
+            "operations": [
+                {
+                    "stable_id": stable_id,
+                    "guest_method": "selectionActiveDocument",
+                    "source": "FreeCAD.Selection.activeDocument",
+                    "params": [],
+                    "returns": {
+                        "kind": "handle",
+                        "type": "FreeCAD.Document",
+                    },
+                },
+                {
+                    "stable_id": document_stable_id,
+                    "guest_method": "activeDocumentCount",
+                    "source": "FreeCAD.activeDocumentCount",
+                    "params": [],
+                    "returns": {"kind": "int64"},
+                },
+                {
+                    "stable_id": "org.freecad.host@1/document_new",
+                    "guest_method": "documentNew",
+                    "sdk_service": "documents",
+                    "params": [],
+                    "returns": {
+                        "kind": "handle",
+                        "type": "FreeCAD.Document",
+                    },
+                },
+            ],
+        }
+
+        sdk = generate_wasm_sdk.semantic_sdk_model(model)
+        operations = {operation.stable_id: operation for operation in sdk.operations}
+
+        self.assertIsNone(operations[stable_id].receiver)
+        self.assertEqual(operations[stable_id].service, "selection")
+        self.assertEqual(operations[document_stable_id].service, "documents")
+        self.assertEqual(
+            operations["org.freecad.host@1/document_new"].service,
+            "documents",
+        )
 
     def test_wire_types_round_trip_through_json(self):
         wire_type = WasmAbiType(

@@ -53,6 +53,7 @@ class WasmAdapterDeclaration:
     requires: tuple[str, ...] = ()
     consumes: bool = False
     kind: AdapterKind = AdapterKind.HOST
+    sdk_service: str | None = None
 
     @property
     def name(self) -> str:
@@ -94,6 +95,8 @@ class WasmAdapterDeclaration:
             operation["requires"] = list(self.requires)
         if self.consumes:
             operation["consumes"] = True
+        if self.sdk_service is not None:
+            operation["sdk_service"] = self.sdk_service
         return operation
 
 
@@ -147,6 +150,7 @@ WASM_ADAPTERS: tuple[WasmAdapterDeclaration, ...] = (
         parameters=(_parameter("name", _STRING),),
         returns=_DOCUMENT,
         requires=("src/App/Document.pyi",),
+        sdk_service="documents",
     ),
     WasmAdapterDeclaration(
         stable_id="org.freecad.part@1/make_box",

@@ -449,6 +449,11 @@ def _validate_operation_catalog(operations: list[dict[str, Any]]) -> None:
         origin = operation.get("origin")
         if origin is not None and origin not in {"projection", "adapter"}:
             raise ValueError(f"WASM operation '{name}' has an invalid origin")
+        sdk_service = operation.get("sdk_service")
+        if sdk_service is not None and (
+            not isinstance(sdk_service, str) or not sdk_service
+        ):
+            raise ValueError(f"WASM operation '{name}' has an invalid SDK service")
 
         permission = operation.get("permission")
         if permission is not None and (not isinstance(permission, str) or not permission):

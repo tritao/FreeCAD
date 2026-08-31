@@ -212,7 +212,7 @@ class GeneratedWasmPythonSdkTests(unittest.TestCase):
         source = generate_wasm_sdk.render_python(model)
         exec(compile(source, "freecad_wasm_api.py", "exec"), module.__dict__)
         namespace = module.__dict__
-        cls.Client = namespace["Client"]
+        cls.RawClient = namespace["RawClient"]
         cls.Extension = namespace["Extension"]
         cls.WasmGuestError = namespace["WasmGuestError"]
         cls.WasmHostError = namespace["WasmHostError"]
@@ -223,7 +223,7 @@ class GeneratedWasmPythonSdkTests(unittest.TestCase):
     def test_generated_client_uses_typed_transport_and_transaction_rollback(self):
         operations = self.operations
         host = MockHost(operations, self.WasmHostError)
-        client = self.Client(host)
+        client = self.RawClient(host)
 
         with self.assertRaises(self.WasmGuestError):
             client.document_new("invalid\x00name")
@@ -266,23 +266,23 @@ class GeneratedWasmPythonSdkTests(unittest.TestCase):
             message = b"host capability 'document.modify' is not granted"
             return struct.pack("<4sBBBBI", b"FCWR", 1, 1, 2, 0, len(message)) + message
 
-        client = self.Client(denied)
+        client = self.RawClient(denied)
         with self.assertRaisesRegex(self.WasmHostError, "document.modify") as context:
             client.document_open_transaction(1, "Denied")
         self.assertEqual(context.exception.code, 2)
 
-        malformed = self.Client(lambda _request: b"bad")
+        malformed = self.RawClient(lambda _request: b"bad")
         with self.assertRaises(self.WasmProtocolError):
             malformed.document_new("Broken")
 
         def success(payload: bytes) -> bytes:
             return struct.pack("<4sBBBBI", b"FCWR", 1, 0, 0, 0, len(payload)) + payload
 
-        truncated_handle = self.Client(lambda _request: success(b"short"))
+        truncated_handle = self.RawClient(lambda _request: success(b"short"))
         with self.assertRaises(self.WasmProtocolError):
             truncated_handle.document_new("Truncated")
 
-        invalid_release = self.Client(lambda _request: success(b"\x01"))
+        invalid_release = self.RawClient(lambda _request: success(b"\x01"))
         with self.assertRaises(self.WasmProtocolError):
             invalid_release.release(1)
 

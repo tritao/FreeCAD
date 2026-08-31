@@ -62,6 +62,7 @@ class WasmAbiOperation:
     effect: str | None = None
     property_access: str | None = None
     since: str | None = None
+    sdk_service: str | None = None
 
     @classmethod
     def from_dict(cls, value: dict[str, Any]) -> "WasmAbiOperation":
@@ -109,6 +110,7 @@ class WasmAbiOperation:
             effect=value.get("effect"),
             property_access=value.get("property_access"),
             since=value.get("since"),
+            sdk_service=value.get("sdk_service"),
         )
 
     def as_dict(self) -> dict[str, Any]:
@@ -143,6 +145,8 @@ class WasmAbiOperation:
             value["property_access"] = self.property_access
         if self.since is not None:
             value["since"] = self.since
+        if self.sdk_service is not None:
+            value["sdk_service"] = self.sdk_service
         return value
 
 

@@ -47,8 +47,12 @@ class GenerateWasmSdkTests(unittest.TestCase):
         self.assertIn("FreeCADDocumentHandle", rust)
         self.assertIn("namespace FreeCAD::Extension::Raw", cpp)
         self.assertIn("class RawClient", cpp)
-        self.assertIn("using Client = RawClient", cpp)
-        self.assertIn("namespace FreeCAD::Wasm::Generated", cpp)
+        self.assertNotIn("using Client = RawClient", cpp)
+        self.assertNotIn("namespace FreeCAD::Wasm::Generated", cpp)
+        self.assertIn("namespace FreeCAD::Extension", cpp)
+        self.assertIn("class Documents final", cpp)
+        self.assertIn("class Document final", cpp)
+        self.assertIn("class Transaction final", cpp)
         self.assertIn("class OwnedHandle", cpp)
         self.assertIn("documentIsSavedResult", cpp)
         self.assertIn("bool documentNew", cpp)
@@ -81,10 +85,10 @@ class GenerateWasmSdkTests(unittest.TestCase):
         self.assertIn("pub const VECTOR_DOT: u8 = 7", rust)
         self.assertIn("pub const TOPO_SHAPE_AREA: u8 = 14", rust)
         self.assertIn("pub struct RawClient", rust)
-        self.assertIn("pub type Client = RawClient", rust)
+        self.assertNotIn("pub type Client = RawClient", rust)
         self.assertIn("pub struct Extension", rust)
         self.assertIn("class RawClient:", python)
-        self.assertIn("Client = RawClient", python)
+        self.assertNotIn("Client = RawClient", python)
         self.assertIn("class Extension:", python)
         self.assertIn("class OwnedHandle:", python)
         self.assertIn("class WasmHostError", python)
@@ -136,6 +140,31 @@ class GenerateWasmSdkTests(unittest.TestCase):
                 rust_path.read_text(encoding="utf-8").count("pub struct PartTopoShapeHandle"), 1
             )
             compile(python_path.read_text(encoding="utf-8"), str(python_path), "exec")
+
+    def test_facade_uses_semantic_metadata_not_abi_method_names(self):
+        model = generate_wasm_api.build_model(
+            ROOT,
+            [
+                ROOT / "src/Base/Vector.pyi",
+                ROOT / "src/App/Document.pyi",
+                ROOT / "src/App/DocumentObject.pyi",
+                ROOT / "src/Mod/Part/App/TopoShape.pyi",
+            ],
+        )
+        for index, operation in enumerate(model["operations"]):
+            operation["name"] = f"abiOperation{index}"
+            operation["guest_method"] = f"abiOperation{index}"
+
+        cpp = generate_wasm_sdk.render_cpp(model)
+        rust = generate_wasm_sdk.render_rust(model)
+        python = generate_wasm_sdk.render_python(model)
+
+        self.assertIn("Result<bool> isSaved() const", cpp)
+        self.assertIn("pub fn is_saved(&self) -> Result<bool>", rust)
+        self.assertIn("def is_saved(self) -> bool:", python)
+        self.assertIn("abiOperation8Result", cpp)
+        self.assertIn("abi_operation8", rust)
+        self.assertIn("abi_operation8", python)
 
     def test_operations_follow_selected_api_inputs(self):
         model = generate_wasm_api.build_model(
