@@ -5,6 +5,9 @@ the current curated surface. Wasm is the current runtime backend, not the
 extension author's programming model. It is a design contract, not a promise
 that every Python API is suitable for extension exposure.
 
+The broader architecture documentation is indexed at
+[`docs/extension/index.md`](../../../docs/extension/index.md).
+
 ## Source Of Truth
 
 The dependency direction is fixed:
