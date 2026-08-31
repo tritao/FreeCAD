@@ -69,6 +69,7 @@ enum class Operation : std::uint8_t
     DocumentAbortTransaction = 18,
     DocumentObjectGetLabel = 19,
     DocumentObjectSetLabel = 20,
+    VectorSub = 21,
 };
 
 inline void appendU32(std::string& output, std::uint32_t value)

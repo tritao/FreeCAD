@@ -426,6 +426,27 @@ public:
         return true;
     }
 
+    Result<Vector3> vectorSub(Vector3 left, Vector3 right) const
+    {
+        std::string payload;
+        appendVector(payload, left);
+        appendVector(payload, right);
+        return callVector(Abi::Operation::VectorSub, payload);
+    }
+
+    bool vectorSub(Vector3 left, Vector3 right, Vector3* result) const
+    {
+        if (result == nullptr) {
+            return false;
+        }
+        const auto response = vectorSub(left, right);
+        if (!response.ok) {
+            return false;
+        }
+        *result = response.value;
+        return true;
+    }
+
     Result<double> vectorDot(Vector3 left, Vector3 right) const
     {
         std::string payload;

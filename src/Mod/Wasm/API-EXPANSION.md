@@ -76,7 +76,7 @@ classification that Python typing cannot express.
 The current direct-projection slice is:
 
 ```text
-Base.Vector.add, dot, cross
+Base.Vector.add, sub, dot, cross
 Document.isSaved, getObject, openTransaction,
     commitTransaction, abortTransaction
 DocumentObject.Label getter and setter

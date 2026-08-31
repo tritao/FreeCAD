@@ -36,6 +36,16 @@ with tempfile.TemporaryDirectory(prefix="freecad-wasm-api-") as temporary_direct
         [sys.executable, str(GENERATOR), "--output", str(output), *(str(path) for path in INPUTS)],
         check=True,
     )
+    subprocess.run(
+        [
+            sys.executable,
+            str(ROOT / "src/Tools/bindings/manage_wasm_abi.py"),
+            "--check",
+            "--catalog",
+            str(output),
+        ],
+        check=True,
+    )
     model = json.loads(output.read_text(encoding="utf-8"))
 
 assert model["schema"] == "org.freecad.wasm.api"
@@ -52,6 +62,8 @@ assert operations["documentAddObject"]["mutates"] is True
 assert operations["documentAddObject"]["transaction"] == "required"
 assert operations["documentAddObject"]["source"] == "FreeCAD.Document.addObject"
 assert operations["vectorDot"]["source"] == "FreeCAD.Base.Vector.dot"
+assert operations["vectorSub"]["id"] == 21
+assert operations["vectorSub"]["source"] == "FreeCAD.Base.Vector.sub"
 assert operations["documentIsSaved"]["permission"] == "document.read"
 assert operations["topoShapeArea"]["source"] == "Part.TopoShape.Area"
 assert operations["documentOpenTransaction"]["permission"] == "document.modify"

@@ -69,6 +69,7 @@ class GenerateWasmSdkTests(unittest.TestCase):
         )
         self.assertIn("bool partMakeBox", cpp)
         self.assertIn("bool vectorAdd", cpp)
+        self.assertIn("bool vectorSub", cpp)
         self.assertIn("bool vectorDot", cpp)
         self.assertIn("bool topoShapeArea", cpp)
         self.assertIn('documentNewPermission[] = "document.create"', cpp)
@@ -148,6 +149,7 @@ class GenerateWasmSdkTests(unittest.TestCase):
                 "vectorAdd",
                 "vectorDot",
                 "vectorCross",
+                "vectorSub",
                 "release",
             },
         )

@@ -407,6 +407,7 @@ WasmHostApi::OperationHandler WasmHostApi::handlerFor(Abi::Operation operation)
     case Abi::Operation::VectorAdd:
     case Abi::Operation::VectorDot:
     case Abi::Operation::VectorCross:
+    case Abi::Operation::VectorSub:
         return &WasmHostApi::dispatchVectorOperation;
     case Abi::Operation::DocumentNew:
     case Abi::Operation::DocumentAddObject:
@@ -465,6 +466,8 @@ HostCallResult WasmHostApi::dispatchVectorOperation(Abi::Operation operation,
         return {true, doublePayload(left.Dot(right)), {}};
     case Abi::Operation::VectorCross:
         return {true, vectorPayload(left.Cross(right)), {}};
+    case Abi::Operation::VectorSub:
+        return {true, vectorPayload(left - right), {}};
     default:
         return {false, {}, "unsupported vector operation", Abi::ErrorCode::Unsupported};
     }

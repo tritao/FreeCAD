@@ -71,6 +71,42 @@ class ManageWasmAbiTests(unittest.TestCase):
         self.assertEqual(changed, ["org.freecad.test@1/first"])
         self.assertEqual(removed, [])
 
+    def test_check_allows_operations_disabled_by_missing_source_inputs(self):
+        lock = self.lock()
+        entry = AbiLockEntry(
+            stable_id="org.freecad.test@1/part",
+            opcode=3,
+            wire_name="test.part",
+            signature="sha256:" + "2" * 64,
+            name="part",
+            guest_method="part",
+            requires=("src/Mod/Part/App/TopoShape.pyi",),
+        )
+        lock = AbiLock(1, {**lock.operations, entry.stable_id: entry}, lock.retired)
+        catalog = {
+            "org.freecad.test@1/first": operation(
+                "org.freecad.test@1/first", 1, wire_name="test.first"
+            )
+        }
+
+        added, changed, removed = manage_wasm_abi._differences(
+            lock,
+            catalog,
+            [Path("src/Base/Vector.pyi")],
+        )
+        self.assertEqual((added, changed, removed), ([], [], []))
+
+    def test_check_does_not_hide_missing_selected_operations(self):
+        lock = self.lock()
+        catalog = {}
+
+        _, _, removed = manage_wasm_abi._differences(
+            lock,
+            catalog,
+            [Path("src/Base/Vector.pyi")],
+        )
+        self.assertEqual(removed, ["org.freecad.test@1/first"])
+
     def test_add_new_allocates_after_active_and_retired_opcodes(self):
         with tempfile.TemporaryDirectory() as directory:
             lock_path = Path(directory) / "wasm_abi.lock.toml"

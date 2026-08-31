@@ -811,6 +811,11 @@ TEST(WasmGuestTest, EncodesThePublishedHostProtocol)
               binaryRequest(Wasm::Abi::Operation::VectorAdd,
                             vectorPairPayload(1.0, 2.0, 3.0, 4.0, 5.0, 6.0)));
 
+    EXPECT_FALSE(guest.vectorSub(left, right, &vector));
+    EXPECT_EQ(GuestCapture::lastRequest,
+              binaryRequest(Wasm::Abi::Operation::VectorSub,
+                            vectorPairPayload(1.0, 2.0, 3.0, 4.0, 5.0, 6.0)));
+
     double dot = 0.0;
     EXPECT_FALSE(guest.vectorDot(left, right, &dot));
     EXPECT_EQ(GuestCapture::lastRequest,
@@ -868,6 +873,16 @@ TEST(WasmHostApiTest, ExecutesVectorOperationsFromPyiSurface)
     EXPECT_DOUBLE_EQ(doubleFromPayload(cross.payload, 0U), -3.0);
     EXPECT_DOUBLE_EQ(doubleFromPayload(cross.payload, sizeof(double)), 6.0);
     EXPECT_DOUBLE_EQ(doubleFromPayload(cross.payload, sizeof(double) * 2U), -3.0);
+
+    const auto difference = hostApi.dispatch(
+        asBytes(binaryRequest(Wasm::Abi::Operation::VectorSub,
+                              vectorPairPayload(4.0, 5.0, 6.0, 1.0, 2.0, 3.0))),
+        hostApi.permissions(),
+        handles);
+    ASSERT_TRUE(difference.ok) << difference.error;
+    EXPECT_DOUBLE_EQ(doubleFromPayload(difference.payload, 0U), 3.0);
+    EXPECT_DOUBLE_EQ(doubleFromPayload(difference.payload, sizeof(double)), 3.0);
+    EXPECT_DOUBLE_EQ(doubleFromPayload(difference.payload, sizeof(double) * 2U), 3.0);
 }
 
 #if defined(FREECAD_WASM_HAS_PART)

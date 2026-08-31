@@ -174,6 +174,22 @@ jobs:
             --log-dir "${{ env.logdir }}" \
             --report-file "${{ env.reportdir }}${{ env.reportfilename }}"
 
+      - name: Check Wasm ABI lock
+        if: always()
+        run: |
+          wasm_api_dir=$(mktemp -d)
+          python3 src/Tools/bindings/generate_wasm_api.py \
+            --output "$wasm_api_dir/freecad_wasm_api.json" \
+            src/Base/Vector.pyi \
+            src/App/Document.pyi \
+            src/App/DocumentObject.pyi \
+            src/Mod/Part/App/TopoShape.pyi
+          python3 src/Tools/bindings/manage_wasm_abi.py \
+            --check \
+            --catalog "$wasm_api_dir/freecad_wasm_api.json"
+          python3 src/Tools/bindings/tests/test_manage_wasm_abi.py
+          python3 tests/src/Mod/Wasm/WasmApiGeneratorTest.py
+
     # C++ linting steps
 
       - name: Install FreeCAD dependencies

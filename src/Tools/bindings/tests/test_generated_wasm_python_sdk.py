@@ -155,6 +155,13 @@ class MockHost:
                 "<ddd", *(left[index] + right[index] for index in range(3))
             )
 
+        if operation == self.operations.VECTOR_SUB:
+            left = struct.unpack_from("<ddd", payload, 0)
+            right = struct.unpack_from("<ddd", payload, 24)
+            return struct.pack(
+                "<ddd", *(left[index] - right[index] for index in range(3))
+            )
+
         raise AssertionError(f"unhandled operation {operation}")
 
 
@@ -194,6 +201,10 @@ class GeneratedWasmPythonSdkTests(unittest.TestCase):
             self.Vector(1.0, 2.0, 3.0), self.Vector(4.0, 5.0, 6.0)
         )
         self.assertEqual((vector.x, vector.y, vector.z), (5.0, 7.0, 9.0))
+        difference = client.vector_sub(
+            self.Vector(4.0, 5.0, 6.0), self.Vector(1.0, 2.0, 3.0)
+        )
+        self.assertEqual((difference.x, difference.y, difference.z), (3.0, 3.0, 3.0))
 
         document = client.document_new("PythonExample")
         self.assertFalse(client.document_is_saved(document))

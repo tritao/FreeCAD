@@ -160,3 +160,11 @@ wire_name = "document.object.set_label"
 guest_method = "documentObjectSetLabel"
 signature = "sha256:c6142d6d707f9bd5829eb21306df3648b422501be35b85f94303791e40df9002"
 requires = ["src/App/DocumentObject.pyi"]
+
+[operations."org.freecad.geometry@1/vector_sub"]
+opcode = 21
+name = "vectorSub"
+wire_name = "base.vector.sub"
+guest_method = "vectorSub"
+signature = "sha256:ef7a8b9e22fea7343e8f066a7db3da95d1decb941ed192a5b83881c60f3fec8a"
+requires = ["src/Base/Vector.pyi"]

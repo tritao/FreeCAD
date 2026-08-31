@@ -22,9 +22,11 @@ set(Wasm_API_SIGNATURE ${CMAKE_BINARY_DIR}/Mod/Wasm/freecad_wasm_api.signature)
 set(Wasm_API_DISPATCH_METADATA
     ${CMAKE_BINARY_DIR}/Mod/Wasm/freecad_wasm_dispatch_metadata.hpp)
 set(Wasm_API_GENERATOR ${CMAKE_SOURCE_DIR}/src/Tools/bindings/generate_wasm_api.py)
+set(Wasm_API_ABI_CHECKER ${CMAKE_SOURCE_DIR}/src/Tools/bindings/manage_wasm_abi.py)
 set(Wasm_API_SDK_GENERATOR ${CMAKE_SOURCE_DIR}/src/Tools/bindings/generate_wasm_sdk.py)
 set(Wasm_API_GENERATOR_SOURCES
     ${Wasm_API_GENERATOR}
+    ${Wasm_API_ABI_CHECKER}
     ${CMAKE_SOURCE_DIR}/src/Tools/python_api_model/diagnostics.py
     ${CMAKE_SOURCE_DIR}/src/Tools/python_api_model/metadata.py
     ${CMAKE_SOURCE_DIR}/src/Tools/python_api_model/model.py
@@ -64,6 +66,10 @@ add_custom_command(
             --dispatch-metadata-output ${Wasm_API_DISPATCH_METADATA}
             --catalog-signature-output ${Wasm_API_SIGNATURE}
             ${Wasm_API_INPUTS}
+    COMMAND ${Python3_EXECUTABLE} ${Wasm_API_ABI_CHECKER}
+            --check
+            --catalog ${Wasm_API_MODEL}
+            --available-input ${Wasm_API_INPUTS}
     MAIN_DEPENDENCY ${Wasm_API_GENERATOR}
     DEPENDS ${Wasm_API_INPUTS} ${Wasm_API_GENERATOR_SOURCES}
     COMMENT "Generating experimental FreeCAD Wasm API model"

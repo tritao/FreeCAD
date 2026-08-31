@@ -53,6 +53,7 @@ class ExtensionProjectTests(unittest.TestCase):
                 "org.freecad.geometry@1/vector_add",
                 "org.freecad.geometry@1/vector_cross",
                 "org.freecad.geometry@1/vector_dot",
+                "org.freecad.geometry@1/vector_sub",
                 "org.freecad.part@1/shape_is_null",
                 "org.freecad.part@1/shape_is_valid",
                 "org.freecad.part@1/shape_length",

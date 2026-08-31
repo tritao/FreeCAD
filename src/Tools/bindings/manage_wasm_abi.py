@@ -117,16 +117,41 @@ def _lock_fields(entry: AbiLockEntry) -> tuple[Any, ...]:
     )
 
 
+def _available_input_names(inputs: list[Path]) -> set[str]:
+    root = ROOT.resolve()
+    available: set[str] = set()
+    for path in inputs:
+        resolved = path if path.is_absolute() else root / path
+        try:
+            available.add(resolved.resolve().relative_to(root).as_posix())
+        except ValueError:
+            continue
+    return available
+
+
 def _differences(
     lock: AbiLock,
     catalog: dict[str, dict[str, Any]],
+    available_inputs: list[Path] | None = None,
 ) -> tuple[list[str], list[str], list[str]]:
     generated = {
         stable_id: _catalog_entry(operation)
         for stable_id, operation in catalog.items()
     }
     added = sorted(set(generated) - set(lock.operations))
-    removed = sorted(set(lock.operations) - set(generated))
+    removed_ids = set(lock.operations) - set(generated)
+    if available_inputs is not None:
+        available = _available_input_names(available_inputs)
+        removed_ids = {
+            stable_id
+            for stable_id in removed_ids
+            if not lock.operations[stable_id].requires
+            or not any(
+                requirement not in available
+                for requirement in lock.operations[stable_id].requires
+            )
+        }
+    removed = sorted(removed_ids)
     changed = sorted(
         stable_id
         for stable_id in set(generated) & set(lock.operations)
@@ -286,6 +311,13 @@ def main(argv: list[str] | None = None) -> int:
         default=ROOT / "src/Mod/Wasm/wasm_abi.lock.toml",
     )
     parser.add_argument("--catalog", type=Path)
+    parser.add_argument(
+        "--available-input",
+        nargs="+",
+        type=Path,
+        default=None,
+        help="source inputs selected for this build; missing requirements are disabled",
+    )
     parser.add_argument("--stable-id")
     parser.add_argument("--reason")
     args = parser.parse_args(argv)
@@ -314,7 +346,7 @@ def main(argv: list[str] | None = None) -> int:
             "generated catalog contains retired operation(s): "
             + ", ".join(sorted(retired))
         )
-    differences = _differences(lock, catalog)
+    differences = _differences(lock, catalog, args.available_input)
     _print_differences(*differences)
     return 1 if any(differences) else 0
 

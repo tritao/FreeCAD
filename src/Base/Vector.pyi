@@ -130,6 +130,11 @@ class Vector(PyObjectBase):
         ...
 
     @constmethod
+    @extension_api(
+        id="vector_sub",
+        permission="geometry.compute",
+        effect="compute",
+    )
     def sub(self, vector2: "Vector", /) -> "Vector":
         """
         Returns the difference of this vector and `vector2`.

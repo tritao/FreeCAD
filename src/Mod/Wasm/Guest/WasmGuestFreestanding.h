@@ -298,6 +298,17 @@ public:
         return call(result);
     }
 
+    bool vectorSub(Vector3 left, Vector3 right, Vector3* result) const
+    {
+        if (result == nullptr) {
+            return false;
+        }
+        resetRequest(21U, 48U);
+        appendVector(left);
+        appendVector(right);
+        return call(result);
+    }
+
     bool vectorDot(Vector3 left, Vector3 right, double* result) const
     {
         if (result == nullptr) {

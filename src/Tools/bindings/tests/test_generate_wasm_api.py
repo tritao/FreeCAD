@@ -243,7 +243,7 @@ class GenerateWasmApiTests(unittest.TestCase):
         )
         self.assertEqual(release_operation["adapter_kind"], "host")
         self.assertTrue(release_operation["consumes"])
-        self.assertEqual(lock.reserved_opcodes, frozenset(range(1, 21)))
+        self.assertEqual(lock.reserved_opcodes, frozenset(range(1, 22)))
 
     def test_published_operations_match_the_wire_compatibility_lock(self):
         model = generate_wasm_api.build_model(
@@ -412,6 +412,7 @@ class GenerateWasmApiTests(unittest.TestCase):
                 "org.freecad.geometry@1/vector_add",
                 "org.freecad.geometry@1/vector_dot",
                 "org.freecad.geometry@1/vector_cross",
+                "org.freecad.geometry@1/vector_sub",
                 "org.freecad.part@1/shape_is_null",
                 "org.freecad.part@1/shape_is_valid",
                 "org.freecad.part@1/shape_length",
