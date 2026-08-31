@@ -61,7 +61,12 @@ else()
         API_SIGNATURE_VARIABLE _freecad_wasm_guest_api_signature
         INPUTS ${_freecad_wasm_api_inputs}
         DEPENDS
-            "${FREECAD_SOURCE_DIR}/src/Mod/Wasm/WasmApiOperations.json"
+            "${FREECAD_SOURCE_DIR}/src/Mod/Wasm/wasm_abi.lock.toml"
+            "${FREECAD_SOURCE_DIR}/src/Tools/wasm_api_model/__init__.py"
+            "${FREECAD_SOURCE_DIR}/src/Tools/wasm_api_model/adapters.py"
+            "${FREECAD_SOURCE_DIR}/src/Tools/wasm_api_model/lock.py"
+            "${FREECAD_SOURCE_DIR}/src/Tools/wasm_api_model/model.py"
+            "${FREECAD_SOURCE_DIR}/src/Tools/wasm_api_model/types.py"
     )
     list(APPEND _freecad_wasm_guest_api_include_dirs
         "${_freecad_wasm_guest_api_dir}")

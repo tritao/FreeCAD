@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import copy
-import json
 import sys
 import unittest
 from pathlib import Path
@@ -17,7 +16,7 @@ import generate_wasm_sdk  # noqa: E402
 from extension_api_model import project_api_model  # noqa: E402
 from stubgen.api_extract import extract_curated_api_model  # noqa: E402
 from python_api_model.types import parse_annotation  # noqa: E402
-from wasm_api_model import load_wasm_extension_adapters  # noqa: E402
+from wasm_api_model import load_abi_lock, load_wasm_adapters  # noqa: E402
 
 
 ROOT = TOOLS_DIR.parents[2]
@@ -152,9 +151,12 @@ class GenerateWasmApiTests(unittest.TestCase):
             )
 
     def test_stale_lock_entries_must_be_retired(self):
-        lock = json.loads(
-            (ROOT / "src/Mod/Wasm/WasmApiOperations.json").read_text(encoding="utf-8")
-        )["abi"]["operations"]
+        lock = {
+            stable_id: entry.as_dict()
+            for stable_id, entry in load_abi_lock(
+                ROOT / "src/Mod/Wasm/wasm_abi.lock.toml"
+            ).operations.items()
+        }
         lock["org.freecad.geometry@1/not_published"] = {
             "id": 21,
             "name": "notPublished",
@@ -197,27 +199,51 @@ class GenerateWasmApiTests(unittest.TestCase):
             )
 
     def test_adapters_are_loaded_from_the_separate_typed_catalog(self):
-        adapters = load_wasm_extension_adapters(
-            ROOT / "src/Mod/Wasm/WasmApiAdapters.json"
-        )
+        adapters = load_wasm_adapters()
+        lock = load_abi_lock(ROOT / "src/Mod/Wasm/wasm_abi.lock.toml")
         self.assertEqual(len(adapters), 5)
         document_new = next(adapter for adapter in adapters if adapter.name == "documentNew")
-        self.assertEqual(document_new.operation_id, 1)
+        self.assertEqual(document_new.stable_id, "org.freecad.host@1/document_new")
         self.assertEqual(document_new.requires, ("src/App/Document.pyi",))
         self.assertEqual(document_new.parameters[0].type.kind, "string")
         self.assertEqual(document_new.returns.ownership, "owned")
         release = next(adapter for adapter in adapters if adapter.name == "release")
         self.assertEqual(release.returns.kind, "bool")
         self.assertEqual(release.wire_returns.kind, "none")
-        self.assertEqual(release.as_catalog_operation()["wire_returns"]["kind"], "none")
         self.assertEqual(
-            document_new.as_catalog_operation()["origin"],
+            release.as_catalog_operation(lock.operations[release.stable_id])["wire_returns"]["kind"],
+            "none",
+        )
+        self.assertEqual(
+            document_new.as_catalog_operation(lock.operations[document_new.stable_id])["origin"],
             "adapter",
         )
-        operations = json.loads(
-            (ROOT / "src/Mod/Wasm/WasmApiOperations.json").read_text(encoding="utf-8")
+        with self.assertRaisesRegex(ValueError, "name differs"):
+            document_new.as_catalog_operation(
+                lock.operations[document_new.stable_id].__class__(
+                    stable_id=document_new.stable_id,
+                    opcode=1,
+                    wire_name="document.new",
+                    signature="sha256:" + "0" * 64,
+                    name="wrongName",
+                    guest_method=document_new.guest_method,
+                )
+            )
+        model = generate_wasm_api.build_model(
+            ROOT,
+            [
+                ROOT / "src/Base/Vector.pyi",
+                ROOT / "src/App/Document.pyi",
+                ROOT / "src/App/DocumentObject.pyi",
+                ROOT / "src/Mod/Part/App/TopoShape.pyi",
+            ],
         )
-        self.assertNotIn("adapters", operations)
+        release_operation = next(
+            operation for operation in model["operations"] if operation["name"] == "release"
+        )
+        self.assertEqual(release_operation["adapter_kind"], "host")
+        self.assertTrue(release_operation["consumes"])
+        self.assertEqual(lock.reserved_opcodes, frozenset(range(1, 21)))
 
     def test_published_operations_match_the_wire_compatibility_lock(self):
         model = generate_wasm_api.build_model(
@@ -229,16 +255,16 @@ class GenerateWasmApiTests(unittest.TestCase):
                 ROOT / "src/Mod/Part/App/TopoShape.pyi",
             ],
         )
-        lock = json.loads(
-            (ROOT / "src/Mod/Wasm/WasmApiOperations.json").read_text(encoding="utf-8")
-        )["abi"]["operations"]
-        published = {entry["name"]: entry for entry in lock.values()}
+        lock = load_abi_lock(ROOT / "src/Mod/Wasm/wasm_abi.lock.toml")
+        published = {
+            entry.name: entry.as_dict()
+            for entry in lock.operations.values()
+            if entry.name is not None
+        }
         published.update(
             {
-                adapter.name: adapter.as_catalog_operation()
-                for adapter in load_wasm_extension_adapters(
-                    ROOT / "src/Mod/Wasm/WasmApiAdapters.json"
-                )
+                adapter.name: adapter.as_catalog_operation(lock.operations[adapter.stable_id])
+                for adapter in load_wasm_adapters()
             }
         )
 

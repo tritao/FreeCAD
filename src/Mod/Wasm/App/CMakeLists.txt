@@ -44,10 +44,13 @@ set(Wasm_API_GENERATOR_SOURCES
     ${CMAKE_SOURCE_DIR}/src/Tools/typing/stubgen/naming.py
     ${CMAKE_SOURCE_DIR}/src/Tools/typing/stubgen/parsing.py
     ${CMAKE_SOURCE_DIR}/src/Tools/typing/stubgen/source_inputs.py
-    ${CMAKE_SOURCE_DIR}/src/Mod/Wasm/WasmApiOperations.json
-    ${CMAKE_SOURCE_DIR}/src/Mod/Wasm/WasmApiAdapters.json
+    ${CMAKE_SOURCE_DIR}/src/Mod/Wasm/wasm_abi.lock.toml
     ${CMAKE_SOURCE_DIR}/src/Mod/Wasm/WasmExtensionApi.json
-    ${CMAKE_SOURCE_DIR}/src/Tools/bindings/wasm_api_model.py
+    ${CMAKE_SOURCE_DIR}/src/Tools/wasm_api_model/__init__.py
+    ${CMAKE_SOURCE_DIR}/src/Tools/wasm_api_model/adapters.py
+    ${CMAKE_SOURCE_DIR}/src/Tools/wasm_api_model/lock.py
+    ${CMAKE_SOURCE_DIR}/src/Tools/wasm_api_model/model.py
+    ${CMAKE_SOURCE_DIR}/src/Tools/wasm_api_model/types.py
 )
 
 add_custom_command(

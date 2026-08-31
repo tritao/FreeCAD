@@ -96,8 +96,9 @@ wire lowering, but their permission, ownership, transaction, and wire
 signature metadata must be explicit.
 
 Adapters must not pretend to be direct projections. They are reviewed as host
-API additions and remain in `WasmApiAdapters.json` until a canonical `.pyi`
-declaration and extension metadata can replace them.
+API additions and remain as typed declarations in
+`src/Tools/wasm_api_model/adapters.py` until a canonical `.pyi` declaration and
+extension metadata can replace them.
 
 ## Capability And Lifetime Rules
 
@@ -124,9 +125,10 @@ initial expansion and require separate capability designs.
 
 ## ABI Compatibility
 
-`WasmApiOperations.json` is an ABI lock, not a second API declaration. It
-reserves numeric operation codes, compatibility names, wire names, and wire
-signatures. Numeric IDs and retired IDs are never reused. A changed wire
+`wasm_abi.lock.toml` is the ABI lock, not a second API declaration. It reserves
+numeric operation codes, compatibility names, wire names, and wire signatures.
+The generated operation JSON is read-only output. Numeric IDs and retired IDs
+are never reused. A changed wire
 shape, ownership behavior, permission requirement, or failure contract needs
 an explicit compatibility decision and catalog signature update.
 

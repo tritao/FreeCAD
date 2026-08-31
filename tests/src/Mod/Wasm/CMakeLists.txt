@@ -51,9 +51,13 @@ if(FREECAD_USE_WAMR)
             ${CMAKE_SOURCE_DIR}/src/App/DocumentObject.pyi
             ${CMAKE_SOURCE_DIR}/src/Mod/Part/App/TopoShape.pyi
         DEPENDS
-            ${CMAKE_SOURCE_DIR}/src/Mod/Wasm/WasmApiOperations.json
-            ${CMAKE_SOURCE_DIR}/src/Mod/Wasm/WasmApiAdapters.json
+            ${CMAKE_SOURCE_DIR}/src/Mod/Wasm/wasm_abi.lock.toml
             ${CMAKE_SOURCE_DIR}/src/Mod/Wasm/WasmExtensionApi.json
+            ${CMAKE_SOURCE_DIR}/src/Tools/wasm_api_model/__init__.py
+            ${CMAKE_SOURCE_DIR}/src/Tools/wasm_api_model/adapters.py
+            ${CMAKE_SOURCE_DIR}/src/Tools/wasm_api_model/lock.py
+            ${CMAKE_SOURCE_DIR}/src/Tools/wasm_api_model/model.py
+            ${CMAKE_SOURCE_DIR}/src/Tools/wasm_api_model/types.py
     )
     freecad_wasm_addon(WasmGuestFixture
         OPTIONAL
@@ -249,7 +253,7 @@ if(FREECAD_USE_WAMR)
     if(_freecad_wamr_test_profile STREQUAL "JIT")
         target_compile_definitions(Wasm_tests_run PRIVATE FREECAD_WAMR_SUPPORTS_JIT=1)
     endif()
-    if(FREECAD_WAMR_SUPPORTS_INSTRUCTION_METERING)
+    if(_freecad_wamr_test_profile STREQUAL "INTERP")
         target_compile_definitions(Wasm_tests_run PRIVATE FREECAD_WAMR_SUPPORTS_INSTRUCTION_METERING=1)
     endif()
 endif()

@@ -32,10 +32,21 @@ from extension_api_model import (  # noqa: E402
     project_api_model,
 )
 from stubgen.api_extract import extract_curated_api_model_with_diagnostics  # noqa: E402
-from wasm_api_model import load_wasm_extension_adapters  # noqa: E402
+from wasm_api_model import (  # noqa: E402
+    AbiLock,
+    WasmAbiModel,
+    load_abi_lock,
+    load_wasm_adapters,
+)
 
 
 SCHEMA_VERSION = 0
+
+WASM_OPERATION_DEFAULTS = {
+    "fallible": True,
+    "nullable": False,
+    "handle_ownership": "owned",
+}
 
 # This is ABI lowering, not API classification. The extension model decides
 # whether a type is a value or resource; this table decides how a value is
@@ -614,6 +625,7 @@ def _validate_projected_abi_lock(
     extension_model: ExtensionApiModel,
     input_paths: set[str],
     adapter_sources: Mapping[str, str],
+    adapter_ids: set[str] | None = None,
 ) -> None:
     """Require every selected extension operation to have one ABI owner."""
 
@@ -658,7 +670,7 @@ def _validate_projected_abi_lock(
         for stable_id, entry in lock.items()
         if all(requirement in input_paths for requirement in entry.get("requires", []))
     }
-    stale = sorted(selected_lock - set(projected))
+    stale = sorted(selected_lock - set(projected) - (adapter_ids or set()))
     if stale:
         raise ValueError(
             "WASM ABI lock contains stale active operation(s); move removed operations "
@@ -750,6 +762,7 @@ def _extension_operation_catalog(
         wire_returns = parse_annotation("bool", module_name)
         assert wire_returns is not None
     return {
+        "stable_id": operation.stable_id,
         "name": lock_entry["name"],
         "wire_name": lock_entry["wire_name"],
         "id": lock_entry["id"],
@@ -805,34 +818,35 @@ def _load_operations(
     api_model: Any,
     extension_model: ExtensionApiModel,
     value_type_encodings: Mapping[str, str],
-) -> list[dict[str, Any]]:
-    operations_path = root / "src/Mod/Wasm/WasmApiOperations.json"
-    adapters_path = root / "src/Mod/Wasm/WasmApiAdapters.json"
-    if not operations_path.exists():
-        return []
-
-    model = json.loads(operations_path.read_text(encoding="utf-8"))
+) -> WasmAbiModel:
+    lock_path = root / "src/Mod/Wasm/wasm_abi.lock.toml"
     input_paths = {path.resolve().relative_to(root).as_posix() for path in inputs}
     sources = _operation_sources(api_model)
-    abi = model.get("abi", {})
-    if not isinstance(abi, dict):
-        raise ValueError("WASM operation catalog must contain an ABI operation lock")
-    lock = abi.get("operations", {})
-    retired = abi.get("retired", {})
-    adapters = [
-        adapter.as_catalog_operation()
-        for adapter in load_wasm_extension_adapters(adapters_path)
-    ]
-    defaults = model.get("defaults", {})
-    if not isinstance(lock, dict):
-        raise ValueError("WASM operation catalog must contain an ABI operation lock")
-    if not isinstance(retired, dict):
-        raise ValueError("WASM operation catalog ABI retired entries must be an object")
+    typed_adapters = load_wasm_adapters()
+    abi_lock = load_abi_lock(lock_path)
+    lock = {
+        stable_id: entry.as_dict()
+        for stable_id, entry in abi_lock.operations.items()
+    }
+    retired = {
+        stable_id: entry.as_dict()
+        for stable_id, entry in abi_lock.retired.items()
+    }
+    defaults = WASM_OPERATION_DEFAULTS
     _validate_abi_lock(lock)
     retired_ids = _validate_retired_abi_lock(retired, lock)
+    adapters: list[dict[str, Any]] = []
+    for adapter in typed_adapters:
+        lock_entry = abi_lock.operations.get(adapter.stable_id)
+        if lock_entry is None:
+            raise ValueError(
+                f"WASM adapter '{adapter.name}' is missing from the ABI lock"
+            )
+        operation = adapter.as_catalog_operation(lock_entry)
+        adapters.append(operation)
     _validate_operation_catalog(adapters)
-    active_ids = {entry["id"] for entry in lock.values()}
-    _validate_reserved_catalog_ids(adapters, active_ids | retired_ids)
+    adapter_ids = {adapter.stable_id for adapter in typed_adapters}
+    _validate_reserved_catalog_ids(adapters, retired_ids)
 
     selected_adapters: list[dict[str, Any]] = []
     adapter_sources: dict[str, str] = {}
@@ -856,7 +870,13 @@ def _load_operations(
             adapter_sources[source] = operation.get("name", "<unnamed>")
         selected_adapters.append(operation)
 
-    _validate_projected_abi_lock(lock, extension_model, input_paths, adapter_sources)
+    _validate_projected_abi_lock(
+        lock,
+        extension_model,
+        input_paths,
+        adapter_sources,
+        adapter_ids,
+    )
 
     selected_operations: list[dict[str, Any]] = []
     for extension_operation in extension_model.operations:
@@ -882,7 +902,7 @@ def _load_operations(
     selected_operations.sort(key=lambda operation: operation["id"])
     _validate_operation_catalog(selected_operations)
     _validate_reserved_catalog_ids(selected_operations, retired_ids)
-    return selected_operations
+    return WasmAbiModel.from_dicts(selected_operations)
 
 
 def _extension_type_encodings(extension_model: ExtensionApiModel) -> dict[str, str]:
@@ -1015,13 +1035,14 @@ def build_model(root: Path, inputs: list[Path]) -> dict[str, Any]:
         for module in model.modules
         for alias in module.aliases
     ]
-    operations = _load_operations(
+    abi_model = _load_operations(
         root,
         inputs,
         model,
         extension_model,
         value_type_encodings,
     )
+    operations = abi_model.as_dicts()
     return {
         "schema": "org.freecad.wasm.api",
         "schema_version": SCHEMA_VERSION,
