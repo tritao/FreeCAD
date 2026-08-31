@@ -63,7 +63,7 @@ def _catalog_entry(operation: dict[str, Any]) -> AbiLockEntry:
     stable_id = operation.get("stable_id")
     opcode = operation.get("id")
     wire_name = operation.get("wire_name")
-    signature = operation.get("wire_signature")
+    signature = operation.get("signature")
     name = operation.get("name")
     guest_method = operation.get("guest_method")
     requires = operation.get("requires", [])
@@ -75,7 +75,7 @@ def _catalog_entry(operation: dict[str, Any]) -> AbiLockEntry:
         raise ValueError(f"generated Wasm API operation '{stable_id}' has an invalid wire_name")
     if not isinstance(signature, str) or not _SIGNATURE_PATTERN.fullmatch(signature):
         raise ValueError(
-            f"generated Wasm API operation '{stable_id}' has an invalid wire_signature"
+            f"generated Wasm API operation '{stable_id}' has an invalid signature"
         )
     if not isinstance(name, str) or not name:
         raise ValueError(f"generated Wasm API operation '{stable_id}' has an invalid name")
@@ -95,9 +95,6 @@ def _catalog_entry(operation: dict[str, Any]) -> AbiLockEntry:
             opcode=opcode,
             wire_name=wire_name,
             signature=signature,
-            name=name,
-            guest_method=guest_method,
-            requires=tuple(requires),
         )
     except (KeyError, TypeError) as exc:
         raise ValueError(
@@ -111,46 +108,20 @@ def _lock_fields(entry: AbiLockEntry) -> tuple[Any, ...]:
         entry.opcode,
         entry.wire_name,
         entry.signature,
-        entry.name,
-        entry.guest_method,
-        entry.requires,
     )
-
-
-def _available_input_names(inputs: list[Path]) -> set[str]:
-    root = ROOT.resolve()
-    available: set[str] = set()
-    for path in inputs:
-        resolved = path if path.is_absolute() else root / path
-        try:
-            available.add(resolved.resolve().relative_to(root).as_posix())
-        except ValueError:
-            continue
-    return available
 
 
 def _differences(
     lock: AbiLock,
     catalog: dict[str, dict[str, Any]],
-    available_inputs: list[Path] | None = None,
+    allow_missing: bool = False,
 ) -> tuple[list[str], list[str], list[str]]:
     generated = {
         stable_id: _catalog_entry(operation)
         for stable_id, operation in catalog.items()
     }
     added = sorted(set(generated) - set(lock.operations))
-    removed_ids = set(lock.operations) - set(generated)
-    if available_inputs is not None:
-        available = _available_input_names(available_inputs)
-        removed_ids = {
-            stable_id
-            for stable_id in removed_ids
-            if not lock.operations[stable_id].requires
-            or not any(
-                requirement not in available
-                for requirement in lock.operations[stable_id].requires
-            )
-        }
+    removed_ids = set() if allow_missing else set(lock.operations) - set(generated)
     removed = sorted(removed_ids)
     changed = sorted(
         stable_id
@@ -207,15 +178,6 @@ def _render_entry(entry: AbiLockEntry, *, include_reason: bool = False) -> list[
         f"wire_name = {_toml_string(entry.wire_name)}",
         f"signature = {_toml_string(entry.signature)}",
     ]
-    if entry.name is not None:
-        lines.insert(1, f"name = {_toml_string(entry.name)}")
-    if entry.guest_method is not None:
-        insert_at = 2 if entry.name is not None else 1
-        lines.insert(insert_at, f"guest_method = {_toml_string(entry.guest_method)}")
-    if entry.requires:
-        lines.append(
-            "requires = [" + ", ".join(_toml_string(value) for value in entry.requires) + "]"
-        )
     if include_reason:
         lines.append(f"reason = {_toml_string(entry.reason or '')}")
     return lines
@@ -232,9 +194,6 @@ def _entry_from_operation(operation: dict[str, Any], opcode: int) -> AbiLockEntr
         opcode=opcode,
         wire_name=entry.wire_name,
         signature=entry.signature,
-        name=entry.name,
-        guest_method=entry.guest_method,
-        requires=entry.requires,
     )
 
 
@@ -288,9 +247,6 @@ def _retire(lock_path: Path, stable_id: str, reason: str, catalog_path: Path | N
         opcode=entry.opcode,
         wire_name=entry.wire_name,
         signature=entry.signature,
-        name=entry.name,
-        guest_method=entry.guest_method,
-        requires=entry.requires,
         reason=reason,
     )
     _write_lock(lock_path, AbiLock(lock.version, active, retired))
@@ -312,11 +268,9 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument("--catalog", type=Path)
     parser.add_argument(
-        "--available-input",
-        nargs="+",
-        type=Path,
-        default=None,
-        help="source inputs selected for this build; missing requirements are disabled",
+        "--allow-missing",
+        action="store_true",
+        help="allow active lock entries to be absent from a partial catalog",
     )
     parser.add_argument("--stable-id")
     parser.add_argument("--reason")
@@ -346,7 +300,7 @@ def main(argv: list[str] | None = None) -> int:
             "generated catalog contains retired operation(s): "
             + ", ".join(sorted(retired))
         )
-    differences = _differences(lock, catalog, args.available_input)
+    differences = _differences(lock, catalog, args.allow_missing)
     _print_differences(*differences)
     return 1 if any(differences) else 0
 

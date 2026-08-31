@@ -285,3 +285,13 @@ function(freecad_wasm_addon target)
         set(${_FREECAD_WASM_BUNDLE_TARGET_VARIABLE} "" PARENT_SCOPE)
     endif()
 endfunction()
+
+# Preferred extension-facing names. The Wasm helpers remain the implementation
+# layer and are kept as compatibility entry points for existing addons.
+macro(freecad_extension_generate_sdk target)
+    freecad_wasm_generate_guest_sdk(${target} ${ARGN})
+endmacro()
+
+macro(freecad_add_extension target)
+    freecad_wasm_addon(${target} ${ARGN})
+endmacro()

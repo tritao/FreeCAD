@@ -73,11 +73,17 @@ public:
     {
         const auto path = addonDirectory / "manifest.json";
         std::string manifest = contents;
-        const std::string apiMarker =
+        const std::string legacyApiMarker =
             std::string("\"api\":\"") + Wasm::WasmManifest::SupportedApi + "\",";
-        const auto apiPosition = manifest.find(apiMarker);
-        if (apiPosition != std::string::npos && manifest.find("\"abi_hash\"") == std::string::npos) {
-            const auto insertPosition = apiPosition + apiMarker.size();
+        const std::string extensionApiMarker =
+            std::string("\"extension_api\":")
+            + std::to_string(Wasm::WasmManifest::SupportedExtensionApi) + ",";
+        const auto apiPosition = manifest.find(legacyApiMarker);
+        const auto extensionApiPosition = manifest.find(extensionApiMarker);
+        const auto markerPosition = apiPosition != std::string::npos ? apiPosition : extensionApiPosition;
+        const auto markerSize = apiPosition != std::string::npos ? legacyApiMarker.size() : extensionApiMarker.size();
+        if (markerPosition != std::string::npos && manifest.find("\"abi_hash\"") == std::string::npos) {
+            const auto insertPosition = markerPosition + markerSize;
             manifest.insert(
                 insertPosition,
                 std::string("\"abi_hash\":\"")
@@ -428,6 +434,21 @@ TEST(WasmManifestTest, ParsesAndValidatesStrictManifest)
     EXPECT_EQ(*manifest.resolveEntryPath(), std::filesystem::canonical(files.addonDirectory / "entry.wasm"));
 }
 
+TEST(WasmManifestTest, ParsesTheExtensionFacingManifestVersion)
+{
+    TemporaryAddon files;
+    files.writeFile(files.addonDirectory / "entry.wasm", "wasm");
+    const auto manifestPath = files.writeManifest(
+        R"({"name":"Example","extension_api":1,"entry":"entry.wasm","permissions":["console.log"]})");
+
+    const auto manifest = Wasm::WasmManifest::loadFromFile(manifestPath);
+
+    EXPECT_TRUE(manifest.validate().empty());
+    ASSERT_TRUE(manifest.extensionApiVersion().has_value());
+    EXPECT_EQ(*manifest.extensionApiVersion(), Wasm::WasmManifest::SupportedExtensionApi);
+    EXPECT_EQ(manifest.api(), Wasm::WasmManifest::SupportedApi);
+}
+
 TEST(WasmManifestTest, RejectsMalformedDuplicateAndWrongTypeFields)
 {
     TemporaryAddon files;
@@ -455,6 +476,10 @@ TEST(WasmManifestTest, RejectsMalformedDuplicateAndWrongTypeFields)
     const auto unsupportedPermission = Wasm::WasmManifest::loadFromFile(files.writeManifest(
         R"({"name":"Example","api":"org.freecad.wasm.api@0","entry":"entry.wasm","permissions":["filesystem.read"]})"));
     EXPECT_TRUE(containsError(unsupportedPermission.validate(), "unsupported permission"));
+
+    const auto wrongExtensionApi = Wasm::WasmManifest::loadFromFile(files.writeManifest(
+        R"({"name":"Example","extension_api":99,"entry":"entry.wasm"})"));
+    EXPECT_TRUE(containsError(wrongExtensionApi.validate(), "unsupported extension API version"));
 }
 
 TEST(WasmManifestTest, RejectsOversizedManifest)

@@ -35,8 +35,10 @@ from stubgen.api_extract import extract_curated_api_model_with_diagnostics  # no
 from wasm_api_model import (  # noqa: E402
     AbiLock,
     WasmAbiModel,
+    guest_method_name,
     load_abi_lock,
     load_wasm_adapters,
+    operation_name,
 )
 
 
@@ -451,14 +453,14 @@ def _validate_operation_catalog(operations: list[dict[str, Any]]) -> None:
         permission = operation.get("permission")
         if permission is not None and (not isinstance(permission, str) or not permission):
             raise ValueError(f"WASM operation '{name}' has an invalid permission")
-        mutates = operation.get("mutates")
-        if not isinstance(mutates, bool):
-            raise ValueError(f"WASM operation '{name}' has an invalid mutates flag")
+        effect = operation.get("effect")
+        if effect is not None and effect not in {"read", "compute", "create", "modify"}:
+            raise ValueError(f"WASM operation '{name}' has an invalid effect")
         transaction = operation.get("transaction")
         if transaction is not None and transaction not in {"required", "open", "commit", "abort"}:
             raise ValueError(f"WASM operation '{name}' has an invalid transaction policy")
-        if transaction is not None and not mutates:
-            raise ValueError(f"WASM operation '{name}' transaction policy must mutate")
+        if transaction is not None and effect not in {"create", "modify"}:
+            raise ValueError(f"WASM operation '{name}' transaction policy requires a mutating effect")
 
         requirements = operation.get("requires", [])
         if not isinstance(requirements, list) or not all(
@@ -471,7 +473,7 @@ def _validate_operation_catalog(operations: list[dict[str, Any]]) -> None:
             parameter_type = parameter.get("type", {})
             if parameter_type.get("kind") == "handle":
                 ownership = parameter.get("ownership", "borrowed")
-                if ownership not in {"owned", "borrowed"}:
+                if ownership not in {"owned", "borrowed", "consumed"}:
                     raise ValueError(
                         f"WASM operation '{name}' has invalid parameter ownership"
                     )
@@ -487,12 +489,12 @@ def _validate_operation_catalog(operations: list[dict[str, Any]]) -> None:
         wire_returns = operation.get("wire_returns")
         if wire_returns is not None and not isinstance(wire_returns, dict):
             raise ValueError(f"WASM operation '{name}' has invalid wire return metadata")
-        wire_signature = operation.get("wire_signature")
-        if not isinstance(wire_signature, str) or not wire_signature:
-            raise ValueError(f"WASM operation '{name}' has no wire signature")
-        if wire_signature != _wire_signature(operation):
+        signature = operation.get("signature")
+        if not isinstance(signature, str) or not signature:
+            raise ValueError(f"WASM operation '{name}' has no ABI signature")
+        if signature != _signature(operation):
             raise ValueError(
-                f"WASM operation '{name}' wire signature changed; update the ABI lock"
+                f"WASM operation '{name}' ABI signature changed; update the ABI lock"
             )
         if "consumes" in operation and not isinstance(operation["consumes"], bool):
             raise ValueError(f"WASM operation '{name}' has invalid consumes flag")
@@ -500,15 +502,13 @@ def _validate_operation_catalog(operations: list[dict[str, Any]]) -> None:
 
 def _validate_abi_lock(lock: Mapping[str, Any]) -> None:
     seen_ids: dict[int, str] = {}
-    seen_names: set[str] = set()
     seen_wire_names: set[str] = set()
-    seen_guest_methods: set[str] = set()
     for stable_id, entry in lock.items():
         if not isinstance(stable_id, str) or not stable_id:
             raise ValueError("WASM ABI lock contains an invalid operation identity")
         if not isinstance(entry, dict):
             raise ValueError(f"WASM ABI lock entry '{stable_id}' is not an object")
-        for field in ("id", "name", "wire_name", "guest_method", "wire_signature"):
+        for field in ("id", "wire_name", "signature"):
             value = entry.get(field)
             if field == "id":
                 if (
@@ -527,22 +527,10 @@ def _validate_abi_lock(lock: Mapping[str, Any]) -> None:
                 raise ValueError(
                     f"WASM ABI lock entry '{stable_id}' has an invalid '{field}'"
                 )
-        for field, seen in (
-            ("name", seen_names),
-            ("wire_name", seen_wire_names),
-            ("guest_method", seen_guest_methods),
-        ):
-            value = entry[field]
-            if value in seen:
-                raise ValueError(f"WASM ABI lock field '{field}' is duplicated: '{value}'")
-            seen.add(value)
-        requirements = entry.get("requires", [])
-        if not isinstance(requirements, list) or not all(
-            isinstance(requirement, str) and requirement for requirement in requirements
-        ):
-            raise ValueError(
-                f"WASM ABI lock entry '{stable_id}' has invalid requirements"
-            )
+        value = entry["wire_name"]
+        if value in seen_wire_names:
+            raise ValueError(f"WASM ABI lock field 'wire_name' is duplicated: '{value}'")
+        seen_wire_names.add(value)
 
 
 def _validate_retired_abi_lock(
@@ -557,20 +545,10 @@ def _validate_retired_abi_lock(
         if isinstance(entry, dict) and isinstance(entry.get("id"), int)
     }
     seen_ids = set(active_ids)
-    seen_names = {
-        entry["name"]
-        for entry in lock.values()
-        if isinstance(entry, dict) and isinstance(entry.get("name"), str)
-    }
     seen_wire_names = {
         entry["wire_name"]
         for entry in lock.values()
         if isinstance(entry, dict) and isinstance(entry.get("wire_name"), str)
-    }
-    seen_guest_methods = {
-        entry["guest_method"]
-        for entry in lock.values()
-        if isinstance(entry, dict) and isinstance(entry.get("guest_method"), str)
     }
     retired_ids: set[int] = set()
 
@@ -583,7 +561,7 @@ def _validate_retired_abi_lock(
             )
         if not isinstance(entry, dict):
             raise ValueError(f"WASM retired ABI entry '{stable_id}' is not an object")
-        for field in ("id", "name", "wire_name", "guest_method", "reason"):
+        for field in ("id", "wire_name", "signature", "reason"):
             value = entry.get(field)
             if field == "id":
                 if (
@@ -605,17 +583,12 @@ def _validate_retired_abi_lock(
                 raise ValueError(
                     f"WASM retired ABI entry '{stable_id}' has an invalid '{field}'"
                 )
-        for field, seen in (
-            ("name", seen_names),
-            ("wire_name", seen_wire_names),
-            ("guest_method", seen_guest_methods),
-        ):
-            value = entry[field]
-            if value in seen:
-                raise ValueError(
-                    f"WASM retired ABI field '{field}' is reused: '{value}'"
-                )
-            seen.add(value)
+        value = entry["wire_name"]
+        if value in seen_wire_names:
+            raise ValueError(
+                f"WASM retired ABI field 'wire_name' is reused: '{value}'"
+            )
+        seen_wire_names.add(value)
 
     return retired_ids
 
@@ -625,7 +598,6 @@ def _validate_projected_abi_lock(
     extension_model: ExtensionApiModel,
     input_paths: set[str],
     adapter_sources: Mapping[str, str],
-    adapter_ids: set[str] | None = None,
 ) -> None:
     """Require every selected extension operation to have one ABI owner."""
 
@@ -639,43 +611,18 @@ def _validate_projected_abi_lock(
     for stable_id, operation in projected.items():
         adapter_name = adapter_sources.get(operation.source_symbol)
         lock_entry = lock.get(stable_id)
-        lock_requirements = (
-            lock_entry.get("requires", [])
-            if isinstance(lock_entry, dict)
-            else []
-        )
-        lock_selected = stable_id in lock and all(
-            requirement in input_paths for requirement in lock_requirements
-        )
-        source_selected = (
-            operation.source_location is None
-            or not lock_requirements
-            or operation.source_location.path in lock_requirements
-        )
+        lock_selected = stable_id in lock
         if stable_id in lock and adapter_name is not None:
             raise ValueError(
                 f"WASM extension operation '{stable_id}' is covered by both the ABI lock "
                 f"and adapter '{adapter_name}'"
             )
-        if (not lock_selected or not source_selected) and adapter_name is None:
+        if not lock_selected and adapter_name is None:
             missing.append(stable_id)
     if missing:
         raise ValueError(
             "WASM ABI lock is missing projected operation(s): "
             + ", ".join(sorted(missing))
-        )
-
-    selected_lock = {
-        stable_id
-        for stable_id, entry in lock.items()
-        if all(requirement in input_paths for requirement in entry.get("requires", []))
-    }
-    stale = sorted(selected_lock - set(projected) - (adapter_ids or set()))
-    if stale:
-        raise ValueError(
-            "WASM ABI lock contains stale active operation(s); move removed operations "
-            "to abi.retired: "
-            + ", ".join(stale)
         )
 
 
@@ -751,7 +698,12 @@ def _extension_operation_catalog(
                 "default": parameter.default,
             }
         )
-    effect = operation.effect.value if operation.effect is not None else None
+    effect = operation.effect
+    property_access = (
+        operation.property_access.value
+        if operation.property_access is not None
+        else None
+    )
     wire_returns = operation.returns
     if (
         wire_returns.kind is ApiTypeKind.NONE
@@ -763,20 +715,24 @@ def _extension_operation_catalog(
         assert wire_returns is not None
     return {
         "stable_id": operation.stable_id,
-        "name": lock_entry["name"],
+        "name": operation_name(
+            operation.stable_id,
+            source=operation.source_symbol,
+            property_access=property_access,
+        ),
         "wire_name": lock_entry["wire_name"],
         "id": lock_entry["id"],
-        "guest_method": lock_entry["guest_method"],
+        "guest_method": guest_method_name(
+            operation.stable_id,
+            source=operation.source_symbol,
+            property_access=property_access,
+        ),
         "origin": "projection",
-        "wire_signature": lock_entry["wire_signature"],
+        "signature": lock_entry["signature"],
         "source": operation.source_symbol,
         "permission": operation.permission,
-        "mutates": effect in {"create", "modify"},
-        "property_access": (
-            operation.property_access.value
-            if operation.property_access is not None
-            else None
-        ),
+        "effect": effect.value if effect is not None else None,
+        "property_access": property_access,
         "requires": [
             operation.source_location.path
             if operation.source_location is not None
@@ -845,7 +801,6 @@ def _load_operations(
         operation = adapter.as_catalog_operation(lock_entry)
         adapters.append(operation)
     _validate_operation_catalog(adapters)
-    adapter_ids = {adapter.stable_id for adapter in typed_adapters}
     _validate_reserved_catalog_ids(adapters, retired_ids)
 
     selected_adapters: list[dict[str, Any]] = []
@@ -875,7 +830,6 @@ def _load_operations(
         extension_model,
         input_paths,
         adapter_sources,
-        adapter_ids,
     )
 
     selected_operations: list[dict[str, Any]] = []
@@ -1100,11 +1054,12 @@ def _wire_type_name(type_model: Mapping[str, Any], label: str) -> str:
     raise ValueError(f"{label} uses an unsupported WASM wire type")
 
 
-def _wire_signature(operation: Mapping[str, Any]) -> str:
-    """Return the stable fingerprint for an operation's wire payload shape."""
+def _signature(operation: Mapping[str, Any]) -> str:
+    """Return the stable fingerprint for the complete ABI contract."""
 
     name = operation.get("name", "<unnamed>")
     parameters = operation.get("params", [])
+    returns = operation.get("returns", {})
     descriptor = {
         "params": [
             {
@@ -1120,6 +1075,30 @@ def _wire_signature(operation: Mapping[str, Any]) -> str:
             operation.get("wire_returns", operation["returns"]),
             f"WASM operation '{name}' return",
         ),
+        "permission": operation.get("permission"),
+        "effect": operation.get("effect"),
+        "transaction": operation.get("transaction"),
+        "parameter_ownership": [
+            {
+                "ownership": (
+                    parameter.get("ownership", "borrowed")
+                    if parameter.get("type", {}).get("kind") == "handle"
+                    else None
+                )
+            }
+            for parameter in parameters
+        ],
+        "return_contract": {
+            "ownership": (
+                returns.get("ownership", "borrowed")
+                if returns.get("kind") == "handle"
+                else None
+            ),
+            "nullable": returns.get("nullable", False),
+        },
+        "fallible": operation.get("fallible", True),
+        "consumes": operation.get("consumes", False),
+        "property_access": operation.get("property_access"),
     }
     canonical = json.dumps(
         descriptor,
@@ -1150,12 +1129,11 @@ def _catalog_signature(operations: list[dict[str, Any]]) -> str:
         descriptor.append(
             {
                 "id": operation["id"],
-                "name": operation["name"],
+                "stable_id": operation["stable_id"],
                 "wire_name": operation["wire_name"],
-                "guest_method": operation["guest_method"],
-                "wire_signature": operation["wire_signature"],
+                "signature": operation["signature"],
                 "permission": operation.get("permission"),
-                "mutates": operation["mutates"],
+                "effect": operation.get("effect"),
                 "transaction": operation.get("transaction"),
                 "origin": operation["origin"],
                 "consumes": operation.get("consumes", False),
@@ -1234,7 +1212,7 @@ def render_dispatch_metadata(model: Mapping[str, Any]) -> str:
         "    std::string_view name;",
         "    std::string_view wireName;",
         "    std::string_view permission;",
-        "    bool mutates;",
+        "    std::string_view effect;",
         "    std::string_view transaction;",
         "    std::string_view origin;",
         "    std::span<const ParameterMetadata> parameters;",
@@ -1309,6 +1287,7 @@ def render_dispatch_metadata(model: Mapping[str, Any]) -> str:
         name = operation["name"]
         operation_id = operation["id"]
         permission = operation.get("permission") or ""
+        effect = operation.get("effect") or ""
         transaction = operation.get("transaction") or ""
         origin = operation["origin"]
         parameter_name = f"{_operation_enum_name(name)}Parameters"
@@ -1323,7 +1302,7 @@ def render_dispatch_metadata(model: Mapping[str, Any]) -> str:
             f"{json.dumps(name, ensure_ascii=True)}, "
             f"{json.dumps(operation.get('wire_name', ''), ensure_ascii=True)}, "
             f"{json.dumps(permission, ensure_ascii=True)}, "
-            f"{'true' if operation.get('mutates') else 'false'}, "
+            f"{json.dumps(effect, ensure_ascii=True)}, "
             f"{json.dumps(transaction, ensure_ascii=True)}, "
             f"{json.dumps(origin, ensure_ascii=True)}, "
             f"{parameter_name}, "

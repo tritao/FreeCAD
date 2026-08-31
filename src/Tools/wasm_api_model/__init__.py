@@ -4,13 +4,14 @@
 
 from .lock import AbiLock, AbiLockEntry, load_abi_lock
 from .model import WasmAbiModel, WasmAbiOperation, WasmAbiParameter
+from .naming import guest_method_name, operation_name
 from .adapters import (
     AdapterKind,
     WasmAdapterDeclaration,
     WasmAdapterParameter,
     load_wasm_adapters,
 )
-from .types import WasmAbiType
+from .types import Ownership, WasmAbiType, WireKind
 
 __all__ = [
     "AbiLock",
@@ -22,6 +23,10 @@ __all__ = [
     "WasmAbiOperation",
     "WasmAbiParameter",
     "WasmAbiType",
+    "Ownership",
+    "WireKind",
+    "guest_method_name",
     "load_abi_lock",
     "load_wasm_adapters",
+    "operation_name",
 ]

@@ -1,0 +1,37 @@
+# SPDX-License-Identifier: LGPL-2.1-or-later
+
+@PACKAGE_INIT@
+
+set(FreeCADExtensionSDK_INCLUDE_DIR
+    "@PACKAGE_CMAKE_INSTALL_INCLUDEDIR@/FreeCAD")
+set(FREECAD_EXTENSION_SDK_INCLUDE_ROOT
+    "${FreeCADExtensionSDK_INCLUDE_DIR}")
+set(FreeCADExtensionSDK_CMAKE_MODULE
+    "@PACKAGE_CMAKE_INSTALL_DATADIR@/FreeCAD/Wasm/FreeCADWasmGuest.cmake")
+set(FreeCADExtensionSDK_API_SIGNATURE_FILE
+    "@PACKAGE_CMAKE_INSTALL_DATADIR@/FreeCAD/Wasm/freecad_wasm_api.signature")
+set(FreeCADExtensionSDK_EXAMPLES_DIR
+    "@PACKAGE_CMAKE_INSTALL_DATADIR@/FreeCAD/Wasm/examples/cpp")
+
+if(NOT EXISTS "${FreeCADExtensionSDK_INCLUDE_DIR}")
+    set(FreeCADExtensionSDK_FOUND FALSE)
+    set(FreeCADExtensionSDK_NOT_FOUND_MESSAGE
+        "FreeCAD Extension SDK headers were not found")
+    return()
+endif()
+
+if(NOT EXISTS "${FreeCADExtensionSDK_CMAKE_MODULE}")
+    set(FreeCADExtensionSDK_FOUND FALSE)
+    set(FreeCADExtensionSDK_NOT_FOUND_MESSAGE
+        "FreeCAD Extension SDK CMake helper was not found")
+    return()
+endif()
+
+if(NOT EXISTS "${FreeCADExtensionSDK_API_SIGNATURE_FILE}")
+    set(FreeCADExtensionSDK_FOUND FALSE)
+    set(FreeCADExtensionSDK_NOT_FOUND_MESSAGE
+        "FreeCAD Extension SDK API signature was not found")
+    return()
+endif()
+
+set(FreeCADExtensionSDK_FOUND TRUE)

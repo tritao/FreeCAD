@@ -17,15 +17,12 @@ _SIGNATURE_PATTERN = re.compile(r"sha256:[0-9a-f]{64}\Z")
 
 @dataclass(frozen=True)
 class AbiLockEntry:
-    """Compatibility identity and wire fingerprint for one operation."""
+    """Compatibility identity and fingerprints for one operation."""
 
     stable_id: str
     opcode: int
     wire_name: str
     signature: str
-    name: str | None = None
-    guest_method: str | None = None
-    requires: tuple[str, ...] = ()
     reason: str | None = None
 
     def as_dict(self) -> dict[str, Any]:
@@ -34,14 +31,8 @@ class AbiLockEntry:
         value: dict[str, Any] = {
             "id": self.opcode,
             "wire_name": self.wire_name,
-            "wire_signature": self.signature,
+            "signature": self.signature,
         }
-        if self.name is not None:
-            value["name"] = self.name
-        if self.guest_method is not None:
-            value["guest_method"] = self.guest_method
-        if self.requires:
-            value["requires"] = list(self.requires)
         if self.reason is not None:
             value["reason"] = self.reason
         return value
@@ -76,9 +67,6 @@ def _entry(
         "opcode",
         "wire_name",
         "signature",
-        "name",
-        "guest_method",
-        "requires",
         "reason",
     }
     unknown = set(value) - allowed
@@ -95,19 +83,6 @@ def _entry(
     if not isinstance(signature, str) or not _SIGNATURE_PATTERN.fullmatch(signature):
         raise ValueError(f"{label} has an invalid signature")
 
-    name = value.get("name")
-    if name is not None and (not isinstance(name, str) or not name):
-        raise ValueError(f"{label} has an invalid name")
-    guest_method = value.get("guest_method")
-    if guest_method is not None and (not isinstance(guest_method, str) or not guest_method):
-        raise ValueError(f"{label} has an invalid guest_method")
-
-    requirements = value.get("requires", [])
-    if not isinstance(requirements, list) or not all(
-        isinstance(requirement, str) and requirement for requirement in requirements
-    ):
-        raise ValueError(f"{label} has invalid requirements")
-
     reason = value.get("reason")
     if retired:
         if not isinstance(reason, str) or not reason:
@@ -120,9 +95,6 @@ def _entry(
         opcode=opcode,
         wire_name=wire_name,
         signature=signature,
-        name=name,
-        guest_method=guest_method,
-        requires=tuple(requirements),
         reason=reason,
     )
 
@@ -131,15 +103,11 @@ def _validate_unique(entries: tuple[AbiLockEntry, ...]) -> None:
     fields: dict[str, set[object]] = {
         "opcode": set(),
         "wire_name": set(),
-        "name": set(),
-        "guest_method": set(),
     }
     for entry in entries:
         for field, value in (
             ("opcode", entry.opcode),
             ("wire_name", entry.wire_name),
-            ("name", entry.name),
-            ("guest_method", entry.guest_method),
         ):
             if value is None:
                 continue

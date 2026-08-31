@@ -25,8 +25,8 @@ struct ParseState
 
 bool isAllowedKey(std::string_view key)
 {
-    return key == "name" || key == "api" || key == "abi_hash" || key == "entry"
-        || key == "permissions";
+    return key == "name" || key == "api" || key == "extension_api"
+        || key == "abi_hash" || key == "entry" || key == "permissions";
 }
 
 bool isSha256Digest(std::string_view value)
@@ -138,8 +138,22 @@ WasmManifest WasmManifest::loadFromFile(const std::filesystem::path& path)
 
     readString("name", manifest.manifestName);
     readString("api", manifest.manifestApi);
+    const auto extensionApi = source.find("extension_api");
+    if (extensionApi != source.end()) {
+        if (!extensionApi->is_number_integer()) {
+            manifest.parseErrors.emplace_back(
+                "manifest field 'extension_api' must be an integer");
+        } else {
+            manifest.manifestExtensionApiVersion = extensionApi->get<int>();
+        }
+    }
     readString("abi_hash", manifest.manifestAbiHash);
     readString("entry", manifest.manifestEntry);
+
+    // Keep the legacy accessor usable while manifests migrate to extension_api.
+    if (manifest.manifestApi.empty() && manifest.manifestExtensionApiVersion.has_value()) {
+        manifest.manifestApi = SupportedApi;
+    }
 
     const auto permissions = source.find("permissions");
     if (permissions != source.end()) {
@@ -178,6 +192,11 @@ const std::string& WasmManifest::name() const
 const std::string& WasmManifest::api() const
 {
     return manifestApi;
+}
+
+std::optional<int> WasmManifest::extensionApiVersion() const
+{
+    return manifestExtensionApiVersion;
 }
 
 const std::string& WasmManifest::abiHash() const
@@ -270,11 +289,19 @@ std::vector<std::string> WasmManifest::validate() const
         errors.emplace_back("manifest is missing string field 'name'");
     }
 
-    if (manifestApi.empty()) {
-        errors.emplace_back("manifest is missing string field 'api'");
+    if (manifestExtensionApiVersion.has_value()) {
+        if (*manifestExtensionApiVersion != SupportedExtensionApi) {
+            errors.emplace_back(
+                "manifest declares unsupported extension API version "
+                + std::to_string(*manifestExtensionApiVersion) + " (expected "
+                + std::to_string(SupportedExtensionApi) + ")");
+        }
+    } else if (manifestApi.empty()) {
+        errors.emplace_back("manifest is missing integer field 'extension_api'");
     } else if (manifestApi != SupportedApi) {
         errors.emplace_back(
-            "manifest declares unsupported API '" + manifestApi + "' (expected '" + SupportedApi + "')");
+            "manifest declares unsupported API '" + manifestApi + "' (expected '"
+            + SupportedApi + "')");
     }
 
     if (manifestAbiHash.empty()) {

@@ -1,8 +1,9 @@
-# FreeCAD Wasm API Expansion
+# FreeCAD Extension API Expansion
 
-This document defines how the experimental Wasm API grows beyond the current
-curated surface. It is a design contract, not a promise that every Python API
-is suitable for guest exposure.
+This document defines how the experimental FreeCAD Extension API grows beyond
+the current curated surface. Wasm is the current runtime backend, not the
+extension author's programming model. It is a design contract, not a promise
+that every Python API is suitable for extension exposure.
 
 ## Source Of Truth
 
@@ -126,7 +127,7 @@ initial expansion and require separate capability designs.
 ## ABI Compatibility
 
 `wasm_abi.lock.toml` is the ABI lock, not a second API declaration. It reserves
-numeric operation codes, compatibility names, wire names, and wire signatures.
+numeric operation codes, wire names, and one compatibility signature.
 The generated operation JSON is read-only output. Numeric IDs and retired IDs
 are never reused. A changed wire
 shape, ownership behavior, permission requirement, or failure contract needs
@@ -137,8 +138,8 @@ The compatibility rules are:
 1. Additive operations receive new local IDs and new numeric opcodes.
 2. A published operation's numeric opcode and wire name do not change.
 3. An incompatible interface change requires a new major interface version.
-4. Removing an operation moves its lock entry to `abi.retired`; its ID and
-   guest-facing names remain reserved.
+4. Removing an operation moves its lock entry to `abi.retired`; its ID and wire
+   name remain reserved.
 5. SDKs, host dispatch metadata, and ABI documentation are generated from the
    same merged model and lock.
 
@@ -167,6 +168,6 @@ keeping the source-of-truth and capability contracts unambiguous.
 An operation is ready for publication when its `.pyi` declaration and
 extension metadata are sufficient to regenerate the C++, Rust, Python, and
 host metadata surfaces without handwritten signature duplication. The ABI
-lock has a stable derived identity, numeric opcode, wire signature, permission,
-ownership, transaction policy, and failure behavior, and the operation has a
-test proving both its permitted behavior and its denial behavior.
+lock has a stable derived identity, numeric opcode, wire name, and one
+compatibility signature, and the operation has a test proving both its
+permitted behavior and its denial behavior.

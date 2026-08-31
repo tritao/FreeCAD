@@ -102,7 +102,7 @@ Property writes preserve the Python semantic return type of `None` and therefore
 use an empty successful response. Transport failures remain represented by the
 response envelope; they are not part of the projected Python return type.
 
-## Guest SDK
+## Extension SDK
 
 `Guest/WasmGuest.h` provides a small C++ client for the protocol. It uses the
 same import names and can be included by a Wasm guest built with Clang. The
@@ -118,14 +118,13 @@ For freestanding guests without WASI or libc++, define
 example is built this way in the WAMR integration test and exports the byte-
 buffer entrypoint `freecad_addon_entry`.
 
-`Guest/FreeCADWasmGuest.cmake` provides the reusable `freecad_wasm_addon()`
-CMake function used by that test. The same source can be built without a full
-FreeCAD configure using `examples/wasm/cpp`; see its README for the required
-Clang and `wasm-ld` settings. The build generates
-`freecad_wasm_api.hpp`, stages `manifest.json` beside the Wasm module, and can
-consume either the source-tree SDK or an installed `FreeCADWasmGuest` package.
-The generated Python transport is installed beside these guest artifacts as
-`freecad_wasm_api.py`.
+`Guest/FreeCADWasmGuest.cmake` provides the implementation helper behind the
+preferred `freecad_add_extension()` and `freecad_extension_generate_sdk()`
+CMake functions. The same source can be built without a full FreeCAD configure
+using `examples/wasm/cpp`; see its README for the required Clang and `wasm-ld`
+settings. The SDK can be consumed through the installed `FreeCADExtensionSDK`
+package. The older `FreeCADWasmGuest` package and `freecad_wasm_*` functions
+remain compatibility aliases.
 
 `Guest/examples/CapabilityAddon.rs` is a matching `no_std` Rust guest. It uses
 the generated Rust client and therefore the same imports, request envelope,
@@ -134,17 +133,15 @@ test build compiles it when
 `rustc --target wasm32-unknown-unknown` is available, providing a language-
 neutral ABI regression test without enabling WASI.
 
-The build also emits `freecad_wasm_api.hpp`, `freecad_wasm_api.rs`, and
-`freecad_wasm_api.py` from the same versioned API model. These files provide
-typed handle wrappers, ownership/transaction metadata, and thin operation
-declarations over shared transport code. All facades use the narrow host ABI,
-so generated declarations cannot bypass host policy. The generated C++ header
-delegates wire handling to `Wasm::Guest::Client` and is named `Client`; the
-Rust SDK is a `no_std` client with bounded request buffers and structured
-`Result<T, Error>` values; and the Python SDK exposes `Client(dispatch)`, where
-`dispatch` is a host-provided callback accepting and returning the binary
-request/response payloads. Operation IDs, permissions, failure semantics, and
-mutation metadata remain in the neutral API model.
+The generated language SDKs have two layers. The advanced/raw layer is
+`FreeCAD::Extension::Raw::RawClient`, Rust `RawClient`, and Python
+`RawClient`; the old `Client` names remain aliases. The public layer is
+`FreeCAD::Extension::Extension`, Rust `Extension`, and Python `Extension`,
+which exposes `documents()`, `part()`, and `geometry()` modules plus resource
+objects and scoped transactions. It keeps handles, packets, and operation IDs
+out of normal extension code while preserving the raw layer for advanced
+guests. All layers use the narrow host ABI, so generated declarations cannot
+bypass host policy.
 
 Handle values returned by the API are owned guest-side tokens unless the
 operation metadata says otherwise. Every SDK provides an explicit lifecycle
@@ -174,7 +171,7 @@ generated catalog signature:
 
 ```json
 {
-  "api": "org.freecad.wasm.api@0",
+  "extension_api": 1,
   "abi_hash": "sha256:<64 lowercase hexadecimal characters>"
 }
 ```
@@ -200,22 +197,24 @@ class Document:
 The generator derives `org.freecad.document@1/is_saved` and projects the
 signature, types, permissions, effects, and transaction policy from the
 canonical Python API model. `wasm_abi.lock.toml` is the authoritative ABI lock
-for numeric opcodes, compatibility names, and wire-shape signatures. Each
-`wire_signature` is a SHA-256 fingerprint of the compact parameter and
-effective return wire descriptors; changing a published wire shape requires
-an explicit ABI-lock update. Typed declarations in
+for numeric opcodes, wire names, and one compatibility fingerprint. The
+`signature` is a SHA-256 fingerprint of the compact parameter and effective
+return wire descriptors plus permissions, effects, transactions, ownership,
+nullability, fallibility, and consumption. Changing a published contract
+requires an explicit ABI-lock update. Typed declarations in
 `src/Tools/wasm_api_model/adapters.py` describe host adapters for operations
 that are not direct projections. The generated `freecad_wasm_api.json` is a
 read-only build artifact. No source catalog may duplicate projected parameter
 or return signatures.
 
 Every projected operation must be present in the lock or be covered by one
-explicit adapter. Removing a published operation requires moving its complete
-lock entry to `abi.retired` with a reason; retired IDs, names, wire names, and
-guest methods remain reserved and cannot be reused.
+explicit adapter. Source requirements are derived from selected `.pyi` inputs
+and are not copied into the lock. Removing a published operation requires
+moving its complete lock entry to `abi.retired` with a reason; retired IDs and
+wire names remain reserved and cannot be reused.
 
 The generator also emits host dispatch metadata from the merged operation list.
-It includes the stable operation identity, wire name, capability, mutation and
+It includes the stable operation identity, wire name, capability, effect and
 transaction policy, origin, and typed parameter/return wire descriptors. The
 host uses this table for operation lookup, capability checks, and centralized
 request/response payload validation; native handler implementations remain

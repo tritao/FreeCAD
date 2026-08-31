@@ -4,167 +4,105 @@ version = 1
 
 [operations."org.freecad.host@1/document_new"]
 opcode = 1
-name = "documentNew"
 wire_name = "document.new"
-guest_method = "documentNew"
-signature = "sha256:97eb0baf24b2e7427bea4dee34348b0639ca0b59033e8886200ad6319d8da557"
-requires = ["src/App/Document.pyi"]
+signature = "sha256:5a0018a354009571c524b1df2227ccf6f25db69e4cceb0a281cffd04c1351191"
 
 [operations."org.freecad.part@1/make_box"]
 opcode = 2
-name = "partMakeBox"
 wire_name = "part.make_box"
-guest_method = "partMakeBox"
-signature = "sha256:5a1a18ee2cdfda4e95373b841388cda7091c0f2902899edce8f12bba7ae0a848"
-requires = ["src/Mod/Part/App/TopoShape.pyi"]
+signature = "sha256:92a67dd124b7857ee5d3d4f9545a7a7f96b050a085008fbcd98ae00a94040de3"
 
 [operations."org.freecad.document@1/add_object"]
 opcode = 3
-name = "documentAddObject"
 wire_name = "document.add_object"
-guest_method = "documentAddObject"
-signature = "sha256:1590cff1e648bc980a00aec89ea3bd2b9a5da9b930fbfe65066a19fb38c778f0"
-requires = ["src/App/Document.pyi", "src/Mod/Part/App/TopoShape.pyi"]
+signature = "sha256:431585c04f3f17d34809027cd49a77da9b1f90833a7597a3a752e1086ea360cd"
 
 [operations."org.freecad.host@1/handle_release"]
 opcode = 4
-name = "release"
 wire_name = "handle.release"
-guest_method = "release"
-signature = "sha256:270c2ae821a78a2d5f7245823d17fa6b7d7108b7d385ca7c33fa434a034f587c"
+signature = "sha256:2cef6d519ae36221002a8b5da08a39f4240127bc479d53c4e8dff5761942245f"
 
 [operations."org.freecad.geometry@1/vector_new"]
 opcode = 5
-name = "vectorNew"
 wire_name = "base.vector.new"
-guest_method = "vectorNew"
-signature = "sha256:0052a3857d5d7f617d13a92dd1bc0692a0efbbaa5e6ce2f46492f24bf94d3c97"
-requires = ["src/Base/Vector.pyi"]
+signature = "sha256:496c04217930bf50a421cf666b8c2400422bca436521dd8e9695584beadcc8c0"
 
 [operations."org.freecad.geometry@1/vector_add"]
 opcode = 6
-name = "vectorAdd"
 wire_name = "base.vector.add"
-guest_method = "vectorAdd"
-signature = "sha256:ef7a8b9e22fea7343e8f066a7db3da95d1decb941ed192a5b83881c60f3fec8a"
-requires = ["src/Base/Vector.pyi"]
+signature = "sha256:f5ca810387c70c256b78a8805104cbc372a0958ecf6cd7384f9cc570069aceb2"
 
 [operations."org.freecad.geometry@1/vector_dot"]
 opcode = 7
-name = "vectorDot"
 wire_name = "base.vector.dot"
-guest_method = "vectorDot"
-signature = "sha256:008fe40722bd711e28a289da72d3630c864eb4931463513391807c55c32ff555"
-requires = ["src/Base/Vector.pyi"]
+signature = "sha256:6d445fda1b87e515a16ceba17166f953e58c38a986b387f3bc2b004ef428b2f1"
 
 [operations."org.freecad.geometry@1/vector_cross"]
 opcode = 8
-name = "vectorCross"
 wire_name = "base.vector.cross"
-guest_method = "vectorCross"
-signature = "sha256:ef7a8b9e22fea7343e8f066a7db3da95d1decb941ed192a5b83881c60f3fec8a"
-requires = ["src/Base/Vector.pyi"]
+signature = "sha256:f5ca810387c70c256b78a8805104cbc372a0958ecf6cd7384f9cc570069aceb2"
 
 [operations."org.freecad.document@1/is_saved"]
 opcode = 9
-name = "documentIsSaved"
 wire_name = "document.is_saved"
-guest_method = "documentIsSaved"
-signature = "sha256:1ba1bb9245fb3aef184fb354332bac1fcc75c21ded06bb280cc615097209caeb"
-requires = ["src/App/Document.pyi"]
+signature = "sha256:1cb968afb3da7284a148990807c365dd887f4b1e6e6a6d60b16b351331e66d74"
 
 [operations."org.freecad.document@1/get_object"]
 opcode = 10
-name = "documentGetObject"
 wire_name = "document.get_object"
-guest_method = "documentGetObject"
-signature = "sha256:47287245fbf8e9459000cdb13c29018f210784743c2b6eda21387526bf918896"
-requires = ["src/App/Document.pyi"]
+signature = "sha256:2d98ae05c0cb7586e4ab53539c101cd8232c44964b618dcd2101f05835b6190b"
 
 [operations."org.freecad.part@1/shape_is_null"]
 opcode = 11
-name = "topoShapeIsNull"
 wire_name = "part.topo_shape.is_null"
-guest_method = "topoShapeIsNull"
-signature = "sha256:89ab28d33fa4baeb111e8fe6a98701a6402c182cf1a06dcd19073d516d68d59f"
-requires = ["src/Mod/Part/App/TopoShape.pyi"]
+signature = "sha256:41257b2cb9afe45de05edd04a05283df92a7530aeb90c8c8942e00c7004998f6"
 
 [operations."org.freecad.part@1/shape_is_valid"]
 opcode = 12
-name = "topoShapeIsValid"
 wire_name = "part.topo_shape.is_valid"
-guest_method = "topoShapeIsValid"
-signature = "sha256:89ab28d33fa4baeb111e8fe6a98701a6402c182cf1a06dcd19073d516d68d59f"
-requires = ["src/Mod/Part/App/TopoShape.pyi"]
+signature = "sha256:41257b2cb9afe45de05edd04a05283df92a7530aeb90c8c8942e00c7004998f6"
 
 [operations."org.freecad.part@1/shape_length"]
 opcode = 13
-name = "topoShapeLength"
 wire_name = "part.topo_shape.length"
-guest_method = "topoShapeLength"
-signature = "sha256:a1382338ebe8c2fafa70f7894a0fd3bc81024ab8d91de6257d3c5902f20c63b6"
-requires = ["src/Mod/Part/App/TopoShape.pyi"]
+signature = "sha256:6ba1ef840737f493a1f617655fdde113ff49fa53e9d1e55f16a0417221e3ed73"
 
 [operations."org.freecad.part@1/shape_area"]
 opcode = 14
-name = "topoShapeArea"
 wire_name = "part.topo_shape.area"
-guest_method = "topoShapeArea"
-signature = "sha256:a1382338ebe8c2fafa70f7894a0fd3bc81024ab8d91de6257d3c5902f20c63b6"
-requires = ["src/Mod/Part/App/TopoShape.pyi"]
+signature = "sha256:6ba1ef840737f493a1f617655fdde113ff49fa53e9d1e55f16a0417221e3ed73"
 
 [operations."org.freecad.part@1/shape_volume"]
 opcode = 15
-name = "topoShapeVolume"
 wire_name = "part.topo_shape.volume"
-signature = "sha256:a1382338ebe8c2fafa70f7894a0fd3bc81024ab8d91de6257d3c5902f20c63b6"
-guest_method = "topoShapeVolume"
-requires = ["src/Mod/Part/App/TopoShape.pyi"]
+signature = "sha256:6ba1ef840737f493a1f617655fdde113ff49fa53e9d1e55f16a0417221e3ed73"
 
 [operations."org.freecad.document@1/open_transaction"]
 opcode = 16
-name = "documentOpenTransaction"
 wire_name = "document.open_transaction"
-guest_method = "documentOpenTransaction"
-signature = "sha256:01f40d55b5c9455e01caf47a01a96b94d610f280ef32720e0ffe371e319fe8fa"
-requires = ["src/App/Document.pyi"]
+signature = "sha256:9e6d64b13c74fcb2af3ae6402e3a78f26be85476426ef9dd95118802d5ee5c76"
 
 [operations."org.freecad.document@1/commit_transaction"]
 opcode = 17
-name = "documentCommitTransaction"
 wire_name = "document.commit_transaction"
-guest_method = "documentCommitTransaction"
-signature = "sha256:1ba1bb9245fb3aef184fb354332bac1fcc75c21ded06bb280cc615097209caeb"
-requires = ["src/App/Document.pyi"]
+signature = "sha256:3bb2a0eb2edb47c07d35ee004057f28afb5a3e172a9e353470ea3f50bb613b6d"
 
 [operations."org.freecad.document@1/abort_transaction"]
 opcode = 18
-name = "documentAbortTransaction"
 wire_name = "document.abort_transaction"
-guest_method = "documentAbortTransaction"
-signature = "sha256:1ba1bb9245fb3aef184fb354332bac1fcc75c21ded06bb280cc615097209caeb"
-requires = ["src/App/Document.pyi"]
+signature = "sha256:9b1fa6b81bccaca5bd24bf466ce67db24fb899a9d5f4b6c87f525918e3f0dcb0"
 
 [operations."org.freecad.document@1/object_get_label"]
 opcode = 19
-name = "documentObjectGetLabel"
 wire_name = "document.object.get_label"
-guest_method = "documentObjectGetLabel"
-signature = "sha256:385172c00fc65ce5507035bd18fbcbdaf6f065f4e168b3626e22c678c80c9d70"
-requires = ["src/App/DocumentObject.pyi"]
+signature = "sha256:3a842c46adfd4a10efa6f8fe1eb2ecca5606bcea0b9019b6c168fc3902260259"
 
 [operations."org.freecad.document@1/object_set_label"]
 opcode = 20
-name = "documentObjectSetLabel"
 wire_name = "document.object.set_label"
-guest_method = "documentObjectSetLabel"
-signature = "sha256:c6142d6d707f9bd5829eb21306df3648b422501be35b85f94303791e40df9002"
-requires = ["src/App/DocumentObject.pyi"]
+signature = "sha256:2f1e552310ed35298f2fb6749971ac1fa1e611e9a4651c3ce29e26c92d30b406"
 
 [operations."org.freecad.geometry@1/vector_sub"]
 opcode = 21
-name = "vectorSub"
 wire_name = "base.vector.sub"
-guest_method = "vectorSub"
-signature = "sha256:ef7a8b9e22fea7343e8f066a7db3da95d1decb941ed192a5b83881c60f3fec8a"
-requires = ["src/Base/Vector.pyi"]
+signature = "sha256:f5ca810387c70c256b78a8805104cbc372a0958ecf6cd7384f9cc570069aceb2"

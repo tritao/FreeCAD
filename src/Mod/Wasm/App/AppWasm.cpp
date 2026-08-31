@@ -85,6 +85,7 @@ private:
         dict.setItem(
             "api_catalog_signature",
             Py::String(std::string(Generated::ApiCatalogSignature)));
+        dict.setItem("extension_api", Py::Int(WasmManifest::SupportedExtensionApi));
         dict.setItem("api_model", Py::String("freecad_wasm_api.json"));
         return dict;
     }
@@ -108,6 +109,9 @@ private:
         dict.setItem("valid", Py::Boolean(errors.empty()));
         dict.setItem("name", Py::String(manifest.name()));
         dict.setItem("api", Py::String(manifest.api()));
+        dict.setItem(
+            "extension_api",
+            Py::Int(manifest.extensionApiVersion().value_or(WasmManifest::SupportedExtensionApi)));
         dict.setItem("abi_hash", Py::String(manifest.abiHash()));
         dict.setItem("entry", Py::String(manifest.entry()));
         dict.setItem("errors", pyErrors);
@@ -132,6 +136,9 @@ private:
         Py::Dict dict;
         dict.setItem("name", Py::String(manifest.name()));
         dict.setItem("api", Py::String(manifest.api()));
+        dict.setItem(
+            "extension_api",
+            Py::Int(manifest.extensionApiVersion().value_or(WasmManifest::SupportedExtensionApi)));
         dict.setItem("abi_hash", Py::String(manifest.abiHash()));
         dict.setItem("entry", Py::String(manifest.entry()));
         return dict;

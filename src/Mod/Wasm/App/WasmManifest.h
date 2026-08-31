@@ -15,6 +15,7 @@ class WasmManifest
 {
 public:
     static constexpr const char* SupportedApi = "org.freecad.wasm.api@0";
+    static constexpr int SupportedExtensionApi = 1;
     static constexpr std::size_t MaxManifestBytes = 64U * 1024U;
 
     static WasmManifest loadFromFile(const std::filesystem::path& path);
@@ -23,6 +24,7 @@ public:
     const std::string& source() const;
     const std::string& name() const;
     const std::string& api() const;
+    std::optional<int> extensionApiVersion() const;
     const std::string& abiHash() const;
     const std::string& entry() const;
     const std::vector<std::string>& permissions() const;
@@ -37,6 +39,7 @@ private:
     std::string manifestSource;
     std::string manifestName;
     std::string manifestApi;
+    std::optional<int> manifestExtensionApiVersion;
     std::string manifestAbiHash;
     std::string manifestEntry;
     std::vector<std::string> manifestPermissions;

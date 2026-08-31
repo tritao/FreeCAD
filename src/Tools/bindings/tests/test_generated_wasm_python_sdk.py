@@ -99,6 +99,16 @@ class MockHost:
             self.objects[handle] = name
             return struct.pack("<Q", handle)
 
+        if operation == self.operations.DOCUMENT_GET_OBJECT:
+            document, offset = _read_u64(payload)
+            name, offset = _read_string(payload, offset)
+            if offset != len(payload) or document not in self.documents:
+                raise AssertionError("unexpected document.get_object payload")
+            for handle, object_name in self.objects.items():
+                if object_name == name:
+                    return struct.pack("<Q", handle)
+            raise self.host_error("object not found")
+
         if operation == self.operations.DOCUMENT_OPEN_TRANSACTION:
             document, offset = _read_u64(payload)
             _, offset = _read_string(payload, offset)
@@ -155,11 +165,31 @@ class MockHost:
                 "<ddd", *(left[index] + right[index] for index in range(3))
             )
 
+        if operation == self.operations.VECTOR_NEW:
+            if len(payload) != 24:
+                raise AssertionError("unexpected vector.new payload")
+            return payload
+
         if operation == self.operations.VECTOR_SUB:
             left = struct.unpack_from("<ddd", payload, 0)
             right = struct.unpack_from("<ddd", payload, 24)
             return struct.pack(
                 "<ddd", *(left[index] - right[index] for index in range(3))
+            )
+
+        if operation == self.operations.VECTOR_DOT:
+            left = struct.unpack_from("<ddd", payload, 0)
+            right = struct.unpack_from("<ddd", payload, 24)
+            return struct.pack("<d", sum(left[index] * right[index] for index in range(3)))
+
+        if operation == self.operations.VECTOR_CROSS:
+            left = struct.unpack_from("<ddd", payload, 0)
+            right = struct.unpack_from("<ddd", payload, 24)
+            return struct.pack(
+                "<ddd",
+                left[1] * right[2] - left[2] * right[1],
+                left[2] * right[0] - left[0] * right[2],
+                left[0] * right[1] - left[1] * right[0],
             )
 
         raise AssertionError(f"unhandled operation {operation}")
@@ -183,6 +213,7 @@ class GeneratedWasmPythonSdkTests(unittest.TestCase):
         exec(compile(source, "freecad_wasm_api.py", "exec"), module.__dict__)
         namespace = module.__dict__
         cls.Client = namespace["Client"]
+        cls.Extension = namespace["Extension"]
         cls.WasmGuestError = namespace["WasmGuestError"]
         cls.WasmHostError = namespace["WasmHostError"]
         cls.WasmProtocolError = namespace["WasmProtocolError"]
@@ -254,6 +285,25 @@ class GeneratedWasmPythonSdkTests(unittest.TestCase):
         invalid_release = self.Client(lambda _request: success(b"\x01"))
         with self.assertRaises(self.WasmProtocolError):
             invalid_release.release(1)
+
+    def test_extension_facade_hides_handles_and_scopes_transactions(self):
+        host = MockHost(self.operations, self.WasmHostError)
+        extension = self.Extension(host)
+
+        left = extension.geometry().vector(1.0, 2.0, 3.0)
+        right = extension.geometry().vector(4.0, 5.0, 6.0)
+        self.assertEqual((left.add(right).x, left.add(right).y, left.add(right).z), (5.0, 7.0, 9.0))
+        self.assertEqual(left.dot(right), 32.0)
+
+        with extension.documents().create("Facade") as document:
+            shape = extension.part().make_box(10.0, 20.0, 30.0)
+            with document.transaction("Add object"):
+                document.add_object(shape, "Box")
+            object_handle = document.get_object("Box")
+            with document.transaction("Set label"):
+                object_handle.label = "Bracket"
+            self.assertEqual(object_handle.label, "Bracket")
+            shape.close()
 
 
 if __name__ == "__main__":

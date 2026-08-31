@@ -22,13 +22,13 @@ execute_process(
 )
 if(NOT _install_result EQUAL 0)
     message(FATAL_ERROR
-        "FreeCAD Wasm guest SDK installation failed:\n${_install_output}\n${_install_error}")
+        "FreeCAD Extension SDK installation failed:\n${_install_output}\n${_install_error}")
 endif()
 
 set(_consumer_source
     "${_install_prefix}/share/FreeCAD/Wasm/examples/cpp")
 if(NOT EXISTS "${_consumer_source}/CMakeLists.txt")
-    message(FATAL_ERROR "installed FreeCAD Wasm C++ example was not found")
+    message(FATAL_ERROR "installed FreeCAD Extension C++ example was not found")
 endif()
 
 set(_configure_command
@@ -37,7 +37,7 @@ set(_configure_command
     -B "${_consumer_build}"
     -G "${TEST_GENERATOR}"
     "-DCMAKE_PREFIX_PATH=${_install_prefix}"
-    -DFREECAD_WASM_USE_INSTALLED_SDK=ON
+    -DFREECAD_EXTENSION_USE_INSTALLED_SDK=ON
     "-DFREECAD_WASM_GUEST_COMPILER=${TEST_GUEST_COMPILER}"
     "-DFREECAD_WASM_GUEST_LINKER=${TEST_GUEST_LINKER}"
 )
@@ -58,7 +58,7 @@ execute_process(
 )
 if(NOT _configure_result EQUAL 0)
     message(FATAL_ERROR
-        "installed FreeCAD Wasm SDK consumer configuration failed:\n"
+        "installed FreeCAD Extension SDK consumer configuration failed:\n"
         "${_configure_output}\n${_configure_error}")
 endif()
 
@@ -70,7 +70,7 @@ execute_process(
 )
 if(NOT _build_result EQUAL 0)
     message(FATAL_ERROR
-        "installed FreeCAD Wasm SDK consumer build failed:\n"
+        "installed FreeCAD Extension SDK consumer build failed:\n"
         "${_build_output}\n${_build_error}")
 endif()
 
@@ -79,24 +79,24 @@ set(_signature
     "${_install_prefix}/share/FreeCAD/Wasm/freecad_wasm_api.signature")
 if(NOT EXISTS "${_manifest}" OR NOT EXISTS "${_signature}")
     message(FATAL_ERROR
-        "installed SDK consumer did not produce its manifest and signature")
+        "installed Extension SDK consumer did not produce its manifest and signature")
 endif()
 
 file(READ "${_manifest}" _manifest_contents)
 file(READ "${_signature}" _signature_contents)
 string(STRIP "${_signature_contents}" _signature_contents)
 if(_manifest_contents MATCHES "@FREECAD_WASM_ABI_HASH@")
-    message(FATAL_ERROR "installed SDK consumer manifest kept the ABI hash placeholder")
+    message(FATAL_ERROR "installed Extension SDK consumer manifest kept the ABI hash placeholder")
 endif()
 string(FIND "${_manifest_contents}" "${_signature_contents}" _signature_position)
 if(_signature_position EQUAL -1)
     message(FATAL_ERROR
-        "installed SDK consumer manifest does not contain the installed ABI signature")
+        "installed Extension SDK consumer manifest does not contain the installed ABI signature")
 endif()
 
 set(_wasm "${_consumer_build}/freecad-capability-addon.wasm")
 if(NOT EXISTS "${_wasm}")
-    message(FATAL_ERROR "installed SDK consumer did not produce a Wasm module")
+    message(FATAL_ERROR "installed Extension SDK consumer did not produce a Wasm module")
 endif()
 
-message(STATUS "Installed FreeCAD Wasm guest SDK consumer test passed")
+message(STATUS "Installed FreeCAD Extension SDK consumer test passed")

@@ -1,8 +1,9 @@
-# FreeCAD C++ Wasm Addon
+# FreeCAD C++ Extension
 
-This example builds the capability guest used by the WAMR integration tests.
-It uses the freestanding C++ guest client, so it does not require WASI,
-libc++, or a full FreeCAD build.
+This example builds the capability extension used by the runtime integration
+tests. It uses the freestanding C++ raw client, so it does not require WASI,
+libc++, or a full FreeCAD build. Hosted extensions can use the generated
+`FreeCAD::Extension` facade; the freestanding client is the advanced path.
 
 ## Requirements
 
@@ -30,7 +31,7 @@ build-wasm-cpp/
 ```
 
 The source-tree build generates the typed C++ SDK header and the addon uses
-the generated `FreeCAD::Wasm::Generated::Client` wrapper rather than encoding
+the advanced `FreeCAD::Extension::Raw::RawClient` wrapper rather than encoding
 ABI operations directly.
 
 To build the installed example against an installed SDK:
@@ -39,7 +40,7 @@ To build the installed example against an installed SDK:
 cmake -S "$PREFIX/share/FreeCAD/Wasm/examples/cpp" \
   -B build-wasm-cpp-installed \
   -DCMAKE_PREFIX_PATH="$PREFIX" \
-  -DFREECAD_WASM_USE_INSTALLED_SDK=ON \
+  -DFREECAD_EXTENSION_USE_INSTALLED_SDK=ON \
   -DFREECAD_WASM_GUEST_COMPILER="$(command -v clang++)" \
   -DFREECAD_WASM_GUEST_LINKER="$(command -v wasm-ld)"
 cmake --build build-wasm-cpp-installed

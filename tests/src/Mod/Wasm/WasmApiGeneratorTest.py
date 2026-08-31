@@ -58,7 +58,7 @@ assert model["abi"]["error_codes"]["permission_denied"] == 2
 operations = {operation["name"]: operation for operation in model["operations"]}
 assert operations["documentNew"]["permission"] == "document.create"
 assert operations["partMakeBox"]["id"] == 2
-assert operations["documentAddObject"]["mutates"] is True
+assert operations["documentAddObject"]["effect"] == "create"
 assert operations["documentAddObject"]["transaction"] == "required"
 assert operations["documentAddObject"]["source"] == "FreeCAD.Document.addObject"
 assert operations["vectorDot"]["source"] == "FreeCAD.Base.Vector.dot"

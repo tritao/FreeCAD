@@ -13,6 +13,15 @@ configure_package_config_file(
     PATH_VARS CMAKE_INSTALL_INCLUDEDIR CMAKE_INSTALL_DATADIR
 )
 
+set(Wasm_Extension_CONFIG
+    ${CMAKE_CURRENT_BINARY_DIR}/FreeCADExtensionSDKConfig.cmake)
+configure_package_config_file(
+    Guest/FreeCADExtensionSDKConfig.cmake.in
+    ${Wasm_Extension_CONFIG}
+    INSTALL_DESTINATION ${CMAKE_INSTALL_DATADIR}/cmake/FreeCADExtensionSDK
+    PATH_VARS CMAKE_INSTALL_INCLUDEDIR CMAKE_INSTALL_DATADIR
+)
+
 set(Wasm_Scripts
     Init.py
 )
@@ -23,6 +32,7 @@ set(Wasm_Guest_SDK
     WasmExtensionApi.json
     Guest/FreeCADWasmGuest.cmake
     Guest/FreeCADWasmGuestConfig.cmake.in
+    Guest/FreeCADExtensionSDKConfig.cmake.in
     Guest/ConfigureWasmManifest.cmake
     Guest/WasmGuest.h
     Guest/WasmGuestFreestanding.h
@@ -70,6 +80,14 @@ install(
         ${Wasm_Guest_CONFIG}
     DESTINATION
         ${CMAKE_INSTALL_DATADIR}/cmake/FreeCADWasmGuest
+    COMPONENT WasmGuestSDK
+)
+
+install(
+    FILES
+        ${Wasm_Extension_CONFIG}
+    DESTINATION
+        ${CMAKE_INSTALL_DATADIR}/cmake/FreeCADExtensionSDK
     COMPONENT WasmGuestSDK
 )
 

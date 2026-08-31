@@ -7,7 +7,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from .types import WasmAbiType
+from .types import Ownership, WasmAbiType
 
 
 @dataclass(frozen=True)
@@ -16,7 +16,7 @@ class WasmAbiParameter:
 
     name: str
     type: WasmAbiType
-    ownership: str | None = None
+    ownership: Ownership | None = None
     argument_kind: str | None = None
     annotation: str | None = None
     default: str | None = None
@@ -27,7 +27,7 @@ class WasmAbiParameter:
             "type": self.type.as_json(),
         }
         if self.ownership is not None:
-            value["ownership"] = self.ownership
+            value["ownership"] = self.ownership.value
         if self.argument_kind is not None:
             value["kind"] = self.argument_kind
         if self.annotation is not None:
@@ -50,10 +50,9 @@ class WasmAbiOperation:
     returns: WasmAbiType
     wire_returns: WasmAbiType | None
     permission: str | None
-    mutates: bool
     transaction: str | None
     origin: str
-    wire_signature: str
+    signature: str
     fallible: bool = True
     nullable: bool = False
     source: str | None = None
@@ -73,7 +72,11 @@ class WasmAbiOperation:
             WasmAbiParameter(
                 name=parameter["name"],
                 type=WasmAbiType.from_json(parameter["type"], "WASM ABI parameter type"),
-                ownership=parameter.get("ownership"),
+                ownership=(
+                    Ownership(parameter["ownership"])
+                    if parameter.get("ownership") is not None
+                    else None
+                ),
                 argument_kind=parameter.get("kind"),
                 annotation=parameter.get("annotation"),
                 default=parameter.get("default"),
@@ -94,10 +97,9 @@ class WasmAbiOperation:
                 else None
             ),
             permission=value.get("permission"),
-            mutates=value["mutates"],
             transaction=value.get("transaction"),
             origin=value["origin"],
-            wire_signature=value["wire_signature"],
+            signature=value["signature"],
             fallible=value.get("fallible", True),
             nullable=value.get("returns", {}).get("nullable", False),
             source=value.get("source"),
@@ -118,10 +120,9 @@ class WasmAbiOperation:
             "guest_method": self.guest_method,
             "origin": self.origin,
             "permission": self.permission,
-            "mutates": self.mutates,
             "params": [parameter.as_dict() for parameter in self.parameters],
             "returns": self.returns.as_json() | {"nullable": self.nullable},
-            "wire_signature": self.wire_signature,
+            "signature": self.signature,
             "fallible": self.fallible,
         }
         if self.consumes:

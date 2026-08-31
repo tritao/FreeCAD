@@ -16,7 +16,13 @@ import generate_wasm_sdk  # noqa: E402
 from extension_api_model import project_api_model  # noqa: E402
 from stubgen.api_extract import extract_curated_api_model  # noqa: E402
 from python_api_model.types import parse_annotation  # noqa: E402
-from wasm_api_model import load_abi_lock, load_wasm_adapters  # noqa: E402
+from wasm_api_model import (  # noqa: E402
+    Ownership,
+    WireKind,
+    WasmAbiType,
+    load_abi_lock,
+    load_wasm_adapters,
+)
 
 
 ROOT = TOOLS_DIR.parents[2]
@@ -86,7 +92,6 @@ class GenerateWasmApiTests(unittest.TestCase):
                 "id": 1,
                 "guest_method": "first",
                 "permission": None,
-                "mutates": False,
                 "params": [],
                 "returns": {"kind": "none"},
             },
@@ -96,13 +101,12 @@ class GenerateWasmApiTests(unittest.TestCase):
                 "id": 1,
                 "guest_method": "second",
                 "permission": None,
-                "mutates": False,
                 "params": [],
                 "returns": {"kind": "none"},
             },
         ]
         for operation in operations:
-            operation["wire_signature"] = generate_wasm_api._wire_signature(operation)
+            operation["signature"] = generate_wasm_api._signature(operation)
         with self.assertRaisesRegex(ValueError, "operation id 1"):
             generate_wasm_api._validate_operation_catalog(operations)
 
@@ -112,17 +116,13 @@ class GenerateWasmApiTests(unittest.TestCase):
                 {
                     "org.freecad.test@1/first": {
                         "id": 1,
-                        "name": "first",
                         "wire_name": "test.first",
-                        "guest_method": "first",
-                        "wire_signature": "sha256:" + "0" * 64,
+                        "signature": "sha256:" + "0" * 64,
                     },
                     "org.freecad.test@1/second": {
                         "id": 1,
-                        "name": "second",
                         "wire_name": "test.second",
-                        "guest_method": "second",
-                        "wire_signature": "sha256:" + "0" * 64,
+                        "signature": "sha256:" + "0" * 64,
                     },
                 }
             )
@@ -150,42 +150,13 @@ class GenerateWasmApiTests(unittest.TestCase):
                 },
             )
 
-    def test_stale_lock_entries_must_be_retired(self):
-        lock = {
-            stable_id: entry.as_dict()
-            for stable_id, entry in load_abi_lock(
-                ROOT / "src/Mod/Wasm/wasm_abi.lock.toml"
-            ).operations.items()
-        }
-        lock["org.freecad.geometry@1/not_published"] = {
-            "id": 21,
-            "name": "notPublished",
-            "wire_name": "test.not_published",
-            "guest_method": "notPublished",
-        }
-        with self.assertRaisesRegex(ValueError, "stale active operation"):
-            generate_wasm_api._validate_projected_abi_lock(
-                lock,
-                self.extension_model(),
-                {
-                    "src/Base/Vector.pyi",
-                    "src/App/Document.pyi",
-                    "src/App/DocumentObject.pyi",
-                    "src/Mod/Part/App/TopoShape.pyi",
-                },
-                {
-                    "FreeCAD.Base.Vector.__init__": "vectorNew",
-                },
-            )
-
     def test_retired_ids_cannot_be_reused(self):
         retired_ids = generate_wasm_api._validate_retired_abi_lock(
             {
                 "org.freecad.geometry@1/removed": {
                     "id": 21,
-                    "name": "removed",
                     "wire_name": "geometry.removed",
-                    "guest_method": "removed",
+                    "signature": "sha256:" + "0" * 64,
                     "reason": "removed from the experimental surface",
                 }
             },
@@ -205,11 +176,13 @@ class GenerateWasmApiTests(unittest.TestCase):
         document_new = next(adapter for adapter in adapters if adapter.name == "documentNew")
         self.assertEqual(document_new.stable_id, "org.freecad.host@1/document_new")
         self.assertEqual(document_new.requires, ("src/App/Document.pyi",))
-        self.assertEqual(document_new.parameters[0].type.kind, "string")
-        self.assertEqual(document_new.returns.ownership, "owned")
+        self.assertIs(document_new.parameters[0].type.kind, WireKind.STRING)
+        self.assertIs(document_new.returns.ownership, Ownership.OWNED)
+        self.assertIs(document_new.returns.kind, WireKind.HANDLE)
         release = next(adapter for adapter in adapters if adapter.name == "release")
-        self.assertEqual(release.returns.kind, "bool")
-        self.assertEqual(release.wire_returns.kind, "none")
+        self.assertIs(release.parameters[0].ownership, Ownership.CONSUMED)
+        self.assertIs(release.returns.kind, WireKind.BOOL)
+        self.assertIs(release.wire_returns.kind, WireKind.NONE)
         self.assertEqual(
             release.as_catalog_operation(lock.operations[release.stable_id])["wire_returns"]["kind"],
             "none",
@@ -218,15 +191,13 @@ class GenerateWasmApiTests(unittest.TestCase):
             document_new.as_catalog_operation(lock.operations[document_new.stable_id])["origin"],
             "adapter",
         )
-        with self.assertRaisesRegex(ValueError, "name differs"):
+        with self.assertRaisesRegex(ValueError, "does not match ABI lock entry"):
             document_new.as_catalog_operation(
                 lock.operations[document_new.stable_id].__class__(
-                    stable_id=document_new.stable_id,
+                    stable_id="org.freecad.test@1/wrong",
                     opcode=1,
                     wire_name="document.new",
                     signature="sha256:" + "0" * 64,
-                    name="wrongName",
-                    guest_method=document_new.guest_method,
                 )
             )
         model = generate_wasm_api.build_model(
@@ -245,7 +216,20 @@ class GenerateWasmApiTests(unittest.TestCase):
         self.assertTrue(release_operation["consumes"])
         self.assertEqual(lock.reserved_opcodes, frozenset(range(1, 22)))
 
-    def test_published_operations_match_the_wire_compatibility_lock(self):
+    def test_wire_types_round_trip_through_json(self):
+        wire_type = WasmAbiType(
+            kind=WireKind.HANDLE,
+            type_name="FreeCAD.Document",
+            ownership=Ownership.CONSUMED,
+        )
+        encoded = wire_type.as_json()
+        self.assertEqual(encoded["kind"], "handle")
+        self.assertEqual(encoded["ownership"], "consumed")
+        decoded = WasmAbiType.from_json(encoded, "test type")
+        self.assertIs(decoded.kind, WireKind.HANDLE)
+        self.assertIs(decoded.ownership, Ownership.CONSUMED)
+
+    def test_published_operations_match_the_compatibility_lock(self):
         model = generate_wasm_api.build_model(
             ROOT,
             [
@@ -257,31 +241,30 @@ class GenerateWasmApiTests(unittest.TestCase):
         )
         lock = load_abi_lock(ROOT / "src/Mod/Wasm/wasm_abi.lock.toml")
         published = {
-            entry.name: entry.as_dict()
-            for entry in lock.operations.values()
-            if entry.name is not None
+            stable_id: entry.as_dict()
+            for stable_id, entry in lock.operations.items()
         }
         published.update(
             {
-                adapter.name: adapter.as_catalog_operation(lock.operations[adapter.stable_id])
+                adapter.stable_id: adapter.as_catalog_operation(lock.operations[adapter.stable_id])
                 for adapter in load_wasm_adapters()
             }
         )
 
         self.assertEqual(
-            {operation["name"] for operation in model["operations"]},
+            {operation["stable_id"] for operation in model["operations"]},
             set(published),
         )
         for operation in model["operations"]:
-            expected = published[operation["name"]]
-            for field in ("id", "name", "wire_name", "guest_method", "wire_signature"):
+            expected = published[operation["stable_id"]]
+            for field in ("id", "wire_name", "signature"):
                 self.assertEqual(operation[field], expected[field], field)
             self.assertEqual(
-                operation["wire_signature"],
-                generate_wasm_api._wire_signature(operation),
+                operation["signature"],
+                generate_wasm_api._signature(operation),
             )
 
-    def test_wire_signature_rejects_payload_shape_drift(self):
+    def test_signature_rejects_payload_shape_drift(self):
         model = generate_wasm_api.build_model(
             ROOT,
             [
@@ -297,7 +280,26 @@ class GenerateWasmApiTests(unittest.TestCase):
         )
         vector_add["params"][0]["type"] = {"kind": "float64"}
 
-        with self.assertRaisesRegex(ValueError, "wire signature changed"):
+        with self.assertRaisesRegex(ValueError, "ABI signature changed"):
+            generate_wasm_api._validate_operation_catalog(operations)
+
+    def test_signature_rejects_policy_drift(self):
+        model = generate_wasm_api.build_model(
+            ROOT,
+            [
+                ROOT / "src/Base/Vector.pyi",
+                ROOT / "src/App/Document.pyi",
+                ROOT / "src/App/DocumentObject.pyi",
+                ROOT / "src/Mod/Part/App/TopoShape.pyi",
+            ],
+        )
+        operations = copy.deepcopy(model["operations"])
+        vector_add = next(
+            operation for operation in operations if operation["name"] == "vectorAdd"
+        )
+        vector_add["permission"] = "geometry.modify"
+
+        with self.assertRaisesRegex(ValueError, "ABI signature changed"):
             generate_wasm_api._validate_operation_catalog(operations)
 
     def test_published_operations_are_emitted_to_all_abi_consumers(self):
@@ -354,7 +356,7 @@ class GenerateWasmApiTests(unittest.TestCase):
         )
         self.assertIn("WireType::Vector3F64", metadata)
         self.assertIn(
-            'Abi::Operation::HandleRelease, 4U, "release", "handle.release", "", false, "", "adapter", HandleReleaseParameters, WireType::None',
+            'Abi::Operation::HandleRelease, 4U, "release", "handle.release", "", "modify", "", "adapter", HandleReleaseParameters, WireType::None',
             metadata,
         )
         self.assertIn('"projection"', metadata)
@@ -434,6 +436,7 @@ class GenerateWasmApiTests(unittest.TestCase):
             [parameter["name"] for parameter in vector_add_catalog["params"]],
             ["left", "right"],
         )
+        self.assertEqual(vector_add_catalog["effect"], "compute")
         self.assertEqual(vector_add["params"][0]["name"], "vector2")
         self.assertEqual(vector_add["returns"]["kind"], "value")
 

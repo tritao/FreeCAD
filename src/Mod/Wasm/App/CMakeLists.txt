@@ -52,6 +52,7 @@ set(Wasm_API_GENERATOR_SOURCES
     ${CMAKE_SOURCE_DIR}/src/Tools/wasm_api_model/adapters.py
     ${CMAKE_SOURCE_DIR}/src/Tools/wasm_api_model/lock.py
     ${CMAKE_SOURCE_DIR}/src/Tools/wasm_api_model/model.py
+    ${CMAKE_SOURCE_DIR}/src/Tools/wasm_api_model/naming.py
     ${CMAKE_SOURCE_DIR}/src/Tools/wasm_api_model/types.py
 )
 
@@ -69,7 +70,7 @@ add_custom_command(
     COMMAND ${Python3_EXECUTABLE} ${Wasm_API_ABI_CHECKER}
             --check
             --catalog ${Wasm_API_MODEL}
-            --available-input ${Wasm_API_INPUTS}
+            --allow-missing
     MAIN_DEPENDENCY ${Wasm_API_GENERATOR}
     DEPENDS ${Wasm_API_INPUTS} ${Wasm_API_GENERATOR_SOURCES}
     COMMENT "Generating experimental FreeCAD Wasm API model"

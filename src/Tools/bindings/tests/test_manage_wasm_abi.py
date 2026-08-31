@@ -26,7 +26,7 @@ def operation(stable_id: str, opcode: int, *, wire_name: str | None = None) -> d
         "name": stable_id.rsplit("/", 1)[-1],
         "wire_name": wire_name or stable_id.replace("/", "."),
         "guest_method": stable_id.rsplit("/", 1)[-1],
-        "wire_signature": "sha256:" + "0" * 64,
+        "signature": "sha256:" + "0" * 64,
     }
 
 
@@ -41,22 +41,35 @@ class ManageWasmAbiTests(unittest.TestCase):
             opcode=1,
             wire_name="test.first",
             signature="sha256:" + "0" * 64,
-            name="first",
-            guest_method="first",
         )
         retired = AbiLockEntry(
             stable_id="org.freecad.test@1/old",
             opcode=2,
             wire_name="test.old",
             signature="sha256:" + "1" * 64,
-            name="old",
-            guest_method="old",
             reason="removed",
         )
         return AbiLock(1, {entry.stable_id: entry}, {retired.stable_id: retired})
 
     def write_lock(self, path: Path, lock: AbiLock) -> None:
         path.write_text(manage_wasm_abi._render_lock(lock), encoding="utf-8")
+
+    def test_lock_rejects_derived_identity_fields(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "wasm_abi.lock.toml"
+            path.write_text(
+                """version = 1
+
+[operations."org.freecad.test@1/first"]
+opcode = 1
+wire_name = "test.first"
+signature = "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+name = "first"
+""",
+                encoding="utf-8",
+            )
+            with self.assertRaisesRegex(ValueError, "unknown fields: name"):
+                load_abi_lock(path)
 
     def test_check_reports_identity_and_shape_differences(self):
         lock = self.lock()
@@ -71,16 +84,13 @@ class ManageWasmAbiTests(unittest.TestCase):
         self.assertEqual(changed, ["org.freecad.test@1/first"])
         self.assertEqual(removed, [])
 
-    def test_check_allows_operations_disabled_by_missing_source_inputs(self):
+    def test_check_allows_missing_operations_for_partial_catalog(self):
         lock = self.lock()
         entry = AbiLockEntry(
             stable_id="org.freecad.test@1/part",
             opcode=3,
             wire_name="test.part",
             signature="sha256:" + "2" * 64,
-            name="part",
-            guest_method="part",
-            requires=("src/Mod/Part/App/TopoShape.pyi",),
         )
         lock = AbiLock(1, {**lock.operations, entry.stable_id: entry}, lock.retired)
         catalog = {
@@ -92,18 +102,18 @@ class ManageWasmAbiTests(unittest.TestCase):
         added, changed, removed = manage_wasm_abi._differences(
             lock,
             catalog,
-            [Path("src/Base/Vector.pyi")],
+            True,
         )
         self.assertEqual((added, changed, removed), ([], [], []))
 
-    def test_check_does_not_hide_missing_selected_operations(self):
+    def test_check_reports_missing_operations_in_strict_mode(self):
         lock = self.lock()
         catalog = {}
 
         _, _, removed = manage_wasm_abi._differences(
             lock,
             catalog,
-            [Path("src/Base/Vector.pyi")],
+            False,
         )
         self.assertEqual(removed, ["org.freecad.test@1/first"])
 

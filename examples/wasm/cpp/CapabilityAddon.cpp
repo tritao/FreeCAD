@@ -2,11 +2,11 @@
 
 #include <Wasm/Guest/freecad_wasm_api.hpp>
 
-using FreeCAD::Wasm::Generated::FreeCADDocumentHandle;
-using FreeCAD::Wasm::Generated::FreeCADDocumentObjectHandle;
-using FreeCAD::Wasm::Generated::FreeCADBaseVectorValue;
-using FreeCAD::Wasm::Generated::Client;
-using FreeCAD::Wasm::Generated::PartTopoShapeHandle;
+using FreeCAD::Extension::Raw::FreeCADDocumentHandle;
+using FreeCAD::Extension::Raw::FreeCADDocumentObjectHandle;
+using FreeCAD::Extension::Raw::FreeCADBaseVectorValue;
+using FreeCAD::Extension::Raw::RawClient;
+using FreeCAD::Extension::Raw::PartTopoShapeHandle;
 
 #if defined(__clang__) && defined(__wasm__)
 # define FREECAD_WASM_EXPORT(name) __attribute__((export_name(name)))
@@ -19,7 +19,7 @@ extern "C" unsigned long long freecad_addon_entry(const unsigned char*, unsigned
 
 extern "C" unsigned long long freecad_addon_entry(const unsigned char*, unsigned int)
 {
-    Client host;
+    RawClient host;
     FreeCADBaseVectorValue left;
     FreeCADBaseVectorValue right;
     if (!host.vectorNew(1.0, 2.0, 3.0, &left)
