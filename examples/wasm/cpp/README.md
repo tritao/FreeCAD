@@ -30,6 +30,10 @@ build-wasm-cpp/
   manifest.json
 ```
 
+The author-facing `freecad-extension.toml` next to this CMake project contains
+only the extension name and requested permissions. The build generates the
+runtime `manifest.json`, including the module entry and SDK ABI hash.
+
 The source-tree build generates the typed C++ SDK header and the addon uses
 the advanced `FreeCAD::Extension::Raw::RawClient` wrapper rather than encoding
 ABI operations directly.

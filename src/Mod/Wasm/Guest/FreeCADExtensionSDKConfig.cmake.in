@@ -10,6 +10,8 @@ set(FreeCADExtensionSDK_CMAKE_MODULE
     "@PACKAGE_CMAKE_INSTALL_DATADIR@/FreeCAD/Wasm/FreeCADWasmGuest.cmake")
 set(FreeCADExtensionSDK_API_SIGNATURE_FILE
     "@PACKAGE_CMAKE_INSTALL_DATADIR@/FreeCAD/Wasm/freecad_wasm_api.signature")
+set(FREECAD_EXTENSION_SDK_API_SIGNATURE_FILE
+    "${FreeCADExtensionSDK_API_SIGNATURE_FILE}")
 set(FreeCADExtensionSDK_EXAMPLES_DIR
     "@PACKAGE_CMAKE_INSTALL_DATADIR@/FreeCAD/Wasm/examples/cpp")
 

@@ -34,6 +34,7 @@ set(Wasm_Guest_SDK
     Guest/FreeCADWasmGuestConfig.cmake.in
     Guest/FreeCADExtensionSDKConfig.cmake.in
     Guest/ConfigureWasmManifest.cmake
+    Guest/GenerateExtensionManifest.cmake
     Guest/WasmGuest.h
     Guest/WasmGuestFreestanding.h
     ABI.md
@@ -68,6 +69,7 @@ install(
     FILES
         Guest/FreeCADWasmGuest.cmake
         Guest/ConfigureWasmManifest.cmake
+        Guest/GenerateExtensionManifest.cmake
         wasm_abi.lock.toml
         WasmExtensionApi.json
     DESTINATION
@@ -104,7 +106,7 @@ install(
     FILES
         ${CMAKE_SOURCE_DIR}/examples/wasm/cpp/CapabilityAddon.cpp
         ${CMAKE_SOURCE_DIR}/examples/wasm/cpp/CMakeLists.txt
-        ${CMAKE_SOURCE_DIR}/examples/wasm/cpp/manifest.json
+        ${CMAKE_SOURCE_DIR}/examples/wasm/cpp/freecad-extension.toml
         ${CMAKE_SOURCE_DIR}/examples/wasm/cpp/README.md
     DESTINATION
         ${CMAKE_INSTALL_DATADIR}/FreeCAD/Wasm/examples/cpp

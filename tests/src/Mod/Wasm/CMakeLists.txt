@@ -67,7 +67,7 @@ if(FREECAD_USE_WAMR)
         INCLUDE_DIRS ${CMAKE_CURRENT_BINARY_DIR}/generated
         OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/freecad-capability-addon.wasm
         OUTPUT_VARIABLE FREECAD_WASM_CAPABILITY_FIXTURE
-        MANIFEST ${CMAKE_SOURCE_DIR}/examples/wasm/cpp/manifest.json
+        MANIFEST ${CMAKE_SOURCE_DIR}/examples/wasm/cpp/freecad-extension.toml
         MANIFEST_OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/freecad-capability-addon-manifest.json
         MANIFEST_ABI_HASH_FILE ${FREECAD_WASM_API_SIGNATURE}
         BUNDLE_TARGET_VARIABLE FREECAD_WASM_CAPABILITY_BUNDLE

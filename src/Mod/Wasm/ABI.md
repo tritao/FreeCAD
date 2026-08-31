@@ -180,6 +180,20 @@ The generated C++ SDK exposes `ApiCatalogSignature`; Rust and Python expose
 `API_CATALOG_SIGNATURE`. These values must match the manifest used to package
 the guest module.
 
+Extension projects author only a `freecad-extension.toml` next to their
+`CMakeLists.txt`:
+
+```toml
+name = "MyExtension"
+permissions = ["document.read", "document.modify"]
+```
+
+The preferred `freecad_add_extension()` flow derives the Wasm entry filename
+and SDK ABI hash and generates the runtime `manifest.json` during the build.
+Authors do not provide those generated fields manually. The supported author
+format is intentionally restricted to a top-level `name` string and a
+`permissions` array of basic strings; unsupported fields are rejected.
+
 ## API Source Of Truth
 
 Extension identities are scoped instead of repeated on every declaration. The

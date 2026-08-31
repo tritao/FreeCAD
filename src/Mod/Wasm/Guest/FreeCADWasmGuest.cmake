@@ -116,7 +116,7 @@ function(freecad_wasm_addon target)
         SOURCE OUTPUT INCLUDE_ROOT OUTPUT_VARIABLE MANIFEST MANIFEST_OUTPUT
         BUNDLE_TARGET_VARIABLE MANIFEST_ABI_HASH_FILE
     )
-    set(_multi_value_args DEPENDS INCLUDE_DIRS)
+    set(_multi_value_args DEPENDS INCLUDE_DIRS SOURCES)
     cmake_parse_arguments(
         _FREECAD_WASM
         "${_options}"
@@ -125,9 +125,16 @@ function(freecad_wasm_addon target)
         ${ARGN}
     )
 
-    if(NOT _FREECAD_WASM_SOURCE)
+    if(_FREECAD_WASM_SOURCE AND _FREECAD_WASM_SOURCES)
         message(FATAL_ERROR
-            "freecad_wasm_addon(${target}) requires SOURCE")
+            "freecad_wasm_addon(${target}) accepts SOURCE or SOURCES, not both")
+    endif()
+    if(_FREECAD_WASM_SOURCE)
+        set(_FREECAD_WASM_SOURCES "${_FREECAD_WASM_SOURCE}")
+    endif()
+    if(NOT _FREECAD_WASM_SOURCES)
+        message(FATAL_ERROR
+            "freecad_wasm_addon(${target}) requires SOURCE or SOURCES")
     endif()
 
     if(NOT _FREECAD_WASM_OUTPUT)
@@ -192,8 +199,8 @@ function(freecad_wasm_addon target)
         -Wl,--max-memory=4194304
         -o
         "${_FREECAD_WASM_OUTPUT}"
-        "${_FREECAD_WASM_SOURCE}"
     )
+    list(APPEND _FREECAD_WASM_COMPILE_COMMAND ${_FREECAD_WASM_SOURCES})
     foreach(_FREECAD_WASM_INCLUDE_DIR IN LISTS _FREECAD_WASM_ALL_INCLUDE_DIRS)
         list(INSERT _FREECAD_WASM_COMPILE_COMMAND 7
             "-I${_FREECAD_WASM_INCLUDE_DIR}"
@@ -210,7 +217,7 @@ function(freecad_wasm_addon target)
         OUTPUT "${_FREECAD_WASM_OUTPUT}"
         COMMAND ${_FREECAD_WASM_COMPILE_COMMAND}
         DEPENDS
-            "${_FREECAD_WASM_SOURCE}"
+            ${_FREECAD_WASM_SOURCES}
             ${_FREECAD_WASM_DEPENDS}
         COMMENT "Building the FreeCAD Wasm guest ${target}"
         VERBATIM
@@ -238,7 +245,32 @@ function(freecad_wasm_addon target)
             set(_FREECAD_WASM_MANIFEST_OUTPUT
                 "${CMAKE_CURRENT_BINARY_DIR}/manifest.json")
         endif()
-        if(_FREECAD_WASM_MANIFEST_ABI_HASH_FILE)
+        if(_FREECAD_WASM_MANIFEST MATCHES "\\.toml$")
+            if(NOT _FREECAD_WASM_MANIFEST_ABI_HASH_FILE)
+                message(FATAL_ERROR
+                    "TOML extension manifests require the generated API signature")
+            endif()
+            get_filename_component(
+                _FREECAD_WASM_MANIFEST_ENTRY
+                "${_FREECAD_WASM_OUTPUT}"
+                NAME
+            )
+            add_custom_command(
+                OUTPUT "${_FREECAD_WASM_MANIFEST_OUTPUT}"
+                COMMAND ${CMAKE_COMMAND}
+                        -DINPUT=${_FREECAD_WASM_MANIFEST}
+                        -DOUTPUT=${_FREECAD_WASM_MANIFEST_OUTPUT}
+                        -DABI_HASH_FILE=${_FREECAD_WASM_MANIFEST_ABI_HASH_FILE}
+                        -DENTRY=${_FREECAD_WASM_MANIFEST_ENTRY}
+                        -P "${_FREECAD_WASM_GUEST_MODULE_DIR}/GenerateExtensionManifest.cmake"
+                DEPENDS
+                    "${_FREECAD_WASM_MANIFEST}"
+                    "${_FREECAD_WASM_MANIFEST_ABI_HASH_FILE}"
+                    "${_FREECAD_WASM_GUEST_MODULE_DIR}/GenerateExtensionManifest.cmake"
+                COMMENT "Generating the FreeCAD Extension manifest for ${target}"
+                VERBATIM
+            )
+        elseif(_FREECAD_WASM_MANIFEST_ABI_HASH_FILE)
             add_custom_command(
                 OUTPUT "${_FREECAD_WASM_MANIFEST_OUTPUT}"
                 COMMAND ${CMAKE_COMMAND}
@@ -286,12 +318,87 @@ function(freecad_wasm_addon target)
     endif()
 endfunction()
 
-# Preferred extension-facing names. The Wasm helpers remain the implementation
-# layer and are kept as compatibility entry points for existing addons.
+# Preferred extension-facing SDK generation entry point. The signature is
+# kept in the caller scope so a following freecad_add_extension() can consume
+# it without exposing ABI plumbing in the extension project.
 macro(freecad_extension_generate_sdk target)
-    freecad_wasm_generate_guest_sdk(${target} ${ARGN})
+    freecad_wasm_generate_guest_sdk(
+        ${target}
+        API_SIGNATURE_VARIABLE _FREECAD_EXTENSION_SDK_API_SIGNATURE
+        ${ARGN}
+    )
 endmacro()
 
-macro(freecad_add_extension target)
-    freecad_wasm_addon(${target} ${ARGN})
-endmacro()
+function(freecad_add_extension target)
+    set(_options ALL FREESTANDING OPTIONAL)
+    set(_one_value_args
+        OUTPUT INCLUDE_ROOT OUTPUT_VARIABLE MANIFEST_OUTPUT
+        BUNDLE_TARGET_VARIABLE
+    )
+    set(_multi_value_args SOURCES DEPENDS INCLUDE_DIRS)
+    cmake_parse_arguments(
+        _FREECAD_EXTENSION
+        "${_options}"
+        "${_one_value_args}"
+        "${_multi_value_args}"
+        ${ARGN}
+    )
+
+    if(_FREECAD_EXTENSION_UNPARSED_ARGUMENTS
+       OR _FREECAD_EXTENSION_KEYWORDS_MISSING_VALUES)
+        message(FATAL_ERROR
+            "freecad_add_extension(${target}) received invalid arguments")
+    endif()
+
+    if(NOT _FREECAD_EXTENSION_SOURCES)
+        message(FATAL_ERROR
+            "freecad_add_extension(${target}) requires SOURCES")
+    endif()
+    set(_FREECAD_EXTENSION_MANIFEST
+        "${CMAKE_CURRENT_SOURCE_DIR}/freecad-extension.toml")
+    if(NOT EXISTS "${_FREECAD_EXTENSION_MANIFEST}")
+        message(FATAL_ERROR
+            "freecad_add_extension(${target}) requires ${_FREECAD_EXTENSION_MANIFEST}")
+    endif()
+
+    if(DEFINED _FREECAD_EXTENSION_SDK_API_SIGNATURE)
+        set(_FREECAD_EXTENSION_SIGNATURE
+            "${_FREECAD_EXTENSION_SDK_API_SIGNATURE}")
+    elseif(DEFINED FreeCADExtensionSDK_API_SIGNATURE_FILE)
+        set(_FREECAD_EXTENSION_SIGNATURE
+            "${FreeCADExtensionSDK_API_SIGNATURE_FILE}")
+    endif()
+    if(NOT _FREECAD_EXTENSION_SIGNATURE)
+        message(FATAL_ERROR
+            "freecad_add_extension(${target}) requires a generated Extension SDK; "
+            "call freecad_extension_generate_sdk() or find_package(FreeCADExtensionSDK)")
+    endif()
+
+    set(_freecad_extension_args
+        SOURCES ${_FREECAD_EXTENSION_SOURCES}
+        MANIFEST "${_FREECAD_EXTENSION_MANIFEST}"
+        MANIFEST_ABI_HASH_FILE "${_FREECAD_EXTENSION_SIGNATURE}"
+    )
+    foreach(_argument OUTPUT INCLUDE_ROOT OUTPUT_VARIABLE MANIFEST_OUTPUT
+                      BUNDLE_TARGET_VARIABLE)
+        if(_FREECAD_EXTENSION_${_argument})
+            list(APPEND _freecad_extension_args
+                ${_argument} "${_FREECAD_EXTENSION_${_argument}}")
+        endif()
+    endforeach()
+    if(_FREECAD_EXTENSION_DEPENDS)
+        list(APPEND _freecad_extension_args
+            DEPENDS ${_FREECAD_EXTENSION_DEPENDS})
+    endif()
+    if(_FREECAD_EXTENSION_INCLUDE_DIRS)
+        list(APPEND _freecad_extension_args
+            INCLUDE_DIRS ${_FREECAD_EXTENSION_INCLUDE_DIRS})
+    endif()
+    foreach(_option ALL FREESTANDING OPTIONAL)
+        if(_FREECAD_EXTENSION_${_option})
+            list(APPEND _freecad_extension_args ${_option})
+        endif()
+    endforeach()
+
+    freecad_wasm_addon(${target} ${_freecad_extension_args})
+endfunction()

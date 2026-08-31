@@ -88,6 +88,18 @@ string(STRIP "${_signature_contents}" _signature_contents)
 if(_manifest_contents MATCHES "@FREECAD_WASM_ABI_HASH@")
     message(FATAL_ERROR "installed Extension SDK consumer manifest kept the ABI hash placeholder")
 endif()
+foreach(_expected_manifest_field
+        "\"name\": \"CapabilityExample\""
+        "\"extension_api\": 1"
+        "\"entry\": \"freecad-capability-addon.wasm\""
+        "\"permissions\": [")
+    string(FIND "${_manifest_contents}" "${_expected_manifest_field}"
+        _manifest_field_position)
+    if(_manifest_field_position EQUAL -1)
+        message(FATAL_ERROR
+            "installed Extension SDK consumer manifest is missing ${_expected_manifest_field}")
+    endif()
+endforeach()
 string(FIND "${_manifest_contents}" "${_signature_contents}" _signature_position)
 if(_signature_position EQUAL -1)
     message(FATAL_ERROR
