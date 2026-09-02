@@ -323,7 +323,14 @@ void Cell::setContent(const char* value)
             if (errno == 0) {
                 const bool isEndEmpty = *end == '\0' || strspn(end, " \t\n\r") == strlen(end);
                 if (isEndEmpty) {
-                    newExpr = std::make_unique<App::NumberExpression>(sheet, Quantity(float_value));
+                    auto number = std::make_unique<App::NumberExpression>(sheet, Quantity(float_value));
+
+                    // Use the same representation in memory that NumberExpression writes
+                    // to the document. Otherwise saving and restoring can change both the
+                    // value and its resulting spreadsheet property type.
+                    const std::string persistent = number->toString(true);
+                    const double persistentValue = strtod(persistent.c_str(), nullptr);
+                    newExpr = std::make_unique<App::NumberExpression>(sheet, Quantity(persistentValue));
                 }
             }
 
