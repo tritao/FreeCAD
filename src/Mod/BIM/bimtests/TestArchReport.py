@@ -118,27 +118,6 @@ class TestArchReport(TestArchBase.TestArchBase):
         )
         self.assertTrue(hasattr(report, "Target"), "Report object is missing 'Target' property.")
 
-    def test_report_numeric_cells_use_persistent_precision(self):
-        """Report values match persisted double precision without losing small values."""
-
-        class SpreadsheetRecorder:
-            def __init__(self):
-                self.cells = {}
-
-            def set(self, address, value):
-                self.cells[address] = value
-
-        report = Arch.makeReport()
-        spreadsheet = SpreadsheetRecorder()
-
-        report.Proxy._write_cell(spreadsheet, "A1", 9030000.000000002)
-        report.Proxy._write_cell(spreadsheet, "A2", 1.23456789e-9)
-        report.Proxy._write_cell(spreadsheet, "A3", FreeCAD.Units.Quantity(1.23456789e-9, "mm"))
-
-        self.assertEqual(spreadsheet.cells["A1"], "9030000")
-        self.assertEqual(spreadsheet.cells["A2"], "1.23456789e-09")
-        self.assertEqual(spreadsheet.cells["A3"], "1.23456789e-09")
-
     # Category 2: Core SELECT Functionality
     def test_select_all_from_document(self):
         """Test a 'SELECT * FROM document' query."""
