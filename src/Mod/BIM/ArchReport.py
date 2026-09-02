@@ -589,16 +589,17 @@ class _ArchReport:
 
     def _write_cell(self, spreadsheet, cell_address, value):
         """Intelligently writes a value to a spreadsheet cell based on its type."""
-        # Numerical values are rounded to 8 decimals as this is the max. precision for
-        # saved spreadsheet values. This avoids format changes: a float becomes an integer
-        # upon saving and reopening, then becomes a float again if the Report is recomputed.
+        # Normalize numerical values to the precision used when FreeCAD persists doubles.
+        # This avoids format changes: a float becomes an integer upon saving and reopening,
+        # then becomes a float again if the Report is recomputed. Significant digits are
+        # used instead of decimal places so that legitimate small values are preserved.
         # See: https://github.com/FreeCAD/FreeCAD/issues/32097.
         if isinstance(value, FreeCAD.Units.Quantity):
             # Handle FreeCAD Quantity objects by extracting their raw numerical value.
-            spreadsheet.set(cell_address, str(round(value.Value, 8)))
+            spreadsheet.set(cell_address, format(value.Value, ".15g"))
         elif isinstance(value, (int, float)):
             # Write other numbers directly without quotes for calculations.
-            spreadsheet.set(cell_address, str(round(value, 8)))
+            spreadsheet.set(cell_address, format(value, ".15g"))
         elif value is None:
             # Write an empty literal string for None.
             spreadsheet.set(cell_address, "''")
