@@ -64,6 +64,7 @@ if "draftguitools.gui_base" not in sys.modules:
     draftguitools_module.gui_base = gui_base_module
 
 from bimplan.providers import PlanEditContext, PlanProviderActionContext
+from bimplan.runtime import view as plan_view_module
 from bimplan.runtime.lifecycle import (
     activate_plan_region_tool,
     activate_select_tool,
@@ -569,6 +570,86 @@ class TestBimPlanCore(unittest.TestCase):
             "plane",
             "ref",
             tol=1e-7,
+        )
+
+    def test_apply_plan_view_still_sets_top_orientation_when_projection_change_raises(self):
+        view = SimpleNamespace(
+            setCameraType=Mock(side_effect=RuntimeError("camera conversion warning")),
+            viewTop=Mock(),
+        )
+        working_plane = SimpleNamespace(set_to_top=Mock())
+        interaction_plane = SimpleNamespace(set_to_top=Mock())
+        working_plane_module = ModuleType("WorkingPlane")
+        working_plane_module.get_working_plane = Mock(return_value=working_plane)
+        working_plane_module.PlaneBase = Mock(return_value=interaction_plane)
+        session = SimpleNamespace(
+            view=view,
+            viewer=None,
+            active_storey=None,
+            performance=SimpleNamespace(plan_perf_trace_span=lambda _name: nullcontext()),
+            storey=SimpleNamespace(get_storey_elevation=lambda _storey: 0.0),
+            viewport_state=SimpleNamespace(
+                interaction_plane=None,
+                plan_view_locked_actions={},
+            ),
+        )
+
+        with (
+            patch.dict(sys.modules, {"WorkingPlane": working_plane_module}),
+            patch.object(plan_view_module, "_update_working_plane"),
+            patch.object(plan_view_module, "apply_plan_navigation_profile"),
+        ):
+            plan_view_module.apply_plan_view(session, fit=False)
+
+        view.setCameraType.assert_called_once_with("Orthographic")
+        view.viewTop.assert_called_once_with()
+        working_plane.set_to_top.assert_called_once_with(offset=0.0)
+        interaction_plane.set_to_top.assert_called_once_with(offset=0.0)
+
+    def test_apply_plan_view_waits_for_top_animation_before_locking_navigation(self):
+        calls = []
+        view = SimpleNamespace(
+            setCameraType=Mock(side_effect=lambda value: calls.append(("camera", value))),
+            viewTop=Mock(side_effect=lambda: calls.append(("top", None))),
+            waitForCameraAnimation=Mock(side_effect=lambda: calls.append(("wait", None))),
+        )
+        working_plane = SimpleNamespace(set_to_top=Mock())
+        interaction_plane = SimpleNamespace(set_to_top=Mock())
+        working_plane_module = ModuleType("WorkingPlane")
+        working_plane_module.get_working_plane = Mock(return_value=working_plane)
+        working_plane_module.PlaneBase = Mock(return_value=interaction_plane)
+        session = SimpleNamespace(
+            view=view,
+            viewer=None,
+            active_storey=None,
+            performance=SimpleNamespace(plan_perf_trace_span=lambda _name: nullcontext()),
+            storey=SimpleNamespace(get_storey_elevation=lambda _storey: 0.0),
+            viewport=SimpleNamespace(get_runtime_attr=lambda obj, name: getattr(obj, name, None)),
+            viewport_state=SimpleNamespace(
+                interaction_plane=None,
+                plan_view_locked_actions={},
+            ),
+        )
+
+        with (
+            patch.dict(sys.modules, {"WorkingPlane": working_plane_module}),
+            patch.object(plan_view_module, "_update_working_plane"),
+            patch.object(
+                plan_view_module,
+                "apply_plan_navigation_profile",
+                side_effect=lambda *_args: calls.append(("lock", None)),
+            ),
+        ):
+            plan_view_module.apply_plan_view(session, fit=False)
+
+        self.assertEqual(
+            calls,
+            [
+                ("camera", "Orthographic"),
+                ("top", None),
+                ("wait", None),
+                ("lock", None),
+            ],
         )
 
     def test_collect_plan_provider_snapshot_builds_panel_surfaces_in_one_pass(self):

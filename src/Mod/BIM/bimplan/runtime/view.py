@@ -391,7 +391,15 @@ def apply_plan_view(session, fit=True):
         with session._plan_perf_trace_span("apply_plan_view_camera_top"):
             try:
                 session.view.setCameraType("Orthographic")
+            except RuntimeError:
+                pass
+            try:
                 session.view.viewTop()
+                wait_for_animation = get_runtime_attr(
+                    session, session.view, "waitForCameraAnimation"
+                )
+                if wait_for_animation is not None:
+                    wait_for_animation()
             except RuntimeError:
                 session.view = None
 
