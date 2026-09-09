@@ -42,9 +42,8 @@ class BIM_PlanEdit:
         }
 
     def IsActive(self):
-        return (
-            FreeCAD.ActiveDocument is not None
-            and hasattr(FreeCADGui.getMainWindow().getActiveWindow(), "getSceneGraph")
+        return FreeCAD.ActiveDocument is not None and hasattr(
+            FreeCADGui.getMainWindow().getActiveWindow(), "getSceneGraph"
         )
 
     def Activated(self):
@@ -53,7 +52,11 @@ class BIM_PlanEdit:
         session = BimPlanSession.get_active_session()
         if session:
             panel = getattr(session, "task_panel", None)
-            if panel and getattr(panel, "form", None) is not None and not getattr(panel, "_closed", False):
+            if (
+                panel
+                and getattr(panel, "form", None) is not None
+                and not getattr(panel, "_closed", False)
+            ):
                 try:
                     panel.show()
                     panel.raise_()
