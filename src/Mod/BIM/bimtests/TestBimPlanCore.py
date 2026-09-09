@@ -18,6 +18,8 @@ if "FreeCAD" not in sys.modules:
         )
         sys.modules["FreeCAD"] = freecad_module
 
+FreeCAD = sys.modules["FreeCAD"]
+
 if not hasattr(sys.modules["FreeCAD"], "Vector"):
 
     class _FakeVector:
