@@ -78,6 +78,31 @@ bool NavigationAnimator::startAndWait(const std::shared_ptr<NavigationAnimation>
 }
 
 /**
+ * @brief Wait for the currently active animation to finish
+ *
+ * The nested event loop keeps processing GUI events while the animation runs.
+ *
+ * @return True if there was no active animation or it finished, false if it was interrupted
+ */
+bool NavigationAnimator::waitForAnimation()
+{
+    auto animation = activeAnimation;
+    if (!animation || animation->state() != QAbstractAnimation::State::Running) {
+        return true;
+    }
+
+    bool finished = true;
+    QEventLoop loop;
+    connect(animation.get(), &NavigationAnimation::finished, &loop, &QEventLoop::quit);
+    connect(animation.get(), &NavigationAnimation::interrupted, &loop, [&finished, &loop]() {
+        finished = false;
+        loop.quit();
+    });
+    loop.exec();
+    return finished;
+}
+
+/**
  * @brief Stops an active animation and releases shared ownership of the animation
  */
 void NavigationAnimator::stop()

@@ -1807,6 +1807,11 @@ void NavigationStyle::startAnimating(const std::shared_ptr<NavigationAnimation>&
     }
 }
 
+bool NavigationStyle::waitForAnimation() const
+{
+    return animator->waitForAnimation();
+}
+
 void NavigationStyle::stopAnimating() const
 {
     animator->stop();

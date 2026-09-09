@@ -175,6 +175,10 @@ class _View3DInventor:
         """Stop continuous camera animation."""
         ...
 
+    def waitForCameraAnimation(self) -> bool:
+        """Wait for the active camera animation to finish, returning false if interrupted."""
+        ...
+
     def setAnimationEnabled(self, enabled: bool, /) -> None:
         """Enable or disable camera animation support."""
         ...
