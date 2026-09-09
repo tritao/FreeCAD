@@ -168,8 +168,9 @@ class Tracker:
         if not sg:
             return
         try:
-            if sg.findChild(switch) >= 0:
-                sg.removeChild(switch)
+            index = sg.findChild(switch)
+            if index >= 0:
+                sg.removeChild(index)
         finally:
             if self._scene_graph is sg:
                 self._scene_graph = None
@@ -199,7 +200,10 @@ class Tracker:
             sg = self.get_scene_graph()
             if not sg:
                 return
-            sg.removeChild(self.switch)
+            index = sg.findChild(self.switch)
+            if index < 0:
+                return
+            sg.removeChild(index)
             sg.addChild(self.switch)
 
     def raiseTracker(self):
@@ -211,7 +215,10 @@ class Tracker:
             sg = self.get_scene_graph()
             if not sg:
                 return
-            sg.removeChild(self.switch)
+            index = sg.findChild(self.switch)
+            if index < 0:
+                return
+            sg.removeChild(index)
             sg.insertChild(self.switch, 0)
 
     def setColor(self, color=None):
