@@ -2253,7 +2253,7 @@ class _Wall(ArchComponent.Component):
             return False
 
         try:
-            has_relations = any(True for _relation in ArchWallJoinUtils.iter_wall_relations(obj))
+            has_relations = any(True for _relation in ArchWallRelation.iter_wall_relations(obj))
         except Exception:
             return False
         return has_relations
