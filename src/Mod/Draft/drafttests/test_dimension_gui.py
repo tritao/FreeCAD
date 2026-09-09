@@ -127,6 +127,15 @@ class DraftGuiDimension(test_base.DraftTestCaseDoc):
             self.assertEqual(proxy.node_wld.findChild(node), -1)
             self.assertEqual(proxy.node_scr.findChild(node), -1)
 
+        for _ in range(2):
+            proxy.remove_dim_arrows()
+            proxy.remove_dim_overshoot()
+            proxy.remove_ext_overshoot()
+
+        for node in nodes:
+            self.assertEqual(proxy.lineswitch_wld.findChild(node), -1)
+            self.assertEqual(proxy.lineswitch_scr.findChild(node), -1)
+
     def getAngularSvg(self, dimension):
         """Return the Draft SVG body used by TechDraw DraftView for this dimension."""
         Gui.updateGui()

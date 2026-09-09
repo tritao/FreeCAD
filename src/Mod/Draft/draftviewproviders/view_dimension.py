@@ -55,6 +55,13 @@ from draftviewproviders.view_draft_annotation import ViewProviderDraftAnnotation
 # Delay import of module until first use because it is heavy
 Part = lz.LazyLoader("Part", globals(), "Part")
 
+
+def _remove_child_if_present(parent, child):
+    """Remove a Coin child only while it is still owned by the parent."""
+    if parent.findChild(child) >= 0:
+        parent.removeChild(child)
+
+
 ## \addtogroup draftviewproviders
 # @{
 
@@ -681,8 +688,8 @@ class ViewProviderLinearDimension(ViewProviderDimensionBase):
 
         Remove the existing nodes.
         """
-        self.lineswitch_wld.removeChild(self.marks)
-        self.lineswitch_scr.removeChild(self.marks)
+        _remove_child_if_present(self.lineswitch_wld, self.marks)
+        _remove_child_if_present(self.lineswitch_scr, self.marks)
 
     def draw_dim_arrows(self, vobj):
         """Draw dimension arrows."""
@@ -729,8 +736,8 @@ class ViewProviderLinearDimension(ViewProviderDimensionBase):
 
     def remove_dim_overshoot(self):
         """Remove the dimension overshoot lines."""
-        self.lineswitch_wld.removeChild(self.marksDimOvershoot)
-        self.lineswitch_scr.removeChild(self.marksDimOvershoot)
+        _remove_child_if_present(self.lineswitch_wld, self.marksDimOvershoot)
+        _remove_child_if_present(self.lineswitch_scr, self.marksDimOvershoot)
 
     def draw_dim_overshoot(self, vobj):
         """Draw dimension overshoot lines."""
@@ -759,8 +766,8 @@ class ViewProviderLinearDimension(ViewProviderDimensionBase):
 
     def remove_ext_overshoot(self):
         """Remove dimension extension overshoot lines."""
-        self.lineswitch_wld.removeChild(self.marksExtOvershoot)
-        self.lineswitch_scr.removeChild(self.marksExtOvershoot)
+        _remove_child_if_present(self.lineswitch_wld, self.marksExtOvershoot)
+        _remove_child_if_present(self.lineswitch_scr, self.marksExtOvershoot)
 
     def draw_ext_overshoot(self, vobj):
         """Draw dimension extension overshoot lines."""
