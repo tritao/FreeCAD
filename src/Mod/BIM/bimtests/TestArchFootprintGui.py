@@ -548,14 +548,13 @@ class TestArchFootprintGui(TestArchBaseGui.TestArchBaseGui):
         default_point = ArchSpace._get_default_space_text_position(space)
         default_bounds = ArchSpace._get_label_candidate_bounds(default_point, text_box, "Center")
         faces = ArchSpace._get_space_footprint_faces(space)
-        obstacle_xmax = default_bounds[2] - 100.0
         obstacle_polyline = [
             [
-                [250.0, 900.0, 0.0],
-                [obstacle_xmax, 900.0, 0.0],
-                [obstacle_xmax, 2800.0, 0.0],
-                [250.0, 2800.0, 0.0],
-                [250.0, 900.0, 0.0],
+                [default_point.x - 100.0, default_point.y - 100.0, 0.0],
+                [default_point.x + 100.0, default_point.y - 100.0, 0.0],
+                [default_point.x + 100.0, default_point.y + 100.0, 0.0],
+                [default_point.x - 100.0, default_point.y + 100.0, 0.0],
+                [default_point.x - 100.0, default_point.y - 100.0, 0.0],
             ]
         ]
         with patch.object(
@@ -736,7 +735,7 @@ class TestArchFootprintGui(TestArchBaseGui.TestArchBaseGui):
         equipment_base.Width = 1900
         equipment_base.Height = 600
         equipment = Arch.makeEquipment(equipment_base)
-        equipment.Placement.Base = FreeCAD.Vector(200, 900, 0)
+        equipment.Placement.Base = FreeCAD.Vector(1900, 900, 0)
         self.document.recompute()
         self.pump_gui_events(timeout_ms=500)
 

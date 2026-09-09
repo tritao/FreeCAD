@@ -114,7 +114,12 @@ def apply_cutting_plane(
         trimmed = solid.common(cutting_tool_local)
         if trimmed.isNull() or not trimmed.Solids or not trimmed.isValid():
             raise ValueError("the cutting plane produced no valid solid")
-        return trimmed
+        try:
+            return trimmed.copy(noElementMap=True)
+        except TypeError:
+            if getattr(trimmed, "ElementMapSize", 0):
+                trimmed.clearElementMap()
+            return trimmed
     except (Part.OCCError, RuntimeError, ValueError) as exc:
         FreeCAD.Console.PrintWarning(
             translate(

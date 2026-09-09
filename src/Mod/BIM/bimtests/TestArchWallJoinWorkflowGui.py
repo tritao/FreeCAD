@@ -26,6 +26,7 @@
 
 import Arch
 import ArchWallJoint
+import ArchWallJointGui
 import Draft
 import FreeCAD
 import FreeCADGui
@@ -193,7 +194,7 @@ class TestArchWallJoinWorkflowGui(TestArchBaseGui.TestArchBaseGui):
                 FreeCADGui.ActiveDocument.resetEdit()
                 self.pump_gui_events()
 
-                panel = ArchWallJoint.WallJointTaskPanel(joint)
+                panel = ArchWallJointGui.WallJointTaskPanel(joint)
                 panel._set_combo_value(panel.joint_type_combo, "JointType", "Butt")
                 panel._set_combo_value(panel.butt_trimmed_combo, "ButtTrimmed", "WallA")
                 panel.accept()
@@ -221,7 +222,7 @@ class TestArchWallJoinWorkflowGui(TestArchBaseGui.TestArchBaseGui):
                 joint = joints[0]
                 self.assertEqual(joint.TeeStem, "WallA")
 
-                panel = ArchWallJoint.WallJointTaskPanel(joint)
+                panel = ArchWallJointGui.WallJointTaskPanel(joint)
                 panel._set_combo_value(panel.tee_stem_combo, "TeeStem", "WallB")
                 panel.accept()
                 self.pump_gui_events()
