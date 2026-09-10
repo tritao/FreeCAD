@@ -11,6 +11,55 @@ from .TestBimPlanEditGuiBase import BimPlanEditGuiBase
 
 
 class BimPlanEditGuiOpeningsMixin:
+    def test_section_opening_handles_edit_height_and_cancel_sill(self):
+        """Opening Section handles should retain semantic height and sill behavior."""
+
+        _level, wall, opening = self._make_windowed_plan_wall()
+        section = Arch.makeSectionPlane([wall, opening], name="OpeningSection")
+        section.Placement = FreeCAD.Placement(
+            FreeCAD.Vector(1500, 0, 1250),
+            FreeCAD.Rotation(FreeCAD.Vector(1, 0, 0), 90),
+        )
+        self.document.recompute()
+        FreeCADGui.Selection.clearSelection()
+        FreeCADGui.Selection.addSelection(section)
+        session = BimPlanSession.start_session()
+        self.assertIsNotNone(session)
+        self.pump_gui_events()
+        self.assertTrue(session.selection.activation.select_opening_for_plan_edit(opening))
+
+        handles = session.contextual_rendering.edit_handles_for(opening)
+        by_role = {handle.role: handle for handle in handles}
+        self.assertIn("OpeningHeight", by_role)
+        height = by_role["OpeningHeight"]
+        before = ArchWindow.getWindowHeightMm(opening)
+        session.contextual_editing.begin(height)
+        session.contextual_editing.commit(height.point + height.direction * 250)
+        self.assertAlmostEqual(ArchWindow.getWindowHeightMm(opening), before + 250)
+        self._undo_document()
+        self.assertAlmostEqual(ArchWindow.getWindowHeightMm(opening), before)
+        self._redo_document()
+        self.assertAlmostEqual(ArchWindow.getWindowHeightMm(opening), before + 250)
+
+        handles = session.contextual_rendering.edit_handles_for(opening)
+        sill = next((handle for handle in handles if handle.role == "OpeningSill"), None)
+        self.assertIsNotNone(sill)
+        self.assertEqual(sill.operation.key, "OpeningSill")
+        before_sill_value = sill.operation.get_value(opening)
+        session.contextual_editing.begin(sill)
+        preview = session.contextual_editing.preview(sill.point + sill.direction * 150)
+        self.assertGreater(preview.point.distanceToPoint(sill.point), 100)
+        session.contextual_editing.cancel()
+        self.assertAlmostEqual(sill.operation.get_value(opening), before_sill_value)
+        session.contextual_editing.begin(sill)
+        session.contextual_editing.commit(sill.point + sill.direction * 150)
+        self.assertAlmostEqual(sill.operation.get_value(opening), before_sill_value + 150)
+        self._undo_document()
+        self.assertAlmostEqual(sill.operation.get_value(opening), before_sill_value)
+
+        session.shutdown(close_dialog=False)
+        self.pump_gui_events()
+
     def test_plan_edit_renders_hidden_hosted_doors_contextually(self):
         """A hidden 3D door should receive a viewer-local Plan representation."""
 

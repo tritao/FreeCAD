@@ -98,6 +98,9 @@ def _start_snap_tool(session, tool_name, callback, title, *, movecallback=None):
 
 
 def activate_plan_region_tool(session):
+    contexts = getattr(session, "representation_context", None)
+    if contexts is not None and not contexts.require("space_edit"):
+        return False
     parent_space = _get_selected_space_for_activation(session)
     session.spaces.cancel_space_region_pick(refresh=False)
     session.wall_create.cancel_rect_wall_tool(refresh=False)
@@ -128,6 +131,9 @@ def activate_plan_region_tool(session):
 
 
 def activate_space_separator_tool(session):
+    contexts = getattr(session, "representation_context", None)
+    if contexts is not None and not contexts.require("space_edit"):
+        return False
     session.spaces.cancel_space_region_pick(refresh=False)
     session.spaces.cancel_plan_region_tool(refresh=False)
     session.wall_create.cancel_rect_wall_tool(refresh=False)
@@ -156,6 +162,9 @@ def activate_space_separator_tool(session):
 
 
 def activate_space_tool(session):
+    contexts = getattr(session, "representation_context", None)
+    if contexts is not None and not contexts.require("space_edit"):
+        return False
     session.spaces.cancel_space_region_pick(refresh=False)
     session.spaces.cancel_plan_region_tool(refresh=False)
     if session.current_tool == plan_runtime_tools.PlanTool.SET_SPACE_TEXT:

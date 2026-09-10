@@ -27,6 +27,9 @@ def _proxy_supports(proxy, attrs):
 
 
 def get_selected_opening_edit_handles(session, opening):
+    contexts = getattr(session, "representation_context", None)
+    if contexts is not None and not contexts.supports("opening_host_move"):
+        return []
     proxy = session.openings.get_opening_view_proxy(opening, "get_plan_edit_handles")
     if not proxy:
         return []

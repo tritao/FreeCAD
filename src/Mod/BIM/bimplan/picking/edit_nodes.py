@@ -30,6 +30,12 @@ def get_plan_target_from_edit_node(session, node):
         if session.openings.is_hosted_opening_object(opening):
             return plan_target_kinds.make_plan_target_ref("opening", opening)
         return plan_target_kinds.make_plan_target_ref()
+    if node_kind == "contextual_handle":
+        source, _index = plan_edit_nodes.get_edit_node_payload(node)
+        target_ref = plan_target_kinds.coerce_plan_target_ref(
+            plan_targets.get_plan_target_for_object(session, source)
+        )
+        return plan_target_kinds.make_plan_target_ref(target_ref.kind, target_ref.obj)
     if node_kind == "symbol_handle":
         symbol, _role = plan_edit_nodes.get_edit_node_payload(node)
         if session.visibility.is_plan_symbol_instance(symbol):
@@ -71,6 +77,15 @@ def _emit_get_edit_node_result(session, mouse_pos, source, result):
 
 
 def _get_selected_handle_edit_node(session, mouse_pos):
+    contextual = _pick_selected_contextual_handle(session, mouse_pos)
+    if contextual is not None:
+        source, index = contextual
+        return _emit_get_edit_node_result(
+            session,
+            mouse_pos,
+            "selected_contextual_handle",
+            plan_edit_nodes.ContextualHandleEditNode(source, index),
+        )
     symbol_handle_role = session.overlays.symbols.pick_selected_symbol_handle(mouse_pos)
     if symbol_handle_role is not None:
         return _emit_get_edit_node_result(
@@ -105,6 +120,25 @@ def _get_selected_handle_edit_node(session, mouse_pos):
             ),
         )
     return None
+
+
+def _pick_selected_contextual_handle(session, mouse_pos, radius_px=10):
+    target = session.selection.state.get_selected_plan_target()
+    source = getattr(target, "obj", None)
+    if source is None or session.view is None:
+        return None
+    best = None
+    for index, handle in enumerate(session.contextual_rendering.edit_handles_for(source)):
+        try:
+            screen_x, screen_y = session.view.getPointOnScreen(handle.point)
+        except Exception:
+            continue
+        distance = (float(screen_x) - mouse_pos[0]) ** 2 + (float(screen_y) - mouse_pos[1]) ** 2
+        if distance <= radius_px * radius_px and (best is None or distance < best[0]):
+            best = (distance, index)
+    if best is None:
+        return None
+    return source, best[1]
 
 
 def _get_provider_overlay_edit_node(session, mouse_pos):

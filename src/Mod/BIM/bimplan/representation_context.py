@@ -3,6 +3,17 @@
 """Architectural representation-context providers for BIM Plan Edit."""
 
 import ArchComponent
+import FreeCAD
+
+_PLAN_ONLY_CAPABILITIES = {
+    "wall_axis_edit",
+    "wall_create",
+    "wall_join",
+    "opening_host_move",
+    "opening_create",
+    "space_edit",
+    "symbol_edit",
+}
 
 
 def _quantity_value(value, default=0.0):
@@ -111,6 +122,45 @@ class PlanRepresentationContextAPI:
         if _is_storey(self.source):
             return self._session.visibility.object_belongs_to_active_storey(obj)
         return True
+
+    @property
+    def purpose(self):
+        return self.context.purpose
+
+    def is_plan(self):
+        return self.purpose == ArchComponent.RepresentationPurpose.PLAN
+
+    def supports(self, capability):
+        return self.is_plan() or capability not in _PLAN_ONLY_CAPABILITIES
+
+    def require(self, capability):
+        if self.supports(capability):
+            return True
+        FreeCAD.Console.PrintWarning(
+            "BIM Plan Edit: '{}' is not available in {} context.\n".format(
+                str(capability).replace("_", " "), self.purpose.value
+            )
+        )
+        return False
+
+    def to_local(self, point):
+        frame = getattr(self.context, "reference_frame", None)
+        if frame is None:
+            return FreeCAD.Vector(point)
+        return frame.inverse().multVec(FreeCAD.Vector(point))
+
+    def to_global(self, point):
+        frame = getattr(self.context, "reference_frame", None)
+        if frame is None:
+            return FreeCAD.Vector(point)
+        return frame.multVec(FreeCAD.Vector(point))
+
+    def project_to_plane(self, point, offset=None):
+        local = self.to_local(point)
+        if offset is None:
+            offset = getattr(self.context, "target_offset", None)
+        local.z = float(offset or 0.0)
+        return self.to_global(local)
 
     def refresh(self):
         if self.source is not None:

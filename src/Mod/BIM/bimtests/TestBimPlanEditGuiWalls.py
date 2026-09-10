@@ -11,6 +11,133 @@ from .TestBimPlanEditGuiBase import BimPlanEditGuiBase
 
 
 class BimPlanEditGuiWallsMixin:
+    def test_section_edit_failure_rolls_back_and_reports_reason(self):
+        wall = Arch.makeWall(length=3000, width=200, height=2500)
+        section = Arch.makeSectionPlane([wall], name="FailingSectionEdit")
+        section.Placement = FreeCAD.Placement(
+            FreeCAD.Vector(1500, 0, 1250),
+            FreeCAD.Rotation(FreeCAD.Vector(1, 0, 0), 90),
+        )
+        self.document.recompute()
+        FreeCADGui.Selection.clearSelection()
+        FreeCADGui.Selection.addSelection(section)
+        session = BimPlanSession.start_session()
+        self.assertIsNotNone(session)
+        self.pump_gui_events()
+
+        handle = next(
+            item
+            for item in session.contextual_rendering.edit_handles_for(wall)
+            if item.role == "WallHeight"
+        )
+
+        def fail_after_change(source, value):
+            source.Height = value
+            raise RuntimeError("Profile constraint rejected the height")
+
+        handle.operation._apply_value = fail_after_change
+        session.contextual_editing.begin(handle)
+        result = session.contextual_editing.commit(handle.point + handle.direction * 300)
+
+        self.assertFalse(result.success)
+        self.assertIn("Profile constraint", result.reason)
+        self.assertAlmostEqual(wall.Height.Value, 2500.0)
+        self.assertIn(
+            "Profile constraint",
+            session.status_text.get_integration_feedback_message(),
+        )
+        self.assertIsNone(session.contextual_editing.editor)
+        session.shutdown(close_dialog=False)
+        self.pump_gui_events()
+
+    def test_section_wall_height_handle_pick_preview_commit_cancel_and_undo(self):
+        """The rendered Section handle should drive a complete semantic edit."""
+
+        wall = Arch.makeWall(length=3000, width=200, height=2500)
+        section = Arch.makeSectionPlane([wall], name="EditableSection")
+        section.Placement = FreeCAD.Placement(
+            FreeCAD.Vector(1500, 0, 1250),
+            FreeCAD.Rotation(FreeCAD.Vector(1, 0, 0), 90),
+        )
+        self.document.recompute()
+        FreeCADGui.Selection.clearSelection()
+        FreeCADGui.Selection.addSelection(section)
+        session = BimPlanSession.start_session()
+        self.assertIsNotNone(session)
+        self.pump_gui_events()
+        self.assertTrue(session.selection.activation.select_wall_for_plan_edit(wall))
+
+        handles = session.contextual_rendering.edit_handles_for(wall)
+        handle = next(item for item in handles if item.role == "WallHeight")
+        screen = session.view.getPointOnScreen(handle.point)
+        node = session.picking.pick_edit_node((int(screen[0]), int(screen[1])))
+        self.assertEqual(plan_edit_nodes.get_edit_node_kind(node), "contextual_handle")
+        self.assertEqual(plan_edit_nodes.get_edit_node_payload(node), (wall, handles.index(handle)))
+
+        captured = {}
+
+        def fake_get_point(**kwargs):
+            captured.update(kwargs)
+
+        with patch.object(FreeCADGui.Snapper, "getPoint", side_effect=fake_get_point):
+            with patch.object(session.picking, "pick_edit_node", return_value=node):
+                callback = self._make_fake_left_mouse_press(*screen)
+                session.input.on_mouse_pressed(callback)
+            self.assertTrue(callback._handled)
+            self.assertIsNotNone(session.contextual_editing.editor)
+            target = handle.point + handle.direction * 400
+            with patch.object(
+                session.contextual_rendering,
+                "preview_handle",
+                wraps=session.contextual_rendering.preview_handle,
+            ) as preview_handle:
+                captured["movecallback"](target, None)
+                preview_handle.assert_called_once()
+            captured["callback"](target, None)
+
+        self.assertAlmostEqual(wall.Height.Value, 2900.0)
+        self.assertIsNone(session.contextual_editing.editor)
+        self._undo_document()
+        self.assertAlmostEqual(wall.Height.Value, 2500.0)
+        self._redo_document()
+        self.assertAlmostEqual(wall.Height.Value, 2900.0)
+
+        base_handle = next(
+            item
+            for item in session.contextual_rendering.edit_handles_for(wall)
+            if item.role == "WallBaseElevation"
+        )
+        self.assertEqual(base_handle.operation.key, "WallBaseElevation")
+        session.contextual_editing.begin(base_handle)
+        session.contextual_editing.commit(base_handle.point + base_handle.direction * 200)
+        self.assertAlmostEqual(wall.Placement.Base.z, 200.0)
+        self._undo_document()
+        self.assertAlmostEqual(wall.Placement.Base.z, 0.0)
+
+        refreshed_handle = next(
+            item
+            for item in session.contextual_rendering.edit_handles_for(wall)
+            if item.role == "WallHeight"
+        )
+        with patch.object(FreeCADGui.Snapper, "getPoint", side_effect=fake_get_point):
+            session.contextual_editing.activate(refreshed_handle)
+            captured["movecallback"](
+                refreshed_handle.point + refreshed_handle.direction * 300,
+                None,
+            )
+            captured["callback"](None, None)
+        self.assertAlmostEqual(wall.Height.Value, 2900.0)
+        self.assertIsNone(session.contextual_editing.editor)
+
+        with patch.object(FreeCADGui.Snapper, "getPoint", side_effect=fake_get_point):
+            session.contextual_editing.activate(
+                session.contextual_rendering.edit_handles_for(wall)[0]
+            )
+            self.assertIsNotNone(session.contextual_editing.editor)
+            session.shutdown(close_dialog=False)
+        self.assertIsNone(session.contextual_editing.editor)
+        self.pump_gui_events()
+
     def test_plan_edit_uses_selected_section_plane_context(self):
         """A selected SectionPlane should drive rendering and interaction geometry."""
 
@@ -35,6 +162,9 @@ class BimPlanEditGuiWallsMixin:
         self.assertEqual(context.reference_frame, section.Placement)
         self.assertTrue(representation.cut_geometry)
         self.assertIn(wall, session.contextual_rendering.renderer.sources)
+        self.assertEqual(session.overlays.geometry.get_wall_grip_positions(wall), ())
+        self.assertFalse(session.wall_create.activate_rect_wall_tool())
+        self.assertEqual(session.current_tool, "Select")
 
         session.shutdown(close_dialog=False)
         self.pump_gui_events()

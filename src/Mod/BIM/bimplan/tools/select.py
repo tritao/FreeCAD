@@ -60,6 +60,12 @@ def _activate_edit_node(session, node, event_callback):
         session.selection.activation.select_opening_for_plan_edit(obj)
         session.selection.sync.set_gui_selection_object(obj)
         session.openings.activate_opening_handle(obj, index)
+    elif node_kind == "contextual_handle":
+        obj, index = plan_edit_nodes.get_edit_node_payload(node)
+        handles = session.contextual_rendering.edit_handles_for(obj)
+        if index < 0 or index >= len(handles):
+            return False
+        session.contextual_editing.activate(handles[index])
     elif node_kind == "provider_handle":
         obj, index = plan_edit_nodes.get_edit_node_payload(node)
         session.selection.state.set_selected_plan_target_state("provider", obj)

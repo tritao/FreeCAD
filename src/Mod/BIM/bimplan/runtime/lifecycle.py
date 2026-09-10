@@ -299,6 +299,7 @@ def cancel_pending_edit(session, *, restore_wall_visibility=True):
     session.snap.stop_snapper()
     session.snap.pop_opening_move_snap_profile()
     session.snap.clear_active_draft_command()
+    session.contextual_editing.cancel(refresh=not session.lifecycle_state.tearing_down)
     _reset_pending_edit_state(
         session,
         clear_opening_edit=True,

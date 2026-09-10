@@ -397,6 +397,13 @@ class TestArchWall(TestArchBase.TestArchBase):
         self.assertTrue(faces, "The arbitrary section frame should produce wall geometry.")
         self.assertFalse(representation.projected_geometry)
         self.assertTrue(representation.snap_geometry)
+        self.assertEqual(len(representation.edit_handles), 1)
+        height_handle = representation.edit_handles[0]
+        self.assertEqual(height_handle.role, "WallHeight")
+        self.assertEqual(height_handle.property_name, "Height")
+        self.assertEqual(height_handle.operation.key, "WallHeight")
+        self.assertIs(height_handle.source, wall)
+        self.assertAlmostEqual(height_handle.direction.z, 1.0, places=6)
         self.assertAlmostEqual(sum(face.Area for face in faces), 200.0 * 3000.0, places=3)
         for face in faces:
             mapping = representation.mapping_for(face)
@@ -404,6 +411,11 @@ class TestArchWall(TestArchBase.TestArchBase):
             self.assertEqual(mapping.role, "CutFace")
             self.assertAlmostEqual(face.BoundBox.XMin, 0.0, places=6)
             self.assertAlmostEqual(face.BoundBox.XMax, 0.0, places=6)
+
+        wall.setExpression("Height", "3000 mm")
+        constrained = wall.Proxy.getRepresentation(wall, context)
+        self.assertNotIn("WallHeight", {handle.role for handle in constrained.edit_handles})
+        wall.setExpression("Height", None)
 
     def test_joinWalls(self):
         """Test the joinWalls function."""

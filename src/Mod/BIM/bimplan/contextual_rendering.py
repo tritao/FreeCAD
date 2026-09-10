@@ -36,6 +36,27 @@ class PlanContextualRenderingAPI:
             return None
         return self._renderer.mapping_for_node(node)
 
+    def edit_handles_for(self, source):
+        if self._renderer is None:
+            return ()
+        return self._renderer.edit_handles_for(source)
+
+    def preview_handle(self, handle, point):
+        if self._renderer is None:
+            return False
+        changed = self._renderer.preview_handle(handle, point)
+        if changed:
+            self._session.viewport.request_view_redraw()
+        return changed
+
+    def set_handle_state(self, handle, state):
+        if self._renderer is None:
+            return False
+        changed = self._renderer.set_handle_state(handle, state)
+        if changed:
+            self._session.viewport.request_view_redraw()
+        return changed
+
     def refresh_all(self):
         if self._renderer is None:
             return

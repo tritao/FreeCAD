@@ -159,6 +159,9 @@ class PlanSnapAPI:
         return set_point_focus_suppressed(suppressed)
 
     def query_semantic_snap(self, representations, point, tolerance, context=None, fallback=None):
+        if context is None:
+            contexts = getattr(self._session, "representation_context", None)
+            context = getattr(contexts, "context", None)
         return query_semantic_snap(
             representations,
             point,

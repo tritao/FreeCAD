@@ -43,6 +43,7 @@ TODO put examples here.
 
 import math
 import os
+from dataclasses import dataclass
 from enum import Enum
 
 import FreeCAD
@@ -153,6 +154,47 @@ class RepresentationContext:
         self.target_z = target_z
 
 
+def project_to_representation_plane(point, context):
+    """Project a global point onto the output plane of ``context``."""
+
+    point = FreeCAD.Vector(point)
+    frame = getattr(context, "reference_frame", None)
+    if frame is None:
+        target_z = getattr(context, "target_z", None)
+        if target_z is not None:
+            point.z = float(target_z)
+        return point
+    local = frame.inverse().multVec(point)
+    local.z = float(getattr(context, "target_offset", None) or 0.0)
+    return frame.multVec(local)
+
+
+def representation_vertical_direction(context):
+    """Return model Z projected into the active representation plane."""
+
+    vertical = FreeCAD.Vector(0, 0, 1)
+    frame = getattr(context, "reference_frame", None)
+    if frame is not None:
+        normal = frame.Rotation.multVec(FreeCAD.Vector(0, 0, 1))
+        vertical = vertical - normal * vertical.dot(normal)
+    if vertical.Length <= 1e-9:
+        return None
+    vertical.normalize()
+    return vertical
+
+
+def representation_extent_points(shape, context, direction):
+    """Return low/high projected extent points along an in-plane direction."""
+
+    vertices = tuple(getattr(shape, "Vertexes", ()) or ())
+    if not vertices:
+        return (None, None)
+    points = [project_to_representation_plane(vertex.Point, context) for vertex in vertices]
+    low = min(points, key=lambda point: point.dot(direction))
+    high = max(points, key=lambda point: point.dot(direction))
+    return (low, high)
+
+
 class PlanContext(RepresentationContext):
     """Compatibility context for horizontal plan representations.
 
@@ -184,6 +226,125 @@ class RepresentationSource:
         self.subelement = subelement
 
 
+class BIMEditHandle:
+    """Renderer-independent semantic interaction offered by a BIM object."""
+
+    def __init__(
+        self,
+        source,
+        role,
+        point,
+        direction,
+        operation,
+        *,
+        interaction="Linear",
+        subelement=None,
+        minimum=0.0,
+    ):
+        self.source = source
+        self.role = str(role)
+        self.point = FreeCAD.Vector(point)
+        self.direction = FreeCAD.Vector(direction)
+        if self.direction.Length:
+            self.direction.normalize()
+        self.operation = operation
+        self.interaction = str(interaction)
+        self.subelement = subelement
+        self.minimum = minimum
+
+    @property
+    def property_name(self):
+        """Compatibility name for consumers migrating to typed operations."""
+
+        return getattr(self.operation, "property_name", "")
+
+
+class BIMEditOperation:
+    """Typed semantic mutation used by a renderer-independent edit handle."""
+
+    def __init__(
+        self,
+        key,
+        label,
+        get_value,
+        apply_value,
+        *,
+        property_name="",
+        manages_transaction=False,
+        available=None,
+        minimum=None,
+        maximum=None,
+    ):
+        self.key = str(key)
+        self.label = str(label)
+        self._get_value = get_value
+        self._apply_value = apply_value
+        self.property_name = str(property_name)
+        self.manages_transaction = bool(manages_transaction)
+        self._available = available
+        self.minimum = minimum
+        self.maximum = maximum
+
+    def is_available(self, source):
+        if self._available is None:
+            return True
+        return bool(self._available(source))
+
+    def validate(self, source, value=None):
+        if not self.is_available(source):
+            return BIMEditValidation(False, "This value is controlled by a constraint.")
+        if value is not None and self.minimum is not None and value < self.minimum:
+            return BIMEditValidation(
+                False,
+                "Value must be at least {:g} mm.".format(self.minimum),
+                minimum=self.minimum,
+                maximum=self.maximum,
+            )
+        if value is not None and self.maximum is not None and value > self.maximum:
+            return BIMEditValidation(
+                False,
+                "Value must be at most {:g} mm.".format(self.maximum),
+                minimum=self.minimum,
+                maximum=self.maximum,
+            )
+        return BIMEditValidation(True, minimum=self.minimum, maximum=self.maximum)
+
+    def get_value(self, source):
+        return float(self._get_value(source))
+
+    def apply(self, source, value):
+        validation = self.validate(source, value)
+        if not validation.allowed:
+            raise ValueError(validation.reason)
+        return self._apply_value(source, float(value))
+
+
+@dataclass(frozen=True)
+class BIMEditValidation:
+    allowed: bool
+    reason: str = ""
+    minimum: float | None = None
+    maximum: float | None = None
+
+
+def is_property_expression_driven(obj, property_name):
+    """Return whether a document property path is controlled by an expression."""
+
+    getter = getattr(obj, "getExpression", None)
+    if callable(getter):
+        try:
+            return bool(getter(str(property_name)))
+        except Exception:
+            pass
+    try:
+        return any(
+            str(path) == str(property_name)
+            for path, _expression in (getattr(obj, "ExpressionEngine", ()) or ())
+        )
+    except Exception:
+        return False
+
+
 class BIMRepresentation:
     """Renderer-independent geometry and semantic identity for one BIM object."""
 
@@ -194,6 +355,7 @@ class BIMRepresentation:
         self.projected_geometry = []
         self.snap_geometry = []
         self.source_mappings = []
+        self.edit_handles = []
 
     def add_geometry(self, collection, geometry, role, subelement=None):
         """Add geometry to a named collection and record its semantic source."""
@@ -209,6 +371,14 @@ class BIMRepresentation:
             (mapping for mapping in self.source_mappings if mapping.geometry is geometry),
             None,
         )
+
+    def add_edit_handle(self, handle):
+        """Add a semantic handle without coupling it to a viewer toolkit."""
+
+        if handle.source is None:
+            handle.source = self.source
+        self.edit_handles.append(handle)
+        return handle
 
     def iter_snap_targets(self):
         """Yield semantic targets for the geometry intended for snapping."""

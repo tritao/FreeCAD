@@ -356,6 +356,9 @@ def get_wall_overlay_segments(session, wall):
 def get_wall_grip_positions(session, wall):
     if not session.selection.targets.is_plan_selectable_wall(wall):
         return ()
+    contexts = getattr(session, "representation_context", None)
+    if contexts is not None and not contexts.supports("wall_axis_edit"):
+        return ()
 
     def compute(wall_obj):
         proxy = getattr(wall_obj, "Proxy", None)

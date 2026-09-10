@@ -28,6 +28,7 @@ import Arch
 import ArchComponent
 import BimContextualRendering
 from bimplan import contextual_rendering as plan_contextual_rendering
+from bimplan import contextual_editing as plan_contextual_editing
 from bimplan import representation_context as plan_representation_context
 import Draft
 import Part
@@ -41,6 +42,69 @@ from unittest.mock import MagicMock, patch
 
 
 class TestArchComponent(TestArchBase.TestArchBase):
+
+    def test_bim_edit_operation_reports_constraints_and_ranges(self):
+        obj = self.document.addObject("Part::Feature", "ConstrainedEdit")
+        obj.addProperty("App::PropertyLength", "Height")
+        obj.Height = 1000
+        operation = ArchComponent.BIMEditOperation(
+            "Height",
+            "Edit Height",
+            lambda source: source.Height.Value,
+            lambda source, value: setattr(source, "Height", value),
+            minimum=100.0,
+            maximum=5000.0,
+        )
+
+        self.assertTrue(operation.validate(obj, 1000).allowed)
+        too_small = operation.validate(obj, 50)
+        self.assertFalse(too_small.allowed)
+        self.assertEqual(too_small.minimum, 100.0)
+        self.assertIn("at least", too_small.reason)
+        with self.assertRaisesRegex(ValueError, "at least"):
+            operation.apply(obj, 50)
+
+    def test_contextual_handle_projects_drag_and_commits_transaction(self):
+        """A Section handle should ignore motion normal to its active plane."""
+
+        obj = self.document.addObject("Part::Feature", "SemanticHeight")
+        self.document.UndoMode = 1
+        obj.addProperty("App::PropertyLength", "Height")
+        obj.Height = 3000.0
+        frame = App.Placement(
+            App.Vector(250, 100, 50),
+            App.Rotation(App.Vector(0, 1, 0), 90),
+        )
+        context = ArchComponent.RepresentationContext(
+            purpose=ArchComponent.RepresentationPurpose.SECTION,
+            reference_frame=frame,
+            target_offset=0.0,
+        )
+        direction = ArchComponent.representation_vertical_direction(context)
+        point = ArchComponent.project_to_representation_plane(App.Vector(0, 0, 3000), context)
+        operation = ArchComponent.BIMEditOperation(
+            "WallHeight",
+            "Edit Wall Height",
+            lambda source: source.Height.Value,
+            lambda source, value: setattr(source, "Height", value),
+            property_name="Height",
+        )
+        handle = ArchComponent.BIMEditHandle(
+            obj, "WallHeight", point, direction, operation, subelement="Height"
+        )
+        editor = plan_contextual_editing.BIMContextualHandleEditor(context)
+
+        editor.begin(handle)
+        normal = frame.Rotation.multVec(App.Vector(0, 0, 1))
+        preview = editor.preview(point + direction * 500 + normal * 1700)
+        self.assertAlmostEqual(preview.value, 3500.0)
+        editor.commit(point + direction * 500 + normal * 1700)
+
+        self.assertAlmostEqual(obj.Height.Value, 3500.0)
+        self.document.undo()
+        self.assertAlmostEqual(obj.Height.Value, 3000.0)
+        self.document.redo()
+        self.assertAlmostEqual(obj.Height.Value, 3500.0)
 
     def test_plan_contextual_rendering_refreshes_dependencies_and_closes(self):
         """Plan Edit should incrementally render walls and their hosted openings."""
@@ -124,6 +188,30 @@ class TestArchComponent(TestArchBase.TestArchBase):
 
         self.assertIs(context, expected)
 
+    def test_representation_context_transforms_and_projects_arbitrary_points(self):
+        """Context-local editing math should not assume global XY or Z."""
+
+        frame = App.Placement(App.Vector(10, 20, 30), App.Rotation(App.Vector(1, 0, 0), 90))
+        context = ArchComponent.RepresentationContext(
+            purpose=ArchComponent.RepresentationPurpose.SECTION,
+            reference_frame=frame,
+            target_offset=5.0,
+        )
+        api = plan_representation_context.PlanRepresentationContextAPI(SimpleNamespace())
+        api.context = context
+        local = App.Vector(4, 6, 12)
+
+        global_point = api.to_global(local)
+        roundtrip = api.to_local(global_point)
+        projected = api.to_local(api.project_to_plane(global_point))
+
+        self.assertLess(roundtrip.distanceToPoint(local), 1e-9)
+        self.assertAlmostEqual(projected.x, local.x)
+        self.assertAlmostEqual(projected.y, local.y)
+        self.assertAlmostEqual(projected.z, 5.0)
+        self.assertFalse(api.supports("wall_join"))
+        self.assertTrue(api.supports("semantic_snap"))
+
     def test_contextual_renderer_keeps_same_object_viewer_local(self):
         """Two viewers should own independent representations of one BIM object."""
 
@@ -152,6 +240,21 @@ class TestArchComponent(TestArchBase.TestArchBase):
         section = ArchComponent.BIMRepresentation(source, object())
         face = Part.makePlane(100, 50)
         section.add_geometry("cut_geometry", face, "CutFace", "Face1")
+        handle = section.add_edit_handle(
+            ArchComponent.BIMEditHandle(
+                source,
+                ArchComponent.BIMEditOperation(
+                    "Height",
+                    "Edit Height",
+                    lambda obj: obj.Height.Value,
+                    lambda obj, value: setattr(obj, "Height", value),
+                    property_name="Height",
+                ),
+                App.Vector(50, 50, 0),
+                App.Vector(0, 1, 0),
+                "Height",
+            )
+        )
         first_view = FakeView(11)
         second_view = FakeView(22)
 
@@ -165,6 +268,9 @@ class TestArchComponent(TestArchBase.TestArchBase):
         self.assertIs(first.set_representation(plan), first_node)
         self.assertEqual(first_view.visibility_calls[-1], (11, source, "Hidden"))
         self.assertEqual(second_view.visibility_calls[-1], (22, source, "Hidden"))
+        self.assertEqual(second.edit_handles_for(source), (handle,))
+        self.assertTrue(second.preview_handle(handle, App.Vector(50, 75, 0)))
+        self.assertTrue(second.set_handle_state(handle, "invalid"))
         first.close()
         self.assertEqual(first_view.removed_layer, 11)
         self.assertEqual(second_view.scene.getNumChildren(), 1)

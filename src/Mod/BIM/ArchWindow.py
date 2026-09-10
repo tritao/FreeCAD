@@ -557,6 +557,77 @@ def setWindowHeight(
     )
 
 
+def _opening_height_edit_operation():
+    def apply_height(obj, value):
+        return setWindowHeight(
+            obj,
+            value,
+            transaction_label=translate("Arch", "Edit Opening Height"),
+            raise_on_error=True,
+        )
+
+    return ArchComponent.BIMEditOperation(
+        "OpeningHeight",
+        translate("Arch", "Edit Opening Height"),
+        getWindowHeightMm,
+        apply_height,
+        property_name="Height",
+        manages_transaction=True,
+        minimum=1.0,
+        available=lambda obj: not ArchComponent.is_property_expression_driven(obj, "Height"),
+    )
+
+
+def _opening_sill_property_edit_operation():
+    return ArchComponent.BIMEditOperation(
+        "OpeningSill",
+        translate("Arch", "Edit Opening Sill"),
+        lambda obj: obj.SillHeight.Value,
+        lambda obj, value: setattr(obj, "SillHeight", value),
+        property_name="SillHeight",
+        minimum=0.0,
+        available=lambda obj: not ArchComponent.is_property_expression_driven(obj, "SillHeight"),
+    )
+
+
+def _opening_attachment_sill_edit_operation():
+    def set_offset(obj, value):
+        placement = FreeCAD.Placement(obj.AttachmentOffset)
+        placement.Base.z = value
+        obj.AttachmentOffset = placement
+
+    return ArchComponent.BIMEditOperation(
+        "OpeningSill",
+        translate("Arch", "Edit Opening Sill"),
+        lambda obj: obj.AttachmentOffset.Base.z,
+        set_offset,
+        property_name="AttachmentOffset.Base.z",
+        minimum=0.0,
+        available=lambda obj: not ArchComponent.is_property_expression_driven(
+            obj, "AttachmentOffset.Base.z"
+        ),
+    )
+
+
+def _opening_base_placement_sill_edit_operation():
+    def set_offset(obj, value):
+        placement = FreeCAD.Placement(obj.Base.Placement)
+        placement.Base.z = value
+        obj.Base.Placement = placement
+
+    return ArchComponent.BIMEditOperation(
+        "OpeningSill",
+        translate("Arch", "Edit Opening Sill"),
+        lambda obj: obj.Base.Placement.Base.z,
+        set_offset,
+        property_name="Base.Placement.Base.z",
+        minimum=0.0,
+        available=lambda obj: not ArchComponent.is_property_expression_driven(
+            obj.Base, "Placement.Base.z"
+        ),
+    )
+
+
 def applyWindowPreset(
     obj,
     preset_name,
@@ -2096,6 +2167,7 @@ class _HostedOpeningRepresentationGeometry:
         if getattr(context, "reference_frame", None) is not None:
             faces = ArchComponent.get_reference_slice_faces(source.Shape, context)
             self._add_section_geometry(representation, faces)
+            self._add_section_edit_handles(representation, source, context)
             return representation
 
         purpose = getattr(context, "purpose", ArchComponent.RepresentationPurpose.PLAN)
@@ -2110,6 +2182,7 @@ class _HostedOpeningRepresentationGeometry:
                 source.Shape, cut_z, translate_z=target_z - cut_z
             )
             self._add_section_geometry(representation, faces)
+            self._add_section_edit_handles(representation, source, context)
             return representation
 
         geometry = self.get_plan_overlay_geometry(context)
@@ -2148,6 +2221,59 @@ class _HostedOpeningRepresentationGeometry:
                     "OpeningCutVertex",
                     subelement=f"CutFace{face_index}.Vertex{vertex_index}",
                 )
+
+    @staticmethod
+    def _add_section_edit_handles(representation, source, context):
+        purpose = getattr(context, "purpose", None)
+        if purpose not in (
+            ArchComponent.RepresentationPurpose.SECTION,
+            ArchComponent.RepresentationPurpose.ELEVATION,
+        ):
+            return
+        direction = ArchComponent.representation_vertical_direction(context)
+        if direction is None:
+            return
+        low, high = ArchComponent.representation_extent_points(source.Shape, context, direction)
+        height_operation = _opening_height_edit_operation()
+        if (
+            high is not None
+            and canEditWindowHeight(source)
+            and height_operation.is_available(source)
+        ):
+            representation.add_edit_handle(
+                ArchComponent.BIMEditHandle(
+                    source,
+                    "OpeningHeight",
+                    high,
+                    direction,
+                    height_operation,
+                    subelement="Height",
+                    minimum=1.0,
+                )
+            )
+        if low is None:
+            return
+        if hasattr(source, "SillHeight"):
+            operation = _opening_sill_property_edit_operation()
+        elif hasattr(source, "AttachmentOffset"):
+            operation = _opening_attachment_sill_edit_operation()
+        elif getattr(source, "Base", None) is not None and hasattr(source.Base, "Placement"):
+            operation = _opening_base_placement_sill_edit_operation()
+        else:
+            return
+        if not operation.is_available(source):
+            return
+        representation.add_edit_handle(
+            ArchComponent.BIMEditHandle(
+                source,
+                "OpeningSill",
+                low,
+                direction,
+                operation,
+                subelement=operation.property_name,
+                minimum=0.0,
+            )
+        )
 
 
 class _HostedOpeningPlanGeometryHelper(

@@ -1075,6 +1075,11 @@ class TestArchWindow(TestArchBase.TestArchBase):
         self.assertTrue(representation.cut_geometry)
         self.assertFalse(representation.projected_geometry)
         self.assertTrue(representation.snap_geometry)
+        roles = {handle.role for handle in representation.edit_handles}
+        self.assertIn("OpeningHeight", roles)
+        for handle in representation.edit_handles:
+            self.assertIs(handle.source, door)
+            self.assertEqual(handle.operation.key, handle.role)
         for face in representation.cut_geometry:
             mapping = representation.mapping_for(face)
             self.assertIs(mapping.source, door)

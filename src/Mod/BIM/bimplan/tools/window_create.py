@@ -336,6 +336,9 @@ _WINDOW_TOOL_SELECTION_KINDS = (
 
 
 def activate_window_tool(session):
+    contexts = getattr(session, "representation_context", None)
+    if contexts is not None and not contexts.require("opening_create"):
+        return False
     session.spaces.cancel_space_region_pick(refresh=False)
     session.spaces.cancel_plan_region_tool(refresh=False)
     session.wall_create.cancel_rect_wall_tool(refresh=False)

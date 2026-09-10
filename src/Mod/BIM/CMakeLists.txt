@@ -219,6 +219,7 @@ SET(bimcommands_SRCS
 SET(bimplan_SRCS
     bimplan/__init__.py
     bimplan/benchmark.py
+    bimplan/contextual_editing.py
     bimplan/contextual_rendering.py
     bimplan/devtools/PLAN_EDIT_ARCHITECTURE_PLAN.md
     bimplan/devtools/cruft_report.py

@@ -1027,7 +1027,80 @@ class _Wall(ArchComponent.Component):
                     "CutVertex",
                     subelement=f"RepresentationFace{face_index}.Vertex{vertex_index}",
                 )
+        purpose = getattr(context, "purpose", None)
+        if purpose in (
+            ArchComponent.RepresentationPurpose.SECTION,
+            ArchComponent.RepresentationPurpose.ELEVATION,
+        ) and hasattr(obj, "Height"):
+            direction = ArchComponent.representation_vertical_direction(context)
+            if direction is not None:
+                _low, high = ArchComponent.representation_extent_points(
+                    obj.Shape, context, direction
+                )
+                height_operation = self._height_edit_operation()
+                if high is not None and height_operation.is_available(obj):
+                    representation.add_edit_handle(
+                        ArchComponent.BIMEditHandle(
+                            obj,
+                            "WallHeight",
+                            high,
+                            direction,
+                            height_operation,
+                            subelement="Height",
+                            minimum=1.0,
+                        )
+                    )
+                low, _high = ArchComponent.representation_extent_points(
+                    obj.Shape, context, direction
+                )
+                base_operation = self._base_elevation_edit_operation()
+                if (
+                    low is not None
+                    and getattr(obj, "Base", None) is None
+                    and base_operation.is_available(obj)
+                ):
+                    representation.add_edit_handle(
+                        ArchComponent.BIMEditHandle(
+                            obj,
+                            "WallBaseElevation",
+                            low,
+                            direction,
+                            base_operation,
+                            subelement="Placement.Base.z",
+                            minimum=None,
+                        )
+                    )
         return representation
+
+    @staticmethod
+    def _height_edit_operation():
+        return ArchComponent.BIMEditOperation(
+            "WallHeight",
+            "Edit Wall Height",
+            lambda wall: wall.Height.Value,
+            lambda wall, value: setattr(wall, "Height", value),
+            property_name="Height",
+            minimum=1.0,
+            available=lambda wall: not ArchComponent.is_property_expression_driven(wall, "Height"),
+        )
+
+    @staticmethod
+    def _base_elevation_edit_operation():
+        def set_elevation(wall, value):
+            placement = FreeCAD.Placement(wall.Placement)
+            placement.Base.z = value
+            wall.Placement = placement
+
+        return ArchComponent.BIMEditOperation(
+            "WallBaseElevation",
+            "Edit Wall Base Elevation",
+            lambda wall: wall.Placement.Base.z,
+            set_elevation,
+            property_name="Placement.Base.z",
+            available=lambda wall: not ArchComponent.is_property_expression_driven(
+                wall, "Placement.Base.z"
+            ),
+        )
 
     def _getCutRepresentation(self, obj, context):
         """Generate transient wall cut faces for a representation context."""
