@@ -1336,6 +1336,81 @@ class TestBimPlanCore(unittest.TestCase):
         self.assertEqual(1, polylines.call_count)
         self.assertIn(("wall_overlay_segments_cache_hits", 1), counts)
 
+    def test_wall_overlay_consumes_semantic_representation(self):
+        cut_face = object()
+        snap_edge = object()
+        mapping = SimpleNamespace(
+            geometry=snap_edge,
+            source=None,
+            role="CutEdge",
+            subelement="RepresentationFace1.Edge1",
+        )
+
+        class _Representation:
+            cut_geometry = (cut_face,)
+            snap_geometry = (snap_edge,)
+
+            @staticmethod
+            def mapping_for(geometry):
+                return mapping if geometry is snap_edge else None
+
+        representation = _Representation()
+        representation_calls = []
+        footprint_calls = []
+        wall = SimpleNamespace(Name="Wall001")
+        mapping.source = wall
+        wall.Proxy = SimpleNamespace(
+            getDefaultPlanContext=lambda obj: ("plan", obj),
+            getRepresentation=lambda obj, context: representation_calls.append((obj, context))
+            or representation,
+            getFootprint=lambda obj: footprint_calls.append(obj) or ("legacy-face",),
+        )
+        session = SimpleNamespace(
+            performance=_make_perf_stub(),
+            overlay_cache_state=SimpleNamespace(
+                plan_overlay_geometry_cache={
+                    "wall": {},
+                    "opening": {},
+                    "space": {},
+                    "region": {},
+                }
+            ),
+            visibility=SimpleNamespace(
+                get_plan_semantic_object=lambda obj: obj,
+                get_document_object_key=lambda obj: ("Doc", getattr(obj, "Name", None)),
+            ),
+            selection=SimpleNamespace(
+                targets=SimpleNamespace(
+                    is_plan_selectable_wall=lambda obj: obj is wall,
+                    is_plan_space_object=lambda _obj: False,
+                    is_plan_region_object=lambda _obj: False,
+                )
+            ),
+            openings=SimpleNamespace(is_hosted_opening_object=lambda _obj: False),
+        )
+
+        with patch.object(
+            plan_overlay_geometry_module.ArchPlanGeometry,
+            "get_face_wire_polylines",
+            return_value=(((0, 0), (1, 0)),),
+        ) as polylines:
+            result = plan_overlay_geometry_module.get_wall_overlay_polylines(session, wall)
+
+        self.assertEqual(result, (((0, 0), (1, 0)),))
+        self.assertEqual(representation_calls, [(wall, ("plan", wall))])
+        self.assertEqual(footprint_calls, [])
+        polylines.assert_called_once_with((cut_face,))
+        self.assertEqual(
+            plan_overlay_geometry_module.get_wall_snap_geometry(session, wall),
+            (snap_edge,),
+        )
+        resolved = plan_overlay_geometry_module.resolve_wall_representation_geometry(
+            session, wall, snap_edge
+        )
+        self.assertIs(resolved.source, wall)
+        self.assertEqual(resolved.subelement, "RepresentationFace1.Edge1")
+        self.assertEqual(len(representation_calls), 1, "Representation should be cached per wall.")
+
     def test_sync_segment_overlay_trackers_transfer_finalizes_displaced_trackers(self):
         finalize_calls = []
 

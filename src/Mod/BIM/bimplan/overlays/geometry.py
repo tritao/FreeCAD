@@ -40,6 +40,15 @@ class PlanOverlayGeometryService:
     def get_wall_overlay_polylines(self, *args, **kwargs):
         return get_wall_overlay_polylines(self.session, *args, **kwargs)
 
+    def get_wall_representation(self, *args, **kwargs):
+        return get_wall_representation(self.session, *args, **kwargs)
+
+    def get_wall_snap_geometry(self, *args, **kwargs):
+        return get_wall_snap_geometry(self.session, *args, **kwargs)
+
+    def resolve_wall_representation_geometry(self, *args, **kwargs):
+        return resolve_wall_representation_geometry(self.session, *args, **kwargs)
+
     def get_wall_overlay_segments(self, *args, **kwargs):
         return get_wall_overlay_segments(self.session, *args, **kwargs)
 
@@ -66,6 +75,9 @@ class PlanOverlayGeometryService:
 
     def get_opening_overlay_polylines(self, *args, **kwargs):
         return get_opening_overlay_polylines(self.session, *args, **kwargs)
+
+    def get_opening_representation(self, *args, **kwargs):
+        return get_opening_representation(self.session, *args, **kwargs)
 
     def get_opening_overlay_screen_polylines(self, *args, **kwargs):
         return get_opening_overlay_screen_polylines(self.session, *args, **kwargs)
@@ -172,6 +184,7 @@ def get_cached_plan_overlay_geometry(session, kind, obj, field_name, compute):
             "guide_polylines": tuple(
                 tuple(polyline or ()) for polyline in ((value or {}).get("guide_polylines") or ())
             ),
+            "representation": (value or {}).get("representation"),
         }
     elif field_name.endswith("overlay_segments"):
         value = tuple(value or ())
@@ -244,6 +257,21 @@ def _get_proxy_footprint(proxy, obj):
         return ()
 
 
+def _get_proxy_representation(proxy, obj):
+    get_representation = _get_proxy_method(proxy, "getRepresentation")
+    if get_representation is None:
+        return None
+    get_default_context = _get_proxy_method(proxy, "getDefaultPlanContext")
+    try:
+        context = get_default_context(obj) if get_default_context is not None else None
+        representation = get_representation(obj, context)
+    except Exception:
+        return None
+    if representation is None or not hasattr(representation, "cut_geometry"):
+        return None
+    return representation
+
+
 def get_footprint_overlay_polylines(faces):
     return ArchPlanGeometry.get_face_wire_polylines(faces)
 
@@ -262,10 +290,43 @@ def get_wall_overlay_polylines(session, wall):
     if not wall:
         return []
     proxy = getattr(wall, "Proxy", None)
-    faces = _get_proxy_footprint(proxy, wall)
+    representation = get_wall_representation(session, wall)
+    faces = (
+        getattr(representation, "cut_geometry", ())
+        if representation is not None
+        else _get_proxy_footprint(proxy, wall)
+    )
     if not faces:
         return []
     return get_footprint_overlay_polylines(faces)
+
+
+def get_wall_representation(session, wall):
+    if not session.selection.targets.is_plan_selectable_wall(wall):
+        return None
+    return get_cached_plan_overlay_geometry(
+        session,
+        "wall",
+        wall,
+        "representation",
+        lambda wall_obj: _get_proxy_representation(getattr(wall_obj, "Proxy", None), wall_obj),
+    )
+
+
+def get_wall_snap_geometry(session, wall):
+    representation = get_wall_representation(session, wall)
+    return tuple(getattr(representation, "snap_geometry", ()) or ())
+
+
+def resolve_wall_representation_geometry(session, wall, geometry):
+    representation = get_wall_representation(session, wall)
+    mapping_for = getattr(representation, "mapping_for", None)
+    if not callable(mapping_for):
+        return None
+    try:
+        return mapping_for(geometry)
+    except Exception:
+        return None
 
 
 def get_wall_overlay_segments(session, wall):
@@ -377,10 +438,46 @@ def get_region_overlay_polylines(session, region):
 
 
 def _compute_opening_overlay_geometry(opening_obj):
+    object_proxy = getattr(opening_obj, "Proxy", None)
+    representation = _get_proxy_representation(object_proxy, opening_obj)
+    if representation is not None:
+        symbol_polylines = []
+        guide_polylines = []
+        mapping_for = getattr(representation, "mapping_for", None)
+        for polyline in getattr(representation, "projected_geometry", ()) or ():
+            mapping = mapping_for(polyline) if callable(mapping_for) else None
+            role = getattr(mapping, "role", "")
+            if role == "OpeningGuide":
+                guide_polylines.append(polyline)
+            else:
+                symbol_polylines.append(polyline)
+        return {
+            "symbol_polylines": tuple(symbol_polylines),
+            "guide_polylines": tuple(guide_polylines),
+            "representation": representation,
+        }
+
     view_object = getattr(opening_obj, "ViewObject", None)
     proxy = getattr(view_object, "Proxy", None)
     if not proxy:
         return {"symbol_polylines": (), "guide_polylines": ()}
+    representation = _get_proxy_representation(proxy, opening_obj)
+    if representation is not None:
+        symbol_polylines = []
+        guide_polylines = []
+        mapping_for = getattr(representation, "mapping_for", None)
+        for polyline in getattr(representation, "projected_geometry", ()) or ():
+            mapping = mapping_for(polyline) if callable(mapping_for) else None
+            role = getattr(mapping, "role", "")
+            if role == "OpeningGuide":
+                guide_polylines.append(polyline)
+            else:
+                symbol_polylines.append(polyline)
+        return {
+            "symbol_polylines": tuple(symbol_polylines),
+            "guide_polylines": tuple(guide_polylines),
+            "representation": representation,
+        }
     try:
         get_plan_overlay_geometry = _get_proxy_method(proxy, "get_plan_overlay_geometry")
         if get_plan_overlay_geometry is not None:
@@ -394,6 +491,19 @@ def _compute_opening_overlay_geometry(opening_obj):
     except Exception:
         return {"symbol_polylines": (), "guide_polylines": ()}
     return {"symbol_polylines": (), "guide_polylines": ()}
+
+
+def get_opening_representation(session, opening):
+    if not session.openings.is_hosted_opening_object(opening):
+        return None
+    geometry = get_cached_plan_overlay_geometry(
+        session,
+        "opening",
+        opening,
+        "overlay_geometry",
+        _compute_opening_overlay_geometry,
+    )
+    return geometry.get("representation")
 
 
 def get_opening_overlay_polylines(session, opening):

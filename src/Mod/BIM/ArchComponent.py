@@ -43,6 +43,7 @@ TODO put examples here.
 
 import math
 import os
+from enum import Enum
 
 import FreeCAD
 import ArchCommands
@@ -100,8 +101,60 @@ def _make_projected_horizontal_area_face(projected_faces):
     return fused_face.removeSplitter()
 
 
-class PlanContext:
-    """Plan view definition used to derive object plan representations.
+class RepresentationPurpose(Enum):
+    """Architectural intent of a renderer-independent representation request."""
+
+    MODEL = "Model"
+    PLAN = "Plan"
+    SECTION = "Section"
+    ELEVATION = "Elevation"
+
+
+class RepresentationContext:
+    """GUI-independent inputs used to derive an architectural representation.
+
+    ``reference_frame`` establishes the representation coordinate system.
+    ``cut_offset`` and ``target_offset`` locate a section and its output on
+    that frame's local Z axis. ``cut_range`` and ``projection_range`` are also
+    distances in that frame; their interpretation belongs to the
+    object-specific representation generator.
+    ``profile`` identifies optional architectural representation rules without
+    coupling the context to a renderer or a viewer.
+
+    ``cut_z`` and ``target_z`` preserve the existing horizontal plan contract
+    while plan generators migrate to arbitrary reference frames.
+    """
+
+    def __init__(
+        self,
+        purpose=RepresentationPurpose.MODEL,
+        reference_frame=None,
+        cut_range=None,
+        projection_range=None,
+        profile=None,
+        source=None,
+        *,
+        cut_offset=None,
+        target_offset=None,
+        cut_z=None,
+        target_z=None,
+    ):
+        if not isinstance(purpose, RepresentationPurpose):
+            purpose = RepresentationPurpose(purpose)
+        self.purpose = purpose
+        self.reference_frame = reference_frame
+        self.cut_range = cut_range
+        self.projection_range = projection_range
+        self.profile = profile
+        self.source = source
+        self.cut_offset = cut_offset
+        self.target_offset = target_offset
+        self.cut_z = cut_z
+        self.target_z = target_z
+
+
+class PlanContext(RepresentationContext):
+    """Compatibility context for horizontal plan representations.
 
     `cut_z` is the absolute document Z coordinate where solid objects are cut.
     `target_z` is the absolute document Z coordinate where the resulting plan
@@ -113,9 +166,49 @@ class PlanContext:
     """
 
     def __init__(self, cut_z=None, target_z=None, source=None):
-        self.cut_z = cut_z
-        self.target_z = target_z
+        super().__init__(
+            purpose=RepresentationPurpose.PLAN,
+            source=source,
+            cut_z=cut_z,
+            target_z=target_z,
+        )
+
+
+class RepresentationSource:
+    """Semantic origin of one piece of transient representation geometry."""
+
+    def __init__(self, geometry, source, role, subelement=None):
+        self.geometry = geometry
         self.source = source
+        self.role = role
+        self.subelement = subelement
+
+
+class BIMRepresentation:
+    """Renderer-independent geometry and semantic identity for one BIM object."""
+
+    def __init__(self, source=None, context=None):
+        self.source = source
+        self.context = context
+        self.cut_geometry = []
+        self.projected_geometry = []
+        self.snap_geometry = []
+        self.source_mappings = []
+
+    def add_geometry(self, collection, geometry, role, subelement=None):
+        """Add geometry to a named collection and record its semantic source."""
+        target = getattr(self, collection)
+        target.append(geometry)
+        self.source_mappings.append(
+            RepresentationSource(geometry, self.source, role, subelement=subelement)
+        )
+
+    def mapping_for(self, geometry):
+        """Return the semantic mapping for an exact generated geometry object."""
+        return next(
+            (mapping for mapping in self.source_mappings if mapping.geometry is geometry),
+            None,
+        )
 
 
 def _make_transient_face(shapes, maker_class_name):
@@ -183,6 +276,44 @@ def get_horizontal_slice_faces(shape, cut_z, translate_z=0.0):
             face.translate(FreeCAD.Vector(0, 0, translate_z))
         faces.append(face)
     return faces
+
+
+def get_reference_slice_faces(shape, context):
+    """Return transient slice faces expressed on an arbitrary reference frame.
+
+    The frame maps local representation coordinates into document coordinates.
+    Sectioning is performed at ``cut_offset`` on its local Z axis and the
+    result is placed at ``target_offset`` before being mapped back to the
+    document. The source shape and document are never modified.
+    """
+
+    frame = getattr(context, "reference_frame", None)
+    cut_offset = getattr(context, "cut_offset", None)
+    if frame is None or cut_offset is None or not shape or shape.isNull():
+        return []
+
+    local_shape = _copy_without_element_map(shape)
+    if local_shape is None:
+        return []
+    try:
+        local_shape.transformShape(frame.inverse().toMatrix())
+        bounds = local_shape.BoundBox
+        if bounds.ZLength <= 0.001:
+            return []
+        cut_offset = max(bounds.ZMin + 0.001, min(bounds.ZMax - 0.001, cut_offset))
+        target_offset = getattr(context, "target_offset", None)
+        if target_offset is None:
+            target_offset = bounds.ZMin
+        faces = get_horizontal_slice_faces(
+            local_shape,
+            cut_offset,
+            translate_z=target_offset - cut_offset,
+        )
+        for face in faces:
+            face.transformShape(frame.toMatrix())
+        return faces
+    except Exception:
+        return []
 
 
 def _iter_plan_footprint_local_points(view_provider):

@@ -33,6 +33,41 @@ from bimtests import TestArchBase
 
 class TestArchStructure(TestArchBase.TestArchBase):
 
+    def test_representation_context_is_renderer_independent(self):
+        """BIM representation inputs should not require a GUI or Coin state."""
+        frame = App.Placement(App.Vector(10, 20, 30), App.Rotation(App.Vector(0, 1, 0), 90))
+        source = object()
+        context = ArchComponent.RepresentationContext(
+            purpose=ArchComponent.RepresentationPurpose.SECTION,
+            reference_frame=frame,
+            cut_range=(-100.0, 250.0),
+            projection_range=(0.0, 5000.0),
+            profile="Architectural",
+            source=source,
+            cut_offset=1500.0,
+            target_offset=0.0,
+        )
+
+        self.assertEqual(context.purpose, ArchComponent.RepresentationPurpose.SECTION)
+        self.assertEqual(context.reference_frame, frame)
+        self.assertEqual(context.cut_range, (-100.0, 250.0))
+        self.assertEqual(context.projection_range, (0.0, 5000.0))
+        self.assertEqual(context.profile, "Architectural")
+        self.assertIs(context.source, source)
+        self.assertEqual(context.cut_offset, 1500.0)
+        self.assertEqual(context.target_offset, 0.0)
+
+    def test_plan_context_preserves_existing_contract(self):
+        """Existing footprint callers should remain valid during migration."""
+        source = object()
+        context = ArchComponent.PlanContext(cut_z=1200.0, target_z=200.0, source=source)
+
+        self.assertIsInstance(context, ArchComponent.RepresentationContext)
+        self.assertEqual(context.purpose, ArchComponent.RepresentationPurpose.PLAN)
+        self.assertEqual(context.cut_z, 1200.0)
+        self.assertEqual(context.target_z, 200.0)
+        self.assertIs(context.source, source)
+
     def testStructure(self):
         App.Console.PrintLog("Checking BIM Structure...\n")
         structure = Arch.makeStructure(length=2, width=3, height=5)

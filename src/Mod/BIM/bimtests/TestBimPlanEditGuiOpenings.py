@@ -2,6 +2,8 @@
 
 """Opening and window GUI tests."""
 
+from unittest.mock import patch
+
 from bimplan.tools import opening_edit as plan_opening_edit_module
 
 from .TestBimPlanEditGuiBase import *  # noqa: F401,F403
@@ -1263,6 +1265,31 @@ class BimPlanEditGuiOpeningsMixin:
         guide_polylines = tuple(overlay_geometry.get("guide_polylines", ()))
         self.assertEqual(len(symbol_polylines), 3)
         self.assertEqual(len(guide_polylines), 1)
+
+        app_representation = door.Proxy.getRepresentation(
+            door, door.Proxy.getDefaultPlanContext(door)
+        )
+        self.assertEqual(len(app_representation.projected_geometry), 4)
+
+        with patch.object(
+            proxy,
+            "getRepresentation",
+            side_effect=AssertionError("Plan Edit should use the App proxy representation"),
+        ):
+            representation = session.overlays.geometry.get_opening_representation(door)
+        self.assertIsNotNone(representation)
+        self.assertIs(representation.source, door)
+        self.assertEqual(len(representation.projected_geometry), 4)
+        roles = [
+            representation.mapping_for(polyline).role
+            for polyline in representation.projected_geometry
+        ]
+        self.assertEqual(roles.count("OpeningSymbol"), 3)
+        self.assertEqual(roles.count("OpeningGuide"), 1)
+        for polyline in representation.projected_geometry:
+            mapping = representation.mapping_for(polyline)
+            self.assertIs(mapping.source, door)
+            self.assertTrue(mapping.subelement.startswith("Opening"))
 
         symbol_segments = sum(max(len(polyline) - 1, 0) for polyline in symbol_polylines)
         combined_segments = sum(

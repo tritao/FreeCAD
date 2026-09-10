@@ -25,6 +25,7 @@
 import FreeCAD
 from bimtests import TestArchBase
 import Arch
+import ArchComponent
 import ArchWindow  # For ArchWindow._Window proxy class
 import Part
 import Draft
@@ -998,6 +999,80 @@ class TestArchWindow(TestArchBase.TestArchBase):
         self.assertGreater(context["opening_half_width_u"], 0.0)
         self.assertIsNotNone(context["move_u_min"])
         self.assertIsNotNone(context["move_u_max"])
+
+    def test_hosted_opening_representation_is_generated_by_app_proxy(self):
+        """Hosted-opening symbols should be available without a GUI ViewProvider."""
+
+        wall = Arch.makeWall(length=3000, width=200, height=2500, name="RepresentationWall")
+        self.document.recompute()
+        door_sketch = self._create_sketch_with_wires(
+            "RepresentationDoorSketch", [(0, 0, 900.0, 2100.0)]
+        )
+        door_sketch.Placement.Rotation = FreeCAD.Rotation(FreeCAD.Vector(1, 0, 0), 90)
+        self.document.recompute()
+
+        door = Arch.makeWindow(baseobj=door_sketch, name="RepresentationDoor")
+        door.Width = 900.0
+        door.Height = 2100.0
+        door.HoleDepth = 0
+        door.IfcType = "Door"
+        door.WindowParts = ["DoorLeaf", "Solid panel", "Wire0,Edge1,Mode1", "40", "0"]
+        self.document.recompute()
+        Arch.addComponents(door, wall)
+        self.document.recompute()
+
+        context = door.Proxy.getDefaultPlanContext(door)
+        representation = door.Proxy.getRepresentation(door, context)
+
+        self.assertIs(representation.source, door)
+        self.assertIs(representation.context, context)
+        self.assertEqual(len(representation.projected_geometry), 4)
+        roles = [
+            representation.mapping_for(polyline).role
+            for polyline in representation.projected_geometry
+        ]
+        self.assertEqual(roles.count("OpeningSymbol"), 3)
+        self.assertEqual(roles.count("OpeningGuide"), 1)
+
+        raised_context = ArchComponent.PlanContext(cut_z=1000.0, target_z=250.0)
+        raised_representation = door.Proxy.getRepresentation(door, raised_context)
+        self.assertIsNot(raised_representation, representation)
+        self.assertTrue(raised_representation.projected_geometry)
+        for polyline in raised_representation.projected_geometry:
+            for point in polyline:
+                self.assertAlmostEqual(point.z, 250.0, places=6)
+
+    def test_hosted_opening_representation_uses_arbitrary_section_frame(self):
+        """Hosted openings should produce semantic cuts on non-horizontal frames."""
+
+        door_sketch = self._create_sketch_with_wires("SectionDoorSketch", [(0, 0, 900.0, 2100.0)])
+        door_sketch.Placement.Rotation = FreeCAD.Rotation(FreeCAD.Vector(1, 0, 0), 90)
+        self.document.recompute()
+        door = Arch.makeWindow(baseobj=door_sketch, name="SectionDoor")
+        door.IfcType = "Door"
+        self.document.recompute()
+
+        frame = FreeCAD.Placement(
+            FreeCAD.Vector(),
+            FreeCAD.Rotation(FreeCAD.Vector(0, 1, 0), 90),
+        )
+        context = ArchComponent.RepresentationContext(
+            purpose=ArchComponent.RepresentationPurpose.SECTION,
+            reference_frame=frame,
+            cut_offset=450.0,
+            target_offset=0.0,
+        )
+        representation = door.Proxy.getRepresentation(door, context)
+
+        self.assertTrue(representation.cut_geometry)
+        self.assertFalse(representation.projected_geometry)
+        self.assertTrue(representation.snap_geometry)
+        for face in representation.cut_geometry:
+            mapping = representation.mapping_for(face)
+            self.assertIs(mapping.source, door)
+            self.assertEqual(mapping.role, "OpeningCutFace")
+            self.assertAlmostEqual(face.BoundBox.XMin, 0.0, places=6)
+            self.assertAlmostEqual(face.BoundBox.XMax, 0.0, places=6)
 
     def test_hosted_opening_plan_frame_uses_wall_thickness_without_host_footprint(self):
         """Simple wall hosts should not need a full wall footprint slice for plan bounds."""

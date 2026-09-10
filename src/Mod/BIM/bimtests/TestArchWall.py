@@ -248,6 +248,17 @@ class TestArchWall(TestArchBase.TestArchBase):
             places=3,
             msg="Wall footprint area should reflect the hosted opening gap at plan cut height.",
         )
+        representation = wall.Proxy.getRepresentation(
+            wall,
+            wall.Proxy.getDefaultPlanContext(wall),
+        )
+        self.assertEqual(len(representation.cut_geometry), 2)
+        self.assertTrue(representation.snap_geometry)
+        for geometry in representation.cut_geometry + representation.snap_geometry:
+            mapping = representation.mapping_for(geometry)
+            self.assertIsNotNone(mapping)
+            self.assertIs(mapping.source, wall)
+            self.assertTrue(mapping.subelement.startswith("RepresentationFace"))
 
     def test_wall_footprint_ignores_openings_above_cut_height(self):
         """Only openings intersecting the plan cut height should affect the wall footprint."""
@@ -361,6 +372,38 @@ class TestArchWall(TestArchBase.TestArchBase):
             places=3,
             msg="Parent storey plan cut height should override the default wall-base cut.",
         )
+
+    def test_wall_representation_uses_arbitrary_reference_frame(self):
+        """Wall sections should be generated in a context-local coordinate frame."""
+        self.printTestMessage("Checking wall representation in an arbitrary frame...")
+
+        line = Draft.makeLine(App.Vector(0, 0, 0), App.Vector(4000, 0, 0))
+        wall = Arch.makeWall(line, width=200, height=3000)
+        self.document.recompute()
+
+        frame = App.Placement(
+            App.Vector(),
+            App.Rotation(App.Vector(0, 1, 0), 90),
+        )
+        context = ArchComponent.RepresentationContext(
+            purpose=ArchComponent.RepresentationPurpose.SECTION,
+            reference_frame=frame,
+            cut_offset=2000.0,
+            target_offset=0.0,
+        )
+        representation = wall.Proxy.getRepresentation(wall, context)
+        faces = representation.cut_geometry
+
+        self.assertTrue(faces, "The arbitrary section frame should produce wall geometry.")
+        self.assertFalse(representation.projected_geometry)
+        self.assertTrue(representation.snap_geometry)
+        self.assertAlmostEqual(sum(face.Area for face in faces), 200.0 * 3000.0, places=3)
+        for face in faces:
+            mapping = representation.mapping_for(face)
+            self.assertIs(mapping.source, wall)
+            self.assertEqual(mapping.role, "CutFace")
+            self.assertAlmostEqual(face.BoundBox.XMin, 0.0, places=6)
+            self.assertAlmostEqual(face.BoundBox.XMax, 0.0, places=6)
 
     def test_joinWalls(self):
         """Test the joinWalls function."""

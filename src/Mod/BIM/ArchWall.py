@@ -997,9 +997,44 @@ class _Wall(ArchComponent.Component):
         generic Footprint display mode contract.
         """
 
+        return self.getRepresentation(obj, context).cut_geometry
+
+    def getRepresentation(self, obj, context):
+        """Return renderer-independent wall geometry with semantic mappings."""
+
         if context is None:
             context = self.getDefaultPlanContext(obj)
+        representation = ArchComponent.BIMRepresentation(source=obj, context=context)
+        faces = self._getCutRepresentation(obj, context)
+        for face_index, face in enumerate(faces, start=1):
+            representation.add_geometry(
+                "cut_geometry",
+                face,
+                "CutFace",
+                subelement=f"RepresentationFace{face_index}",
+            )
+            for edge_index, edge in enumerate(face.Edges, start=1):
+                representation.add_geometry(
+                    "snap_geometry",
+                    edge,
+                    "CutEdge",
+                    subelement=f"RepresentationFace{face_index}.Edge{edge_index}",
+                )
+            for vertex_index, vertex in enumerate(face.Vertexes, start=1):
+                representation.add_geometry(
+                    "snap_geometry",
+                    vertex,
+                    "CutVertex",
+                    subelement=f"RepresentationFace{face_index}.Vertex{vertex_index}",
+                )
+        return representation
+
+    def _getCutRepresentation(self, obj, context):
+        """Generate transient wall cut faces for a representation context."""
+
         shape = obj.Shape
+        if getattr(context, "reference_frame", None) is not None:
+            return ArchComponent.get_reference_slice_faces(shape, context)
         if shape and (not shape.isNull()) and shape.Solids:
             bb = shape.BoundBox
             if bb.ZLength > 0.001 and context.cut_z is not None:
