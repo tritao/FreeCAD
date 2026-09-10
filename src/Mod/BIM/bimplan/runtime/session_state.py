@@ -248,6 +248,7 @@ class PlanDocumentVisualState:
     document_visual_refresh_deferred: bool = False
     deferred_selection_effects: list = field(default_factory=list)
     document_observer_added: bool = False
+    contextual_edit_recompute_depth: int = 0
 
 
 @dataclass

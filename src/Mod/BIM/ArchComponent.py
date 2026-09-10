@@ -274,6 +274,7 @@ class BIMEditOperation:
         available=None,
         minimum=None,
         maximum=None,
+        value_kind="Scalar",
     ):
         self.key = str(key)
         self.label = str(label)
@@ -284,6 +285,7 @@ class BIMEditOperation:
         self._available = available
         self.minimum = minimum
         self.maximum = maximum
+        self.value_kind = str(value_kind)
 
     def is_available(self, source):
         if self._available is None:
@@ -293,14 +295,26 @@ class BIMEditOperation:
     def validate(self, source, value=None):
         if not self.is_available(source):
             return BIMEditValidation(False, "This value is controlled by a constraint.")
-        if value is not None and self.minimum is not None and value < self.minimum:
+        below_minimum = (
+            value is not None
+            and self.value_kind == "Scalar"
+            and self.minimum is not None
+            and value < self.minimum
+        )
+        if below_minimum:
             return BIMEditValidation(
                 False,
                 "Value must be at least {:g} mm.".format(self.minimum),
                 minimum=self.minimum,
                 maximum=self.maximum,
             )
-        if value is not None and self.maximum is not None and value > self.maximum:
+        above_maximum = (
+            value is not None
+            and self.value_kind == "Scalar"
+            and self.maximum is not None
+            and value > self.maximum
+        )
+        if above_maximum:
             return BIMEditValidation(
                 False,
                 "Value must be at most {:g} mm.".format(self.maximum),
@@ -310,12 +324,17 @@ class BIMEditOperation:
         return BIMEditValidation(True, minimum=self.minimum, maximum=self.maximum)
 
     def get_value(self, source):
-        return float(self._get_value(source))
+        value = self._get_value(source)
+        if self.value_kind == "Point":
+            return FreeCAD.Vector(value)
+        return float(value)
 
     def apply(self, source, value):
         validation = self.validate(source, value)
         if not validation.allowed:
             raise ValueError(validation.reason)
+        if self.value_kind == "Point":
+            return self._apply_value(source, FreeCAD.Vector(value))
         return self._apply_value(source, float(value))
 
 

@@ -3,6 +3,7 @@
 """Viewer-local committed BIM representations used by Plan Edit."""
 
 import BimContextualRendering
+import ArchWallRelation
 
 
 class PlanContextualRenderingAPI:
@@ -88,6 +89,35 @@ class PlanContextualRenderingAPI:
         for source in affected:
             self._refresh_source(source)
         self._session.viewport.request_view_redraw()
+
+    def refresh_edit_dependencies(self, obj):
+        """Refresh the bounded semantic neighborhood affected by a BIM edit."""
+
+        if self._renderer is None or obj is None:
+            return
+        session = self._session
+        semantic_obj = session.visibility.get_plan_semantic_object(obj)
+        walls = (
+            {semantic_obj}
+            if session.selection.targets.is_plan_selectable_wall(semantic_obj)
+            else set()
+        )
+        for relation in ArchWallRelation.iter_wall_relations(semantic_obj):
+            walls.update(
+                wall for wall in ArchWallRelation.get_relation_walls(relation) if wall is not None
+            )
+
+        session.openings.invalidate_wall_hosted_openings_cache()
+        for wall in walls:
+            session.overlays.geometry.invalidate_plan_overlay_geometry_cache(wall)
+            self.refresh_object(wall)
+        space_visuals = tuple(session.spaces.refresh_document_dependent_visuals())
+        session.selection.refresh.refresh_document_dependent_secondary_selection_visuals()
+        visual_kinds = list(space_visuals)
+        if session.selection.state.is_selected_plan_target("wall"):
+            visual_kinds.extend(("selected_wall", "wall_grips"))
+        if visual_kinds:
+            session.overlays.runtime.queue_plan_overlay_visual_refresh(*visual_kinds)
 
     def remove_object(self, obj):
         if self._renderer is None or obj is None:

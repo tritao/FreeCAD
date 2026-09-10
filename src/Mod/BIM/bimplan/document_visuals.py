@@ -515,6 +515,8 @@ def slot_redo_document(session, doc):
 
 def slot_recomputed_document(session, doc):
     del doc
+    if _document_visual_state(session).contextual_edit_recompute_depth:
+        return
     if are_document_visual_updates_deferred(session):
         defer_document_visual_refresh(session)
         return

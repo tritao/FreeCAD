@@ -1070,7 +1070,41 @@ class _Wall(ArchComponent.Component):
                             minimum=None,
                         )
                     )
+        if purpose == ArchComponent.RepresentationPurpose.PLAN:
+            self._add_owned_path_edit_handles(representation, obj, context)
         return representation
+
+    @staticmethod
+    def _add_owned_path_edit_handles(representation, wall, context):
+        from bimplan import editable_points
+
+        owner = getattr(wall, "Base", None)
+        points = editable_points.get_contextual_edit_points(owner, context)
+        if not points:
+            return
+        for index, point in enumerate(points):
+            role = point.semantic_id or "Vertex{}".format(index + 1)
+            operation = ArchComponent.BIMEditOperation(
+                "WallPathVertex",
+                "Edit Wall Path Vertex",
+                lambda _wall, point=point: point.get_value(),
+                lambda _wall, value, point=point: point.apply_value(value),
+                property_name="Base.{}".format(point.property_name),
+                value_kind="Point",
+                available=lambda _wall, point=point: point.is_available(),
+            )
+            representation.add_edit_handle(
+                ArchComponent.BIMEditHandle(
+                    wall,
+                    "WallPath{}".format(role),
+                    ArchComponent.project_to_representation_plane(point.point, context),
+                    FreeCAD.Vector(),
+                    operation,
+                    interaction="Planar",
+                    subelement="Base.{}".format(point.subelement),
+                    minimum=None,
+                )
+            )
 
     @staticmethod
     def _height_edit_operation():

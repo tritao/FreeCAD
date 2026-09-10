@@ -31,11 +31,142 @@ import ArchComponent
 import ArchWallEndCondition
 import Draft
 import Part
+import Sketcher
 import FreeCAD as App
+from bimplan import contextual_editing as plan_contextual_editing
 from bimtests import TestArchBase
 
 
 class TestArchWall(TestArchBase.TestArchBase):
+    def test_sketch_coincident_path_endpoints_share_one_handle(self):
+        sketch = self.document.addObject("Sketcher::SketchObject", "JoinedWallPath")
+        sketch.addGeometry(
+            [
+                Part.LineSegment(App.Vector(0, 0), App.Vector(2000, 0)),
+                Part.LineSegment(App.Vector(2000, 0), App.Vector(3000, 1000)),
+            ],
+            False,
+        )
+        sketch.addConstraint(Sketcher.Constraint("Coincident", 0, 2, 1, 1))
+        wall = Arch.makeWall(sketch, width=200, height=3000)
+        self.document.recompute()
+        context = ArchComponent.RepresentationContext(
+            purpose=ArchComponent.RepresentationPurpose.PLAN,
+            reference_frame=App.Placement(),
+        )
+
+        handles = [
+            handle
+            for handle in wall.Proxy.getRepresentation(wall, context).edit_handles
+            if handle.operation.key == "WallPathVertex"
+        ]
+        self.assertEqual(len(handles), 3)
+        junction = next(handle for handle in handles if handle.role == "WallPathG0P2_G1P1")
+        editor = plan_contextual_editing.BIMContextualHandleEditor(context)
+        editor.begin(junction)
+        result = editor.commit(junction.point + App.Vector(250, 500, 0))
+
+        self.assertTrue(result.success)
+        expected = App.Vector(2250, 500, 0)
+        self.assertTrue(sketch.getPoint(0, 2).isEqual(expected, 1e-7))
+        self.assertTrue(sketch.getPoint(1, 1).isEqual(expected, 1e-7))
+
+    def test_sketch_solver_owns_plan_path_vertex_edit(self):
+        self.document.UndoMode = 1
+        sketch = self.document.addObject("Sketcher::SketchObject", "WallPathSketch")
+        sketch.addGeometry(
+            Part.LineSegment(App.Vector(0, 0, 0), App.Vector(2000, 0, 0)),
+            False,
+        )
+        sketch.Placement = App.Placement(
+            App.Vector(100, 200, 0),
+            App.Rotation(App.Vector(0, 0, 1), 30),
+        )
+        wall = Arch.makeWall(sketch, width=200, height=3000)
+        self.document.recompute()
+        context = ArchComponent.RepresentationContext(
+            purpose=ArchComponent.RepresentationPurpose.PLAN,
+            reference_frame=App.Placement(App.Vector(0, 0, 1000), App.Rotation()),
+            cut_offset=0.0,
+            target_offset=0.0,
+        )
+
+        representation = wall.Proxy.getRepresentation(wall, context)
+        handles = [
+            handle
+            for handle in representation.edit_handles
+            if handle.operation.key == "WallPathVertex"
+        ]
+        self.assertEqual(len(handles), 2)
+        handle = handles[1]
+        self.assertEqual(handle.operation.property_name, "Base.Geometry[0].Point2")
+        self.assertEqual(handle.subelement, "Base.G0P2")
+
+        editor = plan_contextual_editing.BIMContextualHandleEditor(context)
+        editor.begin(handle)
+        result = editor.commit(handle.point + App.Vector(0, 500, 250))
+        self.assertTrue(result.success)
+        moved = sketch.getGlobalPlacement().multVec(sketch.getPoint(0, 2))
+        expected = sketch.getGlobalPlacement().multVec(App.Vector(2000, 0, 0))
+        expected += App.Vector(0, 500, 0)
+        self.assertTrue(moved.isEqual(expected, 1e-7))
+        self.document.undo()
+        self.assertTrue(sketch.getPoint(0, 2).isEqual(App.Vector(2000, 0, 0), 1e-7))
+
+        sketch.addConstraint(Sketcher.Constraint("Block", 0))
+        self.document.recompute()
+        constrained = wall.Proxy.getRepresentation(wall, context)
+        self.assertFalse(
+            any(item.operation.key == "WallPathVertex" for item in constrained.edit_handles)
+        )
+
+    def test_draft_wire_owns_plan_path_vertex_edit(self):
+        self.document.UndoMode = 1
+        profile = Draft.makeWire(
+            [
+                App.Vector(0, 0, 0),
+                App.Vector(2000, 0, 0),
+                App.Vector(3000, 1000, 0),
+            ],
+        )
+        wall = Arch.makeWall(profile, width=200, height=3000)
+        self.document.recompute()
+        frame = App.Placement(
+            App.Vector(0, 0, 1000),
+            App.Rotation(),
+        )
+        context = ArchComponent.RepresentationContext(
+            purpose=ArchComponent.RepresentationPurpose.PLAN,
+            reference_frame=frame,
+            cut_offset=0.0,
+            target_offset=0.0,
+        )
+
+        representation = wall.Proxy.getRepresentation(wall, context)
+        handles = [
+            handle
+            for handle in representation.edit_handles
+            if handle.operation.key == "WallPathVertex"
+        ]
+        self.assertEqual(len(handles), 3)
+        handle = handles[1]
+        self.assertEqual(handle.interaction, "Planar")
+        self.assertEqual(handle.subelement, "Base.Vertex2")
+
+        editor = plan_contextual_editing.BIMContextualHandleEditor(context)
+        editor.begin(handle)
+        target = handle.point + App.Vector(0, 500, 200)
+        result = editor.commit(target)
+        self.document.recompute()
+
+        self.assertTrue(result.success)
+        self.assertTrue(profile.Points[1].isEqual(App.Vector(2000, 500, 0), 1e-7))
+        self.assertIs(handle.source, wall)
+
+        self.document.undo()
+        self.assertTrue(profile.Points[1].isEqual(App.Vector(2000, 0, 0), 1e-7))
+        self.document.redo()
+        self.assertTrue(profile.Points[1].isEqual(App.Vector(2000, 500, 0), 1e-7))
 
     def _make_hosted_window(self, wall, name, x_start, z_start, width=800.0, height=1200.0):
         sketch = self.document.addObject("Sketcher::SketchObject", name + "Sketch")
