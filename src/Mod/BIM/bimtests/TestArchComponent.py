@@ -114,6 +114,9 @@ class TestArchComponent(TestArchBase.TestArchBase):
         wall_representation = SimpleNamespace(source=wall)
         opening_representation = SimpleNamespace(source=opening)
         renderer = MagicMock()
+        get_contextual_representation = MagicMock(
+            side_effect=lambda obj: wall_representation if obj is wall else opening_representation
+        )
         session = SimpleNamespace(
             view=object(),
             doc=SimpleNamespace(Objects=(wall, opening)),
@@ -135,6 +138,7 @@ class TestArchComponent(TestArchBase.TestArchBase):
                 geometry=SimpleNamespace(
                     get_wall_representation=lambda obj: wall_representation,
                     get_opening_representation=lambda obj: opening_representation,
+                    get_contextual_representation=get_contextual_representation,
                 )
             ),
             representation_context=SimpleNamespace(includes_object=lambda _obj: True),
@@ -153,6 +157,8 @@ class TestArchComponent(TestArchBase.TestArchBase):
 
         renderer.set_representation.assert_any_call(wall_representation)
         renderer.set_representation.assert_any_call(opening_representation)
+        get_contextual_representation.assert_any_call(wall)
+        get_contextual_representation.assert_any_call(opening)
         renderer.close.assert_called_once_with()
 
     def test_section_plane_provides_arbitrary_representation_context(self):

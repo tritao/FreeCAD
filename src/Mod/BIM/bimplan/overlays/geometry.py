@@ -43,6 +43,9 @@ class PlanOverlayGeometryService:
     def get_wall_representation(self, *args, **kwargs):
         return get_wall_representation(self.session, *args, **kwargs)
 
+    def get_contextual_representation(self, *args, **kwargs):
+        return get_contextual_representation(self.session, *args, **kwargs)
+
     def get_wall_snap_geometry(self, *args, **kwargs):
         return get_wall_snap_geometry(self.session, *args, **kwargs)
 
@@ -321,6 +324,44 @@ def get_wall_representation(session, wall):
             _active_representation_context(session),
         ),
     )
+
+
+def get_contextual_representation(session, obj):
+    """Request an object-owned representation for the active BIM context.
+
+    Representation ownership is capability-based: the semantic object's
+    provider (or its view provider for hosted objects) implements
+    ``getRepresentation(obj, context)``.  This keeps the rendering session
+    independent of BIM type names and lets SectionPlane/elevation providers
+    participate without adding another dispatcher branch.
+    """
+    semantic_obj = session.visibility.get_plan_semantic_object(obj)
+    if semantic_obj is None:
+        return None
+    context = _active_representation_context(session)
+
+    def compute(source):
+        representation = _get_proxy_representation(getattr(source, "Proxy", None), source, context)
+        if representation is not None:
+            return representation
+        view_object = getattr(source, "ViewObject", None)
+        return _get_proxy_representation(getattr(view_object, "Proxy", None), source, context)
+
+    representation = get_cached_plan_overlay_geometry(
+        session,
+        "representation",
+        semantic_obj,
+        "representation",
+        compute,
+    )
+    if representation is None:
+        return None
+    if not any(
+        getattr(representation, name, ())
+        for name in ("cut_geometry", "projected_geometry", "snap_geometry", "edit_handles")
+    ):
+        return None
+    return representation
 
 
 def get_wall_snap_geometry(session, wall):

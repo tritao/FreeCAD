@@ -142,12 +142,7 @@ class PlanContextualRenderingAPI:
         self._sources.add(representation.source)
 
     def _representation_for(self, obj):
-        geometry = self._session.overlays.geometry
-        if self._session.selection.targets.is_plan_selectable_wall(obj):
-            return geometry.get_wall_representation(obj)
-        if self._session.openings.is_hosted_opening_object(obj):
-            return geometry.get_opening_representation(obj)
-        return None
+        return self._session.overlays.geometry.get_contextual_representation(obj)
 
     def _is_in_active_context(self, obj):
         return self._session.representation_context.includes_object(obj)
