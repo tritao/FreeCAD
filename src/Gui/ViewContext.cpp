@@ -8,6 +8,7 @@
 
 #include <App/DocumentObject.h>
 #include <App/Document.h>
+#include <App/ClippingPlane.h>
 #include <App/ViewDefinition.h>
 
 #include "Application.h"
@@ -119,6 +120,13 @@ bool ViewContext::applyDefinition(const App::ViewDefinition* definition)
         }
         setVisibility(layer, object, visibility);
     }
+    std::vector<const App::ClippingPlane*> planes;
+    for (auto* object : definition->ClippingPlanes.getValues()) {
+        if (auto* plane = dynamic_cast<const App::ClippingPlane*>(object)) {
+            planes.push_back(plane);
+        }
+    }
+    setClippingPlanes(planes);
     return true;
 }
 
@@ -151,7 +159,23 @@ bool ViewContext::captureDefinition(App::ViewDefinition* definition) const
         }
     }
     definition->VisibilityOverrides.setValue(std::move(overrides));
+    std::vector<App::DocumentObject*> planes;
+    planes.reserve(activeClippingPlanes.size());
+    for (const auto* plane : activeClippingPlanes) {
+        planes.push_back(const_cast<App::ClippingPlane*>(plane));
+    }
+    definition->ClippingPlanes.setValues(planes);
     return true;
+}
+
+void ViewContext::setClippingPlanes(const std::vector<const App::ClippingPlane*>& planes)
+{
+    activeClippingPlanes = planes;
+}
+
+const std::vector<const App::ClippingPlane*>& ViewContext::clippingPlanes() const
+{
+    return activeClippingPlanes;
 }
 
 void ViewContext::removeObject(const App::DocumentObject* object)

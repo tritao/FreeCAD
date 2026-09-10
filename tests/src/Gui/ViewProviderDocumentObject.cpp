@@ -11,6 +11,7 @@
 #include <Inventor/nodes/SoSeparator.h>
 
 #include <App/Application.h>
+#include <App/ClippingPlane.h>
 #include <App/Document.h>
 #include <App/DocumentObjectGroup.h>
 #include <App/ViewDefinition.h>
@@ -294,4 +295,26 @@ TEST_F(ViewProviderDocumentObjectTest, viewDefinitionAppliesAndCapturesContextOv
     viewDefinition->VisibilityOverrides.setValue();
     ASSERT_TRUE(context.captureDefinition(viewDefinition));
     EXPECT_EQ(viewDefinition->VisibilityOverrides.getValue("Child"), "Hidden");
+}
+
+TEST_F(ViewProviderDocumentObjectTest, viewDefinitionCarriesPersistentClippingReferences)
+{
+    auto* definition = static_cast<App::ViewDefinition*>(
+        _doc->addObject("App::ViewDefinition", "SavedView")
+    );
+    auto* clipping = static_cast<App::ClippingPlane*>(
+        _doc->addObject("App::ClippingPlane", "SectionClip")
+    );
+    clipping->Offset.setValue(125.0);
+    definition->ClippingPlanes.setValues({clipping});
+
+    Gui::ViewContext context;
+    ASSERT_TRUE(context.applyDefinition(definition));
+    ASSERT_EQ(context.clippingPlanes().size(), 1U);
+    EXPECT_EQ(context.clippingPlanes().front(), clipping);
+
+    definition->ClippingPlanes.setValues({});
+    ASSERT_TRUE(context.captureDefinition(definition));
+    ASSERT_EQ(definition->ClippingPlanes.getValues().size(), 1U);
+    EXPECT_EQ(definition->ClippingPlanes.getValues().front(), clipping);
 }

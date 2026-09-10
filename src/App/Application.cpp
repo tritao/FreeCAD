@@ -116,6 +116,7 @@
 #include "ApplicationPy.h"
 #include "FreeCADModulePy.h"
 #include "CleanupProcess.h"
+#include "ClippingPlane.h"
 #include "ComplexGeoData.h"
 #include "ConsoleQtBridge.h"
 #include "TranslationQtBridge.h"
@@ -2305,6 +2306,7 @@ void Application::initTypes()
     // Document classes
     App::TransactionalObject       ::init();
     App::DocumentObject            ::init();
+    App::ClippingPlane             ::init();
     App::GeoFeature                ::init();
 
     // Test features

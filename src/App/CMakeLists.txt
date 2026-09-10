@@ -160,6 +160,7 @@ SET(Document_CPP_SRCS
     Document.cpp
     RecoverySnapshot.cpp
     DocumentObject.cpp
+    ClippingPlane.cpp
     DepEdgePyImp.cpp
     Extension.cpp
     ExtensionPyImp.cpp
@@ -221,6 +222,7 @@ SET(Document_HPP_SRCS
     RecoverySnapshot.h
     DepEdge.h
     DocumentObject.h
+    ClippingPlane.h
     Extension.h
     ExtensionContainer.h
     GroupExtension.h

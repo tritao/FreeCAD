@@ -6,6 +6,7 @@
 #include <functional>
 #include <map>
 #include <unordered_map>
+#include <vector>
 
 #include <FCGlobal.h>
 
@@ -13,6 +14,7 @@ namespace App
 {
 class DocumentObject;
 class ViewDefinition;
+class ClippingPlane;
 }
 
 namespace Gui
@@ -42,6 +44,8 @@ public:
     bool effectiveVisibility(const ViewProviderDocumentObject* provider) const;
     bool applyDefinition(const App::ViewDefinition* definition);
     bool captureDefinition(App::ViewDefinition* definition) const;
+    void setClippingPlanes(const std::vector<const App::ClippingPlane*>& planes);
+    const std::vector<const App::ClippingPlane*>& clippingPlanes() const;
     void removeObject(const App::DocumentObject* object);
     void clear();
 
@@ -53,6 +57,7 @@ private:
     std::map<LayerId, VisibilityMap> layers;
     LayerId nextLayerId = 1;
     ChangedCallback changed;
+    std::vector<const App::ClippingPlane*> activeClippingPlanes;
 };
 
 }  // namespace Gui
