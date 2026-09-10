@@ -26,9 +26,10 @@
 
 import FreeCAD as App
 import FreeCADGui as Gui
-from draftguitools import gui_snapper
+from draftguitools import gui_base, gui_snapper
 from drafttests import test_base
 from pivy import coin
+from types import SimpleNamespace
 from unittest.mock import patch
 
 
@@ -85,6 +86,21 @@ class DraftSnapper(test_base.DraftTestCaseDoc):
 
         def getEvent(self):
             return self._event
+
+    def test_interaction_host_forwards_input_hints(self):
+        """Embedded commands should receive the same hint contract as Draft commands."""
+
+        callback = lambda _point: None
+        hints = (("Esc", "Cancel"), ("M", "Mode"))
+        host = gui_base.DraftInteractionHost()
+        snapper = SimpleNamespace(getPoint=lambda **_kwargs: None)
+        with patch.object(Gui, "Snapper", snapper, create=True), patch.object(
+            snapper, "getPoint"
+        ) as get_point:
+            host.request_point(callback=callback, hints=hints)
+
+        self.assertEqual(get_point.call_args.kwargs["callback"], callback)
+        self.assertEqual(get_point.call_args.kwargs["hints"], hints)
 
     def test_getpoint_accept_preserves_point_before_teardown(self):
         """Accept should preserve the picked point even if teardown clears Snapper.pt."""

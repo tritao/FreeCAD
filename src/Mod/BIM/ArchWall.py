@@ -494,6 +494,11 @@ class _Wall(ArchComponent.Component):
 
         ArchComponent.Component.onDocumentRestored(self, obj)
         self._normalizing_end_condition_order = False
+        # Runtime-only relation invalidation state is deliberately not
+        # serialized.  Recreate it for proxies loaded from an FCStd document,
+        # just as __init__ does for newly-created walls.
+        self._resolved_geometry_signatures = {}
+        self._invalidating_wall_relations = False
         self.setProperties(obj)
 
         # In V1.0 the handling of wall normals has changed. As a result existing

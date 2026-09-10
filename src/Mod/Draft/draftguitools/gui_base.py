@@ -108,6 +108,7 @@ class DraftInteractionHost:
         title=None,
         mode=None,
         extra_widget=None,
+        hints=None,
         modifier_resolver=None,
     ):
         if not hasattr(Gui, "Snapper"):
@@ -126,6 +127,8 @@ class DraftInteractionHost:
             kwargs["mode"] = mode
         if extra_widget is not None:
             kwargs["extradlg"] = extra_widget
+        if hints is not None:
+            kwargs["hints"] = hints
         if modifier_resolver is not None:
             kwargs["modifier_resolver"] = modifier_resolver
         interaction_plane = self.get_interaction_plane()

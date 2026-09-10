@@ -3383,6 +3383,29 @@ class _ViewProviderWindow(ArchComponent.ViewProviderComponent):
             self._collect_edge_points(edge), base_z, inverse_placement
         )
 
+    def _collect_local_footprint_polylines(self):
+        """Return App-generated symbol geometry in the ViewProvider's local frame.
+
+        The semantic opening proxy owns plan-symbol generation.  The committed
+        Coin footprint still lives below the ViewProvider placement, so this
+        adapter performs only the global-to-local conversion needed by those
+        nodes.
+        """
+        if not hasattr(self, "Object"):
+            return []
+
+        _cut_z, base_z = self._get_footprint_cut_context()
+        if base_z is None:
+            return []
+        inverse_placement = self._get_footprint_inverse_placement()
+        geometry = self.get_plan_overlay_geometry()
+        polylines = []
+        for points in geometry["symbol_polylines"]:
+            polyline = self._points_to_local_footprint_polyline(points, base_z, inverse_placement)
+            if polyline:
+                polylines.append(polyline)
+        return polylines
+
     def get_plan_overlay_geometry(self):
         """Return structured global-space plan geometry for overlays and picking."""
 
