@@ -53,6 +53,21 @@ class TestArchSectionPlane(TestArchBase.TestArchBase):
             section_plane.Label, "TestSectionPlane", "Section plane label is incorrect."
         )
 
+    def testSectionPlaneProvidesRepresentationContext(self):
+        section_plane = Arch.makeSectionPlane(name="ContextSectionPlane")
+        section_plane.Placement = App.Placement(
+            App.Vector(10, 20, 30), App.Rotation(App.Vector(0, 1, 0), 90)
+        )
+        section_plane.Depth = 2500
+        self.document.recompute()
+
+        context = section_plane.Proxy.getRepresentationContext(section_plane)
+
+        self.assertEqual(context.purpose.value, "Section")
+        self.assertIs(context.source, section_plane)
+        self.assertEqual(context.projection_range, (0.0, 2500.0))
+        self.assertEqual(context.reference_frame.Base, App.Vector(10, 20, 30))
+
     def testSectionPlaneFitUsesLocalAxesAfterRotateY(self):
         """Resize-to-fit dimensions follow the rotated section plane axes."""
 

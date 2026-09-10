@@ -41,6 +41,7 @@ import ArchCommands
 import ArchComponent
 import Draft
 import DraftVecUtils
+from ArchRepresentation import RepresentationContext, RepresentationPurpose
 
 from FreeCAD import Vector
 from draftutils import gui_utils
@@ -1110,6 +1111,19 @@ class _SectionPlane:
     def onDocumentRestored(self, obj):
 
         self.setProperties(obj)
+
+    def getRepresentationContext(self, obj):
+        """Describe this section plane as a renderer-neutral BIM context."""
+        depth = getattr(getattr(obj, "Depth", None), "Value", 0.0)
+        projection_range = (0.0, depth) if depth and depth > 0.0 else None
+        return RepresentationContext(
+            purpose=RepresentationPurpose.SECTION,
+            reference_frame=FreeCAD.Placement(obj.Placement),
+            cut_offset=0.0,
+            target_offset=0.0,
+            projection_range=projection_range,
+            source=obj,
+        )
 
     def execute(self, obj):
         import math
