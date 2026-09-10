@@ -228,7 +228,7 @@ void ViewContext::clear()
 
 void ViewContext::notify(const App::DocumentObject* object) const
 {
-    if (!changed || !object) {
+    if (!changed || !object || !Application::Instance) {
         return;
     }
     auto* provider = dynamic_cast<ViewProviderDocumentObject*>(
