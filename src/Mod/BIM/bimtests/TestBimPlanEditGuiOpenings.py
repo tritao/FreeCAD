@@ -27,7 +27,7 @@ class BimPlanEditGuiOpeningsMixin:
         self.assertIsNotNone(session, "Plan Edit session should start in GUI tests.")
         self.pump_gui_events()
 
-        self.assertTrue(door.ViewObject.Visibility)
+        self.assert_plan_view_visibility(session, door, True)
         self.assertFalse(door.ViewObject.Selectable)
         self.assertTrue(hasattr(door.ViewObject.Proxy, "lcoords"))
 
@@ -85,13 +85,13 @@ class BimPlanEditGuiOpeningsMixin:
         self.assertIsNotNone(session)
         self.pump_gui_events()
 
-        self.assertFalse(other_door.ViewObject.Visibility)
+        self.assert_plan_view_visibility(session, other_door, False)
         self.assertFalse(other_door.ViewObject.Selectable)
 
         session.storey.set_active_storey(other_level)
         self.pump_gui_events()
 
-        self.assertTrue(other_door.ViewObject.Visibility)
+        self.assert_plan_view_visibility(session, other_door, True)
         self.assertFalse(other_door.ViewObject.Selectable)
 
         session.shutdown(close_dialog=False)
@@ -116,7 +116,7 @@ class BimPlanEditGuiOpeningsMixin:
         self.pump_gui_events()
 
         proxy = door.ViewObject.Proxy
-        self.assertTrue(door.ViewObject.Visibility)
+        self.assert_plan_view_visibility(session, door, True)
         self.assertFalse(door.ViewObject.Selectable)
         self.assertTrue(hasattr(proxy, "lcoords"))
         self.assertTrue(hasattr(proxy, "lset"))

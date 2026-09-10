@@ -905,6 +905,7 @@ SET(View3D_CPP_SRCS
     View3DInventor.cpp
     View3DInventorSelection.cpp
     View3DInventorViewer.cpp
+    ViewContext.cpp
     View3DSettings.cpp
     View3DPy.cpp
     View3DViewerPy.cpp
@@ -924,6 +925,7 @@ SET(View3D_SRCS
     View3DInventor.h
     View3DInventorSelection.h
     View3DInventorViewer.h
+    ViewContext.h
     View3DPy.h
     View3DSettings.h
     View3DViewerPy.h
@@ -1081,6 +1083,7 @@ SET(Inventor_CPP_SRCS
     Inventor/SoNaviCube.cpp
     Inventor/SoMouseWheelEvent.cpp
     Inventor/SoFCTransform.cpp
+    Inventor/SoViewContextElement.cpp
     Inventor/SoToggleSwitch.cpp
     Inventor/Draggers/SoTransformDragger.cpp
     Inventor/Draggers/SoLinearDragger.cpp
@@ -1126,6 +1129,7 @@ SET(Inventor_SRCS
     Inventor/SoToggleSwitch.h
     Inventor/Draggers/SoTransformDragger.h
     Inventor/Draggers/SoLinearDragger.h
+    Inventor/SoViewContextElement.h
     Inventor/Draggers/SoLinearDraggerGeometry.h
     Inventor/Draggers/SoPlanarDragger.h
     Inventor/Draggers/SoRotationDragger.h

@@ -179,6 +179,24 @@ class _View3DInventor:
         """Wait for the active camera animation to finish, returning false if interrupted."""
         ...
 
+    def pushViewContextLayer(self) -> int:
+        """Create a transient presentation-context layer and return its handle."""
+        ...
+
+    def removeViewContextLayer(self, layer: int) -> bool:
+        """Remove a context layer, returning whether the handle existed."""
+        ...
+
+    def setViewVisibility(
+        self, layer: int, obj: DocumentObject, state: Literal["Inherit", "Visible", "Hidden"]
+    ) -> bool:
+        """Set an object's visibility override in a context layer."""
+        ...
+
+    def getViewVisibility(self, obj: DocumentObject) -> Literal["Inherit", "Visible", "Hidden"]:
+        """Return the active context override, or ``Inherit`` when none exists."""
+        ...
+
     def setAnimationEnabled(self, enabled: bool, /) -> None:
         """Enable or disable camera animation support."""
         ...

@@ -579,6 +579,9 @@ def restore_state(session):
             except RuntimeError:
                 session.viewer = None
 
+        end_view_context = getattr(session.visibility, "end_view_context", None)
+        if callable(end_view_context):
+            end_view_context()
         session.visibility.restore_object_view_state()
         session.snap.restore_snap_profile()
         session.viewport_state.interaction_plane = None

@@ -312,6 +312,7 @@ class PlanEditSession:
                 )
             with self.performance.plan_perf_trace_span("capture_object_view_state"):
                 self.visibility.capture_object_view_state()
+            self.visibility.begin_view_context()
             with self.performance.plan_perf_trace_span("apply_plan_view"):
                 self.viewport.apply_plan_view(fit=False)
             with self.performance.plan_perf_trace_span("apply_plan_snap_profile"):

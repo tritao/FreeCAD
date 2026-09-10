@@ -94,6 +94,16 @@ def _set_group_visibility_without_propagation(view_object, value):
 def _set_view_object_property(session, view_object, property_name, value):
     if not _has_view_object_property(view_object, property_name):
         return False
+    if property_name == "Visibility":
+        layer = getattr(_viewport_state(session), "view_context_layer", None)
+        owner = _get_view_object_owner(view_object)
+        setter = _get_callable(getattr(session, "view", None), "setViewVisibility")
+        if layer is not None and owner is not None and setter is not None:
+            try:
+                return bool(setter(layer, owner, "Visible" if value else "Hidden"))
+            except (ReferenceError, RuntimeError):
+                session.view = None
+                return False
     current_value = _get_view_object_property(view_object, property_name)
     if current_value == value:
         return False
@@ -658,6 +668,34 @@ def capture_object_view_state(session):
             register_object_view_state(session, obj)
 
 
+def begin_view_context(session):
+    viewport_state = _viewport_state(session)
+    if viewport_state.view_context_layer is not None:
+        return
+    push_layer = _get_callable(getattr(session, "view", None), "pushViewContextLayer")
+    if push_layer is None:
+        return
+    try:
+        viewport_state.view_context_layer = push_layer()
+    except (ReferenceError, RuntimeError):
+        session.view = None
+
+
+def end_view_context(session):
+    viewport_state = _viewport_state(session)
+    layer = viewport_state.view_context_layer
+    viewport_state.view_context_layer = None
+    if layer is None:
+        return
+    remove_layer = _get_callable(getattr(session, "view", None), "removeViewContextLayer")
+    if remove_layer is None:
+        return
+    try:
+        remove_layer(layer)
+    except (ReferenceError, RuntimeError):
+        session.view = None
+
+
 def register_object_view_state(session, obj):
     viewport_state = _viewport_state(session)
     if not obj:
@@ -906,6 +944,12 @@ class PlanVisibilityAPI:
 
     def __init__(self, session):
         self._session = session
+
+    def begin_view_context(self):
+        return begin_view_context(self.session)
+
+    def end_view_context(self):
+        return end_view_context(self.session)
 
     @property
     def session(self):

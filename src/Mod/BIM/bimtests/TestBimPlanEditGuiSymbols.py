@@ -719,7 +719,7 @@ class BimPlanEditGuiSymbolsMixin:
         self.assertIsNone(session.active_storey)
         self.assertTrue(wall.ViewObject.Visibility)
         self.assertTrue(wall.ViewObject.Selectable)
-        self.assertFalse(box.ViewObject.Visibility)
+        self.assert_plan_view_visibility(session, box, False)
         self.assertFalse(box.ViewObject.Selectable)
 
         session.shutdown(close_dialog=False)
@@ -748,10 +748,7 @@ class BimPlanEditGuiSymbolsMixin:
 
         self.assertTrue(wall.ViewObject.Visibility)
         self.assertTrue(wall.ViewObject.Selectable)
-        self.assertFalse(
-            box.ViewObject.Visibility,
-            "Unsupported active-storey objects should be hidden in Plan Edit.",
-        )
+        self.assert_plan_view_visibility(session, box, False)
         self.assertFalse(box.ViewObject.Selectable)
 
         session.shutdown(close_dialog=False)
@@ -779,10 +776,7 @@ class BimPlanEditGuiSymbolsMixin:
 
         self.assertTrue(wall.ViewObject.Visibility)
         self.assertTrue(wall.ViewObject.Selectable)
-        self.assertFalse(
-            box.ViewObject.Visibility,
-            "Unsupported objects outside the active storey should be hidden in Plan Edit.",
-        )
+        self.assert_plan_view_visibility(session, box, False)
         self.assertFalse(box.ViewObject.Selectable)
 
         session.shutdown(close_dialog=False)
@@ -815,17 +809,17 @@ class BimPlanEditGuiSymbolsMixin:
         self.assertTrue(wall.ViewObject.Visibility)
         self.assertTrue(wall.ViewObject.Selectable)
         self.assertFalse(
-            other_wall.ViewObject.Visibility,
+            self.assert_plan_view_visibility(session, other_wall, False),
             "Supported objects from other storeys should be hidden in Plan Edit.",
         )
         self.assertFalse(other_wall.ViewObject.Selectable)
-        self.assertFalse(other_slab.ViewObject.Visibility)
+        self.assert_plan_view_visibility(session, other_slab, False)
         self.assertFalse(other_slab.ViewObject.Selectable)
 
         session.storey.set_active_storey(other_level)
         self.pump_gui_events()
 
-        self.assertFalse(wall.ViewObject.Visibility)
+        self.assert_plan_view_visibility(session, wall, False)
         self.assertFalse(wall.ViewObject.Selectable)
         self.assertTrue(other_wall.ViewObject.Visibility)
         self.assertTrue(other_wall.ViewObject.Selectable)
@@ -865,11 +859,11 @@ class BimPlanEditGuiSymbolsMixin:
         self.assertTrue(wall.ViewObject.Visibility)
         self.assertTrue(wall.ViewObject.Selectable)
         self.assertFalse(
-            unscoped_wall.ViewObject.Visibility,
+            self.assert_plan_view_visibility(session, unscoped_wall, False),
             "Storeyless supported walls should be hidden in active-storey Plan Edit.",
         )
         self.assertFalse(unscoped_wall.ViewObject.Selectable)
-        self.assertFalse(unscoped_slab.ViewObject.Visibility)
+        self.assert_plan_view_visibility(session, unscoped_slab, False)
         self.assertFalse(unscoped_slab.ViewObject.Selectable)
 
         self.assertTrue(site.ViewObject.Visibility)
@@ -964,7 +958,7 @@ class BimPlanEditGuiSymbolsMixin:
         self.assertIsNotNone(session, "Plan Edit session should start in GUI tests.")
         self.pump_gui_events()
 
-        self.assertFalse(group.ViewObject.Visibility)
+        self.assert_plan_view_visibility(session, group, False)
         self.assertFalse(getattr(group.ViewObject, "Selectable", False))
         self.assertFalse(page.ViewObject.Visibility)
         self.assertTrue(wall.ViewObject.Visibility)

@@ -28,6 +28,7 @@
 #include <memory>
 #include <optional>
 #include <set>
+#include <unordered_map>
 #include <vector>
 
 #include <QColor>
@@ -60,6 +61,7 @@
 #include "Selection/Selection.h"
 
 #include "CornerCrossLetters.h"
+#include "ViewContext.h"
 #include "View3DInventorSelection.h"
 #include "Quarter/SoQTQuarterAdaptor.h"
 
@@ -277,6 +279,8 @@ public:
     void addViewProvider(ViewProvider*);
     /// remove a ViewProvider
     void removeViewProvider(ViewProvider*);
+    ViewContext& getViewContext();
+    const ViewContext& getViewContext() const;
     /// get view provider by path
     ViewProvider* getViewProviderByPath(SoPath*) const;
     ViewProvider* getViewProviderByPathFromTail(SoPath*) const;
@@ -721,6 +725,11 @@ private:
     SoSeparator* pcViewProviderRoot;
     // Child group in the scene graph that contains view providers related to the physical object
     SoGroup* objectGroup;
+
+    void updateContextVisibility(const ViewProviderDocumentObject* provider);
+    std::unordered_map<const ViewProvider*, SoSeparator*> contextFrontRoots;
+    std::unordered_map<const ViewProvider*, SoSeparator*> contextBackRoots;
+    ViewContext viewContext;
 
     std::unique_ptr<View3DInventorSelection> inventorSelection;
 

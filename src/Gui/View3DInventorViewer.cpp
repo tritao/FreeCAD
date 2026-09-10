@@ -132,6 +132,7 @@
 #include "Inventor/SoAxisCrossKit.h"
 #include "Inventor/SoFCBackgroundGradient.h"
 #include "Inventor/SoFCBoundingBox.h"
+#include "Inventor/SoViewContextElement.h"
 #include "MainWindow.h"
 #include "Multisample.h"
 #include "NaviCube.h"
@@ -1019,6 +1020,9 @@ View3DInventorViewer::View3DInventorViewer(QWidget* parent, const QOpenGLWidget*
     , SelectionObserver(false, ResolveMode::NoResolve)
     , editViewProvider(nullptr)
     , objectGroup(nullptr)
+    , viewContext([this](const ViewProviderDocumentObject* provider) {
+        updateContextVisibility(provider);
+    })
     , navigation(nullptr)
     , renderType(Native)
     , framebuffer(nullptr)
@@ -1043,6 +1047,9 @@ View3DInventorViewer::View3DInventorViewer(
     , SelectionObserver(false, ResolveMode::NoResolve)
     , editViewProvider(nullptr)
     , objectGroup(nullptr)
+    , viewContext([this](const ViewProviderDocumentObject* provider) {
+        updateContextVisibility(provider);
+    })
     , navigation(nullptr)
     , renderType(Native)
     , framebuffer(nullptr)
@@ -1185,6 +1192,7 @@ void View3DInventorViewer::init()
     // must be created. Using an SoSeparator avoids this drawback.
     selectionRoot = new Gui::SoFCUnifiedSelection();
     selectionRoot->applySettings();
+    selectionRoot->setViewContext(&viewContext);
 
     // set the ViewProvider root node
     pcViewProviderRoot = selectionRoot;
@@ -1623,11 +1631,15 @@ void View3DInventorViewer::addViewProvider(ViewProvider* pcProvider)
     }
 
     if (SoSeparator* fore = pcProvider->getFrontRoot()) {
-        foregroundroot->addChild(fore);
+        auto* gate = new SoViewContextGate(pcProvider, fore, &viewContext);
+        contextFrontRoots[pcProvider] = gate;
+        foregroundroot->addChild(gate);
     }
 
     if (SoSeparator* back = pcProvider->getBackRoot()) {
-        backgroundroot->addChild(back);
+        auto* gate = new SoViewContextGate(pcProvider, back, &viewContext);
+        contextBackRoots[pcProvider] = gate;
+        backgroundroot->addChild(gate);
     }
 
     pcProvider->setOverrideMode(this->getOverrideMode());
@@ -1655,15 +1667,44 @@ void View3DInventorViewer::removeViewProvider(ViewProvider* pcProvider)
         _ViewProviderMap.erase(root);
     }
 
-    if (SoSeparator* fore = pcProvider->getFrontRoot()) {
+    const auto frontPos = contextFrontRoots.find(pcProvider);
+    if (frontPos != contextFrontRoots.end()) {
+        foregroundroot->removeChild(frontPos->second);
+        contextFrontRoots.erase(pcProvider);
+    }
+    else if (SoSeparator* fore = pcProvider->getFrontRoot()) {
+        // Compatibility with providers added before auxiliary roots were gated.
         foregroundroot->removeChild(fore);
     }
 
-    if (SoSeparator* back = pcProvider->getBackRoot()) {
+    const auto backPos = contextBackRoots.find(pcProvider);
+    if (backPos != contextBackRoots.end()) {
+        backgroundroot->removeChild(backPos->second);
+        contextBackRoots.erase(pcProvider);
+    }
+    else if (SoSeparator* back = pcProvider->getBackRoot()) {
+        // Compatibility with providers added before auxiliary roots were gated.
         backgroundroot->removeChild(back);
     }
 
     _ViewProviderSet.erase(pcProvider);
+}
+
+ViewContext& View3DInventorViewer::getViewContext()
+{
+    return viewContext;
+}
+
+const ViewContext& View3DInventorViewer::getViewContext() const
+{
+    return viewContext;
+}
+
+void View3DInventorViewer::updateContextVisibility(
+    const ViewProviderDocumentObject* /*provider*/
+)
+{
+    getSoRenderManager()->scheduleRedraw();
 }
 
 void View3DInventorViewer::setEditingTransform(const Base::Matrix4D& mat)
