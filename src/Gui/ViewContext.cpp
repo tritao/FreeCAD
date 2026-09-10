@@ -7,6 +7,8 @@
 #include <set>
 
 #include <App/DocumentObject.h>
+#include <App/Document.h>
+#include <App/ViewDefinition.h>
 
 #include "Application.h"
 #include "ViewProviderDocumentObject.h"
@@ -91,6 +93,65 @@ bool ViewContext::effectiveVisibility(const ViewProviderDocumentObject* provider
             return provider->Visibility.getValue();
     }
     return provider->Visibility.getValue();
+}
+
+bool ViewContext::applyDefinition(const App::ViewDefinition* definition)
+{
+    if (!definition || !definition->getDocument()) {
+        return false;
+    }
+    clear();
+    const auto layer = pushLayer();
+    for (const auto& [name, state] : definition->VisibilityOverrides.getValue()) {
+        auto* object = definition->getDocument()->getObject(name.c_str());
+        if (!object) {
+            continue;
+        }
+        Visibility visibility;
+        if (state == "Visible") {
+            visibility = Visibility::Visible;
+        }
+        else if (state == "Hidden") {
+            visibility = Visibility::Hidden;
+        }
+        else {
+            continue;
+        }
+        setVisibility(layer, object, visibility);
+    }
+    return true;
+}
+
+bool ViewContext::captureDefinition(App::ViewDefinition* definition) const
+{
+    if (!definition) {
+        return false;
+    }
+    std::map<std::string, std::string> overrides;
+    for (const auto& [id, values] : layers) {
+        (void)id;
+        for (const auto& [object, visibility] : values) {
+            if (!object) {
+                continue;
+            }
+            const char* state = nullptr;
+            switch (visibility) {
+                case Visibility::Visible:
+                    state = "Visible";
+                    break;
+                case Visibility::Hidden:
+                    state = "Hidden";
+                    break;
+                case Visibility::Inherit:
+                    break;
+            }
+            if (state) {
+            overrides[object->getNameInDocument()] = state;
+            }
+        }
+    }
+    definition->VisibilityOverrides.setValue(std::move(overrides));
+    return true;
 }
 
 void ViewContext::removeObject(const App::DocumentObject* object)

@@ -13,6 +13,7 @@
 #include <App/Application.h>
 #include <App/Document.h>
 #include <App/DocumentObjectGroup.h>
+#include <App/ViewDefinition.h>
 #include <Gui/Application.h>
 #include <Gui/Inventor/SoViewContextElement.h>
 #include <Gui/Selection/SoFCUnifiedSelection.h>
@@ -277,4 +278,20 @@ TEST_F(ViewProviderDocumentObjectTest, twoInstancesCanUseDifferentContexts)
     SoGetBoundingBoxAction visibleAction(SbViewportRegion(100, 100));
     visibleAction.apply(visibleInstance.getRoot());
     EXPECT_FALSE(visibleAction.getBoundingBox().isEmpty());
+}
+
+TEST_F(ViewProviderDocumentObjectTest, viewDefinitionAppliesAndCapturesContextOverrides)
+{
+    auto* definition = _doc->addObject("App::ViewDefinition", "SavedView");
+    auto* viewDefinition = dynamic_cast<App::ViewDefinition*>(definition);
+    ASSERT_NE(viewDefinition, nullptr);
+    viewDefinition->VisibilityOverrides.setValue("Child", "Hidden");
+
+    Gui::ViewContext context;
+    ASSERT_TRUE(context.applyDefinition(viewDefinition));
+    EXPECT_EQ(context.visibility(_child), Gui::ViewContext::Visibility::Hidden);
+
+    viewDefinition->VisibilityOverrides.setValue();
+    ASSERT_TRUE(context.captureDefinition(viewDefinition));
+    EXPECT_EQ(viewDefinition->VisibilityOverrides.getValue("Child"), "Hidden");
 }

@@ -74,6 +74,8 @@ public:
     Py::Object removeViewContextLayer(const Py::Tuple&);
     Py::Object setViewVisibility(const Py::Tuple&);
     Py::Object getViewVisibility(const Py::Tuple&);
+    Py::Object applyViewDefinition(const Py::Tuple&);
+    Py::Object captureViewDefinition(const Py::Tuple&);
     Py::Object setAnimationEnabled(const Py::Tuple&);
     Py::Object isAnimationEnabled();
     Py::Object setPopupMenuEnabled(const Py::Tuple&);
