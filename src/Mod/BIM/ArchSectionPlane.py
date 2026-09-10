@@ -428,6 +428,21 @@ def getSVG(
             windows.append(o)
     objs = nonspaces
 
+    # TechDraw can consume the same semantic BIM representations used by
+    # interactive contextual views.  Keep the legacy cut-shape renderer as a
+    # compatibility fallback for modes that need hidden lines, fills, joined
+    # material geometry, or objects that have not adopted the provider
+    # contract yet.
+    contextual_representations = _get_contextual_representations(
+        source,
+        objs,
+        techdraw=techdraw,
+        showHidden=showHidden,
+        showFill=showFill,
+        fillSpaces=fillSpaces,
+        joinArch=joinArch,
+    )
+
     scaledLineWidth = linewidth / scale
     if renderMode in ["Coin", 2, "Coin mono", 3]:
         # don't scale linewidths in coin mode
@@ -549,81 +564,120 @@ def getSVG(
             import TechDraw
             import Part
 
-            if vshapes:
-                baseshape = Part.makeCompound(vshapes)
+            if contextual_representations:
+                import TechDrawBIM
+
                 style = {
                     "stroke": "SVGLINECOLOR",
                     "stroke-linecap": "SVGLINECAP",
                     "stroke-width": "SVGLINEWIDTH",
                 }
-                svgcache += TechDraw.projectToSVG(
-                    baseshape,
-                    direction,
-                    hStyle=style,
-                    h0Style=style,
-                    h1Style=style,
-                    vStyle=style,
-                    v0Style=style,
-                    v1Style=style,
-                )
-            if hshapes:
-                hshapes = Part.makeCompound(hshapes)
-                style = {
-                    "stroke": "SVGLINECOLOR",
-                    "stroke-linecap": "SVGLINECAP",
-                    "stroke-width": "SVGLINEWIDTH",
-                    "stroke-dasharray": "SVGHIDDENPATTERN",
-                }
-                svgcache += '<g transform="scale(-1,1)">\n'
-                svgcache += TechDraw.projectToSVG(
-                    hshapes,
-                    -direction,
-                    hStyle=style,
-                    h0Style=style,
-                    h1Style=style,
-                    vStyle=style,
-                    v0Style=style,
-                    v1Style=style,
-                )
-                svgcache += "</g>\n"
-            if sshapes:
-                if showFill:
-                    # svgcache += fillpattern
-                    svgcache += '<g transform="rotate(180)">\n'
-                    for o, shapes in objectSshapes:
-                        for s in shapes:
-                            if s.Edges:
-                                objectFill = getFillForObject(o, fillColor, source)
-                                # svg += Draft.get_svg(s,
-                                #                      direction=direction.negative(),
-                                #                      linewidth=0,
-                                #                      fillstyle="sectionfill",
-                                #                      color=(0,0,0))
-                                # temporarily disabling fill patterns
-                                svgcache += Draft.get_svg(
-                                    s,
-                                    linewidth=0,
-                                    fillstyle=Draft.getrgb(objectFill, testbw=False),
-                                    direction=direction.negative(),
-                                    color=lineColor,
-                                )
-                    svgcache += "</g>\n"
-                sshapes = Part.makeCompound(sshapes)
-                style = {
+                cut_style = {
                     "stroke": "SVGLINECOLOR",
                     "stroke-linecap": "SVGLINECAP",
                     "stroke-width": "SVGCUTLINEWIDTH",
                 }
-                svgcache += TechDraw.projectToSVG(
-                    sshapes,
-                    direction,
-                    hStyle=style,
-                    h0Style=style,
-                    h1Style=style,
-                    vStyle=style,
-                    v0Style=style,
-                    v1Style=style,
-                )
+                for representation in contextual_representations:
+                    if representation.projected_geometry:
+                        svgcache += TechDrawBIM.project_representation_to_svg(
+                            representation,
+                            direction,
+                            collection="projected_geometry",
+                            hStyle=style,
+                            h0Style=style,
+                            h1Style=style,
+                            vStyle=style,
+                            v0Style=style,
+                            v1Style=style,
+                        )
+                    if representation.cut_geometry:
+                        svgcache += TechDrawBIM.project_representation_to_svg(
+                            representation,
+                            direction,
+                            collection="cut_geometry",
+                            hStyle=cut_style,
+                            h0Style=cut_style,
+                            h1Style=cut_style,
+                            vStyle=cut_style,
+                            v0Style=cut_style,
+                            v1Style=cut_style,
+                        )
+            else:
+                if vshapes:
+                    baseshape = Part.makeCompound(vshapes)
+                    style = {
+                        "stroke": "SVGLINECOLOR",
+                        "stroke-linecap": "SVGLINECAP",
+                        "stroke-width": "SVGLINEWIDTH",
+                    }
+                    svgcache += TechDraw.projectToSVG(
+                        baseshape,
+                        direction,
+                        hStyle=style,
+                        h0Style=style,
+                        h1Style=style,
+                        vStyle=style,
+                        v0Style=style,
+                        v1Style=style,
+                    )
+                if hshapes:
+                    hshapes = Part.makeCompound(hshapes)
+                    style = {
+                        "stroke": "SVGLINECOLOR",
+                        "stroke-linecap": "SVGLINECAP",
+                        "stroke-width": "SVGLINEWIDTH",
+                        "stroke-dasharray": "SVGHIDDENPATTERN",
+                    }
+                    svgcache += '<g transform="scale(-1,1)">\n'
+                    svgcache += TechDraw.projectToSVG(
+                        hshapes,
+                        -direction,
+                        hStyle=style,
+                        h0Style=style,
+                        h1Style=style,
+                        vStyle=style,
+                        v0Style=style,
+                        v1Style=style,
+                    )
+                    svgcache += "</g>\n"
+                if sshapes:
+                    if showFill:
+                        # svgcache += fillpattern
+                        svgcache += '<g transform="rotate(180)">\n'
+                        for o, shapes in objectSshapes:
+                            for s in shapes:
+                                if s.Edges:
+                                    objectFill = getFillForObject(o, fillColor, source)
+                                    # svg += Draft.get_svg(s,
+                                    #                      direction=direction.negative(),
+                                    #                      linewidth=0,
+                                    #                      fillstyle="sectionfill",
+                                    #                      color=(0,0,0))
+                                    # temporarily disabling fill patterns
+                                    svgcache += Draft.get_svg(
+                                        s,
+                                        linewidth=0,
+                                        fillstyle=Draft.getrgb(objectFill, testbw=False),
+                                        direction=direction.negative(),
+                                        color=lineColor,
+                                    )
+                        svgcache += "</g>\n"
+                    sshapes = Part.makeCompound(sshapes)
+                    style = {
+                        "stroke": "SVGLINECOLOR",
+                        "stroke-linecap": "SVGLINECAP",
+                        "stroke-width": "SVGCUTLINEWIDTH",
+                    }
+                    svgcache += TechDraw.projectToSVG(
+                        sshapes,
+                        direction,
+                        hStyle=style,
+                        h0Style=style,
+                        h1Style=style,
+                        vStyle=style,
+                        v0Style=style,
+                        v1Style=style,
+                    )
     if should_update_svg_cache:
         if hasattr(source, "Proxy"):
             source.Proxy.svgcache = [
@@ -729,6 +783,63 @@ def getSVG(
                 svg += "</g>"
 
     return svg
+
+
+def _get_contextual_representations(
+    source,
+    objects,
+    *,
+    techdraw,
+    showHidden,
+    showFill,
+    fillSpaces,
+    joinArch,
+):
+    """Return semantic representations when the simple TechDraw path applies.
+
+    This is intentionally an all-or-nothing path.  A section containing an
+    object that has not adopted ``getRepresentation`` continues through the
+    established cut-shape renderer, so existing Arch and TechDraw behavior is
+    preserved while providers migrate independently.
+    """
+    if (
+        not techdraw
+        or showHidden
+        or showFill
+        or fillSpaces
+        or joinArch
+        or not objects
+    ):
+        return []
+
+    context_provider = getattr(getattr(source, "Proxy", None), "getRepresentationContext", None)
+    if not callable(context_provider):
+        return []
+    try:
+        context = context_provider(source)
+    except Exception:
+        return []
+    if context is None:
+        return []
+
+    try:
+        from ArchRepresentation import representation_for
+    except ImportError:
+        return []
+
+    representations = []
+    for obj in objects:
+        try:
+            representation = representation_for(obj, context)
+        except Exception:
+            return []
+        if not (
+            getattr(representation, "cut_geometry", None)
+            or getattr(representation, "projected_geometry", None)
+        ):
+            return []
+        representations.append(representation)
+    return representations
 
 
 def BoundBoxValid(boundBox) -> bool:

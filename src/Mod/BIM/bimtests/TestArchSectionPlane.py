@@ -27,6 +27,7 @@ import ArchSectionPlane
 import Draft
 import os
 import FreeCAD as App
+import TechDrawBIM
 from bimtests import TestArchBase
 
 
@@ -67,6 +68,32 @@ class TestArchSectionPlane(TestArchBase.TestArchBase):
         self.assertIs(context.source, section_plane)
         self.assertEqual(context.projection_range, (0.0, 2500.0))
         self.assertEqual(context.reference_frame.Base, App.Vector(10, 20, 30))
+
+    def testTechDrawUsesSemanticRepresentationContract(self):
+        """A simple TechDraw section should request provider-owned geometry."""
+
+        wall = Arch.makeWall(length=3000, width=200, height=3000)
+        section_plane = Arch.makeSectionPlane([wall])
+        section_plane.Placement = App.Placement(
+            App.Vector(0, 0, 1500), App.Rotation(App.Vector(0, 1, 0), 90)
+        )
+        self.document.recompute()
+
+        calls = []
+        original_project = TechDrawBIM.project_representation_to_svg
+
+        def capture_project(representation, direction, collection="projected_geometry", **styles):
+            calls.append(collection)
+            return original_project(representation, direction, collection=collection, **styles)
+
+        TechDrawBIM.project_representation_to_svg = capture_project
+        try:
+            svg = ArchSectionPlane.getSVG(section_plane, techdraw=True, renderMode="Wireframe")
+        finally:
+            TechDrawBIM.project_representation_to_svg = original_project
+
+        self.assertTrue(svg)
+        self.assertIn("cut_geometry", calls)
 
     def testSectionPlaneFitUsesLocalAxesAfterRotateY(self):
         """Resize-to-fit dimensions follow the rotated section plane axes."""
