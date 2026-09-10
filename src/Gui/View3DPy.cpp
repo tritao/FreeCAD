@@ -1091,7 +1091,15 @@ Py::Object View3DInventorPy::applyViewDefinition(const Py::Tuple& args)
     if (!definition) {
         throw Py::TypeError("definition must be an App::ViewDefinition");
     }
-    return Py::Boolean(getView3DInventorPtr()->getViewer()->getViewContext().applyDefinition(definition));
+    auto& context = getView3DInventorPtr()->getViewer()->getViewContext();
+    if (!context.applyDefinition(definition)) {
+        return Py::Boolean(false);
+    }
+    const auto& camera = context.cameraState();
+    if (!camera.empty() && !getView3DInventorPtr()->setCamera(camera.c_str())) {
+        return Py::Boolean(false);
+    }
+    return Py::Boolean(true);
 }
 
 Py::Object View3DInventorPy::captureViewDefinition(const Py::Tuple& args)
@@ -1105,7 +1113,9 @@ Py::Object View3DInventorPy::captureViewDefinition(const Py::Tuple& args)
     if (!definition) {
         throw Py::TypeError("definition must be an App::ViewDefinition");
     }
-    return Py::Boolean(getView3DInventorPtr()->getViewer()->getViewContext().captureDefinition(definition));
+    auto& context = getView3DInventorPtr()->getViewer()->getViewContext();
+    context.setCameraState(getView3DInventorPtr()->getCamera());
+    return Py::Boolean(context.captureDefinition(definition));
 }
 
 Py::Object View3DInventorPy::setAnimationEnabled(const Py::Tuple& args)

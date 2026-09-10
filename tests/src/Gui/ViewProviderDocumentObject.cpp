@@ -318,3 +318,25 @@ TEST_F(ViewProviderDocumentObjectTest, viewDefinitionCarriesPersistentClippingRe
     ASSERT_EQ(definition->ClippingPlanes.getValues().size(), 1U);
     EXPECT_EQ(definition->ClippingPlanes.getValues().front(), clipping);
 }
+
+TEST_F(ViewProviderDocumentObjectTest, viewDefinitionCarriesCameraAndReferenceFrame)
+{
+    auto* definition = static_cast<App::ViewDefinition*>(
+        _doc->addObject("App::ViewDefinition", "SavedView")
+    );
+    definition->CameraState.setValue("PerspectiveCamera { position 1 2 3 }");
+    Base::Placement frame(Base::Vector3d(10.0, 20.0, 30.0), Base::Rotation());
+    definition->ReferenceFrame.setValue(frame);
+
+    Gui::ViewContext context;
+    ASSERT_TRUE(context.applyDefinition(definition));
+    EXPECT_EQ(context.cameraState(), definition->CameraState.getValue());
+    EXPECT_TRUE(context.referenceFrame() == frame);
+
+    context.setCameraState("OrthographicCamera { position 4 5 6 }");
+    Base::Placement capturedFrame(Base::Vector3d(-1.0, -2.0, -3.0), Base::Rotation());
+    context.setReferenceFrame(capturedFrame);
+    ASSERT_TRUE(context.captureDefinition(definition));
+    EXPECT_STREQ(definition->CameraState.getValue(), "OrthographicCamera { position 4 5 6 }");
+    EXPECT_TRUE(definition->ReferenceFrame.getValue() == capturedFrame);
+}

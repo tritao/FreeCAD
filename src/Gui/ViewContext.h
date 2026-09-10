@@ -5,10 +5,12 @@
 #include <cstdint>
 #include <functional>
 #include <map>
+#include <string>
 #include <unordered_map>
 #include <vector>
 
 #include <FCGlobal.h>
+#include <Base/Placement.h>
 
 namespace App
 {
@@ -44,6 +46,10 @@ public:
     bool effectiveVisibility(const ViewProviderDocumentObject* provider) const;
     bool applyDefinition(const App::ViewDefinition* definition);
     bool captureDefinition(App::ViewDefinition* definition) const;
+    void setCameraState(std::string state);
+    const std::string& cameraState() const;
+    void setReferenceFrame(const Base::Placement& frame);
+    const Base::Placement& referenceFrame() const;
     void setClippingPlanes(const std::vector<const App::ClippingPlane*>& planes);
     const std::vector<const App::ClippingPlane*>& clippingPlanes() const;
     void removeObject(const App::DocumentObject* object);
@@ -58,6 +64,8 @@ private:
     LayerId nextLayerId = 1;
     ChangedCallback changed;
     std::vector<const App::ClippingPlane*> activeClippingPlanes;
+    std::string activeCameraState;
+    Base::Placement activeReferenceFrame;
 };
 
 }  // namespace Gui

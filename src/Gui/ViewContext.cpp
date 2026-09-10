@@ -102,6 +102,8 @@ bool ViewContext::applyDefinition(const App::ViewDefinition* definition)
         return false;
     }
     clear();
+    activeCameraState = definition->CameraState.getValue();
+    activeReferenceFrame = definition->ReferenceFrame.getValue();
     const auto layer = pushLayer();
     for (const auto& [name, state] : definition->VisibilityOverrides.getValue()) {
         auto* object = definition->getDocument()->getObject(name.c_str());
@@ -159,6 +161,8 @@ bool ViewContext::captureDefinition(App::ViewDefinition* definition) const
         }
     }
     definition->VisibilityOverrides.setValue(std::move(overrides));
+    definition->CameraState.setValue(activeCameraState);
+    definition->ReferenceFrame.setValue(activeReferenceFrame);
     std::vector<App::DocumentObject*> planes;
     planes.reserve(activeClippingPlanes.size());
     for (const auto* plane : activeClippingPlanes) {
@@ -166,6 +170,26 @@ bool ViewContext::captureDefinition(App::ViewDefinition* definition) const
     }
     definition->ClippingPlanes.setValues(planes);
     return true;
+}
+
+void ViewContext::setCameraState(std::string state)
+{
+    activeCameraState = std::move(state);
+}
+
+const std::string& ViewContext::cameraState() const
+{
+    return activeCameraState;
+}
+
+void ViewContext::setReferenceFrame(const Base::Placement& frame)
+{
+    activeReferenceFrame = frame;
+}
+
+const Base::Placement& ViewContext::referenceFrame() const
+{
+    return activeReferenceFrame;
 }
 
 void ViewContext::setClippingPlanes(const std::vector<const App::ClippingPlane*>& planes)
