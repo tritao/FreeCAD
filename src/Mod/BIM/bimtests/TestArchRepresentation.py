@@ -3,6 +3,7 @@
 import unittest
 import sys
 import types
+from pathlib import Path
 
 from ArchRepresentation import (
     BIMRepresentation,
@@ -94,7 +95,8 @@ class TestArchRepresentation(unittest.TestCase):
             representation_for(obj, RepresentationContext())
 
     def test_techdraw_projects_the_shared_representation_contract(self):
-        sys.path.insert(0, "src/Mod/TechDraw")
+        techdraw_path = str(Path(__file__).resolve().parents[2] / "TechDraw")
+        sys.path.insert(0, techdraw_path)
         try:
             import TechDrawBIM
         finally:
