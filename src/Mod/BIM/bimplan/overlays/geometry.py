@@ -96,6 +96,11 @@ def _perf_count(session, name, delta=1):
     return session.performance.plan_perf_count(name, delta=delta)
 
 
+def _active_representation_context(session):
+    contexts = getattr(session, "representation_context", None)
+    return getattr(contexts, "context", None)
+
+
 def get_plan_overlay_geometry_kinds_for_object(session, obj):
     semantic_obj = session.visibility.get_plan_semantic_object(obj)
     if session.selection.targets.is_plan_selectable_wall(semantic_obj):
@@ -257,13 +262,14 @@ def _get_proxy_footprint(proxy, obj):
         return ()
 
 
-def _get_proxy_representation(proxy, obj):
+def _get_proxy_representation(proxy, obj, context=None):
     get_representation = _get_proxy_method(proxy, "getRepresentation")
     if get_representation is None:
         return None
     get_default_context = _get_proxy_method(proxy, "getDefaultPlanContext")
     try:
-        context = get_default_context(obj) if get_default_context is not None else None
+        if context is None:
+            context = get_default_context(obj) if get_default_context is not None else None
         representation = get_representation(obj, context)
     except Exception:
         return None
@@ -309,7 +315,11 @@ def get_wall_representation(session, wall):
         "wall",
         wall,
         "representation",
-        lambda wall_obj: _get_proxy_representation(getattr(wall_obj, "Proxy", None), wall_obj),
+        lambda wall_obj: _get_proxy_representation(
+            getattr(wall_obj, "Proxy", None),
+            wall_obj,
+            _active_representation_context(session),
+        ),
     )
 
 
@@ -437,9 +447,9 @@ def get_region_overlay_polylines(session, region):
     )
 
 
-def _compute_opening_overlay_geometry(opening_obj):
+def _compute_opening_overlay_geometry(opening_obj, context=None):
     object_proxy = getattr(opening_obj, "Proxy", None)
-    representation = _get_proxy_representation(object_proxy, opening_obj)
+    representation = _get_proxy_representation(object_proxy, opening_obj, context)
     if representation is not None:
         symbol_polylines = []
         guide_polylines = []
@@ -461,7 +471,7 @@ def _compute_opening_overlay_geometry(opening_obj):
     proxy = getattr(view_object, "Proxy", None)
     if not proxy:
         return {"symbol_polylines": (), "guide_polylines": ()}
-    representation = _get_proxy_representation(proxy, opening_obj)
+    representation = _get_proxy_representation(proxy, opening_obj, context)
     if representation is not None:
         symbol_polylines = []
         guide_polylines = []
@@ -501,7 +511,9 @@ def get_opening_representation(session, opening):
         "opening",
         opening,
         "overlay_geometry",
-        _compute_opening_overlay_geometry,
+        lambda opening_obj: _compute_opening_overlay_geometry(
+            opening_obj, _active_representation_context(session)
+        ),
     )
     return geometry.get("representation")
 
@@ -515,7 +527,9 @@ def get_opening_overlay_polylines(session, opening):
         "opening",
         opening,
         "overlay_geometry",
-        _compute_opening_overlay_geometry,
+        lambda opening_obj: _compute_opening_overlay_geometry(
+            opening_obj, _active_representation_context(session)
+        ),
     )
     return tuple(geometry.get("symbol_polylines", ()))
 
@@ -534,7 +548,9 @@ def get_opening_guide_polylines(session, opening):
             "opening",
             opening_obj,
             "overlay_geometry",
-            _compute_opening_overlay_geometry,
+            lambda candidate: _compute_opening_overlay_geometry(
+                candidate, _active_representation_context(session)
+            ),
         ).get("guide_polylines", ()),
     )
 

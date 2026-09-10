@@ -26,6 +26,9 @@
 
 import Arch
 import ArchComponent
+import BimContextualRendering
+from bimplan import contextual_rendering as plan_contextual_rendering
+from bimplan import representation_context as plan_representation_context
 import Draft
 import Part
 import FreeCAD as App
@@ -33,10 +36,230 @@ from bimtests import TestArchBase
 from draftutils.messages import _msg
 
 from math import pi, cos, sin, radians
-from unittest.mock import patch
+from types import SimpleNamespace
+from unittest.mock import MagicMock, patch
 
 
 class TestArchComponent(TestArchBase.TestArchBase):
+
+    def test_plan_contextual_rendering_refreshes_dependencies_and_closes(self):
+        """Plan Edit should incrementally render walls and their hosted openings."""
+
+        wall = object()
+        opening = object()
+        wall_representation = SimpleNamespace(source=wall)
+        opening_representation = SimpleNamespace(source=opening)
+        renderer = MagicMock()
+        session = SimpleNamespace(
+            view=object(),
+            doc=SimpleNamespace(Objects=(wall, opening)),
+            active_storey=None,
+            viewport=SimpleNamespace(request_view_redraw=MagicMock()),
+            visibility=SimpleNamespace(get_plan_semantic_object=lambda obj: obj),
+            selection=SimpleNamespace(
+                targets=SimpleNamespace(is_plan_selectable_wall=lambda obj: obj is wall)
+            ),
+            openings=SimpleNamespace(
+                is_hosted_opening_object=lambda obj: obj is opening,
+                get_plan_opening_instances=lambda: (opening,),
+                get_wall_hosted_openings=lambda obj: (opening,) if obj is wall else (),
+                is_opening_visual_dependency=lambda candidate, obj: (
+                    candidate is opening and obj is wall
+                ),
+            ),
+            overlays=SimpleNamespace(
+                geometry=SimpleNamespace(
+                    get_wall_representation=lambda obj: wall_representation,
+                    get_opening_representation=lambda obj: opening_representation,
+                )
+            ),
+            representation_context=SimpleNamespace(includes_object=lambda _obj: True),
+        )
+        api = plan_contextual_rendering.PlanContextualRenderingAPI(session)
+
+        with patch(
+            "bimplan.contextual_rendering."
+            "BimContextualRendering.ContextualRepresentationRenderer",
+            return_value=renderer,
+        ):
+            api.start()
+            renderer.reset_mock()
+            api.refresh_object(wall)
+            api.close()
+
+        renderer.set_representation.assert_any_call(wall_representation)
+        renderer.set_representation.assert_any_call(opening_representation)
+        renderer.close.assert_called_once_with()
+
+    def test_section_plane_provides_arbitrary_representation_context(self):
+        """SectionPlane should configure the same BIM representation pipeline as plans."""
+
+        section = Arch.makeSectionPlane(name="ContextSection")
+        section.Placement = App.Placement(
+            App.Vector(25, 0, 0), App.Rotation(App.Vector(0, 1, 0), 90)
+        )
+        section.Depth = 750
+
+        context = section.Proxy.getRepresentationContext(section)
+
+        self.assertEqual(context.purpose, ArchComponent.RepresentationPurpose.SECTION)
+        self.assertEqual(context.reference_frame, section.Placement)
+        self.assertEqual(context.cut_offset, 0.0)
+        self.assertEqual(context.target_offset, 0.0)
+        self.assertEqual(context.projection_range, 750.0)
+        self.assertIs(context.source, section)
+
+    def test_representation_context_accepts_saved_view_provider_protocol(self):
+        """BIM Views should be able to provide profiles without Plan Edit knowing their type."""
+
+        expected = ArchComponent.RepresentationContext(
+            purpose=ArchComponent.RepresentationPurpose.ELEVATION,
+            reference_frame=App.Placement(),
+            profile="Architectural",
+        )
+        source = SimpleNamespace()
+        source.Proxy = SimpleNamespace(getRepresentationContext=lambda obj: expected)
+
+        context = plan_representation_context.context_from_source(source)
+
+        self.assertIs(context, expected)
+
+    def test_contextual_renderer_keeps_same_object_viewer_local(self):
+        """Two viewers should own independent representations of one BIM object."""
+
+        class FakeView:
+            def __init__(self, layer):
+                self.scene = BimContextualRendering.coin.SoSeparator()
+                self.layer = layer
+                self.visibility_calls = []
+
+            def pushViewContextLayer(self):
+                return self.layer
+
+            def removeViewContextLayer(self, layer):
+                self.removed_layer = layer
+
+            def setViewVisibility(self, layer, source, state):
+                self.visibility_calls.append((layer, source, state))
+
+            def getSceneGraph(self):
+                return self.scene
+
+        source = self.document.addObject("Part::Feature", "ContextualSource")
+        plan = ArchComponent.BIMRepresentation(source, ArchComponent.PlanContext(1000, 0))
+        line = (App.Vector(0, 0, 0), App.Vector(100, 0, 0))
+        plan.add_geometry("projected_geometry", line, "Projection", "Projection1")
+        section = ArchComponent.BIMRepresentation(source, object())
+        face = Part.makePlane(100, 50)
+        section.add_geometry("cut_geometry", face, "CutFace", "Face1")
+        first_view = FakeView(11)
+        second_view = FakeView(22)
+
+        first = BimContextualRendering.ContextualRepresentationRenderer(first_view)
+        second = BimContextualRendering.ContextualRepresentationRenderer(second_view)
+        first_node = first.set_representation(plan)
+        second_node = second.set_representation(section)
+
+        self.assertIsNot(first.root, second.root)
+        self.assertIsNot(first_node, second_node)
+        self.assertIs(first.set_representation(plan), first_node)
+        self.assertEqual(first_view.visibility_calls[-1], (11, source, "Hidden"))
+        self.assertEqual(second_view.visibility_calls[-1], (22, source, "Hidden"))
+        first.close()
+        self.assertEqual(first_view.removed_layer, 11)
+        self.assertEqual(second_view.scene.getNumChildren(), 1)
+        second.close()
+
+    def test_query_representation_snap_preserves_semantic_identity(self):
+        """Semantic snap queries should prefer vertices and retain their source mapping."""
+
+        source = self.document.addObject("Part::Feature", "SnapSource")
+        edge = Part.makeLine(App.Vector(0, 0, 0), App.Vector(100, 0, 0))
+        vertex = edge.Vertexes[0]
+        context = ArchComponent.PlanContext(cut_z=1000.0, target_z=0.0)
+        representation = ArchComponent.BIMRepresentation(source=source, context=context)
+        representation.add_geometry("snap_geometry", edge, "CutEdge", "Face1.Edge1")
+        representation.add_geometry("snap_geometry", vertex, "CutVertex", "Face1.Vertex1")
+
+        result = ArchComponent.query_representation_snap(
+            [representation], App.Vector(0, 0, 500), 1.0, context=context
+        )
+
+        self.assertIsNotNone(result)
+        self.assertIs(result.source, source)
+        self.assertEqual(result.role, "CutVertex")
+        self.assertEqual(result.subelement, "Face1.Vertex1")
+        self.assertAlmostEqual(result.point.z, 0.0)
+
+    def test_query_representation_pick_accepts_cut_face_interior(self):
+        """A filled contextual cut face should remain pickable away from its boundary."""
+
+        source = self.document.addObject("Part::Feature", "FacePickSource")
+        face = Part.makePlane(100, 50)
+        representation = ArchComponent.BIMRepresentation(source, object())
+        representation.add_geometry("cut_geometry", face, "CutFace", "Face1")
+
+        result = ArchComponent.query_representation_pick(
+            (representation,),
+            (50, 25),
+            lambda point: (point.x, point.y),
+            1.0,
+        )
+
+        self.assertIsNotNone(result)
+        self.assertIs(result.source, source)
+        self.assertEqual(result.subelement, "Face1")
+
+    def test_query_representation_snap_uses_arbitrary_context_plane(self):
+        """Snap distance should be measured after projecting onto the active frame."""
+
+        source = self.document.addObject("Part::Feature", "SectionSnapSource")
+        vertex = Part.Vertex(App.Vector(25, 10, 0))
+        frame = App.Placement(App.Vector(), App.Rotation(App.Vector(0, 1, 0), 90))
+        context = ArchComponent.RepresentationContext(
+            purpose=ArchComponent.RepresentationPurpose.SECTION,
+            reference_frame=frame,
+            target_offset=25.0,
+        )
+        representation = ArchComponent.BIMRepresentation(source=source, context=context)
+        representation.add_geometry("snap_geometry", vertex, "CutVertex", "Vertex1")
+
+        result = ArchComponent.query_representation_snap(
+            [representation], App.Vector(900, 10, 0), 0.1, context=context
+        )
+
+        self.assertIsNotNone(result)
+        self.assertIs(result.source, source)
+        self.assertEqual(result.subelement, "Vertex1")
+
+    def test_query_representation_pick_preserves_mapping_and_input_priority(self):
+        """Screen picks should resolve semantic subelements and break ties by input order."""
+
+        wall = self.document.addObject("Part::Feature", "PickWall")
+        opening = self.document.addObject("Part::Feature", "PickOpening")
+        context = ArchComponent.PlanContext(cut_z=1000.0, target_z=0.0)
+        wall_representation = ArchComponent.BIMRepresentation(wall, context)
+        opening_representation = ArchComponent.BIMRepresentation(opening, context)
+        wall_line = (App.Vector(0, 0, 0), App.Vector(100, 0, 0))
+        opening_line = (App.Vector(40, 0, 0), App.Vector(60, 0, 0))
+        wall_representation.add_geometry(
+            "projected_geometry", wall_line, "WallProjection", "WallEdge1"
+        )
+        opening_representation.add_geometry(
+            "projected_geometry", opening_line, "OpeningSymbol", "OpeningSymbol1"
+        )
+
+        result = ArchComponent.query_representation_pick(
+            [opening_representation, wall_representation],
+            (50, 0),
+            lambda point: (point.x, point.y),
+            2.0,
+        )
+
+        self.assertIsNotNone(result)
+        self.assertIs(result.source, opening)
+        self.assertEqual(result.role, "OpeningSymbol")
+        self.assertEqual(result.subelement, "OpeningSymbol1")
 
     def testAdd(self):
         App.Console.PrintLog("Checking Arch Add...\n")

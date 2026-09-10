@@ -210,6 +210,241 @@ class BIMRepresentation:
             None,
         )
 
+    def iter_snap_targets(self):
+        """Yield semantic targets for the geometry intended for snapping."""
+
+        snap_ids = {id(geometry) for geometry in self.snap_geometry}
+        for mapping in self.source_mappings:
+            if id(mapping.geometry) in snap_ids:
+                yield BIMSnapTarget(
+                    geometry=mapping.geometry,
+                    source=mapping.source,
+                    subelement=mapping.subelement,
+                    role=mapping.role,
+                    context=self.context,
+                )
+
+
+class BIMSnapTarget:
+    """One renderer-independent semantic snapping candidate."""
+
+    def __init__(self, geometry, source, subelement=None, role=None, context=None):
+        self.geometry = geometry
+        self.source = source
+        self.subelement = subelement
+        self.role = role
+        self.context = context
+
+
+class BIMSnapResult:
+    """Nearest point and semantic identity returned by a snap query."""
+
+    def __init__(self, point, target, distance):
+        self.point = point
+        self.target = target
+        self.distance = distance
+
+    @property
+    def source(self):
+        return self.target.source
+
+    @property
+    def subelement(self):
+        return self.target.subelement
+
+    @property
+    def role(self):
+        return self.target.role
+
+
+class BIMPickResult:
+    """Screen-space hit that retains semantic representation identity."""
+
+    def __init__(self, target, distance_squared):
+        self.target = target
+        self.distance_squared = distance_squared
+
+    @property
+    def source(self):
+        return self.target.source
+
+    @property
+    def subelement(self):
+        return self.target.subelement
+
+    @property
+    def role(self):
+        return self.target.role
+
+
+def _project_to_context_plane(point, context):
+    frame = getattr(context, "reference_frame", None)
+    if frame is None:
+        target_z = getattr(context, "target_z", None)
+        if target_z is None:
+            return FreeCAD.Vector(point)
+        return FreeCAD.Vector(point.x, point.y, target_z)
+    local_point = frame.inverse().multVec(FreeCAD.Vector(point))
+    target_offset = getattr(context, "target_offset", None)
+    if target_offset is not None:
+        local_point.z = target_offset
+    return frame.multVec(local_point)
+
+
+def _nearest_snap_point(geometry, point):
+    shape_type = getattr(geometry, "ShapeType", "")
+    if shape_type == "Vertex":
+        candidate = FreeCAD.Vector(geometry.Point)
+        return candidate, candidate.distanceToPoint(point)
+    if shape_type == "Edge":
+        import Part
+
+        try:
+            distance, point_pairs, _info = geometry.distToShape(Part.Vertex(point))
+            if point_pairs:
+                return FreeCAD.Vector(point_pairs[0][0]), float(distance)
+        except Exception:
+            return None, None
+    if isinstance(geometry, (tuple, list)):
+        points = [FreeCAD.Vector(value) for value in geometry]
+        winner = None
+        for start, end in zip(points, points[1:]):
+            direction = end.sub(start)
+            length_squared = direction.dot(direction)
+            parameter = 0.0
+            if length_squared > 1e-18:
+                parameter = min(max(point.sub(start).dot(direction) / length_squared, 0.0), 1.0)
+            candidate = start.add(direction.multiply(parameter))
+            distance = candidate.distanceToPoint(point)
+            if winner is None or distance < winner[1]:
+                winner = candidate, distance
+        return winner or (None, None)
+    return None, None
+
+
+def query_representation_snap(representations, point, tolerance, context=None):
+    """Return the nearest semantic representation target within ``tolerance``."""
+
+    query_point = _project_to_context_plane(FreeCAD.Vector(point), context) if context else point
+    winner = None
+    for representation in representations or ():
+        for target in representation.iter_snap_targets():
+            candidate, distance = _nearest_snap_point(target.geometry, query_point)
+            if candidate is None or distance > tolerance:
+                continue
+            prefer_vertex = (
+                winner is not None
+                and abs(distance - winner.distance) <= 1e-9
+                and getattr(target.geometry, "ShapeType", "") == "Vertex"
+                and getattr(winner.target.geometry, "ShapeType", "") != "Vertex"
+            )
+            if winner is None or distance < winner.distance or prefer_vertex:
+                winner = BIMSnapResult(candidate, target, distance)
+    return winner
+
+
+def _iter_pick_polylines(geometry):
+    shape_type = getattr(geometry, "ShapeType", "")
+    if shape_type == "Vertex":
+        yield (FreeCAD.Vector(geometry.Point),)
+    elif shape_type == "Edge":
+        try:
+            yield tuple(FreeCAD.Vector(point) for point in geometry.discretize(Deflection=0.5))
+        except Exception:
+            yield tuple(FreeCAD.Vector(vertex.Point) for vertex in geometry.Vertexes)
+    elif shape_type == "Face":
+        for edge in geometry.Edges:
+            yield from _iter_pick_polylines(edge)
+    elif isinstance(geometry, (tuple, list)):
+        yield tuple(FreeCAD.Vector(point) for point in geometry)
+
+
+def _screen_segment_distance_squared(cursor, start, end):
+    dx = end[0] - start[0]
+    dy = end[1] - start[1]
+    length_squared = dx * dx + dy * dy
+    if length_squared <= 1e-12:
+        parameter = 0.0
+    else:
+        parameter = min(
+            max(((cursor[0] - start[0]) * dx + (cursor[1] - start[1]) * dy) / length_squared, 0.0),
+            1.0,
+        )
+    x = start[0] + parameter * dx
+    y = start[1] + parameter * dy
+    return (x - cursor[0]) ** 2 + (y - cursor[1]) ** 2
+
+
+def _screen_face_contains(geometry, cursor, project_point):
+    if getattr(geometry, "ShapeType", "") != "Face":
+        return False
+    inside = False
+    for wire in geometry.Wires:
+        try:
+            polygon = [project_point(point) for point in wire.discretize(Deflection=0.5)]
+        except Exception:
+            continue
+        if len(polygon) < 3:
+            continue
+        wire_contains = False
+        previous = polygon[-1]
+        for current in polygon:
+            if (current[1] > cursor[1]) != (previous[1] > cursor[1]):
+                crossing_x = previous[0] + (cursor[1] - previous[1]) * (
+                    current[0] - previous[0]
+                ) / (current[1] - previous[1])
+                if cursor[0] < crossing_x:
+                    wire_contains = not wire_contains
+            previous = current
+        if wire_contains:
+            inside = not inside
+    return inside
+
+
+def query_representation_pick(representations, cursor, project_point, tolerance):
+    """Return the nearest visible representation geometry in screen space."""
+
+    cursor = float(cursor[0]), float(cursor[1])
+    tolerance_squared = float(tolerance) ** 2
+    winner = None
+    for representation in representations or ():
+        geometries = tuple(representation.projected_geometry) + tuple(representation.cut_geometry)
+        geometry_ids = {id(geometry) for geometry in geometries}
+        for mapping in representation.source_mappings:
+            if id(mapping.geometry) not in geometry_ids:
+                continue
+            target = BIMSnapTarget(
+                mapping.geometry,
+                mapping.source,
+                mapping.subelement,
+                mapping.role,
+                representation.context,
+            )
+            if _screen_face_contains(mapping.geometry, cursor, project_point):
+                distance_squared = 0.0
+                if winner is None or distance_squared < winner.distance_squared:
+                    winner = BIMPickResult(target, distance_squared)
+                continue
+            for polyline in _iter_pick_polylines(mapping.geometry):
+                try:
+                    projected = [project_point(point) for point in polyline]
+                except Exception:
+                    continue
+                if len(projected) == 1:
+                    distance_squared = (projected[0][0] - cursor[0]) ** 2 + (
+                        projected[0][1] - cursor[1]
+                    ) ** 2
+                else:
+                    distance_squared = min(
+                        _screen_segment_distance_squared(cursor, start, end)
+                        for start, end in zip(projected, projected[1:])
+                    )
+                if distance_squared > tolerance_squared:
+                    continue
+                if winner is None or distance_squared < winner.distance_squared:
+                    winner = BIMPickResult(target, distance_squared)
+    return winner
+
 
 def _make_transient_face(shapes, maker_class_name):
     """Build plain transient faces for analysis-only geometry."""

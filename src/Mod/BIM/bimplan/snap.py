@@ -5,6 +5,17 @@
 import FreeCAD
 import FreeCADGui
 
+import ArchComponent
+
+
+def query_semantic_snap(representations, point, tolerance, context=None, fallback=None):
+    """Prefer a BIM semantic target and retain the caller's ordinary snap fallback."""
+
+    result = ArchComponent.query_representation_snap(
+        representations, point, tolerance, context=context
+    )
+    return result if result is not None else fallback
+
 
 def _get_snapper():
     return getattr(FreeCADGui, "Snapper", None)
@@ -146,3 +157,12 @@ class PlanSnapAPI:
 
     def set_point_focus_suppressed(self, suppressed):
         return set_point_focus_suppressed(suppressed)
+
+    def query_semantic_snap(self, representations, point, tolerance, context=None, fallback=None):
+        return query_semantic_snap(
+            representations,
+            point,
+            tolerance,
+            context=context,
+            fallback=fallback,
+        )

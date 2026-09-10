@@ -2118,12 +2118,14 @@ class _HostedOpeningRepresentationGeometry:
             ("OpeningGuide", geometry["guide_polylines"]),
         ):
             for index, polyline in enumerate(polylines, start=1):
+                polyline = tuple(polyline)
                 representation.add_geometry(
                     "projected_geometry",
-                    tuple(polyline),
+                    polyline,
                     role,
                     subelement=f"{role}{index}",
                 )
+                representation.snap_geometry.append(polyline)
         return representation
 
     @staticmethod

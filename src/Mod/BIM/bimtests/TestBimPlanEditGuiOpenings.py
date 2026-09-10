@@ -11,8 +11,8 @@ from .TestBimPlanEditGuiBase import BimPlanEditGuiBase
 
 
 class BimPlanEditGuiOpeningsMixin:
-    def test_plan_edit_forces_hosted_doors_visible(self):
-        """Hosted doors should become visible in Plan Edit even if the regular 3D view keeps them hidden."""
+    def test_plan_edit_renders_hidden_hosted_doors_contextually(self):
+        """A hidden 3D door should receive a viewer-local Plan representation."""
 
         level = Arch.makeFloor(name="Level 0")
         wall = Arch.makeWall(length=3000, width=200, height=2500)
@@ -29,7 +29,8 @@ class BimPlanEditGuiOpeningsMixin:
         self.assertIsNotNone(session, "Plan Edit session should start in GUI tests.")
         self.pump_gui_events()
 
-        self.assert_plan_view_visibility(session, door, True)
+        self.assertIn(door, session.contextual_rendering.renderer.sources)
+        self.assert_plan_view_visibility(session, door, False)
         self.assertFalse(door.ViewObject.Selectable)
         self.assertTrue(hasattr(door.ViewObject.Proxy, "lcoords"))
 
@@ -88,19 +89,21 @@ class BimPlanEditGuiOpeningsMixin:
         self.pump_gui_events()
 
         self.assert_plan_view_visibility(session, other_door, False)
+        self.assertNotIn(other_door, session.contextual_rendering.renderer.sources)
         self.assertFalse(other_door.ViewObject.Selectable)
 
         session.storey.set_active_storey(other_level)
         self.pump_gui_events()
 
-        self.assert_plan_view_visibility(session, other_door, True)
+        self.assert_plan_view_visibility(session, other_door, False)
+        self.assertIn(other_door, session.contextual_rendering.renderer.sources)
         self.assertFalse(other_door.ViewObject.Selectable)
 
         session.shutdown(close_dialog=False)
         self.pump_gui_events()
 
-    def test_plan_edit_hosted_door_populates_footprint_lines(self):
-        """Hosted doors should have committed footprint line data while Plan Edit is active."""
+    def test_plan_edit_hosted_door_uses_contextual_representation(self):
+        """Hosted doors should use semantic committed geometry in Plan Edit."""
 
         level = Arch.makeFloor(name="Level 0")
         wall = Arch.makeWall(length=3000, width=200, height=2500)
@@ -117,13 +120,12 @@ class BimPlanEditGuiOpeningsMixin:
         self.assertIsNotNone(session)
         self.pump_gui_events()
 
-        proxy = door.ViewObject.Proxy
-        self.assert_plan_view_visibility(session, door, True)
+        representation = session.overlays.geometry.get_opening_representation(door)
+        self.assertIsNotNone(representation)
+        self.assertTrue(representation.projected_geometry)
+        self.assertIn(door, session.contextual_rendering.renderer.sources)
+        self.assert_plan_view_visibility(session, door, False)
         self.assertFalse(door.ViewObject.Selectable)
-        self.assertTrue(hasattr(proxy, "lcoords"))
-        self.assertTrue(hasattr(proxy, "lset"))
-        self.assertGreater(proxy.lcoords.point.getNum(), 0)
-        self.assertGreater(proxy.lset.numVertices.getNum(), 0)
 
     def test_plan_edit_selecting_hosted_door_does_not_enable_wall_grips(self):
         """Hosted opening selection should not re-enter wall endpoint edit mode."""

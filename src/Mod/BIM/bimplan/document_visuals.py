@@ -166,6 +166,8 @@ def flush_created_plan_objects(session, force=False):
             continue
         eligible.append(obj)
     session.visibility.register_plan_objects(eligible)
+    for obj in eligible:
+        session.contextual_rendering.refresh_object(obj)
 
 
 def are_document_visual_updates_deferred(session):
@@ -313,6 +315,7 @@ def refresh_plan_object_footprint_display(session, obj, *, request_redraw=True):
 
     view_object = getattr(obj, "ViewObject", None)
     _update_view_object(view_object)
+    session.contextual_rendering.refresh_object(obj)
     if not refreshed:
         return
     if request_redraw:
@@ -425,6 +428,7 @@ def slot_deleted_object(session, obj):
         return
     _invalidate_document_visual_dependency_caches(session)
     session.overlays.geometry.invalidate_plan_overlay_geometry_cache(obj)
+    session.contextual_rendering.remove_object(obj)
     if are_document_visual_updates_deferred(session):
         if session.selection.state.is_selected_plan_target("wall", obj):
             queue_deferred_selection_effect(
@@ -461,7 +465,11 @@ def invalidate_document_dependent_plan_visuals(session, recompute_opening_hosts=
     _provider_runtime_api(session).invalidate_plan_provider_document_cache()
     session.visibility.invalidate_plan_classification_cache()
     session.openings.invalidate_wall_hosted_openings_cache()
+    refresh_context = getattr(getattr(session, "representation_context", None), "refresh", None)
+    if callable(refresh_context):
+        refresh_context()
     session.overlays.geometry.invalidate_plan_overlay_geometry_cache()
+    session.contextual_rendering.refresh_all()
     session.selection.refresh.sanitize_plan_target_references()
     selected_provider = session.selection.state.get_selected_plan_target_object("provider")
     secondary_targets = session.selection.state.get_secondary_selected_plan_targets()

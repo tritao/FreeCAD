@@ -1033,6 +1033,14 @@ class TestArchWindow(TestArchBase.TestArchBase):
         ]
         self.assertEqual(roles.count("OpeningSymbol"), 3)
         self.assertEqual(roles.count("OpeningGuide"), 1)
+        self.assertEqual(len(representation.snap_geometry), 4)
+        snap_point = representation.snap_geometry[0][0]
+        snap_result = ArchComponent.query_representation_snap(
+            [representation], snap_point, 0.1, context=context
+        )
+        self.assertIsNotNone(snap_result)
+        self.assertIs(snap_result.source, door)
+        self.assertEqual(snap_result.role, "OpeningSymbol")
 
         raised_context = ArchComponent.PlanContext(cut_z=1000.0, target_z=250.0)
         raised_representation = door.Proxy.getRepresentation(door, raised_context)

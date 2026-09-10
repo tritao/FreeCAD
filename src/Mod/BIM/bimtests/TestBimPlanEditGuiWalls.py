@@ -4,11 +4,41 @@
 
 import os
 
+import ArchComponent
+
 from .TestBimPlanEditGuiBase import *  # noqa: F401,F403
 from .TestBimPlanEditGuiBase import BimPlanEditGuiBase
 
 
 class BimPlanEditGuiWallsMixin:
+    def test_plan_edit_uses_selected_section_plane_context(self):
+        """A selected SectionPlane should drive rendering and interaction geometry."""
+
+        wall = Arch.makeWall(length=3000, width=200, height=2500)
+        section = Arch.makeSectionPlane([wall], name="PlanEditSection")
+        section.Placement = FreeCAD.Placement(
+            FreeCAD.Vector(1500, 0, 1250),
+            FreeCAD.Rotation(FreeCAD.Vector(1, 0, 0), 90),
+        )
+        self.document.recompute()
+        FreeCADGui.Selection.clearSelection()
+        FreeCADGui.Selection.addSelection(section)
+
+        session = BimPlanSession.start_session()
+        self.assertIsNotNone(session)
+        self.pump_gui_events()
+
+        context = session.representation_context.context
+        representation = session.overlays.geometry.get_wall_representation(wall)
+        self.assertIs(session.representation_context.source, section)
+        self.assertEqual(context.purpose, ArchComponent.RepresentationPurpose.SECTION)
+        self.assertEqual(context.reference_frame, section.Placement)
+        self.assertTrue(representation.cut_geometry)
+        self.assertIn(wall, session.contextual_rendering.renderer.sources)
+
+        session.shutdown(close_dialog=False)
+        self.pump_gui_events()
+
     def _open_plan_edit_fixture_document(self, relative_path):
         fixture_path = os.path.abspath(os.path.join(os.path.dirname(__file__), relative_path))
         FreeCAD.closeDocument(self.document.Name)

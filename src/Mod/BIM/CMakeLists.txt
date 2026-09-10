@@ -18,6 +18,7 @@ SET(Arch_SRCS
     Init.py
     InitGui.py
     ArchComponent.py
+    BimContextualRendering.py
     ArchIFC.py
     ArchIFCView.py
     ArchIFCSchema.py
@@ -218,6 +219,7 @@ SET(bimcommands_SRCS
 SET(bimplan_SRCS
     bimplan/__init__.py
     bimplan/benchmark.py
+    bimplan/contextual_rendering.py
     bimplan/devtools/PLAN_EDIT_ARCHITECTURE_PLAN.md
     bimplan/devtools/cruft_report.py
     bimplan/document_visuals.py
@@ -232,6 +234,7 @@ SET(bimplan_SRCS
     bimplan/overlays/symbols.py
     bimplan/overlays/walls.py
     bimplan/performance.py
+    bimplan/representation_context.py
     bimplan/picking/__init__.py
     bimplan/picking/area.py
     bimplan/picking/coordinator.py

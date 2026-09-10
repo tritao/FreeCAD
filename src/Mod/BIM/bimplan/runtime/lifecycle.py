@@ -20,6 +20,13 @@ def _overlay_runtime_api(session):
     return getattr(overlays, "runtime", overlays)
 
 
+def _close_contextual_rendering(session):
+    contextual_rendering = getattr(session, "contextual_rendering", None)
+    close = getattr(contextual_rendering, "close", None)
+    if callable(close):
+        close()
+
+
 def _cancel_provider_point_tool(session, refresh=True):
     cancel = getattr(_provider_point_api(session), "cancel_provider_point_tool", None)
     if callable(cancel):
@@ -107,6 +114,7 @@ def disconnect_teardown_signals(session):
 
 
 def discard_runtime_references(session):
+    _close_contextual_rendering(session)
     session.viewport.discard_runtime_references()
     session.selection.state.discard_runtime_references()
     session.providers.runtime.discard_runtime_references()
@@ -182,6 +190,7 @@ def _cleanup_begin_teardown(session):
     cancel_pending_edit(session, restore_wall_visibility=False)
     _cancel_current_tool_for_begin_teardown(session)
     _overlay_runtime_api(session).clear_begin_teardown_visuals()
+    _close_contextual_rendering(session)
     detach_runtime_observers(session)
 
 
@@ -195,6 +204,7 @@ def _cleanup_shutdown(session, *, teardown=False):
     cancel_pending_edit(session, restore_wall_visibility=not teardown)
     _cancel_current_tool_for_shutdown(session)
     _overlay_runtime_api(session).clear_shutdown_visuals()
+    _close_contextual_rendering(session)
     detach_runtime_observers(session)
 
 

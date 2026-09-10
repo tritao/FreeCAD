@@ -105,6 +105,12 @@ def pick_plan_symbol_target_from_overlays(session, mouse_pos, radius_px=10):
     )
 
 
+def pick_plan_wall_target_from_representation(session, mouse_pos, radius_px=10):
+    return plan_overlay_picking.pick_plan_wall_target_from_representation(
+        session, mouse_pos, radius_px=radius_px
+    )
+
+
 def pick_plan_region_target_from_polylines(session, mouse_pos):
     return plan_area_picking.pick_plan_region_target_from_polylines(session, mouse_pos)
 
@@ -261,6 +267,10 @@ def _resolve_symbol_or_terminal_overlay_target(session, mouse_pos, candidates):
         return PickResolutionResult(
             target_ref=plan_target_kinds.make_plan_target_ref("symbol", candidates.symbol.obj),
             stage="symbol_overlay_or_direct",
+        )
+    if candidates.wall.obj is None:
+        candidates.store_if_empty(
+            "wall", pick_plan_wall_target_from_representation(session, mouse_pos)
         )
     if candidates.wall.obj is not None:
         return PickResolutionResult(
