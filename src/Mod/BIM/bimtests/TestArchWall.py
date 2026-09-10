@@ -34,6 +34,7 @@ import Part
 import Sketcher
 import FreeCAD as App
 from bimplan import contextual_editing as plan_contextual_editing
+from ArchRepresentation import PlanContext, RepresentationPurpose
 from bimtests import TestArchBase
 
 
@@ -623,6 +624,33 @@ class TestArchWall(TestArchBase.TestArchBase):
         constrained = wall.Proxy.getRepresentation(wall, context)
         self.assertNotIn("WallHeight", {handle.role for handle in constrained.edit_handles})
         wall.setExpression("Height", None)
+
+    def testWallRepresentationUsesPlanAndSectionPlaneContexts(self):
+        wall = Arch.makeWall(length=2000, width=200, height=2500)
+        self.document.recompute()
+
+        plan = PlanContext(cut_z=1000.0, target_z=0.0, source=wall)
+        plan_representation = wall.Proxy.getRepresentation(wall, plan)
+        self.assertIs(plan_representation.source, wall)
+        self.assertIs(plan_representation.context, plan)
+        self.assertTrue(plan_representation.cut_geometry)
+        self.assertTrue(plan_representation.snap_geometry)
+
+        section = Arch.makeSectionPlane(wall)
+        section.Placement = App.Placement(
+            App.Vector(0.0, 0.0, 1000.0),
+            App.Rotation(App.Vector(0, 1, 0), 90),
+        )
+        self.document.recompute()
+        section_context = section.Proxy.getRepresentationContext(section)
+        section_representation = wall.Proxy.getRepresentation(wall, section_context)
+        self.assertIs(section_context.purpose, RepresentationPurpose.SECTION)
+        self.assertIs(section_representation.context, section_context)
+        self.assertTrue(section_representation.cut_geometry)
+        self.assertNotEqual(
+            section_representation.cut_geometry[0].CenterOfMass.z,
+            plan_representation.cut_geometry[0].CenterOfMass.z,
+        )
 
     def test_joinWalls(self):
         """Test the joinWalls function."""

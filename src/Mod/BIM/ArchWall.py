@@ -54,6 +54,7 @@ import ArchWallRelation
 import ArchWallRelationResolver
 import Draft
 import DraftVecUtils
+from ArchRepresentation import PlanContext
 
 from FreeCAD import Vector
 from draftutils import params
