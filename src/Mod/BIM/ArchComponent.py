@@ -169,6 +169,22 @@ def project_to_representation_plane(point, context):
     return frame.multVec(local)
 
 
+def project_direction_to_representation_plane(direction, context):
+    """Return a normalized global direction within the context output plane."""
+
+    direction = FreeCAD.Vector(direction)
+    frame = getattr(context, "reference_frame", None)
+    if frame is not None:
+        normal = frame.Rotation.multVec(FreeCAD.Vector(0, 0, 1))
+        direction = direction - normal * direction.dot(normal)
+    else:
+        direction.z = 0.0
+    if direction.Length <= 1e-9:
+        return None
+    direction.normalize()
+    return direction
+
+
 def representation_vertical_direction(context):
     """Return model Z projected into the active representation plane."""
 
@@ -275,6 +291,7 @@ class BIMEditOperation:
         minimum=None,
         maximum=None,
         value_kind="Scalar",
+        sensitivity=1.0,
     ):
         self.key = str(key)
         self.label = str(label)
@@ -286,6 +303,7 @@ class BIMEditOperation:
         self.minimum = minimum
         self.maximum = maximum
         self.value_kind = str(value_kind)
+        self.sensitivity = float(sensitivity)
 
     def is_available(self, source):
         if self._available is None:

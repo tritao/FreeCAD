@@ -461,6 +461,7 @@ def resizeWindow(
     preserve_anchor=True,
     transaction_label=None,
     raise_on_error=False,
+    anchor_shift=None,
 ):
     """Resize an existing Arch opening in place."""
 
@@ -503,6 +504,11 @@ def resizeWindow(
 
         doc.recompute()
         _preserve_window_anchor(obj, old_anchor)
+        if anchor_shift is not None:
+            target = getattr(obj, "Base", None) or obj
+            placement = FreeCAD.Placement(target.Placement)
+            placement.Base = placement.Base.add(FreeCAD.Vector(anchor_shift))
+            target.Placement = placement
         doc.recompute()
         doc.commitTransaction()
     except Exception:
@@ -523,6 +529,7 @@ def setWindowWidth(
     preserve_anchor=True,
     transaction_label=None,
     raise_on_error=False,
+    anchor_shift=None,
 ):
     """Resize an opening by changing its width."""
 
@@ -532,6 +539,7 @@ def setWindowWidth(
         obj,
         width=value,
         preserve_anchor=preserve_anchor,
+        anchor_shift=anchor_shift,
         transaction_label=transaction_label,
         raise_on_error=raise_on_error,
     )
@@ -625,6 +633,88 @@ def _opening_base_placement_sill_edit_operation():
         available=lambda obj: not ArchComponent.is_property_expression_driven(
             obj.Base, "Placement.Base.z"
         ),
+    )
+
+
+def _opening_position_edit_operation(helper):
+    move_context = helper.get_plan_move_context()
+    if not move_context:
+        return None
+    origin = move_context["origin"]
+    axis = move_context["axis_u"]
+    center = move_context["center_point"]
+    center_u = FreeCAD.Vector(center).sub(origin).dot(axis)
+    target, _placement = helper._get_plan_move_target()
+    source = helper.Object
+    property_name = "Placement.Base"
+    if target is not source:
+        property_name = "Base.Placement.Base"
+
+    def apply_position(_source, value):
+        point = origin.add(FreeCAD.Vector(axis).multiply(value))
+        point.z = center.z
+        if not helper.move_along_host(point):
+            raise ValueError(translate("Arch", "Opening cannot move along its host"))
+
+    return ArchComponent.BIMEditOperation(
+        "OpeningPosition",
+        translate("Arch", "Edit Opening Position"),
+        lambda _source: center_u,
+        apply_position,
+        property_name=property_name,
+        minimum=move_context.get("move_u_min"),
+        maximum=move_context.get("move_u_max"),
+        available=lambda _source: not ArchComponent.is_property_expression_driven(
+            target, "Placement.Base"
+        ),
+    )
+
+
+def _opening_width_edit_operation(helper, side):
+    move_context = helper.get_plan_move_context()
+    source = helper.Object
+    width = getWindowWidthMm(source)
+    if not move_context or not width or not canEditWindowWidth(source):
+        return None
+    origin = move_context["origin"]
+    axis = move_context["axis_u"]
+    center_u = FreeCAD.Vector(move_context["center_point"]).sub(origin).dot(axis)
+    half_width = width * 0.5
+    left_u = center_u - half_width
+    right_u = center_u + half_width
+    host_min = move_context.get("move_u_min")
+    host_max = move_context.get("move_u_max")
+    host_min = None if host_min is None else host_min - half_width
+    host_max = None if host_max is None else host_max + half_width
+
+    def apply_jamb(_source, value):
+        if side == "Left":
+            new_width = right_u - value
+            new_center_u = (right_u + value) * 0.5
+        else:
+            new_width = value - left_u
+            new_center_u = (left_u + value) * 0.5
+        shift = FreeCAD.Vector(axis).multiply(new_center_u - center_u)
+        setWindowWidth(
+            source,
+            new_width,
+            anchor_shift=shift,
+            transaction_label=translate("Arch", "Edit Opening Width"),
+            raise_on_error=True,
+        )
+
+    minimum = host_min if side == "Left" else left_u + 1.0
+    maximum = right_u - 1.0 if side == "Left" else host_max
+    return ArchComponent.BIMEditOperation(
+        "Opening{}Jamb".format(side),
+        translate("Arch", "Edit Opening Width"),
+        lambda _source: left_u if side == "Left" else right_u,
+        apply_jamb,
+        property_name="Width",
+        manages_transaction=True,
+        minimum=minimum,
+        maximum=maximum,
+        available=lambda _source: canEditWindowWidth(source),
     )
 
 
@@ -2164,6 +2254,7 @@ class _HostedOpeningRepresentationGeometry:
         if context is None:
             context = self._get_default_opening_plan_context(source)
         representation = ArchComponent.BIMRepresentation(source=source, context=context)
+        self._add_position_edit_handle(representation, source, context)
         if getattr(context, "reference_frame", None) is not None:
             faces = ArchComponent.get_reference_slice_faces(source.Shape, context)
             self._add_section_geometry(representation, faces)
@@ -2200,6 +2291,66 @@ class _HostedOpeningRepresentationGeometry:
                 )
                 representation.snap_geometry.append(polyline)
         return representation
+
+    def _add_position_edit_handle(self, representation, source, context):
+        purpose = getattr(context, "purpose", ArchComponent.RepresentationPurpose.PLAN)
+        if purpose not in (
+            ArchComponent.RepresentationPurpose.PLAN,
+            ArchComponent.RepresentationPurpose.SECTION,
+            ArchComponent.RepresentationPurpose.ELEVATION,
+        ):
+            return
+        move_context = self.get_plan_move_context()
+        operation = _opening_position_edit_operation(self)
+        if not move_context or operation is None or not operation.is_available(source):
+            return
+        point = ArchComponent.project_to_representation_plane(move_context["center_point"], context)
+        direction = ArchComponent.project_direction_to_representation_plane(
+            move_context["axis_u"], context
+        )
+        if direction is None:
+            return
+        representation.add_edit_handle(
+            ArchComponent.BIMEditHandle(
+                source,
+                "OpeningPosition",
+                point,
+                direction,
+                operation,
+                subelement=operation.property_name,
+                minimum=operation.minimum,
+            )
+        )
+        for side, jamb_u in (
+            (
+                "Left",
+                move_context["center_point"].sub(move_context["origin"]).dot(move_context["axis_u"])
+                - move_context["opening_half_width_u"],
+            ),
+            (
+                "Right",
+                move_context["center_point"].sub(move_context["origin"]).dot(move_context["axis_u"])
+                + move_context["opening_half_width_u"],
+            ),
+        ):
+            jamb_operation = _opening_width_edit_operation(self, side)
+            if jamb_operation is None or not jamb_operation.is_available(source):
+                continue
+            jamb_point = move_context["origin"].add(
+                FreeCAD.Vector(move_context["axis_u"]).multiply(jamb_u)
+            )
+            jamb_point.z = move_context["center_point"].z
+            representation.add_edit_handle(
+                ArchComponent.BIMEditHandle(
+                    source,
+                    "Opening{}Jamb".format(side),
+                    ArchComponent.project_to_representation_plane(jamb_point, context),
+                    direction,
+                    jamb_operation,
+                    subelement="Width.{}".format(side),
+                    minimum=jamb_operation.minimum,
+                )
+            )
 
     @staticmethod
     def _add_section_geometry(representation, faces):

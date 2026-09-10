@@ -1072,7 +1072,97 @@ class _Wall(ArchComponent.Component):
                     )
         if purpose == ArchComponent.RepresentationPurpose.PLAN:
             self._add_owned_path_edit_handles(representation, obj, context)
+            self._add_native_path_edit_handles(representation, obj, context)
+            self._add_section_property_edit_handles(representation, obj, context)
         return representation
+
+    def _add_section_property_edit_handles(self, representation, wall, context):
+        baseline = self.get_global_baseline(wall)
+        section = self.get_resolved_section(wall)
+        if baseline is None or section is None or not self._can_edit_uniform_section(wall):
+            return
+        axis = baseline.end_point.sub(baseline.start_point)
+        axis.normalize()
+        lateral = axis.cross(baseline.normal)
+        if lateral.Length <= 1e-9:
+            return
+        lateral.normalize()
+        midpoint = (baseline.start_point + baseline.end_point) * 0.5
+        align = str(wall.Align)
+        if align == "Left":
+            width_direction = -lateral
+            width_coordinate = section.y_min
+        else:
+            width_direction = lateral
+            width_coordinate = section.y_max
+        width_operation = ArchComponent.BIMEditOperation(
+            "WallWidth",
+            "Edit Wall Width",
+            lambda source: source.Width.Value,
+            lambda source, value: setattr(source, "Width", value),
+            property_name="Width",
+            minimum=1.0,
+            sensitivity=2.0 if align == "Center" else 1.0,
+            available=lambda source: self._can_edit_uniform_section(source),
+        )
+        representation.add_edit_handle(
+            ArchComponent.BIMEditHandle(
+                wall,
+                "WallWidth",
+                ArchComponent.project_to_representation_plane(
+                    midpoint + lateral * width_coordinate, context
+                ),
+                width_direction,
+                width_operation,
+                subelement="Width",
+                minimum=1.0,
+            )
+        )
+        if align not in ("Left", "Right"):
+            return
+        offset_direction = -lateral if align == "Left" else lateral
+        offset_operation = ArchComponent.BIMEditOperation(
+            "WallOffset",
+            "Edit Wall Offset",
+            lambda source: source.Offset.Value,
+            lambda source, value: setattr(source, "Offset", value),
+            property_name="Offset",
+            minimum=None,
+            available=lambda source: self._can_edit_uniform_section(source),
+        )
+        representation.add_edit_handle(
+            ArchComponent.BIMEditHandle(
+                wall,
+                "WallOffset",
+                ArchComponent.project_to_representation_plane(
+                    midpoint + lateral * ((section.y_min + section.y_max) * 0.5),
+                    context,
+                ),
+                offset_direction,
+                offset_operation,
+                subelement="Offset",
+                minimum=None,
+            )
+        )
+
+    @staticmethod
+    def _can_edit_uniform_section(wall):
+        material = getattr(wall, "Material", None)
+        base = getattr(wall, "Base", None)
+        return bool(
+            hasattr(wall, "Width")
+            and not getattr(material, "Thicknesses", None)
+            and not (
+                getattr(wall, "ArchSketchData", False)
+                and base
+                and Draft.getType(base) == "ArchSketch"
+            )
+            and not list(getattr(wall, "OverrideWidth", ()) or ())
+            and not list(getattr(wall, "OverrideAlign", ()) or ())
+            and not list(getattr(wall, "OverrideOffset", ()) or ())
+            and not ArchComponent.is_property_expression_driven(wall, "Width")
+            and not ArchComponent.is_property_expression_driven(wall, "Offset")
+        )
 
     @staticmethod
     def _add_owned_path_edit_handles(representation, wall, context):
@@ -1105,6 +1195,51 @@ class _Wall(ArchComponent.Component):
                     minimum=None,
                 )
             )
+
+    def _add_native_path_edit_handles(self, representation, wall, context):
+        if getattr(wall, "Base", None) is not None:
+            return
+        endpoints = self.calc_endpoints(wall)
+        if len(endpoints) != 2 or not self._can_edit_native_path(wall):
+            return
+
+        def apply_endpoint(source, index, value):
+            current = self.calc_endpoints(source)
+            if len(current) != 2:
+                raise ValueError("Wall no longer has an editable straight path")
+            current[index] = FreeCAD.Vector(value)
+            source.Proxy.set_from_endpoints(source, current)
+
+        for index, role in enumerate(("Start", "End")):
+            operation = ArchComponent.BIMEditOperation(
+                "WallPathEndpoint",
+                "Edit Wall Path Endpoint",
+                lambda source, index=index: self.calc_endpoints(source)[index],
+                lambda source, value, index=index: apply_endpoint(source, index, value),
+                property_name="Path.{}".format(role),
+                value_kind="Point",
+                available=lambda source: self._can_edit_native_path(source),
+            )
+            representation.add_edit_handle(
+                ArchComponent.BIMEditHandle(
+                    wall,
+                    "WallPath{}".format(role),
+                    ArchComponent.project_to_representation_plane(endpoints[index], context),
+                    FreeCAD.Vector(),
+                    operation,
+                    interaction="Planar",
+                    subelement="Path.{}".format(role),
+                    minimum=None,
+                )
+            )
+
+    def _can_edit_native_path(self, wall):
+        return bool(
+            getattr(wall, "Base", None) is None
+            and len(self.calc_endpoints(wall)) == 2
+            and not ArchComponent.is_property_expression_driven(wall, "Length")
+            and not ArchComponent.is_property_expression_driven(wall, "Placement")
+        )
 
     @staticmethod
     def _height_edit_operation():

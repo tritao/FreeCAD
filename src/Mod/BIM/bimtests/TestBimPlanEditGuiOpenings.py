@@ -11,6 +11,87 @@ from .TestBimPlanEditGuiBase import BimPlanEditGuiBase
 
 
 class BimPlanEditGuiOpeningsMixin:
+    def test_plan_opening_jamb_handle_resizes_with_opposite_jamb_fixed(self):
+        level, _wall, opening = self._make_windowed_plan_wall()
+        FreeCADGui.Selection.clearSelection()
+        FreeCADGui.Selection.addSelection(level)
+        session = BimPlanSession.start_session()
+        self.assertIsNotNone(session)
+        self.pump_gui_events()
+        self.assertTrue(session.selection.activation.select_opening_for_plan_edit(opening))
+
+        handle = next(
+            item
+            for item in session.contextual_rendering.edit_handles_for(opening)
+            if item.role == "OpeningRightJamb"
+        )
+        before_width = ArchWindow.getWindowWidthMm(opening)
+        before_center = opening.Proxy.get_plan_center_point()
+        fixed_left = before_center.sub(handle.direction * (before_width * 0.5))
+        session.contextual_editing.begin(handle)
+        result = session.contextual_editing.commit(handle.point + handle.direction * 200)
+
+        self.assertTrue(result.success)
+        self.assertAlmostEqual(ArchWindow.getWindowWidthMm(opening), before_width + 200)
+        after_center = opening.Proxy.get_plan_center_point()
+        after_left = after_center.sub(
+            handle.direction * (ArchWindow.getWindowWidthMm(opening) * 0.5)
+        )
+        self.assertTrue(after_left.isEqual(fixed_left, 1e-6))
+        resized_width = ArchWindow.getWindowWidthMm(opening)
+        refreshed = next(
+            item
+            for item in session.contextual_rendering.edit_handles_for(opening)
+            if item.role == "OpeningRightJamb"
+        )
+        session.contextual_editing.begin(refreshed)
+        rejected = session.contextual_editing.commit(refreshed.point + refreshed.direction * 10000)
+        self.assertFalse(rejected.success)
+        self.assertAlmostEqual(ArchWindow.getWindowWidthMm(opening), resized_width)
+        self._undo_document()
+        self.assertAlmostEqual(ArchWindow.getWindowWidthMm(opening), before_width)
+
+        session.shutdown(close_dialog=False)
+        self.pump_gui_events()
+
+    def test_plan_opening_position_handle_moves_along_host_and_enforces_span(self):
+        level, _wall, opening = self._make_windowed_plan_wall()
+        FreeCADGui.Selection.clearSelection()
+        FreeCADGui.Selection.addSelection(level)
+        session = BimPlanSession.start_session()
+        self.assertIsNotNone(session)
+        self.pump_gui_events()
+        self.assertTrue(session.selection.activation.select_opening_for_plan_edit(opening))
+
+        handle = next(
+            item
+            for item in session.contextual_rendering.edit_handles_for(opening)
+            if item.role == "OpeningPosition"
+        )
+        before = opening.Proxy.get_plan_center_point()
+        session.contextual_editing.begin(handle)
+        result = session.contextual_editing.commit(handle.point + handle.direction * 300)
+        self.assertTrue(result.success)
+        after = opening.Proxy.get_plan_center_point()
+        self.assertAlmostEqual(after.sub(before).dot(handle.direction), 300.0, places=5)
+
+        refreshed = next(
+            item
+            for item in session.contextual_rendering.edit_handles_for(opening)
+            if item.role == "OpeningPosition"
+        )
+        before_invalid = opening.Proxy.get_plan_center_point()
+        session.contextual_editing.begin(refreshed)
+        rejected = session.contextual_editing.commit(refreshed.point + refreshed.direction * 10000)
+        self.assertFalse(rejected.success)
+        self.assertTrue(opening.Proxy.get_plan_center_point().isEqual(before_invalid, 1e-7))
+        self._undo_document()
+        restored = opening.Proxy.get_plan_center_point()
+        self.assertTrue(restored.isEqual(before, 1e-7))
+
+        session.shutdown(close_dialog=False)
+        self.pump_gui_events()
+
     def test_section_opening_handles_edit_height_and_cancel_sill(self):
         """Opening Section handles should retain semantic height and sill behavior."""
 
@@ -31,6 +112,9 @@ class BimPlanEditGuiOpeningsMixin:
         handles = session.contextual_rendering.edit_handles_for(opening)
         by_role = {handle.role: handle for handle in handles}
         self.assertIn("OpeningHeight", by_role)
+        self.assertIn("OpeningPosition", by_role)
+        self.assertIn("OpeningLeftJamb", by_role)
+        self.assertIn("OpeningRightJamb", by_role)
         height = by_role["OpeningHeight"]
         before = ArchWindow.getWindowHeightMm(opening)
         session.contextual_editing.begin(height)

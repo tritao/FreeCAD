@@ -38,6 +38,82 @@ from bimtests import TestArchBase
 
 
 class TestArchWall(TestArchBase.TestArchBase):
+    def test_plan_native_wall_endpoints_edit_length_and_placement(self):
+        self.document.UndoMode = 1
+        wall = Arch.makeWall(length=2000, width=200, height=2500)
+        wall.Placement = App.Placement(
+            App.Vector(1000, 1000, 0), App.Rotation(App.Vector(0, 0, 1), 45)
+        )
+        self.document.recompute()
+        context = ArchComponent.PlanContext(cut_z=1000, target_z=0)
+        representation = wall.Proxy.getRepresentation(wall, context)
+        handles = {
+            handle.role: handle
+            for handle in representation.edit_handles
+            if handle.operation.key == "WallPathEndpoint"
+        }
+        self.assertEqual(set(handles), {"WallPathStart", "WallPathEnd"})
+
+        start = handles["WallPathStart"]
+        end_before = wall.Proxy.calc_endpoints(wall)[1]
+        target = start.point + App.Vector(-500, 250, 300)
+        editor = plan_contextual_editing.BIMContextualHandleEditor(context)
+        editor.begin(start)
+        result = editor.commit(target)
+        self.document.recompute()
+
+        self.assertTrue(result.success)
+        endpoints = wall.Proxy.calc_endpoints(wall)
+        self.assertTrue(endpoints[0].isEqual(start.operation.get_value(wall), 1e-7))
+        self.assertTrue(endpoints[0].isEqual(start.point + App.Vector(-500, 250, 0), 1e-7))
+        self.assertTrue(endpoints[1].isEqual(end_before, 1e-7))
+        self.assertAlmostEqual(wall.Length.Value, endpoints[0].distanceToPoint(endpoints[1]))
+
+        self.document.undo()
+        restored = wall.Proxy.calc_endpoints(wall)
+        self.assertTrue(restored[0].isEqual(start.point, 1e-7))
+        self.assertTrue(restored[1].isEqual(end_before, 1e-7))
+
+        wall.setExpression("Length", "2000 mm")
+        constrained = wall.Proxy.getRepresentation(wall, context)
+        self.assertNotIn(
+            "WallPathEndpoint", {handle.operation.key for handle in constrained.edit_handles}
+        )
+        wall.setExpression("Length", None)
+
+    def test_plan_section_handles_edit_uniform_wall_width_and_offset(self):
+        self.document.UndoMode = 1
+        wall = Arch.makeWall(length=3000, width=200, height=2500, align="Center")
+        self.document.recompute()
+        context = ArchComponent.PlanContext(cut_z=1000, target_z=0)
+        representation = wall.Proxy.getRepresentation(wall, context)
+        width = next(handle for handle in representation.edit_handles if handle.role == "WallWidth")
+        editor = plan_contextual_editing.BIMContextualHandleEditor(context)
+        editor.begin(width)
+        preview = editor.preview(width.point + width.direction * 50)
+        self.assertAlmostEqual(preview.value, 300.0)
+        editor.commit(width.point + width.direction * 50)
+        self.assertAlmostEqual(wall.Width.Value, 300.0)
+        self.document.undo()
+        self.assertAlmostEqual(wall.Width.Value, 200.0)
+
+        wall.Align = "Right"
+        self.document.recompute()
+        representation = wall.Proxy.getRepresentation(wall, context)
+        offset = next(
+            handle for handle in representation.edit_handles if handle.role == "WallOffset"
+        )
+        editor.begin(offset)
+        editor.commit(offset.point + offset.direction * 75)
+        self.assertAlmostEqual(wall.Offset.Value, 75.0)
+
+        wall.OverrideWidth = [250]
+        self.document.recompute()
+        constrained = wall.Proxy.getRepresentation(wall, context)
+        roles = {handle.role for handle in constrained.edit_handles}
+        self.assertNotIn("WallWidth", roles)
+        self.assertNotIn("WallOffset", roles)
+
     def test_sketch_coincident_path_endpoints_share_one_handle(self):
         sketch = self.document.addObject("Sketcher::SketchObject", "JoinedWallPath")
         sketch.addGeometry(
