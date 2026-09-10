@@ -110,3 +110,19 @@ class BIMRepresentation:
             (mapping for mapping in self.source_mappings if mapping.geometry is geometry),
             None,
         )
+
+
+def representation_for(obj, context):
+    """Request a representation from the object's semantic provider.
+
+    Provider lookup is deliberately capability-based: no BIM type names are
+    inspected here. A Python proxy implementing ``getRepresentation(obj,
+    context)`` owns the representation policy for that object.
+    """
+    provider = getattr(getattr(obj, "Proxy", None), "getRepresentation", None)
+    if not callable(provider):
+        raise TypeError("BIM object does not provide getRepresentation(obj, context)")
+    representation = provider(obj, context)
+    if not isinstance(representation, BIMRepresentation):
+        raise TypeError("getRepresentation(obj, context) must return BIMRepresentation")
+    return representation

@@ -7,6 +7,7 @@ from ArchRepresentation import (
     PlanContext,
     RepresentationContext,
     RepresentationPurpose,
+    representation_for,
 )
 
 
@@ -61,6 +62,34 @@ class TestArchRepresentation(unittest.TestCase):
     def test_representation_rejects_unknown_collection(self):
         with self.assertRaises(ValueError):
             BIMRepresentation().add_geometry("display", object(), "display")
+
+    def test_representation_for_delegates_to_object_provider(self):
+        context = RepresentationContext(purpose="Plan")
+
+        class Provider:
+            def getRepresentation(self, obj, requested_context):
+                self.args = (obj, requested_context)
+                return BIMRepresentation(source=obj, context=requested_context)
+
+        class BIMObject:
+            pass
+
+        obj = BIMObject()
+        obj.Proxy = Provider()
+        result = representation_for(obj, context)
+
+        self.assertIs(result.source, obj)
+        self.assertIs(result.context, context)
+        self.assertEqual(obj.Proxy.args, (obj, context))
+
+    def test_representation_for_does_not_dispatch_on_type_name(self):
+        class BIMObject:
+            pass
+
+        obj = BIMObject()
+        obj.Proxy = object()
+        with self.assertRaises(TypeError):
+            representation_for(obj, RepresentationContext())
 
 
 if __name__ == "__main__":

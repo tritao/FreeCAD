@@ -50,6 +50,7 @@ import FreeCAD
 import ArchCommands
 import ArchIFC
 import Draft
+from ArchRepresentation import BIMRepresentation
 
 from draftutils import params
 
@@ -1160,6 +1161,19 @@ class Component(ArchIFC.IfcProduct):
             The component object.
         """
         Component.setProperties(self, obj)
+
+    def getRepresentation(self, obj, context):
+        """Return the default semantic representation for ``obj``.
+
+        Specialized BIM proxies override this method for plan, section and
+        elevation geometry. The base implementation keeps model geometry
+        available to neutral consumers while preserving object identity.
+        """
+        representation = BIMRepresentation(source=obj, context=context)
+        shape = getattr(obj, "Shape", None)
+        if shape is not None and not shape.isNull():
+            representation.add_geometry("projected_geometry", shape, "model")
+        return representation
 
     def execute(self, obj):
         """Method run when the object is recomputed.
