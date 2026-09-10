@@ -17,6 +17,7 @@
 #include <Gui/Inventor/SoViewContextElement.h>
 #include <Gui/Selection/SoFCUnifiedSelection.h>
 #include <Gui/ViewContext.h>
+#include <Gui/ViewInstance.h>
 #include <Gui/ViewProviderDocumentObject.h>
 #include <Gui/ViewProviderDocumentObjectGroup.h>
 
@@ -219,4 +220,61 @@ TEST_F(ViewProviderDocumentObjectTest, auxiliaryRootGateDoesNotRetainViewProvide
     action.apply(gate);
     EXPECT_TRUE(action.getBoundingBox().isEmpty());
     gate->unref();
+}
+
+TEST_F(ViewProviderDocumentObjectTest, viewInstanceKeepsRepresentationViewerLocal)
+{
+    Gui::ViewProviderDocumentObject viewProvider;
+    viewProvider.attach(_child);
+    Gui::ViewContext hiddenContext;
+    const auto hiddenLayer = hiddenContext.pushLayer();
+    ASSERT_TRUE(
+        hiddenContext.setVisibility(hiddenLayer, _child, Gui::ViewContext::Visibility::Hidden)
+    );
+
+    Gui::ViewInstance instance(&viewProvider, &hiddenContext);
+    instance.setRepresentation(new SoCube);
+    ASSERT_TRUE(instance.hasRepresentation());
+
+    SoGetBoundingBoxAction hiddenAction(SbViewportRegion(100, 100));
+    hiddenAction.apply(instance.getRoot());
+    EXPECT_TRUE(hiddenAction.getBoundingBox().isEmpty());
+
+    ASSERT_TRUE(
+        hiddenContext.setVisibility(hiddenLayer, _child, Gui::ViewContext::Visibility::Visible)
+    );
+    SoGetBoundingBoxAction visibleAction(SbViewportRegion(100, 100));
+    visibleAction.apply(instance.getRoot());
+    EXPECT_FALSE(visibleAction.getBoundingBox().isEmpty());
+
+    instance.clearRepresentation();
+    EXPECT_FALSE(instance.hasRepresentation());
+}
+
+TEST_F(ViewProviderDocumentObjectTest, twoInstancesCanUseDifferentContexts)
+{
+    Gui::ViewProviderDocumentObject viewProvider;
+    viewProvider.attach(_child);
+    Gui::ViewContext hiddenContext;
+    const auto hiddenLayer = hiddenContext.pushLayer();
+    ASSERT_TRUE(
+        hiddenContext.setVisibility(hiddenLayer, _child, Gui::ViewContext::Visibility::Hidden)
+    );
+    Gui::ViewContext visibleContext;
+    const auto visibleLayer = visibleContext.pushLayer();
+    ASSERT_TRUE(
+        visibleContext.setVisibility(visibleLayer, _child, Gui::ViewContext::Visibility::Visible)
+    );
+
+    Gui::ViewInstance hiddenInstance(&viewProvider, &hiddenContext);
+    Gui::ViewInstance visibleInstance(&viewProvider, &visibleContext);
+    hiddenInstance.setRepresentation(new SoCube);
+    visibleInstance.setRepresentation(new SoCube);
+
+    SoGetBoundingBoxAction hiddenAction(SbViewportRegion(100, 100));
+    hiddenAction.apply(hiddenInstance.getRoot());
+    EXPECT_TRUE(hiddenAction.getBoundingBox().isEmpty());
+    SoGetBoundingBoxAction visibleAction(SbViewportRegion(100, 100));
+    visibleAction.apply(visibleInstance.getRoot());
+    EXPECT_FALSE(visibleAction.getBoundingBox().isEmpty());
 }
