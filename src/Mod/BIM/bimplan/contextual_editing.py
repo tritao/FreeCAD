@@ -71,8 +71,8 @@ class BIMContextualHandleEditor:
             validation = self.handle.operation.validate(self.handle.source, value)
             return BIMEditPreview(self.handle, value, projected, validation)
         delta = (projected - self.handle.point).dot(self.handle.direction)
-        value = self.start_value + delta
-        point = self.handle.point + self.handle.direction * (value - self.start_value)
+        value = self.start_value + delta * self.handle.operation.sensitivity
+        point = self.handle.point + self.handle.direction * delta
         validation = self.handle.operation.validate(self.handle.source, value)
         return BIMEditPreview(self.handle, value, point, validation)
 

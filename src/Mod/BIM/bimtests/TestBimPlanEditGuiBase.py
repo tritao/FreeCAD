@@ -173,6 +173,14 @@ class _DeletedDocument:
 
 
 class BimPlanEditGuiBase(ArchWallGuiTestCase):
+    def assert_plan_view_visibility(self, session, obj, expected):
+        override = session.view.getViewVisibility(obj)
+        effective = override == "Visible" or (
+            override == "Inherit" and obj.ViewObject.Visibility
+        )
+        self.assertEqual(expected, effective)
+        return effective
+
     def _assert_selected_plan_target(self, session, kind, obj):
         self.assertEqual(session.selection.state.get_selected_plan_target(), (kind, obj))
 

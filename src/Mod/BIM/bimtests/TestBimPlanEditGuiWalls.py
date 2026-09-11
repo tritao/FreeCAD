@@ -12,6 +12,53 @@ from .TestBimPlanEditGuiBase import BimPlanEditGuiBase
 
 
 class BimPlanEditGuiWallsMixin:
+    def test_plan_native_wall_endpoint_handle_updates_path_and_undoes(self):
+        wall = Arch.makeWall(length=2000, width=200, height=2500)
+        self.document.recompute()
+        session = BimPlanSession.start_session()
+        self.assertIsNotNone(session)
+        self.pump_gui_events()
+        self.assertTrue(session.selection.activation.select_wall_for_plan_edit(wall))
+        handle = next(
+            item
+            for item in session.contextual_rendering.edit_handles_for(wall)
+            if item.role == "WallPathEnd"
+        )
+        start_before, end_before = wall.Proxy.calc_endpoints(wall)
+        session.contextual_editing.begin(handle)
+        result = session.contextual_editing.commit(handle.point + FreeCAD.Vector(500, 400, 200))
+        self.assertTrue(result.success)
+        start_after, end_after = wall.Proxy.calc_endpoints(wall)
+        self.assertTrue(start_after.isEqual(start_before, 1e-7))
+        self.assertTrue(end_after.isEqual(end_before + FreeCAD.Vector(500, 400, 0), 1e-7))
+        self._undo_document()
+        restored = wall.Proxy.calc_endpoints(wall)
+        self.assertTrue(restored[0].isEqual(start_before, 1e-7))
+        self.assertTrue(restored[1].isEqual(end_before, 1e-7))
+        session.shutdown(close_dialog=False)
+        self.pump_gui_events()
+
+    def test_plan_wall_width_handle_respects_center_alignment(self):
+        wall = Arch.makeWall(length=3000, width=200, height=2500, align="Center")
+        self.document.recompute()
+        session = BimPlanSession.start_session()
+        self.assertIsNotNone(session)
+        self.pump_gui_events()
+        self.assertTrue(session.selection.activation.select_wall_for_plan_edit(wall))
+        handle = next(
+            item
+            for item in session.contextual_rendering.edit_handles_for(wall)
+            if item.role == "WallWidth"
+        )
+        session.contextual_editing.begin(handle)
+        result = session.contextual_editing.commit(handle.point + handle.direction * 50)
+        self.assertTrue(result.success)
+        self.assertAlmostEqual(wall.Width.Value, 300.0)
+        self._undo_document()
+        self.assertAlmostEqual(wall.Width.Value, 200.0)
+        session.shutdown(close_dialog=False)
+        self.pump_gui_events()
+
     def test_plan_wall_sketch_handle_uses_solver_and_global_placement(self):
         sketch = self.document.addObject("Sketcher::SketchObject", "GuiWallPathSketch")
         sketch.addGeometry(
