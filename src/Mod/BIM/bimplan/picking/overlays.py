@@ -2,6 +2,8 @@
 
 """Overlay-geometry picking helpers for BIM Plan Edit."""
 
+import ArchComponent
+
 from bimplan.picking import debug as plan_picking_debug
 from bimplan.picking import geometry as plan_picking_geometry
 
@@ -173,15 +175,32 @@ def pick_plan_opening_target_from_overlays(session, mouse_pos, radius_px=10, can
                 _perf_count(session, "opening_overlay_pick_screen_bounds_skipped")
                 continue
             filtered_objects.append(obj)
-        best_opening = pick_best_target_from_projected_polylines(
-            session,
-            filtered_objects,
-            session.overlays.geometry.get_opening_overlay_screen_polylines,
-            mouse_pos,
-            radius_px,
-            candidate_count_name="opening_overlay_pick_candidates",
-            segment_count_name="opening_overlay_pick_segments_scanned",
-        )
+        get_representation = getattr(session.overlays.geometry, "get_opening_representation", None)
+        project_point = getattr(session.view, "getPointOnScreen", None)
+        semantic_hit = None
+        if callable(get_representation) and callable(project_point):
+            representations = tuple(
+                representation
+                for obj in filtered_objects
+                if (representation := get_representation(obj))
+            )
+            semantic_hit = ArchComponent.query_representation_pick(
+                representations,
+                mouse_pos,
+                project_point,
+                radius_px,
+            )
+        best_opening = semantic_hit.source if semantic_hit is not None else None
+        if best_opening is None:
+            best_opening = pick_best_target_from_projected_polylines(
+                session,
+                filtered_objects,
+                session.overlays.geometry.get_opening_overlay_screen_polylines,
+                mouse_pos,
+                radius_px,
+                candidate_count_name="opening_overlay_pick_candidates",
+                segment_count_name="opening_overlay_pick_segments_scanned",
+            )
         _perf_set_fields(
             session,
             opening_overlay_pick_mode="screen",
@@ -190,3 +209,28 @@ def pick_plan_opening_target_from_overlays(session, mouse_pos, radius_px=10, can
             ),
         )
         return best_opening
+
+
+def pick_plan_wall_target_from_representation(session, mouse_pos, radius_px=10):
+    """Pick semantic wall representation geometry before native Coin fallback."""
+
+    if not session.doc or not session.view or not mouse_pos:
+        return None
+    objects = getattr(session.doc, "Objects", None)
+    overlays = getattr(session, "overlays", None)
+    geometry = getattr(overlays, "geometry", None)
+    get_representation = getattr(geometry, "get_wall_representation", None)
+    project_point = getattr(session.view, "getPointOnScreen", None)
+    if objects is None or not callable(get_representation) or not callable(project_point):
+        return None
+    walls = tuple(obj for obj in objects if session.selection.targets.is_plan_selectable_wall(obj))
+    representations = tuple(
+        representation for wall in walls if (representation := get_representation(wall))
+    )
+    hit = ArchComponent.query_representation_pick(
+        representations,
+        mouse_pos,
+        project_point,
+        radius_px,
+    )
+    return hit.source if hit is not None else None

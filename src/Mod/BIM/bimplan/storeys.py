@@ -93,6 +93,5 @@ def get_storey_label(obj):
 
 def set_active_storey(session, storey):
     session.active_storey = storey
-    session.viewport.apply_plan_view(fit=False)
-    session.visibility.apply_storey_visibility()
+    session.representation_context.set_source(storey, fit=False)
     session.task_panels.refresh_task_panel_status()

@@ -54,6 +54,8 @@ from bimplan.runtime.view import PlanViewportAPI
 from bimplan.overlays.runtime import PlanOverlaysAPI
 from bimplan.ui.status_text import PlanStatusTextAPI
 from bimplan.ui.controls import PlanEditControlsWidget
+from bimplan.contextual_rendering import PlanContextualRenderingAPI
+from bimplan.representation_context import PlanRepresentationContextAPI
 
 QT_TRANSLATE_NOOP = FreeCAD.Qt.QT_TRANSLATE_NOOP
 translate = FreeCAD.Qt.translate
@@ -197,6 +199,8 @@ class PlanEditSession:
         self.snap = plan_snap.PlanSnapAPI(self, _PLAN_EDIT_SNAP_SET, _OPENING_MOVE_SNAP_SET)
         self.performance = PlanPerformanceAPI(self)
         self.document_visuals = PlanDocumentVisualsAPI(self)
+        self.contextual_rendering = PlanContextualRenderingAPI(self)
+        self.representation_context = PlanRepresentationContextAPI(self)
         self.status_text = PlanStatusTextAPI(self)
         self.task_panels = plan_task_panel.PlanTaskPanelsAPI(self)
         plan_session_state.initialize_session_state(self)
@@ -307,14 +311,21 @@ class PlanEditSession:
                 self.performance.plan_perf_set_fields(
                     active_storey=self.performance.plan_perf_describe_object(self.active_storey)
                 )
+            self.representation_context.set_source(
+                self.representation_context.find_initial_source(), refresh=False
+            )
             with self.performance.plan_perf_trace_span("capture_object_view_state"):
                 self.visibility.capture_object_view_state()
             self.visibility.begin_view_context()
             with self.performance.plan_perf_trace_span("apply_plan_view"):
-                self.viewport.apply_plan_view(fit=False)
+                self.viewport.apply_representation_context(
+                    self.representation_context.context, fit=False
+                )
             with self.performance.plan_perf_trace_span("apply_plan_snap_profile"):
                 self.snap.apply_plan_snap_profile()
             self.visibility.apply_storey_visibility()
+            with self.performance.plan_perf_trace_span("start_contextual_rendering"):
+                self.contextual_rendering.start()
             with self.performance.plan_perf_trace_span("attach_selection_observer"):
                 self.selection.sync.attach_selection_observer()
             with self.performance.plan_perf_trace_span("attach_document_observer"):

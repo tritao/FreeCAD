@@ -2,13 +2,150 @@
 
 """Opening and window GUI tests."""
 
+from unittest.mock import patch
+
+from bimplan.tools import opening_edit as plan_opening_edit_module
+
 from .TestBimPlanEditGuiBase import *  # noqa: F401,F403
 from .TestBimPlanEditGuiBase import BimPlanEditGuiBase
 
 
 class BimPlanEditGuiOpeningsMixin:
-    def test_plan_edit_forces_hosted_doors_visible(self):
-        """Hosted doors should become visible in Plan Edit even if the regular 3D view keeps them hidden."""
+    def test_plan_opening_jamb_handle_resizes_with_opposite_jamb_fixed(self):
+        level, _wall, opening = self._make_windowed_plan_wall()
+        FreeCADGui.Selection.clearSelection()
+        FreeCADGui.Selection.addSelection(level)
+        session = BimPlanSession.start_session()
+        self.assertIsNotNone(session)
+        self.pump_gui_events()
+        self.assertTrue(session.selection.activation.select_opening_for_plan_edit(opening))
+
+        handle = next(
+            item
+            for item in session.contextual_rendering.edit_handles_for(opening)
+            if item.role == "OpeningRightJamb"
+        )
+        before_width = ArchWindow.getWindowWidthMm(opening)
+        before_center = opening.Proxy.get_plan_center_point()
+        fixed_left = before_center.sub(handle.direction * (before_width * 0.5))
+        session.contextual_editing.begin(handle)
+        result = session.contextual_editing.commit(handle.point + handle.direction * 200)
+
+        self.assertTrue(result.success)
+        self.assertAlmostEqual(ArchWindow.getWindowWidthMm(opening), before_width + 200)
+        after_center = opening.Proxy.get_plan_center_point()
+        after_left = after_center.sub(
+            handle.direction * (ArchWindow.getWindowWidthMm(opening) * 0.5)
+        )
+        self.assertTrue(after_left.isEqual(fixed_left, 1e-6))
+        resized_width = ArchWindow.getWindowWidthMm(opening)
+        refreshed = next(
+            item
+            for item in session.contextual_rendering.edit_handles_for(opening)
+            if item.role == "OpeningRightJamb"
+        )
+        session.contextual_editing.begin(refreshed)
+        rejected = session.contextual_editing.commit(refreshed.point + refreshed.direction * 10000)
+        self.assertFalse(rejected.success)
+        self.assertAlmostEqual(ArchWindow.getWindowWidthMm(opening), resized_width)
+        self._undo_document()
+        self.assertAlmostEqual(ArchWindow.getWindowWidthMm(opening), before_width)
+
+        session.shutdown(close_dialog=False)
+        self.pump_gui_events()
+
+    def test_plan_opening_position_handle_moves_along_host_and_enforces_span(self):
+        level, _wall, opening = self._make_windowed_plan_wall()
+        FreeCADGui.Selection.clearSelection()
+        FreeCADGui.Selection.addSelection(level)
+        session = BimPlanSession.start_session()
+        self.assertIsNotNone(session)
+        self.pump_gui_events()
+        self.assertTrue(session.selection.activation.select_opening_for_plan_edit(opening))
+
+        handle = next(
+            item
+            for item in session.contextual_rendering.edit_handles_for(opening)
+            if item.role == "OpeningPosition"
+        )
+        before = opening.Proxy.get_plan_center_point()
+        session.contextual_editing.begin(handle)
+        result = session.contextual_editing.commit(handle.point + handle.direction * 300)
+        self.assertTrue(result.success)
+        after = opening.Proxy.get_plan_center_point()
+        self.assertAlmostEqual(after.sub(before).dot(handle.direction), 300.0, places=5)
+
+        refreshed = next(
+            item
+            for item in session.contextual_rendering.edit_handles_for(opening)
+            if item.role == "OpeningPosition"
+        )
+        before_invalid = opening.Proxy.get_plan_center_point()
+        session.contextual_editing.begin(refreshed)
+        rejected = session.contextual_editing.commit(refreshed.point + refreshed.direction * 10000)
+        self.assertFalse(rejected.success)
+        self.assertTrue(opening.Proxy.get_plan_center_point().isEqual(before_invalid, 1e-7))
+        self._undo_document()
+        restored = opening.Proxy.get_plan_center_point()
+        self.assertTrue(restored.isEqual(before, 1e-7))
+
+        session.shutdown(close_dialog=False)
+        self.pump_gui_events()
+
+    def test_section_opening_handles_edit_height_and_cancel_sill(self):
+        """Opening Section handles should retain semantic height and sill behavior."""
+
+        _level, wall, opening = self._make_windowed_plan_wall()
+        section = Arch.makeSectionPlane([wall, opening], name="OpeningSection")
+        section.Placement = FreeCAD.Placement(
+            FreeCAD.Vector(1500, 0, 1250),
+            FreeCAD.Rotation(FreeCAD.Vector(1, 0, 0), 90),
+        )
+        self.document.recompute()
+        FreeCADGui.Selection.clearSelection()
+        FreeCADGui.Selection.addSelection(section)
+        session = BimPlanSession.start_session()
+        self.assertIsNotNone(session)
+        self.pump_gui_events()
+        self.assertTrue(session.selection.activation.select_opening_for_plan_edit(opening))
+
+        handles = session.contextual_rendering.edit_handles_for(opening)
+        by_role = {handle.role: handle for handle in handles}
+        self.assertIn("OpeningHeight", by_role)
+        self.assertIn("OpeningPosition", by_role)
+        self.assertIn("OpeningLeftJamb", by_role)
+        self.assertIn("OpeningRightJamb", by_role)
+        height = by_role["OpeningHeight"]
+        before = ArchWindow.getWindowHeightMm(opening)
+        session.contextual_editing.begin(height)
+        session.contextual_editing.commit(height.point + height.direction * 250)
+        self.assertAlmostEqual(ArchWindow.getWindowHeightMm(opening), before + 250)
+        self._undo_document()
+        self.assertAlmostEqual(ArchWindow.getWindowHeightMm(opening), before)
+        self._redo_document()
+        self.assertAlmostEqual(ArchWindow.getWindowHeightMm(opening), before + 250)
+
+        handles = session.contextual_rendering.edit_handles_for(opening)
+        sill = next((handle for handle in handles if handle.role == "OpeningSill"), None)
+        self.assertIsNotNone(sill)
+        self.assertEqual(sill.operation.key, "OpeningSill")
+        before_sill_value = sill.operation.get_value(opening)
+        session.contextual_editing.begin(sill)
+        preview = session.contextual_editing.preview(sill.point + sill.direction * 150)
+        self.assertGreater(preview.point.distanceToPoint(sill.point), 100)
+        session.contextual_editing.cancel()
+        self.assertAlmostEqual(sill.operation.get_value(opening), before_sill_value)
+        session.contextual_editing.begin(sill)
+        session.contextual_editing.commit(sill.point + sill.direction * 150)
+        self.assertAlmostEqual(sill.operation.get_value(opening), before_sill_value + 150)
+        self._undo_document()
+        self.assertAlmostEqual(sill.operation.get_value(opening), before_sill_value)
+
+        session.shutdown(close_dialog=False)
+        self.pump_gui_events()
+
+    def test_plan_edit_renders_hidden_hosted_doors_contextually(self):
+        """A hidden 3D door should receive a viewer-local Plan representation."""
 
         level = Arch.makeFloor(name="Level 0")
         wall = Arch.makeWall(length=3000, width=200, height=2500)
@@ -25,7 +162,8 @@ class BimPlanEditGuiOpeningsMixin:
         self.assertIsNotNone(session, "Plan Edit session should start in GUI tests.")
         self.pump_gui_events()
 
-        self.assertTrue(door.ViewObject.Visibility)
+        self.assertIn(door, session.contextual_rendering.renderer.sources)
+        self.assert_plan_view_visibility(session, door, False)
         self.assertFalse(door.ViewObject.Selectable)
         self.assertTrue(hasattr(door.ViewObject.Proxy, "lcoords"))
 
@@ -62,8 +200,43 @@ class BimPlanEditGuiOpeningsMixin:
 
         self.assertTrue(door.ViewObject.Selectable)
 
-    def test_plan_edit_hosted_door_populates_footprint_lines(self):
-        """Hosted doors should have committed footprint line data while Plan Edit is active."""
+    def test_plan_edit_hides_hosted_openings_outside_active_storey(self):
+        """Hosted openings should inherit level scope from their host wall."""
+
+        level = Arch.makeFloor(name="Level 0")
+        other_level = Arch.makeFloor(name="Level 1")
+        other_level.Placement.Base.z = 3000
+        wall = Arch.makeWall(length=3000, width=200, height=2500)
+        other_wall = Arch.makeWall(length=3000, width=200, height=2500)
+        level.addObject(wall)
+        other_level.addObject(other_wall)
+        self.document.recompute()
+
+        other_door = self._make_hosted_door(other_wall, name="OtherLevelDoor")
+
+        FreeCADGui.Selection.clearSelection()
+        FreeCADGui.Selection.addSelection(level)
+
+        session = BimPlanSession.start_session()
+        self.assertIsNotNone(session)
+        self.pump_gui_events()
+
+        self.assert_plan_view_visibility(session, other_door, False)
+        self.assertNotIn(other_door, session.contextual_rendering.renderer.sources)
+        self.assertFalse(other_door.ViewObject.Selectable)
+
+        session.storey.set_active_storey(other_level)
+        self.pump_gui_events()
+
+        self.assert_plan_view_visibility(session, other_door, False)
+        self.assertIn(other_door, session.contextual_rendering.renderer.sources)
+        self.assertFalse(other_door.ViewObject.Selectable)
+
+        session.shutdown(close_dialog=False)
+        self.pump_gui_events()
+
+    def test_plan_edit_hosted_door_uses_contextual_representation(self):
+        """Hosted doors should use semantic committed geometry in Plan Edit."""
 
         level = Arch.makeFloor(name="Level 0")
         wall = Arch.makeWall(length=3000, width=200, height=2500)
@@ -80,13 +253,12 @@ class BimPlanEditGuiOpeningsMixin:
         self.assertIsNotNone(session)
         self.pump_gui_events()
 
-        proxy = door.ViewObject.Proxy
-        self.assertTrue(door.ViewObject.Visibility)
+        representation = session.overlays.geometry.get_opening_representation(door)
+        self.assertIsNotNone(representation)
+        self.assertTrue(representation.projected_geometry)
+        self.assertIn(door, session.contextual_rendering.renderer.sources)
+        self.assert_plan_view_visibility(session, door, False)
         self.assertFalse(door.ViewObject.Selectable)
-        self.assertTrue(hasattr(proxy, "lcoords"))
-        self.assertTrue(hasattr(proxy, "lset"))
-        self.assertGreater(proxy.lcoords.point.getNum(), 0)
-        self.assertGreater(proxy.lset.numVertices.getNum(), 0)
 
     def test_plan_edit_selecting_hosted_door_does_not_enable_wall_grips(self):
         """Hosted opening selection should not re-enter wall endpoint edit mode."""
@@ -271,6 +443,86 @@ class BimPlanEditGuiOpeningsMixin:
         sketch_x_axis = window.Base.Placement.Rotation.multVec(FreeCAD.Vector(1, 0, 0))
         self.assertAlmostEqual(abs(sketch_x_axis.x), 0.0, delta=1e-6)
         self.assertAlmostEqual(abs(sketch_x_axis.y), 1.0, delta=1e-6)
+
+    def test_plan_edit_cancel_window_tool_restores_selected_wall_visuals(self):
+        """Canceling the window tool should restore selected-wall visuals and hosted-opening context."""
+
+        wall = Arch.makeWall(length=3000, width=200, height=2500)
+        self.document.recompute()
+        self._make_hosted_door(wall, name="WindowCancelDoor")
+        self.document.recompute()
+
+        session = BimPlanSession.start_session()
+        self.assertIsNotNone(session)
+        self.pump_gui_events()
+
+        with (
+            patch.object(FreeCADGui.Snapper, "getPoint", return_value=None),
+            patch.object(FreeCADGui.Snapper, "setSelectMode", return_value=None),
+        ):
+            self.assertTrue(session.selection.activation.select_wall_for_plan_edit(wall))
+            self.assertGreater(
+                len(session.overlay_tracker_state.selected_wall_opening_context_trackers),
+                0,
+            )
+            self.assertTrue(session.windows.activate_window_tool())
+
+        self.assertEqual("Window", session.current_tool)
+        self.assertEqual(len(session.overlay_tracker_state.wall_overlay_trackers), 0)
+        self.assertEqual(len(session.overlay_tracker_state.grip_trackers), 0)
+        self.assertEqual(
+            len(session.overlay_tracker_state.selected_wall_opening_context_trackers),
+            0,
+        )
+
+        self.assertTrue(session.windows.cancel_window_tool())
+
+        self.assertEqual("Select", session.current_tool)
+        self._assert_selected_wall_visuals(session, wall)
+        self.assertGreater(
+            len(session.overlay_tracker_state.selected_wall_opening_context_trackers),
+            0,
+        )
+
+    def test_plan_edit_shutdown_cancels_active_window_tool(self):
+        level = Arch.makeFloor(name="Level 0")
+        wall = Arch.makeWall(length=3000, width=200, height=2500)
+        level.addObject(wall)
+        self.document.recompute()
+
+        FreeCADGui.Selection.clearSelection()
+        FreeCADGui.Selection.addSelection(level)
+
+        session = BimPlanSession.start_session()
+        self.assertIsNotNone(session)
+        self.pump_gui_events()
+
+        try:
+            with (
+                patch.object(FreeCADGui.Snapper, "getPoint", return_value=None),
+                patch.object(FreeCADGui.Snapper, "setSelectMode", return_value=None),
+            ):
+                self.assertTrue(
+                    session.selection.activation.select_wall_for_plan_edit(
+                        wall, sync_gui_selection=True
+                    )
+                )
+                self.assertTrue(session.windows.activate_window_tool())
+
+            self.assertEqual("Window", session.current_tool)
+            self.assertIs(session.creation_preview_state.window_host_wall, wall)
+
+            self.assertTrue(session.shutdown(close_dialog=False))
+            self.pump_gui_events()
+
+            self.assertEqual("Select", session.current_tool)
+            self.assertIsNone(session.creation_preview_state.window_host_wall)
+            self.assertIsNone(session.doc)
+            self.assertIsNone(BimPlanSession.get_active_session())
+        finally:
+            if BimPlanSession.get_active_session() is session:
+                session.shutdown(close_dialog=False)
+                self.pump_gui_events()
 
     def test_plan_edit_selected_window_status_uses_window_label(self):
         """Hosted windows should be labelled as windows, not generic openings."""
@@ -1149,6 +1401,31 @@ class BimPlanEditGuiOpeningsMixin:
         self.assertEqual(len(symbol_polylines), 3)
         self.assertEqual(len(guide_polylines), 1)
 
+        app_representation = door.Proxy.getRepresentation(
+            door, door.Proxy.getDefaultPlanContext(door)
+        )
+        self.assertEqual(len(app_representation.projected_geometry), 4)
+
+        with patch.object(
+            proxy,
+            "getRepresentation",
+            side_effect=AssertionError("Plan Edit should use the App proxy representation"),
+        ):
+            representation = session.overlays.geometry.get_opening_representation(door)
+        self.assertIsNotNone(representation)
+        self.assertIs(representation.source, door)
+        self.assertEqual(len(representation.projected_geometry), 4)
+        roles = [
+            representation.mapping_for(polyline).role
+            for polyline in representation.projected_geometry
+        ]
+        self.assertEqual(roles.count("OpeningSymbol"), 3)
+        self.assertEqual(roles.count("OpeningGuide"), 1)
+        for polyline in representation.projected_geometry:
+            mapping = representation.mapping_for(polyline)
+            self.assertIs(mapping.source, door)
+            self.assertTrue(mapping.subelement.startswith("Opening"))
+
         symbol_segments = sum(max(len(polyline) - 1, 0) for polyline in symbol_polylines)
         combined_segments = sum(
             max(len(polyline) - 1, 0)
@@ -1573,6 +1850,60 @@ class BimPlanEditGuiOpeningsMixin:
         self.assertEqual(hints[1].message, "%1 cycle move anchor")
         self.assertEqual(hints[2].message, "%1 cancel")
 
+    def test_plan_edit_shutdown_cancels_active_opening_move(self):
+        level = Arch.makeFloor(name="Level 0")
+        wall = Arch.makeWall(length=3000, width=200, height=2500)
+        level.addObject(wall)
+        self.document.recompute()
+
+        door = self._make_hosted_door(wall, name="ShutdownOpeningMoveDoor")
+
+        FreeCADGui.Selection.clearSelection()
+        FreeCADGui.Selection.addSelection(level)
+
+        session = BimPlanSession.start_session()
+        self.assertIsNotNone(session)
+        self.pump_gui_events()
+
+        FreeCADGui.Selection.clearSelection()
+        FreeCADGui.Selection.addSelection(self.document.Name, door.Name)
+        self.pump_gui_events()
+        session.selection.refresh.refresh_primary_selected_plan_target()
+
+        handle = session.openings.get_selected_opening_edit_handles(door)[0]
+        pushed_modes = []
+
+        try:
+            with (
+                patch.object(FreeCADGui.Snapper, "getPoint", return_value=None),
+                patch.object(FreeCADGui.Snapper, "setSelectMode", return_value=None),
+                patch.object(
+                    FreeCADGui.Snapper,
+                    "push_snap_modes",
+                    side_effect=lambda modes: pushed_modes.append(set(modes)),
+                ),
+            ):
+                session.openings.start_opening_handle_point_pick(door, 0, handle)
+                self.assertEqual("Move Opening", session.current_tool)
+                self.assertIs(session.interaction_state.edit_opening, door)
+
+                self.assertTrue(session.shutdown(close_dialog=False))
+                self.pump_gui_events()
+
+            self.assertEqual([set(BimPlanSession._OPENING_MOVE_SNAP_SET)], pushed_modes)
+            self.assertEqual("Select", session.current_tool)
+            self.assertIsNone(session.interaction_state.edit_opening)
+            self.assertIsNone(session.interaction_state.edit_opening_handle_index)
+            self.assertIsNone(session.opening_transient_state.edit_opening_move_raw_point)
+            self.assertFalse(session.opening_transient_state.opening_move_snap_profile_pushed)
+            self.assertEqual("center", session.opening_transient_state.edit_opening_move_anchor)
+            self.assertIsNone(session.doc)
+            self.assertIsNone(BimPlanSession.get_active_session())
+        finally:
+            if BimPlanSession.get_active_session() is session:
+                session.shutdown(close_dialog=False)
+                self.pump_gui_events()
+
     def test_plan_edit_opening_move_preview_offsets_readout_outside_host_wall(self):
         """Opening move preview readout should sit outside the host wall footprint."""
 
@@ -1664,6 +1995,112 @@ class BimPlanEditGuiOpeningsMixin:
             calls[0][1]()
             self._assert_selected_plan_target(session, "opening", door)
             self.assertNotEqual(original_parts, list(door.WindowParts))
+
+    def test_plan_edit_stale_opening_restore_does_not_resume_newer_edit(self):
+        """A queued opening restore must not override a newer opening edit session."""
+
+        wall = Arch.makeWall(length=4000, width=200, height=2500)
+        self.document.recompute()
+
+        door_a = self._make_hosted_door(wall, name="RestoreDoorA")
+        door_b = self._make_hosted_door(wall, name="RestoreDoorB")
+        door_b.Placement.Base = FreeCAD.Vector(1800, 0, 0)
+        self.document.recompute()
+
+        session = BimPlanSession.start_session()
+        self.assertIsNotNone(session)
+        self.pump_gui_events()
+
+        queued_callbacks = []
+
+        def fake_single_shot(delay, callback):
+            self.assertEqual(delay, 0)
+            queued_callbacks.append(callback)
+
+        with patch("PySide.QtCore.QTimer.singleShot", side_effect=fake_single_shot):
+            session.openings.queue_restore_selected_opening(door_a)
+
+        self.assertEqual(len(queued_callbacks), 1)
+
+        with (
+            patch.object(FreeCADGui.Snapper, "getPoint", return_value=None),
+            patch.object(FreeCADGui.Snapper, "setSelectMode", return_value=None),
+        ):
+            session.openings.activate_opening_handle_now(door_b, 0)
+
+        self.assertEqual(session.current_tool, "Move Opening")
+        self.assertIs(session.interaction_state.edit_opening, door_b)
+        self._assert_selected_plan_target(session, "opening", door_b)
+
+        queued_callbacks[0]()
+
+        self.assertEqual(session.current_tool, "Move Opening")
+        self.assertIs(session.interaction_state.edit_opening, door_b)
+        self._assert_selected_plan_target(session, "opening", door_b)
+
+    def test_plan_edit_stale_opening_initial_preview_does_not_override_newer_edit(self):
+        """A queued opening preview must not repaint an older opening into a newer move session."""
+
+        wall = Arch.makeWall(length=4000, width=200, height=2500)
+        self.document.recompute()
+
+        door_a = self._make_hosted_door(wall, name="PreviewDoorA")
+        door_b = self._make_hosted_door(wall, name="PreviewDoorB")
+        door_b.Placement.Base = FreeCAD.Vector(1800, 0, 0)
+        self.document.recompute()
+
+        session = BimPlanSession.start_session()
+        self.assertIsNotNone(session)
+        self.pump_gui_events()
+
+        def _start_opening_move(opening):
+            self.assertTrue(
+                session.selection.activation.select_opening_for_plan_edit(
+                    opening,
+                    sync_gui_selection=True,
+                )
+            )
+            handle = session.openings.get_selected_opening_edit_handles(opening)[0]
+            with (
+                patch.object(FreeCADGui.Snapper, "getPoint", return_value=None),
+                patch.object(FreeCADGui.Snapper, "setSelectMode", return_value=None),
+                patch.object(session.viewport, "queue_focus_plan_view", return_value=None),
+            ):
+                session.openings.start_opening_handle_point_pick(opening, 0, handle)
+            self.assertEqual("Move Opening", session.current_tool)
+            self.assertIs(session.interaction_state.edit_opening, opening)
+            return handle.point, session.opening_transient_state.opening_edit_generation
+
+        point_a, generation_a = _start_opening_move(door_a)
+        session.openings.cancel_opening_handle_point_pick()
+        self.pump_gui_events()
+
+        point_b, generation_b = _start_opening_move(door_b)
+
+        with patch.object(
+            session.openings,
+            "sync_opening_move_preview",
+            wraps=session.openings.sync_opening_move_preview,
+        ) as sync_preview:
+            plan_opening_edit_module._run_queued_opening_move_initial_preview(
+                session,
+                door_a,
+                point_a,
+                generation_a,
+            )
+            sync_preview.assert_not_called()
+
+            self.assertEqual("Move Opening", session.current_tool)
+            self.assertIs(session.interaction_state.edit_opening, door_b)
+            self._assert_selected_plan_target(session, "opening", door_b)
+
+            plan_opening_edit_module._run_queued_opening_move_initial_preview(
+                session,
+                door_b,
+                point_b,
+                generation_b,
+            )
+            sync_preview.assert_called_once()
 
     def test_plan_edit_hovered_opening_replaces_selected_wall_context_overlay(self):
         """Hovered openings should not be hidden by selected-wall context overlays."""

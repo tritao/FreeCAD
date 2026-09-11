@@ -26,6 +26,7 @@
 
 import Arch
 import ArchComponent
+import ArchRepresentation
 import BimContextualRendering
 from bimplan import contextual_rendering as plan_contextual_rendering
 from bimplan import contextual_editing as plan_contextual_editing
@@ -75,8 +76,8 @@ class TestArchComponent(TestArchBase.TestArchBase):
             App.Vector(250, 100, 50),
             App.Rotation(App.Vector(0, 1, 0), 90),
         )
-        context = ArchComponent.RepresentationContext(
-            purpose=ArchComponent.RepresentationPurpose.SECTION,
+        context = ArchRepresentation.RepresentationContext(
+            purpose=ArchRepresentation.RepresentationPurpose.SECTION,
             reference_frame=frame,
             target_offset=0.0,
         )
@@ -172,18 +173,18 @@ class TestArchComponent(TestArchBase.TestArchBase):
 
         context = section.Proxy.getRepresentationContext(section)
 
-        self.assertEqual(context.purpose, ArchComponent.RepresentationPurpose.SECTION)
+        self.assertEqual(context.purpose, ArchRepresentation.RepresentationPurpose.SECTION)
         self.assertEqual(context.reference_frame, section.Placement)
         self.assertEqual(context.cut_offset, 0.0)
         self.assertEqual(context.target_offset, 0.0)
-        self.assertEqual(context.projection_range, 750.0)
+        self.assertEqual(context.projection_range, (0.0, 750.0))
         self.assertIs(context.source, section)
 
     def test_representation_context_accepts_saved_view_provider_protocol(self):
         """BIM Views should be able to provide profiles without Plan Edit knowing their type."""
 
-        expected = ArchComponent.RepresentationContext(
-            purpose=ArchComponent.RepresentationPurpose.ELEVATION,
+        expected = ArchRepresentation.RepresentationContext(
+            purpose=ArchRepresentation.RepresentationPurpose.ELEVATION,
             reference_frame=App.Placement(),
             profile="Architectural",
         )
@@ -198,8 +199,8 @@ class TestArchComponent(TestArchBase.TestArchBase):
         """Context-local editing math should not assume global XY or Z."""
 
         frame = App.Placement(App.Vector(10, 20, 30), App.Rotation(App.Vector(1, 0, 0), 90))
-        context = ArchComponent.RepresentationContext(
-            purpose=ArchComponent.RepresentationPurpose.SECTION,
+        context = ArchRepresentation.RepresentationContext(
+            purpose=ArchRepresentation.RepresentationPurpose.SECTION,
             reference_frame=frame,
             target_offset=5.0,
         )
@@ -240,10 +241,15 @@ class TestArchComponent(TestArchBase.TestArchBase):
                 return self.scene
 
         source = self.document.addObject("Part::Feature", "ContextualSource")
-        plan = ArchComponent.BIMRepresentation(source, ArchComponent.PlanContext(1000, 0))
+        plan_context = ArchRepresentation.RepresentationContext(
+            purpose=ArchRepresentation.RepresentationPurpose.PLAN,
+            cut_offset=1000.0,
+            target_offset=0.0,
+        )
+        plan = ArchRepresentation.BIMRepresentation(source, plan_context)
         line = (App.Vector(0, 0, 0), App.Vector(100, 0, 0))
         plan.add_geometry("projected_geometry", line, "Projection", "Projection1")
-        section = ArchComponent.BIMRepresentation(source, object())
+        section = ArchRepresentation.BIMRepresentation(source, object())
         face = Part.makePlane(100, 50)
         section.add_geometry("cut_geometry", face, "CutFace", "Face1")
         handle = section.add_edit_handle(
@@ -288,8 +294,12 @@ class TestArchComponent(TestArchBase.TestArchBase):
         source = self.document.addObject("Part::Feature", "SnapSource")
         edge = Part.makeLine(App.Vector(0, 0, 0), App.Vector(100, 0, 0))
         vertex = edge.Vertexes[0]
-        context = ArchComponent.PlanContext(cut_z=1000.0, target_z=0.0)
-        representation = ArchComponent.BIMRepresentation(source=source, context=context)
+        context = ArchRepresentation.RepresentationContext(
+            purpose=ArchRepresentation.RepresentationPurpose.PLAN,
+            cut_offset=1000.0,
+            target_offset=0.0,
+        )
+        representation = ArchRepresentation.BIMRepresentation(source=source, context=context)
         representation.add_geometry("snap_geometry", edge, "CutEdge", "Face1.Edge1")
         representation.add_geometry("snap_geometry", vertex, "CutVertex", "Face1.Vertex1")
 
@@ -308,7 +318,7 @@ class TestArchComponent(TestArchBase.TestArchBase):
 
         source = self.document.addObject("Part::Feature", "FacePickSource")
         face = Part.makePlane(100, 50)
-        representation = ArchComponent.BIMRepresentation(source, object())
+        representation = ArchRepresentation.BIMRepresentation(source, object())
         representation.add_geometry("cut_geometry", face, "CutFace", "Face1")
 
         result = ArchComponent.query_representation_pick(
@@ -328,12 +338,12 @@ class TestArchComponent(TestArchBase.TestArchBase):
         source = self.document.addObject("Part::Feature", "SectionSnapSource")
         vertex = Part.Vertex(App.Vector(25, 10, 0))
         frame = App.Placement(App.Vector(), App.Rotation(App.Vector(0, 1, 0), 90))
-        context = ArchComponent.RepresentationContext(
-            purpose=ArchComponent.RepresentationPurpose.SECTION,
+        context = ArchRepresentation.RepresentationContext(
+            purpose=ArchRepresentation.RepresentationPurpose.SECTION,
             reference_frame=frame,
             target_offset=25.0,
         )
-        representation = ArchComponent.BIMRepresentation(source=source, context=context)
+        representation = ArchRepresentation.BIMRepresentation(source=source, context=context)
         representation.add_geometry("snap_geometry", vertex, "CutVertex", "Vertex1")
 
         result = ArchComponent.query_representation_snap(
@@ -349,9 +359,13 @@ class TestArchComponent(TestArchBase.TestArchBase):
 
         wall = self.document.addObject("Part::Feature", "PickWall")
         opening = self.document.addObject("Part::Feature", "PickOpening")
-        context = ArchComponent.PlanContext(cut_z=1000.0, target_z=0.0)
-        wall_representation = ArchComponent.BIMRepresentation(wall, context)
-        opening_representation = ArchComponent.BIMRepresentation(opening, context)
+        context = ArchRepresentation.RepresentationContext(
+            purpose=ArchRepresentation.RepresentationPurpose.PLAN,
+            cut_offset=1000.0,
+            target_offset=0.0,
+        )
+        wall_representation = ArchRepresentation.BIMRepresentation(wall, context)
+        opening_representation = ArchRepresentation.BIMRepresentation(opening, context)
         wall_line = (App.Vector(0, 0, 0), App.Vector(100, 0, 0))
         opening_line = (App.Vector(40, 0, 0), App.Vector(60, 0, 0))
         wall_representation.add_geometry(

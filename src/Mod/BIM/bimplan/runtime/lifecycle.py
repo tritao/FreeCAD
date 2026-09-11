@@ -10,6 +10,46 @@ from bimplan.selection import target_kinds as plan_target_kinds
 translate = FreeCAD.Qt.translate
 
 
+def _provider_point_api(session):
+    providers = getattr(session, "providers", None)
+    return getattr(providers, "point", providers)
+
+
+def _overlay_runtime_api(session):
+    overlays = getattr(session, "overlays", None)
+    return getattr(overlays, "runtime", overlays)
+
+
+def _close_contextual_rendering(session):
+    contextual_rendering = getattr(session, "contextual_rendering", None)
+    close = getattr(contextual_rendering, "close", None)
+    if callable(close):
+        close()
+
+
+def _cancel_provider_point_tool(session, refresh=True):
+    cancel = getattr(_provider_point_api(session), "cancel_provider_point_tool", None)
+    if callable(cancel):
+        return bool(cancel(refresh=refresh))
+    return False
+
+
+def _has_active_provider_point_tool(session):
+    has_active = getattr(_provider_point_api(session), "has_active_provider_point_tool", None)
+    if callable(has_active):
+        return bool(has_active())
+    return False
+
+
+def _cancel_provider_point_for_select(session):
+    cancel_for_select = getattr(_provider_point_api(session), "cancel_for_select", None)
+    if callable(cancel_for_select):
+        return bool(cancel_for_select())
+    if not _has_active_provider_point_tool(session):
+        return False
+    return _cancel_provider_point_tool(session)
+
+
 class PlanLifecycleAPI:
     """Owned session surface for Plan Edit lifecycle helpers."""
 
@@ -37,8 +77,8 @@ class PlanLifecycleAPI:
     def activate_select_tool(self):
         return activate_select_tool(self.session)
 
-    def cancel_pending_edit(self):
-        return cancel_pending_edit(self.session)
+    def cancel_pending_edit(self, *args, **kwargs):
+        return cancel_pending_edit(self.session, *args, **kwargs)
 
 
 def connect_teardown_signal(session, signal):
@@ -74,6 +114,7 @@ def disconnect_teardown_signals(session):
 
 
 def discard_runtime_references(session):
+    _close_contextual_rendering(session)
     session.viewport.discard_runtime_references()
     session.selection.state.discard_runtime_references()
     session.providers.discard_runtime_references()
@@ -81,7 +122,7 @@ def discard_runtime_references(session):
     session.wall_edit.discard_runtime_references()
     session.openings.discard_runtime_references()
     session.symbols.discard_runtime_references()
-    session.overlays.discard_runtime_references()
+    _overlay_runtime_api(session).discard_runtime_references()
     session.wall_create.discard_runtime_references()
     session.embedded_tools.discard_runtime_references()
 
@@ -94,7 +135,7 @@ def detach_runtime_observers(session):
 
 def _cancel_current_tool_for_finish(session):
     return (
-        session.providers.cancel_active_tool_for_finish()
+        _provider_point_api(session).cancel_active_tool_for_finish()
         or session.openings.cancel_active_tool_for_finish()
         or session.symbols.cancel_active_tool_for_finish()
         or session.spaces.cancel_active_tool_for_finish()
@@ -103,8 +144,8 @@ def _cancel_current_tool_for_finish(session):
 
 
 def _cancel_finish_fallback(session):
-    if session.providers.has_active_provider_point_tool():
-        session.providers.cancel_provider_point_tool()
+    if _has_active_provider_point_tool(session):
+        _cancel_provider_point_tool(session)
         return True
     if session.embedded_tools.has_active():
         session.embedded_tools.cancel()
@@ -120,7 +161,7 @@ def _cancel_finish_fallback(session):
 
 def _cancel_current_tool_for_begin_teardown(session):
     return (
-        session.providers.cancel_active_tool_for_teardown()
+        _provider_point_api(session).cancel_active_tool_for_teardown()
         or session.openings.cancel_active_tool_for_teardown()
         or session.symbols.cancel_active_tool_for_teardown()
         or session.spaces.cancel_active_tool_for_teardown()
@@ -128,7 +169,13 @@ def _cancel_current_tool_for_begin_teardown(session):
 
 
 def _cancel_current_tool_for_shutdown(session):
-    return session.symbols.cancel_active_tool_for_shutdown()
+    return (
+        _provider_point_api(session).cancel_active_tool_for_shutdown()
+        or session.openings.cancel_active_tool_for_shutdown()
+        or session.symbols.cancel_active_tool_for_shutdown()
+        or session.spaces.cancel_active_tool_for_shutdown()
+        or session.windows.cancel_active_tool_for_shutdown()
+    )
 
 
 def _cleanup_begin_teardown(session):
@@ -138,11 +185,12 @@ def _cleanup_begin_teardown(session):
     session.wall_create.cancel_rect_wall_tool(refresh=False)
     session.windows.cancel_window_tool(refresh=False)
     session.spaces.cancel_plan_region_tool(refresh=False)
-    session.providers.cancel_provider_point_tool(refresh=False)
+    _cancel_provider_point_tool(session, refresh=False)
     session.wall_edit.cancel_wall_edit(restore=False, refresh=False)
-    cancel_pending_edit(session)
+    cancel_pending_edit(session, restore_wall_visibility=False)
     _cancel_current_tool_for_begin_teardown(session)
-    session.overlays.clear_begin_teardown_visuals()
+    _overlay_runtime_api(session).clear_begin_teardown_visuals()
+    _close_contextual_rendering(session)
     detach_runtime_observers(session)
 
 
@@ -153,9 +201,10 @@ def _cleanup_shutdown(session, *, teardown=False):
     session.wall_create.cancel_rect_wall_tool(refresh=False)
     session.spaces.cancel_space_separator_tool(refresh=False)
     session.wall_edit.cancel_wall_edit(restore=not teardown, refresh=False)
-    cancel_pending_edit(session)
+    cancel_pending_edit(session, restore_wall_visibility=not teardown)
     _cancel_current_tool_for_shutdown(session)
-    session.overlays.clear_shutdown_visuals()
+    _overlay_runtime_api(session).clear_shutdown_visuals()
+    _close_contextual_rendering(session)
     detach_runtime_observers(session)
 
 
@@ -171,6 +220,7 @@ def begin_teardown(session):
     if session.lifecycle_state.tearing_down:
         return
     session.lifecycle_state.tearing_down = True
+    disconnect_teardown_signals(session)
     plan_command_gate.uninstall(session)
     _cleanup_begin_teardown(session)
 
@@ -204,14 +254,9 @@ def shutdown(session, close_dialog=True, teardown=False):
     _cleanup_shutdown(session, teardown=teardown)
     _close_or_detach_task_panel(panel, close_dialog=close_dialog, teardown=teardown)
     if not teardown:
+        # Plan Edit mutations are recomputed at the mutation sites. Shutdown only restores
+        # viewer/task-panel state and should not recompute unrelated dirty document state.
         session.viewport.restore_state()
-        if session.doc:
-            try:
-                session.doc.recompute()
-            except ReferenceError:
-                session.doc = None
-            except RuntimeError:
-                session.doc = None
         FreeCAD.Console.PrintMessage(translate("BIM_PlanEdit", "Exited BIM Plan Edit mode.\n"))
     return True
 
@@ -221,7 +266,7 @@ def activate_select_tool(session):
         return
     if session.spaces.cancel_active_tool_for_select():
         return
-    if session.providers.cancel_for_select():
+    if _cancel_provider_point_for_select(session):
         return
     session.embedded_tools.cancel_for_select()
     session.wall_create.cancel_for_select()
@@ -231,22 +276,35 @@ def activate_select_tool(session):
     session.wall_relations.cancel_for_select()
 
 
-def _reset_pending_edit_state(session, *, clear_opening_edit=False):
-    session.wall_edit.reset_pending_edit_state()
+def _reset_pending_edit_state(
+    session,
+    *,
+    clear_opening_edit=False,
+    restore_wall_visibility=True,
+):
+    session.wall_edit.reset_pending_edit_state(restore_wall_visibility=restore_wall_visibility)
     session.openings.reset_pending_edit_state(clear_edit=clear_opening_edit)
     session.embedded_tools.clear_state()
     session.lifecycle_state.ignore_selection_changes = False
 
 
-def cancel_pending_edit(session):
+def cancel_pending_edit(session, *, restore_wall_visibility=True):
     if session.lifecycle_state.tearing_down:
-        _reset_pending_edit_state(session)
+        _reset_pending_edit_state(
+            session,
+            restore_wall_visibility=restore_wall_visibility,
+        )
         session.wall_relations.clear_plan_relation_status()
         return
     session.snap.stop_snapper()
     session.snap.pop_opening_move_snap_profile()
     session.snap.clear_active_draft_command()
-    _reset_pending_edit_state(session, clear_opening_edit=True)
+    session.contextual_editing.cancel(refresh=not session.lifecycle_state.tearing_down)
+    _reset_pending_edit_state(
+        session,
+        clear_opening_edit=True,
+        restore_wall_visibility=restore_wall_visibility,
+    )
     session.wall_relations.clear_plan_relation_status()
     session.overlays.walls.sync_wall_grips()
     plan_target_dispatch.sync_selected_target_visuals(
