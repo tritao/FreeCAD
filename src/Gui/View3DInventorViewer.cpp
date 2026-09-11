@@ -4939,6 +4939,11 @@ bool View3DInventorViewer::isAnimating() const
     return navigation->isAnimating();
 }
 
+bool View3DInventorViewer::waitForCameraAnimation() const
+{
+    return navigation->waitForAnimation();
+}
+
 /**
  * @return Whether or not a spinning animation is currently active e.g. after a user drag
  */
