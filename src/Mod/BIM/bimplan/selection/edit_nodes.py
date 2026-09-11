@@ -32,6 +32,14 @@ class ProviderHandleEditNode:
 
 
 @dataclass(frozen=True, slots=True)
+class ContextualHandleEditNode:
+    source: object
+    index: int
+
+    kind = "contextual_handle"
+
+
+@dataclass(frozen=True, slots=True)
 class ProviderOverlayTargetEditNode:
     target_kind: object
     target_obj: object
@@ -92,6 +100,13 @@ def get_edit_node_payload(node):
     if kind == "provider_handle":
         if _has_dataclass_payload(node, "provider"):
             return (_get_node_attr(node, "provider"), _get_node_attr(node, "index"))
+        try:
+            return (node[1], node[2])
+        except Exception:
+            return ()
+    if kind == "contextual_handle":
+        if _has_dataclass_payload(node, "source"):
+            return (_get_node_attr(node, "source"), _get_node_attr(node, "index"))
         try:
             return (node[1], node[2])
         except Exception:

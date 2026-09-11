@@ -32,11 +32,226 @@ import ArchRepresentation
 import ArchWallEndCondition
 import Draft
 import Part
+import Sketcher
 import FreeCAD as App
+from bimplan import contextual_editing as plan_contextual_editing
 from bimtests import TestArchBase
 
 
 class TestArchWall(TestArchBase.TestArchBase):
+    def test_plan_native_wall_endpoints_edit_length_and_placement(self):
+        self.document.UndoMode = 1
+        wall = Arch.makeWall(length=2000, width=200, height=2500)
+        wall.Placement = App.Placement(
+            App.Vector(1000, 1000, 0), App.Rotation(App.Vector(0, 0, 1), 45)
+        )
+        self.document.recompute()
+        context = ArchRepresentation.RepresentationContext(
+            purpose=ArchRepresentation.RepresentationPurpose.PLAN,
+            cut_offset=1000,
+            target_offset=0,
+        )
+        representation = wall.Proxy.getRepresentation(wall, context)
+        handles = {
+            handle.role: handle
+            for handle in representation.edit_handles
+            if handle.operation.key == "WallPathEndpoint"
+        }
+        self.assertEqual(set(handles), {"WallPathStart", "WallPathEnd"})
+
+        start = handles["WallPathStart"]
+        end_before = wall.Proxy.calc_endpoints(wall)[1]
+        target = start.point + App.Vector(-500, 250, 300)
+        editor = plan_contextual_editing.BIMContextualHandleEditor(context)
+        editor.begin(start)
+        result = editor.commit(target)
+        self.document.recompute()
+
+        self.assertTrue(result.success)
+        endpoints = wall.Proxy.calc_endpoints(wall)
+        self.assertTrue(endpoints[0].isEqual(start.operation.get_value(wall), 1e-7))
+        self.assertTrue(endpoints[0].isEqual(start.point + App.Vector(-500, 250, 0), 1e-7))
+        self.assertTrue(endpoints[1].isEqual(end_before, 1e-7))
+        self.assertAlmostEqual(wall.Length.Value, endpoints[0].distanceToPoint(endpoints[1]))
+
+        self.document.undo()
+        restored = wall.Proxy.calc_endpoints(wall)
+        self.assertTrue(restored[0].isEqual(start.point, 1e-7))
+        self.assertTrue(restored[1].isEqual(end_before, 1e-7))
+
+        wall.setExpression("Length", "2000 mm")
+        constrained = wall.Proxy.getRepresentation(wall, context)
+        self.assertNotIn(
+            "WallPathEndpoint", {handle.operation.key for handle in constrained.edit_handles}
+        )
+        wall.setExpression("Length", None)
+
+    def test_plan_section_handles_edit_uniform_wall_width_and_offset(self):
+        self.document.UndoMode = 1
+        wall = Arch.makeWall(length=3000, width=200, height=2500, align="Center")
+        self.document.recompute()
+        context = ArchRepresentation.RepresentationContext(
+            purpose=ArchRepresentation.RepresentationPurpose.PLAN,
+            cut_offset=1000,
+            target_offset=0,
+        )
+        representation = wall.Proxy.getRepresentation(wall, context)
+        width = next(handle for handle in representation.edit_handles if handle.role == "WallWidth")
+        editor = plan_contextual_editing.BIMContextualHandleEditor(context)
+        editor.begin(width)
+        preview = editor.preview(width.point + width.direction * 50)
+        self.assertAlmostEqual(preview.value, 300.0)
+        editor.commit(width.point + width.direction * 50)
+        self.assertAlmostEqual(wall.Width.Value, 300.0)
+        self.document.undo()
+        self.assertAlmostEqual(wall.Width.Value, 200.0)
+
+        wall.Align = "Right"
+        self.document.recompute()
+        representation = wall.Proxy.getRepresentation(wall, context)
+        offset = next(
+            handle for handle in representation.edit_handles if handle.role == "WallOffset"
+        )
+        editor.begin(offset)
+        editor.commit(offset.point + offset.direction * 75)
+        self.assertAlmostEqual(wall.Offset.Value, 75.0)
+
+        wall.OverrideWidth = [250]
+        self.document.recompute()
+        constrained = wall.Proxy.getRepresentation(wall, context)
+        roles = {handle.role for handle in constrained.edit_handles}
+        self.assertNotIn("WallWidth", roles)
+        self.assertNotIn("WallOffset", roles)
+
+    def test_sketch_coincident_path_endpoints_share_one_handle(self):
+        sketch = self.document.addObject("Sketcher::SketchObject", "JoinedWallPath")
+        sketch.addGeometry(
+            [
+                Part.LineSegment(App.Vector(0, 0), App.Vector(2000, 0)),
+                Part.LineSegment(App.Vector(2000, 0), App.Vector(3000, 1000)),
+            ],
+            False,
+        )
+        sketch.addConstraint(Sketcher.Constraint("Coincident", 0, 2, 1, 1))
+        wall = Arch.makeWall(sketch, width=200, height=3000)
+        self.document.recompute()
+        context = ArchRepresentation.RepresentationContext(
+            purpose=ArchRepresentation.RepresentationPurpose.PLAN,
+            reference_frame=App.Placement(),
+        )
+
+        handles = [
+            handle
+            for handle in wall.Proxy.getRepresentation(wall, context).edit_handles
+            if handle.operation.key == "WallPathVertex"
+        ]
+        self.assertEqual(len(handles), 3)
+        junction = next(handle for handle in handles if handle.role == "WallPathG0P2_G1P1")
+        editor = plan_contextual_editing.BIMContextualHandleEditor(context)
+        editor.begin(junction)
+        result = editor.commit(junction.point + App.Vector(250, 500, 0))
+
+        self.assertTrue(result.success)
+        expected = App.Vector(2250, 500, 0)
+        self.assertTrue(sketch.getPoint(0, 2).isEqual(expected, 1e-7))
+        self.assertTrue(sketch.getPoint(1, 1).isEqual(expected, 1e-7))
+
+    def test_sketch_solver_owns_plan_path_vertex_edit(self):
+        self.document.UndoMode = 1
+        sketch = self.document.addObject("Sketcher::SketchObject", "WallPathSketch")
+        sketch.addGeometry(
+            Part.LineSegment(App.Vector(0, 0, 0), App.Vector(2000, 0, 0)),
+            False,
+        )
+        sketch.Placement = App.Placement(
+            App.Vector(100, 200, 0),
+            App.Rotation(App.Vector(0, 0, 1), 30),
+        )
+        wall = Arch.makeWall(sketch, width=200, height=3000)
+        self.document.recompute()
+        context = ArchRepresentation.RepresentationContext(
+            purpose=ArchRepresentation.RepresentationPurpose.PLAN,
+            reference_frame=App.Placement(App.Vector(0, 0, 1000), App.Rotation()),
+            cut_offset=0.0,
+            target_offset=0.0,
+        )
+
+        representation = wall.Proxy.getRepresentation(wall, context)
+        handles = [
+            handle
+            for handle in representation.edit_handles
+            if handle.operation.key == "WallPathVertex"
+        ]
+        self.assertEqual(len(handles), 2)
+        handle = handles[1]
+        self.assertEqual(handle.operation.property_name, "Base.Geometry[0].Point2")
+        self.assertEqual(handle.subelement, "Base.G0P2")
+
+        editor = plan_contextual_editing.BIMContextualHandleEditor(context)
+        editor.begin(handle)
+        result = editor.commit(handle.point + App.Vector(0, 500, 250))
+        self.assertTrue(result.success)
+        moved = sketch.getGlobalPlacement().multVec(sketch.getPoint(0, 2))
+        expected = sketch.getGlobalPlacement().multVec(App.Vector(2000, 0, 0))
+        expected += App.Vector(0, 500, 0)
+        self.assertTrue(moved.isEqual(expected, 1e-7))
+        self.document.undo()
+        self.assertTrue(sketch.getPoint(0, 2).isEqual(App.Vector(2000, 0, 0), 1e-7))
+
+        sketch.addConstraint(Sketcher.Constraint("Block", 0))
+        self.document.recompute()
+        constrained = wall.Proxy.getRepresentation(wall, context)
+        self.assertFalse(
+            any(item.operation.key == "WallPathVertex" for item in constrained.edit_handles)
+        )
+
+    def test_draft_wire_owns_plan_path_vertex_edit(self):
+        self.document.UndoMode = 1
+        profile = Draft.makeWire(
+            [
+                App.Vector(0, 0, 0),
+                App.Vector(2000, 0, 0),
+                App.Vector(3000, 1000, 0),
+            ],
+        )
+        wall = Arch.makeWall(profile, width=200, height=3000)
+        self.document.recompute()
+        frame = App.Placement(
+            App.Vector(0, 0, 1000),
+            App.Rotation(),
+        )
+        context = ArchRepresentation.RepresentationContext(
+            purpose=ArchRepresentation.RepresentationPurpose.PLAN,
+            reference_frame=frame,
+            cut_offset=0.0,
+            target_offset=0.0,
+        )
+
+        representation = wall.Proxy.getRepresentation(wall, context)
+        handles = [
+            handle
+            for handle in representation.edit_handles
+            if handle.operation.key == "WallPathVertex"
+        ]
+        self.assertEqual(len(handles), 3)
+        handle = handles[1]
+        self.assertEqual(handle.interaction, "Planar")
+        self.assertEqual(handle.subelement, "Base.Vertex2")
+
+        editor = plan_contextual_editing.BIMContextualHandleEditor(context)
+        editor.begin(handle)
+        target = handle.point + App.Vector(0, 500, 200)
+        result = editor.commit(target)
+        self.document.recompute()
+
+        self.assertTrue(result.success)
+        self.assertTrue(profile.Points[1].isEqual(App.Vector(2000, 500, 0), 1e-7))
+        self.assertIs(handle.source, wall)
+
+        self.document.undo()
+        self.assertTrue(profile.Points[1].isEqual(App.Vector(2000, 0, 0), 1e-7))
+        self.document.redo()
+        self.assertTrue(profile.Points[1].isEqual(App.Vector(2000, 500, 0), 1e-7))
 
     def _make_hosted_window(self, wall, name, x_start, z_start, width=800.0, height=1200.0):
         sketch = self.document.addObject("Sketcher::SketchObject", name + "Sketch")
@@ -249,6 +464,17 @@ class TestArchWall(TestArchBase.TestArchBase):
             places=3,
             msg="Wall footprint area should reflect the hosted opening gap at plan cut height.",
         )
+        representation = wall.Proxy.getRepresentation(
+            wall,
+            wall.Proxy.getDefaultPlanContext(wall),
+        )
+        self.assertEqual(len(representation.cut_geometry), 2)
+        self.assertTrue(representation.snap_geometry)
+        for geometry in representation.cut_geometry + representation.snap_geometry:
+            mapping = representation.mapping_for(geometry)
+            self.assertIsNotNone(mapping)
+            self.assertIs(mapping.source, wall)
+            self.assertTrue(mapping.subelement.startswith("RepresentationFace"))
 
     def test_wall_footprint_ignores_openings_above_cut_height(self):
         """Only openings intersecting the plan cut height should affect the wall footprint."""
@@ -362,6 +588,84 @@ class TestArchWall(TestArchBase.TestArchBase):
             expected_area,
             places=3,
             msg="Parent storey plan cut height should override the default wall-base cut.",
+        )
+
+    def test_wall_representation_uses_arbitrary_reference_frame(self):
+        """Wall sections should be generated in a context-local coordinate frame."""
+        self.printTestMessage("Checking wall representation in an arbitrary frame...")
+
+        line = Draft.makeLine(App.Vector(0, 0, 0), App.Vector(4000, 0, 0))
+        wall = Arch.makeWall(line, width=200, height=3000)
+        self.document.recompute()
+
+        frame = App.Placement(
+            App.Vector(),
+            App.Rotation(App.Vector(0, 1, 0), 90),
+        )
+        context = ArchRepresentation.RepresentationContext(
+            purpose=ArchRepresentation.RepresentationPurpose.SECTION,
+            reference_frame=frame,
+            cut_offset=2000.0,
+            target_offset=0.0,
+        )
+        representation = wall.Proxy.getRepresentation(wall, context)
+        faces = representation.cut_geometry
+
+        self.assertTrue(faces, "The arbitrary section frame should produce wall geometry.")
+        self.assertFalse(representation.projected_geometry)
+        self.assertTrue(representation.snap_geometry)
+        self.assertEqual(len(representation.edit_handles), 1)
+        height_handle = representation.edit_handles[0]
+        self.assertEqual(height_handle.role, "WallHeight")
+        self.assertEqual(height_handle.property_name, "Height")
+        self.assertEqual(height_handle.operation.key, "WallHeight")
+        self.assertIs(height_handle.source, wall)
+        self.assertAlmostEqual(height_handle.direction.z, 1.0, places=6)
+        self.assertAlmostEqual(sum(face.Area for face in faces), 200.0 * 3000.0, places=3)
+        for face in faces:
+            mapping = representation.mapping_for(face)
+            self.assertIs(mapping.source, wall)
+            self.assertEqual(mapping.role, "CutFace")
+            self.assertAlmostEqual(face.BoundBox.XMin, 0.0, places=6)
+            self.assertAlmostEqual(face.BoundBox.XMax, 0.0, places=6)
+
+        wall.setExpression("Height", "3000 mm")
+        constrained = wall.Proxy.getRepresentation(wall, context)
+        self.assertNotIn("WallHeight", {handle.role for handle in constrained.edit_handles})
+        wall.setExpression("Height", None)
+
+    def testWallRepresentationUsesPlanAndSectionPlaneContexts(self):
+        wall = Arch.makeWall(length=2000, width=200, height=2500)
+        self.document.recompute()
+
+        plan = ArchRepresentation.RepresentationContext(
+            purpose=ArchRepresentation.RepresentationPurpose.PLAN,
+            cut_offset=1000.0,
+            target_offset=0.0,
+            source=wall,
+        )
+        plan_representation = wall.Proxy.getRepresentation(wall, plan)
+        self.assertIs(plan_representation.source, wall)
+        self.assertIs(plan_representation.context, plan)
+        self.assertTrue(plan_representation.cut_geometry)
+        self.assertTrue(plan_representation.snap_geometry)
+
+        section = Arch.makeSectionPlane(wall)
+        section.Placement = App.Placement(
+            App.Vector(0.0, 0.0, 1000.0),
+            App.Rotation(App.Vector(0, 1, 0), 90),
+        )
+        self.document.recompute()
+        section_context = section.Proxy.getRepresentationContext(section)
+        section_representation = wall.Proxy.getRepresentation(wall, section_context)
+        self.assertIs(
+            section_context.purpose, ArchRepresentation.RepresentationPurpose.SECTION
+        )
+        self.assertIs(section_representation.context, section_context)
+        self.assertTrue(section_representation.cut_geometry)
+        self.assertNotEqual(
+            section_representation.cut_geometry[0].CenterOfMass.z,
+            plan_representation.cut_geometry[0].CenterOfMass.z,
         )
 
     def test_joinWalls(self):
@@ -922,6 +1226,12 @@ class TestArchWall(TestArchBase.TestArchBase):
         self.assertTrue(wall.Shape.isValid(), "Wall shape became invalid after trimming.")
         self.assertLess(wall.Shape.Volume, initial_volume)
         self.assertLess(wall.Shape.BoundBox.XMax, 1000.01)
+        if wall.Shape.ElementMapVersion != "":
+            self.assertEqual(
+                wall.Shape.ElementMapSize,
+                0,
+                "Transient wall end-condition trims should not keep partial element maps.",
+            )
 
         wall.EndingEnd = App.Placement()
         self.document.recompute()

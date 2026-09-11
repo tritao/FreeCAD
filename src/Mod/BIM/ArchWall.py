@@ -54,6 +54,7 @@ import ArchWallRelation
 import ArchWallRelationResolver
 import Draft
 import DraftVecUtils
+import ArchRepresentation
 
 from FreeCAD import Vector
 from draftutils import params
@@ -494,6 +495,11 @@ class _Wall(ArchComponent.Component):
 
         ArchComponent.Component.onDocumentRestored(self, obj)
         self._normalizing_end_condition_order = False
+        # Runtime-only relation invalidation state is deliberately not
+        # serialized.  Recreate it for proxies loaded from an FCStd document,
+        # just as __init__ does for newly-created walls.
+        self._resolved_geometry_signatures = {}
+        self._invalidating_wall_relations = False
         self.setProperties(obj)
 
         # In V1.0 the handling of wall normals has changed. As a result existing
@@ -1002,9 +1008,286 @@ class _Wall(ArchComponent.Component):
         generic Footprint display mode contract.
         """
 
+        return self.getRepresentation(obj, context).cut_geometry
+
+    def getRepresentation(self, obj, context):
+        """Return renderer-independent wall geometry with semantic mappings."""
+
         if context is None:
             context = self.getDefaultPlanContext(obj)
+        representation = ArchRepresentation.BIMRepresentation(source=obj, context=context)
+        faces = self._getCutRepresentation(obj, context)
+        for face_index, face in enumerate(faces, start=1):
+            representation.add_geometry(
+                "cut_geometry",
+                face,
+                "CutFace",
+                subelement=f"RepresentationFace{face_index}",
+            )
+            for edge_index, edge in enumerate(face.Edges, start=1):
+                representation.add_geometry(
+                    "snap_geometry",
+                    edge,
+                    "CutEdge",
+                    subelement=f"RepresentationFace{face_index}.Edge{edge_index}",
+                )
+            for vertex_index, vertex in enumerate(face.Vertexes, start=1):
+                representation.add_geometry(
+                    "snap_geometry",
+                    vertex,
+                    "CutVertex",
+                    subelement=f"RepresentationFace{face_index}.Vertex{vertex_index}",
+                )
+        purpose = getattr(context, "purpose", None)
+        if purpose in (
+            ArchRepresentation.RepresentationPurpose.SECTION,
+            ArchRepresentation.RepresentationPurpose.ELEVATION,
+        ) and hasattr(obj, "Height"):
+            direction = ArchComponent.representation_vertical_direction(context)
+            if direction is not None:
+                _low, high = ArchComponent.representation_extent_points(
+                    obj.Shape, context, direction
+                )
+                height_operation = self._height_edit_operation()
+                if high is not None and height_operation.is_available(obj):
+                    representation.add_edit_handle(
+                        ArchComponent.BIMEditHandle(
+                            obj,
+                            "WallHeight",
+                            high,
+                            direction,
+                            height_operation,
+                            subelement="Height",
+                            minimum=1.0,
+                        )
+                    )
+                low, _high = ArchComponent.representation_extent_points(
+                    obj.Shape, context, direction
+                )
+                base_operation = self._base_elevation_edit_operation()
+                if (
+                    low is not None
+                    and getattr(obj, "Base", None) is None
+                    and base_operation.is_available(obj)
+                ):
+                    representation.add_edit_handle(
+                        ArchComponent.BIMEditHandle(
+                            obj,
+                            "WallBaseElevation",
+                            low,
+                            direction,
+                            base_operation,
+                            subelement="Placement.Base.z",
+                            minimum=None,
+                        )
+                    )
+        if purpose == ArchRepresentation.RepresentationPurpose.PLAN:
+            self._add_owned_path_edit_handles(representation, obj, context)
+            self._add_native_path_edit_handles(representation, obj, context)
+            self._add_section_property_edit_handles(representation, obj, context)
+        return representation
+
+    def _add_section_property_edit_handles(self, representation, wall, context):
+        baseline = self.get_global_baseline(wall)
+        section = self.get_resolved_section(wall)
+        if baseline is None or section is None or not self._can_edit_uniform_section(wall):
+            return
+        axis = baseline.end_point.sub(baseline.start_point)
+        axis.normalize()
+        lateral = axis.cross(baseline.normal)
+        if lateral.Length <= 1e-9:
+            return
+        lateral.normalize()
+        midpoint = (baseline.start_point + baseline.end_point) * 0.5
+        align = str(wall.Align)
+        if align == "Left":
+            width_direction = -lateral
+            width_coordinate = section.y_min
+        else:
+            width_direction = lateral
+            width_coordinate = section.y_max
+        width_operation = ArchComponent.BIMEditOperation(
+            "WallWidth",
+            "Edit Wall Width",
+            lambda source: source.Width.Value,
+            lambda source, value: setattr(source, "Width", value),
+            property_name="Width",
+            minimum=1.0,
+            sensitivity=2.0 if align == "Center" else 1.0,
+            available=lambda source: self._can_edit_uniform_section(source),
+        )
+        representation.add_edit_handle(
+            ArchComponent.BIMEditHandle(
+                wall,
+                "WallWidth",
+                ArchComponent.project_to_representation_plane(
+                    midpoint + lateral * width_coordinate, context
+                ),
+                width_direction,
+                width_operation,
+                subelement="Width",
+                minimum=1.0,
+            )
+        )
+        if align not in ("Left", "Right"):
+            return
+        offset_direction = -lateral if align == "Left" else lateral
+        offset_operation = ArchComponent.BIMEditOperation(
+            "WallOffset",
+            "Edit Wall Offset",
+            lambda source: source.Offset.Value,
+            lambda source, value: setattr(source, "Offset", value),
+            property_name="Offset",
+            minimum=None,
+            available=lambda source: self._can_edit_uniform_section(source),
+        )
+        representation.add_edit_handle(
+            ArchComponent.BIMEditHandle(
+                wall,
+                "WallOffset",
+                ArchComponent.project_to_representation_plane(
+                    midpoint + lateral * ((section.y_min + section.y_max) * 0.5),
+                    context,
+                ),
+                offset_direction,
+                offset_operation,
+                subelement="Offset",
+                minimum=None,
+            )
+        )
+
+    @staticmethod
+    def _can_edit_uniform_section(wall):
+        material = getattr(wall, "Material", None)
+        base = getattr(wall, "Base", None)
+        return bool(
+            hasattr(wall, "Width")
+            and not getattr(material, "Thicknesses", None)
+            and not (
+                getattr(wall, "ArchSketchData", False)
+                and base
+                and Draft.getType(base) == "ArchSketch"
+            )
+            and not list(getattr(wall, "OverrideWidth", ()) or ())
+            and not list(getattr(wall, "OverrideAlign", ()) or ())
+            and not list(getattr(wall, "OverrideOffset", ()) or ())
+            and not ArchComponent.is_property_expression_driven(wall, "Width")
+            and not ArchComponent.is_property_expression_driven(wall, "Offset")
+        )
+
+    @staticmethod
+    def _add_owned_path_edit_handles(representation, wall, context):
+        from bimplan import editable_points
+
+        owner = getattr(wall, "Base", None)
+        points = editable_points.get_contextual_edit_points(owner, context)
+        if not points:
+            return
+        for index, point in enumerate(points):
+            role = point.semantic_id or "Vertex{}".format(index + 1)
+            operation = ArchComponent.BIMEditOperation(
+                "WallPathVertex",
+                "Edit Wall Path Vertex",
+                lambda _wall, point=point: point.get_value(),
+                lambda _wall, value, point=point: point.apply_value(value),
+                property_name="Base.{}".format(point.property_name),
+                value_kind="Point",
+                available=lambda _wall, point=point: point.is_available(),
+            )
+            representation.add_edit_handle(
+                ArchComponent.BIMEditHandle(
+                    wall,
+                    "WallPath{}".format(role),
+                    ArchComponent.project_to_representation_plane(point.point, context),
+                    FreeCAD.Vector(),
+                    operation,
+                    interaction="Planar",
+                    subelement="Base.{}".format(point.subelement),
+                    minimum=None,
+                )
+            )
+
+    def _add_native_path_edit_handles(self, representation, wall, context):
+        if getattr(wall, "Base", None) is not None:
+            return
+        endpoints = self.calc_endpoints(wall)
+        if len(endpoints) != 2 or not self._can_edit_native_path(wall):
+            return
+
+        def apply_endpoint(source, index, value):
+            current = self.calc_endpoints(source)
+            if len(current) != 2:
+                raise ValueError("Wall no longer has an editable straight path")
+            current[index] = FreeCAD.Vector(value)
+            source.Proxy.set_from_endpoints(source, current)
+
+        for index, role in enumerate(("Start", "End")):
+            operation = ArchComponent.BIMEditOperation(
+                "WallPathEndpoint",
+                "Edit Wall Path Endpoint",
+                lambda source, index=index: self.calc_endpoints(source)[index],
+                lambda source, value, index=index: apply_endpoint(source, index, value),
+                property_name="Path.{}".format(role),
+                value_kind="Point",
+                available=lambda source: self._can_edit_native_path(source),
+            )
+            representation.add_edit_handle(
+                ArchComponent.BIMEditHandle(
+                    wall,
+                    "WallPath{}".format(role),
+                    ArchComponent.project_to_representation_plane(endpoints[index], context),
+                    FreeCAD.Vector(),
+                    operation,
+                    interaction="Planar",
+                    subelement="Path.{}".format(role),
+                    minimum=None,
+                )
+            )
+
+    def _can_edit_native_path(self, wall):
+        return bool(
+            getattr(wall, "Base", None) is None
+            and len(self.calc_endpoints(wall)) == 2
+            and not ArchComponent.is_property_expression_driven(wall, "Length")
+            and not ArchComponent.is_property_expression_driven(wall, "Placement")
+        )
+
+    @staticmethod
+    def _height_edit_operation():
+        return ArchComponent.BIMEditOperation(
+            "WallHeight",
+            "Edit Wall Height",
+            lambda wall: wall.Height.Value,
+            lambda wall, value: setattr(wall, "Height", value),
+            property_name="Height",
+            minimum=1.0,
+            available=lambda wall: not ArchComponent.is_property_expression_driven(wall, "Height"),
+        )
+
+    @staticmethod
+    def _base_elevation_edit_operation():
+        def set_elevation(wall, value):
+            placement = FreeCAD.Placement(wall.Placement)
+            placement.Base.z = value
+            wall.Placement = placement
+
+        return ArchComponent.BIMEditOperation(
+            "WallBaseElevation",
+            "Edit Wall Base Elevation",
+            lambda wall: wall.Placement.Base.z,
+            set_elevation,
+            property_name="Placement.Base.z",
+            available=lambda wall: not ArchComponent.is_property_expression_driven(
+                wall, "Placement.Base.z"
+            ),
+        )
+
+    def _getCutRepresentation(self, obj, context):
+        """Generate transient wall cut faces for a representation context."""
+
         shape = obj.Shape
+        if getattr(context, "reference_frame", None) is not None:
+            return ArchComponent.get_reference_slice_faces(shape, context)
         if shape and (not shape.isNull()) and shape.Solids:
             bb = shape.BoundBox
             if bb.ZLength > 0.001 and context.cut_offset is not None:
@@ -2258,7 +2541,7 @@ class _Wall(ArchComponent.Component):
             return False
 
         try:
-            has_relations = any(True for _relation in ArchWallJoinUtils.iter_wall_relations(obj))
+            has_relations = any(True for _relation in ArchWallRelation.iter_wall_relations(obj))
         except Exception:
             return False
         return has_relations

@@ -43,7 +43,7 @@ TODO put examples here.
 
 import math
 import os
-
+from dataclasses import dataclass
 import FreeCAD
 import ArchCommands
 import ArchIFC
@@ -53,6 +53,7 @@ import ArchRepresentation
 from draftutils import params
 
 DEFAULT_PLAN_CUT_HEIGHT = 1000.0
+
 if FreeCAD.GuiUp:
     from PySide import QtGui, QtCore
     from PySide.QtCore import QT_TRANSLATE_NOOP
@@ -69,6 +70,25 @@ else:
     # \endcond
 
 
+def _copy_without_element_map(shape):
+    """Return a transient copy that does not retain element-map metadata."""
+
+    if shape is None:
+        return None
+    try:
+        return shape.copy(noElementMap=True)
+    except TypeError:
+        try:
+            plain_shape = shape.copy()
+            if getattr(plain_shape, "ElementMapSize", 0):
+                plain_shape.clearElementMap()
+            return plain_shape
+        except Exception:
+            return shape
+    except Exception:
+        return shape
+
+
 def _make_projected_horizontal_area_face(projected_faces):
     """Build one transient XY face from projected coplanar analysis faces."""
 
@@ -79,6 +99,263 @@ def _make_projected_horizontal_area_face(projected_faces):
     for face in projected_faces[1:]:
         fused_face = fused_face.fuse(face, noElementMap=True)
     return fused_face.removeSplitter()
+
+
+def project_to_representation_plane(point, context):
+    """Project a global point onto the output plane of ``context``."""
+
+    point = FreeCAD.Vector(point)
+    frame = getattr(context, "reference_frame", None)
+    if frame is None:
+        target_offset = getattr(context, "target_offset", None)
+        if target_offset is not None:
+            point.z = float(target_offset)
+        return point
+    local = frame.inverse().multVec(point)
+    local.z = float(getattr(context, "target_offset", None) or 0.0)
+    return frame.multVec(local)
+
+
+def project_direction_to_representation_plane(direction, context):
+    """Return a normalized global direction within the context output plane."""
+
+    direction = FreeCAD.Vector(direction)
+    frame = getattr(context, "reference_frame", None)
+    if frame is not None:
+        normal = frame.Rotation.multVec(FreeCAD.Vector(0, 0, 1))
+        direction = direction - normal * direction.dot(normal)
+    else:
+        direction.z = 0.0
+    if direction.Length <= 1e-9:
+        return None
+    direction.normalize()
+    return direction
+
+
+def representation_vertical_direction(context):
+    """Return model Z projected into the active representation plane."""
+
+    vertical = FreeCAD.Vector(0, 0, 1)
+    frame = getattr(context, "reference_frame", None)
+    if frame is not None:
+        normal = frame.Rotation.multVec(FreeCAD.Vector(0, 0, 1))
+        vertical = vertical - normal * vertical.dot(normal)
+    if vertical.Length <= 1e-9:
+        return None
+    vertical.normalize()
+    return vertical
+
+
+def representation_extent_points(shape, context, direction):
+    """Return low/high projected extent points along an in-plane direction."""
+
+    vertices = tuple(getattr(shape, "Vertexes", ()) or ())
+    if not vertices:
+        return (None, None)
+    points = [project_to_representation_plane(vertex.Point, context) for vertex in vertices]
+    low = min(points, key=lambda point: point.dot(direction))
+    high = max(points, key=lambda point: point.dot(direction))
+    return (low, high)
+
+
+class RepresentationSource:
+    """Semantic origin of one piece of transient representation geometry."""
+
+    def __init__(self, geometry, source, role, subelement=None):
+        self.geometry = geometry
+        self.source = source
+        self.role = role
+        self.subelement = subelement
+
+
+class BIMEditHandle:
+    """Renderer-independent semantic interaction offered by a BIM object."""
+
+    def __init__(
+        self,
+        source,
+        role,
+        point,
+        direction,
+        operation,
+        *,
+        interaction="Linear",
+        subelement=None,
+        minimum=0.0,
+    ):
+        self.source = source
+        self.role = str(role)
+        self.point = FreeCAD.Vector(point)
+        self.direction = FreeCAD.Vector(direction)
+        if self.direction.Length:
+            self.direction.normalize()
+        self.operation = operation
+        self.interaction = str(interaction)
+        self.subelement = subelement
+        self.minimum = minimum
+
+    @property
+    def property_name(self):
+        """Compatibility name for consumers migrating to typed operations."""
+
+        return getattr(self.operation, "property_name", "")
+
+
+class BIMEditOperation:
+    """Typed semantic mutation used by a renderer-independent edit handle."""
+
+    def __init__(
+        self,
+        key,
+        label,
+        get_value,
+        apply_value,
+        *,
+        property_name="",
+        manages_transaction=False,
+        available=None,
+        minimum=None,
+        maximum=None,
+        value_kind="Scalar",
+        sensitivity=1.0,
+    ):
+        self.key = str(key)
+        self.label = str(label)
+        self._get_value = get_value
+        self._apply_value = apply_value
+        self.property_name = str(property_name)
+        self.manages_transaction = bool(manages_transaction)
+        self._available = available
+        self.minimum = minimum
+        self.maximum = maximum
+        self.value_kind = str(value_kind)
+        self.sensitivity = float(sensitivity)
+
+    def is_available(self, source):
+        if self._available is None:
+            return True
+        return bool(self._available(source))
+
+    def validate(self, source, value=None):
+        if not self.is_available(source):
+            return BIMEditValidation(False, "This value is controlled by a constraint.")
+        below_minimum = (
+            value is not None
+            and self.value_kind == "Scalar"
+            and self.minimum is not None
+            and value < self.minimum
+        )
+        if below_minimum:
+            return BIMEditValidation(
+                False,
+                "Value must be at least {:g} mm.".format(self.minimum),
+                minimum=self.minimum,
+                maximum=self.maximum,
+            )
+        above_maximum = (
+            value is not None
+            and self.value_kind == "Scalar"
+            and self.maximum is not None
+            and value > self.maximum
+        )
+        if above_maximum:
+            return BIMEditValidation(
+                False,
+                "Value must be at most {:g} mm.".format(self.maximum),
+                minimum=self.minimum,
+                maximum=self.maximum,
+            )
+        return BIMEditValidation(True, minimum=self.minimum, maximum=self.maximum)
+
+    def get_value(self, source):
+        value = self._get_value(source)
+        if self.value_kind == "Point":
+            return FreeCAD.Vector(value)
+        return float(value)
+
+    def apply(self, source, value):
+        validation = self.validate(source, value)
+        if not validation.allowed:
+            raise ValueError(validation.reason)
+        if self.value_kind == "Point":
+            return self._apply_value(source, FreeCAD.Vector(value))
+        return self._apply_value(source, float(value))
+
+
+@dataclass(frozen=True)
+class BIMEditValidation:
+    allowed: bool
+    reason: str = ""
+    minimum: float | None = None
+    maximum: float | None = None
+
+
+def is_property_expression_driven(obj, property_name):
+    """Return whether a document property path is controlled by an expression."""
+
+    getter = getattr(obj, "getExpression", None)
+    if callable(getter):
+        try:
+            return bool(getter(str(property_name)))
+        except Exception:
+            pass
+    try:
+        return any(
+            str(path) == str(property_name)
+            for path, _expression in (getattr(obj, "ExpressionEngine", ()) or ())
+        )
+    except Exception:
+        return False
+
+
+class BIMRepresentation(ArchRepresentation.BIMRepresentation):
+    """Renderer-independent geometry and semantic identity for one BIM object."""
+
+    def __init__(self, source=None, context=None):
+        self.source = source
+        self.context = context
+        self.cut_geometry = []
+        self.projected_geometry = []
+        self.snap_geometry = []
+        self.source_mappings = []
+        self.edit_handles = []
+
+    def add_geometry(self, collection, geometry, role, subelement=None):
+        """Add geometry to a named collection and record its semantic source."""
+        target = getattr(self, collection)
+        target.append(geometry)
+        self.source_mappings.append(
+            RepresentationSource(geometry, self.source, role, subelement=subelement)
+        )
+
+    def mapping_for(self, geometry):
+        """Return the semantic mapping for an exact generated geometry object."""
+        return next(
+            (mapping for mapping in self.source_mappings if mapping.geometry is geometry),
+            None,
+        )
+
+    def add_edit_handle(self, handle):
+        """Add a semantic handle without coupling it to a viewer toolkit."""
+
+        if handle.source is None:
+            handle.source = self.source
+        self.edit_handles.append(handle)
+        return handle
+
+    def iter_snap_targets(self):
+        """Yield semantic targets for the geometry intended for snapping."""
+
+        snap_ids = {id(geometry) for geometry in self.snap_geometry}
+        for mapping in self.source_mappings:
+            if id(mapping.geometry) in snap_ids:
+                yield BIMSnapTarget(
+                    geometry=mapping.geometry,
+                    source=mapping.source,
+                    subelement=mapping.subelement,
+                    role=mapping.role,
+                    context=self.context,
+                )
 
 
 class BIMSnapTarget:
@@ -367,6 +644,45 @@ def get_horizontal_slice_faces(shape, cut_z, translate_z=0.0):
             face.translate(FreeCAD.Vector(0, 0, translate_z))
         faces.append(face)
     return faces
+
+
+def get_reference_slice_faces(shape, context):
+    """Return transient slice faces expressed on an arbitrary reference frame.
+
+    The frame maps local representation coordinates into document coordinates.
+    Sectioning is performed at ``cut_offset`` on its local Z axis and the
+    result is placed at ``target_offset`` before being mapped back to the
+    document. The source shape and document are never modified.
+    """
+
+    frame = getattr(context, "reference_frame", None)
+    cut_offset = getattr(context, "cut_offset", None)
+    if frame is None or cut_offset is None or not shape or shape.isNull():
+        return []
+
+    local_shape = _copy_without_element_map(shape)
+    if local_shape is None:
+        return []
+    try:
+        local_shape.transformShape(frame.inverse().toMatrix())
+        bounds = local_shape.BoundBox
+        if bounds.ZLength <= 0.001:
+            return []
+        cut_offset = max(bounds.ZMin + 0.001, min(bounds.ZMax - 0.001, cut_offset))
+        target_offset = getattr(context, "target_offset", None)
+        if target_offset is None:
+            target_offset = bounds.ZMin
+        faces = get_horizontal_slice_faces(
+            local_shape,
+            cut_offset,
+            translate_z=target_offset - cut_offset,
+        )
+        for face in faces:
+            face.transformShape(frame.toMatrix())
+        return faces
+    except Exception:
+        return []
+
 
 def _iter_plan_footprint_local_points(view_provider):
     collector = getattr(view_provider, "_collect_local_footprint_polylines", None)
@@ -770,6 +1086,19 @@ class Component(ArchIFC.IfcProduct):
             The component object.
         """
         Component.setProperties(self, obj)
+
+    def getRepresentation(self, obj, context):
+        """Return the default semantic representation for ``obj``.
+
+        Specialized BIM proxies override this method for plan, section and
+        elevation geometry. The base implementation keeps model geometry
+        available to neutral consumers while preserving object identity.
+        """
+        representation = BIMRepresentation(source=obj, context=context)
+        shape = getattr(obj, "Shape", None)
+        if shape is not None and not shape.isNull():
+            representation.add_geometry("projected_geometry", shape, "model")
+        return representation
 
     def execute(self, obj):
         """Method run when the object is recomputed.

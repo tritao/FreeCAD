@@ -86,6 +86,9 @@ class RectWallTool(plan_runtime_tools.PlanToolHandler):
 
 
 def activate_wall_tool(session):
+    contexts = getattr(session, "representation_context", None)
+    if contexts is not None and not contexts.require("wall_create"):
+        return False
     from bimcommands import BimWall
 
     session.spaces.cancel_space_region_pick(refresh=False)
@@ -112,6 +115,9 @@ def activate_wall_tool(session):
 
 
 def activate_rect_wall_tool(session):
+    contexts = getattr(session, "representation_context", None)
+    if contexts is not None and not contexts.require("wall_create"):
+        return False
     preview_state = _creation_preview_state(session)
     session.spaces.cancel_space_region_pick(refresh=False)
     session.spaces.cancel_plan_region_tool(refresh=False)

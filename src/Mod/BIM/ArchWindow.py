@@ -2226,8 +2226,8 @@ class _HostedOpeningRepresentationGeometry:
             return {"symbol_polylines": (), "guide_polylines": ()}
 
         shape = getattr(self.Object, "Shape", None)
-        cut_z = getattr(context, "cut_z", None)
-        base_z = getattr(context, "target_z", None)
+        cut_z = getattr(context, "cut_offset", None)
+        base_z = getattr(context, "target_offset", None)
         if cut_z is None or base_z is None:
             default_context = self._get_default_opening_plan_context(self.Object)
             if cut_z is None:
@@ -2264,10 +2264,10 @@ class _HostedOpeningRepresentationGeometry:
 
         purpose = getattr(context, "purpose", ArchRepresentation.RepresentationPurpose.PLAN)
         if purpose != ArchRepresentation.RepresentationPurpose.PLAN:
-            cut_z = getattr(context, "cut_z", None)
+            cut_z = getattr(context, "cut_offset", None)
             if cut_z is None:
                 return representation
-            target_z = getattr(context, "target_z", None)
+            target_z = getattr(context, "target_offset", None)
             if target_z is None:
                 target_z = source.Shape.BoundBox.ZMin
             faces = ArchComponent.get_horizontal_slice_faces(

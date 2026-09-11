@@ -32,6 +32,8 @@ class ContextualRepresentationRenderer:
         self._object_nodes = {}
         self._representations = {}
         self._node_mappings = {}
+        self._handle_coordinates = {}
+        self._handle_materials = {}
 
     def set_representation(self, representation):
         """Replace one object's viewer-local representation."""
@@ -43,6 +45,7 @@ class ContextualRepresentationRenderer:
         root = coin.SoSeparator()
         self._append_faces(root, representation)
         self._append_lines(root, representation)
+        self._append_edit_handles(root, representation)
         self.root.addChild(root)
         self._object_nodes[source] = root
         self._representations[source] = representation
@@ -57,6 +60,10 @@ class ContextualRepresentationRenderer:
             stale = [key for key, value in self._node_mappings.items() if value.source is source]
             for key in stale:
                 self._node_mappings.pop(key, None)
+            stale_handles = [key for key in self._handle_coordinates if key[0] is source]
+            for key in stale_handles:
+                self._handle_coordinates.pop(key, None)
+                self._handle_materials.pop(key, None)
         if restore_visibility:
             self.view.setViewVisibility(self.layer, source, "Inherit")
 
@@ -67,6 +74,12 @@ class ContextualRepresentationRenderer:
     def sources(self):
         return tuple(self._representations)
 
+    def edit_handles_for(self, source):
+        representation = self._representations.get(source)
+        if representation is None:
+            return ()
+        return tuple(representation.edit_handles)
+
     def close(self):
         if self.root is None:
             return
@@ -75,6 +88,8 @@ class ContextualRepresentationRenderer:
         self._object_nodes.clear()
         self._representations.clear()
         self._node_mappings.clear()
+        self._handle_coordinates.clear()
+        self._handle_materials.clear()
         self.root.unref()
         self.root = None
 
@@ -135,6 +150,51 @@ class ContextualRepresentationRenderer:
             group.addChild(lines)
             root.addChild(group)
             self._record_node(group, representation, geometry)
+
+    def _append_edit_handles(self, root, representation):
+        for handle in representation.edit_handles:
+            group = coin.SoSeparator()
+            material = coin.SoMaterial()
+            material.diffuseColor = (0.95, 0.35, 0.05)
+            self._handle_materials[(handle.source, handle.role)] = material
+            group.addChild(material)
+            style = coin.SoDrawStyle()
+            style.pointSize = 9.0
+            group.addChild(style)
+            coordinates = coin.SoCoordinate3()
+            coordinates.point.set1Value(0, _xyz(handle.point))
+            self._handle_coordinates[(handle.source, handle.role)] = coordinates
+            group.addChild(coordinates)
+            points = coin.SoPointSet()
+            points.numPoints = 1
+            group.addChild(points)
+            root.addChild(group)
+            self._node_mappings[id(group)] = ContextualNodeMapping(
+                handle.source,
+                handle.subelement,
+                handle.role,
+                handle,
+            )
+
+    def preview_handle(self, handle, point):
+        coordinates = self._handle_coordinates.get((handle.source, handle.role))
+        if coordinates is None:
+            return False
+        coordinates.point.set1Value(0, _xyz(point))
+        return True
+
+    def set_handle_state(self, handle, state):
+        material = self._handle_materials.get((handle.source, handle.role))
+        if material is None:
+            return False
+        colors = {
+            "normal": (0.95, 0.35, 0.05),
+            "active": (1.0, 0.75, 0.05),
+            "invalid": (0.9, 0.05, 0.05),
+            "constrained": (0.5, 0.5, 0.5),
+        }
+        material.diffuseColor = colors.get(str(state), colors["normal"])
+        return True
 
     def __enter__(self):
         return self
