@@ -802,14 +802,7 @@ def _get_contextual_representations(
     established cut-shape renderer, so existing Arch and TechDraw behavior is
     preserved while providers migrate independently.
     """
-    if (
-        not techdraw
-        or showHidden
-        or showFill
-        or fillSpaces
-        or joinArch
-        or not objects
-    ):
+    if not techdraw or showHidden or showFill or fillSpaces or joinArch or not objects:
         return []
 
     context_provider = getattr(getattr(source, "Proxy", None), "getRepresentationContext", None)

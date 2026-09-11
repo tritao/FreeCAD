@@ -230,9 +230,7 @@ TEST_F(ViewProviderDocumentObjectTest, viewInstanceKeepsRepresentationViewerLoca
     viewProvider.attach(_child);
     Gui::ViewContext hiddenContext;
     const auto hiddenLayer = hiddenContext.pushLayer();
-    ASSERT_TRUE(
-        hiddenContext.setVisibility(hiddenLayer, _child, Gui::ViewContext::Visibility::Hidden)
-    );
+    ASSERT_TRUE(hiddenContext.setVisibility(hiddenLayer, _child, Gui::ViewContext::Visibility::Hidden));
 
     Gui::ViewInstance instance(&viewProvider, &hiddenContext);
     instance.setRepresentation(new SoCube);
@@ -259,9 +257,7 @@ TEST_F(ViewProviderDocumentObjectTest, twoInstancesCanUseDifferentContexts)
     viewProvider.attach(_child);
     Gui::ViewContext hiddenContext;
     const auto hiddenLayer = hiddenContext.pushLayer();
-    ASSERT_TRUE(
-        hiddenContext.setVisibility(hiddenLayer, _child, Gui::ViewContext::Visibility::Hidden)
-    );
+    ASSERT_TRUE(hiddenContext.setVisibility(hiddenLayer, _child, Gui::ViewContext::Visibility::Hidden));
     Gui::ViewContext visibleContext;
     const auto visibleLayer = visibleContext.pushLayer();
     ASSERT_TRUE(
