@@ -51,6 +51,7 @@ import ArchRepresentation
 
 from draftutils import params
 
+DEFAULT_PLAN_CUT_HEIGHT = 1000.0
 if FreeCAD.GuiUp:
     from PySide import QtGui, QtCore
     from PySide.QtCore import QT_TRANSLATE_NOOP
@@ -569,6 +570,63 @@ class Component(ArchIFC.IfcProduct):
                 if obj in parent.Additions:
                     return self.getParentHeight(parent)
         return 0
+
+    def getParentBuildingPart(self, obj, ifc_type=None):
+        """Return the nearest containing BuildingPart, optionally filtered by IFC type."""
+
+        for parent in obj.InList:
+            if Draft.getType(parent) == "BuildingPart":
+                if obj in getattr(parent, "Group", []):
+                    if (ifc_type is None) or (getattr(parent, "IfcType", "") == ifc_type):
+                        return parent
+        for parent in obj.InList:
+            if hasattr(parent, "Group"):
+                if obj in parent.Group:
+                    building_part = self.getParentBuildingPart(parent, ifc_type)
+                    if building_part:
+                        return building_part
+        for parent in obj.InList:
+            if hasattr(parent, "Additions"):
+                if obj in parent.Additions:
+                    building_part = self.getParentBuildingPart(parent, ifc_type)
+                    if building_part:
+                        return building_part
+        return None
+
+    def getDefaultPlanContext(self, obj, default_cut_height=DEFAULT_PLAN_CUT_HEIGHT):
+        """Return the default plan context for generic footprint previews.
+
+        Contained objects use their parent Building Storey's `PlanCutHeight`,
+        measured from the storey level. Standalone objects fall back to a simple
+        cut height above the object's base. `getFootprint()` wrappers use this
+        default context to preserve the existing display-mode API while
+        `getPlanRepresentation()` provides the view-aware extension point.
+        """
+
+        shape = getattr(obj, "Shape", None)
+        if shape and not shape.isNull():
+            target_z = shape.BoundBox.ZMin
+        else:
+            target_z = obj.Placement.Base.z
+
+        storey = self.getParentBuildingPart(obj, ifc_type="Building Storey")
+        if storey and hasattr(storey, "PlanCutHeight") and storey.PlanCutHeight.Value > 0:
+            level_offset = getattr(storey, "LevelOffset", 0)
+            if hasattr(level_offset, "Value"):
+                level_offset = level_offset.Value
+            cut_z = storey.Placement.Base.z + level_offset + storey.PlanCutHeight.Value
+            return ArchRepresentation.RepresentationContext(
+                purpose=ArchRepresentation.RepresentationPurpose.PLAN,
+                cut_offset=cut_z,
+                target_offset=target_z,
+                source=storey,
+            )
+
+        return ArchRepresentation.RepresentationContext(
+            purpose=ArchRepresentation.RepresentationPurpose.PLAN,
+            cut_offset=target_z + default_cut_height,
+            target_offset=target_z,
+        )
 
     def clone(self, obj):
         """If the object is a clone, copy the shape.
@@ -1690,7 +1748,73 @@ class ViewProviderComponent:
                         if len(obj.CloneOf.ViewObject.DiffuseColor) > 1:
                             obj.ViewObject.DiffuseColor = obj.CloneOf.ViewObject.DiffuseColor
                             obj.ViewObject.update()
+        if prop in ("Shape", "Placement"):
+            self.refreshFootprint(obj.ViewObject)
         return
+
+    def updateFootprint(self):
+        self.fset.coordIndex.deleteValues(0)
+        self.fcoords.point.deleteValues(0)
+        faces = self.Object.Proxy.getFootprint(self.Object)
+        if faces:
+            inverse_placement = self.Object.Placement.inverse()
+            verts = []
+            fdata = []
+            idx = 0
+            for face in faces:
+                tri = face.tessellate(1)
+                for v in tri[0]:
+                    # getFootprint() returns placed geometry. Store the
+                    # cached footprint node in object-local coordinates so
+                    # Placement changes do not double-transform it.
+                    if inverse_placement is not None:
+                        v = inverse_placement.multVec(v)
+                    verts.append([v.x, v.y, v.z])
+                for f in tri[1]:
+                    fdata.extend([f[0] + idx, f[1] + idx, f[2] + idx, -1])
+                idx += len(tri[0])
+            self.fcoords.point.setValues(verts)
+            self.fset.coordIndex.setValues(0, len(fdata), fdata)
+
+    def ensureFootprintGroup(self, vobj=None):
+        """Ensure the generic Footprint display mode node exists.
+
+        This is idempotent and safe to call from attach, update, and display
+        mode transitions. Objects with footprint support only need to provide
+        `createFootprintGroup()` and `updateFootprint()`.
+        """
+
+        if hasattr(self, "footprintgroup") and self.footprintgroup is not None:
+            return self.footprintgroup
+        if not hasattr(self, "createFootprintGroup"):
+            return None
+        if vobj is None:
+            obj = getattr(self, "Object", None)
+            vobj = obj.ViewObject if obj else None
+        if not vobj:
+            return None
+        try:
+            self.footprintgroup = self.createFootprintGroup()
+            self.footprintgroup.setName("Footprint")
+            vobj.addDisplayMode(self.footprintgroup, "Footprint")
+            return self.footprintgroup
+        except Exception:
+            return None
+
+    def refreshFootprint(self, vobj=None):
+        """Refresh derived footprint display data when footprint mode is available.
+
+        Footprint geometry is a derived GUI cache. Failures here should not break
+        generic attach/update paths for the rest of the view provider.
+        """
+
+        if not self.ensureFootprintGroup(vobj):
+            return False
+        try:
+            self.updateFootprint()
+        except Exception:
+            return False
+        return True
 
     def getIcon(self):
         """Return the path to the appropriate icon.
@@ -1769,7 +1893,7 @@ class ViewProviderComponent:
         lines. This data is stored as additional coin nodes which are children
         of the display mode node.
 
-        Add the HiRes display mode.
+        Add the HiRes and Footprint display modes (if provided by object).
 
         Parameters
         ----------
@@ -1785,6 +1909,7 @@ class ViewProviderComponent:
         self.hiresgroup.addChild(self.meshcolor)
         self.hiresgroup.setName("HiRes")
         vobj.addDisplayMode(self.hiresgroup, "HiRes")
+        self.refreshFootprint(vobj)
         return
 
     def getDisplayModes(self, vobj):
@@ -1805,6 +1930,8 @@ class ViewProviderComponent:
         """
 
         modes = ["HiRes"]
+        if hasattr(self, "footprintgroup") and self.footprintgroup is not None:
+            modes.append("Footprint")
         return modes
 
     def setDisplayMode(self, mode):
@@ -1832,6 +1959,11 @@ class ViewProviderComponent:
         str:
             The name of the display mode the view provider has switched to.
         """
+
+        if mode == "Footprint" and self.refreshFootprint():
+            # Footprint is a generic component display mode, so refresh its
+            # derived display data whenever the viewer switches into it.
+            return "Footprint"
 
         if hasattr(self, "meshnode"):
             if self.meshnode:

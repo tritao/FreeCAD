@@ -601,6 +601,7 @@ def _get_param_dictionary():
         "DoorWidth":                   ("float",     1000.0),
         "FreeLinking":                 ("bool",      False),
         "forceIfcPythonParser":        ("bool",      False),  # importIFClegacy.py
+        "FootprintCutHeight":          ("float",     1000.0),
         "getStandardType":             ("bool",      False),
         "ifcAggregateWindows":         ("bool",      False),  # importIFClegacy.py
         "ifcAsMesh":                   ("string",    ""),     # importIFClegacy.py
