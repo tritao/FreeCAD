@@ -176,8 +176,20 @@ class TestArchComponent(TestArchBase.TestArchBase):
         self.assertEqual(context.reference_frame, section.Placement)
         self.assertEqual(context.cut_offset, 0.0)
         self.assertEqual(context.target_offset, 0.0)
-        self.assertEqual(context.projection_range, 750.0)
+        self.assertEqual(context.projection_range, (0.0, 750.0))
         self.assertIs(context.source, section)
+
+    def test_representation_contract_is_shared_with_archrepresentation(self):
+        """Legacy ArchComponent imports must use the canonical BIM contract."""
+
+        import ArchRepresentation
+
+        self.assertIs(ArchComponent.RepresentationPurpose, ArchRepresentation.RepresentationPurpose)
+        self.assertIs(ArchComponent.RepresentationContext, ArchRepresentation.RepresentationContext)
+        self.assertIs(ArchComponent.PlanContext, ArchRepresentation.PlanContext)
+        self.assertTrue(
+            issubclass(ArchComponent.BIMRepresentation, ArchRepresentation.BIMRepresentation)
+        )
 
     def test_representation_context_accepts_saved_view_provider_protocol(self):
         """BIM Views should be able to provide profiles without Plan Edit knowing their type."""
