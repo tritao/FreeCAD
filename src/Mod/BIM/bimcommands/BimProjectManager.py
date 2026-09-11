@@ -54,6 +54,53 @@ class BIM_ProjectManager:
             "ToolTip": QT_TRANSLATE_NOOP("BIM_ProjectManager", "Creates or manages a BIM project"),
         }
 
+    def _native_ifc_available(self, report=False):
+
+        from nativeifc import has_ifcopenshell
+
+        return has_ifcopenshell(report=report)
+
+    def _get_ifc_tools(self, report=False):
+
+        if not self._native_ifc_available(report=report):
+            return None
+        from nativeifc import ifc_tools
+
+        return ifc_tools
+
+    def _native_ifc_requested(self):
+
+        form = getattr(self, "form", None)
+        return bool(
+            form
+            and form.groupNewProject.isChecked()
+            and (form.radioNative2.isChecked() or form.radioNative3.isChecked())
+        )
+
+    def _configure_native_ifc_options(self):
+
+        if not getattr(self, "form", None):
+            return
+
+        available = self._native_ifc_available(report=False)
+        disabled_hint = translate(
+            "BIM_ProjectManager", "IfcOpenShell is not available in this runtime."
+        )
+
+        for button in (self.form.radioNative2, self.form.radioNative3):
+            base_tooltip = button.property("nativeIfcBaseToolTip")
+            if base_tooltip is None:
+                base_tooltip = button.toolTip()
+                button.setProperty("nativeIfcBaseToolTip", base_tooltip)
+            button.setEnabled(available)
+            if available:
+                button.setToolTip(base_tooltip)
+            else:
+                button.setToolTip(base_tooltip + "\n\n" + disabled_hint)
+
+        if not available and not self.form.radioNative1.isChecked():
+            self.form.radioNative1.setChecked(True)
+
     def Activated(self):
 
         # only raise the dialog if it is already open
@@ -87,24 +134,24 @@ class BIM_ProjectManager:
         self.form.buttonCancel.clicked.connect(self.reject)
         self.form.rejected.connect(self.reject)
         self.fillPresets()
+        self._configure_native_ifc_options()
 
         # Detect existing objects
         sel = FreeCADGui.Selection.getSelection()
         doc = FreeCAD.ActiveDocument
         if doc:
-            if len(sel) == 1:
+            ifc_tools = self._get_ifc_tools(report=False)
+            if ifc_tools and len(sel) == 1:
                 if hasattr(sel[0], "Proxy") and hasattr(sel[0].Proxy, "ifcfile"):
                     # case 1: a project is selected
                     self.project = sel[0]
                     self.form.groupNewProject.setEnabled(False)
-            if hasattr(doc, "Proxy"):
+            if ifc_tools and hasattr(doc, "Proxy"):
                 # case 2: the actuve document is a project
                 if hasattr(doc.Proxy, "ifcfile"):
                     self.project = doc
                     self.form.groupNewProject.setEnabled(False)
-            if self.project:
-                from nativeifc import ifc_tools
-
+            if self.project and ifc_tools:
                 sites = ifc_tools.get_children(self.project, ifctype="IfcSite")
                 sites = list(filter(None, [ifc_tools.get_object(s) for s in sites]))
                 self.form.projectName.setText(self.project.Label)
@@ -132,9 +179,7 @@ class BIM_ProjectManager:
                 if hasattr(self.site, "Declination"):
                     self.form.siteDeclination.setValue(self.site.Declination)
             buildings = []
-            if self.site and self.project:
-                from nativeifc import ifc_tools
-
+            if self.site and self.project and ifc_tools:
                 buildings = ifc_tools.get_children(self.site, ifctype="IfcBuilding")
                 buildings = list(filter(None, [ifc_tools.get_object(b) for b in buildings]))
             if not buildings:
@@ -143,9 +188,7 @@ class BIM_ProjectManager:
                 self.building = buildings[0]
                 self.form.buildingName.setText(self.building.Label)
             levels = []
-            if self.building and self.project:
-                from nativeifc import ifc_tools
-
+            if self.building and self.project and ifc_tools:
                 levels = ifc_tools.get_children(self.building, ifctype="IfcBuildingStorey")
                 levels = list(filter(None, [ifc_tools.get_object(l) for l in levels]))
             if not levels:
@@ -182,6 +225,13 @@ class BIM_ProjectManager:
             self.site = None
             self.building = None
 
+        needs_ifc_tools = bool(self.project) or self._native_ifc_requested()
+        ifc_tools = None
+        if needs_ifc_tools:
+            ifc_tools = self._get_ifc_tools(report=True)
+            if ifc_tools is None:
+                return False
+
         # reading form values
         buildingWidth = FreeCAD.Units.Quantity(self.form.buildingWidth.text()).Value
         buildingLength = FreeCAD.Units.Quantity(self.form.buildingLength.text()).Value
@@ -206,8 +256,6 @@ class BIM_ProjectManager:
 
         # Project creation
         if self.form.groupNewProject.isChecked():
-            from nativeifc import ifc_tools
-
             if self.form.radioNative2.isChecked():
                 self.project = ifc_tools.create_document_object(doc, silent=True)
                 if self.form.projectName.text():
@@ -230,8 +278,6 @@ class BIM_ProjectManager:
             if not self.site:
                 self.site = Arch.makeSite()
                 if self.project:
-                    from nativeifc import ifc_tools
-
                     self.site = ifc_tools.aggregate(self.site, self.project)
             self.site.Label = self.form.siteName.text()
             if hasattr(self.site, "Address"):
@@ -259,8 +305,6 @@ class BIM_ProjectManager:
             if not self.building:
                 self.building = Arch.makeBuilding()
                 if self.project:
-                    from nativeifc import ifc_tools
-
                     if self.site:
                         self.building = ifc_tools.aggregate(self.building, self.site)
                     else:
@@ -392,8 +436,6 @@ class BIM_ProjectManager:
                     lev.Height = levelHeight
                     lev.Placement.move(FreeCAD.Vector(0, 0, h))
                     if self.project and self.building:
-                        from nativeifc import ifc_tools
-
                         lev = ifc_tools.aggregate(lev, self.building)
                     elif self.building:
                         self.building.addObject(lev)
@@ -402,8 +444,6 @@ class BIM_ProjectManager:
                         levGroup = FreeCAD.ActiveDocument.addObject("App::DocumentObjectGroup")
                         levGroup.Label = group
                         if self.project:
-                            from nativeifc import ifc_tools
-
                             ifc_tools.aggregate(levGroup, lev)
                         else:
                             lev.addObject(levGroup)
@@ -416,9 +456,7 @@ class BIM_ProjectManager:
             FreeCADGui.Selection.clearSelection()
         # aggregate layout group
         if self.building and grp:
-            if hasattr(self.building, "IfcClass"):
-                from nativeifc import ifc_tools
-
+            if hasattr(self.building, "IfcClass") and ifc_tools:
                 ifc_tools.aggregate(grp, self.building)
         self.form.hide()
         FreeCAD.ActiveDocument.recompute()

@@ -42,6 +42,7 @@ TODO put examples here.
 """
 
 import math
+import os
 
 import FreeCAD
 import ArchCommands
@@ -80,6 +81,25 @@ def _make_projected_horizontal_area_face(projected_faces):
     return fused_face.removeSplitter()
 
 
+def _make_transient_face(shapes, maker_class_name):
+    """Build plain transient faces for analysis-only geometry."""
+
+    import Part
+
+    plain_shapes = []
+    for shape in shapes or []:
+        plain_shape = _copy_without_element_map(shape)
+        if plain_shape is not None:
+            plain_shapes.append(plain_shape)
+    if not plain_shapes:
+        return None
+
+    try:
+        return Part.makeFace(plain_shapes, maker_class_name, noElementMap=True)
+    except Exception:
+        return None
+
+
 def get_horizontal_slice_edges(shape, cut_z):
     """Return transient section edges for a horizontal cut through ``shape``."""
 
@@ -87,7 +107,7 @@ def get_horizontal_slice_edges(shape, cut_z):
         return []
 
     try:
-        wires = shape.slice(FreeCAD.Vector(0, 0, 1), cut_z)
+        wires = shape.slice(FreeCAD.Vector(0, 0, 1), cut_z, True)
     except Exception:
         return []
 
@@ -1542,7 +1562,11 @@ class AreaCalculator:
                 if len(wires) == 1 and not wires[0].isClosed():
                     projectedArea = 0
                 else:
-                    projectedArea = Part.Face(wires).Area
+                    maker = "Part::FaceMakerSimple" if len(wires) == 1 else "Part::FaceMakerCheese"
+                    projectedFace = _make_transient_face(wires, maker)
+                    if projectedFace is None:
+                        raise RuntimeError("Could not build transient projected face")
+                    projectedArea = projectedFace.Area
             except Exception as err:
                 FreeCAD.Console.PrintWarning(
                     translate(
@@ -1658,13 +1682,19 @@ class AreaCalculator:
                             self.resetAreas()
                             return
                         wire = TechDraw.findShapeOutline(face, 1, direction)
-                        projectedFace = Part.makeFace([wire], "Part::FaceMakerSimple")
+                        projectedFace = _make_transient_face(
+                            [wire],
+                            "Part::FaceMakerSimple",
+                        )
                     else:
                         edges = self._get_projected_edges(face, direction)
                         wires = DraftGeomUtils.findWires(edges)
-                        # Using "Part::FaceMakerCheese" as the face can have holes
-                        projectedFace = Part.makeFace(wires, "Part::FaceMakerCheese")
-                    # Part.show(projectedFace)
+                        maker = (
+                            "Part::FaceMakerSimple" if len(wires) == 1 else "Part::FaceMakerCheese"
+                        )
+                        projectedFace = _make_transient_face(wires, maker)
+                    if projectedFace is None:
+                        raise RuntimeError("Could not build transient projected face")
                     projectedFaces.append(projectedFace)
                 except Exception as err:
                     FreeCAD.Console.PrintWarning(
@@ -1830,6 +1860,106 @@ class ViewProviderComponent:
                 idx += len(tri[0])
             self.fcoords.point.setValues(verts)
             self.fset.coordIndex.setValues(0, len(fdata), fdata)
+
+    def _line_debug_enabled(self):
+        value = os.environ.get("FREECAD_BIM_PLAN_DEBUG_LINES", "")
+        return str(value).strip().lower() not in ("", "0", "false", "no", "off")
+
+    def _get_line_debug_counts(self, field):
+        try:
+            return [int(field[i]) for i in range(field.getNum())]
+        except Exception:
+            return []
+
+    def _get_line_debug_owner(self, context=None):
+        obj = getattr(self, "Object", None)
+        doc = getattr(getattr(obj, "Document", None), "Name", None)
+        name = getattr(obj, "Name", None)
+        label = getattr(obj, "Label", None)
+        owner = name or self.__class__.__name__
+        if doc:
+            owner = "{}.{}".format(doc, owner)
+        if label and label != name:
+            owner = "{} ({})".format(owner, label)
+        if context:
+            return "{} [{}]".format(owner, context)
+        return owner
+
+    def _log_line_debug(self, message, context=None, level="log"):
+        text = "[BIM line debug] {}: {}\n".format(self._get_line_debug_owner(context), message)
+        if level == "error":
+            FreeCAD.Console.PrintError(text)
+        elif level == "warning":
+            FreeCAD.Console.PrintWarning(text)
+        else:
+            FreeCAD.Console.PrintLog(text)
+
+    def _update_footprint_line_nodes(self, lcoords, lset, verts, counts, context=None):
+        counts = [int(count) for count in (counts or [])]
+        verts = list(verts or [])
+        previous_counts = self._get_line_debug_counts(lset.numVertices)
+        previous_coord_count = lcoords.point.getNum()
+        previous_total = sum(previous_counts)
+
+        if previous_counts and previous_total > previous_coord_count:
+            self._log_line_debug(
+                "pre-update mismatch coords={} counts={}".format(
+                    previous_coord_count,
+                    previous_counts,
+                ),
+                context=context,
+                level="warning",
+            )
+        elif self._line_debug_enabled():
+            self._log_line_debug(
+                "pre-update coords={} counts={}".format(
+                    previous_coord_count,
+                    previous_counts,
+                ),
+                context=context,
+            )
+
+        # Clear line counts before coordinates so Coin never sees stale
+        # numVertices values against an emptied coordinate array.
+        lset.numVertices.deleteValues(0)
+        lcoords.point.deleteValues(0)
+
+        if not verts or not counts:
+            if self._line_debug_enabled():
+                self._log_line_debug("cleared footprint line nodes", context=context)
+            return
+
+        if sum(counts) > len(verts):
+            self._log_line_debug(
+                "refusing invalid update coords={} counts={}".format(len(verts), counts),
+                context=context,
+                level="error",
+            )
+            return
+
+        lcoords.point.setValues(verts)
+        lset.numVertices.setValues(0, len(counts), counts)
+
+        current_counts = self._get_line_debug_counts(lset.numVertices)
+        current_coord_count = lcoords.point.getNum()
+        current_total = sum(current_counts)
+        if current_counts and current_total > current_coord_count:
+            self._log_line_debug(
+                "post-update mismatch coords={} counts={}".format(
+                    current_coord_count,
+                    current_counts,
+                ),
+                context=context,
+                level="error",
+            )
+        elif self._line_debug_enabled():
+            self._log_line_debug(
+                "post-update coords={} counts={}".format(
+                    current_coord_count,
+                    current_counts,
+                ),
+                context=context,
+            )
 
     def buildFootprintFillSeparator(
         self, fill_color, transparency, fcoords, fset, shape_hints=None
