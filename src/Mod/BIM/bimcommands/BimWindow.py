@@ -66,6 +66,7 @@ class Arch_Window:
         import Draft
         import WorkingPlane
         import draftguitools.gui_trackers as DraftTrackers
+        from bimcommands import BimPlanSession
 
         self.doc = FreeCAD.ActiveDocument
         self.sel = FreeCADGui.Selection.getSelection()
@@ -84,6 +85,17 @@ class Arch_Window:
         self.baseFace = None
         self.wparams = ["Width", "Height", "H1", "H2", "H3", "W1", "W2", "O1", "O2"]
         self.wp = None
+
+        # If Plan Edit currently has this wall selected, drop the wall-grip
+        # state before the window/door tool mutates the host wall shape.
+        session = BimPlanSession.get_active_session()
+        if session and self.sel:
+            try:
+                selected = session.selected_wall
+                if selected and self.sel[0] == selected:
+                    session.suspend_selected_wall_state(selected)
+            except Exception:
+                pass
 
         # autobuild mode
         if FreeCADGui.Selection.getSelectionEx():
@@ -391,7 +403,27 @@ class Arch_Window:
         "sets up a taskbox widget"
 
         from draftutils import params
-        from PySide import QtCore, QtGui, QtSvgWidgets
+        from PySide import QtCore, QtGui, QtSvg
+
+        class SvgWidget(QtGui.QLabel):
+            """Simple SVG preview widget for the preset taskbox."""
+
+            def __init__(self, path=None, parent=None):
+                super().__init__(parent)
+                self._renderer = QtSvg.QSvgRenderer(self)
+                self.setAlignment(QtCore.Qt.AlignCenter)
+                if path:
+                    self.load(path)
+
+            def load(self, path):
+                self._renderer.load(path)
+                self.update()
+
+            def paintEvent(self, event):
+                painter = QtGui.QPainter(self)
+                self._renderer.render(painter, self.rect())
+                painter.end()
+
         from ArchWindowPresets import WindowPresets
 
         w = QtGui.QWidget()
@@ -466,7 +498,7 @@ class Arch_Window:
         self.pic.hide()
 
         # SVG display
-        self.im = QtSvgWidgets.QSvgWidget(":/ui/ParametersWindowFixed.svg")
+        self.im = SvgWidget(":/ui/ParametersWindowFixed.svg")
         self.im.setMaximumWidth(200)
         self.im.setMinimumHeight(120)
         grid.addWidget(self.im, 4, 0, 1, 2)

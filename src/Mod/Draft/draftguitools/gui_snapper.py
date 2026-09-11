@@ -155,6 +155,7 @@ class Snapper:
         # fmt: on
 
         self.init_active_snaps()
+        self._snap_mode_stack = []
         self.set_snap_style()
 
         self.cursors = coll.OrderedDict(
@@ -179,7 +180,9 @@ class Snapper:
         # is too slow for this function which gets called repeatedly when moving
         # the mouse
         # See: https://github.com/FreeCAD/FreeCAD/issues/24013
-        return WorkingPlane.get_working_plane(update=False)
+        return getattr(self, "interaction_plane", None) or WorkingPlane.get_working_plane(
+            update=False
+        )
 
     def init_active_snaps(self):
         """
@@ -192,6 +195,28 @@ class Snapper:
             if bool(int(snap)):
                 self.active_snaps.append(self.snaps[i])
             i += 1
+
+    def get_snap_modes(self):
+        """Return the currently active snap names."""
+        return list(self.active_snaps)
+
+    def set_snap_modes(self, active_snaps):
+        """Replace the current active snaps with the provided snap names."""
+        valid_snaps = [snap for snap in self.snaps if snap in set(active_snaps)]
+        self.active_snaps = valid_snaps
+        self.save_snap_state()
+        return list(self.active_snaps)
+
+    def push_snap_modes(self, active_snaps):
+        """Save current snap state and apply a temporary snap profile."""
+        self._snap_mode_stack.append(self.get_snap_modes())
+        return self.set_snap_modes(active_snaps)
+
+    def pop_snap_modes(self):
+        """Restore the most recently pushed temporary snap profile."""
+        if not self._snap_mode_stack:
+            return self.get_snap_modes()
+        return self.set_snap_modes(self._snap_mode_stack.pop())
 
     def set_snap_style(self):
         self.snapStyle = params.get_param("snapStyle")
@@ -483,10 +508,30 @@ class Snapper:
         if not snaps:
             return None
 
+        # Seed the hovered object point as a passive candidate.
+        # Without this, edge/face snapping can end up with only explicit
+        # endpoint/midpoint/intersection candidates, which allows a far-away
+        # endpoint on the same object to win even though the cursor is
+        # hovering elsewhere on that edge/face.
+        if self.snapInfo:
+            try:
+                cursor_pt = App.Vector(self.snapInfo["x"], self.snapInfo["y"], self.snapInfo["z"])
+                cursor_wp = self.toWP(cursor_pt)
+                if not any(
+                    (snap and snap[0] is not None and snap[0].sub(cursor_pt).Length == 0)
+                    for snap in snaps
+                ):
+                    snaps.append([cursor_pt, "passive", cursor_wp])
+            except Exception:
+                cursor_pt = None
+        else:
+            cursor_pt = None
+
         # calculating the nearest snap point
         # a Near ("passive") snap point does not 'win' if a different snap point
         # is within snapRange of the cursor point (in screen coordinates)
-        cursor_pt = App.Vector(self.snapInfo["x"], self.snapInfo["y"], self.snapInfo["z"])
+        if cursor_pt is None:
+            cursor_pt = App.Vector(self.snapInfo["x"], self.snapInfo["y"], self.snapInfo["z"])
         shortest_all = shortest_not_near = 1000000000000000000
         winner_all = winner_not_near = None
         for snap in snaps:
@@ -830,9 +875,17 @@ class Snapper:
         """Return a list with a near snap location for a face."""
         if self.isEnabled("Near") and point:
             try:
-                np = shape.Surface.projectPoint(point, "NearestPoint")
+                # Use the trimmed face, not the underlying infinite surface.
+                # Projecting to shape.Surface can jump far away on planar faces
+                # because the nearest point is found on the unbounded support
+                # plane instead of inside the face boundaries.
+                dist = Part.Vertex(point).distToShape(shape)
+                np = dist[1][0][1]
             except Exception:
-                return []
+                try:
+                    np = shape.Surface.projectPoint(point, "NearestPoint")
+                except Exception:
+                    return []
             return [[np, "passive", self.toWP(np)]]
         else:
             return []
@@ -1064,7 +1117,10 @@ class Snapper:
                 if obj and (obj.isDerivedFrom("Part::Feature") or utils.get_type(obj) == "Axis"):
                     # obj sub is face, shape is edge:
                     if "Face" in sub_name and shape.ShapeType == "Edge":
-                        face = obj.Shape.Faces[int(sub_name[4:]) - 1]
+                        face_index = int(sub_name[4:]) - 1
+                        if face_index < 0 or face_index >= len(obj.Shape.Faces):
+                            continue
+                        face = obj.Shape.Faces[face_index]
                         try:
                             pts = geo_intersections.findIntersection(face, shape)
                             for pt in pts:
@@ -1075,7 +1131,10 @@ class Snapper:
                         pass
                     # obj sub is edge, shape is face:
                     elif shape.ShapeType == "Face":
-                        edge = obj.Shape.Edges[int(sub_name[4:]) - 1]
+                        edge_index = int(sub_name[4:]) - 1
+                        if edge_index < 0 or edge_index >= len(obj.Shape.Edges):
+                            continue
+                        edge = obj.Shape.Edges[edge_index]
                         try:
                             pts = geo_intersections.findIntersection(edge, shape)
                             for pt in pts:
@@ -1313,6 +1372,7 @@ class Snapper:
         self.mask = None
         self.selectMode = False
         self.running = False
+        self.interaction_plane = None
         self.holdPoints = []
         self.lastObj = []
         self.lastObjSubelements = []
@@ -1326,6 +1386,45 @@ class Snapper:
             toolbar = self.get_snap_toolbar()
             if toolbar:
                 toolbar.hide()
+
+    def _clear_point_callbacks(self):
+        """Remove the current point-picking callbacks, if any."""
+        had_callbacks = bool(self.callbackClick or self.callbackMove)
+        view = getattr(self, "view", None) or gui_utils.get_3d_view()
+
+        try:
+            if view and self.callbackClick:
+                view.removeEventCallbackPivy(
+                    coin.SoMouseButtonEvent.getClassTypeId(), self.callbackClick
+                )
+            if view and self.callbackMove:
+                view.removeEventCallbackPivy(
+                    coin.SoLocation2Event.getClassTypeId(), self.callbackMove
+                )
+            if had_callbacks:
+                # Next line fixes https://github.com/FreeCAD/FreeCAD/issues/10469:
+                gui_utils.end_all_events()
+        except RuntimeError:
+            # the view has been deleted already
+            pass
+
+        self.callbackClick = None
+        self.callbackMove = None
+
+    def _teardown_point_request(self, hide_hints=False):
+        """Finish the current point-picking request and restore the Draft UI."""
+        self._clear_point_callbacks()
+        self.off()
+        self.pt = None
+        toolbar = getattr(Gui, "draftToolBar", None)
+        if toolbar:
+            toolbar.offUi()
+        if hide_hints:
+            QtCore.QTimer.singleShot(0, Gui.HintManager.hide)
+
+    def cancelPointRequest(self):
+        """Cancel the current point-picking request and restore the Draft UI."""
+        self._teardown_point_request()
 
     def setSelectMode(self, mode):
         """Set the snapper into select mode (hides snapping temporarily)."""
@@ -1436,6 +1535,9 @@ class Snapper:
         title=None,
         mode="point",
         hints=None,
+        modifier_resolver=None,
+        interaction_plane=None,
+        noTracker=False,
     ):
         """Get a 3D point from the screen.
 
@@ -1463,37 +1565,46 @@ class Snapper:
         can be passed as an extra taskbox.
         title is the title of the point task box mode is the dialog box
         you want (default is point, you can also use wire and line)
+        If noTracker is True, the default snap rubber-band line is suppressed.
 
-        If getPoint() is invoked without any argument, nothing is done
-        but the callbacks are removed, so it can be used as a cancel function.
+        If getPoint() is invoked without any argument, only the existing
+        callbacks are cleared for backward compatibility. Prefer
+        cancelPointRequest() for explicit teardown.
 
         ``hints`` is an optional list of ``Gui.InputHint`` instances to
         display in the status bar for the duration of the point pick. They are
         cleared automatically when the user picks a point or cancels.
+
+        ``modifier_resolver`` is an optional callable that can override the
+        Ctrl/Shift modifier state used for snapping and constraints.
         """
+        if (
+            last is None
+            and callback is None
+            and movecallback is None
+            and extradlg is None
+            and title is None
+            and mode == "point"
+            and hints is None
+            and modifier_resolver is None
+        ):
+            self._clear_point_callbacks()
+            return
+
         self.pt = None
         self.holdPoints = []
+        self.interaction_plane = interaction_plane
+        # Point requests should start from a clean constraint state. Otherwise
+        # stale mask/affinity/basepoint values from a previous command can
+        # distort the first preview frame of the next interactive request.
+        self.unconstrain()
+        self.mask = None
+        self.constraintAxis = None
         self.ui = Gui.draftToolBar
         self.view = gui_utils.get_3d_view()
 
         # remove any previous leftover callbacks
-        try:
-            if self.callbackClick:
-                self.view.removeEventCallbackPivy(
-                    coin.SoMouseButtonEvent.getClassTypeId(), self.callbackClick
-                )
-            if self.callbackMove:
-                self.view.removeEventCallbackPivy(
-                    coin.SoLocation2Event.getClassTypeId(), self.callbackMove
-                )
-            if self.callbackClick or self.callbackMove:
-                # Next line fixes https://github.com/FreeCAD/FreeCAD/issues/10469:
-                gui_utils.end_all_events()
-        except RuntimeError:
-            # the view has been deleted already
-            pass
-        self.callbackClick = None
-        self.callbackMove = None
+        self._clear_point_callbacks()
 
         def move(event_cb):
             if not self.ui.mouse:
@@ -1502,7 +1613,19 @@ class Snapper:
             mousepos = event.getPosition()
             ctrl = event.wasCtrlDown()
             shift = event.wasShiftDown()
-            self.pt = Gui.Snapper.snap(mousepos, lastpoint=last, active=ctrl, constrain=shift)
+            alt = event.wasAltDown()
+            if modifier_resolver:
+                try:
+                    ctrl, shift = modifier_resolver(ctrl, shift, alt)
+                except Exception:
+                    pass
+            self.pt = Gui.Snapper.snap(
+                mousepos,
+                lastpoint=last,
+                active=ctrl,
+                constrain=shift,
+                noTracker=noTracker,
+            )
             self.ui.displayPoint(self.pt, last, plane=self._get_wp(), mask=Gui.Snapper.affinity)
             if movecallback:
                 movecallback(self.pt, self.snapInfo)
@@ -1535,59 +1658,21 @@ class Snapper:
                 accept()
 
         def accept():
-            try:
-                if self.callbackClick:
-                    self.view.removeEventCallbackPivy(
-                        coin.SoMouseButtonEvent.getClassTypeId(), self.callbackClick
-                    )
-                if self.callbackMove:
-                    self.view.removeEventCallbackPivy(
-                        coin.SoLocation2Event.getClassTypeId(), self.callbackMove
-                    )
-                if self.callbackClick or self.callbackMove:
-                    # Next line fixes https://github.com/FreeCAD/FreeCAD/issues/10469:
-                    gui_utils.end_all_events()
-            except RuntimeError:
-                # the view has been deleted already
-                pass
-            self.callbackClick = None
-            self.callbackMove = None
-            Gui.Snapper.off()
-            self.ui.offUi()
-            if hints:
-                QtCore.QTimer.singleShot(0, Gui.HintManager.hide)
+            point = self.pt
+            snap_info = dict(self.snapInfo) if isinstance(self.snapInfo, dict) else self.snapInfo
+            self._teardown_point_request(hide_hints=bool(hints))
             if callback:
                 if len(inspect.getfullargspec(callback).args) > 1:
                     obj = None
-                    if self.snapInfo and ("Object" in self.snapInfo) and self.snapInfo["Object"]:
-                        obj = App.ActiveDocument.getObject(self.snapInfo["Object"])
-                    callback(self.pt, obj)
+                    if snap_info and ("Object" in snap_info) and snap_info["Object"]:
+                        obj = App.ActiveDocument.getObject(snap_info["Object"])
+                    callback(point, obj)
                 else:
-                    callback(self.pt)
+                    callback(point)
             self.pt = None
 
         def cancel():
-            try:
-                if self.callbackClick:
-                    self.view.removeEventCallbackPivy(
-                        coin.SoMouseButtonEvent.getClassTypeId(), self.callbackClick
-                    )
-                if self.callbackMove:
-                    self.view.removeEventCallbackPivy(
-                        coin.SoLocation2Event.getClassTypeId(), self.callbackMove
-                    )
-                if self.callbackClick or self.callbackMove:
-                    # Next line fixes https://github.com/FreeCAD/FreeCAD/issues/10469:
-                    gui_utils.end_all_events()
-            except RuntimeError:
-                # the view has been deleted already
-                pass
-            self.callbackClick = None
-            self.callbackMove = None
-            Gui.Snapper.off()
-            self.ui.offUi()
-            if hints:
-                QtCore.QTimer.singleShot(0, Gui.HintManager.hide)
+            self._teardown_point_request(hide_hints=bool(hints))
             if callback:
                 if len(inspect.getfullargspec(callback).args) > 1:
                     callback(None, None)

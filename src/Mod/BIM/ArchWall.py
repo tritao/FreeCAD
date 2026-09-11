@@ -1000,8 +1000,6 @@ class _Wall(ArchComponent.Component):
         generic Footprint display mode contract.
         """
 
-        import Part
-
         if context is None:
             context = self.getDefaultPlanContext(obj)
         shape = obj.Shape
@@ -1011,30 +1009,13 @@ class _Wall(ArchComponent.Component):
                 cut_z = context.cut_offset
                 cut_z = max(bb.ZMin + 0.001, min(bb.ZMax - 0.001, cut_z))
                 target_z = context.target_offset if context.target_offset is not None else bb.ZMin
-                cut_plane = Part.makePlane(1, 1)
-                cut_plane.translate(FreeCAD.Vector(bb.Center.x, bb.Center.y, cut_z))
                 try:
-                    section_plane, _, _ = ArchCommands.getCutVolume(cut_plane, shape)
-                    if section_plane:
-                        section = shape.section(section_plane)
-                        if section and section.Edges:
-                            try:
-                                edge_groups = Part.sortEdges(section.Edges)
-                            except AttributeError:
-                                edge_groups = Part.__sortEdges__(section.Edges)
-                            faces = []
-                            for edges in edge_groups:
-                                wire = Part.Wire(edges)
-                                if not wire.isClosed():
-                                    continue
-                                face = Part.Face(wire)
-                                if face.Area <= 0:
-                                    continue
-                                face.translate(FreeCAD.Vector(0, 0, target_z - cut_z))
-                                faces.append(face)
-                            if faces:
-                                return faces
-                except Part.OCCError:
+                    faces = ArchComponent.get_horizontal_slice_faces(
+                        shape, cut_z, translate_z=target_z - cut_z
+                    )
+                    if faces:
+                        return faces
+                except Exception:
                     # Sectioning can fail on OCC edge cases; fall back to the
                     # wall's literal bottom faces below instead of breaking the
                     # footprint display mode.
@@ -1650,6 +1631,57 @@ class _Wall(ArchComponent.Component):
         if baseline:
             return [baseline.start_point, baseline.end_point]
         return []
+
+    def calc_edit_grip_positions(self, obj):
+        """Returns visible grip positions for endpoint editing.
+
+        Editing still uses the wall centerline, but aligned/offset walls can
+        display their body shifted sideways from that trace. Grip markers should
+        sit on the visible wall body while still editing the underlying
+        centerline.
+        """
+        import DraftVecUtils
+
+        endpoints = self.calc_endpoints(obj)
+        if len(endpoints) != 2:
+            return endpoints
+
+        start = FreeCAD.Vector(endpoints[0])
+        end = FreeCAD.Vector(endpoints[1])
+        midpoint = (start + end) * 0.5
+
+        axis = end.sub(start)
+        axis.z = 0
+        if DraftVecUtils.isNull(axis):
+            return [start, end, midpoint]
+
+        try:
+            faces = self.getFootprint(obj)
+        except Exception:
+            return [start, end, midpoint]
+        if not faces:
+            return [start, end, midpoint]
+
+        area_sum = 0.0
+        center = FreeCAD.Vector()
+        for face in faces:
+            try:
+                weight = float(face.Area)
+                face_center = face.CenterOfMass
+            except Exception:
+                continue
+            center = center.add(face_center.multiply(weight))
+            area_sum += weight
+
+        if area_sum <= 0.0:
+            return [start, end, midpoint]
+
+        center.multiply(1.0 / area_sum)
+        axis.normalize()
+        shift = center.sub(midpoint)
+        shift = shift.sub(axis.multiply(shift.dot(axis)))
+        shift.z = 0
+        return [start.add(shift), end.add(shift), midpoint.add(shift)]
 
     def set_from_endpoints(self, obj, pts):
         """Set a straight wall from two global points.
@@ -2304,23 +2336,41 @@ class _ViewProviderWall(ArchComponent.ViewProviderComponent):
 
         from pivy import coin
 
-        tex = coin.SoTexture2()
-        image = Draft.loadTexture(Draft.svgpatterns()["simple"][1], 128)
-        if not image is None:
-            tex.image = image
-        texcoords = coin.SoTextureCoordinatePlane()
-        s = params.get_param_arch("patternScale")
-        texcoords.directionS.setValue(s, 0, 0)
-        texcoords.directionT.setValue(0, s, 0)
-
         self.fcoords = coin.SoCoordinate3()
         self.fset = coin.SoIndexedFaceSet()
+        self.lcoords = coin.SoCoordinate3()
+        self.lset = coin.SoLineSet()
+
+        shape_hints = coin.SoShapeHints()
+        shape_hints.faceType = coin.SoShapeHints.UNKNOWN_FACE_TYPE
+
+        loffset = coin.SoPolygonOffset()
+        loffset.styles = coin.SoPolygonOffsetElement.LINES
+        loffset.factor = -1.0
+        loffset.units = -2.0
+        loffset.on = True
+        lstyle = coin.SoDrawStyle()
+        lstyle.lineWidth = 2
+        lmat = coin.SoBaseColor()
+        lmat.rgb = (0.15, 0.15, 0.15)
 
         sep = coin.SoSeparator()
-        sep.addChild(tex)
-        sep.addChild(texcoords)
-        sep.addChild(self.fcoords)
-        sep.addChild(self.fset)
+        fill_sep = ArchComponent.ViewProviderComponent.buildFootprintFillSeparator(
+            self,
+            (0.84, 0.84, 0.82),
+            0.2,
+            self.fcoords,
+            self.fset,
+            shape_hints=shape_hints,
+        )
+        line_sep = coin.SoSeparator()
+        line_sep.addChild(loffset)
+        line_sep.addChild(lmat)
+        line_sep.addChild(lstyle)
+        line_sep.addChild(self.lcoords)
+        line_sep.addChild(self.lset)
+        sep.addChild(fill_sep)
+        sep.addChild(line_sep)
 
         return sep
 
@@ -2398,6 +2448,66 @@ class _ViewProviderWall(ArchComponent.ViewProviderComponent):
         if len(obj.ViewObject.DiffuseColor) > 1:
             # force-reset colors if changed
             obj.ViewObject.DiffuseColor = obj.ViewObject.DiffuseColor
+
+    def updateFootprint(self):
+        ArchComponent.ViewProviderComponent.updateFootprint(self)
+
+        if not hasattr(self, "lcoords") or not hasattr(self, "lset"):
+            return
+
+        self.lcoords.point.deleteValues(0)
+        self.lset.numVertices.deleteValues(0)
+
+        if not hasattr(self, "Object"):
+            return
+
+        faces = self.Object.Proxy.getFootprint(self.Object)
+        if not faces:
+            return
+
+        inverse_placement = None
+        placement = getattr(self.Object, "Placement", None)
+        if placement:
+            try:
+                inverse_placement = placement.inverse()
+            except Exception:
+                inverse_placement = None
+
+        line_verts = []
+        line_counts = []
+        for face in faces:
+            for wire in face.Wires:
+                for edge in wire.Edges:
+                    polyline = self._collect_edge_points(edge)
+                    if len(polyline) < 2:
+                        continue
+                    start_idx = len(line_verts)
+                    for point in polyline:
+                        if inverse_placement is not None:
+                            point = inverse_placement.multVec(point)
+                        line_verts.append([point.x, point.y, point.z])
+                    line_counts.append(len(line_verts) - start_idx)
+
+        if line_verts:
+            self.lcoords.point.setValues(line_verts)
+            self.lset.numVertices.setValues(0, len(line_counts), line_counts)
+
+    def _collect_edge_points(self, edge):
+        points = edge.tessellate(1)
+        if points and all(isinstance(point, FreeCAD.Vector) for point in points):
+            return points
+
+        try:
+            points = edge.discretize(Deflection=1.0)
+        except Exception:
+            points = []
+        if points:
+            return [
+                point if isinstance(point, FreeCAD.Vector) else FreeCAD.Vector(point)
+                for point in points
+            ]
+
+        return [vertex.Point for vertex in edge.Vertexes]
 
     def getDisplayModes(self, vobj):
         """Define the display modes unique to the Arch Wall.

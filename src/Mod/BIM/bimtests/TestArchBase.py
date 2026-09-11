@@ -36,7 +36,7 @@ class TestArchBase(unittest.TestCase):
         uniquely-named document and cleaning up any potential leftovers from a previously failed
         run.
         """
-        self.doc_name = f"{self.__class__.__name__}_{self._testMethodName}"
+        self.doc_name = "___".join(self.id().split(".")[2:]) or self.__class__.__name__
 
         # Close any document of the same name that might have been left over from a crashed or
         # aborted test run. FreeCAD.getDocument() raises a NameError if the document is not found,
@@ -57,13 +57,22 @@ class TestArchBase(unittest.TestCase):
 
     def tearDown(self):
         """Close the test document after all tests in the class are complete."""
-        if hasattr(self, "document") and self.document:
-            try:
-                FreeCAD.closeDocument(self.document.Name)
-            except Exception as e:
-                FreeCAD.Console.PrintError(
-                    f"Error during tearDown in {self.__class__.__name__}: {e}\n"
-                )
+        document = getattr(self, "document", None)
+        if not document:
+            return
+
+        try:
+            doc_name = document.Name
+        except Exception:
+            doc_name = getattr(self, "doc_name", None)
+
+        if not doc_name:
+            return
+
+        try:
+            FreeCAD.closeDocument(doc_name)
+        except Exception as e:
+            FreeCAD.Console.PrintError(f"Error during tearDown in {self.__class__.__name__}: {e}\n")
 
     def printTestMessage(self, text, prepend_text="Test ", end="\n"):
         """Write messages to the console including the line ending.

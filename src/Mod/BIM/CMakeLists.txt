@@ -170,6 +170,8 @@ SET(bimcommands_SRCS
     bimcommands/BimNudge.py
     bimcommands/BimOffset.py
     bimcommands/BimPanel.py
+    bimcommands/BimPlanEdit.py
+    bimcommands/BimPlanSession.py
     bimcommands/BimPipe.py
     bimcommands/BimPreflight.py
     bimcommands/BimProfile.py
@@ -257,7 +259,10 @@ SET(bimtests_SRCS
     bimtests/TestArchWallJunction.py
     bimtests/TestArchWallJoinMatrix.py
     bimtests/TestArchWallJunctionMatrix.py
+    bimtests/ArchWallGuiTestUtils.py
     bimtests/TestArchWallGui.py
+    bimtests/TestBimPlanEditGui.py
+    bimtests/TestArchWallJoinWorkflowGui.py
     bimtests/TestArchMaterial.py
     bimtests/TestArchPanel.py
     bimtests/TestArchWindow.py
@@ -286,6 +291,7 @@ SET(bimtests_SRCS
     bimtests/TestArchStairsGui.py
     bimtests/TestArchReport.py
     bimtests/TestArchReportGui.py
+    bimtests/TestArchSpaceGui.py
     bimtests/TestArchStructureGui.py
 )
 

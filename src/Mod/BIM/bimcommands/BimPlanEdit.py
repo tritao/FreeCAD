@@ -2,7 +2,7 @@
 
 # ***************************************************************************
 # *                                                                         *
-# *   Copyright (c) 2013 Yorik van Havre <yorik@uncreated.net>              *
+# *   Copyright (c) 2026 FreeCAD Project Association                        *
 # *                                                                         *
 # *   This file is part of FreeCAD.                                         *
 # *                                                                         *
@@ -22,41 +22,50 @@
 # *                                                                         *
 # ***************************************************************************
 
-"""Import all Arch module unit tests in GUI mode."""
+"""Command for BIM plan editing."""
 
-from bimtests.TestArchImportersGui import TestArchImportersGui
-from bimtests.TestArchAxisGui import TestArchAxisGui
-from bimtests.TestArchBuildingPartGui import TestArchBuildingPartGui
-from bimtests.TestBimPlanEditGui import TestBimPlanEditGui
-from bimtests.TestArchFootprintGui import TestArchFootprintGui
-from bimtests.TestArchStairsGui import TestArchStairsGui
-from bimtests.TestArchReportGui import TestArchReportGui
-from bimtests.TestArchSiteGui import TestArchSiteGui
-from bimtests.TestArchSpaceGui import TestArchSpaceGui
-from bimtests.TestArchStructureGui import TestArchStructureGui
-from bimtests.TestArchWallGui import TestArchWallGui
-from bimtests.TestArchWindowGui import TestArchWindowGui
-from bimtests.TestArchWallJoinWorkflowGui import TestArchWallJoinWorkflowGui
-from bimtests.TestWebGLExportGui import TestWebGLExportGui
-from bimtests.TestArchCoveringGui import TestArchCoveringGui
+import FreeCAD
+import FreeCADGui
 
-TEST_CLASSES = (
-    TestArchImportersGui,
-    TestArchAxisGui,
-    TestArchBuildingPartGui,
-    TestArchStairsGui,
-    TestArchReportGui,
-    TestArchSiteGui,
-    TestArchWallGui,
-    TestArchWindowGui,
-    TestWebGLExportGui,
-    TestArchCoveringGui,
-)
+QT_TRANSLATE_NOOP = FreeCAD.Qt.QT_TRANSLATE_NOOP
 
 
-def load_tests(loader, _tests, _pattern):
-    """Return the complete Arch GUI test suite explicitly."""
-    suite = loader.suiteClass()
-    for test_class in TEST_CLASSES:
-        suite.addTests(loader.loadTestsFromTestCase(test_class))
-    return suite
+class BIM_PlanEdit:
+    def GetResources(self):
+        return {
+            "Pixmap": "Arch_Floor",
+            "MenuText": QT_TRANSLATE_NOOP("BIM_PlanEdit", "Plan Edit"),
+            "ToolTip": QT_TRANSLATE_NOOP(
+                "BIM_PlanEdit",
+                "Enters Plan Edit mode locked to a top orthographic BIM view",
+            ),
+        }
+
+    def IsActive(self):
+        return FreeCAD.ActiveDocument is not None and hasattr(
+            FreeCADGui.getMainWindow().getActiveWindow(), "getSceneGraph"
+        )
+
+    def Activated(self):
+        from bimcommands import BimPlanSession
+
+        session = BimPlanSession.get_active_session()
+        if session:
+            panel = getattr(session, "task_panel", None)
+            if (
+                panel
+                and getattr(panel, "form", None) is not None
+                and not getattr(panel, "_closed", False)
+            ):
+                try:
+                    panel.show()
+                    panel.raise_()
+                    panel.activateWindow()
+                    return
+                except RuntimeError:
+                    pass
+            session.shutdown(close_dialog=False)
+        BimPlanSession.start_session()
+
+
+FreeCADGui.addCommand("BIM_PlanEdit", BIM_PlanEdit())

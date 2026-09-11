@@ -80,6 +80,53 @@ def _make_projected_horizontal_area_face(projected_faces):
     return fused_face.removeSplitter()
 
 
+def get_horizontal_slice_edges(shape, cut_z):
+    """Return transient section edges for a horizontal cut through ``shape``."""
+
+    if not shape or shape.isNull():
+        return []
+
+    try:
+        wires = shape.slice(FreeCAD.Vector(0, 0, 1), cut_z)
+    except Exception:
+        return []
+
+    edges = []
+    for wire in wires or []:
+        try:
+            edges.extend(list(wire.Edges))
+        except Exception:
+            continue
+    return edges
+
+
+def get_horizontal_slice_faces(shape, cut_z, translate_z=0.0):
+    """Return transient planar faces for a horizontal cut through ``shape``."""
+
+    import Part
+
+    section_edges = get_horizontal_slice_edges(shape, cut_z)
+    if not section_edges:
+        return []
+
+    try:
+        edge_groups = Part.sortEdges(section_edges)
+    except AttributeError:
+        edge_groups = Part.__sortEdges__(section_edges)
+
+    faces = []
+    for edges in edge_groups:
+        wire = Part.Wire(edges)
+        if not wire.isClosed():
+            continue
+        face = Part.Face(wire)
+        if face.Area <= 0:
+            continue
+        if translate_z:
+            face.translate(FreeCAD.Vector(0, 0, translate_z))
+        faces.append(face)
+    return faces
+
 def addToComponent(compobject, addobject, prop):
     """Add an object to a component's property.
 
@@ -1750,6 +1797,7 @@ class ViewProviderComponent:
                             obj.ViewObject.update()
         if prop in ("Shape", "Placement"):
             self.refreshFootprint(obj.ViewObject)
+            self._refreshHostedFootprints(obj)
         return
 
     def updateFootprint(self):
@@ -1775,6 +1823,30 @@ class ViewProviderComponent:
                 idx += len(tri[0])
             self.fcoords.point.setValues(verts)
             self.fset.coordIndex.setValues(0, len(fdata), fdata)
+
+    def buildFootprintFillSeparator(
+        self, fill_color, transparency, fcoords, fset, shape_hints=None
+    ):
+        """Build a flat, unlit footprint fill subtree for plan graphics."""
+
+        from pivy import coin
+
+        material = coin.SoMaterial()
+        material.diffuseColor.setValue(fill_color)
+        material.transparency.setValue(transparency)
+        light_model = coin.SoLightModel()
+        light_model.model = coin.SoLightModel.BASE_COLOR
+        if shape_hints is None:
+            shape_hints = coin.SoShapeHints()
+            shape_hints.faceType = coin.SoShapeHints.UNKNOWN_FACE_TYPE
+
+        fill_sep = coin.SoSeparator()
+        fill_sep.addChild(material)
+        fill_sep.addChild(light_model)
+        fill_sep.addChild(shape_hints)
+        fill_sep.addChild(fcoords)
+        fill_sep.addChild(fset)
+        return fill_sep
 
     def ensureFootprintGroup(self, vobj=None):
         """Ensure the generic Footprint display mode node exists.
@@ -1836,6 +1908,37 @@ class ViewProviderComponent:
                     return ":/icons/Arch_Component_Clone.svg"
         return ":/icons/Arch_Component_Tree.svg"
 
+    def _getHostedObjects(self, obj):
+        """Return objects hosted by ``obj`` or by its additions."""
+
+        hostedObjs = []
+        if hasattr(obj, "Proxy") and hasattr(obj.Proxy, "getHosts"):
+            hostedObjs.extend(obj.Proxy.getHosts(obj))
+        # Hosted openings can also belong to wall additions, so include those
+        # hosted objects when refreshing shared display data.
+        for addition in getattr(obj, "Additions", []):
+            if hasattr(addition, "Proxy") and hasattr(addition.Proxy, "getHosts"):
+                hostedObjs.extend(addition.Proxy.getHosts(addition))
+
+        uniqueHostedObjs = []
+        seen = set()
+        for hostedObj in hostedObjs:
+            key = getattr(hostedObj, "Name", None) or id(hostedObj)
+            if key in seen:
+                continue
+            seen.add(key)
+            uniqueHostedObjs.append(hostedObj)
+        return uniqueHostedObjs
+
+    def _refreshHostedFootprints(self, obj):
+        """Refresh derived footprint caches for objects hosted by ``obj``."""
+
+        for hostedObj in self._getHostedObjects(obj):
+            vobj = getattr(hostedObj, "ViewObject", None)
+            proxy = getattr(vobj, "Proxy", None) if vobj else None
+            if proxy and hasattr(proxy, "refreshFootprint"):
+                proxy.refreshFootprint(vobj)
+
     def onChanged(self, vobj, prop):
         """Method called when the view provider has a property changed.
 
@@ -1872,12 +1975,7 @@ class ViewProviderComponent:
         elif prop == "Visibility":
             # do nothing if object is an addition
             if not [parent for parent in obj.InList if obj in getattr(parent, "Additions", [])]:
-                hostedObjs = obj.Proxy.getHosts(obj)
-                # add objects hosted by additions
-                for addition in getattr(obj, "Additions", []):
-                    if hasattr(addition, "Proxy") and hasattr(addition.Proxy, "getHosts"):
-                        hostedObjs.extend(addition.Proxy.getHosts(addition))
-                for hostedObj in hostedObjs:
+                for hostedObj in self._getHostedObjects(obj):
                     if hasattr(hostedObj, "ViewObject"):
                         hostedObj.ViewObject.Visibility = vobj.Visibility
         return

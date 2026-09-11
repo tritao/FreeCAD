@@ -24,16 +24,19 @@
 
 """GUI tests for the ArchWall module."""
 
+import Arch
+import Draft
 import ArchWallRelation
 import ArchWallJointGui
 import FreeCAD
 import FreeCADGui
-import Draft
-import Arch
 import Part
 import WorkingPlane
-from bimtests import TestArchBaseGui
-from bimcommands.BimWall import Arch_Wall
+from bimtests.ArchWallGuiTestUtils import (
+    ArchWallGuiTestCase,
+    MockTracker,
+    current_arch_wall_class,
+)
 from bimcommands.BimJoin import (
     BIM_EditWallJoint,
     BIM_Join_Butt,
@@ -45,38 +48,7 @@ from bimcommands.BimJoin import (
 from unittest.mock import patch
 
 
-class MockTracker:
-    """A dummy tracker to absorb GUI calls during logic tests."""
-
-    def off(self):
-        pass
-
-    def on(self):
-        pass
-
-    def finalize(self):
-        pass
-
-    def update(self, points):
-        pass
-
-    def setorigin(self, arg):
-        pass
-
-
-class TestArchWallGui(TestArchBaseGui.TestArchBaseGui):
-
-    def setUp(self):
-        """Set up the test environment by activating the BIM workbench and setting preferences."""
-        super().setUp()
-        self.params = FreeCAD.ParamGet("User parameter:BaseApp/Preferences/Mod/BIM")
-        self.original_wall_base = self.params.GetInt("WallBaseline", 1)  # Default to 1 (line)
-
-    def tearDown(self):
-        """Restore original preferences after the test."""
-        self.params.SetInt("WallBaseline", self.original_wall_base)
-        super().tearDown()
-
+class TestArchWallGui(ArchWallGuiTestCase):
     def test_create_baseless_wall_interactive_mode(self):
         """
         Tests the interactive creation of a baseless wall by simulating the
@@ -90,7 +62,7 @@ class TestArchWallGui(TestArchBaseGui.TestArchBaseGui):
         self.params.SetInt("WallBaseline", 0)
 
         # 2. Arrange: Simulate the state of the command after two clicks
-        cmd = Arch_Wall()
+        cmd = current_arch_wall_class()()
         cmd.doc = self.document
         cmd.wp = WorkingPlane.get_working_plane()
         cmd.points = [FreeCAD.Vector(1000, 1000, 0), FreeCAD.Vector(3000, 1000, 0)]
@@ -146,7 +118,7 @@ class TestArchWallGui(TestArchBaseGui.TestArchBaseGui):
         # 1. Arrange: Set preference to "Draft line" mode
         self.params.SetInt("WallBaseline", 1)  # Corresponds to WallBaselineMode.DRAFT_LINE
 
-        cmd = Arch_Wall()
+        cmd = current_arch_wall_class()()
         cmd.doc = self.document
         cmd.wp = WorkingPlane.get_working_plane()
         cmd.points = [FreeCAD.Vector(0, 0, 0), FreeCAD.Vector(2000, 0, 0)]
@@ -186,7 +158,7 @@ class TestArchWallGui(TestArchBaseGui.TestArchBaseGui):
         # 1. Arrange: Set preference to "Sketch" mode
         self.params.SetInt("WallBaseline", 2)  # Corresponds to WallBaselineMode.SKETCH
 
-        cmd = Arch_Wall()
+        cmd = current_arch_wall_class()()
         cmd.doc = self.document
         cmd.wp = WorkingPlane.get_working_plane()
         cmd.points = [FreeCAD.Vector(0, 0, 0), FreeCAD.Vector(2000, 0, 0)]
@@ -316,7 +288,7 @@ class TestArchWallGui(TestArchBaseGui.TestArchBaseGui):
 
         self.params.SetInt("WallBaseline", 0)
 
-        cmd = Arch_Wall()
+        cmd = current_arch_wall_class()()
         cmd.doc = self.document
         cmd.wp = wp
         cmd.points = [p1_global, p2_global]
@@ -363,7 +335,7 @@ class TestArchWallGui(TestArchBaseGui.TestArchBaseGui):
 
         self.params.SetInt("WallBaseline", 2)
 
-        cmd = Arch_Wall()
+        cmd = current_arch_wall_class()()
         cmd.doc = self.document
         cmd.wp = WorkingPlane.get_working_plane()
         cmd.Align = "Left"
@@ -447,7 +419,7 @@ class TestArchWallGui(TestArchBaseGui.TestArchBaseGui):
         Simulates the core logic of the Arch_Wall command's interactive mode.
         """
         try:
-            cmd = Arch_Wall()
+            cmd = current_arch_wall_class()()
 
             # This calls the real Activated() method, but the mock intercepts the
             # calls to params.get_param, allowing us to control the outcome.
@@ -1142,7 +1114,6 @@ class TestArchWallGui(TestArchBaseGui.TestArchBaseGui):
         self.assertEqual(len(self.document.Objects), initial_object_count + 1)
         self.assertIn(wall2, wall1.Additions, "New baseless wall should be in wall1's Additions.")
 
-    @patch("draftutils.params.get_param")
     def test_baseless_wall_does_not_join_when_autojoin_is_off(self, mock_get_param):
         """Verify no relationship is created for baseless wall when AUTOJOIN is off."""
         mock_get_param.side_effect = self._get_mock_side_effect(autoJoinWalls=False, WallBaseline=0)
@@ -1157,9 +1128,6 @@ class TestArchWallGui(TestArchBaseGui.TestArchBaseGui):
 
         self.assertEqual(len(wall1.Additions), 0, "No join action should have occurred.")
 
-    # Section 2: Draft-Line-based wall joining
-
-    @patch("draftutils.params.get_param")
     def test_line_based_wall_merges_with_joinWallSketches(self, mock_get_param):
         """Verify line-based wall performs a destructive merge."""
         mock_get_param.side_effect = self._get_mock_side_effect(
@@ -1192,7 +1160,6 @@ class TestArchWallGui(TestArchBaseGui.TestArchBaseGui):
             "The base sketch should have more edges after the merge.",
         )
 
-    @patch("draftutils.params.get_param")
     def test_line_based_wall_uses_autojoin_when_joinWallSketches_is_off(self, mock_get_param):
         """Verify line-based wall uses AUTOJOIN when sketch joining is off."""
         mock_get_param.side_effect = self._get_mock_side_effect(
@@ -1216,7 +1183,6 @@ class TestArchWallGui(TestArchBaseGui.TestArchBaseGui):
         )
         self.assertIn(wall2, wall1.Additions, "The new wall should be an Addition to the first.")
 
-    @patch("draftutils.params.get_param")
     def test_line_based_wall_falls_back_to_autojoin_on_incompatible_walls(self, mock_get_param):
         """Verify fallback to AUTOJOIN for incompatible line-based walls."""
         mock_get_param.side_effect = self._get_mock_side_effect(
@@ -1237,9 +1203,6 @@ class TestArchWallGui(TestArchBaseGui.TestArchBaseGui):
 
         self.assertIn(wall2, wall1.Additions, "Fallback failed; wall should be an Addition.")
 
-    # Section 3: Sketch-based wall joining
-
-    @patch("draftutils.params.get_param")
     def test_sketch_based_wall_merges_with_joinWallSketches(self, mock_get_param):
         """Verify sketch-based wall performs a destructive merge."""
         mock_get_param.side_effect = self._get_mock_side_effect(
@@ -1268,7 +1231,6 @@ class TestArchWallGui(TestArchBaseGui.TestArchBaseGui):
             "The base sketch should have more edges after the merge.",
         )
 
-    @patch("draftutils.params.get_param")
     def test_sketch_based_wall_uses_autojoin_when_joinWallSketches_is_off(self, mock_get_param):
         """Verify sketch-based wall uses AUTOJOIN when sketch joining is off."""
         mock_get_param.side_effect = self._get_mock_side_effect(
@@ -1289,7 +1251,6 @@ class TestArchWallGui(TestArchBaseGui.TestArchBaseGui):
 
         self.assertIn(wall2, wall1.Additions, "The new wall should be an Addition to the first.")
 
-    @patch("draftutils.params.get_param")
     def test_sketch_based_wall_falls_back_to_autojoin_on_incompatible_walls(self, mock_get_param):
         """Verify fallback to AUTOJOIN for incompatible sketch-based walls."""
         mock_get_param.side_effect = self._get_mock_side_effect(
@@ -1311,7 +1272,6 @@ class TestArchWallGui(TestArchBaseGui.TestArchBaseGui):
 
         self.assertIn(wall2, wall1.Additions, "Fallback failed; wall should be an Addition.")
 
-    @patch("draftutils.params.get_param")
     def test_no_join_action_when_prefs_are_off(self, mock_get_param):
         """Verify no join action occurs when both preferences are off."""
         mock_get_param.side_effect = self._get_mock_side_effect(
