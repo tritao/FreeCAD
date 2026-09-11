@@ -1023,11 +1023,12 @@ View3DInventorViewer::View3DInventorViewer(QWidget* parent, const QOpenGLWidget*
     , SelectionObserver(false, ResolveMode::NoResolve)
     , editViewProvider(nullptr)
     , objectGroup(nullptr)
-    , viewContext([this](const ViewProviderDocumentObject* provider) {
-        updateContextVisibility(provider);
-    }, [this](const std::vector<const App::ClippingPlane*>& planes) {
-        updateContextClipping(planes);
-    })
+    , viewContext(
+          [this](const ViewProviderDocumentObject* provider) { updateContextVisibility(provider); },
+          [this](const std::vector<const App::ClippingPlane*>& planes) {
+              updateContextClipping(planes);
+          }
+      )
     , navigation(nullptr)
     , renderType(Native)
     , framebuffer(nullptr)
@@ -1052,11 +1053,12 @@ View3DInventorViewer::View3DInventorViewer(
     , SelectionObserver(false, ResolveMode::NoResolve)
     , editViewProvider(nullptr)
     , objectGroup(nullptr)
-    , viewContext([this](const ViewProviderDocumentObject* provider) {
-        updateContextVisibility(provider);
-    }, [this](const std::vector<const App::ClippingPlane*>& planes) {
-        updateContextClipping(planes);
-    })
+    , viewContext(
+          [this](const ViewProviderDocumentObject* provider) { updateContextVisibility(provider); },
+          [this](const std::vector<const App::ClippingPlane*>& planes) {
+              updateContextClipping(planes);
+          }
+      )
     , navigation(nullptr)
     , renderType(Native)
     , framebuffer(nullptr)
@@ -4312,9 +4314,7 @@ bool View3DInventorViewer::hasClippingPlane() const
     return pcClipPlane != nullptr;
 }
 
-void View3DInventorViewer::updateContextClipping(
-    const std::vector<const App::ClippingPlane*>& planes
-)
+void View3DInventorViewer::updateContextClipping(const std::vector<const App::ClippingPlane*>& planes)
 {
     if (!pcViewProviderRoot) {
         return;
@@ -4339,10 +4339,7 @@ void View3DInventorViewer::updateContextClipping(
         }
         auto* clip = new SoClipPlane;
         clip->plane.setValue(
-            SbPlane(
-                Base::convertTo<SbVec3f>(normal),
-                static_cast<float>(definition->Offset.getValue())
-            )
+            SbPlane(Base::convertTo<SbVec3f>(normal), static_cast<float>(definition->Offset.getValue()))
         );
         clip->ref();
         pcViewProviderRoot->insertChild(clip, 0);

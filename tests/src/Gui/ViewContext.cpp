@@ -52,9 +52,7 @@ TEST(ViewContextTest, clippingChangesNotifyViewerAndClearStaleDefinitions)
     std::vector<std::vector<const App::ClippingPlane*>> events;
     Gui::ViewContext context(
         Gui::ViewContext::ChangedCallback {},
-        [&](const std::vector<const App::ClippingPlane*>& planes) {
-            events.push_back(planes);
-        }
+        [&](const std::vector<const App::ClippingPlane*>& planes) { events.push_back(planes); }
     );
 
     context.setClippingPlanes({plane});

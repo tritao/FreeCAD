@@ -702,9 +702,7 @@ private:
     void aboutToDestroyGLContext();
     void createStandardCursors();
     bool applyCameraState(const SoCamera& camera);
-    void updateContextClipping(
-        const std::vector<const App::ClippingPlane*>& planes
-    );
+    void updateContextClipping(const std::vector<const App::ClippingPlane*>& planes);
 
 private:
     NaviCube* naviCube;

@@ -158,7 +158,7 @@ bool ViewContext::captureDefinition(App::ViewDefinition* definition) const
                     break;
             }
             if (state) {
-            overrides[object->getNameInDocument()] = state;
+                overrides[object->getNameInDocument()] = state;
             }
         }
     }

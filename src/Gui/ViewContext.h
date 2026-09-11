@@ -17,7 +17,7 @@ namespace App
 class DocumentObject;
 class ViewDefinition;
 class ClippingPlane;
-}
+}  // namespace App
 
 namespace Gui
 {
@@ -36,13 +36,9 @@ public:
 
     using LayerId = std::uint64_t;
     using ChangedCallback = std::function<void(const ViewProviderDocumentObject*)>;
-    using ClippingChangedCallback =
-        std::function<void(const std::vector<const App::ClippingPlane*>&)>;
+    using ClippingChangedCallback = std::function<void(const std::vector<const App::ClippingPlane*>&)>;
 
-    explicit ViewContext(
-        ChangedCallback changed = {},
-        ClippingChangedCallback clippingChanged = {}
-    );
+    explicit ViewContext(ChangedCallback changed = {}, ClippingChangedCallback clippingChanged = {});
 
     LayerId pushLayer();
     bool removeLayer(LayerId layer);
