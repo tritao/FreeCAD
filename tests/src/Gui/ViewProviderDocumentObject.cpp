@@ -20,7 +20,6 @@
 #include <Gui/Selection/SoFCUnifiedSelection.h>
 #include <Gui/ViewContext.h>
 #include <Gui/ViewInstance.h>
-#include <Gui/ViewInstance.h>
 #include <Gui/ViewProviderDocumentObject.h>
 #include <Gui/ViewProviderDocumentObjectGroup.h>
 
@@ -285,6 +284,33 @@ TEST_F(ViewProviderDocumentObjectTest, viewDefinitionAppliesAndCapturesContextOv
     ASSERT_TRUE(context.captureDefinition(viewDefinition));
     ASSERT_EQ(viewDefinition->ForcedHidden.getValues().size(), 1U);
     EXPECT_EQ(viewDefinition->ForcedHidden.getValues().front(), _child);
+}
+
+TEST_F(ViewProviderDocumentObjectTest, viewDefinitionCaptureFlattensLayerOverrides)
+{
+    auto* definition = static_cast<App::ViewDefinition*>(
+        _doc->addObject("App::ViewDefinition", "SavedView")
+    );
+
+    Gui::ViewContext context;
+    const auto olderLayer = context.pushLayer();
+    ASSERT_TRUE(
+        context.setVisibility(olderLayer, _child, Gui::ViewContext::Visibility::Hidden)
+    );
+    const auto newerLayer = context.pushLayer();
+    ASSERT_TRUE(
+        context.setVisibility(newerLayer, _child, Gui::ViewContext::Visibility::Visible)
+    );
+    ASSERT_EQ(context.visibility(_child), Gui::ViewContext::Visibility::Visible);
+
+    ASSERT_TRUE(context.captureDefinition(definition));
+    ASSERT_EQ(definition->ForcedVisible.getValues().size(), 1U);
+    EXPECT_EQ(definition->ForcedVisible.getValues().front(), _child);
+    EXPECT_TRUE(definition->ForcedHidden.getValues().empty());
+
+    Gui::ViewContext restored;
+    ASSERT_TRUE(restored.applyDefinition(definition));
+    EXPECT_EQ(restored.visibility(_child), Gui::ViewContext::Visibility::Visible);
 }
 
 TEST_F(ViewProviderDocumentObjectTest, viewDefinitionCarriesPersistentClippingReferences)

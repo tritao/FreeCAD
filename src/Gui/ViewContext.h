@@ -12,6 +12,7 @@
 namespace App
 {
 class DocumentObject;
+class ViewDefinition;
 }
 
 namespace Gui
@@ -39,6 +40,8 @@ public:
     bool setVisibility(LayerId layer, const App::DocumentObject* object, Visibility visibility);
     Visibility visibility(const App::DocumentObject* object) const;
     bool effectiveVisibility(const ViewProviderDocumentObject* provider) const;
+    bool applyDefinition(const App::ViewDefinition* definition);
+    bool captureDefinition(App::ViewDefinition* definition) const;
     void removeObject(const App::DocumentObject* object);
     void clear();
 

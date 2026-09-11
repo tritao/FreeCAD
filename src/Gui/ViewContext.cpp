@@ -7,6 +7,8 @@
 #include <set>
 
 #include <App/DocumentObject.h>
+#include <App/Document.h>
+#include <App/ViewDefinition.h>
 
 #include "Application.h"
 #include "ViewProviderDocumentObject.h"
@@ -91,6 +93,56 @@ bool ViewContext::effectiveVisibility(const ViewProviderDocumentObject* provider
             return provider->Visibility.getValue();
     }
     return provider->Visibility.getValue();
+}
+
+bool ViewContext::applyDefinition(const App::ViewDefinition* definition)
+{
+    if (!definition || !definition->getDocument()) {
+        return false;
+    }
+    clear();
+    const auto layer = pushLayer();
+    for (auto* object : definition->ForcedVisible.getValues()) {
+        setVisibility(layer, object, Visibility::Visible);
+    }
+    for (auto* object : definition->ForcedHidden.getValues()) {
+        setVisibility(layer, object, Visibility::Hidden);
+    }
+    return true;
+}
+
+bool ViewContext::captureDefinition(App::ViewDefinition* definition) const
+{
+    if (!definition) {
+        return false;
+    }
+    std::vector<App::DocumentObject*> forcedVisible;
+    std::vector<App::DocumentObject*> forcedHidden;
+    std::set<const App::DocumentObject*> captured;
+
+    // Persist only the effective state.  Walking layers from newest to oldest
+    // ensures that a later override is not accidentally overwritten by an
+    // older one when the two link lists are restored.
+    for (auto layer = layers.rbegin(); layer != layers.rend(); ++layer) {
+        for (const auto& [object, visibility] : layer->second) {
+            if (!object || !captured.insert(object).second) {
+                continue;
+            }
+            switch (visibility) {
+                case Visibility::Visible:
+                    forcedVisible.push_back(const_cast<App::DocumentObject*>(object));
+                    break;
+                case Visibility::Hidden:
+                    forcedHidden.push_back(const_cast<App::DocumentObject*>(object));
+                    break;
+                case Visibility::Inherit:
+                    break;
+            }
+        }
+    }
+    definition->ForcedVisible.setValues(std::move(forcedVisible));
+    definition->ForcedHidden.setValues(std::move(forcedHidden));
+    return true;
 }
 
 void ViewContext::removeObject(const App::DocumentObject* object)
