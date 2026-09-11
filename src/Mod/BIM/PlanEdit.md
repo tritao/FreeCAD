@@ -307,6 +307,16 @@ The following principles should remain stable:
 
 ## Testing As Specification
 
+Two generated example documents provide focused manual test fixtures:
+
+- `data/examples/BIMPlanEditBasic.py` generates `BIMPlanEditBasic.FCStd`
+- `data/examples/BIMPlanEditPathOwnership.py` generates
+  `BIMPlanEditPathOwnership.FCStd`
+
+Run either script with the GUI FreeCAD binary from the repository root. The
+scripts are the source of truth for the checked-in documents and close FreeCAD
+automatically after saving.
+
 The most reliable description of current behavior is a combination of this
 document and the maintained tests:
 
