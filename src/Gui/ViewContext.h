@@ -7,6 +7,7 @@
 #include <map>
 #include <string>
 #include <unordered_map>
+#include <vector>
 
 #include <FCGlobal.h>
 #include <Base/Placement.h>
@@ -15,6 +16,7 @@ namespace App
 {
 class DocumentObject;
 class ViewDefinition;
+class ClippingPlane;
 }
 
 namespace Gui
@@ -34,8 +36,9 @@ public:
 
     using LayerId = std::uint64_t;
     using ChangedCallback = std::function<void(const ViewProviderDocumentObject*)>;
+    using ClippingChangedCallback = std::function<void(const std::vector<const App::ClippingPlane*>&)>;
 
-    explicit ViewContext(ChangedCallback changed = {});
+    explicit ViewContext(ChangedCallback changed = {}, ClippingChangedCallback clippingChanged = {});
 
     LayerId pushLayer();
     bool removeLayer(LayerId layer);
@@ -48,6 +51,9 @@ public:
     const std::string& cameraState() const;
     void setReferenceFrame(const Base::Placement& frame);
     const Base::Placement& referenceFrame() const;
+    void setClippingPlanes(const std::vector<const App::ClippingPlane*>& planes);
+    const std::vector<const App::ClippingPlane*>& clippingPlanes() const;
+    void setClippingChangedCallback(ClippingChangedCallback callback);
     void removeObject(const App::DocumentObject* object);
     void clear();
 
@@ -59,6 +65,8 @@ private:
     std::map<LayerId, VisibilityMap> layers;
     LayerId nextLayerId = 1;
     ChangedCallback changed;
+    ClippingChangedCallback clippingChanged;
+    std::vector<const App::ClippingPlane*> activeClippingPlanes;
     std::string activeCameraState;
     std::string activeCameraCodec;
     int activeCameraVersion = 1;
