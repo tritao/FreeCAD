@@ -239,5 +239,5 @@ class _ViewProviderEquipment(ArchComponent.ViewProviderComponent):
             return None
 
         taskd = EquipmentTaskPanel(vobj.Object)
-        FreeCADGui.Control.showDialog(taskd)
+        FreeCADGui.Control.showDialog(taskd, FreeCADGui.ActiveDocument)
         return True

@@ -35,6 +35,7 @@
 #include <Base/CoordinateSystem.h>
 #include <Base/Tools.h>
 #include <Gui/Application.h>
+#include <Gui/Document.h>
 #include <Gui/Command.h>
 #include <Gui/Control.h>
 #include <Gui/MainWindow.h>
@@ -85,7 +86,10 @@ void CmdApproxCurve::activated(int)
     }
 
     objT = obj.front();
-    Gui::Control().showDialog(new ReenGui::TaskFitBSplineCurve(objT));
+    Gui::Control().showDialog(
+        new ReenGui::TaskFitBSplineCurve(objT),
+        Gui::Application::Instance->activeDocument()->getDocument()
+    );
 }
 
 bool CmdApproxCurve::isActive()
@@ -124,7 +128,10 @@ void CmdApproxSurface::activated(int)
     }
 
     objT = obj.front();
-    Gui::Control().showDialog(new ReenGui::TaskFitBSplineSurface(objT));
+    Gui::Control().showDialog(
+        new ReenGui::TaskFitBSplineSurface(objT),
+        Gui::Application::Instance->activeDocument()->getDocument()
+    );
 }
 
 bool CmdApproxSurface::isActive()
@@ -431,7 +438,7 @@ void CmdSegmentation::activated(int)
     if (!dlg) {
         dlg = new ReverseEngineeringGui::TaskSegmentation(mesh);
     }
-    Gui::Control().showDialog(dlg);
+    Gui::Control().showDialog(dlg, Gui::Application::Instance->activeDocument()->getDocument());
 }
 
 bool CmdSegmentation::isActive()
@@ -461,7 +468,7 @@ void CmdSegmentationManual::activated(int)
     if (!dlg) {
         dlg = new ReverseEngineeringGui::TaskSegmentationManual();
     }
-    Gui::Control().showDialog(dlg);
+    Gui::Control().showDialog(dlg, Gui::Application::Instance->activeDocument()->getDocument());
 }
 
 bool CmdSegmentationManual::isActive()
@@ -616,7 +623,10 @@ void CmdPoissonReconstruction::activated(int)
     }
 
     objT = obj.front();
-    Gui::Control().showDialog(new ReenGui::TaskPoisson(objT));
+    Gui::Control().showDialog(
+        new ReenGui::TaskPoisson(objT),
+        Gui::Application::Instance->activeDocument()->getDocument()
+    );
 }
 
 bool CmdPoissonReconstruction::isActive()

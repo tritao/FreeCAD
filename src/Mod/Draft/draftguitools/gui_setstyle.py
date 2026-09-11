@@ -72,7 +72,7 @@ class Draft_SetStyle:
 
     def Activated(self):
 
-        dia = Gui.Control.showDialog(Draft_SetStyle_TaskPanel())
+        dia = Gui.Control.showDialog(Draft_SetStyle_TaskPanel(), Gui.ActiveDocument)
         dia.setDocumentName(Gui.ActiveDocument.Document.Name)
         dia.setAutoCloseOnDeletedDocument(True)
 

@@ -30,6 +30,7 @@
 #include <Gui/ActionFunction.h>
 #include <Gui/Control.h>
 #include <Gui/Document.h>
+#include <Gui/Application.h>
 #include <Mod/Part/App/PrimitiveFeature.h>
 
 #include "ViewProviderPrimitive.h"
@@ -69,7 +70,7 @@ bool ViewProviderPrimitive::setEdit(int ModNum)
         PartGui::TaskPrimitivesEdit* dlg = new PartGui::TaskPrimitivesEdit(
             getObject<Part::Primitive>()
         );
-        Gui::Control().showDialog(dlg);
+        Gui::Control().showDialog(dlg, Gui::Application::Instance->activeDocument()->getDocument());
         return true;
     }
     else {

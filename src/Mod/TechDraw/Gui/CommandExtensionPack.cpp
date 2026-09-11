@@ -732,7 +732,7 @@ CmdTechDrawExtensionSelectLineAttributes::CmdTechDrawExtensionSelectLineAttribut
 void CmdTechDrawExtensionSelectLineAttributes::activated(int iMsg)
 {
     Q_UNUSED(iMsg);
-    Gui::Control().showDialog(new TaskDlgSelectLineAttributes());
+    Gui::Control().showDialog(new TaskDlgSelectLineAttributes(), Gui::Application::Instance->activeDocument()->getDocument());
 }
 
 bool CmdTechDrawExtensionSelectLineAttributes::isActive()
@@ -950,7 +950,8 @@ void execCosmeticCircleCenter(Gui::Command* cmd)
         }
 
         Gui::Control().showDialog(new TaskDlgCosmeticCircle(baseFeat,
-                                                          edgeNames.front()));
+                                                          edgeNames.front()),
+                                  page->getDocument());
         return;
     }
 
@@ -992,7 +993,8 @@ void execCosmeticCircleCenter(Gui::Command* cmd)
 
     Gui::Control().showDialog(new TaskDlgCosmeticCircle(baseFeat,
                                                       points,
-                                                      centerIs3d));
+                                                      centerIs3d),
+                              page->getDocument());
 }
 void CmdTechDrawCosmeticCircle::activated(int iMsg)
 {

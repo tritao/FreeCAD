@@ -42,6 +42,7 @@
 #include <App/Document.h>
 #include <App/DocumentObjectGroup.h>
 #include <Gui/Application.h>
+#include <Gui/Document.h>
 #include <Gui/Command.h>
 #include <Gui/Control.h>
 #include <Gui/MainWindow.h>
@@ -276,10 +277,16 @@ bool ViewProviderDatum::setEdit(int ModNum)
 
         // start the edit dialog
         if (datumDlg) {
-            Gui::Control().showDialog(datumDlg);
+            Gui::Control().showDialog(
+                datumDlg,
+                Gui::Application::Instance->activeDocument()->getDocument()
+            );
         }
         else {
-            Gui::Control().showDialog(new TaskDlgDatumParameters(this));
+            Gui::Control().showDialog(
+                new TaskDlgDatumParameters(this),
+                Gui::Application::Instance->activeDocument()->getDocument()
+            );
         }
 
         return true;

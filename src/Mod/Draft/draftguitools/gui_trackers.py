@@ -38,6 +38,7 @@ that is, previews, of the real objects that will be created on the 3D view.
 ## \addtogroup draftguitools
 # @{
 import math
+import os
 import re
 import pivy.coin as coin
 
@@ -60,6 +61,21 @@ __author__ = "Yorik van Havre"
 __url__ = "https://www.freecad.org"
 
 
+def _bim_line_debug_enabled():
+    value = os.environ.get("FREECAD_BIM_PLAN_DEBUG_LINES", "")
+    return str(value).strip().lower() not in ("", "0", "false", "no", "off")
+
+
+def _format_debug_points(values):
+    formatted = []
+    for value in values:
+        try:
+            formatted.append("({:.3f}, {:.3f}, {:.3f})".format(*value))
+        except Exception:
+            formatted.append(str(value))
+    return "[{}]".format(", ".join(formatted))
+
+
 class Tracker:
     """A generic Draft Tracker, to be used by other specific trackers."""
 
@@ -68,6 +84,8 @@ class Tracker:
         import Part
 
         self.ontop = ontop
+        self._finalized = False
+        self._scene_graph = None
         self.color = coin.SoBaseColor()
         drawstyle = coin.SoDrawStyle()
         if swidth:
@@ -92,11 +110,19 @@ class Tracker:
         """Finish the command by removing the switch.
         Also called by ghostTracker.remove.
         """
-        ToDo.delay(self._removeSwitch, self.switch)
+        switch = self.switch
+        self._finalized = True
+        if switch is None:
+            self.Visible = False
+            return
+        ToDo.delay(self._removeSwitch, (switch, self._scene_graph))
         self.switch = None
+        self.Visible = False
 
     def get_scene_graph(self):
         """Returns the current scenegraph or None if this is not a 3D view"""
+        if self._scene_graph is not None:
+            return self._scene_graph
         v = gui_utils.get_3d_view()
         if v:
             return v.getSceneGraph()
@@ -109,33 +135,59 @@ class Tracker:
         Must not be called
         from an event handler (or other scene graph traversal).
         """
+        if switch is None or self._finalized:
+            return
+        if switch is not self.switch:
+            return
         sg = self.get_scene_graph()
         if not sg:
+            return
+        self._scene_graph = sg
+        if sg.findChild(switch) >= 0:
             return
         if self.ontop:
             sg.insertChild(switch, 0)
         else:
             sg.addChild(switch)
 
-    def _removeSwitch(self, switch):
+    def _removeSwitch(self, switch_data):
         """Remove self.switch from the scene graph.
 
         As with _insertSwitch,
         must not be called during scene graph traversal).
         """
-        sg = self.get_scene_graph()
+        if isinstance(switch_data, tuple):
+            switch, sg = switch_data
+        else:
+            switch = switch_data
+            sg = None
+        if sg is None:
+            sg = self._scene_graph
+        if sg is None:
+            sg = self.get_scene_graph()
         if not sg:
             return
-        if sg.findChild(switch) >= 0:
-            sg.removeChild(switch)
+        try:
+            index = sg.findChild(switch)
+            if index >= 0:
+                sg.removeChild(index)
+        finally:
+            if self._scene_graph is sg:
+                self._scene_graph = None
 
     def on(self):
         """Set the visibility to True."""
+        if self.switch is None:
+            self.Visible = False
+            return
         self.switch.whichChild = 0
         self.Visible = True
 
     def off(self):
         """Set the visibility to False."""
+        if self.switch is None:
+            self.Visible = False
+            return
         self.switch.whichChild = -1
         self.Visible = False
 
@@ -148,7 +200,10 @@ class Tracker:
             sg = self.get_scene_graph()
             if not sg:
                 return
-            sg.removeChild(self.switch)
+            index = sg.findChild(self.switch)
+            if index < 0:
+                return
+            sg.removeChild(index)
             sg.addChild(self.switch)
 
     def raiseTracker(self):
@@ -160,7 +215,10 @@ class Tracker:
             sg = self.get_scene_graph()
             if not sg:
                 return
-            sg.removeChild(self.switch)
+            index = sg.findChild(self.switch)
+            if index < 0:
+                return
+            sg.removeChild(index)
             sg.insertChild(self.switch, 0)
 
     def setColor(self, color=None):
@@ -180,7 +238,7 @@ class Tracker:
             ]
 
     def _get_wp(self):
-        return FreeCAD.DraftWorkingPlane
+        return getattr(self, "working_plane", None) or FreeCAD.DraftWorkingPlane
 
 
 class snapTracker(Tracker):
@@ -233,23 +291,64 @@ class lineTracker(Tracker):
     def __init__(self, dotted=False, scolor=None, swidth=None, ontop=False):
         line = coin.SoLineSet()
         line.numVertices.setValue(2)
+        self.line = line
         self.coords = coin.SoCoordinate3()  # this is the coordinate
         self.coords.point.setValues(0, 2, [[0, 0, 0], [1, 0, 0]])
+        self._debug_label = "lineTracker"
         super().__init__(dotted, scolor, swidth, [self.coords, line], ontop, name="lineTracker")
+        self._debug_line_state("created")
+
+    def setDebugLabel(self, label):
+        self._debug_label = str(label) if label else "lineTracker"
+        if self.switch is not None:
+            try:
+                self.switch.setName(self._debug_label)
+            except Exception:
+                pass
+
+    def _debug_line_state(self, reason):
+        try:
+            counts = [int(self.line.numVertices[i]) for i in range(self.line.numVertices.getNum())]
+        except Exception:
+            counts = []
+        try:
+            points = [
+                self.coords.point[i].getValue() for i in range(min(self.coords.point.getNum(), 2))
+            ]
+        except Exception:
+            points = []
+        coord_count = self.coords.point.getNum()
+        mismatch = bool(counts) and sum(counts) > coord_count
+        if not mismatch and not _bim_line_debug_enabled():
+            return
+        message = "{} {}: coords={} counts={} visible={} points={}\n".format(
+            self._debug_label,
+            reason,
+            coord_count,
+            counts,
+            self.Visible,
+            _format_debug_points(points),
+        )
+        if mismatch:
+            FreeCAD.Console.PrintWarning("[BIM line debug] " + message)
+        else:
+            FreeCAD.Console.PrintLog("[BIM line debug] " + message)
 
     def p1(self, point=None):
         """Set or get the first point of the line."""
-        if point:
+        if point is not None:
             if self.coords.point.getValues()[0].getValue() != tuple(point):
                 self.coords.point.set1Value(0, point.x, point.y, point.z)
+                self._debug_line_state("p1")
         else:
             return Vector(self.coords.point.getValues()[0].getValue())
 
     def p2(self, point=None):
         """Set or get the second point of the line."""
-        if point:
+        if point is not None:
             if self.coords.point.getValues()[-1].getValue() != tuple(point):
                 self.coords.point.set1Value(1, point.x, point.y, point.z)
+                self._debug_line_state("p2")
         else:
             return Vector(self.coords.point.getValues()[-1].getValue())
 
@@ -258,6 +357,18 @@ class lineTracker(Tracker):
         p1 = Vector(self.coords.point.getValues()[0].getValue())
         p2 = Vector(self.coords.point.getValues()[-1].getValue())
         return (p2.sub(p1)).Length
+
+    def on(self):
+        super().on()
+        self._debug_line_state("on")
+
+    def off(self):
+        super().off()
+        self._debug_line_state("off")
+
+    def finalize(self):
+        self._debug_line_state("finalize")
+        super().finalize()
 
 
 class polygonTracker(Tracker):
@@ -1553,8 +1664,8 @@ class boxTracker(Tracker):
         w = coin.SoDrawStyle()
         w.style = coin.SoDrawStyle.LINES
         self.cube = coin.SoCube()
-        self.cube.height.setValue(width)
-        self.cube.depth.setValue(height)
+        self.cube.height.setValue(float(width))
+        self.cube.depth.setValue(float(height))
         self.baseline = None
         if line:
             self.baseline = line
@@ -1580,7 +1691,7 @@ class boxTracker(Tracker):
             bp = self.baseline.Shape.Edges[0].Vertexes[0].Point
         else:
             return
-        self.cube.width.setValue(lvec.Length)
+        self.cube.width.setValue(float(lvec.Length))
         bp = bp.add(lvec.multiply(0.5))
         bp = bp.add(DraftVecUtils.scaleTo(normal, self.cube.depth.getValue() / 2.0))
         self.pos(bp)
@@ -1603,21 +1714,21 @@ class boxTracker(Tracker):
     def width(self, w=None):
         """Set the width."""
         if w:
-            self.cube.height.setValue(w)
+            self.cube.height.setValue(float(w))
         else:
             return self.cube.height.getValue()
 
     def length(self, l=None):
         """Set the length."""
         if l:
-            self.cube.width.setValue(l)
+            self.cube.width.setValue(float(l))
         else:
             return self.cube.width.getValue()
 
     def height(self, h=None):
         """Set the height."""
         if h:
-            self.cube.depth.setValue(h)
+            self.cube.depth.setValue(float(h))
             self.update()
         else:
             return self.cube.depth.getValue()
@@ -1709,6 +1820,7 @@ class archDimTracker(Tracker):
             self.param1.setValue(-1 * sign * self.offset)
         else:
             self.Distance = (p2.sub(p1)).Length
+            self.param1.setValue(self.offset)
 
         text = FreeCAD.Units.Quantity(self.Distance, FreeCAD.Units.Length).UserString
         self.matrix.setValue(*plane.get_placement().Matrix.transposed().A)
@@ -1757,6 +1869,174 @@ class archDimTracker(Tracker):
             self.setString()
         else:
             return Vector(self.pnts.getValues()[-1].getValue())
+
+
+class editableArchDimTracker:
+    """An editable dimension tracker backed by Gui.EditableDatumLabel."""
+
+    def __init__(
+        self,
+        p1=FreeCAD.Vector(0, 0, 0),
+        p2=FreeCAD.Vector(1, 0, 0),
+        mode=1,
+        auto_distance=False,
+        avoid_mouse_cursor=False,
+    ):
+        self.offset = 0.5
+        self.mode = mode
+        self.Visible = False
+        self.working_plane = None
+        self._p1 = FreeCAD.Vector()
+        self._p2 = FreeCAD.Vector()
+        self.view = gui_utils.get_3d_view()
+        self.camera = self.view.getCameraNode()
+        self.size_pixel = params.get_param_view("MarkerSize") * 2 * 96 / 72
+        self.Distance = 0.0
+        self.color = utils.get_rgba_tuple(params.get_param("snapcolor"))[:3]
+        self.label = FreeCADGui.EditableDatumLabel(
+            self.view,
+            self._get_wp().get_placement(),
+            self.color,
+            auto_distance,
+            avoid_mouse_cursor,
+        )
+        self.setMode(mode)
+        self.p1(p1)
+        self.p2(p2)
+
+    def _get_wp(self):
+        return self.working_plane or FreeCAD.DraftWorkingPlane
+
+    def _project_point(self, point):
+        plane = self._get_wp()
+        projected = plane.project_point(point)
+        projected_u = (projected - plane.position).dot(plane.u.normalize())
+        projected_v = (projected - plane.position).dot(plane.v.normalize())
+        return Vector(projected_u, projected_v, 0)
+
+    def on(self):
+        """Set the visibility to True."""
+        self.label.activate()
+        self.Visible = True
+
+    def off(self):
+        """Set the visibility to False."""
+        self.label.deactivate()
+        self.Visible = False
+
+    def finalize(self):
+        """Remove the editable label from the scene."""
+        if self.label:
+            self.label.deactivate()
+            self.label = None
+        self.Visible = False
+
+    def setColor(self, color=None):
+        """Set the color."""
+        if color is None:
+            self.color = utils.get_rgba_tuple(params.get_param("snapcolor"))[:3]
+        else:
+            self.color = color
+        self.label.setColor(self.color)
+
+    def setMode(self, mode=1):
+        """Set the mode.
+
+        0 = without lines (falls back to aligned)
+        1 = aligned (default)
+        2 = horizontal
+        3 = vertical.
+        """
+        self.mode = mode
+        if mode == 2:
+            label_type = "distancex"
+        elif mode == 3:
+            label_type = "distancey"
+        else:
+            label_type = "distance"
+        self.label.setLabelType(label_type, "dimensioning")
+
+    def setString(self, text=None, sync_spinbox=True):
+        """Update the label text and placement from the current points."""
+        del text
+        plane = self._get_wp()
+        p1 = self._p1
+        p2 = self._p2
+        self.label.setPlacement(plane.get_placement())
+        self.label.setPoints(p1, p2)
+        self.label.setLabelAutoDistanceReverse(False)
+        # Prevent the dim line from intersecting the curve near the cursor.
+        sign_dx = math.copysign(1, (p2.sub(p1)).x or 1)
+        sign_dy = math.copysign(1, (p2.sub(p1)).y or 1)
+        sign = sign_dx * sign_dy
+        if self.mode == 2:
+            self.Distance = abs((p2.sub(p1)).x)
+            self.label.setLabelDistance(sign * self.offset)
+        elif self.mode == 3:
+            self.Distance = abs((p2.sub(p1)).y)
+            self.label.setLabelDistance(-1 * sign * self.offset)
+        else:
+            self.Distance = (p2.sub(p1)).Length
+            self.label.setLabelDistance(self.offset)
+        text = FreeCAD.Units.Quantity(self.Distance, FreeCAD.Units.Length).UserString
+        volume = self.camera.getViewVolume()
+        scale = self.view.getSize()[1] / volume.getHeight()
+        if scale * self.Distance > self.size_pixel * len(text):
+            self.label.setLabelStartAngle(0)
+        else:
+            self.label.setLabelStartAngle(
+                1 / 2 * self.Distance + 3 / 5 * self.size_pixel * len(text) / scale
+            )
+        if sync_spinbox:
+            self.label.setSpinboxValue(self.Distance)
+
+    def p1(self, point=None, sync_spinbox=True):
+        """Set or get the first point of the dim."""
+        if point is not None:
+            self._p1 = self._project_point(point)
+            self.setString(sync_spinbox=sync_spinbox)
+        else:
+            return self._p1
+
+    def p2(self, point=None, sync_spinbox=True):
+        """Set or get the second point of the dim."""
+        if point is not None:
+            self._p2 = self._project_point(point)
+            self.setString(sync_spinbox=sync_spinbox)
+        else:
+            return self._p2
+
+    def updatePoints(self, p1, p2, sync_spinbox=True):
+        """Update both dimension endpoints and refresh the label."""
+        self._p1 = self._project_point(p1)
+        self._p2 = self._project_point(p2)
+        self.setString(sync_spinbox=sync_spinbox)
+
+    def startEdit(self, value=None, event_filter=None, visible_to_mouse=False):
+        """Start interactive editing of the current label."""
+        if value is None:
+            value = self.Distance
+        self.label.startEdit(value, event_filter, visible_to_mouse)
+
+    def stopEdit(self):
+        """Stop interactive editing."""
+        self.label.stopEdit()
+
+    def isInEdit(self):
+        """Return whether the underlying label is currently being edited."""
+        return self.label.isInEdit()
+
+    def setValueChangedCallback(self, callback):
+        """Set the callback invoked when the edited value changes."""
+        self.label.setValueChangedCallback(callback)
+
+    def setEditingFinishedCallback(self, callback):
+        """Set the callback invoked when editing is accepted with Enter."""
+        self.label.setEditingFinishedCallback(callback)
+
+    def setEditingCanceledCallback(self, callback):
+        """Set the callback invoked when editing is canceled with Escape."""
+        self.label.setEditingCanceledCallback(callback)
 
 
 ## @}

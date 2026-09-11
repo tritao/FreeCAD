@@ -25,6 +25,8 @@
 
 
 #include <Gui/Control.h>
+#include <Gui/Document.h>
+#include <Gui/Application.h>
 #include <Mod/Fem/App/FemSetElementNodesObject.h>
 #include <Mod/Fem/Gui/TaskDlgCreateElementSet.h>
 
@@ -40,7 +42,7 @@ bool ViewProviderSetElementNodes::doubleClicked()
     Gui::TaskView::TaskDialog* dlg = new TaskDlgCreateElementSet(
         getObject<Fem::FemSetElementNodesObject>()
     );
-    Gui::Control().showDialog(dlg);
+    Gui::Control().showDialog(dlg, Gui::Application::Instance->activeDocument()->getDocument());
     return true;
 }
 

@@ -236,7 +236,7 @@ class DressupPathBoundaryViewProvider(object):
     def setupTaskPanel(self, panel):
         self.panel = panel
         FreeCADGui.Control.closeDialog()
-        FreeCADGui.Control.showDialog(panel)
+        FreeCADGui.Control.showDialog(panel, FreeCADGui.ActiveDocument)
         panel.setupUi()
 
     def clearTaskPanel(self):

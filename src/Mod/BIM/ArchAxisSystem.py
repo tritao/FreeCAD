@@ -202,7 +202,7 @@ class _ViewProviderAxisSystem:
             return None
 
         taskd = AxisSystemTaskPanel(vobj.Object)
-        FreeCADGui.Control.showDialog(taskd)
+        FreeCADGui.Control.showDialog(taskd, FreeCADGui.ActiveDocument)
         return True
 
     def unsetEdit(self, vobj, mode):

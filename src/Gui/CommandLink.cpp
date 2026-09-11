@@ -335,7 +335,10 @@ void StdCmdLinkMake::activated(int)
     }
 
     if (objs.empty()) {
-        Gui::Control().showDialog(new TaskCommandLinkDialog(exec));
+        Gui::Control().showDialog(
+            new TaskCommandLinkDialog(exec),
+            Gui::Application::Instance->activeDocument()->getDocument()
+        );
     }
     else {
         Selection().selStackPush();

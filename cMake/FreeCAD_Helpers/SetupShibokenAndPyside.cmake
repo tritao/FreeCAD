@@ -192,6 +192,25 @@ file(WRITE "${OUT}"
 )
 ]])
 
+function(_freecad_collect_qrc_dependencies out_var qrc_file)
+    set(_qrc_dependencies)
+    if(EXISTS "${qrc_file}")
+        file(READ "${qrc_file}" _qrc_contents)
+        string(REGEX MATCHALL "<file[^>]*>[^<]+</file>" _qrc_entries "${_qrc_contents}")
+        get_filename_component(_qrc_dir "${qrc_file}" DIRECTORY)
+        foreach(_qrc_entry IN LISTS _qrc_entries)
+            string(REGEX REPLACE ".*<file[^>]*>([^<]+)</file>.*" "\\1" _qrc_path "${_qrc_entry}")
+            if(NOT IS_ABSOLUTE "${_qrc_path}")
+                set(_qrc_path "${_qrc_dir}/${_qrc_path}")
+            endif()
+            get_filename_component(_qrc_path "${_qrc_path}" ABSOLUTE)
+            list(APPEND _qrc_dependencies "${_qrc_path}")
+        endforeach()
+        list(REMOVE_DUPLICATES _qrc_dependencies)
+    endif()
+    set(${out_var} "${_qrc_dependencies}" PARENT_SCOPE)
+endfunction()
+
 # Function to generate Python files for Qt resources
 # Usage -
 #   PYSIDE_WRAP_RC(
@@ -224,6 +243,7 @@ function(PYSIDE_WRAP_RC)
     foreach(it ${arg_RESOURCES})
         get_filename_component(rcpy_base ${it} NAME_WE)
         get_filename_component(infile ${it} ABSOLUTE)
+        _freecad_collect_qrc_dependencies(_qrc_depends "${infile}")
         file(RELATIVE_PATH infile_relative_to_root "${CMAKE_SOURCE_DIR}" "${infile}")
         set(rcpy_relative "${rcpy_base}_rc.py")
         set(rcpy "${CMAKE_CURRENT_BINARY_DIR}/${rcpy_relative}")
@@ -240,6 +260,7 @@ function(PYSIDE_WRAP_RC)
                 MAIN_DEPENDENCY "${infile}"
                 DEPENDS "${PYSIDE_RCC_EXECUTABLE}"
                         "${CMAKE_BINARY_DIR}/cMake/FreeCAD_Helpers/PysideQtRccGen.cmake"
+                        ${_qrc_depends}
                 COMMENT "Generating binary Python Qt Resource files for ${infile_relative_to_root}"
             )
             if(NOT "${arg_RELATIVE}" STREQUAL "")
@@ -252,7 +273,7 @@ function(PYSIDE_WRAP_RC)
             add_custom_command(OUTPUT "${rcpy}"
                 COMMAND "${PYSIDE_RCC_EXECUTABLE}" ${PYSIDE_RCC_OPTIONS} "${infile}" -o "${rcpy}"
                 MAIN_DEPENDENCY "${infile}"
-                DEPENDS "${PYSIDE_RCC_EXECUTABLE}"
+                DEPENDS "${PYSIDE_RCC_EXECUTABLE}" ${_qrc_depends}
                 COMMENT "Generating Python Qt Resource file for ${infile_relative_to_root}"
             )
             if(NOT "${arg_RELATIVE}" STREQUAL "")

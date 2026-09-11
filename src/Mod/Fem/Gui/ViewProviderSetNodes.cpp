@@ -24,6 +24,8 @@
 
 
 #include <Gui/Control.h>
+#include <Gui/Document.h>
+#include <Gui/Application.h>
 #include <Mod/Fem/App/FemSetNodesObject.h>
 #include <Mod/Fem/Gui/TaskDlgCreateNodeSet.h>
 
@@ -37,7 +39,7 @@ PROPERTY_SOURCE(FemGui::ViewProviderSetNodes, Gui::ViewProviderGeometryObject)
 bool ViewProviderSetNodes::doubleClicked()
 {
     Gui::TaskView::TaskDialog* dlg = new TaskDlgCreateNodeSet(getObject<Fem::FemSetNodesObject>());
-    Gui::Control().showDialog(dlg);
+    Gui::Control().showDialog(dlg, Gui::Application::Instance->activeDocument()->getDocument());
     return true;
 }
 
@@ -45,7 +47,7 @@ bool ViewProviderSetNodes::doubleClicked()
 bool ViewProviderSetNodes::setEdit(int)
 {
     Gui::TaskView::TaskDialog* dlg = new TaskDlgCreateNodeSet(getObject<Fem::FemSetNodesObject>());
-    Gui::Control().showDialog(dlg);
+    Gui::Control().showDialog(dlg, Gui::Application::Instance->activeDocument()->getDocument());
     return true;
 }
 

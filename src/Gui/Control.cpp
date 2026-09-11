@@ -26,6 +26,7 @@
 #include <QDockWidget>
 #include <QPointer>
 
+#include <App/Application.h>
 #include <App/Document.h>
 #include <Gui/Application.h>
 #include <Gui/ComboView.h>
@@ -43,6 +44,25 @@ using namespace Gui;
 using namespace std;
 
 /* TRANSLATOR Gui::ControlSingleton */
+
+namespace
+{
+App::Document* dialogDocument(Gui::TaskView::TaskDialog* dlg)
+{
+    if (!dlg) {
+        return nullptr;
+    }
+
+    if (auto* doc = dlg->getDocument()) {
+        return doc;
+    }
+    if (dlg->getDocumentName().empty()) {
+        return nullptr;
+    }
+
+    return App::GetApplication().getDocument(dlg->getDocumentName().c_str());
+}
+}  // namespace
 
 ControlSingleton* ControlSingleton::_pcSingleton = nullptr;
 
@@ -148,7 +168,25 @@ void ControlSingleton::showModelView()
 
 void ControlSingleton::showDialog(Gui::TaskView::TaskDialog* dlg, App::Document* attachTo)
 {
-    attachTo = docOrDefault(attachTo);
+    if (!dlg) {
+        qWarning() << "ControlSingleton::showDialog: Task dialog is null";
+        return;
+    }
+
+    if (!attachTo) {
+        attachTo = dialogDocument(dlg);
+    }
+    if (!attachTo) {
+        attachTo = docOrDefault(attachTo);
+        if (attachTo) {
+            static bool warnedImplicitDocument = false;
+            if (!warnedImplicitDocument) {
+                qWarning() << "ControlSingleton::showDialog: Implicit task dialog attachment is "
+                              "deprecated; pass the document explicitly";
+                warnedImplicitDocument = true;
+            }
+        }
+    }
     if (!attachTo) {
         qWarning() << "ControlSingleton::showDialog: Cannot attach to nullptr document";
         return;
@@ -160,17 +198,16 @@ void ControlSingleton::showDialog(Gui::TaskView::TaskDialog* dlg, App::Document*
         return;
     }
 
+    dlg->setDocument(attachTo);
+
     // only one dialog at a time, print a warning instead of raising an assert
     TaskView::TaskDialog* foundDialog = taskView->dialog(attachTo);
-    if (!dlg || foundDialog == dlg) {
+    if (foundDialog == dlg) {
         if (dlg) {
             qWarning() << "ControlSingleton::showDialog: Can't show "
                        << dlg->metaObject()->className()
                        << " since there is already an active task dialog in Document "
                        << (attachTo ? attachTo->getName() : "''");
-        }
-        else {
-            qWarning() << "ControlSingleton::showDialog: Task dialog is null";
         }
         return;
     }
