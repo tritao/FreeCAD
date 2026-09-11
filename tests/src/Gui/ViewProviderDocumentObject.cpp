@@ -20,6 +20,7 @@
 #include <Gui/Selection/SoFCUnifiedSelection.h>
 #include <Gui/ViewContext.h>
 #include <Gui/ViewInstance.h>
+#include <Gui/ViewInstance.h>
 #include <Gui/ViewProviderDocumentObject.h>
 #include <Gui/ViewProviderDocumentObjectGroup.h>
 
