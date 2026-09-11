@@ -47,6 +47,7 @@ import FreeCAD
 import ArchCommands
 import ArchIFC
 import Draft
+import ArchRepresentation
 
 from draftutils import params
 
