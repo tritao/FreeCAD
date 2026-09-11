@@ -245,6 +245,10 @@ public:
     std::list<MDIView*> getMDIViews(bool includePassive = false) const;
     /// returns a list of all MDI views of a certain type
     std::list<MDIView*> getMDIViewsOfType(const Base::Type& typeId, bool includePassive = false) const;
+    /// Reapply active override modes on this document's 3D views.
+    void reapplyViewOverrides();
+    /// Reapply active override modes only when the given display mode became available.
+    void reapplyViewOverrides(const std::string& modeType);
     MDIView* setActiveView(
         const ViewProviderDocumentObject* vp = nullptr,
         Base::Type typeId = Base::Type()

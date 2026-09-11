@@ -2127,6 +2127,8 @@ void Document::slotFinishRestoreDocument(const App::Document& doc)
 
     reapplyViewOverrides();
 
+    reapplyViewOverrides();
+
     // reset modified flag
     setModified(doc.testStatus(App::Document::LinkStampChanged));
 }

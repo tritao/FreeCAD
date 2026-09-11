@@ -2194,6 +2194,10 @@ const App::LinkBaseExtension* ViewProviderLink::getLinkExtension() const
 
 void ViewProviderLink::updateData(const App::Property* prop)
 {
+    if (!pcObject || !pcObject->isAttachedToDocument() || !isAttachedToDocument()) {
+        return;
+    }
+
     if (childVp) {
         childVp->updateData(prop);
     }
@@ -2302,6 +2306,12 @@ void ViewProviderLink::updateDataPrivate(App::LinkBaseExtension* ext, const App:
             // applyColors();
             signalChangeIcon();
             updateWindingOrder(linkView, ext);
+
+            if (!App::GetApplication().isRestoring()) {
+                if (auto* guiDoc = getDocument()) {
+                    guiDoc->reapplyViewOverrides();
+                }
+            }
         }
     }
     else if (prop == ext->getLinkTransformProperty()) {

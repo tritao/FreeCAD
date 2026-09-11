@@ -44,6 +44,9 @@ class TestArchFootprintGui(TestArchBaseGui.TestArchBaseGui):
             polylines.append(polyline)
         return polylines
 
+    def _project_v_values(self, polyline, origin, axis_v):
+        return [point.sub(origin).dot(axis_v) for point in polyline]
+
     def _make_hosted_window(self, wall, name, x_start, z_start, width=800.0, height=1200.0):
         sketch = self.document.addObject("Sketcher::SketchObject", name + "Sketch")
         sketch.addGeometry(
@@ -215,6 +218,106 @@ class TestArchFootprintGui(TestArchBaseGui.TestArchBaseGui):
             self.assertAlmostEqual(vmin - host_vmin, expected_inset, delta=1e-6)
             self.assertAlmostEqual(host_vmax - vmax, expected_inset, delta=1e-6)
 
+    def test_symbolic_equipment_populates_line_footprint_display_data(self):
+        """Edge-only equipment should populate line footprint data in plan mode."""
+
+        base = self.document.addObject("Part::Feature", "EquipmentSymbol")
+        base.Shape = Part.makeCompound(
+            [
+                Part.makeLine(FreeCAD.Vector(0, 0, 0), FreeCAD.Vector(600, 0, 0)),
+                Part.makeLine(FreeCAD.Vector(600, 0, 0), FreeCAD.Vector(600, 400, 0)),
+                Part.makeLine(FreeCAD.Vector(600, 400, 0), FreeCAD.Vector(0, 400, 0)),
+                Part.makeLine(FreeCAD.Vector(0, 400, 0), FreeCAD.Vector(0, 0, 0)),
+                Part.makeLine(FreeCAD.Vector(300, 0, 0), FreeCAD.Vector(300, 400, 0)),
+            ]
+        )
+
+        equipment = Arch.makeEquipment(base)
+        self.document.recompute()
+        self.pump_gui_events()
+
+        proxy = equipment.ViewObject.Proxy
+        self.assertIn("Footprint", equipment.ViewObject.listDisplayModes())
+        self.assertTrue(hasattr(proxy, "lcoords"))
+        self.assertTrue(hasattr(proxy, "lset"))
+        self.assertGreater(proxy.lcoords.point.getNum(), 0)
+        self.assertGreater(proxy.lset.numVertices.getNum(), 0)
+
+    def test_equipment_plan_symbols_drive_line_footprint_display_data(self):
+        """Authored 2D plan symbols should override generated equipment line footprints."""
+
+        box = self.document.addObject("Part::Box", "EquipmentBox")
+        box.Length = 800
+        box.Width = 500
+        box.Height = 900
+
+        plan = self.document.addObject("Part::Feature", "EquipmentPlan")
+        plan.Shape = Part.makeCompound(
+            [
+                Part.makeLine(FreeCAD.Vector(0, 0, 0), FreeCAD.Vector(1000, 0, 0)),
+                Part.makeLine(FreeCAD.Vector(1000, 0, 0), FreeCAD.Vector(1000, 700, 0)),
+                Part.makeLine(FreeCAD.Vector(1000, 700, 0), FreeCAD.Vector(0, 700, 0)),
+                Part.makeLine(FreeCAD.Vector(0, 700, 0), FreeCAD.Vector(0, 0, 0)),
+            ]
+        )
+
+        equipment = Arch.makeEquipment(box)
+        equipment.PlanSymbols = [plan]
+        self.document.recompute()
+        self.pump_gui_events()
+
+        proxy = equipment.ViewObject.Proxy
+        self.assertGreater(proxy.lcoords.point.getNum(), 0)
+        self.assertGreater(proxy.lset.numVertices.getNum(), 0)
+
+        polylines = self._get_line_polylines(proxy)
+        points = [point for polyline in polylines for point in polyline]
+        xs = [point.x for point in points]
+        ys = [point.y for point in points]
+        self.assertAlmostEqual(0.0, min(xs), delta=1e-6)
+        self.assertAlmostEqual(1000.0, max(xs), delta=1e-6)
+        self.assertAlmostEqual(0.0, min(ys), delta=1e-6)
+        self.assertAlmostEqual(700.0, max(ys), delta=1e-6)
+
+    def test_late_equipment_plan_symbols_refresh_line_footprint_display_data(self):
+        """Assigning plan symbols after creation should refresh cached footprint linework."""
+
+        box = self.document.addObject("Part::Box", "LateEquipmentBox")
+        box.Length = 800
+        box.Width = 500
+        box.Height = 900
+
+        equipment = Arch.makeEquipment(box)
+        self.document.recompute()
+        self.pump_gui_events()
+
+        plan = self.document.addObject("Part::Feature", "LateEquipmentPlan")
+        plan.Shape = Part.makeCompound(
+            [
+                Part.makeLine(FreeCAD.Vector(0, 0, 0), FreeCAD.Vector(1000, 0, 0)),
+                Part.makeLine(FreeCAD.Vector(1000, 0, 0), FreeCAD.Vector(1000, 700, 0)),
+                Part.makeLine(FreeCAD.Vector(1000, 700, 0), FreeCAD.Vector(0, 700, 0)),
+                Part.makeLine(FreeCAD.Vector(0, 700, 0), FreeCAD.Vector(0, 0, 0)),
+            ]
+        )
+
+        equipment.PlanSymbols = [plan]
+        self.document.recompute()
+        self.pump_gui_events()
+
+        proxy = equipment.ViewObject.Proxy
+        self.assertGreater(proxy.lcoords.point.getNum(), 0)
+        self.assertGreater(proxy.lset.numVertices.getNum(), 0)
+
+        polylines = self._get_line_polylines(proxy)
+        points = [point for polyline in polylines for point in polyline]
+        xs = [point.x for point in points]
+        ys = [point.y for point in points]
+        self.assertAlmostEqual(0.0, min(xs), delta=1e-6)
+        self.assertAlmostEqual(1000.0, max(xs), delta=1e-6)
+        self.assertAlmostEqual(0.0, min(ys), delta=1e-6)
+        self.assertAlmostEqual(700.0, max(ys), delta=1e-6)
+
     def test_window_footprint_ignores_openings_above_cut_height(self):
         """Openings above the cut plane should not emit committed footprint symbols."""
 
@@ -277,7 +380,7 @@ class TestArchFootprintGui(TestArchBaseGui.TestArchBaseGui):
         self.assertAlmostEqual(closed_leaf_length, 900.0, delta=1.0)
 
         cut_z, base_z = proxy._get_footprint_cut_context()
-        profile = proxy._get_opening_section_profile(door.Shape, cut_z)
+        profile = proxy._get_hosted_opening_plan_frame(door.Shape, cut_z, base_z)
         self.assertIsNotNone(profile)
         host_bounds = proxy._get_host_plan_v_bounds(
             profile["origin"], profile["axis_u"], profile["axis_v"]
@@ -359,9 +462,9 @@ class TestArchFootprintGui(TestArchBaseGui.TestArchBaseGui):
             wall,
             "LegacyTranslatedOpening",
             x_start=5800,
-            z_start=0,
+            z_start=700,
             width=1000.0,
-            height=2100.0,
+            height=1200.0,
         )
         self.pump_gui_events()
 
@@ -391,25 +494,40 @@ class TestArchFootprintGui(TestArchBaseGui.TestArchBaseGui):
             wall,
             "LegacyOpeningWidthRefresh",
             x_start=900,
-            z_start=0,
+            z_start=700,
             width=1000.0,
-            height=2100.0,
+            height=1200.0,
         )
         self.pump_gui_events()
 
-        def _y_span():
-            points = opening.ViewObject.Proxy.lcoords.point
-            ys = [points[idx][1] for idx in range(points.getNum())]
-            return max(ys) - min(ys)
+        def _window_symbol_v_span():
+            proxy = opening.ViewObject.Proxy
+            cut_z, base_z = proxy._get_footprint_cut_context()
+            frame = proxy._get_hosted_opening_plan_frame(opening.Shape, cut_z, base_z)
+            self.assertIsNotNone(frame)
+            host_bounds = proxy._get_host_plan_v_bounds(
+                frame["origin"], frame["axis_u"], frame["axis_v"]
+            )
+            self.assertIsNotNone(host_bounds)
+            polylines = self._get_line_polylines(proxy)
+            self.assertGreaterEqual(len(polylines), 1)
+            v_values = self._project_v_values(polylines[0], frame["origin"], frame["axis_v"])
+            return (max(v_values) - min(v_values), host_bounds)
 
         self.assertGreater(opening.ViewObject.Proxy.lcoords.point.getNum(), 0)
-        self.assertAlmostEqual(_y_span(), 200.0, delta=1.0)
+        span, host_bounds = _window_symbol_v_span()
+        host_vmin, host_vmax = host_bounds
+        expected_inset = min((host_vmax - host_vmin) * 0.25, 30.0)
+        self.assertAlmostEqual(span, (host_vmax - host_vmin) - (2.0 * expected_inset), delta=1.0)
 
         wall.Width = 400
         self.document.recompute()
         self.pump_gui_events()
 
-        self.assertAlmostEqual(_y_span(), 400.0, delta=1.0)
+        span, host_bounds = _window_symbol_v_span()
+        host_vmin, host_vmax = host_bounds
+        expected_inset = min((host_vmax - host_vmin) * 0.25, 30.0)
+        self.assertAlmostEqual(span, (host_vmax - host_vmin) - (2.0 * expected_inset), delta=1.0)
 
     def test_null_shape_opening_at_floor_uses_door_footprint_symbol(self):
         """Floor-level legacy openings should emit the door-style footprint symbol."""
@@ -430,5 +548,10 @@ class TestArchFootprintGui(TestArchBaseGui.TestArchBaseGui):
         self.pump_gui_events()
 
         proxy = opening.ViewObject.Proxy
+        polylines = self._get_line_polylines(proxy)
         self.assertGreater(proxy.lcoords.point.getNum(), 0)
-        self.assertEqual(proxy.lset.numVertices.getNum(), 2)
+        self.assertEqual(len(polylines), 3)
+        self.assertEqual(len(polylines[0]), 2)
+        self.assertEqual(len(polylines[1]), 2)
+        self.assertGreater(len(polylines[2]), 2)
+        self.assertTrue(polylines[0][0].isEqual(polylines[1][0], 1e-6))

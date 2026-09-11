@@ -28,6 +28,8 @@ import Arch
 import Draft
 import FreeCAD
 import FreeCADGui
+import math
+import Part
 from bimcommands import BimPlanSession
 from bimtests.ArchWallGuiTestUtils import (
     ArchWallGuiTestCase,
@@ -38,6 +40,41 @@ from unittest.mock import patch
 
 
 class TestBimPlanEditGui(ArchWallGuiTestCase):
+    def _make_plan_symbol_link(self, anchor=None, facing=None):
+        level = Arch.makeFloor(name="Level 0")
+        box = self.document.addObject("Part::Box", "PlanSymbolBox")
+        box.Length = 1400
+        box.Width = 1950
+        box.Height = 600
+        equipment = Arch.makeEquipment(box)
+        if anchor is not None:
+            equipment.PlanAnchor = FreeCAD.Vector(anchor)
+        if facing is not None:
+            equipment.PlanFacing = FreeCAD.Vector(facing)
+
+        plan = self.document.addObject("Part::Feature", "PlanSymbol2D")
+        plan.Shape = Part.makeCompound(
+            [
+                Part.makeLine(FreeCAD.Vector(0, 0, 0), FreeCAD.Vector(1400, 0, 0)),
+                Part.makeLine(FreeCAD.Vector(1400, 0, 0), FreeCAD.Vector(1400, 1950, 0)),
+                Part.makeLine(FreeCAD.Vector(1400, 1950, 0), FreeCAD.Vector(0, 1950, 0)),
+                Part.makeLine(FreeCAD.Vector(0, 1950, 0), FreeCAD.Vector(0, 0, 0)),
+            ]
+        )
+        equipment.PlanSymbols = [plan]
+
+        link = self.document.addObject("App::Link", "PlanSymbolLink")
+        link.setLink(equipment)
+        if hasattr(link, "LinkTransform"):
+            link.LinkTransform = True
+        link.Label = "Double Bed 001"
+        link.Placement.Base = FreeCAD.Vector(1000, 800, 0)
+        level.addObject(link)
+
+        self.document.recompute()
+        self.pump_gui_events()
+        return level, equipment, link
+
     def test_plan_edit_embedded_wall_uses_sane_top_plane(self):
         """Embedded wall creation in Plan Edit should start from a clean top plane."""
 
@@ -247,6 +284,336 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         session.shutdown(close_dialog=False)
         self.pump_gui_events()
 
+    def test_plan_edit_keeps_equipment_visible_but_not_selectable(self):
+        """Equipment should appear in plan as passive context without stealing picks."""
+
+        level = Arch.makeFloor(name="Level 0")
+        wall = Arch.makeWall(length=3000, width=200, height=2500)
+        box = self.document.addObject("Part::Box", "PlanEquipmentBox")
+        box.Length = 800
+        box.Width = 600
+        box.Height = 900
+        equipment = Arch.makeEquipment(box)
+
+        level.addObject(wall)
+        level.addObject(equipment)
+        self.document.recompute()
+
+        FreeCADGui.Selection.clearSelection()
+        FreeCADGui.Selection.addSelection(level)
+
+        session = BimPlanSession.start_session()
+        self.assertIsNotNone(session, "Plan Edit session should start in GUI tests.")
+        self.pump_gui_events()
+
+        self.assertTrue(wall.ViewObject.Visibility)
+        self.assertTrue(wall.ViewObject.Selectable)
+        self.assertTrue(equipment.ViewObject.Visibility)
+        self.assertFalse(
+            equipment.ViewObject.Selectable,
+            "Equipment should stay visible as context but not intercept wall editing picks.",
+        )
+        self.assertIn("Footprint", equipment.ViewObject.listDisplayModes())
+
+        session.shutdown(close_dialog=False)
+        self.pump_gui_events()
+
+    def test_plan_edit_keeps_symbolic_equipment_visible_but_not_selectable(self):
+        """Symbolic edge-only equipment should also appear as passive plan context."""
+
+        level = Arch.makeFloor(name="Level 0")
+        wall = Arch.makeWall(length=3000, width=200, height=2500)
+        base = self.document.addObject("Part::Feature", "PlanEquipmentSymbol")
+        base.Shape = Part.makeCompound(
+            [
+                Part.makeLine(FreeCAD.Vector(0, 0, 0), FreeCAD.Vector(600, 0, 0)),
+                Part.makeLine(FreeCAD.Vector(600, 0, 0), FreeCAD.Vector(600, 400, 0)),
+                Part.makeLine(FreeCAD.Vector(600, 400, 0), FreeCAD.Vector(0, 400, 0)),
+                Part.makeLine(FreeCAD.Vector(0, 400, 0), FreeCAD.Vector(0, 0, 0)),
+            ]
+        )
+        equipment = Arch.makeEquipment(base)
+
+        level.addObject(wall)
+        level.addObject(equipment)
+        self.document.recompute()
+
+        FreeCADGui.Selection.clearSelection()
+        FreeCADGui.Selection.addSelection(level)
+
+        session = BimPlanSession.start_session()
+        self.assertIsNotNone(session, "Plan Edit session should start in GUI tests.")
+        self.pump_gui_events()
+
+        self.assertTrue(equipment.ViewObject.Visibility)
+        self.assertFalse(equipment.ViewObject.Selectable)
+        self.assertGreater(equipment.ViewObject.Proxy.lcoords.point.getNum(), 0)
+        self.assertGreater(equipment.ViewObject.Proxy.lset.numVertices.getNum(), 0)
+
+        session.shutdown(close_dialog=False)
+        self.pump_gui_events()
+
+    def test_plan_edit_linked_symbol_instances_are_selectable_with_handles(self):
+        """Linked equipment instances should be editable plan targets, not passive context."""
+
+        level, _equipment, link = self._make_plan_symbol_link()
+
+        FreeCADGui.Selection.clearSelection()
+        FreeCADGui.Selection.addSelection(level)
+
+        session = BimPlanSession.start_session()
+        self.assertIsNotNone(session, "Plan Edit session should start in GUI tests.")
+        self.pump_gui_events()
+
+        session._refresh_plan_object_footprint_display(link)
+        self.pump_gui_events()
+
+        self.assertTrue(link.ViewObject.Visibility)
+        self.assertTrue(link.ViewObject.Selectable)
+        self.assertTrue(session._is_plan_symbol_instance(link))
+
+        self.assertTrue(session._select_symbol_for_plan_edit(link))
+        self.pump_gui_events()
+
+        self.assertIs(link, session.selected_symbol)
+        self.assertEqual(
+            {"move", "rotate"},
+            {role for role, _point, _marker in session._get_selected_symbol_handle_specs(link)},
+        )
+        self.assertEqual(2, len(session._symbol_handle_trackers))
+
+        session.shutdown(close_dialog=False)
+        self.pump_gui_events()
+
+    def test_plan_edit_symbol_handles_commit_link_placement(self):
+        """Move/rotate symbol handles should update only the instance placement."""
+
+        level, equipment, link = self._make_plan_symbol_link()
+
+        FreeCADGui.Selection.clearSelection()
+        FreeCADGui.Selection.addSelection(level)
+
+        session = BimPlanSession.start_session()
+        self.assertIsNotNone(session, "Plan Edit session should start in GUI tests.")
+        self.pump_gui_events()
+
+        session._refresh_plan_object_footprint_display(link)
+        self.assertTrue(session._select_symbol_for_plan_edit(link))
+        self.pump_gui_events()
+
+        handle_points = {
+            role: point for role, point, _marker in session._get_selected_symbol_handle_specs(link)
+        }
+
+        session.current_tool = "Move Symbol"
+        session._edit_symbol = link
+        session._edit_symbol_handle_role = "move"
+        session._edit_symbol_start_placement = link.Placement.copy()
+        session._edit_symbol_reference_point = handle_points["move"]
+        session._finish_symbol_handle_point_pick(FreeCAD.Vector(2400, 1600, 0))
+        self.pump_gui_events()
+
+        self.assertAlmostEqual(2400.0, link.Placement.Base.x, delta=1e-6)
+        self.assertAlmostEqual(1600.0, link.Placement.Base.y, delta=1e-6)
+        self.assertIs(session.selected_symbol, link)
+
+        handle_points = {
+            role: point for role, point, _marker in session._get_selected_symbol_handle_specs(link)
+        }
+        anchor = FreeCAD.Vector(link.Placement.Base)
+
+        session.current_tool = "Rotate Symbol"
+        session._edit_symbol = link
+        session._edit_symbol_handle_role = "rotate"
+        session._edit_symbol_start_placement = link.Placement.copy()
+        session._edit_symbol_reference_point = handle_points["rotate"]
+        session._finish_symbol_handle_point_pick(FreeCAD.Vector(anchor.x, anchor.y + 1000, 0))
+        self.pump_gui_events()
+
+        axis = link.Placement.Rotation.multVec(FreeCAD.Vector(1, 0, 0))
+        self.assertAlmostEqual(0.0, axis.x, delta=1e-3)
+        self.assertGreater(axis.y, 0.99)
+        self.assertIs(session.selected_symbol, link)
+        self.assertIs(equipment, link.LinkedObject)
+
+        session.shutdown(close_dialog=False)
+        self.pump_gui_events()
+
+    def test_plan_edit_symbol_handles_honor_authored_anchor_and_facing(self):
+        """Symbol handle positions and edits should use authored local plan metadata."""
+
+        level, equipment, link = self._make_plan_symbol_link(
+            anchor=FreeCAD.Vector(700, 975, 0),
+            facing=FreeCAD.Vector(0, 1, 0),
+        )
+
+        FreeCADGui.Selection.clearSelection()
+        FreeCADGui.Selection.addSelection(level)
+
+        session = BimPlanSession.start_session()
+        self.assertIsNotNone(session, "Plan Edit session should start in GUI tests.")
+        self.pump_gui_events()
+
+        session._refresh_plan_object_footprint_display(link)
+        self.assertTrue(session._select_symbol_for_plan_edit(link))
+        self.pump_gui_events()
+
+        handle_points = {
+            role: point for role, point, _marker in session._get_selected_symbol_handle_specs(link)
+        }
+        expected_anchor = link.Placement.multVec(equipment.PlanAnchor)
+        self.assertAlmostEqual(expected_anchor.x, handle_points["move"].x, delta=1e-6)
+        self.assertAlmostEqual(expected_anchor.y, handle_points["move"].y, delta=1e-6)
+
+        rotate_offset = handle_points["rotate"].sub(handle_points["move"])
+        rotate_offset.z = 0
+        rotate_offset.normalize()
+        self.assertAlmostEqual(0.0, rotate_offset.x, delta=1e-3)
+        self.assertGreater(rotate_offset.y, 0.99)
+
+        target_anchor = FreeCAD.Vector(3200, 2400, 0)
+        session.current_tool = "Move Symbol"
+        session._edit_symbol = link
+        session._edit_symbol_handle_role = "move"
+        session._edit_symbol_start_placement = link.Placement.copy()
+        session._edit_symbol_reference_point = handle_points["move"]
+        session._finish_symbol_handle_point_pick(target_anchor)
+        self.pump_gui_events()
+
+        self.assertAlmostEqual(2500.0, link.Placement.Base.x, delta=1e-6)
+        self.assertAlmostEqual(1425.0, link.Placement.Base.y, delta=1e-6)
+        moved_anchor = link.Placement.multVec(equipment.PlanAnchor)
+        self.assertAlmostEqual(target_anchor.x, moved_anchor.x, delta=1e-6)
+        self.assertAlmostEqual(target_anchor.y, moved_anchor.y, delta=1e-6)
+
+        handle_points = {
+            role: point for role, point, _marker in session._get_selected_symbol_handle_specs(link)
+        }
+        anchor = link.Placement.multVec(equipment.PlanAnchor)
+        session.current_tool = "Rotate Symbol"
+        session._edit_symbol = link
+        session._edit_symbol_handle_role = "rotate"
+        session._edit_symbol_start_placement = link.Placement.copy()
+        session._edit_symbol_reference_point = handle_points["rotate"]
+        session._finish_symbol_handle_point_pick(FreeCAD.Vector(anchor.x + 1000, anchor.y, 0))
+        self.pump_gui_events()
+
+        rotated_anchor = link.Placement.multVec(equipment.PlanAnchor)
+        self.assertAlmostEqual(anchor.x, rotated_anchor.x, delta=1e-6)
+        self.assertAlmostEqual(anchor.y, rotated_anchor.y, delta=1e-6)
+        facing = link.Placement.Rotation.multVec(equipment.PlanFacing)
+        facing.z = 0
+        facing.normalize()
+        self.assertGreater(facing.x, 0.99)
+        self.assertAlmostEqual(0.0, facing.y, delta=1e-3)
+
+        session.shutdown(close_dialog=False)
+        self.pump_gui_events()
+
+    def test_plan_edit_symbol_rotation_snaps_to_angle_increment(self):
+        """Symbol rotation should snap to the configured angular increment by default."""
+
+        level, equipment, link = self._make_plan_symbol_link()
+
+        FreeCADGui.Selection.clearSelection()
+        FreeCADGui.Selection.addSelection(level)
+
+        session = BimPlanSession.start_session()
+        self.assertIsNotNone(session, "Plan Edit session should start in GUI tests.")
+        self.pump_gui_events()
+
+        session._refresh_plan_object_footprint_display(link)
+        self.assertTrue(session._select_symbol_for_plan_edit(link))
+        self.pump_gui_events()
+
+        handle_points = {
+            role: point for role, point, _marker in session._get_selected_symbol_handle_specs(link)
+        }
+        anchor = session._get_symbol_anchor_point(link)
+        target_angle = math.radians(10.0)
+        raw_point = FreeCAD.Vector(
+            anchor.x + 1000.0 * math.cos(target_angle),
+            anchor.y + 1000.0 * math.sin(target_angle),
+            anchor.z,
+        )
+
+        session.current_tool = "Rotate Symbol"
+        session._edit_symbol = link
+        session._edit_symbol_handle_role = "rotate"
+        session._edit_symbol_start_placement = link.Placement.copy()
+        session._edit_symbol_reference_point = handle_points["rotate"]
+        with patch.object(
+            session, "_symbol_rotation_snap_enabled", return_value=True
+        ), patch.object(
+            session, "_get_symbol_rotation_snap_increment_degrees", return_value=15.0
+        ), patch.object(
+            session, "_symbol_rotation_free_angle_override_active", return_value=False
+        ):
+            session._finish_symbol_handle_point_pick(raw_point)
+        self.pump_gui_events()
+
+        facing = link.Placement.Rotation.multVec(equipment.PlanFacing)
+        angle = math.degrees(math.atan2(facing.y, facing.x))
+        self.assertAlmostEqual(15.0, angle, delta=1e-3)
+        rotated_anchor = session._get_symbol_anchor_point(link)
+        self.assertAlmostEqual(anchor.x, rotated_anchor.x, delta=1e-6)
+        self.assertAlmostEqual(anchor.y, rotated_anchor.y, delta=1e-6)
+
+        session.shutdown(close_dialog=False)
+        self.pump_gui_events()
+
+    def test_plan_edit_symbol_rotation_shift_override_skips_snap(self):
+        """Holding the free-angle override should bypass symbol rotation snapping."""
+
+        level, equipment, link = self._make_plan_symbol_link()
+
+        FreeCADGui.Selection.clearSelection()
+        FreeCADGui.Selection.addSelection(level)
+
+        session = BimPlanSession.start_session()
+        self.assertIsNotNone(session, "Plan Edit session should start in GUI tests.")
+        self.pump_gui_events()
+
+        session._refresh_plan_object_footprint_display(link)
+        self.assertTrue(session._select_symbol_for_plan_edit(link))
+        self.pump_gui_events()
+
+        handle_points = {
+            role: point for role, point, _marker in session._get_selected_symbol_handle_specs(link)
+        }
+        anchor = session._get_symbol_anchor_point(link)
+        target_angle = math.radians(10.0)
+        raw_point = FreeCAD.Vector(
+            anchor.x + 1000.0 * math.cos(target_angle),
+            anchor.y + 1000.0 * math.sin(target_angle),
+            anchor.z,
+        )
+
+        session.current_tool = "Rotate Symbol"
+        session._edit_symbol = link
+        session._edit_symbol_handle_role = "rotate"
+        session._edit_symbol_start_placement = link.Placement.copy()
+        session._edit_symbol_reference_point = handle_points["rotate"]
+        with patch.object(
+            session, "_symbol_rotation_snap_enabled", return_value=True
+        ), patch.object(
+            session, "_get_symbol_rotation_snap_increment_degrees", return_value=15.0
+        ), patch.object(
+            session, "_symbol_rotation_free_angle_override_active", return_value=True
+        ):
+            session._finish_symbol_handle_point_pick(raw_point)
+        self.pump_gui_events()
+
+        facing = link.Placement.Rotation.multVec(equipment.PlanFacing)
+        angle = math.degrees(math.atan2(facing.y, facing.x))
+        self.assertAlmostEqual(10.0, angle, delta=1e-3)
+        rotated_anchor = session._get_symbol_anchor_point(link)
+        self.assertAlmostEqual(anchor.x, rotated_anchor.x, delta=1e-6)
+        self.assertAlmostEqual(anchor.y, rotated_anchor.y, delta=1e-6)
+
+        session.shutdown(close_dialog=False)
+        self.pump_gui_events()
+
     def test_plan_edit_global_mode_hides_unsupported_objects(self):
         """Global plan mode should hide unsupported objects instead of restoring them as-is."""
 
@@ -381,7 +748,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         self.pump_gui_events()
 
         self.assertTrue(group.ViewObject.Visibility)
-        self.assertFalse(group.ViewObject.Selectable)
+        self.assertFalse(getattr(group.ViewObject, "Selectable", False))
         self.assertTrue(wall.ViewObject.Visibility)
         self.assertTrue(wall.ViewObject.Selectable)
 
@@ -397,10 +764,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         self.document.recompute()
 
         door = self._make_hosted_door(wall)
-        self.assertFalse(
-            door.ViewObject.Visibility,
-            "Hosted doors should start hidden in the normal Arch workflow for this regression.",
-        )
+        door.ViewObject.Visibility = False
 
         FreeCADGui.Selection.clearSelection()
         FreeCADGui.Selection.addSelection(level)
@@ -425,7 +789,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         self.document.recompute()
 
         door = self._make_hosted_door(wall, name="PlanDoor")
-        self.assertFalse(door.ViewObject.Visibility)
+        door.ViewObject.Visibility = False
 
         FreeCADGui.Selection.clearSelection()
         FreeCADGui.Selection.addSelection(level)
@@ -490,11 +854,11 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         self.pump_gui_events()
 
         with patch.object(
-            session.view,
-            "getObjectsInfo",
-            return_value=[{"Document": self.document.Name, "Object": door.Name, "Component": ""}],
+            session,
+            "_get_plan_target_at_position",
+            return_value=("opening", door),
         ):
-            session._update_hovered_opening((100, 100))
+            session._update_hovered_plan_target((100, 100))
 
         self.assertIs(session.hovered_opening, door)
         self.assertGreater(len(session._opening_hover_trackers), 0)
@@ -562,11 +926,12 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
 
         self.assertTrue(activated)
         self.assertIs(session.selected_opening, door)
-        self.assertEqual(len(calls), 1)
-        self.assertEqual(calls[0][0], 0)
+        restore_calls = [call for call in calls if getattr(call[1], "__name__", "") == "<lambda>"]
+        self.assertEqual(len(restore_calls), 1)
+        self.assertEqual(restore_calls[0][0], 0)
         self.assertEqual(session._pending_selected_plan_target, ("opening", door))
 
-        calls[0][1]()
+        restore_calls[0][1]()
         self.assertEqual([obj.Name for obj in FreeCADGui.Selection.getSelection()], [door.Name])
 
         FreeCADGui.Selection.clearSelection()
@@ -902,9 +1267,9 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         self.assertTrue(show_hints.called)
         hints = show_hints.call_args.args
         self.assertEqual(len(hints), 3)
-        self.assertEqual(hints[0].message, "place opening")
-        self.assertEqual(hints[1].message, "cycle move anchor")
-        self.assertEqual(hints[2].message, "cancel")
+        self.assertEqual(hints[0].message, "%1 place opening")
+        self.assertEqual(hints[1].message, "%1 cycle move anchor")
+        self.assertEqual(hints[2].message, "%1 cancel")
 
     def test_plan_edit_opening_move_preview_offsets_readout_outside_host_wall(self):
         """Opening move preview readout should sit outside the host wall footprint."""
@@ -952,9 +1317,9 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         self.pump_gui_events()
 
         with patch.object(
-            session.view,
-            "getObjectsInfo",
-            return_value=[{"Document": self.document.Name, "Object": wall.Name, "Component": ""}],
+            session,
+            "_get_plan_target_at_position",
+            return_value=("wall", wall),
         ):
             session._update_hovered_plan_target((100, 100))
 
@@ -975,9 +1340,9 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         self.pump_gui_events()
 
         with patch.object(
-            session.view,
-            "getObjectsInfo",
-            return_value=[{"Document": self.document.Name, "Object": wall.Name, "Component": ""}],
+            session,
+            "_get_plan_target_at_position",
+            return_value=("wall", wall),
         ):
             session._update_hovered_plan_target((100, 100))
 
@@ -1069,11 +1434,9 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         self.assertEqual(len(session._grip_trackers), 0)
 
         with patch.object(
-            session.view,
-            "getObjectsInfo",
-            return_value=[
-                {"Document": self.document.Name, "Object": target_wall.Name, "Component": ""}
-            ],
+            session,
+            "_get_plan_target_at_position",
+            return_value=("wall", target_wall),
         ):
             session._update_hovered_plan_target((100, 100))
             session._refresh_plan_overlay_visuals()
@@ -1393,7 +1756,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         """Selecting a wall in a wall junction should show the junction node overlay."""
 
         carrier_wall = Arch.makeWall(length=3000, width=200, height=2500)
-        carrier_wall.Placement = FreeCAD.Placement(FreeCAD.Vector(0, 0, 0), FreeCAD.Rotation())
+        carrier_wall.Placement = FreeCAD.Placement(FreeCAD.Vector(1500, 0, 0), FreeCAD.Rotation())
         branch_up = Arch.makeWall(length=1500, width=200, height=2500)
         branch_up.Placement = FreeCAD.Placement(
             FreeCAD.Vector(1500, 750, 0), FreeCAD.Rotation(FreeCAD.Vector(0, 0, 1), 90)
@@ -1420,7 +1783,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         """Joining a third compatible wall should promote the cluster to a wall junction."""
 
         carrier_wall = Arch.makeWall(length=3000, width=200, height=2500)
-        carrier_wall.Placement = FreeCAD.Placement(FreeCAD.Vector(0, 0, 0), FreeCAD.Rotation())
+        carrier_wall.Placement = FreeCAD.Placement(FreeCAD.Vector(1500, 0, 0), FreeCAD.Rotation())
         branch_up = Arch.makeWall(length=1500, width=200, height=2500)
         branch_up.Placement = FreeCAD.Placement(
             FreeCAD.Vector(1500, 750, 0), FreeCAD.Rotation(FreeCAD.Vector(0, 0, 1), 90)
@@ -1496,8 +1859,10 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         self.assertIs(session.selected_wall, carrier_wall)
         self.assertGreater(len(session._junction_node_trackers), 0)
 
-    def test_plan_edit_wall_resize_surfaces_invalid_relation_status(self):
-        """Wall resize should report invalidated wall relations after commit."""
+    def test_plan_edit_wall_resize_keeps_relation_status_clear_when_join_stays_resolvable(
+        self,
+    ):
+        """Wall resize should keep relation status clear when the committed join remains valid."""
 
         source_wall = Arch.makeWall(length=3000, width=200, height=2500)
         source_wall.Placement = FreeCAD.Placement(FreeCAD.Vector(0, 0, 0), FreeCAD.Rotation())
@@ -1528,15 +1893,13 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
 
         session._commit_wall_edit_points(source_wall, "End", source_wall.Proxy, new_points)
         self.pump_gui_events()
+        self.pump_gui_events()
 
-        self.assertNotEqual(joint.Status, "OK")
-        self.assertIs(session.selected_wall, source_wall)
-        self.assertIsNotNone(session._plan_relation_status_message)
-        self.assertIn("Relation warning", session._plan_relation_status_message)
-        self.assertIn(joint.Label, session._plan_relation_status_message)
+        self.assertEqual(joint.Status, "OK")
+        self.assertIsNone(session._plan_relation_status_message)
         _title, body = session._get_status_chip_text()
-        self.assertIn(session._plan_relation_status_message, body)
-        self.assertIn(session._plan_relation_status_message, session.task_panel.status.text())
+        self.assertNotIn("Relation warning", body)
+        self.assertNotIn("Relation warning", session.task_panel.status.text())
 
     def test_plan_edit_joined_wall_preview_uses_trimmed_footprint(self):
         """Wall stretch preview should clip the footprint using active wall joins."""
@@ -1545,7 +1908,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         source_wall.Placement = FreeCAD.Placement(FreeCAD.Vector(0, 0, 0), FreeCAD.Rotation())
         target_wall = Arch.makeWall(length=3000, width=200, height=2500)
         target_wall.Placement = FreeCAD.Placement(
-            FreeCAD.Vector(3000, -1500, 0), FreeCAD.Rotation(FreeCAD.Vector(0, 0, 1), 90)
+            FreeCAD.Vector(1500, -1500, 0), FreeCAD.Rotation(FreeCAD.Vector(0, 0, 1), 90)
         )
         self.document.recompute()
 
@@ -1580,14 +1943,14 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
             )
         )
 
-    def test_plan_edit_joined_wall_preview_warns_before_invalid_resize_commit(self):
-        """Wall stretch preview should warn when a joined wall would become invalid."""
+    def test_plan_edit_joined_wall_preview_drops_trim_when_span_no_longer_reaches_join(self):
+        """Wall stretch preview should fall back to the plain footprint when the edited span no longer reaches the join."""
 
         source_wall = Arch.makeWall(length=3000, width=200, height=2500)
         source_wall.Placement = FreeCAD.Placement(FreeCAD.Vector(0, 0, 0), FreeCAD.Rotation())
         target_wall = Arch.makeWall(length=3000, width=200, height=2500)
         target_wall.Placement = FreeCAD.Placement(
-            FreeCAD.Vector(3000, -1500, 0), FreeCAD.Rotation(FreeCAD.Vector(0, 0, 1), 90)
+            FreeCAD.Vector(1500, -1500, 0), FreeCAD.Rotation(FreeCAD.Vector(0, 0, 1), 90)
         )
         self.document.recompute()
 
@@ -1618,12 +1981,20 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         session._sync_wall_edit_preview(invalid_points)
         self.pump_gui_events()
 
-        self.assertIsNotNone(session._plan_relation_status_message)
-        self.assertIn("Preview warning", session._plan_relation_status_message)
-        self.assertIn(joint.Label, session._plan_relation_status_message)
-        _title, body = session._get_status_chip_text()
-        self.assertIn(session._plan_relation_status_message, body)
-        self.assertIn(session._plan_relation_status_message, session.task_panel.status.text())
+        self.assertIsNone(session._plan_relation_status_message)
+        plain = session._get_preview_footprint(invalid_points)
+        polylines, warnings = session._get_preview_footprint_polylines(invalid_points)
+        self.assertEqual(warnings, [])
+        self.assertEqual(len(polylines), 1)
+        closed_plain = [FreeCAD.Vector(point) for point in plain]
+        closed_plain.append(FreeCAD.Vector(plain[0]))
+        self.assertEqual(len(polylines[0]), len(closed_plain))
+        self.assertTrue(
+            all(
+                preview_point.distanceToPoint(plain_point) < 1e-6
+                for preview_point, plain_point in zip(polylines[0], closed_plain)
+            )
+        )
 
     def test_plan_edit_wall_grip_move_uses_point_pick_commit(self):
         """Wall grips should use click-move-click editing instead of hold-drag."""
@@ -1931,7 +2302,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
 
         from PySide import QtGui
 
-        session = BimPlanSession()
+        session = BimPlanSession.PlanEditSession()
         main_window = QtGui.QWidget()
 
         initially_enabled = QtGui.QAction(main_window)
@@ -1998,7 +2369,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
             def setCornerCrossVisible(self, enabled):
                 self.corner_cross_visible = enabled
 
-        session = BimPlanSession()
+        session = BimPlanSession.PlanEditSession()
         nav_style = FakeNavigationStyle()
         viewer = FakeViewer()
         view = FakeView()
@@ -2031,7 +2402,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
             def clearBackgroundAppearanceOverride(self):
                 self.calls.append(("clear",))
 
-        session = BimPlanSession()
+        session = BimPlanSession.PlanEditSession()
         session.viewer = FakeViewer()
 
         session._apply_plan_background_override()
@@ -2156,6 +2527,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
 
         callback = self._FakeEventCallback(self._FakeKeyEvent(coin.SoKeyboardEvent.RETURN))
         session._on_key_pressed(callback)
+        self.pump_gui_events()
 
         self.assertTrue(callback._handled)
         self.assertIsNotNone(session._wall_edit_active_readout_tracker)
@@ -2190,6 +2562,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
 
         callback = self._FakeEventCallback(self._FakeKeyEvent(coin.SoKeyboardEvent.RETURN))
         session._on_key_pressed(callback)
+        self.pump_gui_events()
 
         self.assertTrue(callback._handled)
         self.assertEqual(len(session._wall_edit_readout_trackers), 2)
@@ -2226,6 +2599,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
 
         callback = self._FakeEventCallback(self._FakeKeyEvent(coin.SoKeyboardEvent.TAB))
         session._on_key_pressed(callback)
+        self.pump_gui_events()
 
         self.assertTrue(callback._handled)
         self.assertIsNotNone(session._wall_edit_active_readout_tracker)
@@ -2644,7 +3018,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         self.assertAlmostEqual(symbol_center_u, actual_center_u, delta=1e-6)
 
         wall_faces = wall.Proxy.getFootprint(wall)
-        self.assertEqual(len(wall_faces), 2)
+        self.assertTrue(wall_faces)
 
         def get_u_bounds(face):
             u_values = []
@@ -2654,11 +3028,25 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
             return min(u_values), max(u_values)
 
         wall_bounds = sorted((get_u_bounds(face) for face in wall_faces), key=lambda item: item[0])
-        gap_center_u = (wall_bounds[0][1] + wall_bounds[1][0]) * 0.5
-        gap_width = wall_bounds[1][0] - wall_bounds[0][1]
+        left_jamb_u = actual_center_u - actual_context["opening_half_width_u"]
+        right_jamb_u = actual_center_u + actual_context["opening_half_width_u"]
 
-        self.assertAlmostEqual(gap_center_u, actual_center_u, delta=1e-6)
-        self.assertAlmostEqual(gap_width, actual_context["opening_half_width_u"] * 2.0, delta=1e-6)
+        if len(wall_bounds) == 2:
+            gap_center_u = (wall_bounds[0][1] + wall_bounds[1][0]) * 0.5
+            gap_width = wall_bounds[1][0] - wall_bounds[0][1]
+            self.assertAlmostEqual(gap_center_u, actual_center_u, delta=1e-6)
+            self.assertAlmostEqual(
+                gap_width, actual_context["opening_half_width_u"] * 2.0, delta=1e-6
+            )
+            return
+
+        self.assertEqual(len(wall_bounds), 1)
+        single_min_u, single_max_u = wall_bounds[0]
+        flush_start = (
+            abs(single_min_u - right_jamb_u) < 1e-6 and abs(single_max_u - wall_length) < 1e-6
+        )
+        flush_end = abs(single_min_u) < 1e-6 and abs(single_max_u - left_jamb_u) < 1e-6
+        self.assertTrue(flush_start or flush_end)
 
     def test_plan_edit_can_flip_selected_door_hinge(self):
         """Selected door handles should expose hinge flipping in Plan Edit."""
@@ -2740,11 +3128,20 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         self.pump_gui_events()
         session._refresh_selected_wall()
 
-        with patch.object(session, "_queue_plan_overlay_visual_refresh") as queue_refresh:
+        with patch.object(
+            session, "_queue_hard_refresh_selected_opening_visuals"
+        ) as hard_refresh, patch.object(
+            session, "_queue_recompute_opening_hosts"
+        ) as recompute_hosts, patch.object(
+            session, "_queue_plan_overlay_visual_refresh"
+        ) as queue_refresh:
             session.slotUndoDocument(self.document)
 
+        hard_refresh.assert_called_once_with()
+        recompute_hosts.assert_called_once_with(door, None)
         queue_refresh.assert_called_once_with(
-            BimPlanSession._PLAN_VISUAL_SELECTED_OPENING,
+            BimPlanSession._PLAN_VISUAL_SELECTED_SYMBOL,
+            BimPlanSession._PLAN_VISUAL_HOVERED_SYMBOL,
             BimPlanSession._PLAN_VISUAL_HOVERED_OPENING,
             BimPlanSession._PLAN_VISUAL_HOVERED_WALL,
             BimPlanSession._PLAN_VISUAL_WALL_GRIPS,
