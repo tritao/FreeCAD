@@ -25,6 +25,7 @@
 
 # Unit tests for the Arch space module
 
+import json
 import os
 from unittest.mock import patch
 import Arch
@@ -32,6 +33,7 @@ import ArchPlanGeometry
 import ArchSpace
 import Draft
 import Part
+import Sketcher
 import FreeCAD as App
 from FreeCAD import Units
 from bimtests import TestArchBase
@@ -61,6 +63,12 @@ class _BoundarySelectionEntry:
 
 
 class TestArchSpace(TestArchBase.TestArchBase):
+    def _open_fixture_document(self, relative_path):
+        fixture_path = os.path.abspath(os.path.join(os.path.dirname(__file__), relative_path))
+        App.closeDocument(self.document.Name)
+        self.document = App.openDocument(fixture_path)
+        App.setActiveDocument(self.document.Name)
+        return self.document
 
     def testSpace(self):
         operation = "Checking Arch Space..."
@@ -118,6 +126,46 @@ class TestArchSpace(TestArchBase.TestArchBase):
         for face in faces:
             if getattr(face, "ElementMapVersion", "") != "":
                 self.assertEqual(face.ElementMapSize, 0)
+
+    def test_space_auto_text_position_avoids_linked_plan_symbol_footprint(self):
+        operation = "Checking Arch Space automatic text avoids plan symbols..."
+        self.printTestMessage(operation)
+
+        base = App.ActiveDocument.addObject("Part::Feature", "SpaceLabelAvoidanceBase")
+        base.Shape = Part.makeBox(6000, 4000, 2500)
+        space = Arch.makeSpace(base, name="Living Room")
+
+        plan_symbol = App.ActiveDocument.addObject("Part::Feature", "CenteredPlanSymbol")
+        plan_symbol.Shape = Part.makeBox(900, 900, 1)
+        equipment = Arch.makeEquipment(name="Dining Table Definition")
+        equipment.PlanSymbols = [plan_symbol]
+        equipment.addProperty("App::PropertyBool", "IsLibraryDefinition", "Test")
+        equipment.IsLibraryDefinition = True
+
+        symbol_link = App.ActiveDocument.addObject("App::Link", "DiningTableSymbol")
+        symbol_link.LinkedObject = equipment
+        symbol_link.Placement = App.Placement(App.Vector(2550, 1550, 0), App.Rotation())
+        App.ActiveDocument.recompute()
+
+        text_box = {"width": 900.0, "below": 450.0, "above": 450.0, "padding": 0.0}
+        default_point = ArchSpace._get_default_space_text_position(space)
+        default_bounds = ArchSpace._get_label_candidate_bounds(default_point, text_box, "Center")
+        faces = ArchSpace._get_space_footprint_faces(space)
+        obstacle_bounds = ArchSpace._collect_space_label_obstacle_bounds(space, faces)
+
+        self.assertEqual(len(obstacle_bounds), 1)
+        self.assertTrue(ArchSpace._bounds_intersect_xy(default_bounds, obstacle_bounds[0]))
+
+        text_point = ArchSpace._get_automatic_space_text_position(
+            space,
+            text_box=text_box,
+            text_align="Center",
+        )
+        text_bounds = ArchSpace._get_label_candidate_bounds(text_point, text_box, "Center")
+
+        self.assertTrue(ArchSpace._point_in_space_footprint(faces, text_point))
+        self.assertFalse(ArchSpace._bounds_intersect_xy(text_bounds, obstacle_bounds[0]))
+        self.assertGreater(text_point.distanceToPoint(default_point), 1.0)
 
     def test_plan_geometry_face_wire_polylines_follow_edge_order_when_vertex_order_is_scrambled(
         self,
@@ -611,6 +659,129 @@ class TestArchSpace(TestArchBase.TestArchBase):
         self.assertTrue(report["valid"])
         self.assertEqual(report["code"], "valid")
 
+    def test_boundary_region_hint_stores_wall_boundaries_semantically(self):
+        """Boundary-driven spaces should store wall links semantically instead of persisting face ids."""
+        operation = "Arch Space stores wall-linked room boundaries semantically"
+        self.printTestMessage(operation)
+
+        level = Arch.makeFloor(name="Level 0")
+        walls = []
+        placements = (
+            ("South Wall", 6000.0, App.Vector(3000.0, 0.0, 0.0), 0),
+            ("East Wall", 4000.0, App.Vector(6000.0, 2000.0, 0.0), 90),
+            ("North Wall", 6000.0, App.Vector(3000.0, 4000.0, 0.0), 180),
+            ("West Wall", 4000.0, App.Vector(0.0, 2000.0, 0.0), -90),
+            ("Divider Wall", 4000.0, App.Vector(3000.0, 2000.0, 0.0), 90),
+        )
+        for label, length, base, angle in placements:
+            wall = Arch.makeWall(length=length, width=200.0, height=2500.0, align="Left")
+            wall.Label = label
+            wall.Placement.Base = base
+            wall.Placement.Rotation = App.Rotation(App.Vector(0.0, 0.0, 1.0), angle)
+            level.addObject(wall)
+            walls.append(wall)
+        App.ActiveDocument.recompute()
+
+        divider_wall = next(wall for wall in walls if wall.Label == "Divider Wall")
+        left_reference = App.Vector(1500.0, 2000.0, 1000.0)
+        right_reference = App.Vector(4500.0, 2000.0, 1000.0)
+        center_reference = App.Vector(3000.0, 2000.0, 1000.0)
+        left_divider_face = ArchSpace.getBoundaryFaceNamesForObject(
+            divider_wall,
+            reference_point=left_reference,
+        )[0]
+        right_divider_face = ArchSpace.getBoundaryFaceNamesForObject(
+            divider_wall,
+            reference_point=right_reference,
+        )[0]
+
+        boundaries = []
+        for wall in walls:
+            if wall is divider_wall:
+                face_names = tuple(dict.fromkeys((left_divider_face, right_divider_face)))
+            else:
+                face_names = ArchSpace.getBoundaryFaceNamesForObject(
+                    wall,
+                    reference_point=center_reference,
+                )
+            boundaries.append((wall, face_names))
+
+        report = ArchSpace.getBoundaryRegionCandidates(boundaries, label="Two Rooms Preview")
+        major_candidates = [
+            candidate
+            for candidate in report.get("candidates", [])
+            if candidate["area"] > 1_000_000.0
+        ]
+        major_candidates.sort(key=lambda item: float(item["sample_point"].x))
+        self.assertEqual(len(major_candidates), 2)
+
+        base = App.ActiveDocument.addObject("Part::Feature", "SemanticSpaceRegionBase")
+        base.Shape = major_candidates[0]["shape"].copy()
+        space = Arch.makeSpace(base, name="SemanticRoom")
+        ArchSpace.setBoundaryRegionReferencePoint(space, major_candidates[0]["sample_point"])
+        ArchSpace.setBoundaryLinks(space, boundaries)
+        App.ActiveDocument.recompute()
+
+        expected_wall_names = {wall.Name for wall in walls}
+        self.assertEqual(space.Proxy.getLastBoundaryError(space), "")
+        self.assertEqual(
+            {
+                getattr(wall, "Name", None)
+                for wall in list(getattr(space, "BoundaryWalls", []) or [])
+            },
+            expected_wall_names,
+        )
+        self.assertFalse(
+            [
+                boundary
+                for boundary in list(getattr(space, "Boundaries", []) or [])
+                if Draft.getType(boundary[0]) == "Wall"
+            ]
+        )
+        hint_payloads = [
+            json.loads(raw_hint) for raw_hint in getattr(space, "BoundarySideHints", []) or []
+        ]
+        self.assertTrue(hint_payloads)
+        self.assertTrue(all("face" not in hint for hint in hint_payloads))
+        stable_links = list(space.Proxy.getStableBoundaryLinks(space) or [])
+        self.assertEqual(len(stable_links), 5)
+        self.assertTrue(all(subnames for _wall, subnames in stable_links))
+
+        source_wall = next(wall for wall in walls if wall.Label == "South Wall")
+        joint = Arch.makeWallJoint(source_wall, divider_wall, "Miter")
+        self.assertIsNotNone(joint)
+        joint.Enabled = True
+        joint.JointType = "Miter"
+        joint.EndA = "Auto"
+        joint.EndB = "Auto"
+        joint.ButtTrimmed = "Auto"
+        joint.TeeStem = "Auto"
+        App.ActiveDocument.recompute()
+
+        self.assertEqual(space.Proxy.getLastBoundaryError(space), "")
+        self.assertEqual(
+            {
+                getattr(wall, "Name", None)
+                for wall in list(getattr(space, "BoundaryWalls", []) or [])
+            },
+            expected_wall_names,
+        )
+        self.assertFalse(
+            [
+                boundary
+                for boundary in list(getattr(space, "Boundaries", []) or [])
+                if Draft.getType(boundary[0]) == "Wall"
+            ]
+        )
+        hint_payloads = [
+            json.loads(raw_hint) for raw_hint in getattr(space, "BoundarySideHints", []) or []
+        ]
+        self.assertTrue(hint_payloads)
+        self.assertTrue(all("face" not in hint for hint in hint_payloads))
+        stable_links = list(space.Proxy.getStableBoundaryLinks(space) or [])
+        self.assertEqual(len(stable_links), 5)
+        self.assertTrue(all(subnames for _wall, subnames in stable_links))
+
     def test_space_with_region_base_keeps_chosen_multiple_room_candidate(self):
         """A base-backed space should preserve the chosen room when boundaries expose many rooms."""
         operation = "Arch Space keeps a chosen candidate from a multi-room boundary set"
@@ -701,6 +872,284 @@ class TestArchSpace(TestArchBase.TestArchBase):
         self.assertAlmostEqual(space.Area.getValueAs("m^2").Value, 12.0, places=3)
         self.assertEqual(len(space.Boundaries), 5)
         self.assertEqual(space.Proxy.getLastBoundaryError(space), "")
+
+    def test_space_region_hint_keeps_distinct_sibling_candidates_without_base(self):
+        """Sibling spaces should keep their chosen region even after dropping their base shape."""
+        operation = "Arch Space keeps sibling region candidates distinct without base solids"
+        self.printTestMessage(operation)
+
+        height = 2500.0
+        expected_area = 3000.0 * 4000.0
+
+        def make_boundary_face(name, points):
+            face_object = App.ActiveDocument.addObject("Part::Feature", name)
+            face_object.Shape = Part.Face(Part.makePolygon(points + [points[0]]))
+            return face_object
+
+        boundaries = [
+            (
+                make_boundary_face(
+                    "OuterSouth",
+                    [
+                        App.Vector(0.0, 0.0, 0.0),
+                        App.Vector(6000.0, 0.0, 0.0),
+                        App.Vector(6000.0, 0.0, height),
+                        App.Vector(0.0, 0.0, height),
+                    ],
+                ),
+                ["Face1"],
+            ),
+            (
+                make_boundary_face(
+                    "OuterEast",
+                    [
+                        App.Vector(6000.0, 0.0, 0.0),
+                        App.Vector(6000.0, 4000.0, 0.0),
+                        App.Vector(6000.0, 4000.0, height),
+                        App.Vector(6000.0, 0.0, height),
+                    ],
+                ),
+                ["Face1"],
+            ),
+            (
+                make_boundary_face(
+                    "OuterNorth",
+                    [
+                        App.Vector(6000.0, 4000.0, 0.0),
+                        App.Vector(0.0, 4000.0, 0.0),
+                        App.Vector(0.0, 4000.0, height),
+                        App.Vector(6000.0, 4000.0, height),
+                    ],
+                ),
+                ["Face1"],
+            ),
+            (
+                make_boundary_face(
+                    "OuterWest",
+                    [
+                        App.Vector(0.0, 4000.0, 0.0),
+                        App.Vector(0.0, 0.0, 0.0),
+                        App.Vector(0.0, 0.0, height),
+                        App.Vector(0.0, 4000.0, height),
+                    ],
+                ),
+                ["Face1"],
+            ),
+            (
+                make_boundary_face(
+                    "Divider",
+                    [
+                        App.Vector(3000.0, 0.0, 0.0),
+                        App.Vector(3000.0, 4000.0, 0.0),
+                        App.Vector(3000.0, 4000.0, height),
+                        App.Vector(3000.0, 0.0, height),
+                    ],
+                ),
+                ["Face1"],
+            ),
+        ]
+
+        report = ArchSpace.getBoundaryRegionCandidates(boundaries, label="Two Rooms Preview")
+        self.assertEqual(report["candidate_count"], 2)
+
+        spaces = []
+        for index, candidate in enumerate(report["candidates"]):
+            base = App.ActiveDocument.addObject("Part::Feature", f"ChosenRegionBase{index}")
+            base.Shape = candidate["shape"].copy()
+            space = Arch.makeSpace(base, name=f"SplitRoom{index}")
+            space.Boundaries = boundaries
+            spaces.append(space)
+
+        App.ActiveDocument.recompute()
+
+        initial_centers = sorted(float(space.Shape.CenterOfMass.x) for space in spaces)
+        self.assertLess(initial_centers[0], 3000.0)
+        self.assertGreater(initial_centers[1], 3000.0)
+        for space in spaces:
+            self.assertAlmostEqual(space.Proxy.getArea(space), expected_area)
+            self.assertTrue(str(getattr(space, "BoundaryRegionHint", "") or "").strip())
+            self.assertEqual(space.Proxy.getLastBoundaryError(space), "")
+
+        for space in spaces:
+            space.Base = None
+
+        App.ActiveDocument.recompute()
+
+        recomputed_centers = sorted(float(space.Shape.CenterOfMass.x) for space in spaces)
+        self.assertLess(recomputed_centers[0], 3000.0)
+        self.assertGreater(recomputed_centers[1], 3000.0)
+        for space in spaces:
+            self.assertAlmostEqual(space.Proxy.getArea(space), expected_area)
+            self.assertEqual(space.Proxy.getLastBoundaryError(space), "")
+
+    def test_boundary_region_hint_conflict_preserves_shape_and_sets_status(self):
+        """Boundary-driven spaces should keep their shape but enter conflict when no region matches the hint."""
+
+        operation = "Arch Space marks boundary-region conflicts explicitly"
+        self.printTestMessage(operation)
+
+        height = 2500.0
+        expected_area = 3000.0 * 4000.0
+
+        def make_boundary_face(name, points):
+            face_object = App.ActiveDocument.addObject("Part::Feature", name)
+            face_object.Shape = Part.Face(Part.makePolygon(points + [points[0]]))
+            return face_object
+
+        boundaries = [
+            (
+                make_boundary_face(
+                    "OuterSouth",
+                    [
+                        App.Vector(0.0, 0.0, 0.0),
+                        App.Vector(6000.0, 0.0, 0.0),
+                        App.Vector(6000.0, 0.0, height),
+                        App.Vector(0.0, 0.0, height),
+                    ],
+                ),
+                ["Face1"],
+            ),
+            (
+                make_boundary_face(
+                    "OuterEast",
+                    [
+                        App.Vector(6000.0, 0.0, 0.0),
+                        App.Vector(6000.0, 4000.0, 0.0),
+                        App.Vector(6000.0, 4000.0, height),
+                        App.Vector(6000.0, 0.0, height),
+                    ],
+                ),
+                ["Face1"],
+            ),
+            (
+                make_boundary_face(
+                    "OuterNorth",
+                    [
+                        App.Vector(6000.0, 4000.0, 0.0),
+                        App.Vector(0.0, 4000.0, 0.0),
+                        App.Vector(0.0, 4000.0, height),
+                        App.Vector(6000.0, 4000.0, height),
+                    ],
+                ),
+                ["Face1"],
+            ),
+            (
+                make_boundary_face(
+                    "OuterWest",
+                    [
+                        App.Vector(0.0, 4000.0, 0.0),
+                        App.Vector(0.0, 0.0, 0.0),
+                        App.Vector(0.0, 0.0, height),
+                        App.Vector(0.0, 4000.0, height),
+                    ],
+                ),
+                ["Face1"],
+            ),
+            (
+                make_boundary_face(
+                    "Divider",
+                    [
+                        App.Vector(3000.0, 0.0, 0.0),
+                        App.Vector(3000.0, 4000.0, 0.0),
+                        App.Vector(3000.0, 4000.0, height),
+                        App.Vector(3000.0, 0.0, height),
+                    ],
+                ),
+                ["Face1"],
+            ),
+        ]
+
+        report = ArchSpace.getBoundaryRegionCandidates(boundaries, label="Two Rooms Preview")
+        self.assertEqual(report["candidate_count"], 2)
+        left_candidate = min(report["candidates"], key=lambda item: float(item["sample_point"].x))
+
+        base = App.ActiveDocument.addObject("Part::Feature", "ConflictRegionBase")
+        base.Shape = left_candidate["shape"].copy()
+        space = Arch.makeSpace(base, name="Conflicted Room")
+        ArchSpace.setBoundaryRegionReferencePoint(space, left_candidate["sample_point"])
+        ArchSpace.setBoundaryLinks(space, boundaries)
+        App.ActiveDocument.recompute()
+
+        initial_area = float(space.Proxy.getArea(space))
+        initial_center_x = float(space.Shape.CenterOfMass.x)
+        self.assertEqual(getattr(space, "BoundaryStatus", ""), "OK")
+        self.assertAlmostEqual(initial_area, expected_area)
+
+        ArchSpace.setBoundaryRegionReferencePoint(space, App.Vector(7000.0, 2000.0, 1000.0))
+        space.touch()
+        App.ActiveDocument.recompute()
+
+        self.assertAlmostEqual(float(space.Proxy.getArea(space)), initial_area)
+        self.assertAlmostEqual(float(space.Shape.CenterOfMass.x), initial_center_x, places=3)
+        self.assertEqual(getattr(space, "BoundaryStatus", ""), "Conflict")
+        self.assertIn(
+            "stored room reference",
+            str(getattr(space, "BoundaryStatusMessage", "") or "").lower(),
+        )
+        self.assertTrue(list(getattr(space, "BoundaryStatusDetails", []) or []))
+        self.assertIn(
+            "stored room reference",
+            space.Proxy.getLastBoundaryError(space).lower(),
+        )
+
+    def test_legacy_region_base_space_resolves_wall_resize_without_boundary_conflict(self):
+        """Legacy region-base spaces should preserve shape and avoid a false boundary conflict after phased retry."""
+
+        self._open_fixture_document("../../../../../tests/t2-symbols.FCStd")
+
+        wall = App.ActiveDocument.getObject("Wall005")
+        space = App.ActiveDocument.getObject("Space")
+        self.assertIsNotNone(wall)
+        self.assertIsNotNone(space)
+        self.assertEqual(space.Label, "Living Room")
+
+        space.touch()
+        App.ActiveDocument.recompute()
+        self.assertTrue(str(getattr(space, "BoundaryRegionHint", "") or "").strip())
+        self.assertEqual(getattr(space, "BoundaryStatus", ""), "OK")
+
+        initial_area = float(space.Proxy.getArea(space))
+        initial_bounds = space.Shape.BoundBox
+
+        start, end = wall.Proxy.calc_endpoints(wall)
+        axis = App.Vector(end).sub(start)
+        self.assertGreater(axis.Length, 0.0)
+        axis.normalize()
+        new_start = App.Vector(start).add(axis.multiply(900.0))
+
+        wall.Proxy.set_from_endpoints(wall, [new_start, App.Vector(end)])
+        App.ActiveDocument.recompute()
+
+        stable_links = list(space.Proxy.getStableBoundaryLinks(space) or [])
+        self.assertTrue(any(getattr(obj, "Name", None) == "Wall005" for obj, _subs in stable_links))
+        self.assertEqual(getattr(space, "BoundaryStatus", ""), "OK")
+        self.assertFalse(str(getattr(space, "BoundaryStatusMessage", "") or "").strip())
+        self.assertFalse(space.Proxy.getLastBoundaryError(space))
+        self.assertTrue(str(getattr(space, "BoundaryRegionHint", "") or "").strip())
+        self.assertGreater(float(space.Proxy.getArea(space)), initial_area * 0.85)
+        self.assertGreater(space.Shape.BoundBox.XMax, initial_bounds.XMax - 500.0)
+        self.assertGreater(space.Shape.BoundBox.YMax, initial_bounds.YMax - 100.0)
+
+    def test_legacy_region_base_space_preserves_room_shape_on_recompute(self):
+        """Legacy region-base spaces should preserve the saved room shape on plain recompute."""
+
+        self._open_fixture_document("../../../../../tests/t2-symbols.FCStd")
+
+        space = App.ActiveDocument.getObject("Space")
+        self.assertIsNotNone(space)
+        self.assertEqual(space.Label, "Living Room")
+
+        initial_area = float(space.Proxy.getArea(space))
+        initial_bounds = space.Shape.BoundBox
+
+        space.touch()
+        App.ActiveDocument.recompute()
+
+        self.assertEqual(space.Proxy.getLastBoundaryError(space), "")
+        self.assertTrue(str(getattr(space, "BoundaryRegionHint", "") or "").strip())
+        self.assertAlmostEqual(float(space.Proxy.getArea(space)), initial_area, places=3)
+        self.assertAlmostEqual(space.Shape.BoundBox.XMax, initial_bounds.XMax, places=3)
+        self.assertAlmostEqual(space.Shape.BoundBox.YMax, initial_bounds.YMax, places=3)
 
     def test_space_boundary_failure_describes_open_loop(self):
         """Open boundary selections should keep a useful failure reason."""

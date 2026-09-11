@@ -703,6 +703,15 @@ class PropertyType(IntEnum):
 
 App.PropertyType = PropertyType
 
+class RecomputePhase(IntEnum):
+    Idle = -1
+    Normal = 0
+    PostUpstream = 1
+    PostGeometry = 2
+    Finalize = 3
+
+App.RecomputePhase = RecomputePhase
+
 class ReturnType(IntEnum):
     """Return-shape selector used by FreeCAD Python callbacks."""
 

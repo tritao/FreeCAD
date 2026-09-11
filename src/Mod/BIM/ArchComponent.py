@@ -147,6 +147,105 @@ def get_horizontal_slice_faces(shape, cut_z, translate_z=0.0):
         faces.append(face)
     return faces
 
+def _iter_plan_footprint_local_points(view_provider):
+    collector = getattr(view_provider, "_collect_local_footprint_polylines", None)
+    if not callable(collector):
+        return
+
+    try:
+        polylines = collector() or ()
+    except Exception:
+        return
+
+    for polyline in polylines:
+        for point in polyline or ():
+            try:
+                yield FreeCAD.Vector(point)
+            except Exception:
+                try:
+                    yield FreeCAD.Vector(
+                        float(point[0]),
+                        float(point[1]),
+                        float(point[2] if len(point) > 2 else 0.0),
+                    )
+                except Exception:
+                    continue
+
+
+def _bounds_from_points(points):
+    points = list(points or ())
+    if not points:
+        return None
+
+    xs = [float(point.x) for point in points]
+    ys = [float(point.y) for point in points]
+    zs = [float(point.z) for point in points]
+    return (min(xs), min(ys), max(xs), max(ys), min(zs), max(zs))
+
+
+def _union_bounds(first, second):
+    if first is None:
+        return second
+    if second is None:
+        return first
+    return (
+        min(first[0], second[0]),
+        min(first[1], second[1]),
+        max(first[2], second[2]),
+        max(first[3], second[3]),
+        min(first[4], second[4]),
+        max(first[5], second[5]),
+    )
+
+
+def _get_plan_footprint_global_bounds(obj):
+    if (not FreeCAD.GuiUp) or (obj is None):
+        return None
+
+    vobj = getattr(obj, "ViewObject", None)
+    proxy = getattr(vobj, "Proxy", None) if vobj else None
+    if proxy is None:
+        return None
+
+    local_points = tuple(_iter_plan_footprint_local_points(proxy))
+    if not local_points:
+        return None
+
+    try:
+        placement = obj.getGlobalPlacement()
+    except Exception:
+        placement = getattr(obj, "Placement", None)
+    if placement is None:
+        return _bounds_from_points(local_points)
+
+    try:
+        global_points = [placement.multVec(point) for point in local_points]
+    except Exception:
+        global_points = local_points
+    return _bounds_from_points(global_points)
+
+
+def notify_plan_footprint_changed(view_provider):
+    """Notify BIM GUI consumers that a view provider's plan footprint has changed."""
+
+    if (not FreeCAD.GuiUp) or (view_provider is None):
+        return 0
+
+    obj = getattr(view_provider, "Object", None)
+    doc = getattr(obj, "Document", None)
+    current_bounds = _get_plan_footprint_global_bounds(obj)
+    previous_bounds = getattr(view_provider, "_last_plan_footprint_bounds", None)
+    view_provider._last_plan_footprint_bounds = current_bounds
+    changed_bounds = _union_bounds(previous_bounds, current_bounds)
+
+    if doc is None or changed_bounds is None:
+        return 0
+
+    import ArchSpace
+
+    return ArchSpace.schedule_auto_space_text_refresh(doc, changed_bounds=changed_bounds)
+
+
 def addToComponent(compobject, addobject, prop):
     """Add an object to a component's property.
 
@@ -1220,6 +1319,42 @@ class Component(ArchIFC.IfcProduct):
             return True
         return False
 
+    def isSamePlacement(self, first, second):
+        """Check that two placements are almost equal."""
+
+        try:
+            delta = FreeCAD.Placement(first).inverse().multiply(FreeCAD.Placement(second))
+        except Exception:
+            return False
+        return self.isIdentity(delta)
+
+    def setPlacementIfChanged(self, obj, placement):
+        """Assign Placement only when it would change."""
+
+        if self.isSamePlacement(obj.Placement, placement):
+            return
+        obj.Placement = placement
+
+    def setPropertyIfChanged(self, obj, prop, value, tolerance=0.000001):
+        """Assign a property only when it would change."""
+
+        try:
+            current = getattr(obj, prop)
+        except Exception:
+            return
+        current_value = getattr(current, "Value", current)
+        value_value = getattr(value, "Value", value)
+        try:
+            if abs(float(current_value) - float(value_value)) < tolerance:
+                return
+        except (TypeError, ValueError):
+            try:
+                if current == value:
+                    return
+            except Exception:
+                pass
+        setattr(obj, prop, value)
+
     def applyShape(self, obj, shape, placement, allowinvalid=False, allownosolid=False):
         """Check the given shape, then assign it to the object.
 
@@ -1266,19 +1401,19 @@ class Component(ArchIFC.IfcProduct):
                             pass
                         else:
                             shape = r
-                        p = self.spread(
-                            obj, shape, placement
-                        ).Placement.copy()  # for some reason this gets zeroed in next line
-                        obj.Shape = self.spread(obj, shape, placement)
+                        applied_shape = self.spread(obj, shape, placement)
+                        # Keep a copy before assigning the shape; assignment can zero it.
+                        p = applied_shape.Placement.copy()
+                        obj.Shape = applied_shape
                         if not self.isIdentity(placement):
-                            obj.Placement = placement
+                            self.setPlacementIfChanged(obj, placement)
                         else:
-                            obj.Placement = p
+                            self.setPlacementIfChanged(obj, p)
                     else:
                         if allownosolid:
                             obj.Shape = self.spread(obj, shape, placement)
                             if not self.isIdentity(placement):
-                                obj.Placement = placement
+                                self.setPlacementIfChanged(obj, placement)
                         else:
                             FreeCAD.Console.PrintWarning(
                                 obj.Label + " " + translate("Arch", "has no solid") + "\n"
@@ -1287,7 +1422,7 @@ class Component(ArchIFC.IfcProduct):
                     if allowinvalid:
                         obj.Shape = self.spread(obj, shape, placement)
                         if not self.isIdentity(placement):
-                            obj.Placement = placement
+                            self.setPlacementIfChanged(obj, placement)
                     else:
                         FreeCAD.Console.PrintWarning(
                             obj.Label + " " + translate("Arch", "has an invalid shape") + "\n"
@@ -1508,14 +1643,53 @@ class AreaCalculator:
         for prop in ["VerticalArea", "HorizontalArea", "PerimeterLength"]:
             setattr(self.obj, prop, 0)
 
-    def _get_projected_edges(self, face, direction):
-        """Return the visible projected edges for a face."""
-        import TechDraw
+    def _collect_projection_edges(self, projection, visible_group_count):
+        """Collect visible edges from a projection result."""
 
-        projection = TechDraw.project(face, direction)
-        if not projection:
-            raise RuntimeError("TechDraw.project returned no shapes")
-        return projection[0].Edges
+        edges = []
+        for group in list(projection or [])[:visible_group_count]:
+            if not group or group.isNull():
+                continue
+            edges.extend(group.Edges)
+        if not edges:
+            raise RuntimeError("Projection returned no visible edges")
+        return edges
+
+    def _get_projected_edges(self, face, direction):
+        """Return the visible projected edges for a face.
+
+        Prefer `Part.project()` when available, but fall back to `Part.projectEx()`
+        so geometry consumers do not depend on the TechDraw workbench bindings.
+        """
+        import Part
+
+        project_error = None
+        project = getattr(Part, "project", None)
+        if callable(project):
+            try:
+                projection = project(face, direction)
+                return self._collect_projection_edges(projection, visible_group_count=2)
+            except Exception as err:
+                project_error = err
+
+        project_ex = getattr(Part, "projectEx", None)
+        if callable(project_ex):
+            try:
+                projection = project_ex(face, direction)
+                return self._collect_projection_edges(projection, visible_group_count=5)
+            except Exception as err:
+                if project_error is not None:
+                    raise RuntimeError(
+                        "Part.project failed "
+                        f"({type(project_error).__name__}: {project_error}) and "
+                        "Part.projectEx failed "
+                        f"({type(err).__name__}: {err})"
+                    ) from err
+                raise
+
+        if project_error is not None:
+            raise project_error
+        raise AttributeError("Part exposes neither project nor projectEx")
 
     def isFaceVertical(self, face, face_index=None):
         """Determine if a face is vertical.
@@ -1837,10 +2011,11 @@ class ViewProviderComponent:
             self._refreshHostedFootprints(obj)
         return
 
-    def updateFootprint(self):
+    def updateFootprint(self, faces=None):
         self.fset.coordIndex.deleteValues(0)
         self.fcoords.point.deleteValues(0)
-        faces = self.Object.Proxy.getFootprint(self.Object)
+        if faces is None:
+            faces = self.Object.Proxy.getFootprint(self.Object)
         if faces:
             inverse_placement = self.Object.Placement.inverse()
             verts = []

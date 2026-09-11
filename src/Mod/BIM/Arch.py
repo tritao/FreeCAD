@@ -2036,16 +2036,18 @@ def makeWindow(
         If `baseobj` is None, this value is used by `ensureBase()` on first
         recompute to create a default sketch with a "Width" constraint.
         If `baseobj` is a sketch with a "Width" named constraint, setting
-        `window_or_door.Width` will drive this sketch constraint. `makeWindow` itself
-        does not initially set the object's `Width` *from* a sketch's constraint.
+        `window_or_door.Width` will drive this sketch constraint. When `width`
+        is omitted, `makeWindow` initializes the object's `Width` from the base
+        sketch if that size can be resolved.
         Defaults to None (or an Arch preference value if `baseobj` is None).
     height : float, optional
         The total height of the window/door.
         If `baseobj` is None, this value is used by `ensureBase()` on first
         recompute to create a default sketch with a "Height" constraint.
         If `baseobj` is a sketch with a "Height" named constraint, setting
-        `window_or_door.Height` will drive this sketch constraint. `makeWindow` itself
-        does not initially set the object's `Height` *from* a sketch's constraint.
+        `window_or_door.Height` will drive this sketch constraint. When `height`
+        is omitted, `makeWindow` initializes the object's `Height` from the base
+        sketch if that size can be resolved.
         Defaults to None (or an Arch preference value if `baseobj` is None).
     parts : list[str], optional
         A list defining custom components for the window/door. The list is flat, with
@@ -2091,11 +2093,10 @@ def makeWindow(
       created object to "Window" or "Door", and by the chosen components or preset.
     - **Sketch-based dimensions**: If `baseobj` is a `Sketcher::SketchObject`
       with named constraints "Width" and "Height", these sketch constraints will be
-      parametrically driven by the created object's `Width` and `Height` properties
-      respectively *after* the object is created and its properties are changed.
-      `makeWindow` itself does not initially populate the object's `Width`/`Height` from
-      these sketch constraints if `width`/`height` arguments are not passed to it.
-      The object's internal `Width` and `Height` properties are the drivers.
+      parametrically driven by the created object's `Width` and `Height` properties.
+      When `width`/`height` arguments are omitted, `makeWindow` initializes those
+      properties from the base sketch when it can resolve them. The object's
+      internal `Width` and `Height` properties remain the drivers after creation.
     - **Object from dimensions (No `baseobj` initially)**: if `baseobj` is `None` but
       `width` and `height` are provided, `makeWindow` creates an Arch Window object.
       Upon the first `doc.recompute()`, the `ensureBase()` mechanism generates
@@ -2118,18 +2119,13 @@ def makeWindow(
       (e.g., `Sketcher::SketchObject`) and `parts` is `None` or provided:
         - The `window.Shape` (geometric representation) is correctly generated
           at the global position and orientation defined by `baseobj.Placement`.
-        - However, the created window object's own `window.Placement` property is
+        - The created window object's own `window.Placement` property is still
           **not** automatically initialized from `baseobj.Placement` and typically
           remains at the identity placement (origin, no rotation).
-        - Similarly, the `window.Width` and `window.Height` properties are **not**
-          automatically populated from the dimensions of the `baseobj` sketch.
-          These properties will default to 0.0 or values from Arch preferences
-          (if `width`/`height` arguments to `makeWindow` are also `None`).
-        - If you need the `window` object's `Placement`, `Width`, or `Height`
-          properties to reflect the `baseobj` sketch for subsequent operations
-          (e.g., if other systems query these specific window properties, or if
-          you intend to parametrically drive the sketch via these window properties),
-          you may need to set them manually after `makeWindow` is called:
+        - When `width`/`height` arguments are omitted, `makeWindow` now attempts
+          to resolve `window.Width` and `window.Height` from the base sketch
+          geometry or named constraints. If a dimension cannot be resolved, the
+          property keeps its default value.
         - The `ArchWindow._Window.execute()` method, when recomputing the window,
           *does* use `window.Base.Shape` (the sketch's shape in its global position)
           to generate the window's geometry. The `ArchWindow._Window.getSubVolume()`
@@ -2245,9 +2241,9 @@ def makeWindow(
     )
 
     # Initialize all relevant properties
-    if width:
+    if width is not None:
         window.Width = width
-    if height:
+    if height is not None:
         window.Height = height
     if baseobj:
         # 2025.5.25
@@ -2259,6 +2255,16 @@ def makeWindow(
         # here.
         # obj.Normal = baseobj.Placement.Rotation.multVec(FreeCAD.Vector(0, 0, -1))
         window.Base = baseobj
+        import ArchWindow
+
+        if width is None:
+            inferred_width = ArchWindow.getWindowWidthMm(window)
+            if inferred_width is not None and inferred_width > 0.0:
+                window.Width = inferred_width
+        if height is None:
+            inferred_height = ArchWindow.getWindowHeightMm(window)
+            if inferred_height is not None and inferred_height > 0.0:
+                window.Height = inferred_height
     if parts is not None:
         window.WindowParts = parts
     else:
@@ -2312,6 +2318,158 @@ def makeWindow(
         todo.ToDo.delay(recolorize, [window.Document.Name, window.Name])
 
     return window
+
+
+def validateWindowPresetApplication(window, preset_name=None):
+    """Return validation status for applying a built-in preset to an Arch opening."""
+
+    import ArchWindow
+
+    return ArchWindow.validateWindowPresetApplication(window, preset_name)
+
+
+def validateWindowResize(window, width=None, height=None):
+    """Return validation status for resizing an existing Arch opening."""
+
+    import ArchWindow
+
+    return ArchWindow.validateWindowResize(window, width=width, height=height)
+
+
+def canRehostObject(obj, host=None):
+    """Return ``True`` when an object supports host reassignment."""
+
+    if obj is None:
+        return False
+    if host is obj:
+        return False
+
+    obj_doc = getattr(obj, "Document", None)
+    host_doc = getattr(host, "Document", None)
+    if host is not None and obj_doc and host_doc and obj_doc != host_doc:
+        return False
+
+    return hasattr(obj, "Host") or hasattr(obj, "Hosts")
+
+
+def rehostObject(obj, host, preserve_world_position=False, raise_on_error=False):
+    """Assign a new host to an object exposing ``Host`` or ``Hosts``."""
+
+    if not canRehostObject(obj, host):
+        if raise_on_error:
+            raise ValueError("Object does not support reassignment to the requested host")
+        return False
+
+    pose_snapshot = _snapshotRehostObjectPose(obj) if preserve_world_position else None
+    try:
+        if hasattr(obj, "Host"):
+            obj.Host = host
+        elif hasattr(obj, "Hosts"):
+            obj.Hosts = [host] if host is not None else []
+        else:
+            if raise_on_error:
+                raise ValueError("Object has no host property")
+            return False
+        if pose_snapshot is not None:
+            _restoreRehostObjectPose(obj, pose_snapshot)
+    except Exception:
+        if raise_on_error:
+            raise
+        return False
+    return True
+
+
+def applyWindowPreset(window, preset_name, preserve_anchor=True, raise_on_error=False):
+    """Apply a built-in preset to an existing Arch opening object."""
+
+    import ArchWindow
+
+    return ArchWindow.applyWindowPreset(
+        window,
+        preset_name,
+        preserve_anchor=preserve_anchor,
+        raise_on_error=raise_on_error,
+    )
+
+
+def resizeWindow(window, width=None, height=None, preserve_anchor=True, raise_on_error=False):
+    """Resize an existing Arch opening object in place."""
+
+    import ArchWindow
+
+    return ArchWindow.resizeWindow(
+        window,
+        width=width,
+        height=height,
+        preserve_anchor=preserve_anchor,
+        raise_on_error=raise_on_error,
+    )
+
+
+def setWindowWidth(window, value, preserve_anchor=True, raise_on_error=False):
+    """Resize an existing Arch opening by changing its width."""
+
+    import ArchWindow
+
+    return ArchWindow.setWindowWidth(
+        window,
+        value,
+        preserve_anchor=preserve_anchor,
+        raise_on_error=raise_on_error,
+    )
+
+
+def setWindowHeight(window, value, preserve_anchor=True, raise_on_error=False):
+    """Resize an existing Arch opening by changing its height."""
+
+    import ArchWindow
+
+    return ArchWindow.setWindowHeight(
+        window,
+        value,
+        preserve_anchor=preserve_anchor,
+        raise_on_error=raise_on_error,
+    )
+
+
+def _snapshotRehostObjectPose(obj):
+    if obj is None:
+        return None
+    placement = getattr(obj, "Placement", None)
+    if placement is not None:
+        try:
+            return ("placement", FreeCAD.Placement(placement))
+        except Exception:
+            pass
+    if hasattr(obj, "X") and hasattr(obj, "Y"):
+        try:
+            return (
+                "xyz",
+                (
+                    float(getattr(obj, "X")),
+                    float(getattr(obj, "Y")),
+                    float(getattr(obj, "Z", 0.0) or 0.0),
+                    bool(hasattr(obj, "Z")),
+                ),
+            )
+        except Exception:
+            pass
+    return None
+
+
+def _restoreRehostObjectPose(obj, snapshot):
+    if obj is None or snapshot is None:
+        return
+    kind, value = snapshot
+    if kind == "placement":
+        obj.Placement = FreeCAD.Placement(value)
+        return
+    if kind == "xyz":
+        x_value, y_value, z_value, has_z = value
+        obj.X = x_value
+        obj.Y = y_value
+        if has_z:
+            obj.Z = z_value
 
 
 def is_debasable(wall):

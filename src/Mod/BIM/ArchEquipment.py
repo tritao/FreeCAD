@@ -630,6 +630,9 @@ class _ViewProviderEquipment(ArchComponent.ViewProviderComponent):
             context="ArchEquipment.updateFootprint",
         )
 
+        if FreeCAD.GuiUp:
+            ArchComponent.notify_plan_footprint_changed(self)
+
     def setEdit(self, vobj, mode):
         if mode != 0:
             return None

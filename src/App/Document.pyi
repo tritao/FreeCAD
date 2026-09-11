@@ -77,6 +77,9 @@ class Document(PropertyContainer):
     Recomputing: Final[bool] = False
     """Indicate if the document is recomputing"""
 
+    CurrentRecomputePhase: Final[int] = -1
+    """Current semantic recompute phase as an int-valued FreeCAD.RecomputePhase member."""
+
     Transacting: Final[bool] = False
     """Indicate whether the document is undoing/redoing"""
 

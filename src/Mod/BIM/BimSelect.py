@@ -26,6 +26,11 @@ import FreeCAD
 
 
 class CyclicSelectionObserver:
+    def __init__(self, document_name, object_name, subelement_name=""):
+        self.document_name = document_name
+        self.object_name = object_name
+        self.subelement_name = subelement_name or ""
+
     def addSelection(self, document, object, element, position):
         import FreeCADGui
 
@@ -33,15 +38,29 @@ class CyclicSelectionObserver:
             return
         if not hasattr(FreeCAD, "CyclicSelectionObserver"):
             return
-        FreeCADGui.Selection.removeSelection(FreeCAD.ActiveDocument.getObject(object))
         FreeCADGui.Selection.removeObserver(FreeCAD.CyclicSelectionObserver)
         del FreeCAD.CyclicSelectionObserver
-        preselection = FreeCADGui.Selection.getPreselection()
-        FreeCADGui.Selection.addSelection(
-            FreeCAD.ActiveDocument.getObject(preselection.Object.Name),
-            preselection.SubElementNames[0],
-        )
-        FreeCAD.ActiveDocument.recompute()
+        try:
+            doc = FreeCAD.getDocument(self.document_name)
+        except NameError:
+            return
+        if not doc.getObject(self.object_name):
+            return
+        clicked_element = element or ""
+        if (
+            document == self.document_name
+            and object == self.object_name
+            and clicked_element == self.subelement_name
+        ):
+            return
+        FreeCADGui.Selection.removeSelection(document, object, clicked_element)
+        if self.subelement_name:
+            FreeCADGui.Selection.addSelection(
+                self.document_name, self.object_name, self.subelement_name
+            )
+        else:
+            FreeCADGui.Selection.addSelection(self.document_name, self.object_name)
+        doc.recompute()
 
 
 class CyclicObjectSelector:
@@ -72,7 +91,12 @@ class CyclicObjectSelector:
                 del FreeCAD.CyclicSelectionObserver
             return
 
-        FreeCAD.CyclicSelectionObserver = CyclicSelectionObserver()
+        target = self.selectableObjects[self.objectIndex]
+        FreeCAD.CyclicSelectionObserver = CyclicSelectionObserver(
+            FreeCAD.ActiveDocument.Name,
+            target["Object"],
+            target.get("Component", ""),
+        )
         FreeCADGui.Selection.addObserver(FreeCAD.CyclicSelectionObserver)
 
     def cycleSelectableObjects(self, event_callback):

@@ -27,6 +27,7 @@
 from bimtests.TestArchImportersGui import TestArchImportersGui
 from bimtests.TestArchAxisGui import TestArchAxisGui
 from bimtests.TestArchBuildingPartGui import TestArchBuildingPartGui
+from bimtests.TestBimSelectGui import TestBimSelectGui
 from bimtests.TestBimLibraryGui import TestBimLibraryGui
 from bimtests.TestBimPlanEditGui import TestBimPlanEditGui
 from bimtests.TestBimProjectManagerGui import TestBimProjectManagerGui

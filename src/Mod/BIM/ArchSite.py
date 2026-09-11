@@ -964,7 +964,6 @@ class _Site(ArchIFC.IfcProduct):
                 obj.SubtractionVolume = 0
             return
 
-        import TechDraw
         import Part
 
         area = 0
@@ -975,7 +974,9 @@ class _Site(ArchIFC.IfcProduct):
 
         for face in obj.Shape.Faces:
             if face.normalAt(0, 0).getAngle(FreeCAD.Vector(0, 0, 1)) < 1.5707:
-                edges.extend(TechDraw.project(face, FreeCAD.Vector(0, 0, 1))[0].Edges)
+                edges.extend(Part.project(face, FreeCAD.Vector(0, 0, 1))[0].Edges)
+        import TechDraw
+
         outer = TechDraw.findOuterWire(edges)
 
         # compute area

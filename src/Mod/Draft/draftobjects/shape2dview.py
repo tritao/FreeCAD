@@ -156,16 +156,16 @@ class Shape2DView(DraftObject):
     def getProjected(self, obj, shape, direction):
         "returns projected edges from a shape and a direction"
         import Part
-        import TechDraw
 
         edges = []
-        edge_compounds = TechDraw.projectEx(shape, direction)
-        if not getattr(obj, "HiddenLines", False):
-            edge_compounds = edge_compounds[0:5]
-        for compound in edge_compounds:
-            edges.extend(compound.Edges)
-        if edges:
-            edges = TechDraw.scrubEdges(edges)  # Remove overlapping edges.
+        _groups = Part.projectEx(shape, direction)
+        for g in _groups[0:5]:
+            if not g.isNull():
+                edges.append(g)
+        if getattr(obj, "HiddenLines", False):
+            for g in _groups[5:]:
+                if not g.isNull():
+                    edges.append(g)
         edges = self.cleanExcluded(obj, edges)
         if getattr(obj, "Tessellation", False):
             return geo_wires.cleanProjection(

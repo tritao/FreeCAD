@@ -279,10 +279,66 @@ void DocumentObject::enforceRecompute()
     touch(false);
 }
 
+void DocumentObject::requestDeferredRecompute()
+{
+    if (!_pDoc || !_pDoc->testStatus(Document::Recomputing)) {
+        enforceRecompute();
+        return;
+    }
+
+    auto target = _pDoc->currentRecomputePhase();
+    if (!isActiveRecomputePhase(target)) {
+        enforceRecompute();
+        return;
+    }
+
+    if (target != RecomputePhase::Finalize) {
+        target = nextRecomputePhase(target);
+    }
+
+    requestDeferredRecompute(target);
+}
+
+void DocumentObject::requestDeferredRecompute(RecomputePhase target)
+{
+    if (!_pDoc || !_pDoc->testStatus(Document::Recomputing)) {
+        enforceRecompute();
+        return;
+    }
+
+    auto current = _pDoc->currentRecomputePhase();
+    if (!isActiveRecomputePhase(current)) {
+        enforceRecompute();
+        return;
+    }
+
+    if (!isActiveRecomputePhase(target)) {
+        target = current;
+    }
+
+    target = maxRecomputePhase(target, current);
+    target = maxRecomputePhase(target, getRecomputePhase());
+    if (hasDeferredRecomputeRequest()) {
+        target = maxRecomputePhase(target, deferredRecomputePhase);
+    }
+
+    deferredRecomputePhase = target;
+    StatusBits.set(ObjectStatus::DeferredRecompute);
+}
+
+RecomputePhase DocumentObject::getRecomputePhase() const
+{
+    return RecomputePhase::Normal;
+}
+
 bool DocumentObject::mustRecompute() const
 {
     if (StatusBits.test(ObjectStatus::Freeze)) {
         return false;
+    }
+
+    if (StatusBits.test(ObjectStatus::DeferredRecompute)) {
+        return true;
     }
 
     if (StatusBits.test(ObjectStatus::Enforce)) {

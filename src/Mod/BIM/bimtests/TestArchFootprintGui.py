@@ -21,13 +21,31 @@
 """GUI regressions for footprint display data."""
 
 import Arch
+import ArchSpace
 import FreeCAD
+import FreeCADGui
+import os
 import Part
+import tempfile
 from bimtests import TestArchBaseGui
 from draftutils import params
+from unittest.mock import patch
 
 
 class TestArchFootprintGui(TestArchBaseGui.TestArchBaseGui):
+
+    def _assert_vector_almost_equal(self, left, right, delta=1e-4):
+        self.assertAlmostEqual(left.x, right.x, delta=delta)
+        self.assertAlmostEqual(left.y, right.y, delta=delta)
+        self.assertAlmostEqual(left.z, right.z, delta=delta)
+
+    def _get_space_label_translation(self, space):
+        value = space.ViewObject.Proxy.coords.translation.getValue()
+        return FreeCAD.Vector(value[0], value[1], value[2])
+
+    def _get_expected_space_label_translation(self, space):
+        pos = space.ViewObject.Proxy.getTextPosition(space.ViewObject)
+        return FreeCAD.Vector(pos.x, pos.y, pos.z + 0.01)
 
     def _get_line_polylines(self, proxy):
         polylines = []
@@ -382,18 +400,426 @@ class TestArchFootprintGui(TestArchBaseGui.TestArchBaseGui):
         cut_z, base_z = proxy._get_footprint_cut_context()
         profile = proxy._get_hosted_opening_plan_frame(door.Shape, cut_z, base_z)
         self.assertIsNotNone(profile)
+        hinge = polylines[0][0]
+        hinge_v = hinge.sub(profile["origin"]).dot(profile["axis_v"])
+        _hinge_at_min, swing_sign = proxy._get_door_symbol_style()
+        source_vmin = float(profile.get("source_vmin", profile["vmin"]))
+        source_vmax = float(profile.get("source_vmax", profile["vmax"]))
+        expected_hinge_v = source_vmin if swing_sign < 0 else source_vmax
+        self.assertAlmostEqual(hinge_v, expected_hinge_v, delta=1e-6)
+
+    def test_space_auto_text_position_avoids_hosted_door_footprint_symbol(self):
+        """Automatic space text should avoid hosted door plan symbols, not only equipment."""
+
+        previous_cut_height = params.get_param_arch("FootprintCutHeight")
+        params.set_param_arch("FootprintCutHeight", 1000.0)
+        self.addCleanup(params.set_param_arch, "FootprintCutHeight", previous_cut_height)
+
+        base = self.document.addObject("Part::Feature", "DoorLabelAvoidanceBase")
+        base.Shape = Part.makeBox(6000, 4000, 2500)
+        space = Arch.makeSpace(base, name="Living Room")
+
+        wall = Arch.makeWall(length=2500, width=200, height=2500)
+        wall.Placement.Base = FreeCAD.Vector(1750, 2000, 0)
+        door = self._make_hosted_door(
+            wall,
+            "CenteredFootprintDoor",
+            x_start=800,
+            z_start=0,
+            width=900.0,
+            height=2100.0,
+        )
+        self.document.recompute()
+        self.pump_gui_events()
+
+        text_box = ArchSpace._estimate_space_text_box(space.ViewObject)
+        default_point = ArchSpace._get_default_space_text_position(space)
+        default_bounds = ArchSpace._get_label_candidate_bounds(default_point, text_box, "Center")
+        faces = ArchSpace._get_space_footprint_faces(space)
+        placement = ArchSpace._get_object_global_placement(door)
+        inverse_placement = placement.inverse()
+
+        def to_local(offset_x, offset_y):
+            point = inverse_placement.multVec(
+                default_point.add(FreeCAD.Vector(offset_x, offset_y, 0))
+            )
+            return [point.x, point.y, 0.0]
+
+        centered_symbol = [
+            [
+                to_local(-700, -500),
+                to_local(700, -500),
+                to_local(700, 500),
+                to_local(-700, 500),
+                to_local(-700, -500),
+            ]
+        ]
+
+        with patch.object(
+            door.ViewObject.Proxy,
+            "_collect_local_footprint_polylines",
+            return_value=centered_symbol,
+        ):
+            obstacle_bounds = ArchSpace._collect_space_label_obstacle_bounds(space, faces)
+
+            self.assertEqual(len(obstacle_bounds), 1)
+            self.assertTrue(ArchSpace._bounds_intersect_xy(default_bounds, obstacle_bounds[0]))
+
+            text_point = ArchSpace._get_automatic_space_text_position(
+                space,
+                text_box=text_box,
+                text_align="Center",
+            )
+
+        text_bounds = ArchSpace._get_label_candidate_bounds(text_point, text_box, "Center")
+
+        self.assertTrue(ArchSpace._point_in_space_footprint(faces, text_point))
+        self.assertFalse(ArchSpace._bounds_intersect_xy(text_bounds, obstacle_bounds[0]))
+        self.assertGreater(text_point.distanceToPoint(default_point), 1.0)
+        self.assertEqual(door.IfcType, "Door")
+
+    def test_space_auto_text_position_keeps_a_real_gap_from_symbols(self):
+        """Automatic space text should keep a visible gap from nearby symbols."""
+
+        base = self.document.addObject("Part::Feature", "BedroomLabelClearanceBase")
+        base.Shape = Part.makeBox(6000, 4000, 2500)
+        space = Arch.makeSpace(base, name="Bedroom")
+
+        equipment_base = self.document.addObject("Part::Box", "BedroomBedBase")
+        equipment_base.Length = 1400
+        equipment_base.Width = 1950
+        equipment_base.Height = 600
+        equipment = Arch.makeEquipment(equipment_base)
+        equipment.Placement.Base = FreeCAD.Vector(0, 0, 0)
+        self.document.recompute()
+        self.pump_gui_events()
+
+        text_box = ArchSpace._estimate_space_text_box(space.ViewObject)
+        default_point = ArchSpace._get_default_space_text_position(space)
+        faces = ArchSpace._get_space_footprint_faces(space)
+        minimum_clearance = ArchSpace._get_space_text_minimum_clearance(text_box)
+        obstacle_polyline = [
+            [
+                [1900.0, 900.0, 0.0],
+                [3200.0, 900.0, 0.0],
+                [3200.0, 2800.0, 0.0],
+                [1900.0, 2800.0, 0.0],
+                [1900.0, 900.0, 0.0],
+            ]
+        ]
+
+        with patch.object(
+            equipment.ViewObject.Proxy,
+            "_collect_local_footprint_polylines",
+            return_value=obstacle_polyline,
+        ):
+            obstacle_bounds = ArchSpace._collect_space_label_obstacle_bounds(space, faces)
+            text_point = ArchSpace._get_automatic_space_text_position(
+                space,
+                text_box=text_box,
+                text_align="Center",
+            )
+
+        text_bounds = ArchSpace._get_label_candidate_bounds(text_point, text_box, "Center")
+        clearance = ArchSpace._bounds_distance_xy(text_bounds, obstacle_bounds[0])
+
+        self.assertEqual(len(obstacle_bounds), 1)
+        self.assertTrue(ArchSpace._point_in_space_footprint(faces, text_point))
+        self.assertFalse(ArchSpace._bounds_intersect_xy(text_bounds, obstacle_bounds[0]))
+        self.assertGreaterEqual(clearance, minimum_clearance - 1e-6)
+
+    def test_space_auto_text_position_prefers_nearby_feasible_position_over_corner_clearance(self):
+        """Automatic space text should stay near the room center once it finds a real clear gap."""
+
+        base = self.document.addObject("Part::Feature", "AlignedLabelBase")
+        base.Shape = Part.makeBox(5200, 4600, 2500)
+        space = Arch.makeSpace(base, name="Bedroom")
+
+        equipment_base = self.document.addObject("Part::Box", "AlignedBedBase")
+        equipment_base.Length = 1400
+        equipment_base.Width = 1950
+        equipment_base.Height = 600
+        equipment = Arch.makeEquipment(equipment_base)
+        equipment.Placement.Base = FreeCAD.Vector(0, 0, 0)
+        self.document.recompute()
+        self.pump_gui_events()
+
+        text_box = ArchSpace._estimate_space_text_box(space.ViewObject)
+        default_point = ArchSpace._get_default_space_text_position(space)
+        default_bounds = ArchSpace._get_label_candidate_bounds(default_point, text_box, "Center")
+        faces = ArchSpace._get_space_footprint_faces(space)
+        obstacle_xmax = default_bounds[2] - 100.0
+        obstacle_polyline = [
+            [
+                [250.0, 900.0, 0.0],
+                [obstacle_xmax, 900.0, 0.0],
+                [obstacle_xmax, 2800.0, 0.0],
+                [250.0, 2800.0, 0.0],
+                [250.0, 900.0, 0.0],
+            ]
+        ]
+        with patch.object(
+            equipment.ViewObject.Proxy,
+            "_collect_local_footprint_polylines",
+            return_value=obstacle_polyline,
+        ):
+            obstacle_bounds = ArchSpace._collect_space_label_obstacle_bounds(space, faces)
+            space_shape_bounds = space.Shape.BoundBox
+            space_bounds = (
+                float(space_shape_bounds.XMin),
+                float(space_shape_bounds.YMin),
+                float(space_shape_bounds.XMax),
+                float(space_shape_bounds.YMax),
+                float(space_shape_bounds.ZMin),
+                float(space_shape_bounds.ZMax),
+            )
+            boundary_polylines = ArchSpace._get_space_boundary_polylines(faces)
+            best_clearance_point = ArchSpace._search_best_space_text_anchor(
+                default_point,
+                faces,
+                boundary_polylines,
+                space_bounds,
+                text_box,
+                "Center",
+                obstacle_bounds,
+                0.0,
+            )
+            text_point = ArchSpace._get_automatic_space_text_position(
+                space,
+                text_box=text_box,
+                text_align="Center",
+            )
+
+        text_bounds = ArchSpace._get_label_candidate_bounds(text_point, text_box, "Center")
+
+        self.assertEqual(len(obstacle_bounds), 1)
+        self.assertTrue(ArchSpace._bounds_intersect_xy(default_bounds, obstacle_bounds[0]))
+        self.assertTrue(ArchSpace._point_in_space_footprint(faces, text_point))
+        self.assertFalse(ArchSpace._bounds_intersect_xy(text_bounds, obstacle_bounds[0]))
+        self.assertLess(
+            ArchSpace._space_text_distance_to_default(text_point, default_point),
+            ArchSpace._space_text_distance_to_default(best_clearance_point, default_point),
+        )
+
+    def test_space_auto_text_refreshes_after_equipment_footprint_update_without_recompute(self):
+        """Updating an equipment plan footprint should refresh auto-positioned space labels in the live view."""
+
+        base = self.document.addObject("Part::Feature", "RefreshEquipmentLabelBase")
+        base.Shape = Part.makeBox(6000, 4000, 2500)
+        space = Arch.makeSpace(base, name="Bedroom")
+
+        equipment_base = self.document.addObject("Part::Box", "RefreshBedBase")
+        equipment_base.Length = 1400
+        equipment_base.Width = 1950
+        equipment_base.Height = 600
+        equipment = Arch.makeEquipment(equipment_base)
+        self.document.recompute()
+        self.pump_gui_events()
+
+        default_translation = self._get_space_label_translation(space)
+        self._assert_vector_almost_equal(
+            default_translation, self._get_expected_space_label_translation(space)
+        )
+
+        obstacle_polyline = [
+            [
+                [1900.0, 900.0, 0.0],
+                [3200.0, 900.0, 0.0],
+                [3200.0, 2800.0, 0.0],
+                [1900.0, 2800.0, 0.0],
+                [1900.0, 900.0, 0.0],
+            ]
+        ]
+
+        with patch.object(
+            equipment.ViewObject.Proxy,
+            "_collect_local_footprint_polylines",
+            return_value=obstacle_polyline,
+        ):
+            expected_translation = self._get_expected_space_label_translation(space)
+            self.assertGreater(default_translation.distanceToPoint(expected_translation), 1.0)
+
+            equipment.ViewObject.Proxy.updateFootprint()
+            self.pump_gui_events()
+
+            refreshed_translation = self._get_space_label_translation(space)
+
+        self._assert_vector_almost_equal(refreshed_translation, expected_translation)
+
+        with patch.object(
+            equipment.ViewObject.Proxy,
+            "_collect_local_footprint_polylines",
+            return_value=[],
+        ):
+            expected_reset_translation = self._get_expected_space_label_translation(space)
+            self.assertGreater(
+                refreshed_translation.distanceToPoint(expected_reset_translation), 1.0
+            )
+
+            equipment.ViewObject.Proxy.updateFootprint()
+            self.pump_gui_events()
+
+            reset_translation = self._get_space_label_translation(space)
+
+        self._assert_vector_almost_equal(reset_translation, expected_reset_translation)
+
+    def test_space_auto_text_refreshes_after_hosted_door_footprint_update_without_recompute(self):
+        """Updating a hosted door plan footprint should refresh auto-positioned space labels in the live view."""
+
+        base = self.document.addObject("Part::Feature", "RefreshDoorLabelBase")
+        base.Shape = Part.makeBox(6000, 4000, 2500)
+        space = Arch.makeSpace(base, name="Living Room")
+
+        wall = Arch.makeWall(length=2500, width=200, height=2500)
+        wall.Placement.Base = FreeCAD.Vector(1750, 2000, 0)
+        door = self._make_hosted_door(
+            wall,
+            "RefreshCenteredDoor",
+            x_start=800,
+            z_start=0,
+            width=900.0,
+            height=2100.0,
+        )
+        self.document.recompute()
+        self.pump_gui_events()
+
+        default_translation = self._get_space_label_translation(space)
+        self._assert_vector_almost_equal(
+            default_translation, self._get_expected_space_label_translation(space)
+        )
+
+        placement = ArchSpace._get_object_global_placement(door)
+        inverse_placement = placement.inverse()
+        default_point = ArchSpace._get_default_space_text_position(space)
+
+        def to_local(offset_x, offset_y):
+            point = inverse_placement.multVec(
+                default_point.add(FreeCAD.Vector(offset_x, offset_y, 0))
+            )
+            return [point.x, point.y, 0.0]
+
+        centered_symbol = [
+            [
+                to_local(-700, -500),
+                to_local(700, -500),
+                to_local(700, 500),
+                to_local(-700, 500),
+                to_local(-700, -500),
+            ]
+        ]
+
+        with patch.object(
+            door.ViewObject.Proxy,
+            "_collect_local_footprint_polylines",
+            return_value=centered_symbol,
+        ):
+            expected_translation = self._get_expected_space_label_translation(space)
+            self.assertGreater(default_translation.distanceToPoint(expected_translation), 1.0)
+
+            door.ViewObject.Proxy.updateFootprint()
+            self.pump_gui_events()
+
+            refreshed_translation = self._get_space_label_translation(space)
+
+        self._assert_vector_almost_equal(refreshed_translation, expected_translation)
+
+    def test_space_auto_text_refreshes_after_document_reload(self):
+        """Auto-positioned space labels should refresh to the computed point after reopening a document."""
+
+        base = self.document.addObject("Part::Feature", "ReloadLabelBase")
+        base.Shape = Part.makeBox(6000, 4000, 2500)
+        space = Arch.makeSpace(base, name="Bedroom")
+        space_name = space.Name
+
+        equipment_base = self.document.addObject("Part::Box", "ReloadBedBase")
+        equipment_base.Length = 2200
+        equipment_base.Width = 1900
+        equipment_base.Height = 600
+        equipment = Arch.makeEquipment(equipment_base)
+        equipment.Placement.Base = FreeCAD.Vector(200, 900, 0)
+        self.document.recompute()
+        self.pump_gui_events(timeout_ms=500)
+
+        expected_before = self._get_expected_space_label_translation(space)
+        self._assert_vector_almost_equal(self._get_space_label_translation(space), expected_before)
+
+        tmp = tempfile.NamedTemporaryFile(suffix=".FCStd", delete=False)
+        tmp.close()
+        try:
+            self.document.saveAs(tmp.name)
+            doc_name = self.document.Name
+            FreeCAD.closeDocument(doc_name)
+
+            self.document = FreeCAD.openDocument(tmp.name)
+            if FreeCAD.GuiUp:
+                FreeCAD.setActiveDocument(self.document.Name)
+                FreeCADGui.ActiveDocument = FreeCADGui.getDocument(self.document.Name)
+            self.pump_gui_events(timeout_ms=500)
+
+            restored_space = self.document.getObject(space_name)
+            self.assertIsNotNone(restored_space)
+
+            restored_translation = self._get_space_label_translation(restored_space)
+            expected_after = self._get_expected_space_label_translation(restored_space)
+            default_point = ArchSpace._get_default_space_text_position(restored_space)
+            default_translation = FreeCAD.Vector(
+                default_point.x, default_point.y, default_point.z + 0.01
+            )
+
+            self._assert_vector_almost_equal(restored_translation, expected_after)
+            self.assertGreater(restored_translation.distanceToPoint(default_translation), 1.0)
+        finally:
+            if os.path.exists(tmp.name):
+                os.unlink(tmp.name)
+
+    def test_rotated_wall_door_footprint_stays_in_host_frame(self):
+        """Hosted door symbols should use the real host frame on rotated walls."""
+
+        previous_cut_height = params.get_param_arch("FootprintCutHeight")
+        params.set_param_arch("FootprintCutHeight", 1000.0)
+        self.addCleanup(params.set_param_arch, "FootprintCutHeight", previous_cut_height)
+
+        wall = Arch.makeWall(length=3000, width=200, height=2500)
+        wall.Placement.Base = FreeCAD.Vector(1200, 800, 0)
+        wall.Placement.Rotation = FreeCAD.Rotation(FreeCAD.Vector(0, 0, 1), 35)
+        self.document.recompute()
+
+        door = self._make_hosted_door(
+            wall,
+            "RotatedFootprintDoor",
+            x_start=900,
+            z_start=0,
+            width=900.0,
+            height=2100.0,
+        )
+        self.pump_gui_events()
+
+        proxy = door.ViewObject.Proxy
+        polylines = self._get_line_polylines(proxy)
+        self.assertEqual(len(polylines), 3)
+
+        cut_z, base_z = proxy._get_footprint_cut_context()
+        profile = proxy._get_hosted_opening_plan_frame(door.Shape, cut_z, base_z)
+        self.assertIsNotNone(profile)
+
         host_bounds = proxy._get_host_plan_v_bounds(
             profile["origin"], profile["axis_u"], profile["axis_v"]
         )
         self.assertIsNotNone(host_bounds)
         host_vmin, host_vmax = host_bounds
+        self.assertAlmostEqual(float(profile["vmin"]), host_vmin, delta=1e-6)
+        self.assertAlmostEqual(float(profile["vmax"]), host_vmax, delta=1e-6)
+
+        source_vmin = float(profile.get("source_vmin", profile["vmin"]))
+        source_vmax = float(profile.get("source_vmax", profile["vmax"]))
+        self.assertGreaterEqual(source_vmin, host_vmin - 1e-6)
+        self.assertLessEqual(source_vmax, host_vmax + 1e-6)
+
         hinge = polylines[0][0]
         hinge_v = hinge.sub(profile["origin"]).dot(profile["axis_v"])
-        thickness = host_vmax - host_vmin
-        expected_inset = min(thickness * 0.25, 30.0)
-        self.assertGreater(hinge_v, host_vmin)
-        self.assertLess(hinge_v, host_vmax)
-        self.assertAlmostEqual(hinge_v - host_vmin, expected_inset, delta=1e-6)
+        _hinge_at_min, swing_sign = proxy._get_door_symbol_style()
+        expected_hinge_v = source_vmin if swing_sign < 0 else source_vmax
+        self.assertAlmostEqual(hinge_v, expected_hinge_v, delta=1e-4)
 
     def test_legacy_opening_element_door_populates_for_cut_opening(self):
         """Legacy hosted openings with door-like WindowParts should still render as doors."""

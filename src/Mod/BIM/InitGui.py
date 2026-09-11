@@ -937,6 +937,9 @@ class BIMWorkbench(Workbench):
         def scene_ready():
             return (FreeCAD.ActiveDocument is not None) and workbench._has_scene_view()
 
+        def plan_edit_active():
+            return BimPlanSession.get_active_session() is not None
+
         context_card = QtGui.QFrame()
         context_card.setObjectName("BimTaskWatcherContext")
         context_card.setFrameShape(QtGui.QFrame.StyledPanel)
@@ -969,14 +972,14 @@ class BIMWorkbench(Workbench):
                 self._condition = condition
 
             def shouldShow(self):
-                return scene_ready() and self._condition()
+                return scene_ready() and not plan_edit_active() and self._condition()
 
         class BimContextWatcher:
             def __init__(self):
                 self.widgets = [context_card]
 
             def shouldShow(self):
-                if not scene_ready():
+                if not scene_ready() or plan_edit_active():
                     return False
 
                 state, hint = workbench._taskwatcher_context()
@@ -999,10 +1002,38 @@ class BIMWorkbench(Workbench):
             def __del__(self):
                 self._detach_controls()
 
+            def _set_taskwatcher_context_visible(self, visible):
+                task_view = None
+                try:
+                    task_view = FreeCADGui.Control.taskPanel()
+                except Exception:
+                    task_view = None
+                if task_view is None:
+                    return
+                try:
+                    context_panel = task_view.findChild(QtGui.QWidget, "TaskWatcherContextPanel")
+                except Exception:
+                    context_panel = None
+                if context_panel is None:
+                    return
+                try:
+                    context_panel.setVisible(bool(visible))
+                except Exception:
+                    pass
+                try:
+                    context_panel.updateGeometry()
+                except Exception:
+                    pass
+                try:
+                    task_view.updateGeometry()
+                except Exception:
+                    pass
+
             def _detach_controls(self):
                 widget = self._widget
                 self._session = None
                 self._widget = None
+                self._set_taskwatcher_context_visible(True)
                 if widget is None:
                     return
                 try:
@@ -1022,15 +1053,15 @@ class BIMWorkbench(Workbench):
                 controls = getattr(session, "task_panel", None)
                 widget = getattr(controls, "form", None) if controls else None
                 if widget is None:
-                    return False
+                    return None
                 if self._session is session and self._widget is widget:
-                    return True
+                    return "reused"
 
                 self._detach_controls()
                 self.layout.addWidget(widget)
                 self._session = session
                 self._widget = widget
-                return True
+                return "attached"
 
             def shouldShow(self):
                 if not scene_ready():
@@ -1041,10 +1072,15 @@ class BIMWorkbench(Workbench):
                 if session is None:
                     self._detach_controls()
                     return False
-                if not self._ensure_controls(session):
+                controls_state = self._ensure_controls(session)
+                if not controls_state:
                     return False
+                self._set_taskwatcher_context_visible(False)
                 try:
-                    session.task_panel.refresh_from_session()
+                    if controls_state == "reused":
+                        session.task_panels.refresh_task_panels(reason="selection")
+                    else:
+                        session.task_panels.refresh_task_panels(reason="full")
                 except Exception:
                     self._detach_controls()
                     return False

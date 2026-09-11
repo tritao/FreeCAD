@@ -705,6 +705,8 @@ class _Wall(ArchComponent.Component):
                     )
         base = self.processSubShapes(obj, base, pl)
         trimmed_base = self.process_endings(obj, base, pl, end_conditions)
+        if self._should_preserve_existing_relation_shape(obj, trimmed_base):
+            return
         if any(end_conditions.values()):
             # End-condition booleans are transient clipping operations.  The
             # resulting topology no longer has a complete correspondence with
@@ -754,7 +756,7 @@ class _Wall(ArchComponent.Component):
                 )
 
         # set the Area property
-        obj.Area = obj.Length.Value * obj.Height.Value
+        self.setPropertyIfChanged(obj, "Area", obj.Length.Value * obj.Height.Value)
 
     def onBeforeChange(self, obj, prop):
         """Method called before the object has a property changed.
@@ -1656,6 +1658,23 @@ class _Wall(ArchComponent.Component):
             return [start, end, midpoint]
 
         try:
+            offset = float(getattr(getattr(obj, "Offset", None), "Value", 0.0) or 0.0)
+            material = getattr(obj, "Material", None)
+            has_layers = bool(getattr(material, "Thicknesses", None))
+            has_alignment_overrides = bool(
+                getattr(obj, "OverrideAlign", None) or getattr(obj, "OverrideOffset", None)
+            )
+            if (
+                getattr(obj, "Align", "Center") == "Center"
+                and abs(offset) <= 1e-9
+                and not has_layers
+                and not has_alignment_overrides
+            ):
+                return [start, end, midpoint]
+        except Exception:
+            pass
+
+        try:
             faces = self.getFootprint(obj)
         except Exception:
             return [start, end, midpoint]
@@ -2221,6 +2240,29 @@ class _Wall(ArchComponent.Component):
             conditions, getattr(obj, "EndConditionOrder" + end_name)
         )
 
+    @staticmethod
+    def _shape_has_solid(shape):
+        if shape is None:
+            return False
+        try:
+            if shape.isNull():
+                return False
+        except Exception:
+            return False
+        return bool(list(getattr(shape, "Solids", []) or []))
+
+    def _should_preserve_existing_relation_shape(self, obj, shape):
+        if self._shape_has_solid(shape):
+            return False
+        if not self._shape_has_solid(getattr(obj, "Shape", None)):
+            return False
+
+        try:
+            has_relations = any(True for _relation in ArchWallJoinUtils.iter_wall_relations(obj))
+        except Exception:
+            return False
+        return has_relations
+
 
 if FreeCAD.GuiUp:
 
@@ -2450,7 +2492,11 @@ class _ViewProviderWall(ArchComponent.ViewProviderComponent):
             obj.ViewObject.DiffuseColor = obj.ViewObject.DiffuseColor
 
     def updateFootprint(self):
-        ArchComponent.ViewProviderComponent.updateFootprint(self)
+        faces = None
+        if hasattr(self, "Object"):
+            faces = self.Object.Proxy.getFootprint(self.Object)
+
+        ArchComponent.ViewProviderComponent.updateFootprint(self, faces=faces)
 
         if not hasattr(self, "lcoords") or not hasattr(self, "lset"):
             return
@@ -2458,29 +2504,27 @@ class _ViewProviderWall(ArchComponent.ViewProviderComponent):
         line_verts = []
         line_counts = []
 
-        if hasattr(self, "Object"):
-            faces = self.Object.Proxy.getFootprint(self.Object)
-            if faces:
-                inverse_placement = None
-                placement = getattr(self.Object, "Placement", None)
-                if placement:
-                    try:
-                        inverse_placement = placement.inverse()
-                    except Exception:
-                        inverse_placement = None
+        if faces:
+            inverse_placement = None
+            placement = getattr(self.Object, "Placement", None)
+            if placement:
+                try:
+                    inverse_placement = placement.inverse()
+                except Exception:
+                    inverse_placement = None
 
-                for face in faces:
-                    for wire in face.Wires:
-                        for edge in wire.Edges:
-                            polyline = self._collect_edge_points(edge)
-                            if len(polyline) < 2:
-                                continue
-                            start_idx = len(line_verts)
-                            for point in polyline:
-                                if inverse_placement is not None:
-                                    point = inverse_placement.multVec(point)
-                                line_verts.append([point.x, point.y, point.z])
-                            line_counts.append(len(line_verts) - start_idx)
+            for face in faces:
+                for wire in face.Wires:
+                    for edge in wire.Edges:
+                        polyline = self._collect_edge_points(edge)
+                        if len(polyline) < 2:
+                            continue
+                        start_idx = len(line_verts)
+                        for point in polyline:
+                            if inverse_placement is not None:
+                                point = inverse_placement.multVec(point)
+                            line_verts.append([point.x, point.y, point.z])
+                        line_counts.append(len(line_verts) - start_idx)
 
         self._update_footprint_line_nodes(
             self.lcoords,

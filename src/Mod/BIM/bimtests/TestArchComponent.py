@@ -26,6 +26,10 @@
 
 import Arch
 import ArchComponent
+import BimContextualRendering
+from bimplan import contextual_rendering as plan_contextual_rendering
+from bimplan import contextual_editing as plan_contextual_editing
+from bimplan import representation_context as plan_representation_context
 import Draft
 import Part
 import FreeCAD as App
@@ -33,9 +37,341 @@ from bimtests import TestArchBase
 from draftutils.messages import _msg
 
 from math import pi, cos, sin, radians
+from types import SimpleNamespace
+from unittest.mock import MagicMock, patch
 
 
 class TestArchComponent(TestArchBase.TestArchBase):
+
+    def test_bim_edit_operation_reports_constraints_and_ranges(self):
+        obj = self.document.addObject("Part::Feature", "ConstrainedEdit")
+        obj.addProperty("App::PropertyLength", "Height")
+        obj.Height = 1000
+        operation = ArchComponent.BIMEditOperation(
+            "Height",
+            "Edit Height",
+            lambda source: source.Height.Value,
+            lambda source, value: setattr(source, "Height", value),
+            minimum=100.0,
+            maximum=5000.0,
+        )
+
+        self.assertTrue(operation.validate(obj, 1000).allowed)
+        too_small = operation.validate(obj, 50)
+        self.assertFalse(too_small.allowed)
+        self.assertEqual(too_small.minimum, 100.0)
+        self.assertIn("at least", too_small.reason)
+        with self.assertRaisesRegex(ValueError, "at least"):
+            operation.apply(obj, 50)
+
+    def test_contextual_handle_projects_drag_and_commits_transaction(self):
+        """A Section handle should ignore motion normal to its active plane."""
+
+        obj = self.document.addObject("Part::Feature", "SemanticHeight")
+        self.document.UndoMode = 1
+        obj.addProperty("App::PropertyLength", "Height")
+        obj.Height = 3000.0
+        frame = App.Placement(
+            App.Vector(250, 100, 50),
+            App.Rotation(App.Vector(0, 1, 0), 90),
+        )
+        context = ArchComponent.RepresentationContext(
+            purpose=ArchComponent.RepresentationPurpose.SECTION,
+            reference_frame=frame,
+            target_offset=0.0,
+        )
+        direction = ArchComponent.representation_vertical_direction(context)
+        point = ArchComponent.project_to_representation_plane(App.Vector(0, 0, 3000), context)
+        operation = ArchComponent.BIMEditOperation(
+            "WallHeight",
+            "Edit Wall Height",
+            lambda source: source.Height.Value,
+            lambda source, value: setattr(source, "Height", value),
+            property_name="Height",
+        )
+        handle = ArchComponent.BIMEditHandle(
+            obj, "WallHeight", point, direction, operation, subelement="Height"
+        )
+        editor = plan_contextual_editing.BIMContextualHandleEditor(context)
+
+        editor.begin(handle)
+        normal = frame.Rotation.multVec(App.Vector(0, 0, 1))
+        preview = editor.preview(point + direction * 500 + normal * 1700)
+        self.assertAlmostEqual(preview.value, 3500.0)
+        editor.commit(point + direction * 500 + normal * 1700)
+
+        self.assertAlmostEqual(obj.Height.Value, 3500.0)
+        self.document.undo()
+        self.assertAlmostEqual(obj.Height.Value, 3000.0)
+        self.document.redo()
+        self.assertAlmostEqual(obj.Height.Value, 3500.0)
+
+    def test_plan_contextual_rendering_refreshes_dependencies_and_closes(self):
+        """Plan Edit should incrementally render walls and their hosted openings."""
+
+        wall = object()
+        opening = object()
+        wall_representation = SimpleNamespace(source=wall)
+        opening_representation = SimpleNamespace(source=opening)
+        renderer = MagicMock()
+        get_contextual_representation = MagicMock(
+            side_effect=lambda obj: wall_representation if obj is wall else opening_representation
+        )
+        session = SimpleNamespace(
+            view=object(),
+            doc=SimpleNamespace(Objects=(wall, opening)),
+            active_storey=None,
+            viewport=SimpleNamespace(request_view_redraw=MagicMock()),
+            visibility=SimpleNamespace(get_plan_semantic_object=lambda obj: obj),
+            selection=SimpleNamespace(
+                targets=SimpleNamespace(is_plan_selectable_wall=lambda obj: obj is wall)
+            ),
+            openings=SimpleNamespace(
+                is_hosted_opening_object=lambda obj: obj is opening,
+                get_plan_opening_instances=lambda: (opening,),
+                get_wall_hosted_openings=lambda obj: (opening,) if obj is wall else (),
+                is_opening_visual_dependency=lambda candidate, obj: (
+                    candidate is opening and obj is wall
+                ),
+            ),
+            overlays=SimpleNamespace(
+                geometry=SimpleNamespace(
+                    get_wall_representation=lambda obj: wall_representation,
+                    get_opening_representation=lambda obj: opening_representation,
+                    get_contextual_representation=get_contextual_representation,
+                )
+            ),
+            representation_context=SimpleNamespace(includes_object=lambda _obj: True),
+        )
+        api = plan_contextual_rendering.PlanContextualRenderingAPI(session)
+
+        with patch(
+            "bimplan.contextual_rendering."
+            "BimContextualRendering.ContextualRepresentationRenderer",
+            return_value=renderer,
+        ):
+            api.start()
+            renderer.reset_mock()
+            api.refresh_object(wall)
+            api.close()
+
+        renderer.set_representation.assert_any_call(wall_representation)
+        renderer.set_representation.assert_any_call(opening_representation)
+        get_contextual_representation.assert_any_call(wall)
+        get_contextual_representation.assert_any_call(opening)
+        renderer.close.assert_called_once_with()
+
+    def test_section_plane_provides_arbitrary_representation_context(self):
+        """SectionPlane should configure the same BIM representation pipeline as plans."""
+
+        section = Arch.makeSectionPlane(name="ContextSection")
+        section.Placement = App.Placement(
+            App.Vector(25, 0, 0), App.Rotation(App.Vector(0, 1, 0), 90)
+        )
+        section.Depth = 750
+
+        context = section.Proxy.getRepresentationContext(section)
+
+        self.assertEqual(context.purpose, ArchComponent.RepresentationPurpose.SECTION)
+        self.assertEqual(context.reference_frame, section.Placement)
+        self.assertEqual(context.cut_offset, 0.0)
+        self.assertEqual(context.target_offset, 0.0)
+        self.assertEqual(context.projection_range, 750.0)
+        self.assertIs(context.source, section)
+
+    def test_representation_context_accepts_saved_view_provider_protocol(self):
+        """BIM Views should be able to provide profiles without Plan Edit knowing their type."""
+
+        expected = ArchComponent.RepresentationContext(
+            purpose=ArchComponent.RepresentationPurpose.ELEVATION,
+            reference_frame=App.Placement(),
+            profile="Architectural",
+        )
+        source = SimpleNamespace()
+        source.Proxy = SimpleNamespace(getRepresentationContext=lambda obj: expected)
+
+        context = plan_representation_context.context_from_source(source)
+
+        self.assertIs(context, expected)
+
+    def test_representation_context_transforms_and_projects_arbitrary_points(self):
+        """Context-local editing math should not assume global XY or Z."""
+
+        frame = App.Placement(App.Vector(10, 20, 30), App.Rotation(App.Vector(1, 0, 0), 90))
+        context = ArchComponent.RepresentationContext(
+            purpose=ArchComponent.RepresentationPurpose.SECTION,
+            reference_frame=frame,
+            target_offset=5.0,
+        )
+        api = plan_representation_context.PlanRepresentationContextAPI(SimpleNamespace())
+        api.context = context
+        local = App.Vector(4, 6, 12)
+
+        global_point = api.to_global(local)
+        roundtrip = api.to_local(global_point)
+        projected = api.to_local(api.project_to_plane(global_point))
+
+        self.assertLess(roundtrip.distanceToPoint(local), 1e-9)
+        self.assertAlmostEqual(projected.x, local.x)
+        self.assertAlmostEqual(projected.y, local.y)
+        self.assertAlmostEqual(projected.z, 5.0)
+        self.assertFalse(api.supports("wall_join"))
+        self.assertTrue(api.supports("semantic_snap"))
+
+    def test_contextual_renderer_keeps_same_object_viewer_local(self):
+        """Two viewers should own independent representations of one BIM object."""
+
+        class FakeView:
+            def __init__(self, layer):
+                self.scene = BimContextualRendering.coin.SoSeparator()
+                self.layer = layer
+                self.visibility_calls = []
+
+            def pushViewContextLayer(self):
+                return self.layer
+
+            def removeViewContextLayer(self, layer):
+                self.removed_layer = layer
+
+            def setViewVisibility(self, layer, source, state):
+                self.visibility_calls.append((layer, source, state))
+
+            def getSceneGraph(self):
+                return self.scene
+
+        source = self.document.addObject("Part::Feature", "ContextualSource")
+        plan = ArchComponent.BIMRepresentation(source, ArchComponent.PlanContext(1000, 0))
+        line = (App.Vector(0, 0, 0), App.Vector(100, 0, 0))
+        plan.add_geometry("projected_geometry", line, "Projection", "Projection1")
+        section = ArchComponent.BIMRepresentation(source, object())
+        face = Part.makePlane(100, 50)
+        section.add_geometry("cut_geometry", face, "CutFace", "Face1")
+        handle = section.add_edit_handle(
+            ArchComponent.BIMEditHandle(
+                source,
+                ArchComponent.BIMEditOperation(
+                    "Height",
+                    "Edit Height",
+                    lambda obj: obj.Height.Value,
+                    lambda obj, value: setattr(obj, "Height", value),
+                    property_name="Height",
+                ),
+                App.Vector(50, 50, 0),
+                App.Vector(0, 1, 0),
+                "Height",
+            )
+        )
+        first_view = FakeView(11)
+        second_view = FakeView(22)
+
+        first = BimContextualRendering.ContextualRepresentationRenderer(first_view)
+        second = BimContextualRendering.ContextualRepresentationRenderer(second_view)
+        first_node = first.set_representation(plan)
+        second_node = second.set_representation(section)
+
+        self.assertIsNot(first.root, second.root)
+        self.assertIsNot(first_node, second_node)
+        self.assertIs(first.set_representation(plan), first_node)
+        self.assertEqual(first_view.visibility_calls[-1], (11, source, "Hidden"))
+        self.assertEqual(second_view.visibility_calls[-1], (22, source, "Hidden"))
+        self.assertEqual(second.edit_handles_for(source), (handle,))
+        self.assertTrue(second.preview_handle(handle, App.Vector(50, 75, 0)))
+        self.assertTrue(second.set_handle_state(handle, "invalid"))
+        first.close()
+        self.assertEqual(first_view.removed_layer, 11)
+        self.assertEqual(second_view.scene.getNumChildren(), 1)
+        second.close()
+
+    def test_query_representation_snap_preserves_semantic_identity(self):
+        """Semantic snap queries should prefer vertices and retain their source mapping."""
+
+        source = self.document.addObject("Part::Feature", "SnapSource")
+        edge = Part.makeLine(App.Vector(0, 0, 0), App.Vector(100, 0, 0))
+        vertex = edge.Vertexes[0]
+        context = ArchComponent.PlanContext(cut_z=1000.0, target_z=0.0)
+        representation = ArchComponent.BIMRepresentation(source=source, context=context)
+        representation.add_geometry("snap_geometry", edge, "CutEdge", "Face1.Edge1")
+        representation.add_geometry("snap_geometry", vertex, "CutVertex", "Face1.Vertex1")
+
+        result = ArchComponent.query_representation_snap(
+            [representation], App.Vector(0, 0, 500), 1.0, context=context
+        )
+
+        self.assertIsNotNone(result)
+        self.assertIs(result.source, source)
+        self.assertEqual(result.role, "CutVertex")
+        self.assertEqual(result.subelement, "Face1.Vertex1")
+        self.assertAlmostEqual(result.point.z, 0.0)
+
+    def test_query_representation_pick_accepts_cut_face_interior(self):
+        """A filled contextual cut face should remain pickable away from its boundary."""
+
+        source = self.document.addObject("Part::Feature", "FacePickSource")
+        face = Part.makePlane(100, 50)
+        representation = ArchComponent.BIMRepresentation(source, object())
+        representation.add_geometry("cut_geometry", face, "CutFace", "Face1")
+
+        result = ArchComponent.query_representation_pick(
+            (representation,),
+            (50, 25),
+            lambda point: (point.x, point.y),
+            1.0,
+        )
+
+        self.assertIsNotNone(result)
+        self.assertIs(result.source, source)
+        self.assertEqual(result.subelement, "Face1")
+
+    def test_query_representation_snap_uses_arbitrary_context_plane(self):
+        """Snap distance should be measured after projecting onto the active frame."""
+
+        source = self.document.addObject("Part::Feature", "SectionSnapSource")
+        vertex = Part.Vertex(App.Vector(25, 10, 0))
+        frame = App.Placement(App.Vector(), App.Rotation(App.Vector(0, 1, 0), 90))
+        context = ArchComponent.RepresentationContext(
+            purpose=ArchComponent.RepresentationPurpose.SECTION,
+            reference_frame=frame,
+            target_offset=25.0,
+        )
+        representation = ArchComponent.BIMRepresentation(source=source, context=context)
+        representation.add_geometry("snap_geometry", vertex, "CutVertex", "Vertex1")
+
+        result = ArchComponent.query_representation_snap(
+            [representation], App.Vector(900, 10, 0), 0.1, context=context
+        )
+
+        self.assertIsNotNone(result)
+        self.assertIs(result.source, source)
+        self.assertEqual(result.subelement, "Vertex1")
+
+    def test_query_representation_pick_preserves_mapping_and_input_priority(self):
+        """Screen picks should resolve semantic subelements and break ties by input order."""
+
+        wall = self.document.addObject("Part::Feature", "PickWall")
+        opening = self.document.addObject("Part::Feature", "PickOpening")
+        context = ArchComponent.PlanContext(cut_z=1000.0, target_z=0.0)
+        wall_representation = ArchComponent.BIMRepresentation(wall, context)
+        opening_representation = ArchComponent.BIMRepresentation(opening, context)
+        wall_line = (App.Vector(0, 0, 0), App.Vector(100, 0, 0))
+        opening_line = (App.Vector(40, 0, 0), App.Vector(60, 0, 0))
+        wall_representation.add_geometry(
+            "projected_geometry", wall_line, "WallProjection", "WallEdge1"
+        )
+        opening_representation.add_geometry(
+            "projected_geometry", opening_line, "OpeningSymbol", "OpeningSymbol1"
+        )
+
+        result = ArchComponent.query_representation_pick(
+            [opening_representation, wall_representation],
+            (50, 0),
+            lambda point: (point.x, point.y),
+            2.0,
+        )
+
+        self.assertIsNotNone(result)
+        self.assertIs(result.source, opening)
+        self.assertEqual(result.role, "OpeningSymbol")
+        self.assertEqual(result.subelement, "OpeningSymbol1")
 
     def testAdd(self):
         App.Console.PrintLog("Checking Arch Add...\n")
@@ -293,6 +629,33 @@ class TestArchComponent(TestArchBase.TestArchBase):
             f"Got: {actualVerticalArea:.3f}",
         )
 
+    def test_plan_region_area_falls_back_to_project_ex_when_project_missing(self):
+        """Plan-region areas should still compute when TechDraw.project is unavailable."""
+
+        import TechDraw
+
+        points = [
+            App.Vector(0, 0, 0),
+            App.Vector(3000, 0, 0),
+            App.Vector(3000, 2000, 0),
+            App.Vector(0, 2000, 0),
+        ]
+        region = Arch.makePlanRegion(points=points, name="Fallback Region")
+        self.document.recompute()
+
+        region.HorizontalArea = 0
+        region.PerimeterLength = 0
+
+        with patch.object(
+            TechDraw,
+            "project",
+            side_effect=AttributeError("module 'TechDraw' has no attribute 'project'"),
+        ):
+            region.Proxy.computeAreas(region)
+
+        self.assertAlmostEqual(region.HorizontalArea.getValueAs("m^2").Value, 6.0, places=3)
+        self.assertAlmostEqual(region.PerimeterLength.getValueAs("m").Value, 10.0, places=3)
+
     def test_remove_single_window_from_wall_host_is_none(self):
         """
         Tests that a window is removed from its wall's host list when
@@ -335,6 +698,53 @@ class TestArchComponent(TestArchBase.TestArchBase):
         # Assert: the wall should no longer be in the window's Hosts list.
         self.assertNotIn(wall, window.Hosts, "Wall should not be in window.Hosts after removal.")
         self.assertEqual(len(window.Hosts), 0, "Window.Hosts list should be empty after removal.")
+
+    def test_rehost_object_updates_single_host_link_and_preserves_placement(self):
+        wall_a = Arch.makeWall(Draft.makeLine(App.Vector(0, 0, 0), App.Vector(3000, 0, 0)))
+        wall_b = Arch.makeWall(Draft.makeLine(App.Vector(0, 2000, 0), App.Vector(3000, 2000, 0)))
+        hosted = self.document.addObject("Part::Box", "HostedSingle")
+        hosted.addProperty("App::PropertyLink", "Host", "Component")
+        hosted.Placement.Base = App.Vector(400, 500, 600)
+        hosted.Host = wall_a
+        self.document.recompute()
+
+        original_base = hosted.Placement.Base
+
+        self.assertTrue(Arch.canRehostObject(hosted, wall_b))
+        self.assertTrue(
+            Arch.rehostObject(hosted, wall_b, preserve_world_position=True, raise_on_error=True)
+        )
+        self.document.recompute()
+
+        self.assertIs(wall_b, hosted.Host)
+        self.assertTrue(hosted.Placement.Base.isEqual(original_base, 1e-6))
+
+    def test_rehost_object_replaces_hosts_link_list_and_supports_clear(self):
+        wall_a = Arch.makeWall(Draft.makeLine(App.Vector(0, 0, 0), App.Vector(3000, 0, 0)))
+        wall_b = Arch.makeWall(Draft.makeLine(App.Vector(0, 2000, 0), App.Vector(3000, 2000, 0)))
+        hosted = self.document.addObject("Part::Box", "HostedMulti")
+        hosted.addProperty("App::PropertyLinkList", "Hosts", "Component")
+        hosted.Placement.Base = App.Vector(700, 800, 900)
+        hosted.Hosts = [wall_a]
+        self.document.recompute()
+
+        self.assertTrue(Arch.canRehostObject(hosted, wall_b))
+        self.assertTrue(Arch.rehostObject(hosted, wall_b, raise_on_error=True))
+        self.assertEqual([wall_b], list(hosted.Hosts))
+
+        self.assertTrue(Arch.canRehostObject(hosted, None))
+        self.assertTrue(Arch.rehostObject(hosted, None, raise_on_error=True))
+        self.assertEqual([], list(hosted.Hosts))
+
+    def test_can_rehost_object_rejects_invalid_targets(self):
+        wall = Arch.makeWall(Draft.makeLine(App.Vector(0, 0, 0), App.Vector(3000, 0, 0)))
+        plain = self.document.addObject("Part::Box", "PlainBox")
+        hosted = self.document.addObject("Part::Box", "Hosted")
+        hosted.addProperty("App::PropertyLinkList", "Hosts", "Component")
+        self.document.recompute()
+
+        self.assertFalse(Arch.canRehostObject(plain, wall))
+        self.assertFalse(Arch.canRehostObject(hosted, hosted))
 
     def test_if_face_vertical(self):
         """
