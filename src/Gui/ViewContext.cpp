@@ -101,6 +101,10 @@ bool ViewContext::applyDefinition(const App::ViewDefinition* definition)
         return false;
     }
     clear();
+    activeCameraState = definition->CameraPayload.getValue();
+    activeCameraCodec = definition->CameraCodec.getValue();
+    activeCameraVersion = definition->CameraVersion.getValue();
+    activeReferenceFrame = definition->ReferenceFrame.getValue();
     const auto layer = pushLayer();
     for (auto* object : definition->ForcedVisible.getValues()) {
         setVisibility(layer, object, Visibility::Visible);
@@ -142,7 +146,31 @@ bool ViewContext::captureDefinition(App::ViewDefinition* definition) const
     }
     definition->ForcedVisible.setValues(std::move(forcedVisible));
     definition->ForcedHidden.setValues(std::move(forcedHidden));
+    definition->CameraPayload.setValue(activeCameraState);
+    definition->CameraCodec.setValue(activeCameraCodec);
+    definition->CameraVersion.setValue(activeCameraVersion);
+    definition->ReferenceFrame.setValue(activeReferenceFrame);
     return true;
+}
+
+void ViewContext::setCameraState(std::string state)
+{
+    activeCameraState = std::move(state);
+}
+
+const std::string& ViewContext::cameraState() const
+{
+    return activeCameraState;
+}
+
+void ViewContext::setReferenceFrame(const Base::Placement& frame)
+{
+    activeReferenceFrame = frame;
+}
+
+const Base::Placement& ViewContext::referenceFrame() const
+{
+    return activeReferenceFrame;
 }
 
 void ViewContext::removeObject(const App::DocumentObject* object)
