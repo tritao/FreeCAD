@@ -45,6 +45,7 @@ import math
 import FreeCAD
 import ArchCommands
 import ArchComponent
+import ArchRepresentation
 import ArchSketchObject
 import ArchWallGeometry
 import ArchWallEndpoint
@@ -54,7 +55,6 @@ import ArchWallRelation
 import ArchWallRelationResolver
 import Draft
 import DraftVecUtils
-import ArchRepresentation
 
 from FreeCAD import Vector
 from draftutils import params
@@ -1051,7 +1051,7 @@ class _Wall(ArchComponent.Component):
                 height_operation = self._height_edit_operation()
                 if high is not None and height_operation.is_available(obj):
                     representation.add_edit_handle(
-                        ArchComponent.BIMEditHandle(
+                        ArchRepresentation.BIMEditHandle(
                             obj,
                             "WallHeight",
                             high,
@@ -1071,7 +1071,7 @@ class _Wall(ArchComponent.Component):
                     and base_operation.is_available(obj)
                 ):
                     representation.add_edit_handle(
-                        ArchComponent.BIMEditHandle(
+                        ArchRepresentation.BIMEditHandle(
                             obj,
                             "WallBaseElevation",
                             low,
@@ -1106,7 +1106,7 @@ class _Wall(ArchComponent.Component):
         else:
             width_direction = lateral
             width_coordinate = section.y_max
-        width_operation = ArchComponent.BIMEditOperation(
+        width_operation = ArchRepresentation.BIMEditOperation(
             "WallWidth",
             "Edit Wall Width",
             lambda source: source.Width.Value,
@@ -1117,7 +1117,7 @@ class _Wall(ArchComponent.Component):
             available=lambda source: self._can_edit_uniform_section(source),
         )
         representation.add_edit_handle(
-            ArchComponent.BIMEditHandle(
+            ArchRepresentation.BIMEditHandle(
                 wall,
                 "WallWidth",
                 ArchComponent.project_to_representation_plane(
@@ -1132,7 +1132,7 @@ class _Wall(ArchComponent.Component):
         if align not in ("Left", "Right"):
             return
         offset_direction = -lateral if align == "Left" else lateral
-        offset_operation = ArchComponent.BIMEditOperation(
+        offset_operation = ArchRepresentation.BIMEditOperation(
             "WallOffset",
             "Edit Wall Offset",
             lambda source: source.Offset.Value,
@@ -1142,7 +1142,7 @@ class _Wall(ArchComponent.Component):
             available=lambda source: self._can_edit_uniform_section(source),
         )
         representation.add_edit_handle(
-            ArchComponent.BIMEditHandle(
+            ArchRepresentation.BIMEditHandle(
                 wall,
                 "WallOffset",
                 ArchComponent.project_to_representation_plane(
@@ -1171,8 +1171,8 @@ class _Wall(ArchComponent.Component):
             and not list(getattr(wall, "OverrideWidth", ()) or ())
             and not list(getattr(wall, "OverrideAlign", ()) or ())
             and not list(getattr(wall, "OverrideOffset", ()) or ())
-            and not ArchComponent.is_property_expression_driven(wall, "Width")
-            and not ArchComponent.is_property_expression_driven(wall, "Offset")
+            and not ArchRepresentation.is_property_expression_driven(wall, "Width")
+            and not ArchRepresentation.is_property_expression_driven(wall, "Offset")
         )
 
     @staticmethod
@@ -1185,7 +1185,7 @@ class _Wall(ArchComponent.Component):
             return
         for index, point in enumerate(points):
             role = point.semantic_id or "Vertex{}".format(index + 1)
-            operation = ArchComponent.BIMEditOperation(
+            operation = ArchRepresentation.BIMEditOperation(
                 "WallPathVertex",
                 "Edit Wall Path Vertex",
                 lambda _wall, point=point: point.get_value(),
@@ -1195,7 +1195,7 @@ class _Wall(ArchComponent.Component):
                 available=lambda _wall, point=point: point.is_available(),
             )
             representation.add_edit_handle(
-                ArchComponent.BIMEditHandle(
+                ArchRepresentation.BIMEditHandle(
                     wall,
                     "WallPath{}".format(role),
                     ArchComponent.project_to_representation_plane(point.point, context),
@@ -1222,7 +1222,7 @@ class _Wall(ArchComponent.Component):
             source.Proxy.set_from_endpoints(source, current)
 
         for index, role in enumerate(("Start", "End")):
-            operation = ArchComponent.BIMEditOperation(
+            operation = ArchRepresentation.BIMEditOperation(
                 "WallPathEndpoint",
                 "Edit Wall Path Endpoint",
                 lambda source, index=index: self.calc_endpoints(source)[index],
@@ -1232,7 +1232,7 @@ class _Wall(ArchComponent.Component):
                 available=lambda source: self._can_edit_native_path(source),
             )
             representation.add_edit_handle(
-                ArchComponent.BIMEditHandle(
+                ArchRepresentation.BIMEditHandle(
                     wall,
                     "WallPath{}".format(role),
                     ArchComponent.project_to_representation_plane(endpoints[index], context),
@@ -1248,20 +1248,20 @@ class _Wall(ArchComponent.Component):
         return bool(
             getattr(wall, "Base", None) is None
             and len(self.calc_endpoints(wall)) == 2
-            and not ArchComponent.is_property_expression_driven(wall, "Length")
-            and not ArchComponent.is_property_expression_driven(wall, "Placement")
+            and not ArchRepresentation.is_property_expression_driven(wall, "Length")
+            and not ArchRepresentation.is_property_expression_driven(wall, "Placement")
         )
 
     @staticmethod
     def _height_edit_operation():
-        return ArchComponent.BIMEditOperation(
+        return ArchRepresentation.BIMEditOperation(
             "WallHeight",
             "Edit Wall Height",
             lambda wall: wall.Height.Value,
             lambda wall, value: setattr(wall, "Height", value),
             property_name="Height",
             minimum=1.0,
-            available=lambda wall: not ArchComponent.is_property_expression_driven(wall, "Height"),
+            available=lambda wall: not ArchRepresentation.is_property_expression_driven(wall, "Height"),
         )
 
     @staticmethod
@@ -1271,13 +1271,13 @@ class _Wall(ArchComponent.Component):
             placement.Base.z = value
             wall.Placement = placement
 
-        return ArchComponent.BIMEditOperation(
+        return ArchRepresentation.BIMEditOperation(
             "WallBaseElevation",
             "Edit Wall Base Elevation",
             lambda wall: wall.Placement.Base.z,
             set_elevation,
             property_name="Placement.Base.z",
-            available=lambda wall: not ArchComponent.is_property_expression_driven(
+            available=lambda wall: not ArchRepresentation.is_property_expression_driven(
                 wall, "Placement.Base.z"
             ),
         )

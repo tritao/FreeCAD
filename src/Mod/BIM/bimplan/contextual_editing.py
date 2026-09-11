@@ -19,7 +19,7 @@ class BIMEditPreview:
     """Non-persistent result of projecting a pointer onto a semantic handle."""
 
     handle: object
-    value: float
+    value: object
     point: object
     validation: object = None
 
@@ -51,12 +51,12 @@ class BIMContextualHandleEditor:
         self.start_value = None
 
     def begin(self, handle):
-        if handle is None or handle.interaction != "Linear":
+        if handle is None or handle.interaction not in {"Linear", "Planar"}:
             raise ValueError("Unsupported BIM edit handle")
         validation = handle.operation.validate(handle.source)
         if not validation.allowed:
             raise ValueError(validation.reason)
-        if handle.direction.Length <= 1e-9:
+        if handle.interaction == "Linear" and handle.direction.Length <= 1e-9:
             raise ValueError("BIM edit handle has no direction")
         self.handle = handle
         self.start_value = _handle_value(handle)
@@ -66,6 +66,10 @@ class BIMContextualHandleEditor:
         if self.handle is None:
             raise RuntimeError("No BIM edit handle is active")
         projected = ArchComponent.project_to_representation_plane(pointer, self.context)
+        if self.handle.interaction == "Planar":
+            value = self.start_value + projected - self.handle.point
+            validation = self.handle.operation.validate(self.handle.source, value)
+            return BIMEditPreview(self.handle, value, projected, validation)
         delta = (projected - self.handle.point).dot(self.handle.direction)
         value = self.start_value + delta
         point = self.handle.point + self.handle.direction * (value - self.start_value)
@@ -111,7 +115,7 @@ class PlanContextualEditingAPI:
     def begin(self, handle):
         self.editor = BIMContextualHandleEditor(
             self.session.representation_context.context,
-            refresh=self.session.contextual_rendering.refresh_object,
+            refresh=self.session.contextual_rendering.refresh_edit_dependencies,
         )
         try:
             preview = self.editor.begin(handle)
@@ -136,6 +140,8 @@ class PlanContextualEditingAPI:
         if self.editor is None:
             raise RuntimeError("No BIM edit handle is active")
         handle = self.editor.handle
+        visual_state = self.session.document_visual_state
+        visual_state.contextual_edit_recompute_depth += 1
         try:
             result = self.editor.commit(pointer)
             self._clear_feedback()
@@ -145,6 +151,9 @@ class PlanContextualEditingAPI:
             self.session.contextual_rendering.refresh_object(handle.source)
             return BIMEditResult(False, reason=str(exc))
         finally:
+            visual_state.contextual_edit_recompute_depth = max(
+                0, visual_state.contextual_edit_recompute_depth - 1
+            )
             self.editor = None
 
     def cancel(self, *, refresh=True):

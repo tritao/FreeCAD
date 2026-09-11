@@ -575,7 +575,7 @@ def _opening_height_edit_operation():
             raise_on_error=True,
         )
 
-    return ArchComponent.BIMEditOperation(
+    return ArchRepresentation.BIMEditOperation(
         "OpeningHeight",
         translate("Arch", "Edit Opening Height"),
         getWindowHeightMm,
@@ -583,19 +583,19 @@ def _opening_height_edit_operation():
         property_name="Height",
         manages_transaction=True,
         minimum=1.0,
-        available=lambda obj: not ArchComponent.is_property_expression_driven(obj, "Height"),
+        available=lambda obj: not ArchRepresentation.is_property_expression_driven(obj, "Height"),
     )
 
 
 def _opening_sill_property_edit_operation():
-    return ArchComponent.BIMEditOperation(
+    return ArchRepresentation.BIMEditOperation(
         "OpeningSill",
         translate("Arch", "Edit Opening Sill"),
         lambda obj: obj.SillHeight.Value,
         lambda obj, value: setattr(obj, "SillHeight", value),
         property_name="SillHeight",
         minimum=0.0,
-        available=lambda obj: not ArchComponent.is_property_expression_driven(obj, "SillHeight"),
+        available=lambda obj: not ArchRepresentation.is_property_expression_driven(obj, "SillHeight"),
     )
 
 
@@ -605,14 +605,14 @@ def _opening_attachment_sill_edit_operation():
         placement.Base.z = value
         obj.AttachmentOffset = placement
 
-    return ArchComponent.BIMEditOperation(
+    return ArchRepresentation.BIMEditOperation(
         "OpeningSill",
         translate("Arch", "Edit Opening Sill"),
         lambda obj: obj.AttachmentOffset.Base.z,
         set_offset,
         property_name="AttachmentOffset.Base.z",
         minimum=0.0,
-        available=lambda obj: not ArchComponent.is_property_expression_driven(
+        available=lambda obj: not ArchRepresentation.is_property_expression_driven(
             obj, "AttachmentOffset.Base.z"
         ),
     )
@@ -624,14 +624,14 @@ def _opening_base_placement_sill_edit_operation():
         placement.Base.z = value
         obj.Base.Placement = placement
 
-    return ArchComponent.BIMEditOperation(
+    return ArchRepresentation.BIMEditOperation(
         "OpeningSill",
         translate("Arch", "Edit Opening Sill"),
         lambda obj: obj.Base.Placement.Base.z,
         set_offset,
         property_name="Base.Placement.Base.z",
         minimum=0.0,
-        available=lambda obj: not ArchComponent.is_property_expression_driven(
+        available=lambda obj: not ArchRepresentation.is_property_expression_driven(
             obj.Base, "Placement.Base.z"
         ),
     )
@@ -657,7 +657,7 @@ def _opening_position_edit_operation(helper):
         if not helper.move_along_host(point):
             raise ValueError(translate("Arch", "Opening cannot move along its host"))
 
-    return ArchComponent.BIMEditOperation(
+    return ArchRepresentation.BIMEditOperation(
         "OpeningPosition",
         translate("Arch", "Edit Opening Position"),
         lambda _source: center_u,
@@ -665,7 +665,7 @@ def _opening_position_edit_operation(helper):
         property_name=property_name,
         minimum=move_context.get("move_u_min"),
         maximum=move_context.get("move_u_max"),
-        available=lambda _source: not ArchComponent.is_property_expression_driven(
+        available=lambda _source: not ArchRepresentation.is_property_expression_driven(
             target, "Placement.Base"
         ),
     )
@@ -706,7 +706,7 @@ def _opening_width_edit_operation(helper, side):
 
     minimum = host_min if side == "Left" else left_u + 1.0
     maximum = right_u - 1.0 if side == "Left" else host_max
-    return ArchComponent.BIMEditOperation(
+    return ArchRepresentation.BIMEditOperation(
         "Opening{}Jamb".format(side),
         translate("Arch", "Edit Opening Width"),
         lambda _source: left_u if side == "Left" else right_u,
@@ -2312,7 +2312,7 @@ class _HostedOpeningRepresentationGeometry:
         if direction is None:
             return
         representation.add_edit_handle(
-            ArchComponent.BIMEditHandle(
+            ArchRepresentation.BIMEditHandle(
                 source,
                 "OpeningPosition",
                 point,
@@ -2342,7 +2342,7 @@ class _HostedOpeningRepresentationGeometry:
             )
             jamb_point.z = move_context["center_point"].z
             representation.add_edit_handle(
-                ArchComponent.BIMEditHandle(
+                ArchRepresentation.BIMEditHandle(
                     source,
                     "Opening{}Jamb".format(side),
                     ArchComponent.project_to_representation_plane(jamb_point, context),
@@ -2393,7 +2393,7 @@ class _HostedOpeningRepresentationGeometry:
             and height_operation.is_available(source)
         ):
             representation.add_edit_handle(
-                ArchComponent.BIMEditHandle(
+                ArchRepresentation.BIMEditHandle(
                     source,
                     "OpeningHeight",
                     high,
@@ -2416,7 +2416,7 @@ class _HostedOpeningRepresentationGeometry:
         if not operation.is_available(source):
             return
         representation.add_edit_handle(
-            ArchComponent.BIMEditHandle(
+            ArchRepresentation.BIMEditHandle(
                 source,
                 "OpeningSill",
                 low,
@@ -3416,7 +3416,7 @@ class _ViewProviderWindow(ArchComponent.ViewProviderComponent):
         return helper.get_plan_overlay_geometry()
 
     def getRepresentation(self, obj=None, context=None):
-        """Compatibility wrapper for the App-side opening representation."""
+        """Provide the opening's semantic representation for a context."""
 
         helper = self._get_plan_geometry("getRepresentation")
         if not helper:

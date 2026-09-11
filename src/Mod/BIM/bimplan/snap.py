@@ -5,13 +5,13 @@
 import FreeCAD
 import FreeCADGui
 
-import ArchComponent
+import ArchRepresentation
 
 
 def query_semantic_snap(representations, point, tolerance, context=None, fallback=None):
     """Prefer a BIM semantic target and retain the caller's ordinary snap fallback."""
 
-    result = ArchComponent.query_representation_snap(
+    result = ArchRepresentation.query_representation_snap(
         representations, point, tolerance, context=context
     )
     return result if result is not None else fallback

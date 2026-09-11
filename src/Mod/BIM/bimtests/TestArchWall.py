@@ -35,6 +35,7 @@ import Part
 import Sketcher
 import FreeCAD as App
 from bimplan import contextual_editing as plan_contextual_editing
+from ArchRepresentation import RepresentationContext, RepresentationPurpose
 from bimtests import TestArchBase
 
 
@@ -638,8 +639,8 @@ class TestArchWall(TestArchBase.TestArchBase):
         wall = Arch.makeWall(length=2000, width=200, height=2500)
         self.document.recompute()
 
-        plan = ArchRepresentation.RepresentationContext(
-            purpose=ArchRepresentation.RepresentationPurpose.PLAN,
+        plan = RepresentationContext(
+            purpose=RepresentationPurpose.PLAN,
             cut_offset=1000.0,
             target_offset=0.0,
             source=wall,
@@ -658,9 +659,7 @@ class TestArchWall(TestArchBase.TestArchBase):
         self.document.recompute()
         section_context = section.Proxy.getRepresentationContext(section)
         section_representation = wall.Proxy.getRepresentation(wall, section_context)
-        self.assertIs(
-            section_context.purpose, ArchRepresentation.RepresentationPurpose.SECTION
-        )
+        self.assertIs(section_context.purpose, RepresentationPurpose.SECTION)
         self.assertIs(section_representation.context, section_context)
         self.assertTrue(section_representation.cut_geometry)
         self.assertNotEqual(

@@ -4,6 +4,7 @@
 
 import os
 
+import ArchComponent
 import ArchRepresentation
 
 from .TestBimPlanEditGuiBase import *  # noqa: F401,F403
@@ -11,6 +12,95 @@ from .TestBimPlanEditGuiBase import BimPlanEditGuiBase
 
 
 class BimPlanEditGuiWallsMixin:
+    def test_plan_wall_sketch_handle_uses_solver_and_global_placement(self):
+        sketch = self.document.addObject("Sketcher::SketchObject", "GuiWallPathSketch")
+        sketch.addGeometry(
+            Part.LineSegment(FreeCAD.Vector(0, 0), FreeCAD.Vector(2000, 0)),
+            False,
+        )
+        sketch.Placement = FreeCAD.Placement(
+            FreeCAD.Vector(100, 200, 0),
+            FreeCAD.Rotation(FreeCAD.Vector(0, 0, 1), 30),
+        )
+        wall = Arch.makeWall(sketch, width=200, height=2500)
+        self.document.recompute()
+
+        session = BimPlanSession.start_session()
+        self.assertIsNotNone(session)
+        self.pump_gui_events()
+        self.assertTrue(session.selection.activation.select_wall_for_plan_edit(wall))
+        handle = next(
+            item
+            for item in session.contextual_rendering.edit_handles_for(wall)
+            if item.role == "WallPathG0P2"
+        )
+        self.assertEqual(handle.operation.property_name, "Base.Geometry[0].Point2")
+
+        session.contextual_editing.begin(handle)
+        result = session.contextual_editing.commit(handle.point + FreeCAD.Vector(0, 500, 250))
+        self.assertTrue(result.success)
+        moved = sketch.getGlobalPlacement().multVec(sketch.getPoint(0, 2))
+        expected = sketch.getGlobalPlacement().multVec(FreeCAD.Vector(2000, 0))
+        expected += FreeCAD.Vector(0, 500, 0)
+        self.assertTrue(moved.isEqual(expected, 1e-7))
+        self._undo_document()
+        self.assertTrue(sketch.getPoint(0, 2).isEqual(FreeCAD.Vector(2000, 0), 1e-7))
+
+        session.shutdown(close_dialog=False)
+        self.pump_gui_events()
+
+    def test_plan_wall_path_handle_edits_owning_draft_wire(self):
+        path = Draft.makeWire(
+            [
+                FreeCAD.Vector(0, 0, 0),
+                FreeCAD.Vector(2000, 0, 0),
+                FreeCAD.Vector(3000, 1000, 0),
+            ]
+        )
+        wall = Arch.makeWall(path, width=200, height=2500)
+        related_wall = Arch.makeWall(length=1500, width=200, height=2500)
+        related_wall.Placement.Base = FreeCAD.Vector(3000, 1000, 0)
+        Arch.makeWallJoint(wall, related_wall, "Miter")
+        self.document.recompute()
+
+        session = BimPlanSession.start_session()
+        self.assertIsNotNone(session)
+        self.pump_gui_events()
+        self.assertTrue(session.selection.activation.select_wall_for_plan_edit(wall))
+        handle = next(
+            item
+            for item in session.contextual_rendering.edit_handles_for(wall)
+            if item.role == "WallPathVertex2"
+        )
+        self.assertIs(handle.source, wall)
+        self.assertEqual(handle.subelement, "Base.Vertex2")
+
+        started = session.contextual_editing.begin(handle)
+        self.assertFalse(hasattr(started, "success"))
+        with patch.object(
+            session.contextual_rendering,
+            "refresh_object",
+            wraps=session.contextual_rendering.refresh_object,
+        ) as refresh_object:
+            with patch.object(
+                type(session.spaces),
+                "refresh_document_dependent_visuals",
+                autospec=True,
+                return_value=(),
+            ) as refresh_spaces:
+                result = session.contextual_editing.commit(
+                    handle.point + FreeCAD.Vector(0, 500, 250)
+                )
+        self.assertIn(related_wall, [call.args[0] for call in refresh_object.call_args_list])
+        refresh_spaces.assert_called_once_with(session.spaces)
+        self.assertTrue(result.success)
+        self.assertTrue(path.Points[1].isEqual(FreeCAD.Vector(2000, 500, 0), 1e-7))
+        self._undo_document()
+        self.assertTrue(path.Points[1].isEqual(FreeCAD.Vector(2000, 0, 0), 1e-7))
+
+        session.shutdown(close_dialog=False)
+        self.pump_gui_events()
+
     def test_section_edit_failure_rolls_back_and_reports_reason(self):
         wall = Arch.makeWall(length=3000, width=200, height=2500)
         section = Arch.makeSectionPlane([wall], name="FailingSectionEdit")

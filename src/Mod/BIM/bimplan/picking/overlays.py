@@ -2,7 +2,7 @@
 
 """Overlay-geometry picking helpers for BIM Plan Edit."""
 
-import ArchComponent
+import ArchRepresentation
 
 from bimplan.picking import debug as plan_picking_debug
 from bimplan.picking import geometry as plan_picking_geometry
@@ -184,7 +184,7 @@ def pick_plan_opening_target_from_overlays(session, mouse_pos, radius_px=10, can
                 for obj in filtered_objects
                 if (representation := get_representation(obj))
             )
-            semantic_hit = ArchComponent.query_representation_pick(
+            semantic_hit = ArchRepresentation.query_representation_pick(
                 representations,
                 mouse_pos,
                 project_point,
@@ -227,7 +227,7 @@ def pick_plan_wall_target_from_representation(session, mouse_pos, radius_px=10):
     representations = tuple(
         representation for wall in walls if (representation := get_representation(wall))
     )
-    hit = ArchComponent.query_representation_pick(
+    hit = ArchRepresentation.query_representation_pick(
         representations,
         mouse_pos,
         project_point,

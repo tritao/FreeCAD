@@ -521,9 +521,9 @@ def apply_plan_view(session, fit=True):
     with session.performance.plan_perf_trace_span("apply_plan_view_working_plane"):
         wp = WorkingPlane.get_working_plane(update=False)
         active_context = getattr(getattr(session, "representation_context", None), "context", None)
-        target_z = getattr(active_context, "target_z", None)
-        if target_z is not None:
-            offset = float(target_z)
+        target_offset = getattr(active_context, "target_offset", None)
+        if target_offset is not None:
+            offset = float(target_offset)
         elif session.active_storey:
             offset = session.storey.get_storey_elevation(session.active_storey)
         else:

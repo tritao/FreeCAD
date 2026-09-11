@@ -220,6 +220,8 @@ SET(bimcommands_SRCS
 SET(bimplan_SRCS
     bimplan/__init__.py
     bimplan/benchmark.py
+    bimplan/contextual_editing.py
+    bimplan/editable_points.py
     bimplan/devtools/PLAN_EDIT_ARCHITECTURE_PLAN.md
     bimplan/devtools/cruft_report.py
     bimplan/document_visuals.py

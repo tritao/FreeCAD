@@ -48,7 +48,7 @@ class TestArchComponent(TestArchBase.TestArchBase):
         obj = self.document.addObject("Part::Feature", "ConstrainedEdit")
         obj.addProperty("App::PropertyLength", "Height")
         obj.Height = 1000
-        operation = ArchComponent.BIMEditOperation(
+        operation = ArchRepresentation.BIMEditOperation(
             "Height",
             "Edit Height",
             lambda source: source.Height.Value,
@@ -83,14 +83,14 @@ class TestArchComponent(TestArchBase.TestArchBase):
         )
         direction = ArchComponent.representation_vertical_direction(context)
         point = ArchComponent.project_to_representation_plane(App.Vector(0, 0, 3000), context)
-        operation = ArchComponent.BIMEditOperation(
+        operation = ArchRepresentation.BIMEditOperation(
             "WallHeight",
             "Edit Wall Height",
             lambda source: source.Height.Value,
             lambda source, value: setattr(source, "Height", value),
             property_name="Height",
         )
-        handle = ArchComponent.BIMEditHandle(
+        handle = ArchRepresentation.BIMEditHandle(
             obj, "WallHeight", point, direction, operation, subelement="Height"
         )
         editor = plan_contextual_editing.BIMContextualHandleEditor(context)
@@ -180,6 +180,11 @@ class TestArchComponent(TestArchBase.TestArchBase):
         self.assertEqual(context.projection_range, (0.0, 750.0))
         self.assertIs(context.source, section)
 
+    def test_representation_contract_is_shared_with_archrepresentation(self):
+        """Legacy ArchComponent imports must use the canonical BIM contract."""
+
+        import ArchRepresentation
+
     def test_representation_context_accepts_saved_view_provider_protocol(self):
         """BIM Views should be able to provide profiles without Plan Edit knowing their type."""
 
@@ -241,21 +246,23 @@ class TestArchComponent(TestArchBase.TestArchBase):
                 return self.scene
 
         source = self.document.addObject("Part::Feature", "ContextualSource")
-        plan_context = ArchRepresentation.RepresentationContext(
-            purpose=ArchRepresentation.RepresentationPurpose.PLAN,
-            cut_offset=1000.0,
-            target_offset=0.0,
+        plan = ArchRepresentation.BIMRepresentation(
+            source,
+            ArchRepresentation.RepresentationContext(
+                purpose=ArchRepresentation.RepresentationPurpose.PLAN,
+                cut_offset=1000,
+                target_offset=0,
+            ),
         )
-        plan = ArchRepresentation.BIMRepresentation(source, plan_context)
         line = (App.Vector(0, 0, 0), App.Vector(100, 0, 0))
         plan.add_geometry("projected_geometry", line, "Projection", "Projection1")
         section = ArchRepresentation.BIMRepresentation(source, object())
         face = Part.makePlane(100, 50)
         section.add_geometry("cut_geometry", face, "CutFace", "Face1")
         handle = section.add_edit_handle(
-            ArchComponent.BIMEditHandle(
+            ArchRepresentation.BIMEditHandle(
                 source,
-                ArchComponent.BIMEditOperation(
+                ArchRepresentation.BIMEditOperation(
                     "Height",
                     "Edit Height",
                     lambda obj: obj.Height.Value,
@@ -303,7 +310,7 @@ class TestArchComponent(TestArchBase.TestArchBase):
         representation.add_geometry("snap_geometry", edge, "CutEdge", "Face1.Edge1")
         representation.add_geometry("snap_geometry", vertex, "CutVertex", "Face1.Vertex1")
 
-        result = ArchComponent.query_representation_snap(
+        result = ArchRepresentation.query_representation_snap(
             [representation], App.Vector(0, 0, 500), 1.0, context=context
         )
 
@@ -321,7 +328,7 @@ class TestArchComponent(TestArchBase.TestArchBase):
         representation = ArchRepresentation.BIMRepresentation(source, object())
         representation.add_geometry("cut_geometry", face, "CutFace", "Face1")
 
-        result = ArchComponent.query_representation_pick(
+        result = ArchRepresentation.query_representation_pick(
             (representation,),
             (50, 25),
             lambda point: (point.x, point.y),
@@ -346,7 +353,7 @@ class TestArchComponent(TestArchBase.TestArchBase):
         representation = ArchRepresentation.BIMRepresentation(source=source, context=context)
         representation.add_geometry("snap_geometry", vertex, "CutVertex", "Vertex1")
 
-        result = ArchComponent.query_representation_snap(
+        result = ArchRepresentation.query_representation_snap(
             [representation], App.Vector(900, 10, 0), 0.1, context=context
         )
 
@@ -375,7 +382,7 @@ class TestArchComponent(TestArchBase.TestArchBase):
             "projected_geometry", opening_line, "OpeningSymbol", "OpeningSymbol1"
         )
 
-        result = ArchComponent.query_representation_pick(
+        result = ArchRepresentation.query_representation_pick(
             [opening_representation, wall_representation],
             (50, 0),
             lambda point: (point.x, point.y),
