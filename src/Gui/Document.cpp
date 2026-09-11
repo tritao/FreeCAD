@@ -59,6 +59,7 @@
 #include "Command.h"
 #include "Control.h"
 #include "FileDialog.h"
+#include "Inventor/SoViewContextElement.h"
 #include "MainWindow.h"
 #include "MDIView.h"
 #include "NotificationArea.h"
@@ -79,6 +80,29 @@ namespace sp = std::placeholders;
 
 namespace Gui
 {
+
+namespace
+{
+bool shouldReapplyOverrideMode(const std::string& overrideMode, const std::string* modeType)
+{
+    if (overrideMode.empty() || overrideMode == "As Is") {
+        return false;
+    }
+    if (!modeType) {
+        return true;
+    }
+    if (overrideMode == *modeType) {
+        return true;
+    }
+    if (overrideMode == "No Shading") {
+        return (*modeType == "Flat Lines");
+    }
+    if (overrideMode == "Hidden Line") {
+        return (*modeType == "Shaded");
+    }
+    return false;
+}
+}  // namespace
 
 // Pimpl class
 struct DocumentP
@@ -1108,6 +1132,7 @@ void Document::slotDeletedObject(const App::DocumentObject& Obj)
         for (auto* v : d->baseViews) {
             auto activeView = dynamic_cast<View3DInventor*>(v);
             if (activeView) {
+                activeView->getViewer()->getViewContext().removeObject(&Obj);
                 activeView->getViewer()->removeViewProvider(viewProvider);
             }
         }
@@ -2100,6 +2125,8 @@ void Document::slotFinishRestoreDocument(const App::Document& doc)
         }
     }
 
+    reapplyViewOverrides();
+
     // reset modified flag
     setModified(doc.testStatus(App::Document::LinkStampChanged));
 }
@@ -2681,6 +2708,48 @@ std::list<MDIView*> Document::getMDIViewsOfType(const Base::Type& typeId, bool i
     return views;
 }
 
+void Document::reapplyViewOverrides()
+{
+    auto views = getMDIViewsOfType(View3DInventor::getClassTypeId());
+    for (auto* mdiView : views) {
+        auto* view3D = dynamic_cast<View3DInventor*>(mdiView);
+        if (!view3D) {
+            continue;
+        }
+        auto* viewer = view3D->getViewer();
+        if (!viewer) {
+            continue;
+        }
+        std::string overrideMode = viewer->getOverrideMode();
+        if (!shouldReapplyOverrideMode(overrideMode, nullptr)) {
+            continue;
+        }
+        viewer->updateOverrideMode("As Is");
+        viewer->setOverrideMode(overrideMode);
+    }
+}
+
+void Document::reapplyViewOverrides(const std::string& modeType)
+{
+    auto views = getMDIViewsOfType(View3DInventor::getClassTypeId());
+    for (auto* mdiView : views) {
+        auto* view3D = dynamic_cast<View3DInventor*>(mdiView);
+        if (!view3D) {
+            continue;
+        }
+        auto* viewer = view3D->getViewer();
+        if (!viewer) {
+            continue;
+        }
+        std::string overrideMode = viewer->getOverrideMode();
+        if (!shouldReapplyOverrideMode(overrideMode, &modeType)) {
+            continue;
+        }
+        viewer->updateOverrideMode("As Is");
+        viewer->setOverrideMode(overrideMode);
+    }
+}
+
 /// send messages to the active view
 bool Document::sendMsgToViews(const char* pMsg)
 {
@@ -3059,7 +3128,7 @@ void Document::handleChildren3D(ViewProvider* viewProvider, bool deleting)
         std::vector<App::DocumentObject*> children = viewProvider->claimChildren3D();
         SoGroup* childGroup = viewProvider->getChildRoot();
         SoGroup* frontGroup = viewProvider->getFrontRoot();
-        SoGroup* backGroup = viewProvider->getFrontRoot();
+        SoGroup* backGroup = viewProvider->getBackRoot();
 
         // size not the same -> build up the list new
         if (deleting || childGroup->getNumChildren() != static_cast<int>(children.size())) {
@@ -3108,7 +3177,9 @@ void Document::handleChildren3D(ViewProvider* viewProvider, bool deleting)
                                 );
                             }
                             else if (frontGroup) {
-                                frontGroup->addChild(childFrontNode);
+                                frontGroup->addChild(
+                                    new SoViewContextGate(ChildViewProvider, childFrontNode)
+                                );
                             }
                         }
 
@@ -3121,7 +3192,9 @@ void Document::handleChildren3D(ViewProvider* viewProvider, bool deleting)
                                 );
                             }
                             else if (backGroup) {
-                                backGroup->addChild(childBackNode);
+                                backGroup->addChild(
+                                    new SoViewContextGate(ChildViewProvider, childBackNode)
+                                );
                             }
                         }
 

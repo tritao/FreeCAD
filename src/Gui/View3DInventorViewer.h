@@ -26,9 +26,12 @@
 #include <list>
 #include <map>
 #include <memory>
+#include <optional>
 #include <set>
+#include <unordered_map>
 #include <vector>
 
+#include <QColor>
 #include <QCursor>
 #include <QImage>
 #include <QLabel>
@@ -59,6 +62,7 @@
 
 #include "CornerCrossLetters.h"
 #include "View3DInventorSelection.h"
+#include "ViewContext.h"
 #include "Quarter/SoQTQuarterAdaptor.h"
 
 class QOpenGLFramebufferObject;
@@ -88,6 +92,11 @@ class SoClipPlane;
 class SoTimerSensor;
 class SoSensor;
 class SbBox3f;
+
+namespace App
+{
+class ClippingPlane;
+}
 
 namespace Quarter = SIM::Coin3D::Quarter;
 
@@ -275,6 +284,9 @@ public:
     void addViewProvider(ViewProvider*);
     /// remove a ViewProvider
     void removeViewProvider(ViewProvider*);
+    /// Return the transient presentation context owned by this viewer.
+    ViewContext& getViewContext();
+    const ViewContext& getViewContext() const;
     /// get view provider by path
     ViewProvider* getViewProviderByPath(SoPath*) const;
     ViewProvider* getViewProviderByPathFromTail(SoPath*) const;
@@ -543,6 +555,7 @@ public:
 
     void alignToSelection();
 
+    void setBackgroundColor(const QColor& color);
     void setGradientBackground(Background);
     Background getGradientBackground() const;
     void setGradientBackgroundColor(const SbColor& fromColor, const SbColor& toColor);
@@ -551,6 +564,33 @@ public:
         const SbColor& toColor,
         const SbColor& midColor
     );
+    void setPreferredBackgroundAppearance(
+        Background gradient,
+        const QColor& backgroundColor,
+        const SbColor& fromColor,
+        const SbColor& toColor
+    );
+    void setPreferredBackgroundAppearance(
+        Background gradient,
+        const QColor& backgroundColor,
+        const SbColor& fromColor,
+        const SbColor& toColor,
+        const SbColor& midColor
+    );
+    void setBackgroundAppearanceOverride(
+        Background gradient,
+        const QColor& backgroundColor,
+        const SbColor& fromColor,
+        const SbColor& toColor
+    );
+    void setBackgroundAppearanceOverride(
+        Background gradient,
+        const QColor& backgroundColor,
+        const SbColor& fromColor,
+        const SbColor& toColor,
+        const SbColor& midColor
+    );
+    void clearBackgroundAppearanceOverride();
     void setNavigationType(Base::Type);
 
     void setAxisLetterColor(const SbColor& color);
@@ -563,6 +603,9 @@ public:
     void setEnabledFPSCounter(bool on);
     void setEnabledNaviCube(bool on);
     bool isEnabledNaviCube() const;
+    void setPreferredNaviCubeEnabled(bool on);
+    void setNaviCubeEnabledOverride(bool on);
+    void clearNaviCubeEnabledOverride();
     void setNaviCubeCorner(int);
     NaviCube* getNaviCube() const;
     void setEnabledVBO(bool on);
@@ -621,6 +664,15 @@ private:
 
 private:
     class ScopedRenderIntent;
+    struct BackgroundAppearanceState
+    {
+        QColor backgroundColor = QColor(25, 25, 25);
+        Background gradient = Background::NoGradient;
+        SbColor gradientFrom = SbColor(0.0f, 0.0f, 0.0f);
+        SbColor gradientTo = SbColor(0.0f, 0.0f, 0.0f);
+        SbColor gradientMid = SbColor(0.0f, 0.0f, 0.0f);
+        bool useMid = false;
+    };
     static void selectCB(void* viewer, SoPath* path);
     // A small intent stack lets nested export/capture code paths temporarily
     // override the default live-view traversal behavior.
@@ -628,6 +680,14 @@ private:
     void popRenderIntentOverride() const;
     RenderIntent currentRenderIntent() const;
     static bool shouldRenderDecorations(RenderIntent intent);
+    void applyGradientBackgroundDirect(Background grad);
+    void applyGradientBackgroundColorDirect(const SbColor& fromColor, const SbColor& toColor);
+    void applyGradientBackgroundColorDirect(
+        const SbColor& fromColor,
+        const SbColor& toColor,
+        const SbColor& midColor
+    );
+    void applyBackgroundAppearance(const BackgroundAppearanceState& appearance);
 
     static void deselectCB(void* viewer, SoPath* path);
     static SoPath* pickFilterCB(void* viewer, const SoPickedPoint* pp);
@@ -643,6 +703,7 @@ private:
     void aboutToDestroyGLContext();
     void createStandardCursors();
     bool applyCameraState(const SoCamera& camera);
+    void updateContextClipping(const std::vector<const App::ClippingPlane*>& planes);
 
 private:
     NaviCube* naviCube;
@@ -671,6 +732,12 @@ private:
     SoSeparator* pcViewProviderRoot;
     // Child group in the scene graph that contains view providers related to the physical object
     SoGroup* objectGroup;
+
+    void updateContextVisibility(const ViewProviderDocumentObject* provider);
+    std::unordered_map<const ViewProvider*, SoSeparator*> contextFrontRoots;
+    std::unordered_map<const ViewProvider*, SoSeparator*> contextBackRoots;
+    ViewContext viewContext;
+    std::vector<SoClipPlane*> contextClipPlanes;
 
     std::unique_ptr<View3DInventorSelection> inventorSelection;
 
@@ -705,7 +772,12 @@ private:
     unsigned long previousAxisLetterColor = 0;
     bool vboEnabled;
     bool naviCubeEnabled;
-
+    // Keep preference-applied appearance separate from temporary session
+    // overrides so tools like Plan Edit can layer on top of live settings.
+    BackgroundAppearanceState preferredBackgroundAppearance;
+    std::optional<BackgroundAppearanceState> backgroundAppearanceOverride;
+    bool preferredNaviCubeEnabled = true;
+    std::optional<bool> naviCubeVisibilityOverride;
     // Screen-only viewer decorations such as the navicube are rendered only
     // when the active render intent allows them.
     mutable std::vector<RenderIntent> renderIntentOverrideStack;

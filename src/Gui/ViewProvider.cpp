@@ -45,8 +45,11 @@
 #include <Base/Matrix.h>
 #include <Base/Tools.h>
 
+#include <App/Document.h>
+
 #include "Inventor/SoMouseWheelEvent.h"
 #include "Inventor/SoFCTransform.h"
+#include "Inventor/SoViewContextElement.h"
 #include "ViewProvider.h"
 #include "ActionFunction.h"
 #include "Application.h"
@@ -57,6 +60,7 @@
 #include "SoFullPathHelper.h"
 #include "View3DInventor.h"
 #include "View3DInventorViewer.h"
+#include "ViewProviderDocumentObject.h"
 #include "ViewParams.h"
 #include "ViewProviderExtension.h"
 #include "ViewProviderLink.h"
@@ -117,7 +121,7 @@ ViewProvider::ViewProvider()
     // pcRoot = new SoFCSeparator(true);
     pcRoot = new SoFCSelectionRoot(true, this);
     pcRoot->ref();
-    pcModeSwitch = new SoSwitch();
+    pcModeSwitch = new SoViewContextSwitch(this);
     pcModeSwitch->ref();
     pcModeSwitch->setName("ModeSwitch");
     pcTransform = new SoFCTransform();
@@ -416,6 +420,39 @@ void ViewProvider::addDisplayMaskMode(SoNode* node, const char* type)
 {
     _sDisplayMaskModes[type] = pcModeSwitch->getNumChildren();
     pcModeSwitch->addChild(node);
+
+    // A display mode can be added after a viewer override mode has already
+    // been applied, for example when a late-created Footprint mode appears on
+    // a newly inserted object. Reapply the current override so this provider
+    // can immediately participate in that mode.
+    std::string modeType(type);
+    if (modeType != "Footprint") {
+        return;
+    }
+    if (App::GetApplication().isRestoring()) {
+        return;
+    }
+
+    auto* docViewProvider = dynamic_cast<ViewProviderDocumentObject*>(this);
+    if (!docViewProvider) {
+        return;
+    }
+    auto* guiDoc = docViewProvider->getDocument();
+    if (!guiDoc) {
+        return;
+    }
+    auto* appDoc = guiDoc->getDocument();
+    if (!appDoc) {
+        return;
+    }
+    std::string docName = appDoc->getName();
+    QTimer::singleShot(0, [docName, modeType]() {
+        auto* queuedGuiDoc = Application::Instance->getDocument(docName.c_str());
+        if (!queuedGuiDoc) {
+            return;
+        }
+        queuedGuiDoc->reapplyViewOverrides(modeType);
+    });
 }
 
 void ViewProvider::setDisplayMaskMode(const char* type)
