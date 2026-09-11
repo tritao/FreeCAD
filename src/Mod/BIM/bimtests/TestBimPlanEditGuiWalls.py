@@ -307,7 +307,14 @@ class BimPlanEditGuiWallsMixin:
         self.pump_gui_events()
 
     def _open_plan_edit_fixture_document(self, relative_path):
-        fixture_path = os.path.abspath(os.path.join(os.path.dirname(__file__), relative_path))
+        source_dir = os.environ.get("FREECAD_SOURCE_DIR", "")
+        candidates = [
+            os.path.abspath(os.path.join(os.getcwd(), relative_path)),
+            os.path.abspath(os.path.join(os.path.dirname(__file__), relative_path)),
+        ]
+        if source_dir:
+            candidates.insert(0, os.path.abspath(os.path.join(source_dir, relative_path)))
+        fixture_path = next((path for path in candidates if os.path.isfile(path)), candidates[0])
         FreeCAD.closeDocument(self.document.Name)
         self.document = FreeCAD.openDocument(fixture_path)
         if FreeCAD.GuiUp:
@@ -1848,7 +1855,7 @@ class BimPlanEditGuiWallsMixin:
         source_wall.Placement = FreeCAD.Placement(FreeCAD.Vector(0, 0, 0), FreeCAD.Rotation())
         target_wall = Arch.makeWall(length=3000, width=200, height=2500)
         target_wall.Placement = FreeCAD.Placement(
-            FreeCAD.Vector(3000, -1500, 0), FreeCAD.Rotation(FreeCAD.Vector(0, 0, 1), 90)
+            FreeCAD.Vector(-500, -1500, 0), FreeCAD.Rotation(FreeCAD.Vector(0, 0, 1), 90)
         )
         self.document.recompute()
 
@@ -3031,7 +3038,7 @@ class BimPlanEditGuiWallsMixin:
     def test_plan_edit_t2_symbols_wall_resize_refreshes_opening_display_without_space_warning(self):
         """Wall005 fixture resize should refresh opening display and avoid transient space warnings."""
 
-        self._open_plan_edit_fixture_document("../../../../../tests/t2-symbols.FCStd")
+        self._open_plan_edit_fixture_document("tests/t2-symbols.FCStd")
 
         wall = self.document.getObject("Wall005")
         opening = self.document.getObject("Window002")

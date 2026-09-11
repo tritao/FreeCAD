@@ -363,6 +363,7 @@ SET(bimtests_SRCS
     bimtests/TestBimPlanCore.py
     bimtests/TestBimPlanEditGui.py
     bimtests/TestBimPlanEditGuiBase.py
+    bimtests/TestBimPlanEditExamplesGui.py
     bimtests/TestBimPlanEditGuiOpenings.py
     bimtests/TestBimPlanEditGuiProvider.py
     bimtests/TestBimPlanEditGuiSpaces.py

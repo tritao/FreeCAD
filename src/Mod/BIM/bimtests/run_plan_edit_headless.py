@@ -15,6 +15,7 @@ from pathlib import Path
 
 DEFAULT_SUITES = (
     "bimtests.TestBimPlanCore",
+    "bimtests.TestBimPlanEditExamplesGui",
     "bimtests.TestBimPlanProviderSelectionGui",
     "bimtests.TestBimPlanEditGuiProvider",
     "bimtests.TestBimPlanEditGuiSymbols",
@@ -99,7 +100,8 @@ def run_suite(repo_root: Path, freecad_executable: Path, suite: str) -> tuple[in
         env = get_core_test_environment(repo_root)
     else:
         command = ["xvfb-run", "-a", str(freecad_executable), "-t", suite]
-        env = None
+        env = os.environ.copy()
+        env["FREECAD_SOURCE_DIR"] = str(repo_root)
     started_at = time.monotonic()
     result = subprocess.run(command, cwd=repo_root, env=env)
     elapsed = time.monotonic() - started_at

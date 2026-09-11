@@ -642,6 +642,30 @@ def make_preview_wall_adapter(session, wall, endpoints):
                 return get_layers(wall)
             return None
 
+        def get_global_baseline(self, _obj):
+            """Resolve the transient preview endpoints as a real baseline."""
+            get_global_baseline = _get_callable_attr(self._wrapped_proxy, "get_global_baseline")
+            baseline = get_global_baseline(wall) if get_global_baseline else None
+            if baseline is None or preview_points[0].isEqual(preview_points[1], 1e-9):
+                return None
+
+            import ArchWallGeometry
+            import Part
+
+            edge = Part.makeLine(preview_points[0], preview_points[1])
+            return ArchWallGeometry.WallBaseline(
+                edge,
+                baseline.normal,
+                preview_points[0],
+                preview_points[1],
+            )
+
+        def get_resolved_section(self, _obj, segment_index=0):
+            get_resolved_section = _get_callable_attr(self._wrapped_proxy, "get_resolved_section")
+            if get_resolved_section is None:
+                return None
+            return get_resolved_section(wall, segment_index=segment_index)
+
     class _PreviewWall:
         def __init__(self):
             self.Proxy = _PreviewWallProxy(real_proxy)
@@ -713,6 +737,12 @@ def collect_preview_wall_relation_data(session, wall, points):
         if not solution:
             continue
         if not solution.is_ok():
+            # Moving an endpoint can temporarily place an existing joint
+            # beyond the preview segment.  That relation simply contributes no
+            # trim until the path reaches it again; the plain wall preview is
+            # already the complete and actionable feedback for this state.
+            if getattr(solution, "status", "") == "RequiresExtension":
+                continue
             warnings.append(
                 (
                     getattr(relation, "Label", getattr(relation, "Name", "")),
