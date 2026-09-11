@@ -36,8 +36,13 @@ public:
 
     using LayerId = std::uint64_t;
     using ChangedCallback = std::function<void(const ViewProviderDocumentObject*)>;
+    using ClippingChangedCallback =
+        std::function<void(const std::vector<const App::ClippingPlane*>&)>;
 
-    explicit ViewContext(ChangedCallback changed = {});
+    explicit ViewContext(
+        ChangedCallback changed = {},
+        ClippingChangedCallback clippingChanged = {}
+    );
 
     LayerId pushLayer();
     bool removeLayer(LayerId layer);
@@ -52,6 +57,7 @@ public:
     const Base::Placement& referenceFrame() const;
     void setClippingPlanes(const std::vector<const App::ClippingPlane*>& planes);
     const std::vector<const App::ClippingPlane*>& clippingPlanes() const;
+    void setClippingChangedCallback(ClippingChangedCallback callback);
     void removeObject(const App::DocumentObject* object);
     void clear();
 
@@ -63,6 +69,7 @@ private:
     std::map<LayerId, VisibilityMap> layers;
     LayerId nextLayerId = 1;
     ChangedCallback changed;
+    ClippingChangedCallback clippingChanged;
     std::vector<const App::ClippingPlane*> activeClippingPlanes;
     std::string activeCameraState;
     Base::Placement activeReferenceFrame;

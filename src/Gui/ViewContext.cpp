@@ -4,6 +4,7 @@
 
 #include "ViewContext.h"
 
+#include <algorithm>
 #include <set>
 
 #include <App/DocumentObject.h>
@@ -16,8 +17,9 @@
 
 using namespace Gui;
 
-ViewContext::ViewContext(ChangedCallback changed)
+ViewContext::ViewContext(ChangedCallback changed, ClippingChangedCallback clippingChanged)
     : changed(std::move(changed))
+    , clippingChanged(std::move(clippingChanged))
 {}
 
 ViewContext::LayerId ViewContext::pushLayer()
@@ -194,7 +196,13 @@ const Base::Placement& ViewContext::referenceFrame() const
 
 void ViewContext::setClippingPlanes(const std::vector<const App::ClippingPlane*>& planes)
 {
+    if (activeClippingPlanes == planes) {
+        return;
+    }
     activeClippingPlanes = planes;
+    if (clippingChanged) {
+        clippingChanged(activeClippingPlanes);
+    }
 }
 
 const std::vector<const App::ClippingPlane*>& ViewContext::clippingPlanes() const
@@ -202,11 +210,27 @@ const std::vector<const App::ClippingPlane*>& ViewContext::clippingPlanes() cons
     return activeClippingPlanes;
 }
 
+void ViewContext::setClippingChangedCallback(ClippingChangedCallback callback)
+{
+    clippingChanged = std::move(callback);
+    if (clippingChanged) {
+        clippingChanged(activeClippingPlanes);
+    }
+}
+
 void ViewContext::removeObject(const App::DocumentObject* object)
 {
     for (auto& [id, values] : layers) {
         (void)id;
         values.erase(object);
+    }
+    const auto oldSize = activeClippingPlanes.size();
+    activeClippingPlanes.erase(
+        std::remove(activeClippingPlanes.begin(), activeClippingPlanes.end(), object),
+        activeClippingPlanes.end()
+    );
+    if (oldSize != activeClippingPlanes.size() && clippingChanged) {
+        clippingChanged(activeClippingPlanes);
     }
 }
 
@@ -221,8 +245,13 @@ void ViewContext::clear()
         }
     }
     layers.clear();
+    const bool hadClippingPlanes = !activeClippingPlanes.empty();
+    activeClippingPlanes.clear();
     for (const auto* object : affected) {
         notify(object);
+    }
+    if (hadClippingPlanes && clippingChanged) {
+        clippingChanged(activeClippingPlanes);
     }
 }
 

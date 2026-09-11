@@ -93,6 +93,11 @@ class SoTimerSensor;
 class SoSensor;
 class SbBox3f;
 
+namespace App
+{
+class ClippingPlane;
+}
+
 namespace Quarter = SIM::Coin3D::Quarter;
 
 namespace Base
@@ -697,6 +702,9 @@ private:
     void aboutToDestroyGLContext();
     void createStandardCursors();
     bool applyCameraState(const SoCamera& camera);
+    void updateContextClipping(
+        const std::vector<const App::ClippingPlane*>& planes
+    );
 
 private:
     NaviCube* naviCube;
@@ -730,6 +738,7 @@ private:
     std::unordered_map<const ViewProvider*, SoSeparator*> contextFrontRoots;
     std::unordered_map<const ViewProvider*, SoSeparator*> contextBackRoots;
     ViewContext viewContext;
+    std::vector<SoClipPlane*> contextClipPlanes;
 
     std::unique_ptr<View3DInventorSelection> inventorSelection;
 
