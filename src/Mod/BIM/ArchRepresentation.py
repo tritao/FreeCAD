@@ -40,6 +40,8 @@ class RepresentationContext:
         *,
         cut_offset=None,
         target_offset=None,
+        cut_z=None,
+        target_z=None,
     ):
         if not isinstance(purpose, RepresentationPurpose):
             purpose = RepresentationPurpose(purpose)
@@ -51,6 +53,12 @@ class RepresentationContext:
         self.source = source
         self.cut_offset = cut_offset
         self.target_offset = target_offset
+        # Compatibility names used by the existing horizontal plan
+        # providers.  The generic contract uses offsets on the reference
+        # frame, but keeping these aliases here lets old plan callers and
+        # arbitrary-plane callers share one context type.
+        self.cut_z = cut_z
+        self.target_z = target_z
 
 
 class PlanContext(RepresentationContext):
@@ -67,6 +75,8 @@ class PlanContext(RepresentationContext):
             source=source,
             cut_offset=cut_z,
             target_offset=target_z,
+            cut_z=cut_z,
+            target_z=target_z,
         )
         self.cut_z = cut_z
         self.target_z = target_z

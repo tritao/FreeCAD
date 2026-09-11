@@ -44,12 +44,11 @@ TODO put examples here.
 import math
 import os
 from dataclasses import dataclass
-from enum import Enum
-
 import FreeCAD
 import ArchCommands
 import ArchIFC
 import Draft
+import ArchRepresentation as _ArchRepresentation
 from ArchRepresentation import BIMRepresentation
 
 from draftutils import params
@@ -103,56 +102,8 @@ def _make_projected_horizontal_area_face(projected_faces):
     return fused_face.removeSplitter()
 
 
-class RepresentationPurpose(Enum):
-    """Architectural intent of a renderer-independent representation request."""
-
-    MODEL = "Model"
-    PLAN = "Plan"
-    SECTION = "Section"
-    ELEVATION = "Elevation"
-
-
-class RepresentationContext:
-    """GUI-independent inputs used to derive an architectural representation.
-
-    ``reference_frame`` establishes the representation coordinate system.
-    ``cut_offset`` and ``target_offset`` locate a section and its output on
-    that frame's local Z axis. ``cut_range`` and ``projection_range`` are also
-    distances in that frame; their interpretation belongs to the
-    object-specific representation generator.
-    ``profile`` identifies optional architectural representation rules without
-    coupling the context to a renderer or a viewer.
-
-    ``cut_z`` and ``target_z`` preserve the existing horizontal plan contract
-    while plan generators migrate to arbitrary reference frames.
-    """
-
-    def __init__(
-        self,
-        purpose=RepresentationPurpose.MODEL,
-        reference_frame=None,
-        cut_range=None,
-        projection_range=None,
-        profile=None,
-        source=None,
-        *,
-        cut_offset=None,
-        target_offset=None,
-        cut_z=None,
-        target_z=None,
-    ):
-        if not isinstance(purpose, RepresentationPurpose):
-            purpose = RepresentationPurpose(purpose)
-        self.purpose = purpose
-        self.reference_frame = reference_frame
-        self.cut_range = cut_range
-        self.projection_range = projection_range
-        self.profile = profile
-        self.source = source
-        self.cut_offset = cut_offset
-        self.target_offset = target_offset
-        self.cut_z = cut_z
-        self.target_z = target_z
+RepresentationPurpose = _ArchRepresentation.RepresentationPurpose
+RepresentationContext = _ArchRepresentation.RepresentationContext
 
 
 def project_to_representation_plane(point, context):
@@ -212,25 +163,7 @@ def representation_extent_points(shape, context, direction):
     return (low, high)
 
 
-class PlanContext(RepresentationContext):
-    """Compatibility context for horizontal plan representations.
-
-    `cut_z` is the absolute document Z coordinate where solid objects are cut.
-    `target_z` is the absolute document Z coordinate where the resulting plan
-    faces should be placed. `source` can reference the document object that
-    supplied the context, such as a Building Storey. The generic Footprint
-    display mode uses this as its default preview context, but callers can pass
-    another context to request a different plan representation of the same
-    object.
-    """
-
-    def __init__(self, cut_z=None, target_z=None, source=None):
-        super().__init__(
-            purpose=RepresentationPurpose.PLAN,
-            source=source,
-            cut_z=cut_z,
-            target_z=target_z,
-        )
+PlanContext = _ArchRepresentation.PlanContext
 
 
 class RepresentationSource:
@@ -383,7 +316,7 @@ def is_property_expression_driven(obj, property_name):
         return False
 
 
-class BIMRepresentation:
+class BIMRepresentation(_ArchRepresentation.BIMRepresentation):
     """Renderer-independent geometry and semantic identity for one BIM object."""
 
     def __init__(self, source=None, context=None):

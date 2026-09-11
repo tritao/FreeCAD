@@ -1265,20 +1265,6 @@ class _SectionPlane:
 
         return obj.Shape.Faces[0].normalAt(0, 0)
 
-    def getRepresentationContext(self, obj):
-        """Return the renderer-independent BIM context supplied by this plane."""
-
-        import ArchComponent
-
-        return ArchComponent.RepresentationContext(
-            purpose=ArchComponent.RepresentationPurpose.SECTION,
-            reference_frame=obj.Placement,
-            cut_offset=0.0,
-            target_offset=0.0,
-            projection_range=float(getattr(getattr(obj, "Depth", 0.0), "Value", 0.0)),
-            source=obj,
-        )
-
     def dumps(self):
 
         return None
