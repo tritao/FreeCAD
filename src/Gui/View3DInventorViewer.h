@@ -209,6 +209,7 @@ public:
     bool isAnimationEnabled() const;
     bool isSpinningAnimationEnabled() const;
     bool isAnimating() const;
+    bool waitForCameraAnimation() const;
     bool isSpinning() const;
     std::shared_ptr<NavigationAnimation> startAnimation(
         const SbRotation& orientation,

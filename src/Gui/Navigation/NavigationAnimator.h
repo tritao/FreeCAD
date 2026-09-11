@@ -40,6 +40,7 @@ public:
     ~NavigationAnimator();
     void start(const std::shared_ptr<NavigationAnimation>& animation);
     bool startAndWait(const std::shared_ptr<NavigationAnimation>& animation);
+    bool waitForAnimation();
     void stop();
     bool isAnimating() const;
 
