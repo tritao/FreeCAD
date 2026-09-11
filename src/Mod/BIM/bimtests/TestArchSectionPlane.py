@@ -28,6 +28,7 @@ import ArchSectionPlane
 import Draft
 import os
 import FreeCAD as App
+import TechDrawBIM
 from bimtests import TestArchBase
 
 
@@ -119,6 +120,38 @@ class TestArchSectionPlane(TestArchBase.TestArchBase):
         self.assertAlmostEqual(local_boundbox.Center.x, 0)
         self.assertAlmostEqual(local_boundbox.Center.y, 0)
         self.assertAlmostEqual(local_boundbox.Center.z, 0)
+
+    def testTechDrawUsesSemanticRepresentationContract(self):
+        """A simple TechDraw section should request provider-owned geometry."""
+
+        wall = Arch.makeWall(length=3000, width=200, height=3000)
+        section_plane = Arch.makeSectionPlane([wall])
+        section_plane.Placement = App.Placement(
+            App.Vector(0, 0, 1500), App.Rotation(App.Vector(0, 1, 0), 90)
+        )
+        self.document.recompute()
+
+        calls = []
+        original_project = TechDrawBIM.project_representation_to_svg
+        original_cut_shapes = ArchSectionPlane.getCutShapes
+
+        def capture_project(representation, direction, collection="projected_geometry", **styles):
+            calls.append(collection)
+            return original_project(representation, direction, collection=collection, **styles)
+
+        def fail_legacy_cut_shapes(*args, **kwargs):
+            raise AssertionError("semantic TechDraw must not build legacy cut shapes")
+
+        TechDrawBIM.project_representation_to_svg = capture_project
+        ArchSectionPlane.getCutShapes = fail_legacy_cut_shapes
+        try:
+            svg = ArchSectionPlane.getSVG(section_plane, techdraw=True, renderMode="Wireframe")
+        finally:
+            TechDrawBIM.project_representation_to_svg = original_project
+            ArchSectionPlane.getCutShapes = original_cut_shapes
+
+        self.assertTrue(svg)
+        self.assertIn("cut_geometry", calls)
 
     def testTechDrawViewGeneration(self):
         """Tests the whole TD view generation workflow"""

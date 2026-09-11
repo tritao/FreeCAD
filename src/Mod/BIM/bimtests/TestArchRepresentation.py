@@ -1,6 +1,8 @@
 # SPDX-License-Identifier: LGPL-2.1-or-later
 
 import unittest
+import sys
+import types
 
 from ArchRepresentation import (
     BIMRepresentation,
@@ -92,6 +94,41 @@ class TestArchRepresentation(unittest.TestCase):
         obj.Proxy = object()
         with self.assertRaises(RepresentationUnavailable):
             representation_for(obj, RepresentationContext())
+
+    def test_techdraw_projects_the_shared_representation_contract(self):
+        sys.path.insert(0, "src/Mod/TechDraw")
+        try:
+            import TechDrawBIM
+        finally:
+            sys.path.pop(0)
+
+        shape = object()
+        representation = BIMRepresentation()
+        representation.add_geometry("projected_geometry", shape, "projected")
+
+        calls = []
+        fake_techdraw = types.SimpleNamespace(
+            projectToSVG=lambda projected, direction, **styles: calls.append(
+                (projected, direction, styles)
+            )
+            or "<svg />"
+        )
+        previous = sys.modules.get("TechDraw")
+        sys.modules["TechDraw"] = fake_techdraw
+        try:
+            result = TechDrawBIM.project_representation_to_svg(
+                representation,
+                (0, 0, 1),
+                stroke="#000000",
+            )
+        finally:
+            if previous is None:
+                del sys.modules["TechDraw"]
+            else:
+                sys.modules["TechDraw"] = previous
+
+        self.assertEqual(result, "<svg />")
+        self.assertEqual(calls, [(shape, (0, 0, 1), {"stroke": "#000000"})])
 
 
 if __name__ == "__main__":
