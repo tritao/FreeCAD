@@ -26,6 +26,9 @@ import unittest
 import FreeCAD as App
 from FreeCAD import Vector
 import Arch
+import ArchComponent
+import ArchRepresentation
+import Draft
 from bimtests import TestArchBase
 
 
@@ -35,6 +38,45 @@ class TestArchStructure(TestArchBase.TestArchBase):
         App.Console.PrintLog("Checking BIM Structure...\n")
         structure = Arch.makeStructure(length=2, width=3, height=5)
         self.assertTrue(structure, "BIM Structure failed")
+
+    def test_slab_get_footprint(self):
+        """Slabs should expose a flattened footprint for plan display."""
+        self.printTestMessage("Checking slab footprint faces")
+
+        rect = Draft.makeRectangle(length=4000, height=3000)
+        slab = Arch.makeStructure(rect, height=200, name="TestSlab")
+        slab.IfcType = "Slab"
+        self.document.recompute()
+
+        faces = slab.Proxy.getFootprint(slab)
+        self.assertEqual(len(faces), 1, "Expected one footprint face for a rectangular slab.")
+        self.assertAlmostEqual(faces[0].Area, 4000 * 3000, places=3)
+        bbox = faces[0].BoundBox
+        self.assertAlmostEqual(bbox.ZMin, slab.Shape.BoundBox.ZMin, places=6)
+        self.assertAlmostEqual(bbox.ZMax, slab.Shape.BoundBox.ZMin, places=6)
+
+        context = ArchRepresentation.RepresentationContext(
+            purpose=ArchRepresentation.RepresentationPurpose.PLAN,
+            cut_offset=0.0,
+            target_offset=42.0,
+        )
+        context_faces = slab.Proxy.getPlanRepresentation(slab, context)
+        context_bbox = context_faces[0].BoundBox
+        self.assertAlmostEqual(context_bbox.ZMin, 42.0, places=6)
+        self.assertAlmostEqual(context_bbox.ZMax, 42.0, places=6)
+
+        representation = ArchRepresentation.representation_for(slab, context)
+        self.assertIs(representation.source, slab)
+        self.assertEqual(len(representation.cut_geometry), len(context_faces))
+        self.assertAlmostEqual(
+            representation.cut_geometry[0].BoundBox.ZMin,
+            context_faces[0].BoundBox.ZMin,
+            places=6,
+        )
+        mapping = representation.mapping_for(representation.cut_geometry[0])
+        self.assertIsNotNone(mapping)
+        self.assertEqual(mapping.role, "SlabPlanFace")
+        self.assertEqual(mapping.subelement, "PlanFace1")
 
     #  Dimensions
     def test_makeStructure_explicit_dimensions(self):

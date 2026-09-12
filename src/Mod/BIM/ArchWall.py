@@ -49,6 +49,7 @@ import math
 import FreeCAD
 import ArchCommands
 import ArchComponent
+import ArchRepresentation
 import ArchSketchObject
 import Draft
 import DraftVecUtils
@@ -800,20 +801,85 @@ class _Wall(ArchComponent.Component):
         ArchComponent.Component.onChanged(self, obj, prop)
 
     def getFootprint(self, obj):
-        """Get the faces that make up the base/foot of the wall.
+        """Get the plan faces that represent this wall in footprint mode.
+
+        The preferred representation is a horizontal section through the wall
+        solid at a standard plan cut height. If the wall belongs to a Building
+        Storey, use that level's PlanCutHeight relative to the storey elevation.
+        Otherwise, fall back to the default 1000 mm plan cut above the wall
+        base. This makes hosted openings appear naturally in footprint mode
+        because the wall shape has already been cut by them. If that section
+        cannot be computed, fall back to the literal bottom faces of the wall.
+        This is the default-preview wrapper for `getPlanRepresentation()`.
 
         Returns
         -------
         list of <Part.Face>
-            The faces that make up the foot of the wall.
+            The faces that make up the wall footprint.
         """
 
+        context = self.getDefaultPlanContext(obj)
+        return self.getRepresentation(obj, context).cut_geometry
+
+    def getPlanRepresentation(self, obj, context):
+        """Return wall plan faces for the supplied plan context.
+
+        The context defines both the absolute cut elevation and the elevation
+        where the resulting faces are placed. This lets callers ask for
+        different plan representations of the same wall without changing the
+        generic Footprint display mode contract.
+        """
+
+        if context is None:
+            context = self.getDefaultPlanContext(obj)
+        return self.getRepresentation(obj, context).cut_geometry
+
+    def getRepresentation(self, obj, context):
+        """Return this wall's renderer-neutral plan representation."""
+
+        if context is None:
+            context = self.getDefaultPlanContext(obj)
+        if context.purpose != ArchRepresentation.RepresentationPurpose.PLAN:
+            raise ArchRepresentation.RepresentationUnavailable(
+                "Wall plan provider only supports Plan contexts"
+            )
+
+        representation = ArchRepresentation.BIMRepresentation(source=obj, context=context)
+        for index, face in enumerate(self._getPlanCutFaces(obj, context), start=1):
+            representation.add_geometry(
+                "cut_geometry", face, "PlanCutFace", subelement=f"PlanFace{index}"
+            )
+        return representation
+
+    def _getPlanCutFaces(self, obj, context):
+        """Build horizontal cut faces used by the plan representation."""
+
+        shape = obj.Shape
+        if shape and (not shape.isNull()) and shape.Solids:
+            bb = shape.BoundBox
+            if bb.ZLength > 0.001 and context.cut_offset is not None:
+                cut_z = context.cut_offset
+                cut_z = max(bb.ZMin + 0.001, min(bb.ZMax - 0.001, cut_z))
+                target_z = context.target_offset if context.target_offset is not None else bb.ZMin
+                faces = ArchComponent.get_horizontal_slice_faces(
+                    shape, cut_z, translate_z=target_z - cut_z
+                )
+                if faces:
+                    return faces
+
         faces = []
-        if obj.Shape:
-            for f in obj.Shape.Faces:
+        if shape:
+            bb = shape.BoundBox
+            target_z = context.target_offset if context.target_offset is not None else bb.ZMin
+            for f in shape.Faces:
                 if f.normalAt(0, 0).getAngle(FreeCAD.Vector(0, 0, -1)) < 0.01:
-                    if abs(abs(f.CenterOfMass.z) - abs(obj.Shape.BoundBox.ZMin)) < 0.001:
-                        faces.append(f)
+                    if abs(f.CenterOfMass.z - bb.ZMin) < 0.001:
+                        face = f
+                        delta_z = target_z - bb.ZMin
+                        if abs(delta_z) >= 0.001:
+                            face = f.copy()
+                            face.translate(FreeCAD.Vector(0, 0, delta_z))
+                        faces.append(face)
         return faces
 
     def getExtrusionData(self, obj):
@@ -1947,21 +2013,9 @@ class _ViewProviderWall(ArchComponent.ViewProviderComponent):
                 return ":/icons/Arch_Wall_Tree_Assembly.svg"
         return ":/icons/Arch_Wall_Tree.svg"
 
-    def attach(self, vobj):
-        """Add display modes' data to the coin scenegraph.
+    def createFootprintGroup(self):
+        """Sets up the Coin group for footprint display mode"""
 
-        Add each display mode as a coin node, whose parent is this view
-        provider.
-
-        Each display mode's node includes the data needed to display the object
-        in that mode. This might include colors of faces, or the draw style of
-        lines. This data is stored as additional coin nodes which are children
-        of the display mode node.
-
-        Add the textures used in the Footprint display mode.
-        """
-
-        self.Object = vobj.Object
         from pivy import coin
 
         tex = coin.SoTexture2()
@@ -1972,14 +2026,31 @@ class _ViewProviderWall(ArchComponent.ViewProviderComponent):
         s = params.get_param_arch("patternScale")
         texcoords.directionS.setValue(s, 0, 0)
         texcoords.directionT.setValue(0, s, 0)
+
         self.fcoords = coin.SoCoordinate3()
         self.fset = coin.SoIndexedFaceSet()
+
         sep = coin.SoSeparator()
         sep.addChild(tex)
         sep.addChild(texcoords)
         sep.addChild(self.fcoords)
         sep.addChild(self.fset)
-        vobj.RootNode.addChild(sep)
+
+        return sep
+
+    def attach(self, vobj):
+        """Add display modes' data to the coin scenegraph.
+
+        Add each display mode as a coin node, whose parent is this view
+        provider.
+
+        Each display mode's node includes the data needed to display the object
+        in that mode. This might include colors of faces, or the draw style of
+        lines. This data is stored as additional coin nodes which are children
+        of the display mode node.
+        """
+
+        self.Object = vobj.Object
         ArchComponent.ViewProviderComponent.attach(self, vobj)
 
     def updateData(self, obj, prop):
@@ -2049,7 +2120,7 @@ class _ViewProviderWall(ArchComponent.ViewProviderComponent):
             List containing the names of the new display modes.
         """
 
-        modes = ArchComponent.ViewProviderComponent.getDisplayModes(self, vobj) + ["Footprint"]
+        modes = ArchComponent.ViewProviderComponent.getDisplayModes(self, vobj)
         return modes
 
     def setDisplayMode(self, mode):
@@ -2074,26 +2145,9 @@ class _ViewProviderWall(ArchComponent.ViewProviderComponent):
         str:
             The name of the display mode the view provider has switched to.
         """
-
-        self.fset.coordIndex.deleteValues(0)
-        self.fcoords.point.deleteValues(0)
         if mode == "Footprint":
-            if hasattr(self, "Object"):
-                faces = self.Object.Proxy.getFootprint(self.Object)
-                if faces:
-                    verts = []
-                    fdata = []
-                    idx = 0
-                    for face in faces:
-                        tri = face.tessellate(1)
-                        for v in tri[0]:
-                            verts.append([v.x, v.y, v.z])
-                        for f in tri[1]:
-                            fdata.extend([f[0] + idx, f[1] + idx, f[2] + idx, -1])
-                        idx += len(tri[0])
-                    self.fcoords.point.setValues(verts)
-                    self.fset.coordIndex.setValues(0, len(fdata), fdata)
-            return "Wireframe"
+            if self.refreshFootprint():
+                return "Footprint"
         return ArchComponent.ViewProviderComponent.setDisplayMode(self, mode)
 
     def setEdit(self, vobj, mode):
