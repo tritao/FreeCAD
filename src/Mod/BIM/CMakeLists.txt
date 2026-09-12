@@ -52,6 +52,8 @@ SET(Arch_SRCS
     ArchRoof.py
     ArchStairs.py
     ArchSpace.py
+    ArchPlanRegion.py
+    ArchSpaceSeparator.py
     ArchRebar.py
     ArchTessellation.py
     ArchFrame.py
@@ -268,6 +270,7 @@ SET(bimtests_SRCS
     bimtests/TestArchRoof.py
     bimtests/test_roof_subtraction.brep
     bimtests/TestArchSpace.py
+    bimtests/TestArchSpaceGui.py
     bimtests/TestArchWall.py
     bimtests/TestArchWallGeometry.py
     bimtests/TestArchWallJoint.py

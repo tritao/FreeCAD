@@ -152,6 +152,172 @@ def get_horizontal_slice_faces(shape, cut_z, translate_z=0.0):
     return faces
 
 
+def representation_vertical_direction(context):
+    """Return model Z projected into the active representation plane."""
+
+    return ArchRepresentation.project_direction_to_representation_plane(
+        FreeCAD.Vector(0, 0, 1), context
+    )
+
+
+def representation_extent_points(shape, context, direction):
+    """Return low/high projected extent points along an in-plane direction."""
+
+    vertices = tuple(getattr(shape, "Vertexes", ()) or ())
+    if not vertices:
+        return (None, None)
+    points = [
+        ArchRepresentation.project_to_representation_plane(vertex.Point, context)
+        for vertex in vertices
+    ]
+    return (
+        min(points, key=lambda point: point.dot(direction)),
+        max(points, key=lambda point: point.dot(direction)),
+    )
+
+
+def get_reference_slice_faces(shape, context):
+    """Section *shape* on an arbitrary context frame without modifying it."""
+
+    frame = getattr(context, "reference_frame", None)
+    cut_offset = getattr(context, "cut_offset", None)
+    if frame is None or cut_offset is None or not shape or shape.isNull():
+        return []
+    try:
+        import Part
+
+        normal = frame.Rotation.multVec(FreeCAD.Vector(0, 0, 1))
+        x_axis = frame.Rotation.multVec(FreeCAD.Vector(1, 0, 0))
+        y_axis = frame.Rotation.multVec(FreeCAD.Vector(0, 1, 0))
+        origin = frame.multVec(FreeCAD.Vector(0, 0, cut_offset))
+        size = max(shape.BoundBox.DiagonalLength * 2.0, 1.0)
+        corner = origin - x_axis * (size * 0.5) - y_axis * (size * 0.5)
+        plane = Part.makePlane(size, size, corner, normal, x_axis)
+        section = shape.section(plane)
+        edges = list(section.Edges)
+        if not edges:
+            return []
+        try:
+            edge_groups = Part.sortEdges(edges)
+        except AttributeError:
+            edge_groups = Part.__sortEdges__(edges)
+        faces = []
+        for group in edge_groups:
+            wire = Part.Wire(group)
+            if wire.isClosed():
+                face = Part.Face(wire)
+                if face.Area > 0:
+                    faces.append(face)
+        target_offset = getattr(context, "target_offset", None)
+        if target_offset is None:
+            target_offset = cut_offset
+        delta = float(target_offset) - float(cut_offset)
+        if delta:
+            for face in faces:
+                face.translate(normal * delta)
+        return faces
+    except Exception:
+        return []
+
+def _iter_plan_footprint_local_points(view_provider):
+    collector = getattr(view_provider, "_collect_local_footprint_polylines", None)
+    if not callable(collector):
+        return
+
+    try:
+        polylines = collector() or ()
+    except Exception:
+        return
+
+    for polyline in polylines:
+        for point in polyline or ():
+            try:
+                yield FreeCAD.Vector(point)
+            except Exception:
+                try:
+                    yield FreeCAD.Vector(
+                        float(point[0]),
+                        float(point[1]),
+                        float(point[2] if len(point) > 2 else 0.0),
+                    )
+                except Exception:
+                    continue
+
+
+def _bounds_from_points(points):
+    points = list(points or ())
+    if not points:
+        return None
+
+    xs = [float(point.x) for point in points]
+    ys = [float(point.y) for point in points]
+    zs = [float(point.z) for point in points]
+    return (min(xs), min(ys), max(xs), max(ys), min(zs), max(zs))
+
+
+def _union_bounds(first, second):
+    if first is None:
+        return second
+    if second is None:
+        return first
+    return (
+        min(first[0], second[0]),
+        min(first[1], second[1]),
+        max(first[2], second[2]),
+        max(first[3], second[3]),
+        min(first[4], second[4]),
+        max(first[5], second[5]),
+    )
+
+
+def _get_plan_footprint_global_bounds(obj):
+    if (not FreeCAD.GuiUp) or (obj is None):
+        return None
+
+    vobj = getattr(obj, "ViewObject", None)
+    proxy = getattr(vobj, "Proxy", None) if vobj else None
+    if proxy is None:
+        return None
+
+    local_points = tuple(_iter_plan_footprint_local_points(proxy))
+    if not local_points:
+        return None
+
+    try:
+        placement = obj.getGlobalPlacement()
+    except Exception:
+        placement = getattr(obj, "Placement", None)
+    if placement is None:
+        return _bounds_from_points(local_points)
+
+    try:
+        global_points = [placement.multVec(point) for point in local_points]
+    except Exception:
+        global_points = local_points
+    return _bounds_from_points(global_points)
+
+
+def notify_plan_footprint_changed(view_provider):
+    """Notify BIM GUI consumers that a view provider's plan footprint has changed."""
+
+    if (not FreeCAD.GuiUp) or (view_provider is None):
+        return 0
+
+    obj = getattr(view_provider, "Object", None)
+    doc = getattr(obj, "Document", None)
+    current_bounds = _get_plan_footprint_global_bounds(obj)
+    previous_bounds = getattr(view_provider, "_last_plan_footprint_bounds", None)
+    view_provider._last_plan_footprint_bounds = current_bounds
+    changed_bounds = _union_bounds(previous_bounds, current_bounds)
+
+    if doc is None or changed_bounds is None:
+        return 0
+
+    import ArchSpace
+
+    return ArchSpace.schedule_auto_space_text_refresh(doc, changed_bounds=changed_bounds)
+
+
 def addToComponent(compobject, addobject, prop):
     """Add an object to a component's property.
 

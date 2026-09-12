@@ -36,6 +36,7 @@ from bimtests.TestBimPlanEditSessionGui import TestBimPlanEditSessionGui
 from bimtests.TestArchStairsGui import TestArchStairsGui
 from bimtests.TestArchReportGui import TestArchReportGui
 from bimtests.TestArchSiteGui import TestArchSiteGui
+from bimtests.TestArchSpaceGui import TestArchSpaceGui
 from bimtests.TestArchStructureGui import TestArchStructureGui
 from bimtests.TestArchWallGui import TestArchWallGui
 from bimtests.TestArchWindowGui import TestArchWindowGui
@@ -55,6 +56,7 @@ TEST_CLASSES = (
     TestArchStairsGui,
     TestArchReportGui,
     TestArchSiteGui,
+    TestArchSpaceGui,
     TestArchStructureGui,
     TestArchWallGui,
     TestArchWindowGui,
