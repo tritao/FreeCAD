@@ -165,23 +165,37 @@ after FreeCAD launches</string>
        </layout>
       </item>
       <item>
-       <widget class="Gui::PrefCheckBox" name="CheckBox_WbByTab">
-        <property name="toolTip">
-         <string>Remembers which workbench is active for each tab of the viewport</string>
+       <layout class="QHBoxLayout">
+        <property name="spacing">
+         <number>6</number>
         </property>
-        <property name="text">
-         <string>Remember active workbench by tab</string>
+        <property name="leftMargin">
+         <number>0</number>
         </property>
-        <property name="checked">
-         <bool>false</bool>
+        <property name="topMargin">
+         <number>0</number>
         </property>
-        <property name="prefEntry" stdset="0">
-         <cstring>SaveWBbyTab</cstring>
+        <property name="rightMargin">
+         <number>0</number>
         </property>
-        <property name="prefPath" stdset="0">
-         <cstring>View</cstring>
+        <property name="bottomMargin">
+         <number>0</number>
         </property>
-       </widget>
+        <item>
+         <widget class="QLabel" name="WorkbenchContextLabel">
+          <property name="text">
+           <string>Remember active workbench per</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QComboBox" name="WorkbenchContextCombo">
+          <property name="toolTip">
+           <string>Controls whether switching documents or tabs restores a remembered workbench</string>
+          </property>
+         </widget>
+        </item>
+       </layout>
       </item>
      </layout>
     </widget>
@@ -190,11 +204,6 @@ after FreeCAD launches</string>
  </widget>
  <layoutdefault spacing="6" margin="11"/>
  <customwidgets>
-  <customwidget>
-   <class>Gui::PrefCheckBox</class>
-   <extends>QCheckBox</extends>
-   <header>Gui/PrefWidgets.h</header>
-  </customwidget>
   <customwidget>
    <class>ListWidgetDragBugFix</class>
    <extends>QListWidget</extends>

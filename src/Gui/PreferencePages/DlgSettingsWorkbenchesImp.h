@@ -58,7 +58,6 @@ protected Q_SLOTS:
     void wbToggled(const QString& wbName, bool enabled);
     void wbItemMoved();
     void onStartWbChanged(int index);
-    void onWbByTabToggled(bool val);
 
 protected:
     void buildWorkbenchList();
@@ -69,6 +68,10 @@ private:
     void sortEnabledWorkbenches();
 
     void setStartWorkbenchComboItems();
+
+    void saveWorkbenchContextPolicy();
+    void loadWorkbenchContextPolicy();
+    void translateWorkbenchContextPolicy();
 
     void saveWorkbenchSelector();
     void loadWorkbenchSelector();
