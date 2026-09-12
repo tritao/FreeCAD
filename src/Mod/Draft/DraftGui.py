@@ -241,6 +241,8 @@ class DraftToolBar:
         self.display_point_active = False  # prevent cyclic processing of point values
         self._locks = InputFieldLockGroup(on_change=self._on_lock_change)
         self._angle_lock_axis = None
+        self.suppress_point_focus = False
+        self._saved_point_focus_policies = {}
 
     # ---------------------------------------------------------------------------
     # General UI setup
@@ -879,6 +881,8 @@ class DraftToolBar:
         self.checkLocal()
 
     def setFocus(self, f=None):
+        if self.suppress_point_focus:
+            return
 
         # Do not set focus on Length if length+angle input is problematic:
         force_xyz = False
@@ -946,6 +950,45 @@ class DraftToolBar:
             if widget.isVisible() and widget.isEnabled() and not self._is_field_locked(key):
                 return widget
         return self.xValue
+
+    def setPointFocusSuppressed(self, suppressed):
+        """Temporarily prevent Draft point fields from taking keyboard focus."""
+
+        suppressed = bool(suppressed)
+        self.suppress_point_focus = suppressed
+
+        widgets = [self.tray]
+        try:
+            widgets.extend(self.tray.findChildren(QtWidgets.QWidget))
+        except Exception:
+            pass
+
+        if suppressed:
+            focus_widget = QtWidgets.QApplication.focusWidget()
+            for widget in widgets:
+                if widget is None:
+                    continue
+                if widget not in self._saved_point_focus_policies:
+                    self._saved_point_focus_policies[widget] = widget.focusPolicy()
+                try:
+                    widget.setFocusPolicy(QtCore.Qt.NoFocus)
+                except Exception:
+                    pass
+                try:
+                    if focus_widget is widget or (
+                        focus_widget is not None and widget.isAncestorOf(focus_widget)
+                    ):
+                        focus_widget.clearFocus()
+                except Exception:
+                    pass
+            return
+
+        for widget, policy in list(self._saved_point_focus_policies.items()):
+            try:
+                widget.setFocusPolicy(policy)
+            except Exception:
+                pass
+        self._saved_point_focus_policies.clear()
 
     def number_length(self, st):
         nl = len(st)

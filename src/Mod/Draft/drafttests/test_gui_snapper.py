@@ -26,6 +26,7 @@
 
 import FreeCAD as App
 import FreeCADGui as Gui
+import DraftGui
 from draftguitools import gui_base
 from draftguitools import gui_snapper
 from draftguitools import gui_trackers
@@ -36,6 +37,30 @@ from unittest.mock import patch
 
 
 class DraftSnapper(test_base.DraftTestCaseDoc):
+    class _FakeFocusWidget:
+        def __init__(self, policy):
+            self.policy = policy
+
+        def focusPolicy(self):
+            return self.policy
+
+        def setFocusPolicy(self, policy):
+            self.policy = policy
+
+        def isAncestorOf(self, widget):
+            return False
+
+        def clearFocus(self):
+            pass
+
+    class _FakeTray(_FakeFocusWidget):
+        def __init__(self, policy, children):
+            super().__init__(policy)
+            self.children = children
+
+        def findChildren(self, widget_type):
+            return self.children
+
     class _FakeToolbar:
         def __init__(self):
             self.mouse = True
@@ -246,3 +271,22 @@ class DraftSnapper(test_base.DraftTestCaseDoc):
         plane = object()
         tracker = SimpleNamespace(working_plane=plane)
         self.assertIs(gui_trackers.Tracker._get_wp(tracker), plane)
+
+    def test_draft_point_focus_policy_is_restored(self):
+        """Point-focus suppression must restore each Draft widget's old policy."""
+
+        child = self._FakeFocusWidget(1)
+        tray = self._FakeTray(2, [child])
+        toolbar = DraftGui.DraftToolBar.__new__(DraftGui.DraftToolBar)
+        toolbar.tray = tray
+        toolbar.suppress_point_focus = False
+        toolbar._saved_point_focus_policies = {}
+
+        toolbar.setPointFocusSuppressed(True)
+        self.assertEqual(tray.focusPolicy(), DraftGui.QtCore.Qt.NoFocus)
+        self.assertEqual(child.focusPolicy(), DraftGui.QtCore.Qt.NoFocus)
+
+        toolbar.setPointFocusSuppressed(False)
+        self.assertEqual(tray.focusPolicy(), 2)
+        self.assertEqual(child.focusPolicy(), 1)
+        self.assertFalse(toolbar._saved_point_focus_policies)
