@@ -90,6 +90,8 @@ class DraftInteractionHost:
         title=None,
         mode=None,
         extra_widget=None,
+        hints=None,
+        modifier_resolver=None,
     ):
         if not hasattr(Gui, "Snapper"):
             return
@@ -107,7 +109,23 @@ class DraftInteractionHost:
             kwargs["mode"] = mode
         if extra_widget is not None:
             kwargs["extradlg"] = extra_widget
+        if hints is not None:
+            kwargs["hints"] = hints
+        if modifier_resolver is not None:
+            kwargs["modifier_resolver"] = modifier_resolver
         Gui.Snapper.getPoint(**kwargs)
+
+    def supports_extra_widget(self):
+        return True
+
+    def resolve_point_request_modifiers(self, ctrl, shift, alt):
+        return ctrl, shift
+
+    def default_ortho_enabled(self):
+        return False
+
+    def free_angle_override_active(self):
+        return False
 
     def stop_point_request(self):
         snapper = getattr(Gui, "Snapper", None)
