@@ -21,6 +21,7 @@
 #include <Gui/Inventor/SoViewContextElement.h>
 #include <Gui/Selection/SoFCUnifiedSelection.h>
 #include <Gui/ViewContext.h>
+#include <Gui/ViewInstance.h>
 #include <Gui/ViewProviderDocumentObject.h>
 
 #include <src/App/InitApplication.h>
@@ -89,6 +90,41 @@ TEST_F(ViewProviderDocumentObjectTest, refreshDisplayModesPreservesSupportedMode
     EXPECT_STREQ(viewProvider.DisplayMode.getValueAsString(), "Shaded");
     EXPECT_NO_THROW(viewProvider.DisplayMode.setValue("Plan"));
     EXPECT_STREQ(viewProvider.DisplayMode.getValueAsString(), "Plan");
+}
+
+TEST_F(ViewProviderDocumentObjectTest, viewInstanceOwnsTransientRepresentationBehindContextGate)
+{
+    Gui::ViewProviderDocumentObject viewProvider;
+    viewProvider.attach(_child);
+
+    Gui::ViewContext context;
+    const auto layer = context.pushLayer();
+    ASSERT_TRUE(context.setVisibility(layer, _child, Gui::ViewContext::Visibility::Hidden));
+
+    Gui::ViewInstance instance(&viewProvider, &context);
+    instance.setRepresentation(new SoCube);
+    ASSERT_TRUE(instance.hasRepresentation());
+
+    auto* scene = new SoGroup;
+    scene->ref();
+    scene->addChild(instance.getRoot());
+
+    SoGetBoundingBoxAction hiddenAction(SbViewportRegion(100, 100));
+    hiddenAction.apply(scene);
+    EXPECT_TRUE(hiddenAction.getBoundingBox().isEmpty());
+
+    ASSERT_TRUE(context.setVisibility(layer, _child, Gui::ViewContext::Visibility::Visible));
+    SoGetBoundingBoxAction visibleAction(SbViewportRegion(100, 100));
+    visibleAction.apply(scene);
+    EXPECT_FALSE(visibleAction.getBoundingBox().isEmpty());
+
+    instance.clearRepresentation();
+    EXPECT_FALSE(instance.hasRepresentation());
+    SoGetBoundingBoxAction clearedAction(SbViewportRegion(100, 100));
+    clearedAction.apply(scene);
+    EXPECT_TRUE(clearedAction.getBoundingBox().isEmpty());
+
+    scene->unref();
 }
 
 TEST_F(ViewProviderDocumentObjectTest, viewContextTraversesHiddenProviderWithoutChangingModeSwitch)
