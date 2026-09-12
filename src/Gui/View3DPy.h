@@ -70,6 +70,10 @@ public:
     Py::Object startAnimating(const Py::Tuple&);
     Py::Object stopAnimating();
     Py::Object waitForCameraAnimation();
+    Py::Object pushViewContextLayer();
+    Py::Object removeViewContextLayer(const Py::Tuple&);
+    Py::Object setViewVisibility(const Py::Tuple&);
+    Py::Object getViewVisibility(const Py::Tuple&);
     Py::Object setAnimationEnabled(const Py::Tuple&);
     Py::Object isAnimationEnabled();
     Py::Object setPopupMenuEnabled(const Py::Tuple&);

@@ -68,6 +68,7 @@ GuiExport std::size_t choosePreferredPick(const std::vector<Candidate>& picked);
 }  // namespace SelectionPickPolicy
 
 class Document;
+class ViewContext;
 class ViewProviderDocumentObject;
 
 /**  Unified Selection node
@@ -88,6 +89,10 @@ public:
     static void finish();
     SoFCUnifiedSelection();
     void applySettings();
+    void setViewContext(const ViewContext* context)
+    {
+        viewContext = context;
+    }
 
     enum SelectionModes
     {
@@ -108,8 +113,15 @@ public:
 
     void doAction(SoAction* action) override;
 
+    void callback(SoCallbackAction* action) override;
+    void getBoundingBox(SoGetBoundingBoxAction* action) override;
+    void getMatrix(SoGetMatrixAction* action) override;
+    void getPrimitiveCount(SoGetPrimitiveCountAction* action) override;
     void handleEvent(SoHandleEventAction* action) override;
     void GLRenderBelowPath(SoGLRenderAction* action) override;
+    void GLRenderInPath(SoGLRenderAction* action) override;
+    void pick(SoPickAction* action) override;
+    void rayPick(SoRayPickAction* action) override;
 
     static bool hasHighlight();
 
@@ -121,6 +133,8 @@ protected:
     ~SoFCUnifiedSelection() override;
 
 private:
+    void setViewContextElement(SoAction* action) const;
+
     static int getPriority(const SoPickedPoint* p);
 
     struct PickedInfo
@@ -158,6 +172,7 @@ private:
     std::vector<PickedInfo> getPickedList(SoHandleEventAction* action, bool singlePick) const;
 
     Gui::Document* pcDocument {nullptr};
+    const ViewContext* viewContext {nullptr};
 
     static SoFullPath* currentHighlightPath;
     SoFullPath* detailPath;
