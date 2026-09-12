@@ -29,6 +29,7 @@ from bimtests.TestArchAxisGui import TestArchAxisGui
 from bimtests.TestArchBuildingPartGui import TestArchBuildingPartGui
 from bimtests.TestArchPlanGeometry import TestArchPlanGeometry
 from bimtests.TestArchFootprintGui import TestArchFootprintGui
+from bimtests.TestBimLibraryBrowserGui import TestBimLibraryBrowserGui
 from bimtests.TestBimPlanEditSessionGui import TestBimPlanEditSessionGui
 from bimtests.TestArchStairsGui import TestArchStairsGui
 from bimtests.TestArchReportGui import TestArchReportGui
@@ -45,6 +46,7 @@ TEST_CLASSES = (
     TestArchBuildingPartGui,
     TestArchFootprintGui,
     TestArchPlanGeometry,
+    TestBimLibraryBrowserGui,
     TestBimPlanEditSessionGui,
     TestArchStairsGui,
     TestArchReportGui,
