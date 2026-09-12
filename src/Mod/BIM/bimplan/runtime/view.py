@@ -103,6 +103,9 @@ class PlanViewportAPI:
     def apply_plan_view(self, fit=True):
         return apply_plan_view(self.session, fit=fit)
 
+    def apply_representation_context(self, context, fit=True):
+        return apply_representation_context(self.session, context, fit=fit)
+
     def restore_state(self):
         return restore_state(self.session)
 
@@ -517,11 +520,14 @@ def apply_plan_view(session, fit=True):
 
     with session.performance.plan_perf_trace_span("apply_plan_view_working_plane"):
         wp = WorkingPlane.get_working_plane(update=False)
-        offset = (
-            session.storey.get_storey_elevation(session.active_storey)
-            if session.active_storey
-            else 0.0
-        )
+        active_context = getattr(getattr(session, "representation_context", None), "context", None)
+        target_offset = getattr(active_context, "target_offset", None)
+        if target_offset is not None:
+            offset = float(target_offset)
+        elif session.active_storey:
+            offset = session.storey.get_storey_elevation(session.active_storey)
+        else:
+            offset = 0.0
         wp.set_to_top(offset=offset)
         _update_working_plane(wp)
 
@@ -541,6 +547,48 @@ def apply_plan_view(session, fit=True):
                 session.view.fitAll()
             except RuntimeError:
                 session.view = None
+
+
+def apply_representation_context(session, context, fit=True):
+    """Apply the camera and Draft plane described by a BIM context."""
+
+    frame = getattr(context, "reference_frame", None)
+    if frame is None:
+        return apply_plan_view(session, fit=fit)
+
+    import WorkingPlane
+
+    if session.view:
+        try:
+            session.view.setCameraType("Orthographic")
+            vx = frame.Rotation.multVec(FreeCAD.Vector(1, 0, 0))
+            vy = frame.Rotation.multVec(FreeCAD.Vector(0, 1, 0))
+            vz = frame.Rotation.multVec(FreeCAD.Vector(0, 0, 1))
+            session.view.setCameraOrientation(FreeCAD.Rotation(vx, vy, vz, "ZXY").Q)
+        except (AttributeError, RuntimeError):
+            pass
+
+    if session.viewer:
+        try:
+            session.viewer.setOverrideMode("As Is")
+            apply_plan_background_override(session, session.viewport_state.plan_paper_rgb)
+        except RuntimeError:
+            session.viewer = None
+
+    wp = WorkingPlane.get_working_plane(update=False)
+    wp.align_to_placement(frame)
+    _update_working_plane(wp)
+    session.viewport_state.interaction_plane = WorkingPlane.PlaneBase()
+    session.viewport_state.interaction_plane.align_to_placement(frame)
+    source = getattr(context, "source", None)
+    if source is not None:
+        session.viewport.set_active_object(source)
+    apply_plan_navigation_profile(session, session.viewport_state.plan_view_locked_actions)
+    if fit and session.view:
+        try:
+            session.view.fitAll()
+        except RuntimeError:
+            session.view = None
 
 
 def restore_state(session):
