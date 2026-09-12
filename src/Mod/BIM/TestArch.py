@@ -57,6 +57,7 @@ from bimtests.TestWebGLExport import TestWebGLExport
 from bimtests.TestArchReport import TestArchReport
 from bimtests.TestArchCovering import TestArchCovering
 from bimtests.TestBimAssetSemantics import TestBimAssetSemantics
+from bimtests.TestBimLibrarySources import TestBimLibrarySources
 
 TEST_CLASSES = (
     TestArchRoof,
@@ -92,6 +93,7 @@ TEST_CLASSES = (
     TestArchReport,
     TestArchCovering,
     TestBimAssetSemantics,
+    TestBimLibrarySources,
 )
 
 

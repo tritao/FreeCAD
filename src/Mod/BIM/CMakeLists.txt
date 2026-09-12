@@ -78,6 +78,7 @@ SET(Arch_SRCS
     ArchReport.py
     ArchSql.py
     BimAssetSemantics.py
+    BimLibrarySources.py
 )
 
 SET(bimplan_SRCS
@@ -258,6 +259,7 @@ SET(bimtests_SRCS
     bimtests/TestArchPlanGeometry.py
     bimtests/TestArchRepresentation.py
     bimtests/TestBimAssetSemantics.py
+    bimtests/TestBimLibrarySources.py
     bimtests/TestArchCovering.py
     bimtests/TestArchCoveringGui.py
     bimtests/TestArchBuildingPart.py
