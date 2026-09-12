@@ -298,6 +298,7 @@ SET(bimtests_SRCS
     bimtests/TestArchFootprintGui.py
     bimtests/TestArchImportersGui.py
     bimtests/TestArchBuildingPartGui.py
+    bimtests/TestBimLibraryBrowserGui.py
     bimtests/TestBimPlanEditSessionGui.py
     bimtests/TestArchStairsGui.py
     bimtests/TestArchReport.py
