@@ -47,9 +47,11 @@ import FreeCAD
 import ArchCommands
 import ArchIFC
 import Draft
+import ArchRepresentation
 
 from draftutils import params
 
+DEFAULT_PLAN_CUT_HEIGHT = 1000.0
 if FreeCAD.GuiUp:
     from PySide import QtGui, QtCore
     from PySide.QtCore import QT_TRANSLATE_NOOP
@@ -76,6 +78,59 @@ def _make_projected_horizontal_area_face(projected_faces):
     for face in projected_faces[1:]:
         fused_face = fused_face.fuse(face, noElementMap=True)
     return fused_face.removeSplitter()
+
+
+def get_horizontal_slice_edges(shape, cut_z):
+    """Return transient section edges for a horizontal cut through ``shape``."""
+
+    if not shape or shape.isNull():
+        return []
+
+    try:
+        wires = shape.slice(FreeCAD.Vector(0, 0, 1), cut_z)
+    except TypeError:
+        try:
+            wires = shape.slice(FreeCAD.Vector(0, 0, 1), cut_z, 0.0)
+        except Exception:
+            return []
+    except Exception:
+        return []
+
+    edges = []
+    for wire in wires or []:
+        try:
+            edges.extend(list(wire.Edges))
+        except Exception:
+            continue
+    return edges
+
+
+def get_horizontal_slice_faces(shape, cut_z, translate_z=0.0):
+    """Return transient planar faces for a horizontal cut through ``shape``."""
+
+    import Part
+
+    section_edges = get_horizontal_slice_edges(shape, cut_z)
+    if not section_edges:
+        return []
+
+    try:
+        edge_groups = Part.sortEdges(section_edges)
+    except AttributeError:
+        edge_groups = Part.__sortEdges__(section_edges)
+
+    faces = []
+    for edges in edge_groups:
+        wire = Part.Wire(edges)
+        if not wire.isClosed():
+            continue
+        face = Part.Face(wire)
+        if face.Area <= 0:
+            continue
+        if translate_z:
+            face.translate(FreeCAD.Vector(0, 0, translate_z))
+        faces.append(face)
+    return faces
 
 
 def addToComponent(compobject, addobject, prop):
@@ -568,6 +623,63 @@ class Component(ArchIFC.IfcProduct):
                 if obj in parent.Additions:
                     return self.getParentHeight(parent)
         return 0
+
+    def getParentBuildingPart(self, obj, ifc_type=None):
+        """Return the nearest containing BuildingPart, optionally filtered by IFC type."""
+
+        for parent in obj.InList:
+            if Draft.getType(parent) == "BuildingPart":
+                if obj in getattr(parent, "Group", []):
+                    if (ifc_type is None) or (getattr(parent, "IfcType", "") == ifc_type):
+                        return parent
+        for parent in obj.InList:
+            if hasattr(parent, "Group"):
+                if obj in parent.Group:
+                    building_part = self.getParentBuildingPart(parent, ifc_type)
+                    if building_part:
+                        return building_part
+        for parent in obj.InList:
+            if hasattr(parent, "Additions"):
+                if obj in parent.Additions:
+                    building_part = self.getParentBuildingPart(parent, ifc_type)
+                    if building_part:
+                        return building_part
+        return None
+
+    def getDefaultPlanContext(self, obj, default_cut_height=DEFAULT_PLAN_CUT_HEIGHT):
+        """Return the default plan context for generic footprint previews.
+
+        Contained objects use their parent Building Storey's `PlanCutHeight`,
+        measured from the storey level. Standalone objects fall back to a simple
+        cut height above the object's base. `getFootprint()` wrappers use this
+        default context to preserve the existing display-mode API while
+        `getPlanRepresentation()` provides the view-aware extension point.
+        """
+
+        shape = getattr(obj, "Shape", None)
+        if shape and not shape.isNull():
+            target_z = shape.BoundBox.ZMin
+        else:
+            target_z = obj.Placement.Base.z
+
+        storey = self.getParentBuildingPart(obj, ifc_type="Building Storey")
+        if storey and hasattr(storey, "PlanCutHeight") and storey.PlanCutHeight.Value > 0:
+            level_offset = getattr(storey, "LevelOffset", 0)
+            if hasattr(level_offset, "Value"):
+                level_offset = level_offset.Value
+            cut_z = storey.Placement.Base.z + level_offset + storey.PlanCutHeight.Value
+            return ArchRepresentation.RepresentationContext(
+                purpose=ArchRepresentation.RepresentationPurpose.PLAN,
+                cut_offset=cut_z,
+                target_offset=target_z,
+                source=storey,
+            )
+
+        return ArchRepresentation.RepresentationContext(
+            purpose=ArchRepresentation.RepresentationPurpose.PLAN,
+            cut_offset=target_z + default_cut_height,
+            target_offset=target_z,
+        )
 
     def clone(self, obj):
         """If the object is a clone, copy the shape.
@@ -1689,7 +1801,120 @@ class ViewProviderComponent:
                         if len(obj.CloneOf.ViewObject.DiffuseColor) > 1:
                             obj.ViewObject.DiffuseColor = obj.CloneOf.ViewObject.DiffuseColor
                             obj.ViewObject.update()
+        if prop in ("Shape", "Placement"):
+            self.refreshFootprint(obj.ViewObject)
+            self._refreshHostedFootprints(obj)
         return
+
+    def updateFootprint(self):
+        self.fset.coordIndex.deleteValues(0)
+        self.fcoords.point.deleteValues(0)
+        faces = self.Object.Proxy.getFootprint(self.Object)
+        if faces:
+            inverse_placement = self.Object.Placement.inverse()
+            verts = []
+            fdata = []
+            idx = 0
+            for face in faces:
+                tri = face.tessellate(1)
+                for v in tri[0]:
+                    # getFootprint() returns placed geometry. Store the
+                    # cached footprint node in object-local coordinates so
+                    # Placement changes do not double-transform it.
+                    if inverse_placement is not None:
+                        v = inverse_placement.multVec(v)
+                    verts.append([v.x, v.y, v.z])
+                for f in tri[1]:
+                    fdata.extend([f[0] + idx, f[1] + idx, f[2] + idx, -1])
+                idx += len(tri[0])
+            self.fcoords.point.setValues(verts)
+            self.fset.coordIndex.setValues(0, len(fdata), fdata)
+
+    def _update_footprint_line_nodes(self, lcoords, lset, verts, counts):
+        """Replace cached footprint polylines without exposing invalid Coin state."""
+
+        vertices = list(verts or [])
+        line_counts = [int(count) for count in (counts or [])]
+
+        # Clear the index field first; Coin must not see old line counts paired
+        # with a newly emptied coordinate array.
+        lset.numVertices.deleteValues(0)
+        lcoords.point.deleteValues(0)
+
+        if not vertices and not line_counts:
+            return True
+        if not line_counts or any(count < 2 for count in line_counts):
+            return False
+        if sum(line_counts) != len(vertices):
+            return False
+
+        lcoords.point.setValues(vertices)
+        lset.numVertices.setValues(0, len(line_counts), line_counts)
+        return True
+
+    def buildFootprintFillSeparator(
+        self, fill_color, transparency, fcoords, fset, shape_hints=None
+    ):
+        """Build an unlit fill subtree shared by BIM footprint display modes."""
+
+        from pivy import coin
+
+        material = coin.SoMaterial()
+        material.diffuseColor.setValue(fill_color)
+        material.transparency.setValue(transparency)
+        light_model = coin.SoLightModel()
+        light_model.model = coin.SoLightModel.BASE_COLOR
+        if shape_hints is None:
+            shape_hints = coin.SoShapeHints()
+            shape_hints.faceType = coin.SoShapeHints.UNKNOWN_FACE_TYPE
+
+        fill_sep = coin.SoSeparator()
+        fill_sep.addChild(material)
+        fill_sep.addChild(light_model)
+        fill_sep.addChild(shape_hints)
+        fill_sep.addChild(fcoords)
+        fill_sep.addChild(fset)
+        return fill_sep
+
+    def ensureFootprintGroup(self, vobj=None):
+        """Ensure the generic Footprint display mode node exists.
+
+        This is idempotent and safe to call from attach, update, and display
+        mode transitions. Objects with footprint support only need to provide
+        `createFootprintGroup()` and `updateFootprint()`.
+        """
+
+        if hasattr(self, "footprintgroup") and self.footprintgroup is not None:
+            return self.footprintgroup
+        if not hasattr(self, "createFootprintGroup"):
+            return None
+        if vobj is None:
+            obj = getattr(self, "Object", None)
+            vobj = obj.ViewObject if obj else None
+        if not vobj:
+            return None
+        try:
+            self.footprintgroup = self.createFootprintGroup()
+            self.footprintgroup.setName("Footprint")
+            vobj.addDisplayMode(self.footprintgroup, "Footprint")
+            return self.footprintgroup
+        except Exception:
+            return None
+
+    def refreshFootprint(self, vobj=None):
+        """Refresh derived footprint display data when footprint mode is available.
+
+        Footprint geometry is a derived GUI cache. Failures here should not break
+        generic attach/update paths for the rest of the view provider.
+        """
+
+        if not self.ensureFootprintGroup(vobj):
+            return False
+        try:
+            self.updateFootprint()
+        except Exception:
+            return False
+        return True
 
     def getIcon(self):
         """Return the path to the appropriate icon.
@@ -1710,6 +1935,38 @@ class ViewProviderComponent:
                 if self.Object.CloneOf:
                     return ":/icons/Arch_Component_Clone.svg"
         return ":/icons/Arch_Component_Tree.svg"
+
+    @staticmethod
+    def _getHostedObjects(obj):
+        """Return unique objects hosted by ``obj`` or by its additions."""
+
+        hosted_objects = []
+        proxy = getattr(obj, "Proxy", None)
+        if proxy and hasattr(proxy, "getHosts"):
+            hosted_objects.extend(proxy.getHosts(obj) or [])
+        for addition in getattr(obj, "Additions", []):
+            addition_proxy = getattr(addition, "Proxy", None)
+            if addition_proxy and hasattr(addition_proxy, "getHosts"):
+                hosted_objects.extend(addition_proxy.getHosts(addition) or [])
+
+        unique_objects = []
+        seen = set()
+        for hosted_obj in hosted_objects:
+            key = getattr(hosted_obj, "Name", None) or id(hosted_obj)
+            if key in seen:
+                continue
+            seen.add(key)
+            unique_objects.append(hosted_obj)
+        return unique_objects
+
+    def _refreshHostedFootprints(self, obj):
+        """Refresh derived footprint caches for objects hosted by ``obj``."""
+
+        for hosted_obj in self._getHostedObjects(obj):
+            view_object = getattr(hosted_obj, "ViewObject", None)
+            proxy = getattr(view_object, "Proxy", None) if view_object else None
+            if proxy and hasattr(proxy, "refreshFootprint"):
+                proxy.refreshFootprint(view_object)
 
     def onChanged(self, vobj, prop):
         """Method called when the view provider has a property changed.
@@ -1747,14 +2004,9 @@ class ViewProviderComponent:
         elif prop == "Visibility":
             # do nothing if object is an addition
             if not [parent for parent in obj.InList if obj in getattr(parent, "Additions", [])]:
-                hostedObjs = obj.Proxy.getHosts(obj)
-                # add objects hosted by additions
-                for addition in getattr(obj, "Additions", []):
-                    if hasattr(addition, "Proxy") and hasattr(addition.Proxy, "getHosts"):
-                        hostedObjs.extend(addition.Proxy.getHosts(addition))
-                for hostedObj in hostedObjs:
-                    if hasattr(hostedObj, "ViewObject"):
-                        hostedObj.ViewObject.Visibility = vobj.Visibility
+                for hosted_obj in self._getHostedObjects(obj):
+                    if hasattr(hosted_obj, "ViewObject"):
+                        hosted_obj.ViewObject.Visibility = vobj.Visibility
         return
 
     def attach(self, vobj):
@@ -1768,7 +2020,7 @@ class ViewProviderComponent:
         lines. This data is stored as additional coin nodes which are children
         of the display mode node.
 
-        Add the HiRes display mode.
+        Add the HiRes and Footprint display modes (if provided by object).
 
         Parameters
         ----------
@@ -1784,6 +2036,7 @@ class ViewProviderComponent:
         self.hiresgroup.addChild(self.meshcolor)
         self.hiresgroup.setName("HiRes")
         vobj.addDisplayMode(self.hiresgroup, "HiRes")
+        self.refreshFootprint(vobj)
         return
 
     def getDisplayModes(self, vobj):
@@ -1804,6 +2057,8 @@ class ViewProviderComponent:
         """
 
         modes = ["HiRes"]
+        if hasattr(self, "footprintgroup") and self.footprintgroup is not None:
+            modes.append("Footprint")
         return modes
 
     def setDisplayMode(self, mode):
@@ -1831,6 +2086,11 @@ class ViewProviderComponent:
         str:
             The name of the display mode the view provider has switched to.
         """
+
+        if mode == "Footprint" and self.refreshFootprint():
+            # Footprint is a generic component display mode, so refresh its
+            # derived display data whenever the viewer switches into it.
+            return "Footprint"
 
         if hasattr(self, "meshnode"):
             if self.meshnode:
