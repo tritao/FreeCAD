@@ -99,6 +99,7 @@ SET(bimplan_SRCS
     bimplan/overlays/symbols.py
     bimplan/overlays/walls.py
     bimplan/performance.py
+    bimplan/representation_context.py
     bimplan/picking/__init__.py
     bimplan/picking/area.py
     bimplan/picking/coordinator.py

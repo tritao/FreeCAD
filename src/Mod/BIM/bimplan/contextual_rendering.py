@@ -24,8 +24,10 @@ class PlanContextualRenderingAPI:
                 self._session.view
             )
         self.refresh_all()
+        self._session.snap.enable_semantic_snapping()
 
     def close(self):
+        self._session.snap.disable_semantic_snapping()
         renderer = self._renderer
         self._renderer = None
         self._sources.clear()
@@ -36,6 +38,24 @@ class PlanContextualRenderingAPI:
         if self._renderer is None:
             return None
         return self._renderer.mapping_for_node(node)
+
+    def pick_mapping(self, mouse_pos, radius_px=4):
+        if self._renderer is None:
+            return None
+        return self._renderer.pick_mapping(
+            mouse_pos,
+            self._session.view.getPointOnScreen,
+            radius_px=radius_px,
+        )
+
+    def pick_edit_handle(self, mouse_pos, radius_px=8):
+        if self._renderer is None:
+            return None
+        return self._renderer.pick_edit_handle(
+            mouse_pos,
+            self._session.view.getPointOnScreen,
+            radius_px=radius_px,
+        )
 
     def edit_handles_for(self, source):
         if self._renderer is None:
@@ -58,6 +78,17 @@ class PlanContextualRenderingAPI:
             self._session.viewport.request_view_redraw()
         return changed
 
+    def sync_visible_handles(self):
+        """Keep semantic handles scoped to the primary Plan Edit selection."""
+
+        if self._renderer is None:
+            return False
+        _kind, source = self._session.selection.state.get_selected_plan_target()
+        changed = self._renderer.set_visible_handle_sources((source,) if source else ())
+        if changed:
+            self._session.viewport.request_view_redraw()
+        return changed
+
     def refresh_all(self):
         if self._renderer is None:
             return
@@ -74,6 +105,7 @@ class PlanContextualRenderingAPI:
         for source in self._sources - current:
             self._renderer.remove_representation(source)
         self._sources = current
+        self.sync_visible_handles()
         self._session.viewport.request_view_redraw()
 
     def refresh_object(self, obj):

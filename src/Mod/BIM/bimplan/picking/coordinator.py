@@ -142,6 +142,15 @@ def _get_view_objects_info(session, mouse_pos):
     return list(infos or [])
 
 
+def _get_contextual_representation_target(session, mouse_pos):
+    mapping = session.contextual_rendering.pick_mapping(mouse_pos)
+    if mapping is None:
+        return plan_target_kinds.make_plan_target_ref()
+    return plan_target_kinds.coerce_plan_target_ref(
+        plan_targets.get_plan_pick_target_for_object(session, mapping.source)
+    )
+
+
 def _collect_pick_candidates_from_objects_info(session, infos):
     candidates = PickStageCandidates()
     debug_infos = []
@@ -339,6 +348,16 @@ def get_plan_target_at_position(session, mouse_pos, *, include_space_fallback=Tr
         if not session.view or not mouse_pos:
             return plan_target_kinds.make_plan_target_ref()
         prioritize_provider_targets = _should_prioritize_provider_targets_for_mode(session)
+        contextual_target = _get_contextual_representation_target(session, mouse_pos)
+        if contextual_target.kind is not None:
+            _perf_set_fields(
+                session,
+                picked_target=plan_picking_debug.describe_pick_target(
+                    session, contextual_target.kind, contextual_target.obj
+                ),
+            )
+            return contextual_target
+
         infos = _get_view_objects_info(session, mouse_pos)
         _perf_count(session, "objects_info_entries", len(infos))
 

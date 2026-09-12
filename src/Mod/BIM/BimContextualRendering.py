@@ -6,6 +6,8 @@ from dataclasses import dataclass
 
 from pivy import coin
 
+import ArchRepresentation
+
 
 def _xyz(point):
     return float(point.x), float(point.y), float(point.z)
@@ -32,6 +34,10 @@ class ContextualRepresentationRenderer:
         self._object_nodes = {}
         self._representations = {}
         self._node_mappings = {}
+        self._handle_coordinates = {}
+        self._handle_materials = {}
+        self._handle_switches = {}
+        self._visible_handle_sources = set()
 
     def set_representation(self, representation):
         """Replace one object's viewer-local representation."""
@@ -39,10 +45,17 @@ class ContextualRepresentationRenderer:
         source = representation.source
         if self._representations.get(source) is representation:
             return self._object_nodes[source]
+        handles_were_visible = source in self._visible_handle_sources
         self.remove_representation(source, restore_visibility=False)
+        if handles_were_visible:
+            self._visible_handle_sources.add(source)
         root = coin.SoSeparator()
         self._append_faces(root, representation)
         self._append_lines(root, representation)
+        handle_switch = self._append_edit_handles(root, representation)
+        if handle_switch is not None:
+            self._handle_switches[source] = handle_switch
+            self._apply_handle_visibility(source)
         self.root.addChild(root)
         self._object_nodes[source] = root
         self._representations[source] = representation
@@ -57,15 +70,94 @@ class ContextualRepresentationRenderer:
             stale = [key for key, value in self._node_mappings.items() if value.source is source]
             for key in stale:
                 self._node_mappings.pop(key, None)
+            stale_handles = [key for key in self._handle_coordinates if key[0] is source]
+            for key in stale_handles:
+                self._handle_coordinates.pop(key, None)
+                self._handle_materials.pop(key, None)
+            self._handle_switches.pop(source, None)
+            if restore_visibility:
+                self._visible_handle_sources.discard(source)
         if restore_visibility:
             self.view.setViewVisibility(self.layer, source, "Inherit")
 
     def mapping_for_node(self, node):
         return self._node_mappings.get(id(node))
 
+    def pick_mapping(self, mouse_pos, project_point, radius_px=4):
+        """Pick rendered semantic geometry through the neutral representation contract."""
+
+        if mouse_pos is None or not callable(project_point):
+            return None
+        result = ArchRepresentation.query_representation_pick(
+            tuple(self._representations.values()),
+            mouse_pos,
+            project_point,
+            radius_px,
+        )
+        if result is None:
+            return None
+        target = result.target
+        return ContextualNodeMapping(
+            target.source,
+            target.subelement,
+            target.role,
+            target.geometry,
+        )
+
+    def pick_edit_handle(self, mouse_pos, project_point, radius_px=8):
+        """Return the nearest visible semantic edit handle in screen space."""
+
+        if mouse_pos is None or not callable(project_point):
+            return None
+        cursor_x, cursor_y = float(mouse_pos[0]), float(mouse_pos[1])
+        tolerance_squared = float(radius_px) ** 2
+        winner = None
+        winner_distance = None
+        for source in self._visible_handle_sources:
+            representation = self._representations.get(source)
+            if representation is None:
+                continue
+            for handle in representation.edit_handles:
+                try:
+                    screen_x, screen_y = project_point(handle.point)
+                except Exception:
+                    continue
+                distance = (float(screen_x) - cursor_x) ** 2 + (float(screen_y) - cursor_y) ** 2
+                if distance <= tolerance_squared and (
+                    winner_distance is None or distance < winner_distance
+                ):
+                    winner = handle
+                    winner_distance = distance
+        return winner
+
     @property
     def sources(self):
         return tuple(self._representations)
+
+    def query_snap(self, point, tolerance, context=None):
+        """Resolve a semantic snap against this viewer's live representations."""
+
+        return ArchRepresentation.query_representation_snap(
+            tuple(self._representations.values()), point, tolerance, context=context
+        )
+
+    def edit_handles_for(self, source):
+        representation = self._representations.get(source)
+        if representation is None:
+            return ()
+        return tuple(representation.edit_handles)
+
+    def set_visible_handle_sources(self, sources):
+        """Show semantic edit handles only for the active semantic sources."""
+
+        visible = {source for source in sources if source in self._representations}
+        if visible == self._visible_handle_sources:
+            return False
+        affected = self._visible_handle_sources | visible
+        self._visible_handle_sources = visible
+        for source in affected:
+            self._apply_handle_visibility(source)
+        return True
 
     def close(self):
         if self.root is None:
@@ -75,6 +167,10 @@ class ContextualRepresentationRenderer:
         self._object_nodes.clear()
         self._representations.clear()
         self._node_mappings.clear()
+        self._handle_coordinates.clear()
+        self._handle_materials.clear()
+        self._handle_switches.clear()
+        self._visible_handle_sources.clear()
         self.root.unref()
         self.root = None
 
@@ -97,6 +193,9 @@ class ContextualRepresentationRenderer:
             if not vertices or not triangles:
                 continue
             group = coin.SoSeparator()
+            light_model = coin.SoLightModel()
+            light_model.model = coin.SoLightModel.BASE_COLOR
+            group.addChild(light_model)
             material = coin.SoMaterial()
             material.diffuseColor = (0.82, 0.82, 0.82)
             group.addChild(material)
@@ -135,6 +234,67 @@ class ContextualRepresentationRenderer:
             group.addChild(lines)
             root.addChild(group)
             self._record_node(group, representation, geometry)
+
+    def _append_edit_handles(self, root, representation):
+        if not representation.edit_handles:
+            return None
+        handle_switch = coin.SoSwitch()
+        handle_switch.whichChild = coin.SO_SWITCH_NONE
+        for handle in representation.edit_handles:
+            group = coin.SoSeparator()
+            material = coin.SoMaterial()
+            material.diffuseColor = (0.95, 0.35, 0.05)
+            key = (handle.source, id(handle))
+            self._handle_materials[key] = material
+            group.addChild(material)
+            style = coin.SoDrawStyle()
+            style.pointSize = 9.0
+            group.addChild(style)
+            coordinates = coin.SoCoordinate3()
+            coordinates.point.set1Value(0, _xyz(handle.point))
+            self._handle_coordinates[key] = coordinates
+            group.addChild(coordinates)
+            points = coin.SoPointSet()
+            points.numPoints = 1
+            group.addChild(points)
+            handle_switch.addChild(group)
+            self._node_mappings[id(group)] = ContextualNodeMapping(
+                handle.source,
+                handle.subelement,
+                handle.role,
+                handle,
+            )
+        root.addChild(handle_switch)
+        return handle_switch
+
+    def _apply_handle_visibility(self, source):
+        handle_switch = self._handle_switches.get(source)
+        if handle_switch is not None:
+            handle_switch.whichChild = (
+                coin.SO_SWITCH_ALL
+                if source in self._visible_handle_sources
+                else coin.SO_SWITCH_NONE
+            )
+
+    def preview_handle(self, handle, point):
+        coordinates = self._handle_coordinates.get((handle.source, id(handle)))
+        if coordinates is None:
+            return False
+        coordinates.point.set1Value(0, _xyz(point))
+        return True
+
+    def set_handle_state(self, handle, state):
+        material = self._handle_materials.get((handle.source, id(handle)))
+        if material is None:
+            return False
+        colors = {
+            "normal": (0.95, 0.35, 0.05),
+            "active": (1.0, 0.75, 0.05),
+            "invalid": (0.9, 0.05, 0.05),
+            "constrained": (0.5, 0.5, 0.5),
+        }
+        material.diffuseColor = colors.get(str(state), colors["normal"])
+        return True
 
     def __enter__(self):
         return self

@@ -132,6 +132,7 @@ class Snapper:
         self.callbackMove = None
         self.snapObjectIndex = 0
         self.pointConstraintProvider = None
+        self.semanticSnapProviders = []
 
         # snap keys, it's important that they are in this order for
         # saving in preferences and for properly restoring the toolbar
@@ -221,6 +222,25 @@ class Snapper:
             return self.get_snap_modes()
         self.active_snaps = self._snap_mode_stack.pop()
         return self.get_snap_modes()
+
+    def push_semantic_snap_provider(self, provider):
+        """Add a temporary renderer-independent snap source."""
+
+        if callable(provider):
+            self.semanticSnapProviders.append(provider)
+        return provider
+
+    def pop_semantic_snap_provider(self, provider=None):
+        """Remove the newest provider, or a specific registered provider."""
+
+        if not self.semanticSnapProviders:
+            return None
+        if provider is None:
+            return self.semanticSnapProviders.pop()
+        for index in range(len(self.semanticSnapProviders) - 1, -1, -1):
+            if self.semanticSnapProviders[index] is provider:
+                return self.semanticSnapProviders.pop(index)
+        return None
 
     def set_snap_style(self):
         self.snapStyle = params.get_param("snapStyle")
@@ -337,6 +357,30 @@ class Snapper:
 
         point = self.getApparentPoint(screenpos[0], screenpos[1])
 
+        semantic_snap = self._snap_to_semantic_provider(point) if active else None
+        if semantic_snap is not None:
+            snapped = self._apply_point_constraint(
+                App.Vector(semantic_snap.point), lastpoint, noTracker
+            )
+            marker = (
+                "endpoint"
+                if getattr(semantic_snap.target.geometry, "ShapeType", "") == "Vertex"
+                else "passive"
+            )
+            self.snapInfo = {
+                "SemanticSnap": semantic_snap,
+                "Object": getattr(semantic_snap.source, "Name", ""),
+                "Component": semantic_snap.subelement or "",
+            }
+            if self.tracker and not self.selectMode:
+                self.tracker.setCoords(snapped)
+                self.tracker.setMarker(self.mk[marker])
+                self.tracker.on()
+            self.setCursor(marker)
+            self.spoint = snapped
+            self.running = False
+            return snapped
+
         # Set up a track line if we got a last point
         if lastpoint and self.trackLine:
             self.trackLine.p1(lastpoint)
@@ -385,6 +429,18 @@ class Snapper:
         self.spoint = fp
         self.running = False
         return fp
+
+    def _snap_to_semantic_provider(self, point):
+        """Ask the newest active contextual provider for a semantic target."""
+
+        for provider in reversed(self.semanticSnapProviders):
+            try:
+                result = provider(App.Vector(point), float(self.radius))
+            except (AttributeError, ReferenceError, RuntimeError, TypeError, ValueError):
+                continue
+            if result is not None:
+                return result
+        return None
 
     def cycleSnapObject(self):
         """Increase the index of the snap object by one."""

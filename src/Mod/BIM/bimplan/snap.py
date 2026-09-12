@@ -112,12 +112,20 @@ def _set_toolbar_point_focus_suppressed(toolbar, suppressed):
 class PlanSnapAPI:
     """Owned session surface for Plan Edit snap-profile behavior."""
 
-    __slots__ = ("_session", "_plan_snap_modes", "_opening_move_snap_modes")
+    __slots__ = (
+        "_session",
+        "_plan_snap_modes",
+        "_opening_move_snap_modes",
+        "_semantic_provider",
+        "_semantic_provider_active",
+    )
 
     def __init__(self, session, plan_snap_modes, opening_move_snap_modes):
         self._session = session
         self._plan_snap_modes = tuple(plan_snap_modes or ())
         self._opening_move_snap_modes = tuple(opening_move_snap_modes or ())
+        self._semantic_provider = self._query_semantic_snap
+        self._semantic_provider_active = False
 
     @property
     def session(self):
@@ -128,6 +136,32 @@ class PlanSnapAPI:
 
     def restore_snap_profile(self):
         return restore_snap_profile()
+
+    def enable_semantic_snapping(self):
+        if self._semantic_provider_active:
+            return
+        method = _get_snapper_method("push_semantic_snap_provider")
+        if method is not None:
+            method(self._semantic_provider)
+            self._semantic_provider_active = True
+
+    def disable_semantic_snapping(self):
+        if not self._semantic_provider_active:
+            return
+        method = _get_snapper_method("pop_semantic_snap_provider")
+        if method is not None:
+            method(self._semantic_provider)
+        self._semantic_provider_active = False
+
+    def _query_semantic_snap(self, point, tolerance):
+        renderer = self.session.contextual_rendering.renderer
+        if renderer is None:
+            return None
+        return renderer.query_snap(
+            point,
+            tolerance,
+            context=self.session.representation_context.context,
+        )
 
     def push_opening_move_snap_profile(self):
         return push_opening_move_snap_profile(self.session, self._opening_move_snap_modes)

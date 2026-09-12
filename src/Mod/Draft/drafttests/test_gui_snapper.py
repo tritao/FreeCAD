@@ -81,6 +81,25 @@ class DraftSnapper(test_base.DraftTestCaseDoc):
         def displayPoint(self, *args, **kwargs):
             pass
 
+    def test_semantic_snap_providers_are_stacked_and_removable(self):
+        snapper = gui_snapper.Snapper()
+        older = lambda point, tolerance: SimpleNamespace(point=point, role="older")
+        newer_result = SimpleNamespace(point=App.Vector(1, 2, 3), role="WallCorner")
+        newer = lambda point, tolerance: newer_result
+
+        snapper.push_semantic_snap_provider(older)
+        snapper.push_semantic_snap_provider(newer)
+        snapper.radius = 1.0
+        self.assertIs(
+            newer_result,
+            snapper._snap_to_semantic_provider(App.Vector()),
+        )
+        self.assertIs(newer, snapper.pop_semantic_snap_provider(newer))
+        self.assertEqual(
+            "older",
+            snapper._snap_to_semantic_provider(App.Vector()).role,
+        )
+
     class _FakeView:
         def __init__(self):
             self.click_callback = None

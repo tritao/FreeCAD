@@ -332,6 +332,7 @@ class PlanSelectionStateService(_SessionAPI):
                     plan_target_kinds.PLAN_TARGET_REGION,
                 ),
             )
+        self.session.contextual_rendering.sync_visible_handles()
 
 
 class PlanSelectionRefreshService(_SessionAPI):
@@ -895,6 +896,7 @@ class PlanSelectionRefreshService(_SessionAPI):
 
     def refresh_primary_selected_plan_target(self, *, force_wall_visual_resync=False):
         self.refresh_selected_plan_target(force_wall_visual_resync=force_wall_visual_resync)
+        self.session.contextual_rendering.sync_visible_handles()
 
 
 class PlanSelectionSyncService(_SessionAPI):
