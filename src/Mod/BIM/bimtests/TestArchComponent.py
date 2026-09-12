@@ -26,6 +26,7 @@
 
 import Arch
 import ArchComponent
+import ArchRepresentation
 import Draft
 import Part
 import FreeCAD as App
@@ -36,6 +37,34 @@ from math import pi, cos, sin, radians
 
 
 class TestArchComponent(TestArchBase.TestArchBase):
+
+    def test_default_plan_context_uses_component_base(self):
+        """Standalone components should derive the default plan cut from their base."""
+
+        line = Draft.makeLine(App.Vector(0, 0, 0), App.Vector(3000, 0, 0))
+        wall = Arch.makeWall(line, width=200, height=2500)
+        self.document.recompute()
+
+        context = wall.Proxy.getDefaultPlanContext(wall)
+
+        self.assertEqual(context.purpose, ArchRepresentation.RepresentationPurpose.PLAN)
+        self.assertAlmostEqual(context.cut_offset, wall.Shape.BoundBox.ZMin + 1000.0, places=6)
+        self.assertAlmostEqual(context.target_offset, wall.Shape.BoundBox.ZMin, places=6)
+        self.assertIsNone(context.source)
+
+    def test_horizontal_slice_faces(self):
+        """Generic footprint slicing should return closed planar cut faces."""
+
+        box = Part.makeBox(100, 80, 60)
+        faces = ArchComponent.get_horizontal_slice_faces(box, 30)
+
+        self.assertEqual(len(faces), 1)
+        self.assertAlmostEqual(faces[0].Area, 8000.0, places=6)
+        self.assertAlmostEqual(faces[0].CenterOfMass.z, 30.0, places=6)
+
+        raised_faces = ArchComponent.get_horizontal_slice_faces(box, 30, translate_z=5)
+        self.assertEqual(len(raised_faces), 1)
+        self.assertAlmostEqual(raised_faces[0].CenterOfMass.z, 35.0, places=6)
 
     def testAdd(self):
         App.Console.PrintLog("Checking Arch Add...\n")
