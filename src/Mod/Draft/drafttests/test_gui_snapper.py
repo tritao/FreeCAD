@@ -26,9 +26,11 @@
 
 import FreeCAD as App
 import FreeCADGui as Gui
+from draftguitools import gui_base
 from draftguitools import gui_snapper
 from drafttests import test_base
 from pivy import coin
+from types import SimpleNamespace
 from unittest.mock import patch
 
 
@@ -79,6 +81,19 @@ class DraftSnapper(test_base.DraftTestCaseDoc):
 
         def getState(self):
             return coin.SoMouseButtonEvent.DOWN
+
+    class _FakeMoveEvent:
+        def getPosition(self):
+            return (12, 34)
+
+        def wasCtrlDown(self):
+            return True
+
+        def wasShiftDown(self):
+            return False
+
+        def wasAltDown(self):
+            return True
 
     class _FakeEventCallback:
         def __init__(self, event):
@@ -152,3 +167,48 @@ class DraftSnapper(test_base.DraftTestCaseDoc):
             self.assertEqual(snapper.pop_snap_modes(), original)
 
         save_snap_state.assert_not_called()
+
+    def test_interaction_host_forwards_hints_and_modifier_resolver(self):
+        """Embedded hosts should pass point-input policy to Snapper."""
+
+        received = {}
+
+        def get_point(**kwargs):
+            received.update(kwargs)
+
+        callback = lambda point: None
+        resolver = lambda ctrl, shift, alt: (not ctrl, alt)
+        hints = [object()]
+        with patch.object(
+            gui_base.Gui, "Snapper", SimpleNamespace(getPoint=get_point), create=True
+        ):
+            gui_base.DraftInteractionHost().request_point(
+                callback, hints=hints, modifier_resolver=resolver
+            )
+
+        self.assertIs(received["callback"], callback)
+        self.assertIs(received["modifier_resolver"], resolver)
+        self.assertIs(received["hints"], hints)
+
+    def test_point_request_uses_host_modifier_resolution(self):
+        """The Snapper applies a host's modifier policy before snapping."""
+
+        snapper = Gui.Snapper
+        toolbar = self._FakeToolbar()
+        view = self._FakeView()
+        calls = []
+
+        def resolve(ctrl, shift, alt):
+            return False, alt
+
+        with patch.object(gui_snapper.gui_utils, "get_3d_view", return_value=view), patch.object(
+            gui_snapper.gui_utils, "end_all_events", return_value=None
+        ), patch.object(gui_snapper.Gui, "draftToolBar", toolbar, create=True), patch.object(
+            snapper, "snap", side_effect=lambda *args, **kwargs: calls.append(kwargs) or App.Vector()
+        ), patch.object(snapper, "unconstrain", return_value=None):
+            snapper.getPoint(callback=lambda point: None, modifier_resolver=resolve)
+            view.move_callback(self._FakeEventCallback(self._FakeMoveEvent()))
+
+        self.assertEqual(len(calls), 1)
+        self.assertFalse(calls[0]["active"])
+        self.assertTrue(calls[0]["constrain"])
