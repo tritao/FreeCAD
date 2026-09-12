@@ -28,9 +28,11 @@ from bimtests.TestArchImportersGui import TestArchImportersGui
 from bimtests.TestArchAxisGui import TestArchAxisGui
 from bimtests.TestArchBuildingPartGui import TestArchBuildingPartGui
 from bimtests.TestArchPlanGeometry import TestArchPlanGeometry
+from bimtests.TestArchFootprintGui import TestArchFootprintGui
 from bimtests.TestArchStairsGui import TestArchStairsGui
 from bimtests.TestArchReportGui import TestArchReportGui
 from bimtests.TestArchSiteGui import TestArchSiteGui
+from bimtests.TestArchStructureGui import TestArchStructureGui
 from bimtests.TestArchWallGui import TestArchWallGui
 from bimtests.TestArchWindowGui import TestArchWindowGui
 from bimtests.TestWebGLExportGui import TestWebGLExportGui

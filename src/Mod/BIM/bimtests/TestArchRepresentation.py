@@ -2,6 +2,9 @@
 
 import unittest
 
+import Arch
+import FreeCAD
+
 from ArchRepresentation import (
     BIMRepresentation,
     RepresentationUnavailable,
@@ -15,7 +18,6 @@ class TestArchRepresentation(unittest.TestCase):
     def test_context_accepts_enum_or_serialized_purpose(self):
         plan = RepresentationContext(purpose=RepresentationPurpose.PLAN)
         section = RepresentationContext(purpose="Section")
-
         self.assertIs(plan.purpose, RepresentationPurpose.PLAN)
         self.assertIs(section.purpose, RepresentationPurpose.SECTION)
         self.assertIsNone(section.reference_frame)
@@ -31,7 +33,6 @@ class TestArchRepresentation(unittest.TestCase):
             cut_offset=1.2,
             target_offset=0.0,
         )
-
         self.assertIs(context.reference_frame, frame)
         self.assertEqual(context.cut_range, (0.0, 2.1))
         self.assertEqual(context.projection_range, (-1.0, 8.0))
@@ -44,7 +45,6 @@ class TestArchRepresentation(unittest.TestCase):
             cut_offset=1.0,
             target_offset=0.0,
         )
-
         self.assertIs(context.purpose, RepresentationPurpose.PLAN)
         self.assertEqual(context.cut_offset, 1.0)
         self.assertEqual(context.target_offset, 0.0)
@@ -54,7 +54,6 @@ class TestArchRepresentation(unittest.TestCase):
         edge = object()
         representation = BIMRepresentation(source=source)
         representation.add_geometry("cut_geometry", edge, "cut", subelement="Edge3")
-
         mapping = representation.mapping_for(edge)
         self.assertIs(mapping.geometry, edge)
         self.assertIs(mapping.source, source)
@@ -64,6 +63,32 @@ class TestArchRepresentation(unittest.TestCase):
     def test_representation_rejects_unknown_collection(self):
         with self.assertRaises(ValueError):
             BIMRepresentation().add_geometry("display", object(), "display")
+
+    def test_wall_provider_exposes_semantic_cut_boundary(self):
+        document = FreeCAD.newDocument("SemanticWallBoundary")
+        try:
+            wall = Arch.makeWall(length=3000, width=200, height=3000)
+            document.recompute()
+            representation = wall.Proxy.getRepresentation(
+                wall,
+                RepresentationContext(
+                    purpose=RepresentationPurpose.PLAN,
+                    cut_offset=1000,
+                    target_offset=0,
+                ),
+            )
+            boundaries = [
+                mapping
+                for mapping in representation.source_mappings
+                if mapping.role == "PlanCutOuterBoundary"
+            ]
+            self.assertEqual(len(boundaries), 1)
+            self.assertIn(boundaries[0].geometry, representation.projected_geometry)
+            self.assertEqual(boundaries[0].subelement, "PlanFace1.OuterWire")
+            self.assertGreaterEqual(len(boundaries[0].geometry), 2)
+            self.assertTrue(boundaries[0].geometry[0].isEqual(boundaries[0].geometry[-1], 1e-7))
+        finally:
+            FreeCAD.closeDocument(document.Name)
 
     def test_representation_for_delegates_to_object_provider(self):
         context = RepresentationContext(purpose="Plan")
@@ -79,7 +104,6 @@ class TestArchRepresentation(unittest.TestCase):
         obj = BIMObject()
         obj.Proxy = Provider()
         result = representation_for(obj, context)
-
         self.assertIs(result.source, obj)
         self.assertIs(result.context, context)
         self.assertEqual(obj.Proxy.args, (obj, context))

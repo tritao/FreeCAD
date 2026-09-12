@@ -40,6 +40,7 @@ __url__ = "https://www.freecad.org"
 import enum
 import FreeCAD
 import ArchComponent
+import ArchRepresentation
 import ArchCommands
 import ArchProfile
 import Draft
@@ -909,6 +910,77 @@ class _Structure(ArchComponent.Component):
         if not hasattr(self, "ArchSkPropSetListPrev"):
             self.ArchSkPropSetListPrev = []
 
+    def getFootprint(self, obj):
+        """Return a light plan footprint for flat slabs.
+
+        This derives the outline from the highest horizontal slab faces and
+        flattens it to the slab base elevation. Sloped slabs will need a
+        projection-based footprint path instead. This is the default-preview
+        wrapper for `getPlanRepresentation()`.
+        """
+
+        context = self.getDefaultPlanContext(obj)
+        return self.getRepresentation(obj, context).cut_geometry
+
+    def getPlanRepresentation(self, obj, context):
+        """Return slab plan faces for the supplied plan context.
+
+        The current slab implementation uses the context target elevation only:
+        it flattens the highest horizontal slab faces to that Z coordinate.
+        Future projection or section behavior can use the same context object
+        without changing the generic Footprint display mode contract.
+        """
+
+        if context is None:
+            context = self.getDefaultPlanContext(obj)
+        return self.getRepresentation(obj, context).cut_geometry
+
+    def getRepresentation(self, obj, context):
+        """Return a renderer-neutral plan representation for a slab."""
+
+        if context is None:
+            context = self.getDefaultPlanContext(obj)
+        if context.purpose != ArchRepresentation.RepresentationPurpose.PLAN:
+            raise ArchRepresentation.RepresentationUnavailable(
+                "Slab provider only supports Plan contexts"
+            )
+        if getattr(obj, "IfcType", "Beam") != "Slab":
+            raise ArchRepresentation.RepresentationUnavailable(
+                "Structure plan provider is available only for slabs"
+            )
+
+        shape = obj.Shape
+        if not shape or shape.isNull():
+            return ArchRepresentation.BIMRepresentation(source=obj, context=context)
+
+        top_faces = []
+        top_z = None
+        target_z = context.target_offset if context.target_offset is not None else shape.BoundBox.ZMin
+        for face in shape.Faces:
+            normal = face.normalAt(0, 0)
+            if normal.getAngle(FreeCAD.Vector(0, 0, 1)) >= 0.01:
+                continue
+            z_value = face.CenterOfMass.z
+            if top_z is None or z_value > top_z + 0.001:
+                top_faces = [face]
+                top_z = z_value
+            elif abs(z_value - top_z) < 0.001:
+                top_faces.append(face)
+
+        representation = ArchRepresentation.BIMRepresentation(source=obj, context=context)
+        if not top_faces:
+            return representation
+
+        delta_z = target_z - top_z
+        for face_index, face in enumerate(top_faces, start=1):
+            if abs(delta_z) >= 0.001:
+                face = face.copy()
+                face.translate(FreeCAD.Vector(0, 0, delta_z))
+            representation.add_geometry(
+                "cut_geometry", face, "SlabPlanFace", subelement=f"PlanFace{face_index}"
+            )
+        return representation
+
     def dumps(self):  # Supercede Arch.Component.dumps()
         dump = super().dumps()
         if not isinstance(dump, tuple):
@@ -1421,6 +1493,87 @@ class _ViewProviderStructure(ArchComponent.ViewProviderComponent):
         self.setProperties(vobj)
         vobj.ShapeColor = ArchCommands.getDefaultColor("Structure")
 
+    def _is_slab(self, vobj):
+        obj = getattr(vobj, "Object", None)
+        return Draft.get_type(obj) == "Structure" and getattr(obj, "IfcType", "Beam") == "Slab"
+
+    def ensureFootprintGroup(self, vobj=None):
+        """Ensure slabs expose the generic Footprint display mode."""
+
+        if vobj is None:
+            vobj = getattr(getattr(self, "Object", None), "ViewObject", None)
+        if not vobj or not self._is_slab(vobj):
+            return None
+        return super().ensureFootprintGroup(vobj)
+
+    def getDisplayModes(self, vobj):
+        modes = super().getDisplayModes(vobj)
+        if not self._is_slab(vobj) and "Footprint" in modes:
+            modes.remove("Footprint")
+        return modes
+
+    def _drop_footprint_group(self, vobj):
+        if hasattr(self, "fcoords"):
+            self.fcoords.point.deleteValues(0)
+        if hasattr(self, "fset"):
+            self.fset.coordIndex.deleteValues(0)
+        if vobj.DisplayMode == "Footprint" and "Flat Lines" in vobj.listDisplayModes():
+            vobj.DisplayMode = "Flat Lines"
+
+    def _sync_display_mode_enums(self, vobj):
+        """Refresh the DisplayMode enumeration from the currently exposed modes.
+
+        The generic view-provider refresh preserves the current mode when it
+        remains valid and chooses the provider default otherwise.
+        """
+
+        vobj.refreshDisplayModes()
+
+    def createFootprintGroup(self):
+        """Set up a subtle filled footprint style for slabs."""
+
+        from pivy import coin
+
+        base_color = ArchCommands.getDefaultColor("Structure")
+        fill_color = tuple((component + 2.0) / 3.0 for component in base_color[:3])
+
+        self.fcoords = coin.SoCoordinate3()
+        self.fset = coin.SoIndexedFaceSet()
+        material = coin.SoMaterial()
+        material.diffuseColor.setValue(fill_color)
+        material.transparency.setValue(0.7)
+        shape_hints = coin.SoShapeHints()
+        shape_hints.faceType = coin.SoShapeHints.UNKNOWN_FACE_TYPE
+
+        sep = coin.SoSeparator()
+        sep.addChild(material)
+        sep.addChild(shape_hints)
+        sep.addChild(self.fcoords)
+        sep.addChild(self.fset)
+        return sep
+
+    def attach(self, vobj):
+        """Attach display modes and pre-register the slab footprint mask.
+
+        The DisplayMode enumeration is initialized during attach, so the
+        footprint mode must be registered here even if the structure starts as
+        a beam/column and only becomes a slab later.
+        """
+
+        from pivy import coin
+
+        self.Object = vobj.Object
+        self.hiresgroup = coin.SoSeparator()
+        self.meshcolor = coin.SoBaseColor()
+        self.hiresgroup.addChild(self.meshcolor)
+        self.hiresgroup.setName("HiRes")
+        vobj.addDisplayMode(self.hiresgroup, "HiRes")
+        ArchComponent.ViewProviderComponent.ensureFootprintGroup(self, vobj)
+        if self._is_slab(vobj):
+            self.refreshFootprint(vobj)
+        else:
+            self._drop_footprint_group(vobj)
+
     def setProperties(self, vobj):
 
         pl = vobj.PropertiesList
@@ -1514,8 +1667,12 @@ class _ViewProviderStructure(ArchComponent.ViewProviderComponent):
                     IfcType = None
                 if IfcType == "Slab":
                     obj.ViewObject.NodeType = "Area"
+                    self.refreshFootprint(obj.ViewObject)
+                    self._sync_display_mode_enums(obj.ViewObject)
                 else:
                     obj.ViewObject.NodeType = "Linear"
+                    self._drop_footprint_group(obj.ViewObject)
+                    self._sync_display_mode_enums(obj.ViewObject)
         else:
             ArchComponent.ViewProviderComponent.updateData(self, obj, prop)
 
