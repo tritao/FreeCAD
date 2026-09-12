@@ -277,6 +277,28 @@ class Wire(DraftObject):
             if not obj.End.isEqual(displayfpend, tol):
                 obj.End = displayfpend
 
+    def getContextualEditPoints(self, obj, context=None):
+        """Return global vertices this Draft wire can safely edit in a context."""
+
+        del context
+        if getattr(obj, "Base", None) or getattr(obj, "Tool", None):
+            return ()
+        expressions = getattr(obj, "ExpressionEngine", ()) or ()
+        if any(path == "Points" for path, _expression in expressions):
+            return ()
+        placement = obj.getGlobalPlacement()
+        return tuple(placement.multVec(point) for point in obj.Points)
+
+    def setContextualEditPoint(self, obj, index, point):
+        """Move one wire vertex from a global contextual-edit point."""
+
+        index = int(index)
+        points = list(obj.Points)
+        if index < 0 or index >= len(points):
+            raise IndexError("Draft wire path vertex is unavailable")
+        points[index] = obj.getGlobalPlacement().inverse().multVec(App.Vector(point))
+        obj.Points = points
+
 
 # Alias for compatibility with v0.18 and earlier
 _Wire = Wire

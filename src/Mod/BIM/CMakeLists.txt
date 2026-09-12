@@ -89,6 +89,7 @@ SET(bimplan_SRCS
     bimplan/contextual_rendering.py
     bimplan/contextual_editing.py
     bimplan/document_visuals.py
+    bimplan/editable_points.py
     bimplan/object_visibility.py
     bimplan/overlays/__init__.py
     bimplan/overlays/geometry.py
