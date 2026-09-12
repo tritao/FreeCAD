@@ -348,6 +348,7 @@ SET(bimtests_SRCS
     bimtests/TestBimLibrarySources.py
     bimtests/TestBimTaskWatcherGui.py
     bimtests/TestBimPlanEditLibraryGui.py
+    bimtests/TestBimPlanEditExamplesGui.py
     bimtests/TestArchCovering.py
     bimtests/TestArchCoveringGui.py
     bimtests/TestArchBuildingPart.py
