@@ -79,6 +79,9 @@ class DraftInteractionHost:
         """Return an explicit plane for this interactive request, if any."""
         return self.get_working_plane()
 
+    def get_ui(self):
+        return getattr(Gui, "draftToolBar", None)
+
     def project_point(self, point, working_plane=None):
         if point is None:
             return None
@@ -195,6 +198,20 @@ class DraftInteractionHost:
         if Gui.ActiveDocument:
             try:
                 Gui.ActiveDocument.resetEdit()
+            except Exception:
+                pass
+
+    def restore_working_plane(self, working_plane):
+        if hasattr(working_plane, "_restore"):
+            try:
+                working_plane._restore()
+            except Exception:
+                pass
+
+    def restore_working_plane(self, working_plane):
+        if hasattr(working_plane, "_restore"):
+            try:
+                working_plane._restore()
             except Exception:
                 pass
 

@@ -128,10 +128,21 @@ class DraftSnapper(test_base.DraftTestCaseDoc):
         def getEvent(self):
             return self._event
 
+        def setHandled(self):
+            pass
+
+    @staticmethod
+    def _get_snapper():
+        snapper = getattr(Gui, "Snapper", None)
+        if snapper is None:
+            snapper = gui_snapper.Snapper()
+            Gui.Snapper = snapper
+        return snapper
+
     def test_getpoint_accept_preserves_point_before_teardown(self):
         """Accept should preserve the picked point even if teardown clears Snapper.pt."""
 
-        snapper = Gui.Snapper
+        snapper = self._get_snapper()
         toolbar = self._FakeToolbar()
         view = self._FakeView()
         received = []
@@ -139,7 +150,8 @@ class DraftSnapper(test_base.DraftTestCaseDoc):
         def callback(point):
             received.append(point)
 
-        def fake_teardown():
+        def fake_teardown(**kwargs):
+            del kwargs
             snapper.pt = None
 
         with patch.object(gui_snapper.gui_utils, "get_3d_view", return_value=view), patch.object(
@@ -158,7 +170,7 @@ class DraftSnapper(test_base.DraftTestCaseDoc):
     def test_cancel_point_request_removes_callbacks_and_restores_ui(self):
         """Programmatic cancellation should detach callbacks and close point UI."""
 
-        snapper = Gui.Snapper
+        snapper = self._get_snapper()
         toolbar = self._FakeToolbar()
         view = self._FakeView()
 
@@ -182,7 +194,7 @@ class DraftSnapper(test_base.DraftTestCaseDoc):
     def test_temporary_snap_profiles_restore_without_persisting(self):
         """Nested host profiles should restore prior snaps without writing preferences."""
 
-        snapper = Gui.Snapper
+        snapper = self._get_snapper()
         original = snapper.get_snap_modes()
         first, second = snapper.snaps[:2]
 
@@ -205,10 +217,12 @@ class DraftSnapper(test_base.DraftTestCaseDoc):
         callback = lambda point: None
         resolver = lambda ctrl, shift, alt: (not ctrl, alt)
         hints = [object()]
+        host = gui_base.DraftInteractionHost()
+        host.get_interaction_plane = lambda: None
         with patch.object(
             gui_base.Gui, "Snapper", SimpleNamespace(getPoint=get_point), create=True
         ):
-            gui_base.DraftInteractionHost().request_point(
+            host.request_point(
                 callback, hints=hints, modifier_resolver=resolver
             )
 
@@ -219,7 +233,7 @@ class DraftSnapper(test_base.DraftTestCaseDoc):
     def test_point_request_uses_host_modifier_resolution(self):
         """The Snapper applies a host's modifier policy before snapping."""
 
-        snapper = Gui.Snapper
+        snapper = self._get_snapper()
         toolbar = self._FakeToolbar()
         view = self._FakeView()
         plane = object()
@@ -249,7 +263,7 @@ class DraftSnapper(test_base.DraftTestCaseDoc):
     def test_interaction_plane_is_used_and_cleared_on_cancel(self):
         """A point request uses only its supplied plane and clears it on teardown."""
 
-        snapper = Gui.Snapper
+        snapper = self._get_snapper()
         toolbar = self._FakeToolbar()
         view = self._FakeView()
         plane = object()
