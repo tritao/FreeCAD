@@ -25,6 +25,17 @@ SET(Arch_SRCS
     ArchIFCSchema.py
     ArchProject.py
     ArchWall.py
+    ArchWallEndpoint.py
+    ArchWallEndCondition.py
+    ArchWallTrimming.py
+    ArchWallGeometry.py
+    ArchWallJoint.py
+    ArchWallJointGui.py
+    ArchWallRelation.py
+    ArchWallRelationBase.py
+    ArchWallRelationResolver.py
+    ArchWallJunction.py
+    ArchWallJunctionSolver.py
     Arch.py
     ArchSite.py
     ArchStructure.py
@@ -150,6 +161,7 @@ SET(bimcommands_SRCS
     bimcommands/BimIfcProperties.py
     bimcommands/BimIfcQuantities.py
     bimcommands/BimImagePlane.py
+    bimcommands/BimJoin.py
     bimcommands/BimLayers.py
     bimcommands/BimLeader.py
     bimcommands/BimLibrary.py
@@ -242,6 +254,11 @@ SET(bimtests_SRCS
     bimtests/test_roof_subtraction.brep
     bimtests/TestArchSpace.py
     bimtests/TestArchWall.py
+    bimtests/TestArchWallGeometry.py
+    bimtests/TestArchWallJoint.py
+    bimtests/TestArchWallJunction.py
+    bimtests/TestArchWallJoinMatrix.py
+    bimtests/TestArchWallJunctionMatrix.py
     bimtests/TestArchWallGui.py
     bimtests/TestArchMaterial.py
     bimtests/TestArchPanel.py
