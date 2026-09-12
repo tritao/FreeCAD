@@ -1,17 +1,83 @@
 # SPDX-License-Identifier: LGPL-2.1-or-later
 
-"""Viewer-local Plan Edit session lifecycle."""
+# ***************************************************************************
+# *                                                                         *
+# *   Copyright (c) 2026 FreeCAD Project Association                        *
+# *                                                                         *
+# *   This file is part of FreeCAD.                                         *
+# *                                                                         *
+# *   FreeCAD is free software: you can redistribute it and/or modify it    *
+# *   under the terms of the GNU Lesser General Public License as           *
+# *   published by the Free Software Foundation, either version 2.1 of the  *
+# *   License, or (at your option) any later version.                       *
+# *                                                                         *
+# *   FreeCAD is distributed in the hope that it will be useful, but        *
+# *   WITHOUT ANY WARRANTY; without even the implied warranty of            *
+# *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU      *
+# *   Lesser General Public License for more details.                       *
+# *                                                                         *
+# *   You should have received a copy of the GNU Lesser General Public      *
+# *   License along with FreeCAD. If not, see                               *
+# *   <https://www.gnu.org/licenses/>.                                      *
+# *                                                                         *
+# ***************************************************************************
+
+"""Session controller for BIM plan editing."""
 
 import FreeCAD
 import FreeCADGui
-import WorkingPlane
-from PySide import QtGui
+from bimplan.runtime import command_gate as plan_command_gate
+from bimplan.document_visuals import PlanDocumentVisualsAPI
+from bimplan.runtime.embedded_commands import PlanEmbeddedToolsAPI
+from bimplan.runtime import input as plan_input
+from bimplan.runtime import lifecycle as plan_lifecycle
+from bimplan.runtime import tools as plan_runtime_tools
+from bimplan.object_visibility import PlanVisibilityAPI
+from bimplan.performance import PlanPerformanceAPI
+from bimplan.picking import PlanPickingAPI
+from bimplan import snap as plan_snap
+from bimplan.runtime import session_state as plan_session_state
+from bimplan.runtime.session_state import PlanInteractionAPI
+from bimplan.storeys import PlanStoreysAPI
+from bimplan.ui import task_panel as plan_task_panel
+from bimplan.selection.selection import PlanSelectionAPI
+from bimplan.tools.symbol_edit import PlanSymbolsAPI
+from bimplan.tools.opening_edit import PlanOpeningsAPI
+from bimplan.tools.move import PlanMoveAPI
+from bimplan.providers.runtime import PlanProvidersAPI
+from bimplan.tools.wall_create import PlanWallCreateAPI
+from bimplan.tools.wall_relations import PlanWallRelationsAPI
+from bimplan.tools.wall_edit import PlanWallEditAPI
+from bimplan.tools.window_create import PlanWindowsAPI
+from bimplan.tools.spaces import PlanSpacesAPI
+from bimplan.runtime.view import PlanViewportAPI
+from bimplan.overlays.runtime import PlanOverlaysAPI
+from bimplan.ui.status_text import PlanStatusTextAPI
+from bimplan.ui.controls import PlanEditControlsWidget
 
-from bimplan.ui.session_panel import PlanEditSessionPanel
-
+QT_TRANSLATE_NOOP = FreeCAD.Qt.QT_TRANSLATE_NOOP
+translate = FreeCAD.Qt.translate
 
 _PLAN_PAPER_RGB = (1.0, 1.0, 1.0)
-_LOCKED_VIEW_ACTIONS = (
+_PLAN_EDIT_SNAP_SET = {
+    "Lock",
+    "Near",
+    "Extension",
+    "Endpoint",
+    "Midpoint",
+    "Perpendicular",
+    "Ortho",
+    "Intersection",
+    "WorkingPlane",
+}
+# Opening move is already constrained onto the host axis, so keep its snap
+# profile minimal. This avoids unrelated object snaps dragging the returned
+# point far away from the hovered location during Draft snap winner selection.
+_OPENING_MOVE_SNAP_SET = {
+    "Lock",
+    "WorkingPlane",
+}
+_PLAN_VIEW_LOCKED_ACTIONS = (
     "Std_ViewFront",
     "Std_ViewTop",
     "Std_ViewRight",
@@ -27,333 +93,330 @@ _LOCKED_VIEW_ACTIONS = (
     "Std_ViewHome",
     "Std_ViewRestoreCamera",
 )
+
 _active_session = None
 
 
 def get_active_session():
-    """Return the active Plan Edit session, if one exists."""
-
     return _active_session
 
 
-def start_session():
-    """Start one Plan Edit session for the current document and view."""
+def _refresh_contextual_task_watchers():
+    task_view = None
+    try:
+        task_view = FreeCADGui.Control.taskPanel()
+    except Exception:
+        task_view = None
 
+    if task_view is not None:
+        try:
+            update = getattr(task_view, "updateWatcher", None)
+            if callable(update):
+                update()
+                return
+        except Exception:
+            pass
+
+    try:
+        workbench = FreeCADGui.activeWorkbench()
+    except Exception:
+        workbench = None
+    if not workbench or workbench.name() != "BIMWorkbench":
+        return
+    set_task_watchers = getattr(workbench, "setTaskWatchers", None)
+    if not callable(set_task_watchers):
+        return
+    try:
+        FreeCADGui.Control.clearTaskWatcher()
+        set_task_watchers()
+    except Exception:
+        pass
+
+
+def _register_builtin_plan_edit_integrations():
+    try:
+        from bimplan.providers import register_plan_edit_providers
+
+        register_plan_edit_providers()
+    except Exception as exc:
+        try:
+            FreeCAD.Console.PrintError(
+                translate(
+                    "BIM_PlanEdit",
+                    "BIM Plan Edit window provider registration failed: {error}\n",
+                ).format(error=exc)
+            )
+        except Exception:
+            pass
+
+
+def start_session():
     global _active_session
-    if _active_session is not None:
-        _active_session.show_task_panel()
+
+    if _active_session:
         return _active_session
 
+    _register_builtin_plan_edit_integrations()
     session = PlanEditSession()
     if session.enter():
         _active_session = session
+        try:
+            FreeCADGui.Control.showTaskView()
+        except Exception:
+            pass
+        _refresh_contextual_task_watchers()
         return session
     return None
 
 
 class PlanEditSession:
-    """Own reversible Plan Edit state for one document view."""
+    """Owns the viewer state and control dock for Plan Edit mode."""
 
-    def __init__(self, document=None, gui_document=None):
-        self.doc = document if document is not None else FreeCAD.ActiveDocument
-        self.gui_doc = gui_document if gui_document is not None else FreeCADGui.ActiveDocument
-        self.view = None
-        self.viewer = None
-        self.storeys = []
-        self.active_storey = None
-        self.context_layer = None
-        self.working_plane = None
-        self.task_panel = None
-        self._saved_camera = None
-        self._saved_camera_type = None
-        self._saved_navigation_style = None
-        self._saved_navigation_state = {}
-        self._saved_view_action_state = {}
-        self._finishing = False
-        self._finished = False
-        self._entered = False
-        self._task_panel_open = False
-        self._background_override_applied = False
-        self._navicube_override_applied = False
+    # State-backed compatibility properties are bound after class definition.
 
-    def enter(self, show_panel=True):
-        """Capture the current view, apply the plan profile and show controls."""
+    def __init__(self):
+        self.picking = PlanPickingAPI(self)
+        self.selection = PlanSelectionAPI(self)
+        self.spaces = PlanSpacesAPI(self)
+        self.openings = PlanOpeningsAPI(self)
+        self.wall_relations = PlanWallRelationsAPI(self)
+        self.wall_create = PlanWallCreateAPI(self)
+        self.move_tool = PlanMoveAPI(self)
+        self.interaction = PlanInteractionAPI(self)
+        self.embedded_tools = PlanEmbeddedToolsAPI(self)
+        self.input = plan_input.PlanInputAPI(self)
+        self.lifecycle = plan_lifecycle.PlanLifecycleAPI(self)
+        self.symbols = PlanSymbolsAPI(self)
+        self.windows = PlanWindowsAPI(self)
+        self.viewport = PlanViewportAPI(self)
+        self.overlays = PlanOverlaysAPI(self)
+        self.wall_edit = PlanWallEditAPI(self)
+        self.visibility = PlanVisibilityAPI(self)
+        self.providers = PlanProvidersAPI(self)
+        self.storey = PlanStoreysAPI(self)
+        self.snap = plan_snap.PlanSnapAPI(self, _PLAN_EDIT_SNAP_SET, _OPENING_MOVE_SNAP_SET)
+        self.performance = PlanPerformanceAPI(self)
+        self.document_visuals = PlanDocumentVisualsAPI(self)
+        self.status_text = PlanStatusTextAPI(self)
+        self.task_panels = plan_task_panel.PlanTaskPanelsAPI(self)
+        plan_session_state.initialize_session_state(self)
+        self.viewport_state.plan_paper_rgb = _PLAN_PAPER_RGB
+        self.viewport_state.plan_view_locked_actions = _PLAN_VIEW_LOCKED_ACTIONS
 
-        if self._finished:
-            raise RuntimeError("a finished Plan Edit session cannot be entered again")
-        if self.doc is None or self.gui_doc is None:
-            FreeCAD.Console.PrintError("Plan Edit requires an active document and 3D view.\n")
-            return False
+    @property
+    def current_tool(self):
+        return self._current_tool
 
-        try:
-            self.view = self.gui_doc.ActiveView
-            if self.view is None or not hasattr(self.view, "getViewer"):
-                FreeCAD.Console.PrintError("Plan Edit requires an active 3D view.\n")
+    @current_tool.setter
+    def current_tool(self, value):
+        self._current_tool = plan_runtime_tools.coerce_plan_tool(value)
+
+    @property
+    def hovered_wall(self):
+        return self.selection_state.hovered_wall
+
+    @hovered_wall.setter
+    def hovered_wall(self, value):
+        self.selection_state.hovered_wall = value
+
+    @property
+    def hovered_opening(self):
+        return self.selection_state.hovered_opening
+
+    @hovered_opening.setter
+    def hovered_opening(self, value):
+        self.selection_state.hovered_opening = value
+
+    @property
+    def hovered_symbol(self):
+        return self.selection_state.hovered_symbol
+
+    @hovered_symbol.setter
+    def hovered_symbol(self, value):
+        self.selection_state.hovered_symbol = value
+
+    @property
+    def hovered_provider(self):
+        return self.selection_state.hovered_provider
+
+    @hovered_provider.setter
+    def hovered_provider(self, value):
+        self.selection_state.hovered_provider = value
+
+    @property
+    def hovered_space(self):
+        return self.selection_state.hovered_space
+
+    @hovered_space.setter
+    def hovered_space(self, value):
+        self.selection_state.hovered_space = value
+
+    @property
+    def hovered_region(self):
+        return self.selection_state.hovered_region
+
+    @hovered_region.setter
+    def hovered_region(self, value):
+        self.selection_state.hovered_region = value
+
+    def enter(self):
+        with self.performance.plan_perf_trace_event("enter_plan_edit"):
+            self.performance.plan_perf_count(
+                "document_objects", len(getattr(self.doc, "Objects", []) or [])
+            )
+            if not self.doc or not self.gui_doc:
+                FreeCAD.Console.PrintError(
+                    translate("BIM_PlanEdit", "An active document and 3D view are required.\n")
+                )
                 return False
-            self.viewer = self.view.getViewer()
-            if self.viewer is None:
-                return False
 
-            self._capture_state()
-            self.storeys = self.collect_storeys()
-            self.active_storey = self.find_initial_storey()
-            self.context_layer = self.view.pushViewContextLayer()
-            self._apply_storey_visibility()
-            self._apply_plan_view()
-            self._apply_navigation_profile()
-            self._entered = True
+            with self.performance.plan_perf_trace_span("enter_acquire_view"):
+                self.view = self.gui_doc.ActiveView
+                get_viewer = self.viewport.get_runtime_attr(self.view, "getViewer")
+                if self.view is None or get_viewer is None:
+                    FreeCAD.Console.PrintError(
+                        translate(
+                            "BIM_PlanEdit",
+                            "Plan Edit requires an active 3D Inventor view.\n",
+                        )
+                    )
+                    return False
 
-            if show_panel:
-                self.show_task_panel()
-            FreeCAD.Console.PrintMessage("Entered BIM Plan Edit mode.\n")
+                try:
+                    self.viewer = get_viewer()
+                except (AttributeError, ReferenceError, RuntimeError):
+                    self.viewport.discard_stale_runtime_object(self.view)
+                    FreeCAD.Console.PrintError(
+                        translate(
+                            "BIM_PlanEdit",
+                            "Plan Edit requires an active 3D Inventor view.\n",
+                        )
+                    )
+                    return False
+
+            with self.performance.plan_perf_trace_span("capture_plan_edit_state"):
+                self.viewport.capture_state()
+            with self.performance.plan_perf_trace_span("force_plan_preselection"):
+                self.viewport.force_plan_preselection()
+
+            with self.performance.plan_perf_trace_span("collect_storeys"):
+                self.storeys = self.storey.collect_storeys()
+                self.performance.plan_perf_count("storeys_found", len(self.storeys))
+            with self.performance.plan_perf_trace_span("find_initial_storey"):
+                self.active_storey = self.storey.find_initial_storey()
+                self.performance.plan_perf_set_fields(
+                    active_storey=self.performance.plan_perf_describe_object(self.active_storey)
+                )
+            with self.performance.plan_perf_trace_span("capture_object_view_state"):
+                self.visibility.capture_object_view_state()
+            self.visibility.begin_view_context()
+            with self.performance.plan_perf_trace_span("apply_plan_view"):
+                self.viewport.apply_plan_view(fit=False)
+            with self.performance.plan_perf_trace_span("apply_plan_snap_profile"):
+                self.snap.apply_plan_snap_profile()
+            self.visibility.apply_storey_visibility()
+            with self.performance.plan_perf_trace_span("attach_selection_observer"):
+                self.selection.sync.attach_selection_observer()
+            with self.performance.plan_perf_trace_span("attach_document_observer"):
+                self.document_visuals.attach_document_observer()
+            with self.performance.plan_perf_trace_span("register_edit_callbacks"):
+                self.viewport.register_edit_callbacks()
+            with self.performance.plan_perf_trace_span(
+                "refresh_primary_selected_plan_target_on_enter"
+            ):
+                self.selection.refresh.refresh_primary_selected_plan_target()
+
+            with self.performance.plan_perf_trace_span("build_task_panel"):
+                panel = PlanEditControlsWidget(self)
+            with self.performance.plan_perf_trace_span("attach_task_panel"):
+                self.task_panels.attach_task_panel(panel)
+            with self.performance.plan_perf_trace_span("task_panel_initial_refresh"):
+                panel.refresh(refresh_integrations=False)
+            with self.performance.plan_perf_trace_span("queue_prime_opening_handle_tracker_pool"):
+                self.overlays.openings.queue_prime_opening_handle_tracker_pool()
+            with self.performance.plan_perf_trace_span("queue_prime_wall_hosted_openings_cache"):
+                self.openings.queue_prime_wall_hosted_openings_cache()
+            with self.performance.plan_perf_trace_span("queue_prime_hover_pick_caches"):
+                self.selection.hover.queue_prime_hover_pick_caches()
+            with self.performance.plan_perf_trace_span("install_command_gate"):
+                plan_command_gate.install(self)
+            if self.performance.is_plan_perf_trace_enabled():
+                FreeCAD.Console.PrintMessage(
+                    translate("BIM_PlanEdit", "BIM Plan Edit perf trace: {path}\n").format(
+                        path=self.performance_state.plan_perf_log_path
+                    )
+                )
+            if self.performance.is_plan_pick_debug_enabled():
+                FreeCAD.Console.PrintMessage(
+                    translate("BIM_PlanEdit", "BIM Plan Edit pick debug: {path}\n").format(
+                        path=self.performance_state.plan_pick_debug_log_path
+                    )
+                )
+            FreeCAD.Console.PrintMessage(translate("BIM_PlanEdit", "Entered BIM Plan Edit mode.\n"))
             return True
-        except Exception as exc:
-            FreeCAD.Console.PrintError("Could not enter Plan Edit: {}\n".format(exc))
-            self.finish(close_dialog=False)
-            return False
 
-    def collect_storeys(self):
-        """Return semantic Building Storeys in vertical order.
+    def finish(self, cont=False, close_dialog=True, closed=False):
+        del cont, closed
+        return plan_lifecycle.finish(self, close_dialog=close_dialog)
 
-        Legacy Arch Floors carry the same IFC type, so they use the same
-        context path without a separate Draft type check.
-        """
-        storeys = []
-        for obj in self.doc.Objects:
-            if getattr(obj, "IfcType", "") == "Building Storey":
-                storeys.append(obj)
-        storeys.sort(key=self.get_storey_elevation)
-        return storeys
+    def begin_teardown(self):
+        return plan_lifecycle.begin_teardown(self)
 
-    def find_initial_storey(self):
-        """Use a selected storey, otherwise the lowest storey in the document."""
-
-        storeys_by_name = {storey.Name: storey for storey in self.storeys}
-        for obj in FreeCADGui.Selection.getSelection():
-            storey = storeys_by_name.get(getattr(obj, "Name", None))
-            if storey is not None:
-                return storey
-        return self.storeys[0] if self.storeys else None
-
-    @staticmethod
-    def get_storey_elevation(storey):
-        placement = getattr(storey, "Placement", None)
-        return placement.Base.z if placement else 0.0
-
-    def get_storey_label(self, storey):
-        if storey is None:
-            return FreeCAD.Qt.translate("BIM_PlanEdit", "All model geometry")
-        elevation = FreeCAD.Units.Quantity(
-            self.get_storey_elevation(storey), FreeCAD.Units.Length
-        ).UserString
-        return "{} [{}]".format(storey.Label, elevation)
-
-    def set_active_storey(self, storey):
-        """Change the visibility context without touching document visibility."""
-
-        if storey is not None and storey not in self.storeys:
-            raise ValueError("storey does not belong to this Plan Edit session")
-        self.active_storey = storey
-        self._apply_storey_visibility()
-        self._set_working_plane()
-        if self.view and hasattr(self.view, "fitAll"):
-            self.view.fitAll()
-
-    def _storey_objects(self, storey):
-        """Return the storey and all nested BIM contents without duplicates."""
-
-        names = set()
-        pending = [storey]
-        while pending:
-            obj = pending.pop()
-            name = getattr(obj, "Name", None) if obj is not None else None
-            if not name or name in names:
-                continue
-            names.add(name)
-            pending.extend(getattr(obj, "Group", []) or [])
-            pending.extend(getattr(obj, "Additions", []) or [])
-        return names
-
-    def _apply_storey_visibility(self):
-        if self.context_layer is None or self.view is None:
-            return
-        visible_objects = self._storey_objects(self.active_storey) if self.active_storey else None
-        for obj in self.doc.Objects:
-            try:
-                state = "Inherit"
-                if visible_objects is not None:
-                    if obj.Name in visible_objects:
-                        view_object = getattr(obj, "ViewObject", None)
-                        state = "Visible" if view_object and view_object.Visibility else "Inherit"
-                    else:
-                        state = "Hidden"
-                self.view.setViewVisibility(self.context_layer, obj, state)
-            except (AttributeError, ReferenceError, RuntimeError):
-                continue
-
-    def _capture_state(self):
-        if hasattr(self.view, "getCamera"):
-            self._saved_camera = self.view.getCamera()
-        if hasattr(self.view, "getCameraType"):
-            self._saved_camera_type = self.view.getCameraType()
-        self.working_plane = WorkingPlane.get_working_plane(update=False)
-        if hasattr(self.working_plane, "save"):
-            self.working_plane.save()
-
-        self._saved_navigation_style = self.viewer.getNavigationStyle()
-        for name, getter in (
-            ("rotation_enabled", "isRotationEnabled"),
-            ("orientation_locked", "isOrientationLocked"),
-        ):
-            if hasattr(self._saved_navigation_style, getter):
-                self._saved_navigation_state[name] = bool(
-                    getattr(self._saved_navigation_style, getter)()
-                )
-        for name, getter in (("corner_cross_visible", "isCornerCrossVisible"),):
-            if hasattr(self.view, getter):
-                self._saved_navigation_state[name] = bool(getattr(self.view, getter)())
-
-        main_window = FreeCADGui.getMainWindow()
-        for command_name in _LOCKED_VIEW_ACTIONS:
-            try:
-                action = main_window.findChild(QtGui.QAction, command_name)
-                if action is not None:
-                    self._saved_view_action_state[command_name] = action.isEnabled()
-            except Exception:
-                continue
-
-    def _apply_plan_view(self):
-        if self.view is None:
-            return
-        self._set_working_plane()
-        self.view.setCameraType("Orthographic")
-        self.view.viewTop()
-        self.view.waitForCameraAnimation()
-        self.viewer.setBackgroundAppearanceOverride(
-            "NONE", _PLAN_PAPER_RGB, _PLAN_PAPER_RGB, _PLAN_PAPER_RGB
-        )
-        self._background_override_applied = True
-        self.viewer.setNaviCubeEnabledOverride(False)
-        self._navicube_override_applied = True
-        if hasattr(self.view, "fitAll"):
-            self.view.fitAll()
-
-    def _set_working_plane(self):
-        if self.working_plane is None:
-            return
-        offset = self.get_storey_elevation(self.active_storey) if self.active_storey else 0.0
-        self.working_plane.set_to_top(offset=offset)
-        if hasattr(self.working_plane, "_update_all"):
-            self.working_plane._update_all(_hist_add=False)
-
-    def _apply_navigation_profile(self):
-        style = self._saved_navigation_style
-        if style is not None:
-            style.setRotationEnabled(False)
-            style.setOrientationLocked(True)
-        try:
-            self.view.setCornerCrossVisible(False)
-        except (AttributeError, ReferenceError, RuntimeError):
-            pass
-        main_window = FreeCADGui.getMainWindow()
-        for command_name in _LOCKED_VIEW_ACTIONS:
-            try:
-                action = main_window.findChild(QtGui.QAction, command_name)
-                if action is not None:
-                    action.setEnabled(False)
-            except Exception:
-                continue
-
-    def _restore_navigation_profile(self):
-        style = self._saved_navigation_style
-        if style is not None:
-            try:
-                if "rotation_enabled" in self._saved_navigation_state:
-                    style.setRotationEnabled(self._saved_navigation_state["rotation_enabled"])
-                if "orientation_locked" in self._saved_navigation_state:
-                    style.setOrientationLocked(self._saved_navigation_state["orientation_locked"])
-            except (AttributeError, ReferenceError, RuntimeError):
-                pass
-        if "corner_cross_visible" in self._saved_navigation_state:
-            try:
-                self.view.setCornerCrossVisible(
-                    self._saved_navigation_state["corner_cross_visible"]
-                )
-            except (AttributeError, ReferenceError, RuntimeError):
-                pass
-        main_window = FreeCADGui.getMainWindow()
-        for command_name, enabled in self._saved_view_action_state.items():
-            try:
-                action = main_window.findChild(QtGui.QAction, command_name)
-                if action is not None:
-                    action.setEnabled(bool(enabled))
-            except Exception:
-                continue
-
-    def show_task_panel(self):
-        if self.task_panel is None:
-            self.task_panel = PlanEditSessionPanel(self)
-        if self._task_panel_open:
-            self.task_panel.form.show()
-            self.task_panel.form.raise_()
-            return
-        FreeCADGui.Control.showDialog(self.task_panel, self.gui_doc)
-        self._task_panel_open = True
-
-    def finish(self, close_dialog=True):
-        """Remove transient overrides and restore the original view exactly once."""
-
+    def shutdown(self, close_dialog=True, teardown=False):
         global _active_session
-        if self._finishing or self._finished:
+
+        lifecycle_state = self.lifecycle_state
+        if lifecycle_state.finishing:
             return True
-        self._finishing = True
+        lifecycle_state.finishing = True
+
         try:
-            if self.context_layer is not None and self.view is not None:
-                try:
-                    self.view.removeViewContextLayer(self.context_layer)
-                except (AttributeError, ReferenceError, RuntimeError):
-                    pass
-                self.context_layer = None
-            if self.viewer is not None and self._background_override_applied:
-                try:
-                    self.viewer.clearBackgroundAppearanceOverride()
-                except (AttributeError, ReferenceError, RuntimeError):
-                    pass
-                self._background_override_applied = False
-            if self.viewer is not None and self._navicube_override_applied:
-                try:
-                    self.viewer.clearNaviCubeEnabledOverride()
-                except (AttributeError, ReferenceError, RuntimeError):
-                    pass
-                self._navicube_override_applied = False
-            if self.view is not None:
-                try:
-                    if self._saved_camera_type is not None:
-                        self.view.setCameraType(self._saved_camera_type)
-                except (AttributeError, ReferenceError, RuntimeError):
-                    pass
-                try:
-                    if self._saved_camera is not None:
-                        self.view.setCamera(self._saved_camera)
-                except (AttributeError, ReferenceError, RuntimeError):
-                    pass
-            if self.working_plane is not None:
-                try:
-                    self.working_plane.restore()
-                    self.working_plane._update_all(_hist_add=False)
-                except (AttributeError, ReferenceError, RuntimeError):
-                    pass
-            self._restore_navigation_profile()
-            if close_dialog and self._task_panel_open:
-                try:
-                    FreeCADGui.Control.closeDialog()
-                except (AttributeError, ReferenceError, RuntimeError):
-                    pass
-                self._task_panel_open = False
+            plan_lifecycle.shutdown(self, close_dialog=close_dialog, teardown=teardown)
         finally:
-            self._entered = False
-            self._finishing = False
-            self._finished = True
-            if _active_session is self:
-                _active_session = None
+            self.lifecycle.disconnect_teardown_signals()
+            lifecycle_state.tearing_down = True
+            self.lifecycle.discard_runtime_references()
+            self.task_panel_state.aux_task_panels = []
+            _active_session = None
+            lifecycle_state.finishing = False
+            _refresh_contextual_task_watchers()
         return True
+
+    def addSelection(self, *args):
+        return self.selection.addSelection(*args)
+
+    def removeSelection(self, *args):
+        return self.selection.removeSelection(*args)
+
+    def setSelection(self, *args):
+        return self.selection.setSelection(*args)
+
+    def clearSelection(self, *args):
+        return self.selection.clearSelection(*args)
+
+    def setPreselection(self, *args):
+        return self.selection.setPreselection(*args)
+
+    def removePreselection(self, *args):
+        return self.selection.removePreselection(*args)
+
+    def slotCreatedObject(self, *args):
+        return self.document_visuals.slot_created_object(*args)
+
+    def slotChangedObject(self, *args):
+        return self.document_visuals.slot_changed_object(*args)
+
+    def slotDeletedObject(self, *args):
+        return self.document_visuals.slot_deleted_object(*args)
+
+    def slotUndoDocument(self, *args):
+        return self.document_visuals.slot_undo_document(*args)
+
+    def slotRedoDocument(self, *args):
+        return self.document_visuals.slot_redo_document(*args)
+
+    def slotRecomputedDocument(self, *args):
+        return self.document_visuals.slot_recomputed_document(*args)
+
+    def slotDeletedDocument(self, *args):
+        return self.document_visuals.slot_deleted_document(*args)

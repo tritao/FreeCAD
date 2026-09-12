@@ -102,6 +102,16 @@ def recolorize(attr):  # names is [docname,objname]
             obj.ViewObject.Proxy.colorize(obj)
 
 
+def isWindowObject(obj):
+    """Return whether *obj* exposes the semantic Arch Window contract."""
+
+    return bool(
+        obj
+        and hasattr(obj, "Proxy")
+        and getattr(obj.Proxy, "Type", "") == "Window"
+    )
+
+
 class _Window(ArchComponent.Component):
     "The Window object"
 

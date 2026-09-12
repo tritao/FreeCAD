@@ -1,0 +1,1101 @@
+# SPDX-License-Identifier: LGPL-2.1-or-later
+
+"""Provider-owned overlay rendering for BIM Plan Edit."""
+
+import math
+from dataclasses import dataclass, field
+
+import FreeCAD
+from bimplan.providers import payloads as plan_provider_payloads
+from bimplan.providers import PlanOverlayMarkerKind
+from bimplan.providers import runtime as plan_provider_runtime
+from . import manager as overlay_manager
+
+_PROVIDER_OVERLAY_POINT_PREFIX = "ProviderOverlayPoint"
+_PROVIDER_OVERLAY_PICK_TRACKER_SCALE = 0.14
+_PROVIDER_HOVER_COLOR = (0.38, 0.62, 0.96)
+_PROVIDER_HOVER_MARKER_SCALE = 1.2
+_PROVIDER_HOVER_WIDTH_DELTA = 1.0
+_PROVIDER_SELECTED_COLOR = (0.12, 0.38, 0.95)
+_PROVIDER_SELECTED_MARKER_SCALE = 1.3
+_PROVIDER_SELECTED_WIDTH_DELTA = 1.5
+_PROVIDER_POINT_PREVIEW_MARKER_SIZE = 180.0
+_PROVIDER_POINT_PREVIEW_HOSTED_COLOR = (0.12, 0.38, 0.95)
+_PROVIDER_POINT_PREVIEW_UNHOSTED_COLOR = (0.95, 0.52, 0.10)
+_PROVIDER_POINT_PREVIEW_HOST_COLOR = (0.10, 0.58, 0.38)
+
+
+@dataclass
+class _TrackerPool:
+    trackers: list = field(default_factory=list)
+    render_state: object = None
+    style_state: object = None
+
+
+def _finalize_tracker_pool(pool):
+    overlay_manager.finalize_trackers(pool.trackers)
+    pool.trackers = []
+    pool.render_state = None
+    pool.style_state = None
+
+
+def _ensure_line_tracker_specs(
+    DraftTrackers,
+    pool,
+    specs,
+    *,
+    create_tracker,
+    apply_tracker,
+):
+    style_state = tuple((spec["label"], spec.get("dotted", False)) for spec in specs)
+    if len(pool.trackers) != len(specs) or pool.style_state != style_state:
+        _finalize_tracker_pool(pool)
+        pool.style_state = style_state
+        for spec in specs:
+            pool.trackers.append(create_tracker(spec))
+
+    for tracker, spec in zip(pool.trackers, specs):
+        apply_tracker(tracker, spec)
+
+    return pool
+
+
+class PlanProviderOverlayService:
+    """Owned session surface for provider overlays."""
+
+    __slots__ = ("_session",)
+
+    def __init__(self, session):
+        self._session = session
+
+    @property
+    def session(self):
+        return self._session
+
+    def sync_provider_overlays(self, *args, **kwargs):
+        return sync_provider_overlays(self.session, *args, **kwargs)
+
+    def clear_provider_overlays(self, *args, **kwargs):
+        return clear_provider_overlays(self.session, *args, **kwargs)
+
+    def sync_hovered_provider_overlay(self, *args, **kwargs):
+        return sync_hovered_provider_overlay(self.session, *args, **kwargs)
+
+    def clear_hovered_provider_overlay(self, *args, **kwargs):
+        return clear_hovered_provider_overlay(self.session, *args, **kwargs)
+
+    def sync_selected_provider_overlay(self, *args, **kwargs):
+        return sync_selected_provider_overlay(self.session, *args, **kwargs)
+
+    def clear_selected_provider_overlay(self, *args, **kwargs):
+        return clear_selected_provider_overlay(self.session, *args, **kwargs)
+
+    def get_selected_provider_handle_specs(self, *args, **kwargs):
+        return get_selected_provider_handle_specs(self.session, *args, **kwargs)
+
+    def sync_selected_provider_handles(self, *args, **kwargs):
+        return sync_selected_provider_handles(self.session, *args, **kwargs)
+
+    def clear_selected_provider_handles(self, *args, **kwargs):
+        return clear_selected_provider_handles(self.session, *args, **kwargs)
+
+    def pick_selected_provider_handle(self, *args, **kwargs):
+        return pick_selected_provider_handle(self.session, *args, **kwargs)
+
+    def sync_provider_point_preview(self, *args, **kwargs):
+        return sync_provider_point_preview(self.session, *args, **kwargs)
+
+    def clear_provider_point_preview(self, *args, **kwargs):
+        return clear_provider_point_preview(self.session, *args, **kwargs)
+
+
+def _perf_count(session, name, delta=1):
+    return session.performance.plan_perf_count(name, delta=delta)
+
+
+def _perf_trace_span(session, name, **fields):
+    return session.performance.plan_perf_trace_span(name, **fields)
+
+
+def _provider_tracker_state(session):
+    return session.overlay_tracker_state
+
+
+def _provider_overlay_state(session):
+    return session.provider_overlay_read_state
+
+
+def _provider_transient_state(session):
+    return session.provider_transient_state
+
+
+def sync_provider_overlays(session):
+    with _perf_trace_span(session, "sync_provider_overlays"):
+        tracker_state = _provider_tracker_state(session)
+        overlay_state = _provider_overlay_state(session)
+        if (
+            session.lifecycle_state.tearing_down
+            or session.lifecycle_state.finishing
+            or not session.document_visuals.document_is_alive()
+            or session.current_tool not in ("Select", "Provider Point")
+            or plan_provider_runtime.plan_provider_integrations_disabled(session)
+        ):
+            clear_provider_overlays(session)
+            return
+
+        with plan_provider_runtime.plan_provider_refresh_cache_scope(session):
+            overlays = tuple(
+                overlay
+                for overlay in plan_provider_runtime.get_plan_provider_overlays(session)
+                if bool(getattr(overlay, "visible", True))
+                and plan_provider_runtime.is_plan_provider_overlay_visible(session, overlay)
+            )
+        render_state = (
+            overlays,
+            round(float(session.viewport.get_plan_overlay_scale()), 4),
+        )
+        if render_state == overlay_state.render_state:
+            _perf_count(session, "provider_overlay_cache_hits")
+            return
+
+        clear_provider_overlays(session)
+        overlay_state.render_state = render_state
+
+        try:
+            import draftguitools.gui_trackers as DraftTrackers
+        except ImportError:
+            return
+
+        for overlay in overlays:
+            _create_provider_overlay_trackers(session, DraftTrackers, overlay)
+        _perf_count(
+            session, "provider_overlay_trackers", len(tracker_state.provider_overlay_trackers)
+        )
+
+
+def clear_provider_overlays(session):
+    tracker_state = _provider_tracker_state(session)
+    overlay_state = _provider_overlay_state(session)
+    overlay_manager.finalize_trackers(tracker_state.provider_overlay_trackers)
+    tracker_state.provider_overlay_trackers = []
+    overlay_state.render_state = None
+
+
+def sync_hovered_provider_overlay(session):
+    with _perf_trace_span(session, "sync_hovered_provider_overlay"):
+        tracker_state = _provider_tracker_state(session)
+        clear_hovered_provider_overlay(session)
+        if session.current_tool != "Select":
+            return
+        if plan_provider_runtime.plan_provider_integrations_disabled(session):
+            return
+        provider_obj = getattr(session, "hovered_provider", None)
+        if provider_obj is None:
+            return
+        if session.selection.state.is_selected_plan_target("provider", provider_obj):
+            return
+        try:
+            import draftguitools.gui_trackers as DraftTrackers
+        except ImportError:
+            return
+        specs = _get_hovered_provider_segment_specs(session)
+        if not specs:
+            return
+        for spec in specs:
+            tracker = overlay_manager.make_plan_line_tracker(
+                DraftTrackers,
+                spec["label"],
+                dotted=spec["dotted"],
+                scolor=spec["color"],
+                swidth=spec["width"],
+                ontop=True,
+            )
+            tracker.p1(spec["start"])
+            tracker.p2(spec["end"])
+            tracker.on()
+            tracker_state.provider_hover_trackers.append(tracker)
+        _perf_count(
+            session, "hovered_provider_trackers", len(tracker_state.provider_hover_trackers)
+        )
+
+
+def clear_hovered_provider_overlay(session):
+    tracker_state = _provider_tracker_state(session)
+    overlay_manager.finalize_trackers(tracker_state.provider_hover_trackers)
+    tracker_state.provider_hover_trackers = []
+
+
+def _get_selected_provider_overlay_pool(session):
+    tracker_state = _provider_tracker_state(session)
+    provider_state = _provider_transient_state(session)
+    return _TrackerPool(
+        trackers=list(tracker_state.provider_selected_trackers),
+        render_state=provider_state.selected_provider_overlay_render_state,
+    )
+
+
+def _store_selected_provider_overlay_pool(session, pool):
+    tracker_state = _provider_tracker_state(session)
+    provider_state = _provider_transient_state(session)
+    tracker_state.provider_selected_trackers = list(pool.trackers)
+    provider_state.selected_provider_overlay_render_state = pool.render_state
+
+
+def _get_provider_point_preview_pool(session):
+    state = session.provider_point_state
+    return _TrackerPool(
+        trackers=list(state.provider_point_preview_trackers),
+        render_state=state.provider_point_preview_render_state,
+        style_state=state.provider_point_preview_style_state,
+    )
+
+
+def _store_provider_point_preview_pool(session, pool):
+    state = session.provider_point_state
+    state.provider_point_preview_trackers = list(pool.trackers)
+    state.provider_point_preview_render_state = pool.render_state
+    state.provider_point_preview_style_state = pool.style_state
+
+
+def sync_selected_provider_overlay(session):
+    with _perf_trace_span(session, "sync_selected_provider_overlay"):
+        if session.current_tool != "Select":
+            clear_selected_provider_overlay(session)
+            return
+        plan_provider_integrations_disabled = getattr(
+            session.providers, "plan_provider_integrations_disabled", None
+        )
+        if callable(plan_provider_integrations_disabled) and plan_provider_integrations_disabled():
+            clear_selected_provider_overlay(session)
+            return
+        selected_objects = _get_selected_provider_objects(session)
+        if not selected_objects:
+            clear_selected_provider_overlay(session)
+            return
+        try:
+            import draftguitools.gui_trackers as DraftTrackers
+        except ImportError:
+            clear_selected_provider_overlay(session)
+            return
+        specs = _get_selected_provider_segment_specs(session, selected_objects)
+        if not specs:
+            clear_selected_provider_overlay(session)
+            return
+        selected_keys = tuple(
+            key
+            for key in (
+                session.visibility.get_document_object_key(provider_obj)
+                for provider_obj in selected_objects
+            )
+            if key is not None
+        )
+        render_state = (
+            selected_keys,
+            _get_provider_segment_render_state(session, specs),
+        )
+        pool = _get_selected_provider_overlay_pool(session)
+        if render_state == pool.render_state:
+            _perf_count(session, "selected_provider_overlay_cache_hits")
+            return
+        _finalize_tracker_pool(pool)
+        _ensure_line_tracker_specs(
+            DraftTrackers,
+            pool,
+            specs,
+            create_tracker=lambda spec: overlay_manager.make_plan_line_tracker(
+                DraftTrackers,
+                spec["label"],
+                dotted=spec["dotted"],
+                scolor=spec["color"],
+                swidth=spec["width"],
+                ontop=True,
+            ),
+            apply_tracker=lambda tracker, spec: (
+                tracker.p1(spec["start"]),
+                tracker.p2(spec["end"]),
+                tracker.on(),
+            ),
+        )
+        pool.render_state = render_state
+        _store_selected_provider_overlay_pool(session, pool)
+        _perf_count(session, "selected_provider_trackers", len(pool.trackers))
+
+
+def clear_selected_provider_overlay(session):
+    pool = _get_selected_provider_overlay_pool(session)
+    _finalize_tracker_pool(pool)
+    _store_selected_provider_overlay_pool(session, pool)
+
+
+def get_selected_provider_handle_specs(session, provider_obj):
+    try:
+        from draftutils import params
+    except ImportError:
+        return []
+    if not session.selection.state.is_selected_plan_target("provider", provider_obj):
+        return []
+    marker_size = session.viewport.scaled_marker_size(params.get_param_view("MarkerSize"))
+    specs = []
+    for idx, handle in enumerate(
+        session.providers.get_selected_provider_edit_handles(provider_obj)
+    ):
+        point = _to_vector(getattr(handle, "point", None))
+        if point is None:
+            continue
+        marker = _get_provider_handle_marker(getattr(handle, "marker_kind", None), marker_size)
+        specs.append((idx, handle, point, marker))
+    return specs
+
+
+def sync_selected_provider_handles(session):
+    with _perf_trace_span(session, "sync_selected_provider_handles"):
+        provider_state = _provider_transient_state(session)
+        provider_obj = session.selection.state.get_selected_plan_target_object("provider")
+        if session.current_tool != "Select":
+            clear_selected_provider_handles(session)
+            return
+        if not plan_provider_runtime.is_plan_provider_target_object(session, provider_obj):
+            clear_selected_provider_handles(session)
+            return
+        specs = tuple(get_selected_provider_handle_specs(session, provider_obj))
+        render_state = (
+            session.visibility.get_document_object_key(provider_obj),
+            tuple(
+                (
+                    int(idx),
+                    str(getattr(handle, "key", "") or ""),
+                    round(float(point.x), 6),
+                    round(float(point.y), 6),
+                    round(float(point.z), 6),
+                    -1 if marker is None else int(marker),
+                )
+                for idx, handle, point, marker in specs
+            ),
+        )
+        if provider_state.selected_provider_handle_render_state == render_state and len(
+            provider_state.provider_handle_trackers
+        ) == len(specs):
+            _perf_count(session, "selected_provider_handle_cache_hits")
+            return
+        try:
+            import draftguitools.gui_trackers as DraftTrackers
+        except ImportError:
+            clear_selected_provider_handles(session)
+            return
+        clear_selected_provider_handles(session)
+        for idx, _handle, point, marker in specs:
+            kwargs = dict(
+                pos=point,
+                idx=idx,
+                inactive=True,
+            )
+            if marker is not None:
+                kwargs["marker"] = marker
+            tracker = DraftTrackers.editTracker(**kwargs)
+            tracker.on()
+            provider_state.provider_handle_trackers.append(tracker)
+        provider_state.selected_provider_handle_render_state = render_state
+
+
+def clear_selected_provider_handles(session):
+    provider_state = _provider_transient_state(session)
+    overlay_manager.finalize_trackers(provider_state.provider_handle_trackers)
+    provider_state.provider_handle_trackers = []
+    provider_state.selected_provider_handle_render_state = None
+
+
+def pick_selected_provider_handle(session, mouse_pos, radius_px=10):
+    provider_obj = session.selection.state.get_selected_plan_target_object("provider")
+    if (
+        not plan_provider_runtime.is_plan_provider_target_object(session, provider_obj)
+        or not session.view
+    ):
+        return None
+    try:
+        cursor_x = int(mouse_pos[0])
+        cursor_y = int(mouse_pos[1])
+    except Exception:
+        return None
+    best_index = None
+    best_distance_sq = None
+    for idx, _handle, point, _marker in get_selected_provider_handle_specs(session, provider_obj):
+        try:
+            screen_x, screen_y = session.view.getPointOnScreen(point)
+        except Exception:
+            continue
+        dx = float(screen_x) - float(cursor_x)
+        dy = float(screen_y) - float(cursor_y)
+        distance_sq = dx * dx + dy * dy
+        if distance_sq > radius_px * radius_px:
+            continue
+        if best_distance_sq is None or distance_sq < best_distance_sq:
+            best_index = idx
+            best_distance_sq = distance_sq
+    return best_index
+
+
+def sync_provider_point_preview(session):
+    state = session.provider_point_state
+    if session.current_tool != "Provider Point" or state.provider_point_preview_point is None:
+        clear_provider_point_preview(session)
+        return
+
+    try:
+        import draftguitools.gui_trackers as DraftTrackers
+    except ImportError:
+        clear_provider_point_preview(session)
+        return
+
+    specs = _get_provider_point_preview_segment_specs(session)
+    if not specs:
+        clear_provider_point_preview(session)
+        return
+
+    render_state = _get_provider_segment_render_state(session, specs)
+    pool = _get_provider_point_preview_pool(session)
+    if render_state == pool.render_state:
+        _perf_count(session, "provider_point_preview_cache_hits")
+        return
+
+    _ensure_line_tracker_specs(
+        DraftTrackers,
+        pool,
+        specs,
+        create_tracker=lambda spec: overlay_manager.make_plan_line_tracker(
+            DraftTrackers,
+            spec["label"],
+            dotted=spec["dotted"],
+            scolor=spec["color"],
+            swidth=spec["width"],
+            ontop=True,
+        ),
+        apply_tracker=lambda tracker, spec: (
+            overlay_manager.set_plan_line_tracker_width(tracker, spec["width"]),
+            tracker.setColor(spec["color"]),
+            tracker.p1(spec["start"]),
+            tracker.p2(spec["end"]),
+            tracker.on(),
+        ),
+    )
+    pool.render_state = render_state
+    _store_provider_point_preview_pool(session, pool)
+
+    _perf_count(
+        session,
+        "provider_point_preview_trackers",
+        len(pool.trackers),
+    )
+
+
+def clear_provider_point_preview(session):
+    state = session.provider_point_state
+    _clear_provider_point_preview_trackers(session)
+    state.provider_point_preview_source_point = None
+    state.provider_point_preview_point = None
+    state.provider_point_preview_host_target = None
+    state.provider_point_preview_host_source = ""
+
+
+def _clear_provider_point_preview_trackers(session):
+    pool = _get_provider_point_preview_pool(session)
+    _finalize_tracker_pool(pool)
+    _store_provider_point_preview_pool(session, pool)
+
+
+def _get_provider_point_preview_segment_specs(session):
+    state = session.provider_point_state
+    point = _to_vector(state.provider_point_preview_point)
+    if point is None:
+        return ()
+    source = _to_vector(state.provider_point_preview_source_point)
+    if source is None:
+        source = point
+    host_kind, host_obj = _normalize_host_target(state.provider_point_preview_host_target)
+    hosted = host_kind == "wall" and host_obj is not None
+    preview_color = (
+        _PROVIDER_POINT_PREVIEW_HOSTED_COLOR if hosted else _PROVIDER_POINT_PREVIEW_UNHOSTED_COLOR
+    )
+    width = session.viewport.scaled_line_width(2)
+    specs = []
+    specs.extend(
+        _get_point_marker_segment_specs(
+            point,
+            label="provider-point-preview-marker",
+            color=preview_color,
+            width=width,
+            dotted=not hosted,
+            marker_size=session.viewport.scaled_marker_size(_PROVIDER_POINT_PREVIEW_MARKER_SIZE),
+            marker_kind=PlanOverlayMarkerKind.CROSS,
+        )
+    )
+    if hosted:
+        specs.extend(
+            _get_provider_point_host_segment_specs(
+                session,
+                host_obj,
+                color=_PROVIDER_POINT_PREVIEW_HOST_COLOR,
+                width=session.viewport.scaled_line_width(2),
+            )
+        )
+        if FreeCAD.Vector(source).sub(point).Length > 1e-6:
+            specs.append(
+                {
+                    "label": "provider-point-preview-tether",
+                    "start": source,
+                    "end": point,
+                    "color": preview_color,
+                    "width": session.viewport.scaled_line_width(1),
+                    "dotted": True,
+                }
+            )
+    return tuple(specs)
+
+
+def _get_point_marker_segment_specs(
+    point,
+    *,
+    label,
+    color,
+    width,
+    dotted,
+    marker_size,
+    marker_kind,
+):
+    if marker_kind == PlanOverlayMarkerKind.CIRCLE:
+        return _get_circle_marker_segment_specs(
+            point,
+            label=label,
+            color=color,
+            width=width,
+            dotted=dotted,
+            marker_size=marker_size,
+        )
+    if marker_kind == PlanOverlayMarkerKind.CIRCLE_CROSS:
+        return _get_circle_marker_segment_specs(
+            point,
+            label=label,
+            color=color,
+            width=width,
+            dotted=dotted,
+            marker_size=marker_size,
+        ) + _get_cross_marker_segment_specs(
+            point,
+            label=label,
+            color=color,
+            width=width,
+            dotted=dotted,
+            marker_size=marker_size * 0.7,
+        )
+    if marker_kind == PlanOverlayMarkerKind.DIAMOND:
+        half_size = max(1.0, float(marker_size) / 2.0)
+        return _get_polyline_marker_segment_specs(
+            (
+                FreeCAD.Vector(point.x, point.y + half_size, point.z),
+                FreeCAD.Vector(point.x + half_size, point.y, point.z),
+                FreeCAD.Vector(point.x, point.y - half_size, point.z),
+                FreeCAD.Vector(point.x - half_size, point.y, point.z),
+            ),
+            label=label,
+            color=color,
+            width=width,
+            dotted=dotted,
+            closed=True,
+        )
+    if marker_kind == PlanOverlayMarkerKind.HOURGLASS:
+        half_size = max(1.0, float(marker_size) / 2.0)
+        return _get_polyline_marker_segment_specs(
+            (
+                FreeCAD.Vector(point.x - half_size, point.y + half_size, point.z),
+                FreeCAD.Vector(point.x + half_size, point.y + half_size, point.z),
+                FreeCAD.Vector(point.x - half_size, point.y - half_size, point.z),
+                FreeCAD.Vector(point.x + half_size, point.y - half_size, point.z),
+            ),
+            label=label,
+            color=color,
+            width=width,
+            dotted=dotted,
+            closed=True,
+        )
+    if marker_kind == PlanOverlayMarkerKind.SQUARE:
+        half_size = max(1.0, float(marker_size) / 2.0)
+        return _get_polyline_marker_segment_specs(
+            (
+                FreeCAD.Vector(point.x - half_size, point.y + half_size, point.z),
+                FreeCAD.Vector(point.x + half_size, point.y + half_size, point.z),
+                FreeCAD.Vector(point.x + half_size, point.y - half_size, point.z),
+                FreeCAD.Vector(point.x - half_size, point.y - half_size, point.z),
+            ),
+            label=label,
+            color=color,
+            width=width,
+            dotted=dotted,
+            closed=True,
+        )
+    return _get_cross_marker_segment_specs(
+        point,
+        label=label,
+        color=color,
+        width=width,
+        dotted=dotted,
+        marker_size=marker_size,
+    )
+
+
+def _get_provider_handle_marker(marker_kind, marker_size):
+    try:
+        import FreeCADGui
+    except Exception:
+        return None
+    marker_name = {
+        PlanOverlayMarkerKind.CIRCLE: "CIRCLE_FILLED",
+        PlanOverlayMarkerKind.CIRCLE_CROSS: "CIRCLE_FILLED",
+        PlanOverlayMarkerKind.CROSS: "CROSS",
+        PlanOverlayMarkerKind.DIAMOND: "DIAMOND_FILLED",
+        PlanOverlayMarkerKind.HOURGLASS: "DIAMOND_FILLED",
+        PlanOverlayMarkerKind.SQUARE: "SQUARE_FILLED",
+    }.get(marker_kind, "DIAMOND_FILLED")
+    try:
+        return FreeCADGui.getMarkerIndex(marker_name, marker_size)
+    except Exception:
+        return None
+
+
+def _get_cross_marker_segment_specs(point, *, label, color, width, dotted, marker_size):
+    half_size = max(1.0, float(marker_size) / 2.0)
+    return (
+        {
+            "label": label,
+            "start": FreeCAD.Vector(point.x - half_size, point.y, point.z),
+            "end": FreeCAD.Vector(point.x + half_size, point.y, point.z),
+            "color": color,
+            "width": width,
+            "dotted": dotted,
+        },
+        {
+            "label": label,
+            "start": FreeCAD.Vector(point.x, point.y - half_size, point.z),
+            "end": FreeCAD.Vector(point.x, point.y + half_size, point.z),
+            "color": color,
+            "width": width,
+            "dotted": dotted,
+        },
+    )
+
+
+def _get_circle_marker_segment_specs(point, *, label, color, width, dotted, marker_size):
+    radius = max(1.0, float(marker_size) / 2.0)
+    segments = max(8, int(round(radius / 25.0)))
+    circle_points = []
+    for index in range(segments):
+        angle = (2.0 * math.pi * index) / float(segments)
+        circle_points.append(
+            FreeCAD.Vector(
+                point.x + math.cos(angle) * radius,
+                point.y + math.sin(angle) * radius,
+                point.z,
+            )
+        )
+    return _get_polyline_marker_segment_specs(
+        tuple(circle_points),
+        label=label,
+        color=color,
+        width=width,
+        dotted=dotted,
+        closed=True,
+    )
+
+
+def _get_polyline_marker_segment_specs(points, *, label, color, width, dotted, closed):
+    points = tuple(_to_vector(point) for point in tuple(points or ()))
+    points = tuple(point for point in points if point is not None)
+    if len(points) < 2:
+        return ()
+    segment_points = points + (points[0],) if closed else points
+    return tuple(
+        {
+            "label": label,
+            "start": start,
+            "end": end,
+            "color": color,
+            "width": width,
+            "dotted": dotted,
+        }
+        for start, end in zip(segment_points, segment_points[1:])
+    )
+
+
+def _get_provider_point_host_segment_specs(session, host_wall, *, color, width):
+    from . import geometry as overlay_geometry
+
+    specs = []
+    for polyline in overlay_geometry.get_wall_overlay_polylines(session, host_wall):
+        points = tuple(_to_vector(point) for point in tuple(polyline or ()))
+        points = tuple(point for point in points if point is not None)
+        if len(points) < 2:
+            continue
+        for start, end in zip(points, points[1:]):
+            specs.append(
+                {
+                    "label": "provider-point-preview-host",
+                    "start": start,
+                    "end": end,
+                    "color": color,
+                    "width": width,
+                    "dotted": False,
+                }
+            )
+    return tuple(specs)
+
+
+def _get_provider_segment_render_state(session, specs):
+    return (
+        round(float(session.viewport.get_plan_overlay_scale()), 4),
+        tuple(
+            (
+                spec["label"],
+                _round_vector(spec["start"]),
+                _round_vector(spec["end"]),
+                _round_tuple(spec["color"]),
+                round(float(spec["width"]), 4),
+                bool(spec["dotted"]),
+            )
+            for spec in specs
+        ),
+    )
+
+
+def _get_selected_provider_objects(session):
+    provider_state = _provider_transient_state(session)
+    selected_objects = []
+    seen = set()
+    for provider_obj in (
+        session.selection.state.get_selected_plan_target_object("provider"),
+        *tuple(provider_state.provider_selected_objects or ()),
+    ):
+        if provider_obj is None:
+            continue
+        object_key = session.visibility.get_document_object_key(provider_obj)
+        if object_key is None or object_key in seen:
+            continue
+        seen.add(object_key)
+        selected_objects.append(provider_obj)
+    return tuple(selected_objects)
+
+
+def _get_selected_provider_segment_specs(session, selected_objects):
+    selected_keys = {
+        key
+        for key in (
+            session.visibility.get_document_object_key(provider_obj)
+            for provider_obj in selected_objects
+        )
+        if key is not None
+    }
+    if not selected_keys:
+        return ()
+    specs = []
+    for overlay in _get_visible_provider_overlays(session):
+        key = str(getattr(overlay, "key", "") or "overlay")
+        marker_size = session.viewport.scaled_marker_size(
+            float(getattr(overlay, "marker_size", 160.0) or 160.0) * _PROVIDER_SELECTED_MARKER_SCALE
+        )
+        width = session.viewport.scaled_line_width(
+            max(2.0, float(getattr(overlay, "line_width", 2.0) or 2.0))
+            + _PROVIDER_SELECTED_WIDTH_DELTA
+        )
+        point_targets = tuple(getattr(overlay, "point_targets", ()) or ())
+        for index, point in enumerate(tuple(getattr(overlay, "points", ()) or ())):
+            target = point_targets[index] if index < len(point_targets) else None
+            if not _provider_target_matches_object(session, target, selected_keys):
+                continue
+            point_vector = _to_vector(point)
+            if point_vector is None:
+                continue
+            specs.extend(
+                _get_point_marker_segment_specs(
+                    point_vector,
+                    label="selected-provider-overlay:{}".format(key),
+                    color=_PROVIDER_SELECTED_COLOR,
+                    width=width,
+                    dotted=False,
+                    marker_size=marker_size,
+                    marker_kind=PlanOverlayMarkerKind.CIRCLE,
+                )
+            )
+    return tuple(specs)
+
+
+def _get_hovered_provider_segment_specs(session):
+    provider_obj = getattr(session, "hovered_provider", None)
+    object_key = session.visibility.get_document_object_key(provider_obj)
+    if object_key is None:
+        return ()
+    specs = []
+    for overlay in _get_visible_provider_overlays(session):
+        key = str(getattr(overlay, "key", "") or "overlay")
+        marker_size = session.viewport.scaled_marker_size(
+            float(getattr(overlay, "marker_size", 160.0) or 160.0) * _PROVIDER_HOVER_MARKER_SCALE
+        )
+        width = session.viewport.scaled_line_width(
+            max(2.0, float(getattr(overlay, "line_width", 2.0) or 2.0))
+            + _PROVIDER_HOVER_WIDTH_DELTA
+        )
+        marker_kind = overlay.marker_kind
+        point_targets = tuple(getattr(overlay, "point_targets", ()) or ())
+        for index, point in enumerate(tuple(getattr(overlay, "points", ()) or ())):
+            target = point_targets[index] if index < len(point_targets) else None
+            if not _provider_target_matches_object(session, target, object_key):
+                continue
+            point_vector = _to_vector(point)
+            if point_vector is None:
+                continue
+            specs.extend(
+                _get_point_marker_segment_specs(
+                    point_vector,
+                    label="hovered-provider-overlay:{}".format(key),
+                    color=_PROVIDER_HOVER_COLOR,
+                    width=width,
+                    dotted=False,
+                    marker_size=marker_size,
+                    marker_kind=marker_kind,
+                )
+            )
+    return tuple(specs)
+
+
+def _get_visible_provider_overlays(session):
+    with plan_provider_runtime.plan_provider_refresh_cache_scope(session):
+        return tuple(
+            overlay
+            for overlay in plan_provider_runtime.get_plan_provider_overlays(session)
+            if bool(getattr(overlay, "visible", True))
+            and plan_provider_runtime.is_plan_provider_overlay_visible(session, overlay)
+        )
+
+
+def _create_provider_overlay_trackers(session, DraftTrackers, overlay):
+    color = tuple(getattr(overlay, "color", (0.2, 0.55, 0.85)) or (0.2, 0.55, 0.85))
+    width = session.viewport.scaled_line_width(float(getattr(overlay, "line_width", 2.0) or 2.0))
+    dotted = bool(getattr(overlay, "dotted", False))
+    key = str(getattr(overlay, "key", "") or "overlay")
+    for polyline in tuple(getattr(overlay, "polylines", ()) or ()):
+        _create_polyline_trackers(
+            session,
+            DraftTrackers,
+            "provider-overlay:{}".format(key),
+            polyline,
+            color=color,
+            width=width,
+            dotted=dotted,
+        )
+    marker_size = float(getattr(overlay, "marker_size", 160.0) or 160.0)
+    marker_kind = overlay.marker_kind
+    point_targets = tuple(getattr(overlay, "point_targets", ()) or ())
+    for index, point in enumerate(tuple(getattr(overlay, "points", ()) or ())):
+        target = point_targets[index] if index < len(point_targets) else None
+        _create_point_marker_trackers(
+            session,
+            DraftTrackers,
+            "provider-overlay-point:{}".format(key),
+            _to_vector(point),
+            marker_size=marker_size,
+            marker_kind=marker_kind,
+            color=color,
+            width=width,
+            dotted=dotted,
+            target=target,
+            target_index=index,
+        )
+
+
+def _create_polyline_trackers(session, DraftTrackers, label, polyline, *, color, width, dotted):
+    tracker_state = _provider_tracker_state(session)
+    points = tuple(_to_vector(point) for point in tuple(polyline or ()))
+    points = tuple(point for point in points if point is not None)
+    if len(points) < 2:
+        return
+    for start, end in zip(points, points[1:]):
+        tracker = overlay_manager.make_plan_line_tracker(
+            DraftTrackers,
+            label,
+            dotted=dotted,
+            scolor=color,
+            swidth=width,
+            ontop=True,
+        )
+        tracker.p1(start)
+        tracker.p2(end)
+        tracker.on()
+        tracker_state.provider_overlay_trackers.append(tracker)
+
+
+def _create_point_marker_trackers(
+    session,
+    DraftTrackers,
+    label,
+    point,
+    *,
+    marker_size,
+    marker_kind,
+    color,
+    width,
+    dotted,
+    target=None,
+    target_index=0,
+):
+    tracker_state = _provider_tracker_state(session)
+    if point is None:
+        return
+    for spec in _get_point_marker_segment_specs(
+        point,
+        label=label,
+        color=color,
+        width=width,
+        dotted=dotted,
+        marker_size=marker_size,
+        marker_kind=marker_kind,
+    ):
+        tracker = overlay_manager.make_plan_line_tracker(
+            DraftTrackers,
+            spec["label"],
+            dotted=spec["dotted"],
+            scolor=spec["color"],
+            swidth=spec["width"],
+            ontop=True,
+        )
+        tracker.p1(spec["start"])
+        tracker.p2(spec["end"])
+        tracker.on()
+        tracker_state.provider_overlay_trackers.append(tracker)
+    _create_target_pick_tracker(
+        session,
+        DraftTrackers,
+        point,
+        target,
+        target_index=target_index,
+        marker_size=marker_size,
+    )
+
+
+def _create_target_pick_tracker(
+    session, DraftTrackers, point, target, *, target_index, marker_size
+):
+    if point is None or not _has_target_identity(target):
+        return
+    marker = None
+    try:
+        import FreeCADGui
+
+        marker = FreeCADGui.getMarkerIndex(
+            "CIRCLE",
+            int(
+                max(
+                    4.0,
+                    session.viewport.scaled_marker_size(
+                        marker_size * _PROVIDER_OVERLAY_PICK_TRACKER_SCALE
+                    ),
+                )
+            ),
+        )
+    except Exception:
+        marker = None
+    kwargs = {
+        "pos": point,
+        "idx": int(target_index),
+        "inactive": False,
+    }
+    if marker is not None:
+        kwargs["marker"] = marker
+    try:
+        tracker = DraftTrackers.editTracker(**kwargs)
+    except Exception:
+        return
+    if not _retarget_pick_tracker(session, tracker, target, target_index):
+        overlay_manager.finalize_trackers([tracker])
+        return
+    try:
+        tracker.on()
+    except Exception:
+        pass
+    _provider_tracker_state(session).provider_overlay_trackers.append(tracker)
+
+
+def _has_target_identity(target):
+    return bool(str(getattr(target, "object_name", "") or "").strip())
+
+
+def _get_target_identity(session, target):
+    if not _has_target_identity(target):
+        return None
+    document_name = str(getattr(target, "document_name", "") or "").strip()
+    if not document_name:
+        document_name = str(getattr(getattr(session, "doc", None), "Name", "") or "")
+    object_name = str(getattr(target, "object_name", "") or "").strip()
+    if not document_name or not object_name:
+        return None
+    return (document_name, object_name)
+
+
+def _provider_target_matches_object(session, target, object_key):
+    if object_key is None:
+        return False
+    target_identity = _get_target_identity(session, target)
+    if isinstance(object_key, (set, frozenset)):
+        return target_identity in object_key
+    if isinstance(object_key, tuple) and object_key and isinstance(object_key[0], tuple):
+        return target_identity in object_key
+    return target_identity == object_key
+
+
+def _retarget_pick_tracker(session, tracker, target, target_index):
+    selnode = getattr(tracker, "selnode", None)
+    if selnode is None:
+        return False
+    document_name = str(getattr(target, "document_name", "") or "").strip()
+    if not document_name:
+        document_name = str(getattr(getattr(session, "doc", None), "Name", "") or "")
+    object_name = str(getattr(target, "object_name", "") or "").strip()
+    if not document_name or not object_name:
+        return False
+    target_kind = target.target_kind.value if target.target_kind is not None else ""
+    target_kind = target_kind.replace(":", "_")
+    subname = "{}:{}:{}".format(_PROVIDER_OVERLAY_POINT_PREFIX, target_kind, int(target_index))
+    try:
+        if getattr(selnode, "useNewSelection", None) is not None:
+            selnode.useNewSelection = False
+        selnode.documentName.setValue(document_name)
+        selnode.objectName.setValue(object_name)
+        selnode.subElementName.setValue(subname)
+    except Exception:
+        return False
+    return True
+
+
+def _to_vector(point):
+    if point is None:
+        return None
+    if isinstance(point, FreeCAD.Vector):
+        return FreeCAD.Vector(point)
+    try:
+        return FreeCAD.Vector(float(point[0]), float(point[1]), float(point[2]))
+    except (TypeError, ValueError, IndexError):
+        return None
+
+
+def _normalize_host_target(target):
+    host_kind, host_obj = plan_provider_payloads.unpack_provider_host_target_ref(target)
+    if host_kind == "wall" and host_obj is not None:
+        return host_kind, host_obj
+    return (None, None)
+
+
+def _round_vector(point):
+    return (
+        round(float(point.x), 4),
+        round(float(point.y), 4),
+        round(float(point.z), 4),
+    )
+
+
+def _round_tuple(values):
+    return tuple(round(float(value), 4) for value in tuple(values or ()))

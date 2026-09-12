@@ -26,7 +26,9 @@
 
 import FreeCAD
 import FreeCADGui
+import math
 from enum import Enum
+from draftguitools import gui_base
 
 QT_TRANSLATE_NOOP = FreeCAD.Qt.QT_TRANSLATE_NOOP
 translate = FreeCAD.Qt.translate
@@ -36,6 +38,116 @@ class WallBaselineMode(Enum):
     NONE = 0
     DRAFT_LINE = 1
     SKETCH = 2
+
+
+def create_baseless_wall_from_endpoints(
+    p0,
+    p1,
+    *,
+    width,
+    height,
+    align="Center",
+    offset=0.0,
+    material=None,
+    auto_group=True,
+    on_created=None,
+):
+    """Create one baseless wall segment from two global endpoints."""
+
+    import Arch
+
+    line_vector = p1.sub(p0)
+    length = line_vector.Length
+    if length <= 0:
+        return None
+
+    midpoint = (p0 + p1) * 0.5
+    direction = line_vector.normalize()
+    rotation = FreeCAD.Rotation(FreeCAD.Vector(1, 0, 0), direction)
+    wall = Arch.makeWall(
+        length=length,
+        width=width,
+        height=height,
+        align=align,
+        offset=offset,
+    )
+    wall.Placement = FreeCAD.Placement(midpoint, rotation)
+    if material is not None:
+        wall.Material = material
+    if auto_group and FreeCAD.GuiUp:
+        try:
+            import Draft
+
+            Draft.autogroup(wall)
+        except Exception:
+            pass
+    if on_created:
+        on_created(wall)
+    return wall
+
+
+def create_wall_run_from_points(
+    points,
+    *,
+    width,
+    height,
+    align="Center",
+    offset=0.0,
+    material=None,
+    auto_group=True,
+    closed=False,
+    on_created=None,
+):
+    """Create a run of baseless wall segments from ordered global points."""
+
+    if not points or len(points) < 2:
+        return []
+
+    segments = list(zip(points, points[1:]))
+    if closed and len(points) > 2:
+        segments.append((points[-1], points[0]))
+
+    walls = []
+    for start, end in segments:
+        wall = create_baseless_wall_from_endpoints(
+            start,
+            end,
+            width=width,
+            height=height,
+            align=align,
+            offset=offset,
+            material=material,
+            auto_group=auto_group,
+            on_created=on_created,
+        )
+        if wall is not None:
+            walls.append(wall)
+    return walls
+
+
+def autojoin_wall_run(walls, *, closed=False):
+    """Apply the standard non-destructive autojoin policy to a wall run."""
+
+    from draftutils import params
+    import Arch
+
+    if not walls or len(walls) < 2:
+        return
+    if not params.get_param_arch("autoJoinWalls"):
+        return
+
+    host = walls[0]
+    if closed:
+        additions = [wall for wall in walls[1:] if wall is not None and wall is not host]
+        if additions:
+            Arch.addComponents(additions, host)
+        return
+
+    for wall in walls[1:]:
+        if wall is None or wall is host:
+            continue
+        Arch.addComponents(wall, host)
+        host = wall
 
 
 class Arch_Wall:
@@ -50,6 +162,10 @@ class Arch_Wall:
     Find documentation on the end user usage of Arch Wall here:
     https://wiki.freecad.org/Arch_Wall
     """
+
+    def __init__(self):
+        self.tracker = None
+        self._reset_interactive_state()
 
     def GetResources(self):
         """Returns a dictionary with the visual aspects of the Arch Wall tool."""
@@ -69,7 +185,225 @@ class Arch_Wall:
         v = hasattr(FreeCADGui.getMainWindow().getActiveWindow(), "getSceneGraph")
         return v
 
-    def Activated(self):
+    def _reset_interactive_state(self):
+        self.points = []
+        self.existing = []
+        self.wp = None
+        self.Length = None
+        self._point_request_active = False
+        self._plane = None
+
+    def _get_host(self):
+        host = getattr(self, "host", None)
+        if host is None:
+            host = gui_base.DraftInteractionHost(self)
+            self.host = host
+        return host
+
+    def _clear_draft_ui_state(self):
+        self._get_host().clear_ui_state()
+
+    def _stop_snapper(self):
+        self._get_host().stop_point_request()
+
+    def _make_snapshot_plane(self, wp):
+        import WorkingPlane
+
+        if wp is None:
+            return None
+
+        def _copy_vec(vec):
+            return FreeCAD.Vector(vec.x, vec.y, vec.z)
+
+        return WorkingPlane.PlaneBase(
+            _copy_vec(wp.u),
+            _copy_vec(wp.v),
+            _copy_vec(wp.axis),
+            _copy_vec(wp.position),
+        )
+
+    def _get_interaction_wp(self):
+        plane = getattr(self, "_plane", None)
+        if plane is not None:
+            return plane
+
+        wp = getattr(self, "wp", None)
+        if wp is None:
+            try:
+                wp = self._get_host().get_working_plane()
+            except Exception:
+                wp = None
+        if wp is None:
+            return None
+
+        plane = self._sanitize_working_plane(self._make_snapshot_plane(wp))
+        self._plane = plane
+        return plane
+
+    def _project_to_working_plane(self, point):
+        return self._get_host().project_point(point, self._get_interaction_wp())
+
+    def _sanitize_working_plane(self, wp):
+        if wp is None:
+            return None
+
+        def _vector_is_sane(vec):
+            return (
+                vec is not None
+                and math.isfinite(vec.x)
+                and math.isfinite(vec.y)
+                and math.isfinite(vec.z)
+                and 1e-9 < vec.Length < 1e9
+            )
+
+        u = getattr(wp, "u", None)
+        v = getattr(wp, "v", None)
+        axis = getattr(wp, "axis", None)
+        if (
+            _vector_is_sane(u)
+            and _vector_is_sane(v)
+            and _vector_is_sane(axis)
+            and abs(u.Length - 1.0) < 1e-6
+            and abs(v.Length - 1.0) < 1e-6
+            and abs(axis.Length - 1.0) < 1e-6
+            and abs(u.dot(v)) < 1e-6
+            and abs(u.dot(axis)) < 1e-6
+            and abs(v.dot(axis)) < 1e-6
+        ):
+            return wp
+
+        repaired = self._make_snapshot_plane(wp)
+        try:
+            repaired.set_to_top(offset=getattr(wp, "position", FreeCAD.Vector()).z)
+        except Exception:
+            repaired.u = FreeCAD.Vector(1, 0, 0)
+            repaired.v = FreeCAD.Vector(0, 1, 0)
+            repaired.axis = FreeCAD.Vector(0, 0, 1)
+        return repaired
+
+    def _apply_interactive_alignment(self, point):
+        raw_point = point
+        point = self._project_to_working_plane(point)
+        if (
+            point is None
+            or len(getattr(self, "points", [])) != 1
+            or not self._get_host().default_ortho_enabled()
+            or self._get_host().free_angle_override_active()
+        ):
+            return point
+
+        base = self.points[0]
+        delta = point.sub(base)
+        wp = self._get_interaction_wp()
+        if not wp:
+            return point
+
+        axis_u = getattr(wp, "u", None)
+        axis_v = getattr(wp, "v", None)
+        if not axis_u or not axis_v:
+            return point
+
+        if abs(delta.dot(axis_u)) >= abs(delta.dot(axis_v)):
+            aligned = base.add(FreeCAD.Vector(axis_u).multiply(delta.dot(axis_u)))
+        else:
+            aligned = base.add(FreeCAD.Vector(axis_v).multiply(delta.dot(axis_v)))
+
+        return aligned
+
+    def _request_point(self, title, move_callback=None, last=None, mode=None, hints=None):
+        extra_widget = None
+        if self._get_host().supports_extra_widget():
+            extra_widget = self.taskbox()
+        self._get_host().request_point(
+            callback=self.getPoint,
+            move_callback=move_callback,
+            last=last,
+            title=title,
+            mode=mode,
+            extra_widget=extra_widget,
+            hints=hints,
+            modifier_resolver=self._get_host().resolve_point_request_modifiers,
+        )
+
+    def _teardown_interactive(self):
+
+        tracker = self.tracker
+        if tracker is not None:
+            tracker.off()
+            tracker.finalize()
+        self.tracker = None
+
+        self._get_host().restore_working_plane(self.wp)
+        self._stop_snapper()
+        self._clear_draft_ui_state()
+
+        self._get_host().reset_edit()
+
+        self._get_host().deactivate_command(self)
+        self._reset_interactive_state()
+
+    def _finalize_tracker(self):
+        tracker = getattr(self, "tracker", None)
+        if tracker:
+            try:
+                tracker.off()
+            except Exception:
+                pass
+            try:
+                tracker.finalize()
+            except Exception:
+                pass
+        self.tracker = None
+
+    def _begin_interactive_from_point(self, start_point=None, existing=None):
+        self._get_host().activate_command(self)
+        wp = self._get_host().get_working_plane()
+        self.wp = wp
+        if hasattr(self.wp, "_save"):
+            self.wp._save()
+        self._plane = self._sanitize_working_plane(self._make_snapshot_plane(wp))
+        self._finalize_tracker()
+        self.tracker = self._get_host().create_box_tracker()
+        self.points = []
+        self.existing = list(existing or [])
+
+        if start_point is None:
+            self._request_point(
+                title=translate("Arch", "First Point of Wall"),
+                hints=self.get_hints(),
+            )
+            self._point_request_active = True
+            self._get_host().show_continue()
+            return
+
+        self.points = [start_point]
+        self.tracker.width(self.Width)
+        self.tracker.height(self.Height)
+        self.tracker.on()
+        self._request_point(
+            last=start_point,
+            move_callback=self.update,
+            title=translate("Arch", "Next point"),
+            mode="line",
+            hints=self.get_hints(),
+        )
+        self._point_request_active = True
+
+    def cancel_interactive(self):
+        """Cancel the current interactive wall creation session."""
+        self._teardown_interactive()
+
+    def finish(self, cont=False, closed=False):
+        """Finish the interactive wall command.
+
+        The Draft task toolbar passes `cont` and `closed` to line-like commands.
+        Arch_Wall only needs a consistent teardown hook, so both arguments are
+        accepted for compatibility and intentionally ignored.
+        """
+        del cont, closed
+        self.cancel_interactive()
+
+    def Activated(self, host=None):
         """Executed when Arch Wall is called.
 
         Creates a wall from the object selected by the user. If no objects are
@@ -78,11 +412,10 @@ class Arch_Wall:
         """
 
         import Draft
-        import WorkingPlane
         from draftutils import params
-        import draftguitools.gui_trackers as DraftTrackers
 
         self.doc = FreeCAD.ActiveDocument
+        self.host = host or gui_base.DraftInteractionHost(self)
         self.Align = ["Center", "Left", "Right"][params.get_param_arch("WallAlignment")]
         self.MultiMat = None
         self.Length = None
@@ -101,8 +434,7 @@ class Arch_Wall:
             self.baseline_mode = WallBaselineMode.NONE
         self.AUTOJOIN = params.get_param_arch("autoJoinWalls")
         sel = FreeCADGui.Selection.getSelectionEx()
-        self.existing = []
-        self.wp = None
+        self._reset_interactive_state()
 
         if sel:
             # automatic mode
@@ -135,18 +467,7 @@ class Arch_Wall:
 
         # interactive mode
 
-        FreeCAD.activeDraftCommand = self  # register as a Draft command for auto grid on/off
-        self.wp = WorkingPlane.get_working_plane()
-        self.wp._save()
-        self.points = []
-        self.tracker = DraftTrackers.boxTracker()
-        FreeCADGui.Snapper.getPoint(
-            callback=self.getPoint,
-            extradlg=self.taskbox(),
-            title=translate("Arch", "First Point of Wall"),
-            hints=self.get_hints(),
-        )
-        FreeCADGui.draftToolBar.continueCmd.show()
+        self._begin_interactive_from_point()
 
     def get_hints(self):
         """Return status bar input hints for the current tool state."""
@@ -178,33 +499,27 @@ class Arch_Wall:
         """
 
         import Draft
-        import ArchWall
-        from draftutils import gui_utils
 
-        if obj:
-            if Draft.getType(obj) == "Wall":
-                if not obj in self.existing:
-                    self.existing.append(obj)
+        self._point_request_active = False
+        if obj and Draft.getType(obj) == "Wall" and obj not in self.existing:
+            self.existing.append(obj)
         if point is None:
-            self.wp._restore()
-            FreeCAD.activeDraftCommand = None
-            FreeCADGui.Snapper.off()
-            self.tracker.finalize()
+            self.cancel_interactive()
             return
+        point = self._apply_interactive_alignment(point)
         self.points.append(point)
         if len(self.points) == 1:
             self.tracker.width(self.Width)
             self.tracker.height(self.Height)
             self.tracker.on()
-            FreeCADGui.Snapper.getPoint(
+            self._request_point(
                 last=self.points[0],
-                callback=self.getPoint,
-                movecallback=self.update,
-                extradlg=self.taskbox(),
+                move_callback=self.update,
                 title=translate("Arch", "Next point"),
                 mode="line",
                 hints=self.get_hints(),
             )
+            self._point_request_active = True
 
         elif len(self.points) == 2:
             self.create_wall()
@@ -217,12 +532,12 @@ class Arch_Wall:
         length = line_vector.Length
         midpoint = (p0 + p1) * 0.5
         direction = line_vector.normalize()
-        rotation = FreeCAD.Rotation(direction, FreeCAD.Vector(), FreeCAD.Vector(0, 0, 1), "XZY")
+        rotation = FreeCAD.Rotation(FreeCAD.Vector(1, 0, 0), direction)
 
         # This placement is local to the working plane.
         local_placement = FreeCAD.Placement(midpoint, rotation)
         # Transform the local placement into the global coordinate system.
-        final_placement = self.wp.get_placement().multiply(local_placement)
+        final_placement = self._get_interaction_wp().get_placement().multiply(local_placement)
 
         wall_var = "new_baseless_wall"
 
@@ -259,7 +574,7 @@ class Arch_Wall:
         """Creates a baseline object (Draft line or Sketch) and returns its name."""
         import __main__
 
-        placement = self.wp.get_placement()
+        placement = self._get_interaction_wp().get_placement()
         placement_str = (
             f"FreeCAD.Placement(FreeCAD.Vector({placement.Base.x}, {placement.Base.y}, {placement.Base.z}), "
             f"FreeCAD.Rotation({placement.Rotation.Q[0]}, {placement.Rotation.Q[1]}, {placement.Rotation.Q[2]}, {placement.Rotation.Q[3]}))"
@@ -337,7 +652,7 @@ class Arch_Wall:
             f"{wall_var} = Arch.makeWall(FreeCAD.ActiveDocument.{base_obj.Name}, "
             f"width={self.Width}, height={self.Height}, align='{self.Align}')"
         )
-        set_normal_cmd = f"{wall_var}.Normal = FreeCAD.{self.wp.axis}"
+        set_normal_cmd = f"{wall_var}.Normal = FreeCAD.{self._get_interaction_wp().axis}"
 
         # Execute creation and property-setting commands
         FreeCADGui.doCommand("import Arch")
@@ -378,6 +693,7 @@ class Arch_Wall:
                     and wall_obj.Base
                     and ArchWall.areSameWallTypes([wall_obj, oldWall])
                 ):
+                    FreeCADGui.doCommand("import Arch")
                     FreeCADGui.doCommand(
                         f"Arch.joinWalls([FreeCAD.ActiveDocument.{wall_obj.Name}, FreeCAD.ActiveDocument.{oldWall.Name}], delete=True, deletebase=True)"
                     )
@@ -391,21 +707,34 @@ class Arch_Wall:
                         FreeCADGui.doCommand(
                             f"FreeCAD.ActiveDocument.{wallGrp.Name}.removeObject(FreeCAD.ActiveDocument.{wall_obj.Name})"
                         )
+                    FreeCADGui.doCommand("import Arch")
                     FreeCADGui.doCommand(
                         f"Arch.addComponents(FreeCAD.ActiveDocument.{wall_obj.Name}, FreeCAD.ActiveDocument.{oldWall.Name})"
                     )
+
+    def _notify_wall_created(self, wall_obj):
+        if wall_obj is None:
+            return
+        try:
+            self._get_host().on_created_object(wall_obj)
+        except Exception:
+            pass
 
     def create_wall(self):
         """Orchestrate wall creation according to the baseline mode."""
         from draftutils import params
 
-        self.wp._restore()
-        FreeCAD.activeDraftCommand = None
-        FreeCADGui.Snapper.off()
-        self.tracker.off()
+        plane = self._get_interaction_wp()
+        p0 = plane.get_local_coords(self.points[0])
+        p1 = plane.get_local_coords(self.points[1])
+        next_start = self.points[-1]
 
-        p0 = self.wp.get_local_coords(self.points[0])
-        p1 = self.wp.get_local_coords(self.points[1])
+        tracker = self.tracker
+        if tracker is not None:
+            tracker.off()
+        self._get_host().restore_working_plane(self.wp)
+        self._get_host().deactivate_command(self)
+        self._stop_snapper()
 
         self.doc.openTransaction(translate("Arch", "Create Wall"))
 
@@ -414,14 +743,31 @@ class Arch_Wall:
         if not hasattr(self, "baseline_mode"):
             self.baseline_mode = WallBaselineMode(params.get_param("WallBaseline", path="Mod/BIM"))
 
+        align = getattr(self, "Align", "Center")
+        width = getattr(self, "Width", params.get_param_arch("WallWidth"))
+        height = getattr(self, "Height", params.get_param_arch("WallHeight"))
+        offset = getattr(self, "Offset", params.get_param_arch("WallOffset"))
+        material = getattr(self, "MultiMat", None)
+
         # Create the wall object (either baseless or from a baseline)
         wall_obj = None
         if self.baseline_mode == WallBaselineMode.NONE:
-            wall_obj = self._create_baseless_wall(p0, p1)
+            wall_obj = create_baseless_wall_from_endpoints(
+                self.points[0],
+                self.points[1],
+                width=width,
+                height=height,
+                align=align,
+                offset=offset,
+                material=material,
+                auto_group=True,
+                on_created=self._get_host().on_created_object,
+            )
         else:
             baseline_obj = self._create_baseline_object(p0, p1)
             if baseline_obj:
                 wall_obj = self._create_wall_from_baseline(baseline_obj)
+                self._notify_wall_created(wall_obj)
 
         # Delegate all joining logic to the helper function
         self._handle_wall_joining(wall_obj)
@@ -429,9 +775,15 @@ class Arch_Wall:
         # Finalization
         self.doc.commitTransaction()
         self.doc.recompute()
-        self.tracker.finalize()
-        if FreeCADGui.draftToolBar.continueMode:
-            self.Activated()
+        self._finalize_tracker()
+        self._reset_interactive_state()
+        if self._get_host().continue_wall_chain_enabled():
+            self._begin_interactive_from_point(
+                start_point=next_start, existing=[wall_obj] if wall_obj else []
+            )
+            return
+        if self._get_host().continue_mode_enabled():
+            self.Activated(host=self._get_host())
 
     def update(self, point, info):
         # info parameter is not used but needed for compatibility with the snapper
@@ -450,9 +802,11 @@ class Arch_Wall:
 
         import DraftVecUtils
 
+        point = self._apply_interactive_alignment(point)
+
         if FreeCADGui.Control.activeDialog():
             b = self.points[0]
-            n = self.wp.axis
+            n = self._get_interaction_wp().axis
             bv = point.sub(b)
             dv = bv.cross(n)
             ov = DraftVecUtils.scaleTo(dv, self.Offset)
@@ -465,9 +819,12 @@ class Arch_Wall:
                 dv = dv.negative()
                 self.tracker.update([b.add(dv).sub(ov), point.add(dv).sub(ov)])
             if self.Length:
-                self.Length.setText(
-                    FreeCAD.Units.Quantity(bv.Length, FreeCAD.Units.Length).UserString
-                )
+                try:
+                    self.Length.setText(
+                        FreeCAD.Units.Quantity(bv.Length, FreeCAD.Units.Length).UserString
+                    )
+                except RuntimeError:
+                    self.Length = None
 
     def taskbox(self):
         """Set up a simple gui widget for the interactive mode."""

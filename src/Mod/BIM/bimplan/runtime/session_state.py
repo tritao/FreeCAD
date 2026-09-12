@@ -1,0 +1,432 @@
+# SPDX-License-Identifier: LGPL-2.1-or-later
+
+# ***************************************************************************
+# *                                                                         *
+# *   Copyright (c) 2026 FreeCAD Project Association                        *
+# *                                                                         *
+# *   This file is part of FreeCAD.                                         *
+# *                                                                         *
+# *   FreeCAD is free software: you can redistribute it and/or modify it    *
+# *   under the terms of the GNU Lesser General Public License as           *
+# *   published by the Free Software Foundation, either version 2.1 of the  *
+# *   License, or (at your option) any later version.                       *
+# *                                                                         *
+# *   FreeCAD is distributed in the hope that it will be useful, but        *
+# *   WITHOUT ANY WARRANTY; without even the implied warranty of            *
+# *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU      *
+# *   Lesser General Public License for more details.                       *
+# *                                                                         *
+# *   You should have received a copy of the GNU Lesser General Public      *
+# *   License along with FreeCAD. If not, see                               *
+# *   <https://www.gnu.org/licenses/>.                                      *
+# *                                                                         *
+# ***************************************************************************
+
+"""Initial mutable state for BIM Plan Edit sessions."""
+
+from dataclasses import dataclass, field
+
+import FreeCAD
+import FreeCADGui
+from bimplan.providers.contracts import PLAN_PROVIDER_OVERLAY_MODE_ARCHITECTURE
+from bimplan.runtime import tools as plan_runtime_tools
+
+
+class PlanInteractionAPI:
+    """Owned session surface for Plan Edit interaction-state reads."""
+
+    __slots__ = ("_session",)
+
+    _MODAL_TOOLS = frozenset(
+        (
+            plan_runtime_tools.PlanTool.MOVE_OPENING,
+            plan_runtime_tools.PlanTool.MOVE_SYMBOL,
+            plan_runtime_tools.PlanTool.ROTATE_SYMBOL,
+            plan_runtime_tools.PlanTool.SET_SPACE_TEXT,
+            plan_runtime_tools.PlanTool.WINDOW,
+        )
+    )
+
+    def __init__(self, session):
+        self._session = session
+
+    @property
+    def session(self):
+        return self._session
+
+    def is_modal_plan_interaction_active(self):
+        return bool(
+            self.session.wall_edit.is_wall_edit_modal_active()
+            or self.session.current_tool in self._MODAL_TOOLS
+        )
+
+
+@dataclass
+class PlanTaskPanelState:
+    relation_status_message: str | None = None
+    integration_status_message: str | None = None
+    integration_status_context_key: object = None
+    aux_task_panels: list = field(default_factory=list)
+
+
+@dataclass
+class PlanProviderOverlayReadState:
+    mode: str = PLAN_PROVIDER_OVERLAY_MODE_ARCHITECTURE
+    visibility: dict = field(default_factory=dict)
+    render_state: object = None
+
+
+@dataclass
+class PlanInteractionState:
+    embedded_host: object = None
+    embedded_tool: object = None
+    embedded_tool_name: str | None = None
+    edit_opening: object = None
+    edit_opening_handle_index: object = None
+    symbol_edit_generation: int = 0
+    edit_symbol: object = None
+    edit_symbol_handle_role: object = None
+    edit_symbol_start_placement: object = None
+    edit_symbol_reference_point: object = None
+    provider_edit_generation: int = 0
+    edit_provider: object = None
+    edit_provider_handle_index: object = None
+    edit_provider_handle: object = None
+    edit_space: object = None
+
+
+@dataclass
+class PlanLifecycleState:
+    ignore_selection_changes: bool = False
+    finishing: bool = False
+    tearing_down: bool = False
+    teardown_signal_sources: list = field(default_factory=list)
+
+
+@dataclass
+class PlanSelectionState:
+    selected_plan_target_kind: str | None = None
+    selected_plan_target_obj: object = None
+    hovered_wall: object = None
+    hovered_opening: object = None
+    hovered_symbol: object = None
+    hovered_provider: object = None
+    hovered_space: object = None
+    hovered_region: object = None
+    pending_selected_plan_target: object = None
+    secondary_selected_plan_targets_state: list = field(default_factory=list)
+
+
+@dataclass
+class WallEditState:
+    wall_edit_generation: int = 0
+    wall_edit_modal_active: bool = False
+    edit_wall: object = None
+    edit_endpoint: object = None
+    edit_endpoints: object = None
+    wall_edit_opening_clearances: dict = field(default_factory=dict)
+    wall_edit_opening_clearances_queued: bool = False
+    wall_edit_task_panel_refresh_queued: bool = False
+    preview_points: object = None
+    preview_line_tracker: object = None
+    preview_footprint_trackers: list = field(default_factory=list)
+    preview_grip_trackers: list = field(default_factory=list)
+    wall_edit_readout_trackers: list = field(default_factory=list)
+    wall_edit_opening_preview_trackers: list = field(default_factory=list)
+    wall_edit_active_readout_tracker: object = None
+    wall_edit_active_readout_mode: object = None
+    wall_edit_length_edit_queued: bool = False
+    edit_wall_visibility: object = None
+
+
+@dataclass
+class PlanWallRelationState:
+    join_type: str = "Miter"
+
+
+@dataclass
+class ProviderPointState:
+    provider_point_tool: object = None
+    provider_point_host_target: object = None
+    provider_point_host_source: str = ""
+    provider_point_preview_trackers: list = field(default_factory=list)
+    provider_point_preview_render_state: object = None
+    provider_point_preview_style_state: object = None
+    provider_point_preview_source_point: object = None
+    provider_point_preview_point: object = None
+    provider_point_preview_host_target: object = None
+    provider_point_preview_host_source: str = ""
+
+
+@dataclass
+class SpaceRegionPickState:
+    boundaries: list = field(default_factory=list)
+    seed_space: object = None
+    edit_space: object = None
+    candidates: list = field(default_factory=list)
+    hovered_candidate: object = None
+
+
+@dataclass
+class PlanRegionToolState:
+    points: list = field(default_factory=list)
+    preview_trackers: list = field(default_factory=list)
+    parent_space: object = None
+
+
+@dataclass
+class PlanHoverPickState:
+    dirty: bool = False
+    last_time: float = 0.0
+    last_mouse_pos: object = None
+    cache_queued: bool = False
+
+
+@dataclass
+class PlanSelectionSyncState:
+    selection_refresh_queued: bool = False
+    gui_selection_sync_queued: bool = False
+    gui_selection_sync_generation: int = 0
+    queued_gui_selection_object: object = None
+    gui_selection_sync_in_progress: bool = False
+    clear_plan_selection_state_queued: bool = False
+    selection_observer_added: bool = False
+    pending_selected_wall_reset: bool = False
+
+
+@dataclass
+class PlanInputEventState:
+    mouse_moved_cb: object = None
+    mouse_wheel_cb: object = None
+    mouse_wheel_event_type: object = None
+    mouse_pressed_cb: object = None
+    key_pressed_cb: object = None
+    consume_left_button_release: bool = False
+
+
+@dataclass
+class PlanOverlayRefreshState:
+    overlay_refresh_queued: bool = False
+    view_scale_overlay_refresh_queued: bool = False
+    dirty_plan_visuals: set = field(default_factory=set)
+
+
+@dataclass
+class PlanWallGripState:
+    state: object = None
+    sync_queued: bool = False
+    sync_generation: int = 0
+
+
+@dataclass
+class PlanViewportState:
+    status_chip: object = None
+    status_chip_refresh_queued: bool = False
+    render_manager: object = None
+    plan_paper_rgb: object = None
+    plan_view_locked_actions: object = None
+    saved_camera: object = None
+    saved_camera_type: object = None
+    saved_navigation_style: object = None
+    saved_navigation_state: dict = field(default_factory=dict)
+    saved_view_action_state: dict = field(default_factory=dict)
+    saved_preselection_state: object = None
+    plan_preselection_forced: bool = False
+    saved_object_view_state: dict = field(default_factory=dict)
+    changed_object_view_state: dict = field(default_factory=dict)
+    view_context_layer: object = None
+    working_plane: object = None
+    interaction_plane: object = None
+
+
+@dataclass
+class PlanDocumentVisualState:
+    pending_created_plan_objects: dict = field(default_factory=dict)
+    created_plan_objects_flush_queued: bool = False
+    created_plan_objects_flush_deferred: bool = False
+    document_visual_update_defer_depth: int = 0
+    document_visual_refresh_deferred: bool = False
+    deferred_selection_effects: list = field(default_factory=list)
+    document_observer_added: bool = False
+    contextual_edit_recompute_depth: int = 0
+
+
+@dataclass
+class PlanPerformanceState:
+    plan_edit_params: object = None
+    plan_perf_log_path: object = None
+    plan_pick_debug_log_path: object = None
+    plan_perf_current_event: object = None
+    plan_perf_sequence: int = 0
+    plan_pick_debug_sequence: int = 0
+    plan_pick_debug_scope_depth: int = 0
+    plan_pick_debug_scope_name: str = ""
+
+
+@dataclass
+class PlanProviderRuntimeState:
+    refresh_cache: object = None
+    document_cache: dict = field(default_factory=dict)
+    target_collection_depth: int = 0
+
+
+@dataclass
+class PlanProviderTransientState:
+    selected_provider_overlay_render_state: object = None
+    provider_handle_trackers: list = field(default_factory=list)
+    selected_provider_handle_render_state: object = None
+    provider_selected_objects: list = field(default_factory=list)
+
+
+@dataclass
+class PlanOpeningTransientState:
+    opening_edit_generation: int = 0
+    opening_handle_trackers: list = field(default_factory=list)
+    opening_handle_tracker_pool: list = field(default_factory=list)
+    opening_handle_tracker_pool_queued: bool = False
+    selected_opening_handle_render_state: object = None
+    selected_opening_hard_refresh_queued: bool = False
+    opening_host_recompute_queued: bool = False
+    opening_host_recompute_running: bool = False
+    opening_move_preview_trackers: list = field(default_factory=list)
+    symbol_edit_preview_trackers: list = field(default_factory=list)
+    opening_move_snap_profile_pushed: bool = False
+    edit_opening_move_anchor: str = "center"
+    edit_opening_move_raw_point: object = None
+
+
+@dataclass
+class PlanOverlayTrackerState:
+    grip_trackers: list = field(default_factory=list)
+    wall_hover_trackers: list = field(default_factory=list)
+    wall_overlay_trackers: list = field(default_factory=list)
+    junction_node_trackers: list = field(default_factory=list)
+    hovered_wall_opening_context_trackers: list = field(default_factory=list)
+    opening_hover_trackers: list = field(default_factory=list)
+    symbol_hover_trackers: list = field(default_factory=list)
+    provider_hover_trackers: list = field(default_factory=list)
+    provider_selected_trackers: list = field(default_factory=list)
+    space_hover_trackers: list = field(default_factory=list)
+    region_hover_trackers: list = field(default_factory=list)
+    opening_overlay_trackers: list = field(default_factory=list)
+    symbol_overlay_trackers: list = field(default_factory=list)
+    space_overlay_trackers: list = field(default_factory=list)
+    region_overlay_trackers: list = field(default_factory=list)
+    provider_overlay_trackers: list = field(default_factory=list)
+    secondary_selection_trackers: list = field(default_factory=list)
+    space_region_pick_trackers: list = field(default_factory=list)
+    selected_wall_opening_context_trackers: list = field(default_factory=list)
+    symbol_handle_trackers: list = field(default_factory=list)
+
+
+@dataclass
+class PlanOverlayCacheState:
+    plan_overlay_geometry_cache: dict = field(
+        default_factory=lambda: {
+            "representation": {},
+            "wall": {},
+            "opening": {},
+            "space": {},
+            "region": {},
+        }
+    )
+    plan_semantic_object_cache: dict = field(default_factory=dict)
+    plan_object_storeys_cache: dict = field(default_factory=dict)
+    plan_group_context_cache: dict = field(default_factory=dict)
+    plan_symbol_instances_cache: object = None
+    plan_space_instances_cache: object = None
+    plan_region_instances_cache: object = None
+    plan_opening_instances_cache: object = None
+    wall_hosted_openings_cache: object = None
+    wall_hosted_openings_cache_queued: bool = False
+    opening_overlay_screen_cache: dict = field(default_factory=dict)
+    opening_overlay_screen_cache_projection_key: object = None
+    symbol_overlay_screen_cache: dict = field(default_factory=dict)
+    symbol_overlay_screen_cache_projection_key: object = None
+
+
+@dataclass
+class PlanOverlayTransientState:
+    hovered_opening_overlay_dirty: bool = False
+    hovered_opening_overlay_render_state: object = None
+    selected_opening_overlay_dirty: bool = False
+    selected_opening_overlay_render_state: object = None
+    selected_space_overlay_dirty: bool = True
+    selected_space_overlay_geometry_key: object = None
+    selected_space_overlay_segments: tuple = ()
+    selected_space_overlay_render_state: object = None
+
+
+@dataclass
+class PlanCreationPreviewState:
+    rect_wall_start: object = None
+    rect_wall_params: object = None
+    rect_wall_preview_trackers: list = field(default_factory=list)
+    space_separator_start: object = None
+    space_separator_height: object = None
+    space_separator_preview_trackers: list = field(default_factory=list)
+    window_host_wall: object = None
+    window_preview_trackers: list = field(default_factory=list)
+
+
+PlanWallEditState = WallEditState
+
+
+def initialize_session_read_state(session):
+    session.task_panel_state = PlanTaskPanelState()
+    session.provider_overlay_read_state = PlanProviderOverlayReadState()
+    session.interaction_state = PlanInteractionState()
+    session.lifecycle_state = PlanLifecycleState()
+    session.selection_state = PlanSelectionState()
+    session.wall_edit_state = WallEditState()
+    session.wall_relation_state = PlanWallRelationState()
+    session.provider_point_state = ProviderPointState()
+    session.space_region_pick_state = SpaceRegionPickState()
+    session.plan_region_tool_state = PlanRegionToolState()
+    session.hover_pick_state = PlanHoverPickState()
+    session.selection_sync_state = PlanSelectionSyncState()
+    session.input_event_state = PlanInputEventState()
+    session.overlay_refresh_state = PlanOverlayRefreshState()
+    session.wall_grip_state = PlanWallGripState()
+    session.viewport_state = PlanViewportState()
+    session.document_visual_state = PlanDocumentVisualState()
+    session.performance_state = PlanPerformanceState()
+    session.provider_runtime_state = PlanProviderRuntimeState()
+    session.provider_transient_state = PlanProviderTransientState()
+    session.opening_transient_state = PlanOpeningTransientState()
+    session.overlay_tracker_state = PlanOverlayTrackerState()
+    session.overlay_cache_state = PlanOverlayCacheState()
+    session.overlay_transient_state = PlanOverlayTransientState()
+    session.creation_preview_state = PlanCreationPreviewState()
+
+
+def initialize_session_state(session):
+    """Populate the runtime state owned by a PlanEditSession instance."""
+    session.doc = FreeCAD.ActiveDocument
+    session.gui_doc = FreeCADGui.ActiveDocument
+    session.view = None
+    session.viewer = None
+    session.task_panel = None
+    initialize_session_read_state(session)
+    session.current_tool = plan_runtime_tools.PlanTool.SELECT
+    session.storeys = []
+    session.active_storey = None
+    session.selection_sync_state.selection_observer_added = False
+    session.selection_sync_state.pending_selected_wall_reset = False
+    session.document_visual_state.document_observer_added = False
+    session.performance_state.plan_edit_params = FreeCAD.ParamGet(
+        "User parameter:BaseApp/Preferences/Mod/BIM/PlanEdit"
+    )
+    performance_state = session.performance_state
+    performance_state.plan_perf_log_path = session.performance.resolve_plan_perf_log_path()
+    performance_state.plan_pick_debug_log_path = (
+        session.performance.resolve_plan_pick_debug_log_path()
+    )
+    performance_state.plan_perf_current_event = None
+    performance_state.plan_perf_sequence = 0
+    performance_state.plan_pick_debug_sequence = 0
+    performance_state.plan_pick_debug_scope_depth = 0
+    performance_state.plan_pick_debug_scope_name = ""
+    session.provider_runtime_state.refresh_cache = None
+    session.provider_runtime_state.document_cache = {}
+    session.provider_runtime_state.target_collection_depth = 0
