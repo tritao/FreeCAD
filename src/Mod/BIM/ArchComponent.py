@@ -317,7 +317,6 @@ def notify_plan_footprint_changed(view_provider):
 
     return ArchSpace.schedule_auto_space_text_refresh(doc, changed_bounds=changed_bounds)
 
-
 def addToComponent(compobject, addobject, prop):
     """Add an object to a component's property.
 

@@ -39,6 +39,7 @@ import uuid
 import FreeCAD
 import ArchCommands
 import ArchComponent
+import ArchRepresentation
 import Draft
 import DraftVecUtils
 
@@ -1146,6 +1147,20 @@ class _SectionPlane:
     def getNormal(self, obj):
 
         return obj.Shape.Faces[0].normalAt(0, 0)
+
+    def getRepresentationContext(self, obj):
+        """Return the renderer-independent BIM context supplied by this plane."""
+
+        depth = float(getattr(getattr(obj, "Depth", 0.0), "Value", 0.0))
+
+        return ArchRepresentation.RepresentationContext(
+            purpose=ArchRepresentation.RepresentationPurpose.SECTION,
+            reference_frame=obj.Placement,
+            cut_offset=0.0,
+            target_offset=0.0,
+            projection_range=(0.0, depth),
+            source=obj,
+        )
 
     def dumps(self):
 
