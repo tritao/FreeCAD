@@ -8,6 +8,7 @@ import FreeCAD
 import FreeCADGui
 from bimplan.runtime import capabilities as runtime_capabilities
 from bimplan.runtime import tools as plan_runtime_tools
+from bimplan.transactions import PlanEditTransaction
 
 translate = FreeCAD.Qt.translate
 
@@ -121,17 +122,21 @@ def is_selected_wall_endpoint_editable(session):
 
 
 def cancel_wall_edit(session, restore=True, refresh=True):
-    del restore
     if not has_active_wall_edit(session):
         if refresh:
             session.current_tool = "Select"
             session.task_panels.refresh_task_panel_status()
         return False
 
+    wall = _wall_edit_state(session).edit_wall
     cancel_wall_subtool(session)
 
     session.current_tool = "Select"
-    session.lifecycle.cancel_pending_edit()
+    session.lifecycle.cancel_pending_edit(restore_wall_visibility=restore)
+    session.wall_relations.restore_selected_wall_relation_status()
+    if wall is not None:
+        session.contextual_rendering.set_source_visible(wall, True)
+        session.contextual_rendering.sync_visible_handles()
     session.overlays.openings.sync_selected_wall_opening_context_overlay()
     if refresh:
         session.task_panels.refresh_task_panel_status()
@@ -147,7 +152,7 @@ def _validate_wall_edit_start(session):
         FreeCAD.Console.PrintError(
             translate(
                 "BIM_PlanEdit",
-                "Select a straight wall before using wall grips.\n",
+                "Select a straight wall before using wall handles.\n",
             )
         )
         return None, None
@@ -165,6 +170,7 @@ def _validate_wall_edit_start(session):
 
 def _set_wall_edit_start_state(session, wall, endpoints, mode):
     state = _wall_edit_state(session)
+    state.wall_edit_generation += 1
     session.wall_relations.clear_plan_relation_status()
     session.current_tool = "Move Wall" if mode == "Move" else f"Stretch {mode}"
     session.selection.hover.set_hovered_wall(None)
@@ -185,7 +191,7 @@ def _queue_wall_edit_start_opening_clearances(session, wall, endpoints):
     state = _wall_edit_state(session)
     state.wall_edit_opening_clearances = {}
     state.wall_edit_opening_clearances_queued = False
-    if state.edit_endpoint not in ("Start", "End"):
+    if state.edit_endpoint not in ("Start", "End", "Move"):
         return
     with session.performance.plan_perf_trace_span("snapshot_wall_edit_opening_clearances"):
         state.wall_edit_opening_clearances = snapshot_wall_hosted_opening_clearances(
@@ -204,8 +210,9 @@ def _prepare_wall_edit_preview(session, wall, endpoints):
         wall.ViewObject.Visibility = False
     except Exception:
         state.edit_wall_visibility = None
-    session.overlays.walls.clear_wall_grips()
     session.overlays.walls.clear_selected_wall_overlay()
+    session.contextual_rendering.set_source_visible(wall, False)
+    session.contextual_rendering.sync_visible_handles()
     sync_wall_edit_preview(session, state.preview_points, include_opening_preview=False)
 
 
@@ -337,7 +344,11 @@ def prime_wall_edit_opening_clearances(session):
 
 def ensure_wall_edit_opening_clearances(session, wall, endpoints):
     state = _wall_edit_state(session)
-    if state.wall_edit_opening_clearances or state.edit_endpoint not in ("Start", "End"):
+    if state.wall_edit_opening_clearances or state.edit_endpoint not in (
+        "Start",
+        "End",
+        "Move",
+    ):
         return
     state.wall_edit_opening_clearances_queued = False
     with session.performance.plan_perf_trace_span("ensure_wall_edit_opening_clearances"):
@@ -377,9 +388,25 @@ def finish_wall_edit(session, point=None, obj=None):
     endpoint = state.edit_endpoint
     new_points = compute_wall_edit_points(session, point)
 
-    if point is None or not wall or not endpoint or not new_points:
+    if point is None or not wall or not endpoint:
         session.current_tool = "Select"
         session.lifecycle.cancel_pending_edit()
+        session.wall_relations.restore_selected_wall_relation_status()
+        if wall is not None:
+            session.contextual_rendering.set_source_visible(wall, True)
+            session.contextual_rendering.sync_visible_handles()
+        session.task_panels.refresh_task_panel_status()
+        return
+
+    if not new_points:
+        if endpoint in ("Start", "End") and state.edit_endpoints:
+            _resume_wall_edit_after_invalid_point(session)
+            return
+        session.current_tool = "Select"
+        session.lifecycle.cancel_pending_edit()
+        session.wall_relations.restore_selected_wall_relation_status()
+        session.contextual_rendering.set_source_visible(wall, True)
+        session.contextual_rendering.sync_visible_handles()
         session.task_panels.refresh_task_panel_status()
         return
 
@@ -387,6 +414,9 @@ def finish_wall_edit(session, point=None, obj=None):
     if proxy is None:
         session.current_tool = "Select"
         session.lifecycle.cancel_pending_edit()
+        session.wall_relations.restore_selected_wall_relation_status()
+        session.contextual_rendering.set_source_visible(wall, True)
+        session.contextual_rendering.sync_visible_handles()
         session.task_panels.refresh_task_panel_status()
         return
 
@@ -401,10 +431,25 @@ def _abort_wall_edit_commit(session, openings_fit=True, refresh=True):
                 "The resized wall cannot contain its hosted openings.\n",
             )
         )
+    wall = _wall_edit_state(session).edit_wall
     session.current_tool = "Select"
     session.lifecycle.cancel_pending_edit()
+    session.wall_relations.restore_selected_wall_relation_status()
+    if wall is not None:
+        session.contextual_rendering.set_source_visible(wall, True)
+        session.contextual_rendering.sync_visible_handles()
     if refresh:
         session.task_panels.refresh_task_panel_status()
+
+
+def _warn_post_commit_recompute_failure(session, transaction_name, exc):
+    message = str(exc or "").strip() or type(exc).__name__
+    FreeCAD.Console.PrintWarning(
+        translate(
+            "BIM_PlanEdit",
+            "Completed {action}, but follow-up recompute failed: {error}\n",
+        ).format(action=transaction_name, error=message)
+    )
 
 
 def _apply_wall_edit_transaction(session, wall, proxy, new_points, transaction_name):
@@ -417,23 +462,21 @@ def _apply_wall_edit_transaction(session, wall, proxy, new_points, transaction_n
     except Exception:
         pass
     try:
-        session.doc.openTransaction(transaction_name)
-        proxy.set_from_endpoints(wall, new_points)
-        with suppress_boundary_console:
-            session.doc.recompute()
-        openings_fit = session.openings.resolve_wall_hosted_opening_layout(wall)
-        if not openings_fit:
-            raise RuntimeError("Hosted openings no longer fit within resized wall")
-        session.doc.commitTransaction()
-        session.doc.recompute()
-        return True
+        with PlanEditTransaction(session.doc, transaction_name):
+            proxy.set_from_endpoints(wall, new_points)
+            with suppress_boundary_console:
+                session.doc.recompute()
+            openings_fit = session.openings.resolve_wall_hosted_opening_layout(wall)
+            if not openings_fit:
+                raise RuntimeError("Hosted openings no longer fit within resized wall")
     except Exception:
-        try:
-            session.doc.abortTransaction()
-        except Exception:
-            pass
         _abort_wall_edit_commit(session, openings_fit=openings_fit, refresh=False)
         return False
+    try:
+        session.doc.recompute()
+    except Exception as exc:
+        _warn_post_commit_recompute_failure(session, transaction_name, exc)
+    return True
 
 
 def _finalize_wall_edit_commit(session, wall):
@@ -441,10 +484,11 @@ def _finalize_wall_edit_commit(session, wall):
     session.selection.sync.set_gui_selection_object(wall)
     session.current_tool = "Select"
     session.lifecycle.cancel_pending_edit()
+    session.contextual_rendering.refresh_edit_dependencies(wall)
+    session.contextual_rendering.set_source_visible(wall, True)
     session.selection.state.set_selected_plan_target("wall", wall, pending_restore=True)
     session.wall_relations.update_wall_relation_status(wall)
-    session.overlays.walls.sync_selected_wall_overlay()
-    session.overlays.walls.sync_wall_grips()
+    session.selection.refresh.restore_selected_wall_visuals()
     session.task_panels.refresh_task_panel_status()
 
 
@@ -461,38 +505,6 @@ def commit_wall_edit_points(session, wall, endpoint, proxy, new_points):
     if not _apply_wall_edit_transaction(session, wall, proxy, new_points, transaction_name):
         return
     _finalize_wall_edit_commit(session, wall)
-
-
-def start_wall_grip_edit(session, grip_index):
-    if grip_index not in (0, 1, 2) or not is_selected_wall_endpoint_editable(session):
-        return
-    start_wall_edit(session, {0: "Start", 1: "End", 2: "Move"}[grip_index])
-
-
-def activate_wall_grip(session, grip_index, wall=None):
-    if wall is None:
-        wall = session.selection.state.get_selected_plan_target_object("wall")
-    try:
-        from PySide import QtCore
-    except ImportError:
-        activate_wall_grip_now(session, grip_index, wall)
-        return
-
-    QtCore.QTimer.singleShot(
-        0,
-        lambda wall=wall, grip_index=grip_index: activate_wall_grip_now(session, grip_index, wall),
-    )
-
-
-def activate_wall_grip_now(session, grip_index, wall=None):
-    with session.performance.plan_perf_trace_span("activate_wall_grip_now"):
-        if session.lifecycle_state.tearing_down or session.current_tool != "Select" or not wall:
-            return
-        with session.performance.plan_perf_trace_span("activate_wall_grip_set_target"):
-            if not session.selection.state.is_selected_plan_target("wall", wall):
-                session.selection.state.set_selected_plan_target("wall", wall)
-        with session.performance.plan_perf_trace_span("activate_wall_grip_start_edit"):
-            start_wall_grip_edit(session, grip_index)
 
 
 def get_wall_edit_reference_point(session):
@@ -515,18 +527,27 @@ def compute_wall_edit_points(session, point):
     if point is None or not endpoint or not original_endpoints:
         return None
 
+    point = FreeCAD.Vector(point)
     if endpoint == "Start":
-        axis = original_endpoints[1].sub(original_endpoints[0]).normalize()
-        projected = axis.dot(point.sub(original_endpoints[1]))
-        if projected > -_MIN_WALL_LENGTH:
+        fixed = FreeCAD.Vector(original_endpoints[1])
+        axis = FreeCAD.Vector(original_endpoints[0]).sub(fixed)
+        if axis.Length < _MIN_WALL_LENGTH:
             return None
-        return [original_endpoints[1].add(axis.multiply(projected)), original_endpoints[1]]
+        axis.normalize()
+        length = point.sub(fixed).dot(axis)
+        if length < _MIN_WALL_LENGTH:
+            return None
+        return [fixed + axis * length, fixed]
     elif endpoint == "End":
-        axis = original_endpoints[1].sub(original_endpoints[0]).normalize()
-        projected = axis.dot(point.sub(original_endpoints[0]))
-        if projected < _MIN_WALL_LENGTH:
+        fixed = FreeCAD.Vector(original_endpoints[0])
+        axis = FreeCAD.Vector(original_endpoints[1]).sub(fixed)
+        if axis.Length < _MIN_WALL_LENGTH:
             return None
-        return [original_endpoints[0], original_endpoints[0].add(axis.multiply(projected))]
+        axis.normalize()
+        length = point.sub(fixed).dot(axis)
+        if length < _MIN_WALL_LENGTH:
+            return None
+        return [fixed, fixed + axis * length]
 
     original_midpoint = (original_endpoints[0] + original_endpoints[1]) * 0.5
     delta = point.sub(original_midpoint)
@@ -620,6 +641,30 @@ def make_preview_wall_adapter(session, wall, endpoints):
                 return get_layers(wall)
             return None
 
+        def get_global_baseline(self, _obj):
+            """Resolve the transient preview endpoints as a real baseline."""
+            get_global_baseline = _get_callable_attr(self._wrapped_proxy, "get_global_baseline")
+            baseline = get_global_baseline(wall) if get_global_baseline else None
+            if baseline is None or preview_points[0].isEqual(preview_points[1], 1e-9):
+                return None
+
+            import ArchWallGeometry
+            import Part
+
+            edge = Part.makeLine(preview_points[0], preview_points[1])
+            return ArchWallGeometry.WallBaseline(
+                edge,
+                baseline.normal,
+                preview_points[0],
+                preview_points[1],
+            )
+
+        def get_resolved_section(self, _obj, segment_index=0):
+            get_resolved_section = _get_callable_attr(self._wrapped_proxy, "get_resolved_section")
+            if get_resolved_section is None:
+                return None
+            return get_resolved_section(wall, segment_index=segment_index)
+
     class _PreviewWall:
         def __init__(self):
             self.Proxy = _PreviewWallProxy(real_proxy)
@@ -641,13 +686,13 @@ def solve_preview_wall_relation(session, relation, wall, preview_wall):
     if not relation or not wall or not preview_wall:
         return None
 
-    import ArchWallJoinUtils
-    import ArchWallJunctionUtils
+    import ArchWallJunctionSolver
+    import ArchWallRelation
 
-    if ArchWallJoinUtils.is_wall_joint(relation):
+    if ArchWallRelation.is_wall_joint(relation):
         wall_a = preview_wall if getattr(relation, "WallA", None) == wall else relation.WallA
         wall_b = preview_wall if getattr(relation, "WallB", None) == wall else relation.WallB
-        return ArchWallJoinUtils.solve_wall_joint_inputs(
+        return ArchWallRelation.solve_wall_joint_inputs(
             wall_a,
             wall_b,
             getattr(relation, "JointType", "Miter"),
@@ -657,7 +702,7 @@ def solve_preview_wall_relation(session, relation, wall, preview_wall):
             getattr(relation, "EndB", "Auto"),
         )
 
-    if ArchWallJoinUtils.is_wall_junction(relation):
+    if ArchWallRelation.is_wall_junction(relation):
         walls = [
             preview_wall if linked_wall == wall else linked_wall
             for linked_wall in list(getattr(relation, "Walls", []) or [])
@@ -665,7 +710,7 @@ def solve_preview_wall_relation(session, relation, wall, preview_wall):
         carrier_wall = (
             preview_wall if getattr(relation, "CarrierWall", None) == wall else relation.CarrierWall
         )
-        return ArchWallJunctionUtils.solve_wall_junction_inputs(
+        return ArchWallJunctionSolver.solve_wall_junction_inputs(
             walls,
             getattr(relation, "CarrierMode", "Auto"),
             carrier_wall,
@@ -682,15 +727,21 @@ def collect_preview_wall_relation_data(session, wall, points):
     if not preview_wall:
         return {"Start": None, "End": None, "Conflicts": set()}, []
 
-    import ArchWallJoinUtils
+    import ArchWallRelation
 
     claims = {"Start": [], "End": []}
     warnings = []
-    for relation in ArchWallJoinUtils.iter_wall_relations(wall):
+    for relation in ArchWallRelation.iter_wall_relations(wall):
         solution = solve_preview_wall_relation(session, relation, wall, preview_wall)
         if not solution:
             continue
         if not solution.is_ok():
+            # Moving an endpoint can temporarily place an existing joint
+            # beyond the preview segment.  That relation simply contributes no
+            # trim until the path reaches it again; the plain wall preview is
+            # already the complete and actionable feedback for this state.
+            if getattr(solution, "status", "") == "RequiresExtension":
+                continue
             warnings.append(
                 (
                     getattr(relation, "Label", getattr(relation, "Name", "")),
@@ -699,9 +750,9 @@ def collect_preview_wall_relation_data(session, wall, points):
                 )
             )
             continue
-        end_name, plane = ArchWallJoinUtils.get_trim_for_wall(solution, preview_wall)
-        if end_name and plane:
-            claims[end_name].append((relation, plane))
+        claim = solution.trim_for_wall(preview_wall)
+        if claim is not None and claim.end_name and claim.plane is not None:
+            claims[claim.end_name].append((relation, claim.plane))
 
     result = {"Start": None, "End": None, "Conflicts": set()}
     for end_name, entries in claims.items():
@@ -1006,7 +1057,7 @@ def clear_wall_edit_preview(session):
 def get_wall_hosted_opening_preview_segments(session, wall, points):
     if not wall or not points or len(points) != 2:
         return []
-    if _wall_edit_state(session).edit_endpoint not in ("Start", "End"):
+    if _wall_edit_state(session).edit_endpoint not in ("Start", "End", "Move"):
         return []
 
     layout = session.openings.compute_wall_hosted_opening_layout(wall, points)
@@ -1029,7 +1080,7 @@ def get_wall_hosted_opening_preview_segments(session, wall, points):
 def sync_wall_hosted_opening_preview(session, points):
     state = _wall_edit_state(session)
     wall = state.edit_wall
-    if session.current_tool not in ("Stretch Start", "Stretch End") or not wall:
+    if session.current_tool not in ("Stretch Start", "Stretch End", "Move Wall") or not wall:
         clear_wall_hosted_opening_preview(session)
         return
 
@@ -1108,7 +1159,9 @@ def _get_wall_hosted_opening_layout_item(session, opening, wall_origin, wall_axi
     half_width = float(context.get("opening_half_width_u") or 0.0)
     clearance_seed = state.wall_edit_opening_clearances.get(getattr(opening, "Name", ""))
     if clearance_seed:
-        if state.edit_endpoint == "Start":
+        if state.edit_endpoint == "Move":
+            desired_u = float(clearance_seed.get("center_u") or 0.0)
+        elif state.edit_endpoint == "Start":
             desired_u = max(
                 desired_u,
                 half_width + float(clearance_seed.get("left_clearance") or 0.0),
@@ -1584,6 +1637,14 @@ def on_wall_move_delta_canceled(session, mode, value):
 
 def schedule_wall_edit_readout_cancel(session):
     state = _wall_edit_state(session)
+    resume_token = (
+        state.wall_edit_generation,
+        state.edit_wall,
+        state.edit_endpoint,
+        state.wall_edit_active_readout_tracker,
+        state.wall_edit_active_readout_mode,
+        session.current_tool,
+    )
     preview_points = None
     if state.preview_points:
         preview_points = [FreeCAD.Vector(point) for point in state.preview_points]
@@ -1592,18 +1653,49 @@ def schedule_wall_edit_readout_cancel(session):
     try:
         from PySide import QtCore
     except ImportError:
-        finish_wall_edit_readout_canceled(session, preview_points)
+        finish_wall_edit_readout_canceled(session, preview_points, resume_token=resume_token)
         return
     QtCore.QTimer.singleShot(
-        0, lambda pts=preview_points: finish_wall_edit_readout_canceled(session, pts)
+        0,
+        lambda pts=preview_points, token=resume_token: finish_wall_edit_readout_canceled(
+            session,
+            pts,
+            resume_token=token,
+        ),
     )
 
 
-def finish_wall_edit_readout_canceled(session, preview_points):
+def finish_wall_edit_readout_canceled(session, preview_points, *, resume_token=None):
+    state = _wall_edit_state(session)
+    if resume_token is not None:
+        current_token = (
+            state.wall_edit_generation,
+            state.edit_wall,
+            state.edit_endpoint,
+            state.wall_edit_active_readout_tracker,
+            state.wall_edit_active_readout_mode,
+            session.current_tool,
+        )
+        if current_token != resume_token:
+            return
     if not is_wall_readout_edit_active(session):
         return
     if preview_points:
         sync_wall_edit_preview(session, preview_points)
+    resume_wall_edit_point_pick(session)
+
+
+def _resume_wall_edit_after_invalid_point(session):
+    state = _wall_edit_state(session)
+    preview_points = state.preview_points or state.edit_endpoints
+    if preview_points:
+        sync_wall_edit_preview(session, preview_points)
+    FreeCAD.Console.PrintWarning(
+        translate(
+            "BIM_PlanEdit",
+            "Pick a point that keeps the wall at least {length:g} mm long.\n",
+        ).format(length=_MIN_WALL_LENGTH)
+    )
     resume_wall_edit_point_pick(session)
 
 
@@ -1640,6 +1732,7 @@ def update_wall_edit_point_pick(session, point=None, snap_info=None):
 def cancel_wall_edit_point_pick(session):
     session.current_tool = "Select"
     session.lifecycle.cancel_pending_edit()
+    session.wall_relations.restore_selected_wall_relation_status()
     session.task_panels.refresh_task_panel_status()
 
 
@@ -1690,10 +1783,14 @@ def _set_key_event_handled(event_callback):
         setter()
 
 
-def reset_pending_edit_state(session):
+def reset_pending_edit_state(session, *, restore_wall_visibility=True):
     state = _wall_edit_state(session)
+    state.wall_edit_generation += 1
     state.wall_edit_modal_active = False
-    session.wall_edit.restore_edit_wall_visibility()
+    if restore_wall_visibility:
+        session.wall_edit.restore_edit_wall_visibility()
+    else:
+        state.edit_wall_visibility = None
     session.wall_edit.clear_wall_edit_preview()
     state.edit_wall = None
     state.edit_endpoint = None
@@ -1779,15 +1876,6 @@ class PlanWallEditAPI(_SessionAPI):
 
     def commit_wall_edit_points(self, *args, **kwargs):
         return commit_wall_edit_points(self.session, *args, **kwargs)
-
-    def start_wall_grip_edit(self, *args, **kwargs):
-        return start_wall_grip_edit(self.session, *args, **kwargs)
-
-    def activate_wall_grip(self, *args, **kwargs):
-        return activate_wall_grip(self.session, *args, **kwargs)
-
-    def activate_wall_grip_now(self, *args, **kwargs):
-        return activate_wall_grip_now(self.session, *args, **kwargs)
 
     def get_wall_edit_reference_point(self, *args, **kwargs):
         return get_wall_edit_reference_point(self.session, *args, **kwargs)

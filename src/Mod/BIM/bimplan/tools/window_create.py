@@ -344,7 +344,6 @@ def activate_window_tool(session):
     session.selection.refresh.clear_selected_visuals(
         kinds=_WINDOW_TOOL_SELECTION_KINDS,
         clear_handle_kinds=(plan_target_kinds.PLAN_TARGET_OPENING,),
-        include_wall_grips=True,
         include_selected_wall_opening_context=True,
         include_secondary_selection=True,
     )

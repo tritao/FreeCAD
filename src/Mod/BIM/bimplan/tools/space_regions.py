@@ -323,7 +323,6 @@ def _start_space_region_pick_mode(
         seed_space=seed_space,
         edit_space=edit_space,
     )
-    session.overlays.walls.clear_wall_grips()
     _selection_hover_api(session).clear_hovered_plan_targets(
         kinds=plan_target_kinds.SPACE_EDIT_CLEAR_HOVERED_KINDS
     )

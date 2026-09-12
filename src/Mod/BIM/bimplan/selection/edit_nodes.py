@@ -54,13 +54,6 @@ class ContextualHandleEditNode:
     kind = "contextual_handle"
 
 
-@dataclass(frozen=True, slots=True)
-class RayEditNode:
-    point: object
-
-    kind = "edit_node"
-
-
 def _get_node_attr(node, attr_name):
     return getattr(node, attr_name, None)
 
@@ -111,7 +104,7 @@ def get_edit_node_payload(node):
             return (node[1], node[2])
         except Exception:
             return ()
-    if kind in ("provider_overlay_point", "edit_node"):
+    if kind == "provider_overlay_point":
         if _has_dataclass_payload(node, "point"):
             return (_get_node_attr(node, "point"),)
         try:

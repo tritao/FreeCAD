@@ -30,9 +30,6 @@ _GUI_SELECTION_TOOL_NAMES = (
     plan_runtime_tools.PlanTool.PICK_SPACE_REGION,
 )
 _PENDING_TARGET_UNCHANGED = object()
-_WALL_GRIP_NONE = "none"
-_WALL_GRIP_CLEAR = "clear"
-_WALL_GRIP_SYNC = "sync"
 _MISSING = object()
 
 
@@ -41,7 +38,6 @@ class SelectionRefreshResult:
     primary_target_ref: object = field(default_factory=plan_target_kinds.make_plan_target_ref)
     secondary_targets: tuple = ()
     pending_target: object = _PENDING_TARGET_UNCHANGED
-    wall_grip_action: str = _WALL_GRIP_NONE
 
     @property
     def primary_kind(self):
@@ -450,10 +446,6 @@ class PlanSelectionRefreshService(_SessionAPI):
                 self.session.selection.state.set_pending_selected_plan_target(
                     refresh_result.pending_target
                 )
-        if refresh_result.wall_grip_action == _WALL_GRIP_CLEAR:
-            self.session.overlays.walls.clear_wall_grips()
-        elif refresh_result.wall_grip_action == _WALL_GRIP_SYNC:
-            self.session.overlays.walls.sync_wall_grips()
 
     def _get_selection_refresh_baseline(self):
         previous_target_ref = self.session.selection.state.get_selected_plan_target()
@@ -478,7 +470,6 @@ class PlanSelectionRefreshService(_SessionAPI):
                     plan_target_kinds.PLAN_TARGET_WALL,
                     interaction_state.edit_wall,
                 ),
-                wall_grip_action=_WALL_GRIP_SYNC,
             )
         if self.session.current_tool == plan_runtime_tools.PlanTool.SET_SPACE_TEXT:
             interaction_state = self.session.interaction_state
@@ -493,7 +484,6 @@ class PlanSelectionRefreshService(_SessionAPI):
                         else None
                     ),
                 ),
-                wall_grip_action=_WALL_GRIP_CLEAR,
             )
         if self.session.current_tool == plan_runtime_tools.PlanTool.JOIN:
             wall = previous_wall
@@ -505,7 +495,6 @@ class PlanSelectionRefreshService(_SessionAPI):
                     plan_target_kinds.PLAN_TARGET_WALL,
                     wall,
                 ),
-                wall_grip_action=_WALL_GRIP_CLEAR,
             )
         if self.session.current_tool not in _GUI_SELECTION_TOOL_NAMES:
             return SelectionRefreshResult(pending_target=None)
@@ -576,30 +565,6 @@ class PlanSelectionRefreshService(_SessionAPI):
             previous_obj,
         )
 
-    def _sync_wall_grips_after_selection_refresh(
-        self,
-        refresh_result,
-        previous_kind,
-        previous_obj,
-        *,
-        force_wall_visual_resync=False,
-    ):
-        if refresh_result.wall_grip_action != _WALL_GRIP_NONE:
-            return
-        wall_target_changed = self.session.selection.state.selected_plan_target_changed(
-            previous_kind,
-            previous_obj,
-            plan_target_kinds.PLAN_TARGET_WALL,
-        )
-        if not wall_target_changed and not force_wall_visual_resync:
-            return
-        if self.session.selection.state.get_selected_plan_target_object(
-            plan_target_kinds.PLAN_TARGET_WALL
-        ):
-            self.session.overlays.walls.schedule_wall_grip_sync()
-        else:
-            self.session.overlays.walls.clear_wall_grips()
-
     def _record_selection_refresh_result(self, previous_kind):
         selected_kind, selected_obj = self.session.selection.state.get_selected_plan_target()
         self.session.performance.plan_perf_set_fields(
@@ -615,12 +580,9 @@ class PlanSelectionRefreshService(_SessionAPI):
         kinds=None,
         *,
         clear_handle_kinds=None,
-        include_wall_grips=False,
         include_selected_wall_opening_context=False,
         include_secondary_selection=False,
     ):
-        if include_wall_grips:
-            self.session.overlays.walls.clear_wall_grips()
         plan_target_dispatch.clear_selected_target_visuals(
             self.session,
             kinds=kinds,
@@ -770,7 +732,6 @@ class PlanSelectionRefreshService(_SessionAPI):
         wall = self.session.selection.state.get_selected_plan_target_object("wall")
         if not wall:
             return
-        self.session.overlays.walls.clear_wall_grips()
         self.session.overlays.walls.clear_selected_wall_overlay()
         self.clear_selected_plan_target_if_matches("wall", wall)
         plan_selection_gui_sync.set_gui_selection(self.session, [])
@@ -786,12 +747,24 @@ class PlanSelectionRefreshService(_SessionAPI):
         if not self.session.selection.state.is_selected_plan_target("wall", wall):
             return
         self.session.selection_sync_state.pending_selected_wall_reset = False
-        self.session.overlays.walls.clear_wall_grips()
         self.session.overlays.walls.clear_selected_wall_overlay()
         self.clear_selected_plan_target_if_matches("wall", wall)
         if clear_gui_selection:
             plan_selection_gui_sync.set_gui_selection(self.session, [])
         self.session.task_panels.refresh_task_panel_status(reason="selection")
+
+    def restore_selected_wall_visuals(self):
+        """Restore viewer-local feedback after a wall interaction finishes."""
+
+        if not self.session.selection.state.is_selected_plan_target("wall"):
+            self.session.overlays.walls.clear_selected_wall_overlay()
+            self.session.overlays.openings.clear_selected_wall_opening_context_overlay()
+            self.session.contextual_rendering.sync_visible_handles()
+            return False
+        self.session.overlays.walls.apply_selected_wall_selection_feedback()
+        self.session.overlays.openings.sync_selected_wall_opening_context_overlay()
+        self.session.contextual_rendering.sync_visible_handles()
+        return True
 
     def sync_primary_selected_plan_target_visuals(
         self,
@@ -881,12 +854,6 @@ class PlanSelectionRefreshService(_SessionAPI):
                 previous_wall,
             )
             self._apply_selection_refresh_result(refresh_result)
-            self._sync_wall_grips_after_selection_refresh(
-                refresh_result,
-                previous_kind,
-                previous_obj,
-                force_wall_visual_resync=force_wall_visual_resync,
-            )
             self.sync_primary_selected_plan_target_visuals(
                 previous_kind,
                 previous_obj,

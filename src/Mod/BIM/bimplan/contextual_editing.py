@@ -134,6 +134,15 @@ class PlanContextualEditingAPI:
         self.session.contextual_rendering.preview_handle(preview.handle, preview.point)
         state = "active" if preview.validation.allowed else "invalid"
         self.session.contextual_rendering.set_handle_state(preview.handle, state)
+        shape = preview.handle.operation.get_preview_shape(
+            preview.handle.source,
+            preview.value,
+            self.editor.context,
+        )
+        if shape is None or not preview.validation.allowed:
+            self.session.contextual_rendering.clear_preview(preview.handle.source)
+        else:
+            self.session.contextual_rendering.set_preview_shape(preview.handle.source, shape)
         return preview
 
     def commit(self, pointer):
@@ -151,6 +160,7 @@ class PlanContextualEditingAPI:
             self.session.contextual_rendering.refresh_object(handle.source)
             return BIMEditResult(False, reason=str(exc))
         finally:
+            self.session.contextual_rendering.clear_preview(handle.source)
             visual_state.contextual_edit_recompute_depth = max(
                 0, visual_state.contextual_edit_recompute_depth - 1
             )
@@ -161,8 +171,10 @@ class PlanContextualEditingAPI:
         if self.editor is not None:
             self.editor.cancel()
         self.editor = None
-        if handle is not None and refresh:
-            self.session.contextual_rendering.refresh_object(handle.source)
+        if handle is not None:
+            self.session.contextual_rendering.clear_preview(handle.source)
+            if refresh:
+                self.session.contextual_rendering.refresh_object(handle.source)
 
     def activate(self, handle):
         """Begin a viewer interaction using Draft's point acquisition."""
@@ -170,6 +182,17 @@ class PlanContextualEditingAPI:
         import FreeCADGui
 
         self.cancel()
+        intent = getattr(handle.operation, "interaction_intent", "")
+        wall_modes = {
+            "WallStretchStart": "Start",
+            "WallStretchEnd": "End",
+            "WallMove": "Move",
+        }
+        if intent in wall_modes:
+            self.session.selection.state.set_selected_plan_target("wall", handle.source)
+            self.session.wall_edit.start_wall_edit(wall_modes[intent])
+            self.session.contextual_rendering.sync_visible_handles()
+            return self.session.wall_edit.has_active_wall_edit()
         started = self.begin(handle)
         if isinstance(started, BIMEditResult) and not started.success:
             return False

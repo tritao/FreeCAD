@@ -222,7 +222,6 @@ def activate_symbol_handle_now(session, symbol, handle_role):
             return
         with session.performance.plan_perf_trace_span("activate_symbol_handle_set_target"):
             session.selection.state.set_selected_plan_target("symbol", symbol)
-            session.overlays.walls.clear_wall_grips()
         with session.performance.plan_perf_trace_span("activate_symbol_handle_start_point_pick"):
             session.symbols.start_symbol_handle_point_pick(symbol, handle_role)
 

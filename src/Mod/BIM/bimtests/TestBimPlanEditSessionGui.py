@@ -5,8 +5,10 @@
 from unittest.mock import patch
 
 import Arch
+import ArchWallRelation
 import FreeCAD
 import FreeCADGui
+from pivy import coin
 from bimtests.TestArchBaseGui import TestArchBaseGui
 from bimplan.runtime.session import PlanEditSession
 from bimplan.providers import PlanEditProvider, PlanEditRegistry
@@ -19,6 +21,25 @@ class _TestProvider(PlanEditProvider):
 
     def get_provider_id(self):
         return self.provider_id
+
+
+class _HostedOpeningProxy:
+    """Minimal semantic opening used to exercise host-relative wall movement."""
+
+    def __init__(self, obj):
+        self.Object = obj
+
+    def get_plan_move_context(self):
+        return {"opening_half_width_u": 50.0}
+
+    def get_plan_center_point(self):
+        return FreeCAD.Vector(self.Object.Placement.Base)
+
+    def move_along_host(self, point):
+        placement = FreeCAD.Placement(self.Object.Placement)
+        placement.Base = FreeCAD.Vector(point)
+        self.Object.Placement = placement
+        return True
 
 
 class TestBimPlanEditSessionGui(TestArchBaseGui):
@@ -163,6 +184,20 @@ class TestBimPlanEditSessionGui(TestArchBaseGui):
         self.assertIsNone(session.viewport_state.view_context_layer)
         self.assertFalse(FreeCADGui.Control.activeDialog(gui_document))
 
+    def test_shutdown_discards_pending_view_updates(self):
+        session = PlanEditSession()
+        self.assertTrue(session.enter())
+        callbacks = []
+        self.assertTrue(
+            session.viewport.queue_scene_graph_mutation(
+                "test-pending-mutation", lambda: callbacks.append(True)
+            )
+        )
+        session.shutdown(close_dialog=False)
+
+        self.assertFalse(callbacks)
+        self.assertFalse(session.viewport_state.scene_graph_mutations)
+
     def test_contextual_wall_width_edit_is_transactional(self):
         wall = Arch.makeWall(length=3000, width=200, height=2500, align="Center")
         self.document.recompute()
@@ -172,17 +207,323 @@ class TestBimPlanEditSessionGui(TestArchBaseGui):
             handle = next(
                 item
                 for item in session.contextual_rendering.edit_handles_for(wall)
-                if item.role == "WallWidth"
+                if item.subelement == "Width.PositiveFace"
             )
+            session.contextual_editing.begin(handle)
+            invalid = session.contextual_editing.commit(
+                handle.point - handle.direction * 250
+            )
+            self.assertFalse(invalid.success)
+            self.assertAlmostEqual(200.0, wall.Width.Value)
+
+            session.contextual_editing.begin(handle)
+            preview = session.contextual_editing.preview(
+                handle.point + handle.direction * 50
+            )
+            self.assertTrue(preview.validation.allowed)
+            self.assertNotIn(wall, session.contextual_rendering.renderer._preview_nodes)
+            self.assertIn(
+                ("contextual-preview", wall),
+                session.viewport_state.scene_graph_mutations,
+            )
+            session.viewport.flush_scene_graph_mutations()
+            preview_node = session.contextual_rendering.renderer._preview_nodes[wall]
+            self.assertTrue(
+                preview_node.isOfType(coin.SoType.fromName("SoPreviewShape"))
+            )
+            self.assertNotEqual(
+                -1, session.contextual_rendering.renderer.root.findChild(preview_node)
+            )
+            session.contextual_editing.cancel()
+            session.viewport.flush_scene_graph_mutations()
+            self.assertNotIn(wall, session.contextual_rendering.renderer._preview_nodes)
+
             session.contextual_editing.begin(handle)
             result = session.contextual_editing.commit(
                 handle.point + handle.direction * 50
             )
+            session.viewport.flush_scene_graph_mutations()
 
             self.assertTrue(result.success)
-            self.assertAlmostEqual(300.0, wall.Width.Value)
+            self.assertAlmostEqual(250.0, wall.Width.Value)
+            self.assertEqual("Right", wall.Align)
+            self.assertAlmostEqual(-100.0, wall.Offset.Value)
+            self.assertNotIn(wall, session.contextual_rendering.renderer._preview_nodes)
             self.document.undo()
             self.assertAlmostEqual(200.0, wall.Width.Value)
+            self.assertEqual("Center", wall.Align)
+        finally:
+            session.shutdown(close_dialog=False)
+
+    def test_coin_event_activation_of_semantic_wall_handle_is_event_safe(self):
+        import DraftGui
+        from bimplan.selection import edit_nodes as plan_edit_nodes
+        from draftguitools import gui_snapper
+
+        created_toolbar = not hasattr(FreeCADGui, "draftToolBar")
+        if created_toolbar:
+            FreeCADGui.draftToolBar = DraftGui.DraftToolBar()
+        created_snapper = not hasattr(FreeCADGui, "Snapper")
+        if created_snapper:
+            FreeCADGui.Snapper = gui_snapper.Snapper()
+
+        wall = Arch.makeWall(length=3000, width=200, height=2500, align="Center")
+        self.document.recompute()
+        session = PlanEditSession()
+        self.assertTrue(session.enter())
+        try:
+            session.selection.state.set_selected_plan_target_state("wall", wall)
+            session.contextual_rendering.sync_visible_handles()
+            session.view.fitAll()
+            self.pump_gui_events()
+            handle = next(
+                item
+                for item in session.contextual_rendering.edit_handles_for(wall)
+                if item.subelement == "Width.PositiveFace"
+            )
+            start = session.view.getPointOnScreen(handle.point)
+            self.assertIs(
+                handle,
+                session.contextual_rendering.pick_edit_handle(
+                    start
+                ),
+            )
+
+            event_manager = session.viewer.getSoEventManager()
+
+            def send_move(point):
+                event = coin.SoLocation2Event()
+                event.setPosition(coin.SbVec2s(round(point[0]), round(point[1])))
+                event_manager.processEvent(event)
+
+            def send_button(point, state):
+                event = coin.SoMouseButtonEvent()
+                event.setPosition(coin.SbVec2s(round(point[0]), round(point[1])))
+                event.setButton(coin.SoMouseButtonEvent.BUTTON1)
+                event.setState(state)
+                event_manager.processEvent(event)
+
+            send_move(start)
+            self.pump_gui_events(20)
+            edit_node = plan_edit_nodes.ContextualHandleEditNode(wall, handle)
+            with patch.object(
+                session.picking, "pick_edit_node", return_value=edit_node
+            ):
+                send_button(start, coin.SoButtonEvent.DOWN)
+            self.assertIsNone(session.contextual_editing.editor)
+            self.pump_gui_events(20)
+            self.assertIsNotNone(session.contextual_editing.editor)
+            session.contextual_editing.cancel()
+        finally:
+            session.shutdown(close_dialog=False)
+            if created_snapper:
+                del FreeCADGui.Snapper
+            if created_toolbar:
+                del FreeCADGui.draftToolBar
+
+    def test_native_wall_semantic_handle_activates_wall_interaction_without_draft_grips(self):
+        wall = Arch.makeWall(length=3000, width=200, height=2500, align="Center")
+        self.document.recompute()
+        session = PlanEditSession()
+        self.assertTrue(session.enter())
+        try:
+            session.selection.state.set_selected_plan_target("wall", wall)
+            self.assertFalse(hasattr(session.overlay_tracker_state, "grip_trackers"))
+
+            renderer = session.contextual_rendering.renderer
+            self.assertTrue(session.contextual_rendering.set_source_visible(wall, False))
+            self.assertEqual(coin.SO_SWITCH_NONE, renderer._object_nodes[wall].whichChild.getValue())
+            self.assertTrue(session.contextual_rendering.set_source_visible(wall, True))
+            self.assertEqual(coin.SO_SWITCH_ALL, renderer._object_nodes[wall].whichChild.getValue())
+
+            handle = next(
+                item
+                for item in session.contextual_rendering.edit_handles_for(wall)
+                if item.role == "WallMove"
+            )
+            handle_switch = renderer._handle_switches[wall]
+            self.assertTrue(
+                all(
+                    handle_switch.getChild(index).getTypeId()
+                    == coin.SoType.fromName("SoFCOverlayGlyph")
+                    for index in range(handle_switch.getNumChildren())
+                )
+            )
+            wall_edit_type = type(session.wall_edit)
+            with patch.object(wall_edit_type, "start_wall_edit") as start_wall_edit:
+                with patch.object(wall_edit_type, "has_active_wall_edit", return_value=True):
+                    self.assertTrue(session.contextual_editing.activate(handle))
+            start_wall_edit.assert_called_once_with("Move")
+        finally:
+            session.shutdown(close_dialog=False)
+
+    def test_endpoint_square_resizes_unjoined_wall_along_its_axis(self):
+        wall = Arch.makeWall(length=3000, width=200, height=2500, align="Center")
+        self.document.recompute()
+        original_end = FreeCAD.Vector(wall.Proxy.calc_endpoints(wall)[1])
+        session = PlanEditSession()
+        self.assertTrue(session.enter())
+        try:
+            session.selection.state.set_selected_plan_target("wall", wall)
+            handle = next(
+                item
+                for item in session.contextual_rendering.edit_handles_for(wall)
+                if item.role == "WallPathEnd"
+            )
+            self.assertEqual("Square", handle.glyph)
+            target = original_end + FreeCAD.Vector(200, 400, 0)
+            expected_end = original_end + FreeCAD.Vector(200, 0, 0)
+
+            with patch.object(FreeCADGui, "Snapper", create=True) as snapper:
+                self.assertTrue(session.contextual_editing.activate(handle))
+            callbacks = snapper.getPoint.call_args.kwargs
+            callbacks["movecallback"](target, None)
+            self.assertTrue(
+                session.wall_edit_state.preview_points[1].isEqual(expected_end, 1e-7)
+            )
+            callbacks["callback"](target, None)
+
+            endpoints = wall.Proxy.calc_endpoints(wall)
+            self.assertTrue(endpoints[1].isEqual(expected_end, 1e-7))
+            original_axis = original_end.sub(endpoints[0])
+            resized_axis = endpoints[1].sub(endpoints[0])
+            self.assertLess(original_axis.cross(resized_axis).Length, 1e-7)
+            self.document.undo()
+            self.document.recompute()
+            restored = wall.Proxy.calc_endpoints(wall)
+            self.assertTrue(restored[1].isEqual(original_end, 1e-7))
+        finally:
+            session.shutdown(close_dialog=False)
+
+    def test_center_circle_moves_wall_opening_and_joint_as_one_transaction(self):
+        wall = Arch.makeWall(length=3000, width=200, height=2500, align="Center")
+        self.document.recompute()
+        original = [FreeCAD.Vector(point) for point in wall.Proxy.calc_endpoints(wall)]
+        midpoint = (original[0] + original[1]) * 0.5
+        joined = Arch.makeWall(length=1800, width=200, height=2500, align="Center")
+        joined.Placement = FreeCAD.Placement(
+            original[1],
+            FreeCAD.Rotation(FreeCAD.Vector(0, 0, 1), 90),
+        )
+        opening = self.document.addObject("Part::FeaturePython", "HostedOpening")
+        opening.addProperty("App::PropertyLinkList", "Hosts")
+        opening.Hosts = [wall]
+        opening.Placement.Base = midpoint
+        opening.Proxy = _HostedOpeningProxy(opening)
+        joint = Arch.makeWallJoint(wall, joined, "Miter")
+        self.document.recompute()
+        session = PlanEditSession()
+        self.assertTrue(session.enter())
+        try:
+            session.selection.state.set_selected_plan_target("wall", wall)
+            handle = next(
+                item
+                for item in session.contextual_rendering.edit_handles_for(wall)
+                if item.role == "WallMove"
+            )
+            self.assertEqual("Circle", handle.glyph)
+            delta = FreeCAD.Vector(0, 250, 0)
+            target = midpoint + delta
+
+            opening_api = type(session.openings)
+            with (
+                patch.object(FreeCADGui, "Snapper", create=True) as snapper,
+                patch.object(
+                    opening_api,
+                    "get_wall_hosted_openings",
+                    return_value=[opening],
+                ),
+                patch.object(opening_api, "refresh_opening_footprint_display"),
+                patch.object(opening_api, "refresh_opening_host_footprint_displays"),
+            ):
+                self.assertTrue(session.contextual_editing.activate(handle))
+                callbacks = snapper.getPoint.call_args.kwargs
+                callbacks["movecallback"](target, None)
+                preview = session.wall_edit_state.preview_points
+                self.assertTrue(preview[0].isEqual(original[0] + delta, 1e-7))
+                self.assertTrue(preview[1].isEqual(original[1] + delta, 1e-7))
+                callbacks["callback"](target, None)
+
+            moved = wall.Proxy.calc_endpoints(wall)
+            self.assertTrue(moved[0].isEqual(original[0] + delta, 1e-7))
+            self.assertTrue(moved[1].isEqual(original[1] + delta, 1e-7))
+            self.assertTrue(opening.Placement.Base.isEqual(midpoint + delta, 1e-7))
+            self.assertEqual("OK", joint.Status, joint.StatusMessage)
+            self.document.undo()
+            self.document.recompute()
+            restored = wall.Proxy.calc_endpoints(wall)
+            self.assertTrue(restored[0].isEqual(original[0], 1e-7))
+            self.assertTrue(restored[1].isEqual(original[1], 1e-7))
+            self.assertTrue(opening.Placement.Base.isEqual(midpoint, 1e-7))
+        finally:
+            session.shutdown(close_dialog=False)
+
+    def test_joint_diamond_moves_both_wall_endpoints_atomically(self):
+        wall = Arch.makeWall(length=3000, width=200, height=2500, align="Center")
+        self.document.recompute()
+        original_corner = FreeCAD.Vector(wall.Proxy.calc_endpoints(wall)[1])
+        joined = Arch.makeWall(length=1800, width=200, height=2500, align="Center")
+        joined.Placement = FreeCAD.Placement(
+            original_corner + FreeCAD.Vector(0, 900, 0),
+            FreeCAD.Rotation(FreeCAD.Vector(0, 0, 1), 90),
+        )
+        joint = Arch.makeWallJoint(wall, joined, "Miter")
+        self.document.recompute()
+        original_wall_points = [FreeCAD.Vector(point) for point in wall.Proxy.calc_endpoints(wall)]
+        original_joined_points = [
+            FreeCAD.Vector(point) for point in joined.Proxy.calc_endpoints(joined)
+        ]
+
+        session = PlanEditSession()
+        self.assertTrue(session.enter())
+        try:
+            solution = ArchWallRelation.solve_wall_joint(joint)
+            self.assertTrue(
+                solution.is_ok(),
+                "{}; wall={!r}; joined={!r}".format(
+                    solution.status_message,
+                    wall.Proxy.calc_endpoints(wall),
+                    joined.Proxy.calc_endpoints(joined),
+                ),
+            )
+            self.assertTrue(wall.Proxy._can_edit_native_path(wall))
+            self.assertTrue(joined.Proxy._can_edit_native_path(joined))
+            self.assertIsNotNone(solution.trim_for_wall(wall))
+            self.assertIsNotNone(solution.trim_for_wall(joined))
+            direct = wall.Proxy.getRepresentation(
+                wall, session.representation_context.context
+            )
+            self.assertIn("WallJointMove", [handle.role for handle in direct.edit_handles])
+            session.selection.state.set_selected_plan_target("wall", wall)
+            session.contextual_rendering.refresh_object(wall)
+            handles = session.contextual_rendering.edit_handles_for(wall)
+            self.assertIn("WallJointMove", [handle.role for handle in handles])
+            joint_handle = next(handle for handle in handles if handle.role == "WallJointMove")
+            self.assertEqual("Diamond", joint_handle.glyph)
+            self.assertEqual(13, joint_handle.glyph_size)
+            self.assertFalse(
+                any(handle.subelement == "Path.End" for handle in handles),
+                "A relation-owned corner must not also expose a free endpoint handle",
+            )
+
+            target = original_corner + FreeCAD.Vector(250, 175, 0)
+            self.assertTrue(session.contextual_editing.begin(joint_handle))
+            result = session.contextual_editing.commit(target)
+            session.viewport.flush_scene_graph_mutations()
+
+            self.assertTrue(result.success, result.reason)
+            wall_points = wall.Proxy.calc_endpoints(wall)
+            joined_points = joined.Proxy.calc_endpoints(joined)
+            self.assertTrue(wall_points[1].isEqual(target, 1e-7))
+            self.assertTrue(joined_points[0].isEqual(target, 1e-7))
+            self.assertEqual("OK", joint.Status, joint.StatusMessage)
+
+            self.document.undo()
+            self.document.recompute()
+            restored_wall = wall.Proxy.calc_endpoints(wall)
+            restored_joined = joined.Proxy.calc_endpoints(joined)
+            self.assertTrue(restored_wall[1].isEqual(original_wall_points[1], 1e-7))
+            self.assertTrue(restored_joined[0].isEqual(original_joined_points[0], 1e-7))
         finally:
             session.shutdown(close_dialog=False)
 
@@ -203,6 +544,8 @@ class TestBimPlanEditSessionGui(TestArchBaseGui):
             self.assertIs(wall, picked_mapping.source)
             self.assertTrue(session.picking.hover(screen_point, force=True))
             self.assertIs(wall, session.hovered_wall)
+            self.assertTrue(session.viewport_state.scene_graph_flush_queued)
+            self.pump_gui_events()
             self.assertGreater(len(session.overlay_tracker_state.wall_hover_trackers), 0)
 
             geometry_mapping = ContextualNodeMapping(wall, "Face1", "Cut", object())

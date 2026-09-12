@@ -595,7 +595,7 @@ def _get_select_input_hint_specs(session, ui):
     elif selected_kind == "symbol":
         primary_hint = translate("BIM_PlanEdit", "%1 pick symbol handle")
     elif selected_kind == "wall":
-        primary_hint = translate("BIM_PlanEdit", "%1 pick wall grip")
+        primary_hint = translate("BIM_PlanEdit", "%1 pick wall handle")
     elif selected_kind == "region":
         primary_hint = translate("BIM_PlanEdit", "%1 select another target")
     elif selected_kind == "space":

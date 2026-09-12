@@ -21,7 +21,6 @@ class TargetActivationBehavior:
     clear_hovered_kinds: tuple[str, ...]
     sync_gui_selection: bool = True
     defer_gui_selection: bool = False
-    defer_wall_grips: bool = False
 
 
 _TARGET_ACTIVATION_BEHAVIORS = {
@@ -314,7 +313,6 @@ class PlanSelectionActivationService(_SessionAPI):
         queue_restore=False,
         sync_gui_selection=False,
         defer_gui_selection=False,
-        defer_wall_grips=False,
     ):
         if not plan_target_dispatch.validate_plan_target(self.session, kind, obj):
             return False
@@ -337,9 +335,7 @@ class PlanSelectionActivationService(_SessionAPI):
                 self.session.selection.sync.schedule_gui_selection_object(obj)
             else:
                 self.session.selection.sync.set_gui_selection_object(obj)
-        self.session.overlays.walls.apply_selected_wall_selection_feedback(
-            defer_grips=kind == plan_target_kinds.PLAN_TARGET_WALL and defer_wall_grips
-        )
+        self.session.overlays.walls.apply_selected_wall_selection_feedback()
         plan_target_dispatch.sync_selected_target_visuals(
             self.session,
             kinds=plan_target_kinds.CLEAR_PLAN_SELECTION_VISUAL_KINDS,
@@ -391,15 +387,12 @@ class PlanSelectionActivationService(_SessionAPI):
         resolved_target=None,
         *,
         defer_gui_selection=None,
-        defer_wall_grips=None,
     ):
         behavior = self._get_target_activation_behavior(kind)
         if behavior is None:
             return False
         if defer_gui_selection is None:
             defer_gui_selection = behavior.defer_gui_selection
-        if defer_wall_grips is None:
-            defer_wall_grips = behavior.defer_wall_grips
         return self.activate_plan_target(
             kind,
             mouse_pos,
@@ -408,7 +401,6 @@ class PlanSelectionActivationService(_SessionAPI):
             clear_hovered_kinds=behavior.clear_hovered_kinds,
             resolved_target=resolved_target,
             defer_gui_selection=defer_gui_selection,
-            defer_wall_grips=defer_wall_grips,
         )
 
     def activate_plan_target_for_kind(
@@ -419,7 +411,6 @@ class PlanSelectionActivationService(_SessionAPI):
         resolved_target=None,
         *,
         defer_gui_selection=None,
-        defer_wall_grips=None,
     ):
         return self._activate_configured_plan_target(
             kind,
@@ -427,7 +418,6 @@ class PlanSelectionActivationService(_SessionAPI):
             event_callback=event_callback,
             resolved_target=resolved_target,
             defer_gui_selection=defer_gui_selection,
-            defer_wall_grips=defer_wall_grips,
         )
 
     def activate_plan_target(
@@ -439,7 +429,6 @@ class PlanSelectionActivationService(_SessionAPI):
         clear_hovered_kinds=None,
         resolved_target=None,
         defer_gui_selection=False,
-        defer_wall_grips=False,
     ):
         if resolved_target is None:
             target_ref = plan_target_kinds.coerce_plan_target_ref(
@@ -466,7 +455,6 @@ class PlanSelectionActivationService(_SessionAPI):
                 queue_restore=True,
                 sync_gui_selection=sync_gui_selection,
                 defer_gui_selection=defer_gui_selection,
-                defer_wall_grips=defer_wall_grips,
             ):
                 self.session.performance.plan_perf_set_fields(activate_plan_target_result=False)
                 return False
@@ -527,7 +515,6 @@ class PlanSelectionActivationService(_SessionAPI):
                 event_callback=event_callback,
                 resolved_target=target_ref,
                 defer_gui_selection=True,
-                defer_wall_grips=True,
             )
         return self._activate_configured_plan_target(
             target_ref.kind,
@@ -574,7 +561,6 @@ class PlanSelectionActivationService(_SessionAPI):
         event_callback=None,
         resolved_target=None,
         defer_gui_selection=False,
-        defer_wall_grips=False,
     ):
         return self.activate_plan_target_for_kind(
             plan_target_kinds.PLAN_TARGET_WALL,
@@ -582,7 +568,6 @@ class PlanSelectionActivationService(_SessionAPI):
             event_callback=event_callback,
             resolved_target=resolved_target,
             defer_gui_selection=defer_gui_selection,
-            defer_wall_grips=defer_wall_grips,
         )
 
     def clear_plan_selection_state(self):
@@ -604,7 +589,6 @@ class PlanSelectionActivationService(_SessionAPI):
             with self.session.performance.plan_perf_trace_span("clear_plan_selection_hover_state"):
                 plan_target_dispatch.clear_hovered_targets(self.session)
             with self.session.performance.plan_perf_trace_span("clear_plan_selection_wall_grips"):
-                self.session.overlays.walls.clear_wall_grips()
                 self.session.overlays.walls.clear_selected_wall_overlay()
             with self.session.performance.plan_perf_trace_span(
                 "clear_plan_selection_secondary_overlays"

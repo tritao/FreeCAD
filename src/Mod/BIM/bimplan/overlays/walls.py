@@ -3,7 +3,6 @@
 """Wall overlay and grip tracker helpers for BIM Plan Edit."""
 
 import FreeCAD
-import FreeCADGui
 
 from . import geometry as overlay_geometry
 from . import manager as overlay_manager
@@ -24,21 +23,6 @@ class PlanWallOverlayService:
 
     def discard_runtime_references(self):
         self.session.overlay_tracker_state.junction_node_trackers = []
-
-    def retarget_edit_tracker(self, *args, **kwargs):
-        return retarget_edit_tracker(*args, **kwargs)
-
-    def sync_wall_grips(self, *args, **kwargs):
-        return sync_wall_grips(self.session, *args, **kwargs)
-
-    def schedule_wall_grip_sync(self, *args, **kwargs):
-        return schedule_wall_grip_sync(self.session, *args, **kwargs)
-
-    def run_scheduled_wall_grip_sync(self, *args, **kwargs):
-        return run_scheduled_wall_grip_sync(self.session, *args, **kwargs)
-
-    def clear_wall_grips(self, *args, **kwargs):
-        return clear_wall_grips(self.session, *args, **kwargs)
 
     def sync_hovered_wall_overlay(self, *args, **kwargs):
         return sync_hovered_wall_overlay(self.session, *args, **kwargs)
@@ -91,188 +75,6 @@ def _perf_trace_span(session, name, **fields):
 
 def _wall_tracker_state(session):
     return session.overlay_tracker_state
-
-
-def _wall_grip_runtime_state(session):
-    return session.wall_grip_state
-
-
-def _get_proxy_method(proxy, method_name):
-    method = getattr(proxy, method_name, None)
-    return method if callable(method) else None
-
-
-def _set_selnode_value(selnode, attr_name, value):
-    attr = getattr(selnode, attr_name, None)
-    setter = getattr(attr, "setValue", None)
-    if not callable(setter):
-        return
-    setter(value)
-
-
-def retarget_edit_tracker(tracker, obj, index):
-    selnode = getattr(tracker, "selnode", None)
-    if selnode is None:
-        return
-    doc_name = getattr(getattr(obj, "Document", None), "Name", None)
-    obj_name = getattr(obj, "Name", None)
-    try:
-        if getattr(selnode, "useNewSelection", None) is not None:
-            selnode.useNewSelection = False
-        if doc_name:
-            _set_selnode_value(selnode, "documentName", doc_name)
-        if obj_name:
-            _set_selnode_value(selnode, "objectName", obj_name)
-        _set_selnode_value(selnode, "subElementName", f"EditNode{index}")
-    except Exception:
-        pass
-
-
-def sync_wall_grips(session):
-    with _perf_trace_span(session, "sync_wall_grips"):
-        tracker_state = _wall_tracker_state(session)
-        grip_state = _wall_grip_runtime_state(session)
-        grip_state.sync_queued = False
-        grip_state.sync_generation += 1
-        if not session.wall_edit.is_selected_wall_endpoint_editable():
-            clear_wall_grips(session)
-            return
-
-        with _perf_trace_span(session, "wall_grips_import_trackers"):
-            try:
-                import draftguitools.gui_trackers as DraftTrackers
-                from draftutils import params
-            except Exception:
-                clear_wall_grips(session)
-                return
-
-        wall = session.selection.state.get_selected_plan_target_object("wall")
-        proxy = getattr(wall, "Proxy", None)
-        calc_endpoints = _get_proxy_method(proxy, "calc_endpoints")
-        if calc_endpoints is None:
-            clear_wall_grips(session)
-            return
-
-        with _perf_trace_span(session, "wall_grips_calc_endpoints"):
-            endpoints = calc_endpoints(wall)
-        if len(endpoints) != 2:
-            clear_wall_grips(session)
-            return
-
-        with _perf_trace_span(session, "wall_grips_calc_positions"):
-            calc_edit_grip_positions = _get_proxy_method(proxy, "calc_edit_grip_positions")
-            if calc_edit_grip_positions is not None:
-                grip_positions = calc_edit_grip_positions(wall)
-            else:
-                grip_positions = endpoints + [(endpoints[0] + endpoints[1]) * 0.5]
-        if len(grip_positions) != 3:
-            clear_wall_grips(session)
-            return
-
-        with _perf_trace_span(session, "wall_grips_marker_lookup"):
-            marker_size = session.viewport.scaled_marker_size(params.get_param_view("MarkerSize"))
-            midpoint_marker = FreeCADGui.getMarkerIndex("DIAMOND_FILLED", marker_size)
-        wall_state = (
-            marker_size,
-            midpoint_marker,
-            getattr(getattr(wall, "Document", None), "Name", None),
-            getattr(wall, "Name", None),
-            tuple(
-                (float(position.x), float(position.y), float(position.z))
-                for position in grip_positions
-            ),
-        )
-        previous_state = grip_state.state
-        reuse_allowed = (
-            len(tracker_state.grip_trackers) == 3
-            and previous_state is not None
-            and previous_state[:2] == wall_state[:2]
-        )
-        if reuse_allowed:
-            try:
-                with _perf_trace_span(session, "wall_grips_retarget_trackers"):
-                    for index, tracker in enumerate(tracker_state.grip_trackers):
-                        retarget_edit_tracker(tracker, wall, index)
-                with _perf_trace_span(session, "wall_grips_position_trackers"):
-                    for tracker, position in zip(tracker_state.grip_trackers, grip_positions):
-                        tracker.set(position)
-                with _perf_trace_span(session, "wall_grips_show_trackers"):
-                    for tracker in tracker_state.grip_trackers:
-                        if not getattr(tracker, "Visible", False):
-                            tracker.on()
-                if previous_state == wall_state:
-                    _perf_count(session, "wall_grip_cache_hits")
-                else:
-                    _perf_count(session, "wall_grip_tracker_reuses")
-                grip_state.state = wall_state
-                return
-            except Exception:
-                clear_wall_grips(session)
-
-        grip_start, grip_end, midpoint = grip_positions
-        with _perf_trace_span(session, "wall_grips_create_trackers"):
-            tracker_state.grip_trackers = [
-                DraftTrackers.editTracker(pos=grip_start, name=wall.Name, idx=0),
-                DraftTrackers.editTracker(pos=grip_end, name=wall.Name, idx=1),
-                DraftTrackers.editTracker(
-                    pos=midpoint,
-                    name=wall.Name,
-                    idx=2,
-                    marker=midpoint_marker,
-                ),
-            ]
-        grip_state.state = wall_state
-
-
-def hide_wall_grips(session):
-    for tracker in _wall_tracker_state(session).grip_trackers:
-        try:
-            tracker.off()
-        except Exception:
-            pass
-
-
-def schedule_wall_grip_sync(session, delay_ms=120):
-    if session.lifecycle_state.tearing_down:
-        return
-    hide_wall_grips(session)
-    grip_state = _wall_grip_runtime_state(session)
-    grip_state.sync_queued = True
-    grip_state.sync_generation += 1
-    generation = grip_state.sync_generation
-    try:
-        from PySide import QtCore
-
-        QtCore.QTimer.singleShot(
-            delay_ms,
-            lambda generation=generation: run_scheduled_wall_grip_sync(session, generation),
-        )
-    except Exception:
-        run_scheduled_wall_grip_sync(session, generation)
-
-
-def run_scheduled_wall_grip_sync(session, generation=None):
-    grip_state = _wall_grip_runtime_state(session)
-    if not grip_state.sync_queued:
-        return
-    if generation is not None and generation != grip_state.sync_generation:
-        return
-    grip_state.sync_queued = False
-    with _perf_trace_event(session, "scheduled_wall_grip_sync"):
-        if session.lifecycle_state.tearing_down:
-            return
-        sync_wall_grips(session)
-        session.viewport.request_view_redraw()
-
-
-def clear_wall_grips(session):
-    tracker_state = _wall_tracker_state(session)
-    grip_state = _wall_grip_runtime_state(session)
-    grip_state.sync_queued = False
-    grip_state.sync_generation += 1
-    overlay_manager.finalize_trackers(tracker_state.grip_trackers)
-    tracker_state.grip_trackers = []
-    grip_state.state = None
 
 
 def sync_hovered_wall_overlay(session):
@@ -342,19 +144,14 @@ def clear_selected_wall_overlay(session):
     tracker_state.wall_overlay_trackers = []
 
 
-def apply_selected_wall_selection_feedback(session, *, defer_grips=False):
+def apply_selected_wall_selection_feedback(session):
     tracker_state = _wall_tracker_state(session)
-    had_wall_visuals = bool(tracker_state.grip_trackers or tracker_state.wall_overlay_trackers)
+    had_wall_visuals = bool(tracker_state.wall_overlay_trackers)
     wall = session.selection.state.get_selected_plan_target_object("wall")
     if session.current_tool == "Select" and session.selection.targets.is_plan_selectable_wall(wall):
         sync_selected_wall_overlay(session)
-        if defer_grips:
-            schedule_wall_grip_sync(session)
-        else:
-            sync_wall_grips(session)
         session.viewport.request_view_redraw()
         return
-    clear_wall_grips(session)
     clear_selected_wall_overlay(session)
     if had_wall_visuals:
         session.viewport.request_view_redraw()

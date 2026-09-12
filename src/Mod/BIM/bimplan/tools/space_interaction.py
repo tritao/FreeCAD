@@ -107,7 +107,6 @@ def activate_plan_region_tool(session):
     session.selection.hover.clear_hovered_plan_targets()
     session.selection.refresh.clear_selected_visuals(
         kinds=_PLAN_REGION_TOOL_SELECTION_KINDS,
-        include_wall_grips=True,
         include_selected_wall_opening_context=True,
         include_secondary_selection=True,
     )
@@ -135,7 +134,6 @@ def activate_space_separator_tool(session):
     session.selection.state.set_selected_plan_target()
     session.selection.refresh.clear_selected_visuals(
         kinds=_SPACE_SEPARATOR_TOOL_SELECTION_KINDS,
-        include_wall_grips=True,
         include_selected_wall_opening_context=True,
         include_secondary_selection=True,
     )

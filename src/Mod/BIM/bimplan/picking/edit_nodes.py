@@ -186,13 +186,6 @@ def _get_edit_node_from_picked_points(session, mouse_pos, picked_points):
                 "ray_pick_provider_overlay_point",
                 plan_edit_nodes.ProviderOverlayPointEditNode(point),
             )
-        if "EditNode" in sub_element:
-            return _emit_get_edit_node_result(
-                session,
-                mouse_pos,
-                "ray_pick_edit_node",
-                plan_edit_nodes.RayEditNode(point),
-            )
     return _emit_get_edit_node_result(session, mouse_pos, "no_edit_node", None)
 
 

@@ -6,6 +6,7 @@ import Arch
 import FreeCAD
 import Part
 import Arch
+import Draft
 
 from ArchRepresentation import (
     BIMEditHandle,
@@ -228,8 +229,140 @@ class TestArchRepresentation(unittest.TestCase):
         handles = {
             handle.subelement: handle for handle in representation.edit_handles
         }
-        self.assertEqual({"Path.Start", "Path.End"}, set(handles))
+        self.assertTrue({"Path.Start", "Path.End"}.issubset(handles))
+        self.assertEqual("Square", handles["Path.Start"].glyph)
+        self.assertEqual("Square", handles["Path.End"].glyph)
         self.assertEqual("Point", handles["Path.End"].operation.value_kind)
+        self.assertEqual("WallStretchStart", handles["Path.Start"].operation.interaction_intent)
+        move_handle = next(
+            handle for handle in representation.edit_handles if handle.role == "WallMove"
+        )
+        self.assertEqual("Circle", move_handle.glyph)
+        self.assertEqual("WallMove", move_handle.operation.interaction_intent)
+        endpoints = wall.Proxy.calc_endpoints(wall)
+        self.assertTrue(
+            move_handle.point.isEqual((endpoints[0] + endpoints[1]) * 0.5, 1e-7)
+        )
+
+    def test_joint_handle_anchors_to_offset_miter_seam(self):
+        document = FreeCAD.newDocument("OffsetMiterHandleTest")
+        self.addCleanup(FreeCAD.closeDocument, document.Name)
+        horizontal = Arch.makeWall(length=3000, width=200, height=2500, align="Center")
+        horizontal.Placement.Base = FreeCAD.Vector(1500, 0, 0)
+        vertical = Arch.makeWall(length=2000, width=200, height=2500, align="Right")
+        vertical.Placement = FreeCAD.Placement(
+            FreeCAD.Vector(3000, -1000, 0),
+            FreeCAD.Rotation(FreeCAD.Vector(0, 0, 1), -90),
+        )
+        document.recompute()
+        joint = Arch.makeWallJoint(horizontal, vertical, "Miter")
+        document.recompute()
+        self.assertEqual("OK", joint.Status, joint.StatusMessage)
+
+        context = RepresentationContext(purpose="Plan", cut_offset=1000, target_offset=0)
+        representation = horizontal.Proxy.getRepresentation(horizontal, context)
+        handle = next(
+            item for item in representation.edit_handles if item.role == "WallJointMove"
+        )
+        semantic_point = handle.operation.get_value(handle.source)
+
+        self.assertTrue(semantic_point.isEqual(FreeCAD.Vector(3000, 0, 0), 1e-7))
+        self.assertTrue(handle.point.isEqual(FreeCAD.Vector(3100, 0, 0), 1e-7))
+        editor = BIMContextualHandleEditor(context)
+        editor.begin(handle)
+        preview = editor.preview(handle.point + FreeCAD.Vector(200, 150, 0))
+        self.assertTrue(preview.value.isEqual(semantic_point + FreeCAD.Vector(200, 150, 0), 1e-7))
+
+        vertical_representation = vertical.Proxy.getRepresentation(vertical, context)
+        joint_targets = tuple(
+            target
+            for target in representation.iter_snap_targets()
+            if joint in target.related_sources
+        )
+        self.assertTrue(joint_targets)
+        self.assertIn("WallJointBoundary", {target.role for target in joint_targets})
+        self.assertIn("WallCorner", {target.role for target in joint_targets})
+        corner = next(target for target in joint_targets if target.role == "WallCorner")
+        result = query_representation_snap(
+            (representation, vertical_representation), corner.geometry.Point, 1.0
+        )
+        self.assertIn(joint, result.sources)
+        self.assertIn(horizontal, result.sources)
+        self.assertIn(vertical, result.sources)
+
+    def test_wall_width_face_handles_preserve_the_opposite_face(self):
+        document = FreeCAD.newDocument("ContextualWallWidthTest")
+        self.addCleanup(FreeCAD.closeDocument, document.Name)
+        context = RepresentationContext(
+            purpose="Plan", cut_offset=1000, target_offset=0
+        )
+        for align in ("Center", "Left", "Right"):
+            for side in ("Negative", "Positive"):
+                with self.subTest(align=align, side=side):
+                    wall = Arch.makeWall(
+                        length=3000,
+                        width=200,
+                        height=3000,
+                        align=align,
+                        name="{}{}WidthWall".format(align, side),
+                    )
+                    wall.Offset = 25
+                    document.recompute()
+                    before = wall.Proxy.get_resolved_section(wall)
+                    representation = wall.Proxy.getRepresentation(wall, context)
+                    handles = {
+                        item.subelement: item
+                        for item in representation.edit_handles
+                        if item.role == "WallWidth"
+                    }
+                    self.assertEqual(
+                        {"Width.NegativeFace", "Width.PositiveFace"}, set(handles)
+                    )
+                    handle = handles["Width.{}Face".format(side)]
+                    self.assertEqual("Plus", handle.glyph)
+                    self.assertEqual(1.0, handle.operation.sensitivity)
+
+                    editor = BIMContextualHandleEditor(context)
+                    editor.begin(handle)
+                    result = editor.commit(handle.point + handle.direction * 50)
+                    document.recompute()
+
+                    self.assertTrue(result.success)
+                    self.assertAlmostEqual(250.0, wall.Width.Value)
+                    after = wall.Proxy.get_resolved_section(wall)
+                    if side == "Negative":
+                        self.assertAlmostEqual(before.y_max, after.y_max)
+                        self.assertAlmostEqual(before.y_min - 50, after.y_min)
+                    else:
+                        self.assertAlmostEqual(before.y_min, after.y_min)
+                        self.assertAlmostEqual(before.y_max + 50, after.y_max)
+
+    def test_hosted_opening_exposes_semantic_plan_geometry_and_handles(self):
+        document = FreeCAD.newDocument("ContextualOpeningRepresentationTest")
+        self.addCleanup(FreeCAD.closeDocument, document.Name)
+        wall = Arch.makeWall(length=3000, width=200, height=3000)
+        base = Draft.make_rectangle(900, 2100)
+        base.Placement.Rotation = FreeCAD.Rotation(FreeCAD.Vector(1, 0, 0), 90)
+        opening = Arch.makeWindow(baseobj=base, name="ContextualOpening")
+        opening.Width = 900
+        opening.Height = 2100
+        Arch.addComponents(opening, wall)
+        document.recompute()
+
+        representation = opening.Proxy.getRepresentation(
+            opening,
+            RepresentationContext(
+                purpose="Plan", cut_offset=1000, target_offset=0
+            ),
+        )
+
+        self.assertIs(representation.source, opening)
+        self.assertTrue(representation.projected_geometry)
+        self.assertTrue(representation.snap_geometry)
+        self.assertTrue(representation.edit_handles)
+        self.assertTrue(
+            all(mapping.source is opening for mapping in representation.source_mappings)
+        )
 
     def test_snap_query_preserves_semantic_identity(self):
         source = object()

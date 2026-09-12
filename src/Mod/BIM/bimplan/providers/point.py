@@ -141,7 +141,6 @@ def start_plan_provider_point_tool(session, tool):
     session.selection.hover.set_hovered_provider(None)
     session.selection.hover.set_hovered_space(None)
     session.selection.hover.set_hovered_region(None)
-    session.overlays.walls.clear_wall_grips()
     session.overlays.walls.clear_selected_wall_overlay()
     session.overlays.openings.clear_selected_wall_opening_context_overlay()
     session.overlays.openings.clear_selected_opening_handles()

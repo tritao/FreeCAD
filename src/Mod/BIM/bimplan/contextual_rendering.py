@@ -78,13 +78,49 @@ class PlanContextualRenderingAPI:
             self._session.viewport.request_view_redraw()
         return changed
 
+    def set_preview_shape(self, source, shape):
+        renderer = self._renderer
+        if renderer is None:
+            return False
+        return self._session.viewport.queue_scene_graph_mutation(
+            ("contextual-preview", source),
+            lambda: (
+                renderer.set_preview_shape(source, shape)
+                if self._renderer is renderer
+                else False
+            ),
+        )
+
+    def clear_preview(self, source=None):
+        renderer = self._renderer
+        if renderer is None:
+            return False
+        return self._session.viewport.queue_scene_graph_mutation(
+            ("contextual-preview", source),
+            lambda: (
+                renderer.clear_preview(source)
+                if self._renderer is renderer
+                else False
+            ),
+        )
+
     def sync_visible_handles(self):
         """Keep semantic handles scoped to the primary Plan Edit selection."""
 
         if self._renderer is None:
             return False
         _kind, source = self._session.selection.state.get_selected_plan_target()
+        if self._session.current_tool != "Select":
+            source = None
         changed = self._renderer.set_visible_handle_sources((source,) if source else ())
+        if changed:
+            self._session.viewport.request_view_redraw()
+        return changed
+
+    def set_source_visible(self, source, visible):
+        if self._renderer is None:
+            return False
+        changed = self._renderer.set_source_visible(source, visible)
         if changed:
             self._session.viewport.request_view_redraw()
         return changed
@@ -147,7 +183,7 @@ class PlanContextualRenderingAPI:
         session.selection.refresh.refresh_document_dependent_secondary_selection_visuals()
         visual_kinds = list(space_visuals)
         if session.selection.state.is_selected_plan_target("wall"):
-            visual_kinds.extend(("selected_wall", "wall_grips"))
+            visual_kinds.append("selected_wall")
         if visual_kinds:
             session.overlays.queue_plan_overlay_visual_refresh(*visual_kinds)
 

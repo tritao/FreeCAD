@@ -85,6 +85,8 @@ class BIMEditHandle:
         interaction="Linear",
         subelement=None,
         minimum=0.0,
+        glyph="Circle",
+        glyph_size=9,
     ):
         self.source = source
         self.role = str(role)
@@ -96,6 +98,8 @@ class BIMEditHandle:
         self.interaction = str(interaction)
         self.subelement = subelement
         self.minimum = minimum
+        self.glyph = str(glyph)
+        self.glyph_size = int(glyph_size)
 
     @property
     def property_name(self):
@@ -128,6 +132,7 @@ class BIMEditOperation:
         value_kind="Scalar",
         sensitivity=1.0,
         interaction_intent="",
+        preview_shape=None,
     ):
         self.key = str(key)
         self.label = str(label)
@@ -141,6 +146,12 @@ class BIMEditOperation:
         self.value_kind = str(value_kind)
         self.sensitivity = float(sensitivity)
         self.interaction_intent = str(interaction_intent)
+        self._preview_shape = preview_shape
+
+    def get_preview_shape(self, source, value, context):
+        if not callable(self._preview_shape):
+            return None
+        return self._preview_shape(source, value, context)
 
     def is_available(self, source):
         return True if self._available is None else bool(self._available(source))

@@ -376,16 +376,11 @@ class TestArchFootprintGui(TestArchBaseGui.TestArchBaseGui):
         self.assertGreater(proxy.lset.numVertices.getNum(), 0)
 
         polylines = self._get_line_polylines(proxy)
-        self.assertEqual(len(polylines), 3)
-        self.assertEqual(len(polylines[0]), 2, "Closed door leaf should be a single segment.")
-        self.assertEqual(len(polylines[1]), 2, "Open door leaf should be a single segment.")
-        self.assertGreater(len(polylines[2]), 2, "Door swing arc should be a polyline.")
-        self.assertTrue(
-            polylines[0][0].isEqual(polylines[1][0], 1e-6),
-            "Closed and open leaves should share the same hinge point.",
-        )
-        closed_leaf_length = polylines[0][0].distanceToPoint(polylines[0][1])
-        self.assertAlmostEqual(closed_leaf_length, 900.0, delta=1.0)
+        self.assertEqual(len(polylines), 2)
+        self.assertEqual(len(polylines[0]), 2, "Open door leaf should be a single segment.")
+        self.assertGreater(len(polylines[1]), 2, "Door swing arc should be a polyline.")
+        open_leaf_length = polylines[0][0].distanceToPoint(polylines[0][1])
+        self.assertAlmostEqual(open_leaf_length, 900.0, delta=1.0)
 
         cut_z, base_z = proxy._get_footprint_cut_context()
         profile = proxy._get_hosted_opening_plan_frame(door.Shape, cut_z, base_z)
@@ -784,7 +779,7 @@ class TestArchFootprintGui(TestArchBaseGui.TestArchBaseGui):
 
         proxy = door.ViewObject.Proxy
         polylines = self._get_line_polylines(proxy)
-        self.assertEqual(len(polylines), 3)
+        self.assertEqual(len(polylines), 2)
 
         cut_z, base_z = proxy._get_footprint_cut_context()
         profile = proxy._get_hosted_opening_plan_frame(door.Shape, cut_z, base_z)
@@ -884,8 +879,8 @@ class TestArchFootprintGui(TestArchBaseGui.TestArchBaseGui):
         self.assertGreater(len(xs), 0)
         self.assertLess(max(xs), 8000.0)
         self.assertGreater(min(xs), 5000.0)
-        self.assertLess(max(ys), 4500.0)
-        self.assertGreater(min(ys), 3500.0)
+        self.assertLess(max(ys), wall.Width.Value)
+        self.assertGreater(min(ys), -wall.Width.Value)
 
     def test_host_shape_changes_refresh_legacy_opening_footprint(self):
         """Hosted legacy opening symbols should refresh when the host shape changes."""

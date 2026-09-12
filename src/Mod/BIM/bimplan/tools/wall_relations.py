@@ -174,7 +174,6 @@ def activate_join_tool(session):
     session.wall_edit.cancel_wall_edit()
     session.lifecycle.cancel_pending_edit()
     clear_plan_relation_status(session)
-    session.overlays.walls.clear_wall_grips()
     session.overlays.walls.clear_selected_wall_overlay()
     session.selection.hover.set_hovered_opening(None)
     session.selection.hover.set_hovered_wall(None)

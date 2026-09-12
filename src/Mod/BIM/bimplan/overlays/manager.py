@@ -186,7 +186,6 @@ def refresh_plan_overlay_view_scale(session):
         if session.selection.state.is_selected_plan_target("wall"):
             overlay_walls.sync_selected_wall_overlay(session)
             overlay_openings.sync_selected_wall_opening_context_overlay(session)
-            overlay_walls.sync_wall_grips(session)
         if session.hovered_opening:
             overlay_openings.sync_hovered_opening_overlay(session)
         if session.selection.state.is_selected_plan_target("opening"):
@@ -258,7 +257,6 @@ def _clear_common_overlay_visuals(
     overlay_openings.clear_selected_opening_handles(session)
     overlay_symbols.clear_selected_symbol_handles(session)
     overlay_openings.clear_selected_wall_opening_context_overlay(session)
-    overlay_walls.clear_wall_grips(session)
     overlay_walls.clear_selected_wall_overlay(session)
 
 
@@ -291,7 +289,6 @@ def _refresh_join_tool_overlays(session, dirty, refresh_all):
     overlay_openings.clear_selected_opening_handles(session)
     overlay_symbols.clear_selected_symbol_handles(session)
     overlay_openings.clear_selected_wall_opening_context_overlay(session)
-    overlay_walls.clear_wall_grips(session)
     overlay_walls.clear_selected_wall_overlay(session)
 
 
@@ -401,8 +398,6 @@ def _refresh_select_tool_overlays(session, dirty, refresh_all):
         overlay_spaces.clear_space_region_pick_overlays(session)
     if refresh_all or plan_document_visuals.PLAN_VISUAL_SELECTED_WALL in dirty:
         overlay_walls.sync_selected_wall_overlay(session)
-    if refresh_all or plan_document_visuals.PLAN_VISUAL_WALL_GRIPS in dirty:
-        overlay_walls.sync_wall_grips(session)
     provider_overlays_dirty = (
         refresh_all or plan_document_visuals.PLAN_VISUAL_PROVIDER_OVERLAYS in dirty
     )

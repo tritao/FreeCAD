@@ -34,7 +34,6 @@ def clear_begin_teardown_visuals(session):
     session.overlays.walls.clear_junction_node_overlays()
     session.overlays.walls.clear_hovered_wall_opening_context_overlay()
     plan_target_dispatch.clear_hovered_target_visuals(session)
-    session.overlays.walls.clear_wall_grips()
     plan_target_dispatch.clear_selected_target_visuals(
         session,
         clear_handle_kinds=(
@@ -66,7 +65,6 @@ def clear_shutdown_visuals(session):
             plan_target_kinds.PLAN_TARGET_PROVIDER,
         ),
     )
-    session.overlays.walls.clear_wall_grips()
     plan_target_dispatch.clear_selected_target_visuals(
         session,
         clear_handle_kinds=(

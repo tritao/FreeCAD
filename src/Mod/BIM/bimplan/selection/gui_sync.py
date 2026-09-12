@@ -239,8 +239,6 @@ def selection_observer_add(session, doc, obj, sub, point):
     ):
         if _should_skip_selection_observer_callback(session):
             return
-        if sub in ("EditNode0", "EditNode1", "EditNode2"):
-            return
         del doc, obj, sub, point
         schedule_selection_refresh(session)
 

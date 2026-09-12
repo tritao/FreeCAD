@@ -929,7 +929,7 @@ def _get_selected_target_status_text_view(
         if context.wall_edit.is_selected_wall_endpoint_editable():
             selection_help = translate(
                 "BIM_PlanEdit",
-                "Use wall grips in the viewport to stretch or move the selected wall.",
+                "Use wall handles in the viewport to stretch or move the selected wall.",
             )
         else:
             selection_help = translate(

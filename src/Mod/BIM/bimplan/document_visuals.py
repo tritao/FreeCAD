@@ -54,7 +54,6 @@ PLAN_VISUAL_SELECTED_SPACE = "selected_space"
 PLAN_VISUAL_SELECTED_REGION = "selected_region"
 PLAN_VISUAL_SECONDARY_SELECTION = "secondary_selection"
 PLAN_VISUAL_SPACE_REGION_PICK = "space_region_pick"
-PLAN_VISUAL_WALL_GRIPS = "wall_grips"
 PLAN_VISUAL_WALL_EDIT_PREVIEW = "wall_edit_preview"
 PLAN_VISUAL_PROVIDER_OVERLAYS = "provider_overlays"
 PLAN_VISUAL_VIEW_SCALE = "view_scale"
@@ -72,7 +71,6 @@ _PLAN_VISUAL_SELECTED_SYMBOL = PLAN_VISUAL_SELECTED_SYMBOL
 _PLAN_VISUAL_SELECTED_SPACE = PLAN_VISUAL_SELECTED_SPACE
 _PLAN_VISUAL_SELECTED_REGION = PLAN_VISUAL_SELECTED_REGION
 _PLAN_VISUAL_SECONDARY_SELECTION = PLAN_VISUAL_SECONDARY_SELECTION
-_PLAN_VISUAL_WALL_GRIPS = PLAN_VISUAL_WALL_GRIPS
 _PLAN_VISUAL_PROVIDER_OVERLAYS = PLAN_VISUAL_PROVIDER_OVERLAYS
 _FOOTPRINT_TARGET_KINDS = ("symbol", "region", "space")
 _OPENING_TARGET_KIND = "opening"
@@ -470,7 +468,6 @@ def invalidate_document_dependent_plan_visuals(session, recompute_opening_hosts=
     visual_args.extend(opening_visuals)
     if session.selection.state.is_selected_plan_target("wall"):
         visual_args.append(_PLAN_VISUAL_SELECTED_WALL)
-        visual_args.append(_PLAN_VISUAL_WALL_GRIPS)
     if selected_provider or session.status_text.get_provider_selected_objects():
         visual_args.append(_PLAN_VISUAL_SELECTED_PROVIDER)
     if secondary_targets:

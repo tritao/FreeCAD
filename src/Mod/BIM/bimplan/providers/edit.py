@@ -98,7 +98,6 @@ def activate_provider_handle_now(session, provider_obj, handle_index):
     handle = handles[handle_index]
     session.selection.state.set_selected_plan_target("provider", provider_obj)
     session.selection.sync.set_gui_selection_object(provider_obj)
-    session.overlays.walls.clear_wall_grips()
     if handle.interaction == PlanToolInteraction.POINT:
         start_provider_handle_point_pick(session, provider_obj, handle_index, handle)
         return

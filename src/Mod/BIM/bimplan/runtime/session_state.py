@@ -213,13 +213,6 @@ class PlanOverlayRefreshState:
 
 
 @dataclass
-class PlanWallGripState:
-    state: object = None
-    sync_queued: bool = False
-    sync_generation: int = 0
-
-
-@dataclass
 class PlanViewportState:
     status_chip: object = None
     status_chip_refresh_queued: bool = False
@@ -301,7 +294,6 @@ class PlanOpeningTransientState:
 
 @dataclass
 class PlanOverlayTrackerState:
-    grip_trackers: list = field(default_factory=list)
     wall_hover_trackers: list = field(default_factory=list)
     wall_overlay_trackers: list = field(default_factory=list)
     junction_node_trackers: list = field(default_factory=list)
@@ -391,7 +383,6 @@ def initialize_session_read_state(session):
     session.selection_sync_state = PlanSelectionSyncState()
     session.input_event_state = PlanInputEventState()
     session.overlay_refresh_state = PlanOverlayRefreshState()
-    session.wall_grip_state = PlanWallGripState()
     session.viewport_state = PlanViewportState()
     session.document_visual_state = PlanDocumentVisualState()
     session.performance_state = PlanPerformanceState()

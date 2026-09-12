@@ -6,6 +6,7 @@ import FreeCAD
 import FreeCADGui
 from bimplan.runtime import capabilities as runtime_capabilities
 from bimplan.runtime import tools as plan_runtime_tools
+from bimplan.transactions import PlanEditTransaction
 
 translate = FreeCAD.Qt.translate
 
@@ -191,17 +192,35 @@ def refresh_opening_move_preview_from_raw_point(session):
     session.openings.sync_opening_move_preview(opening, point)
 
 
+def _run_queued_opening_move_initial_preview(session, opening, point, preview_generation):
+    if session.lifecycle_state.tearing_down or session.lifecycle_state.finishing:
+        return
+    if session.opening_transient_state.opening_edit_generation != preview_generation:
+        return
+    if session.current_tool != "Move Opening":
+        return
+    if session.interaction_state.edit_opening is not opening:
+        return
+    with session.performance.plan_perf_trace_event("queued_opening_move_initial_preview"):
+        session.openings.sync_opening_move_preview(opening, point)
+
+
 def queue_opening_move_initial_preview(session, opening, point):
-    def run_preview():
-        with session.performance.plan_perf_trace_event("queued_opening_move_initial_preview"):
-            session.openings.sync_opening_move_preview(opening, point)
+    preview_generation = session.opening_transient_state.opening_edit_generation
 
     try:
         from PySide import QtCore
     except ImportError:
-        run_preview()
+        _run_queued_opening_move_initial_preview(
+            session, opening, point, preview_generation
+        )
         return
-    QtCore.QTimer.singleShot(0, run_preview)
+    QtCore.QTimer.singleShot(
+        0,
+        lambda: _run_queued_opening_move_initial_preview(
+            session, opening, point, preview_generation
+        ),
+    )
 
 
 def activate_opening_handle(session, opening, handle_index):
@@ -223,7 +242,6 @@ def activate_opening_handle_now(session, opening, handle_index):
             return
         with session.performance.plan_perf_trace_span("activate_opening_handle_set_target"):
             session.selection.state.set_selected_plan_target("opening", opening)
-            session.overlays.walls.clear_wall_grips()
         with session.performance.plan_perf_trace_span("activate_opening_handle_get_handles"):
             handles = session.openings.get_selected_opening_edit_handles(opening)
         if handle_index < 0 or handle_index >= len(handles):
@@ -250,6 +268,7 @@ def start_opening_handle_point_pick(session, opening, handle_index, handle):
             session.overlays.spaces.sync_secondary_selected_overlays()
             interaction_state = session.interaction_state
             opening_transient_state = session.opening_transient_state
+            opening_transient_state.opening_edit_generation += 1
             interaction_state.edit_opening = opening
             interaction_state.edit_opening_handle_index = handle_index
             opening_transient_state.edit_opening_move_anchor = "center"
@@ -327,18 +346,12 @@ def finish_opening_handle_point_pick(session, point=None, obj=None):
     handle = handles[handle_index]
     point = session.openings.project_opening_handle_point(opening, handle, point)
 
-    try:
-        session.doc.openTransaction(handle.transaction or translate("BIM_PlanEdit", "Edit Opening"))
-        moved = session.openings.execute_opening_handle(opening, handle_index, point)
-        if not moved:
-            raise RuntimeError("Unable to execute opening handle")
-        session.doc.commitTransaction()
-        session.doc.recompute()
-    except Exception:
-        try:
-            session.doc.abortTransaction()
-        except (ReferenceError, RuntimeError):
-            pass
+    transaction_name = handle.transaction or translate("BIM_PlanEdit", "Edit Opening")
+    if not _run_opening_handle_transaction(
+        session,
+        transaction_name,
+        lambda: _execute_opening_move_handle(session, opening, handle_index, point),
+    ):
         opening_transient_state.edit_opening_move_anchor = "center"
         session.openings.restore_selected_opening(opening)
         return
@@ -352,6 +365,7 @@ def finish_opening_handle_point_pick(session, point=None, obj=None):
 def cancel_opening_handle_point_pick(session):
     interaction_state = session.interaction_state
     opening_transient_state = session.opening_transient_state
+    opening_transient_state.opening_edit_generation += 1
     opening = interaction_state.edit_opening
     interaction_state.edit_opening = None
     interaction_state.edit_opening_handle_index = None
@@ -372,6 +386,7 @@ def cancel_opening_handle_point_pick(session):
 def reset_pending_edit_state(session, *, clear_edit=False):
     interaction_state = session.interaction_state
     opening_transient_state = session.opening_transient_state
+    opening_transient_state.opening_edit_generation += 1
     opening_transient_state.edit_opening_move_anchor = "center"
     opening_transient_state.edit_opening_move_raw_point = None
     if clear_edit:
@@ -401,27 +416,71 @@ def restore_selected_opening(session, opening):
 
 
 def queue_restore_selected_opening(session, opening):
+    restore_generation = session.opening_transient_state.opening_edit_generation
     try:
         from PySide import QtCore
     except ImportError:
-        session.openings.restore_selected_opening(opening)
+        _run_queued_restore_selected_opening(session, opening, restore_generation)
         return
-    QtCore.QTimer.singleShot(0, lambda: session.openings.restore_selected_opening(opening))
+    QtCore.QTimer.singleShot(
+        0,
+        lambda: _run_queued_restore_selected_opening(
+            session, opening, restore_generation
+        ),
+    )
+
+
+def _run_queued_restore_selected_opening(session, opening, restore_generation):
+    opening_transient_state = session.opening_transient_state
+    if session.lifecycle_state.tearing_down or session.lifecycle_state.finishing:
+        return
+    if opening_transient_state.opening_edit_generation != restore_generation:
+        return
+    session.openings.restore_selected_opening(opening)
+
+
+def _warn_post_commit_recompute_failure(action_label, exc):
+    message = str(exc or "").strip() or type(exc).__name__
+    FreeCAD.Console.PrintWarning(
+        translate(
+            "BIM_PlanEdit",
+            "Completed {action}, but follow-up recompute failed: {error}\n",
+        ).format(action=action_label, error=message)
+    )
+
+
+def _run_opening_handle_transaction(session, transaction_name, callback):
+    try:
+        with PlanEditTransaction(session.doc, transaction_name):
+            callback()
+    except Exception:
+        return False
+    try:
+        session.doc.recompute()
+    except Exception as exc:
+        _warn_post_commit_recompute_failure(transaction_name, exc)
+    return True
+
+
+def _execute_opening_move_handle(session, opening, handle_index, point):
+    moved = session.openings.execute_opening_handle(opening, handle_index, point)
+    if not moved:
+        raise RuntimeError("Unable to execute opening handle")
+
+
+def _execute_opening_action_handle(session, opening, handle_index):
+    executed = session.openings.execute_opening_handle(opening, handle_index)
+    if not executed:
+        raise RuntimeError("Unable to execute opening handle")
 
 
 def execute_selected_opening_handle(session, opening, handle_index, handle):
-    try:
-        session.doc.openTransaction(handle.transaction or translate("BIM_PlanEdit", "Edit Opening"))
-        executed = session.openings.execute_opening_handle(opening, handle_index)
-        if not executed:
-            raise RuntimeError("Unable to execute opening handle")
-        session.doc.commitTransaction()
-        session.doc.recompute()
-    except Exception:
-        try:
-            session.doc.abortTransaction()
-        except (ReferenceError, RuntimeError):
-            pass
+    transaction_name = handle.transaction or translate("BIM_PlanEdit", "Edit Opening")
+    if not _run_opening_handle_transaction(
+        session,
+        transaction_name,
+        lambda: _execute_opening_action_handle(session, opening, handle_index),
+    ):
         return
     session.selection.state.set_selected_plan_target("opening", opening, pending_restore=True)
     session.overlays.openings.sync_selected_opening_overlay()
@@ -781,7 +840,7 @@ class PlanOpeningsAPI(_SessionAPI):
             self.refresh_opening_footprint_display(obj)
             self.refresh_opening_host_footprint_displays(obj)
             self.session.overlays.queue_plan_overlay_visual_refresh(
-                plan_document_visuals.PLAN_VISUAL_WALL_GRIPS
+                plan_document_visuals.PLAN_VISUAL_SELECTED_WALL
             )
             return True
         return False

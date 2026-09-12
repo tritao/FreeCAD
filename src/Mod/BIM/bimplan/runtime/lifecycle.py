@@ -265,7 +265,6 @@ def cancel_pending_edit(session, *, restore_wall_visibility=True):
         restore_wall_visibility=restore_wall_visibility,
     )
     session.wall_relations.clear_plan_relation_status()
-    session.overlays.walls.sync_wall_grips()
     plan_target_dispatch.sync_selected_target_visuals(
         session,
         kinds=plan_target_kinds.PENDING_EDIT_VISUAL_SYNC_KINDS,

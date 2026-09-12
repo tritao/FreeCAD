@@ -34,10 +34,12 @@ class ContextualRepresentationRenderer:
         self._object_nodes = {}
         self._representations = {}
         self._node_mappings = {}
-        self._handle_coordinates = {}
-        self._handle_materials = {}
+        self._handle_position_fields = {}
+        self._handle_color_fields = {}
         self._handle_switches = {}
+        self._preview_nodes = {}
         self._visible_handle_sources = set()
+        self._hidden_sources = set()
 
     def set_representation(self, representation):
         """Replace one object's viewer-local representation."""
@@ -49,7 +51,8 @@ class ContextualRepresentationRenderer:
         self.remove_representation(source, restore_visibility=False)
         if handles_were_visible:
             self._visible_handle_sources.add(source)
-        root = coin.SoSeparator()
+        root = coin.SoSwitch()
+        root.whichChild = coin.SO_SWITCH_ALL
         self._append_faces(root, representation)
         self._append_lines(root, representation)
         handle_switch = self._append_edit_handles(root, representation)
@@ -59,10 +62,12 @@ class ContextualRepresentationRenderer:
         self.root.addChild(root)
         self._object_nodes[source] = root
         self._representations[source] = representation
+        self._apply_source_visibility(source)
         self.view.setViewVisibility(self.layer, source, "Hidden")
         return root
 
     def remove_representation(self, source, restore_visibility=True):
+        self.clear_preview(source)
         node = self._object_nodes.pop(source, None)
         self._representations.pop(source, None)
         if node is not None:
@@ -70,14 +75,15 @@ class ContextualRepresentationRenderer:
             stale = [key for key, value in self._node_mappings.items() if value.source is source]
             for key in stale:
                 self._node_mappings.pop(key, None)
-            stale_handles = [key for key in self._handle_coordinates if key[0] is source]
+            stale_handles = [key for key in self._handle_position_fields if key[0] is source]
             for key in stale_handles:
-                self._handle_coordinates.pop(key, None)
-                self._handle_materials.pop(key, None)
+                self._handle_position_fields.pop(key, None)
+                self._handle_color_fields.pop(key, None)
             self._handle_switches.pop(source, None)
             if restore_visibility:
                 self._visible_handle_sources.discard(source)
         if restore_visibility:
+            self._hidden_sources.discard(source)
             self.view.setViewVisibility(self.layer, source, "Inherit")
 
     def mapping_for_node(self, node):
@@ -159,20 +165,67 @@ class ContextualRepresentationRenderer:
             self._apply_handle_visibility(source)
         return True
 
+    def set_source_visible(self, source, visible):
+        hidden_before = source in self._hidden_sources
+        if visible:
+            self._hidden_sources.discard(source)
+        else:
+            self._hidden_sources.add(source)
+        self._apply_source_visibility(source)
+        return hidden_before == bool(visible)
+
     def close(self):
         if self.root is None:
             return
+        self.clear_preview()
         self.scene.removeChild(self.root)
         self.view.removeViewContextLayer(self.layer)
         self._object_nodes.clear()
         self._representations.clear()
         self._node_mappings.clear()
-        self._handle_coordinates.clear()
-        self._handle_materials.clear()
+        self._handle_position_fields.clear()
+        self._handle_color_fields.clear()
         self._handle_switches.clear()
         self._visible_handle_sources.clear()
+        self._hidden_sources.clear()
         self.root.unref()
         self.root = None
+
+    def set_preview_shape(self, source, shape):
+        """Realize one transient shape with Part's preview renderer."""
+
+        self.clear_preview(source)
+        if source is None or shape is None or shape.isNull():
+            return False
+        preview_type = coin.SoType.fromName("SoPreviewShape")
+        if preview_type.isBad():
+            raise RuntimeError("SoPreviewShape is not registered")
+        view_object = getattr(source, "ViewObject", None)
+        update_shape = getattr(view_object, "updatePreviewShape", None)
+        if not callable(update_shape):
+            raise RuntimeError("Source ViewProvider cannot tessellate preview shapes")
+        node = preview_type.createInstance()
+        node.ref()
+        node.color = (0.12, 0.38, 0.95)
+        node.transparency = 0.65
+        node.lineWidth = 2.0
+        update_shape(shape, node)
+        self.root.addChild(node)
+        self._preview_nodes[source] = node
+        return True
+
+    def clear_preview(self, source=None):
+        """Remove viewer-local preview nodes without touching document state."""
+
+        sources = tuple(self._preview_nodes) if source is None else (source,)
+        changed = False
+        for item in sources:
+            node = self._preview_nodes.pop(item, None)
+            if node is not None and self.root is not None:
+                self.root.removeChild(node)
+                node.unref()
+                changed = True
+        return changed
 
     def _record_node(self, node, representation, geometry):
         mapping = representation.mapping_for(geometry)
@@ -240,25 +293,20 @@ class ContextualRepresentationRenderer:
             return None
         handle_switch = coin.SoSwitch()
         handle_switch.whichChild = coin.SO_SWITCH_NONE
+        glyph_type = coin.SoType.fromName("SoFCOverlayGlyph")
+        if glyph_type.isBad():
+            raise RuntimeError("SoFCOverlayGlyph is not registered")
         for handle in representation.edit_handles:
-            group = coin.SoSeparator()
-            material = coin.SoMaterial()
-            material.diffuseColor = (0.95, 0.35, 0.05)
+            glyph = glyph_type.createInstance()
+            glyph.position = _xyz(handle.point)
+            glyph.color = (0.95, 0.35, 0.05)
+            glyph.glyph = str(getattr(handle, "glyph", "Circle")).upper()
+            glyph.size = int(getattr(handle, "glyph_size", 9))
             key = (handle.source, id(handle))
-            self._handle_materials[key] = material
-            group.addChild(material)
-            style = coin.SoDrawStyle()
-            style.pointSize = 9.0
-            group.addChild(style)
-            coordinates = coin.SoCoordinate3()
-            coordinates.point.set1Value(0, _xyz(handle.point))
-            self._handle_coordinates[key] = coordinates
-            group.addChild(coordinates)
-            points = coin.SoPointSet()
-            points.numPoints = 1
-            group.addChild(points)
-            handle_switch.addChild(group)
-            self._node_mappings[id(group)] = ContextualNodeMapping(
+            self._handle_position_fields[key] = glyph.position
+            self._handle_color_fields[key] = glyph.color
+            handle_switch.addChild(glyph)
+            self._node_mappings[id(glyph)] = ContextualNodeMapping(
                 handle.source,
                 handle.subelement,
                 handle.role,
@@ -276,16 +324,23 @@ class ContextualRepresentationRenderer:
                 else coin.SO_SWITCH_NONE
             )
 
+    def _apply_source_visibility(self, source):
+        node = self._object_nodes.get(source)
+        if node is not None:
+            node.whichChild = (
+                coin.SO_SWITCH_NONE if source in self._hidden_sources else coin.SO_SWITCH_ALL
+            )
+
     def preview_handle(self, handle, point):
-        coordinates = self._handle_coordinates.get((handle.source, id(handle)))
-        if coordinates is None:
+        position = self._handle_position_fields.get((handle.source, id(handle)))
+        if position is None:
             return False
-        coordinates.point.set1Value(0, _xyz(point))
+        position.setValue(_xyz(point))
         return True
 
     def set_handle_state(self, handle, state):
-        material = self._handle_materials.get((handle.source, id(handle)))
-        if material is None:
+        color = self._handle_color_fields.get((handle.source, id(handle)))
+        if color is None:
             return False
         colors = {
             "normal": (0.95, 0.35, 0.05),
@@ -293,7 +348,7 @@ class ContextualRepresentationRenderer:
             "invalid": (0.9, 0.05, 0.05),
             "constrained": (0.5, 0.5, 0.5),
         }
-        material.diffuseColor = colors.get(str(state), colors["normal"])
+        color.setValue(colors.get(str(state), colors["normal"]))
         return True
 
     def __enter__(self):

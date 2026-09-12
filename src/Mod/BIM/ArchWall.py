@@ -1020,7 +1020,8 @@ class _Wall(ArchComponent.Component):
             )
 
         representation = ArchRepresentation.BIMRepresentation(source=obj, context=context)
-        for index, face in enumerate(self._getPlanCutFaces(obj, context), start=1):
+        cut_faces = tuple(self._getPlanCutFaces(obj, context))
+        for index, face in enumerate(cut_faces, start=1):
             representation.add_geometry(
                 "cut_geometry", face, "PlanCutFace", subelement=f"PlanFace{index}"
             )
@@ -1047,22 +1048,252 @@ class _Wall(ArchComponent.Component):
                     role,
                     subelement=subelement,
                 )
+        joint_edges = self._wall_joint_snap_edges(representation, obj)
+        for index, face in enumerate(cut_faces, start=1):
             for edge_index, edge in enumerate(face.Edges, start=1):
+                joint = self._joint_for_snap_edge(joint_edges, edge)
                 representation.add_geometry(
                     "snap_geometry",
                     edge,
-                    "PlanCutEdge",
+                    "WallJointBoundary" if joint is not None else "WallBoundaryEdge",
                     subelement=f"PlanFace{index}.Edge{edge_index}",
+                    related_sources=(joint,) if joint is not None else (),
+                )
+            for vertex_index, vertex in enumerate(face.Vertexes, start=1):
+                joints = tuple(
+                    dict.fromkeys(
+                        joint
+                        for edge in face.Edges
+                        if (
+                            joint := self._joint_for_snap_edge(joint_edges, edge)
+                        )
+                        is not None
+                        and any(
+                            vertex.Point.isEqual(edge_vertex.Point, 1e-7)
+                            for edge_vertex in edge.Vertexes
+                        )
+                    )
+                )
+                representation.add_geometry(
+                    "snap_geometry",
+                    vertex,
+                    "WallCorner" if joints else "WallBoundaryVertex",
+                    subelement=f"PlanFace{index}.Vertex{vertex_index}",
+                    related_sources=joints,
                 )
         self._add_owned_path_edit_handles(representation, obj, context)
         self._add_native_path_edit_handles(representation, obj, context)
+        self._add_wall_joint_edit_handles(representation, obj, context)
+        self._add_section_property_edit_handles(representation, obj, context)
         return representation
 
+    def _wall_joint_snap_edges(self, representation, wall):
+        """Map each resolved relation to its physical wall-end boundary edge."""
+
+        result = []
+        claimed_edges = []
+        for joint in ArchWallRelation.iter_wall_joints(wall):
+            if not getattr(joint, "Enabled", True):
+                continue
+            solution = ArchWallRelation.solve_wall_joint(joint)
+            if not solution.is_ok() or solution.trim_for_wall(wall) is None:
+                continue
+            anchor = self._wall_joint_handle_point(
+                representation, wall, solution.intersection
+            )
+            candidates = []
+            for face in representation.cut_geometry:
+                for edge in face.Edges:
+                    if any(
+                        edge.isSame(claimed) for claimed in claimed_edges
+                    ) or len(edge.Vertexes) < 2:
+                        continue
+                    midpoint = sum(
+                        (FreeCAD.Vector(vertex.Point) for vertex in edge.Vertexes),
+                        FreeCAD.Vector(),
+                    ).multiply(1.0 / len(edge.Vertexes))
+                    candidates.append((midpoint.distanceToPoint(anchor), edge))
+            if not candidates:
+                continue
+            _distance, edge = min(candidates, key=lambda item: item[0])
+            result.append((edge, joint))
+            claimed_edges.append(edge)
+        return result
+
     @staticmethod
-    def _add_owned_path_edit_handles(representation, wall, context):
+    def _joint_for_snap_edge(joint_edges, edge):
+        return next(
+            (joint for candidate, joint in joint_edges if edge.isSame(candidate)),
+            None,
+        )
+
+    def _add_section_property_edit_handles(self, representation, wall, context):
+        baseline = self.get_global_baseline(wall)
+        section = self.get_resolved_section(wall)
+        if baseline is None or section is None or not self._can_edit_uniform_section(wall):
+            return
+        axis = baseline.end_point.sub(baseline.start_point)
+        if axis.Length <= 1e-9:
+            return
+        axis.normalize()
+        lateral = axis.cross(baseline.normal)
+        if lateral.Length <= 1e-9:
+            return
+        lateral.normalize()
+        midpoint = (baseline.start_point + baseline.end_point) * 0.5
+        for side, coordinate, direction in (
+            ("Negative", section.y_min, -lateral),
+            ("Positive", section.y_max, lateral),
+        ):
+
+            def set_width_from_face(source, value, side=side):
+                current_section = self.get_resolved_section(source)
+                if current_section is None:
+                    raise ValueError("Wall no longer has an editable uniform section")
+                old_width = float(source.Width.Value)
+                delta = float(value) - old_width
+                align = str(source.Align)
+                if align == "Center":
+                    if side == "Negative":
+                        source.Align = "Left"
+                        source.Offset = -current_section.y_max
+                    else:
+                        source.Align = "Right"
+                        source.Offset = current_section.y_min
+                elif (align == "Left" and side == "Positive") or (
+                    align == "Right" and side == "Negative"
+                ):
+                    source.Offset = source.Offset.Value - delta
+                source.Width = value
+
+            width_operation = ArchRepresentation.BIMEditOperation(
+                "WallWidth{}Face".format(side),
+                "Edit Wall Width",
+                lambda source: source.Width.Value,
+                set_width_from_face,
+                property_name="Width, Align, Offset",
+                minimum=1.0,
+                available=lambda source: self._can_edit_uniform_section(source),
+                preview_shape=(
+                    lambda source, value, preview_context, side=side: (
+                        self._get_width_face_preview_shape(
+                            source, side, value, preview_context
+                        )
+                    )
+                ),
+            )
+            representation.add_edit_handle(
+                ArchRepresentation.BIMEditHandle(
+                    wall,
+                    "WallWidth",
+                    ArchRepresentation.project_to_representation_plane(
+                        midpoint + lateral * coordinate, context
+                    ),
+                    direction,
+                    width_operation,
+                    subelement="Width.{}Face".format(side),
+                    minimum=1.0,
+                    glyph="Plus",
+                )
+            )
+        align = str(wall.Align)
+        if align not in ("Left", "Right"):
+            return
+        offset_direction = -lateral if align == "Left" else lateral
+        offset_operation = ArchRepresentation.BIMEditOperation(
+            "WallOffset",
+            "Edit Wall Offset",
+            lambda source: source.Offset.Value,
+            lambda source, value: setattr(source, "Offset", value),
+            property_name="Offset",
+            available=lambda source: self._can_edit_uniform_section(source),
+        )
+        representation.add_edit_handle(
+            ArchRepresentation.BIMEditHandle(
+                wall,
+                "WallOffset",
+                ArchRepresentation.project_to_representation_plane(
+                    midpoint + lateral * ((section.y_min + section.y_max) * 0.5), context
+                ),
+                offset_direction,
+                offset_operation,
+                subelement="Offset",
+                minimum=None,
+                glyph="Diamond",
+            )
+        )
+
+    def _get_width_face_preview_shape(self, wall, side, value, context):
+        """Build a non-persistent plan face for one width-face edit."""
+
+        import Part
+
+        baseline = self.get_global_baseline(wall)
+        section = self.get_resolved_section(wall)
+        if baseline is None or section is None or float(value) < 1.0:
+            return Part.Shape()
+        width = float(value)
+        delta = width - float(wall.Width.Value)
+        align = str(wall.Align)
+        offset = float(wall.Offset.Value)
+        if align == "Center":
+            if side == "Negative":
+                align = "Left"
+                offset = -section.y_max
+            else:
+                align = "Right"
+                offset = section.y_min
+        elif (align == "Left" and side == "Positive") or (
+            align == "Right" and side == "Negative"
+        ):
+            offset -= delta
+        if align == "Center":
+            y_min, y_max = -width * 0.5, width * 0.5
+        elif align == "Left":
+            y_min, y_max = -width - offset, -offset
+        else:
+            y_min, y_max = offset, offset + width
+        axis = baseline.end_point - baseline.start_point
+        axis.normalize()
+        lateral = axis.cross(baseline.normal)
+        lateral.normalize()
+        points = [
+            baseline.start_point + lateral * y_min,
+            baseline.end_point + lateral * y_min,
+            baseline.end_point + lateral * y_max,
+            baseline.start_point + lateral * y_max,
+        ]
+        target = getattr(context, "target_offset", None)
+        if target is not None and getattr(context, "reference_frame", None) is None:
+            for point in points:
+                point.z = float(target)
+        return Part.Face(Part.makePolygon(points + [points[0]]))
+
+    @staticmethod
+    def _can_edit_uniform_section(wall):
+        material = getattr(wall, "Material", None)
+        base = getattr(wall, "Base", None)
+        return bool(
+            hasattr(wall, "Width")
+            and not getattr(material, "Thicknesses", None)
+            and not (
+                getattr(wall, "ArchSketchData", False)
+                and base
+                and Draft.getType(base) == "ArchSketch"
+            )
+            and not list(getattr(wall, "OverrideWidth", ()) or ())
+            and not list(getattr(wall, "OverrideAlign", ()) or ())
+            and not list(getattr(wall, "OverrideOffset", ()) or ())
+            and not ArchRepresentation.is_property_expression_driven(wall, "Width")
+            and not ArchRepresentation.is_property_expression_driven(wall, "Offset")
+        )
+
+    def _add_owned_path_edit_handles(self, representation, wall, context):
         from bimplan.editable_points import get_contextual_edit_points
 
-        points = get_contextual_edit_points(getattr(wall, "Base", None), context)
+        owner = getattr(wall, "Base", None)
+        points = get_contextual_edit_points(owner, context)
+        use_wall_controller = self._is_straight_owned_path(owner, points)
         for index, point in enumerate(points):
             role = point.semantic_id or "Vertex{}".format(index + 1)
             operation = ArchRepresentation.BIMEditOperation(
@@ -1073,6 +1304,13 @@ class _Wall(ArchComponent.Component):
                 property_name="Base.{}".format(point.property_name),
                 value_kind="Point",
                 available=lambda _wall, point=point: point.is_available(),
+                interaction_intent=(
+                    "WallStretchStart"
+                    if use_wall_controller and index == 0
+                    else "WallStretchEnd"
+                    if use_wall_controller and index == 1
+                    else ""
+                ),
             )
             representation.add_edit_handle(
                 ArchRepresentation.BIMEditHandle(
@@ -1084,13 +1322,61 @@ class _Wall(ArchComponent.Component):
                     interaction="Planar",
                     subelement="Base.{}".format(point.subelement),
                     minimum=None,
+                    glyph="Square",
                 )
             )
+        if use_wall_controller:
+            midpoint = (points[0].point + points[1].point) * 0.5
+
+            def move_owned_path(_wall, value, points=points):
+                current = (points[0].get_value() + points[1].get_value()) * 0.5
+                delta = FreeCAD.Vector(value).sub(current)
+                for point in points:
+                    point.apply_value(point.get_value().add(delta))
+
+            representation.add_edit_handle(
+                ArchRepresentation.BIMEditHandle(
+                    wall,
+                    "WallMove",
+                    ArchRepresentation.project_to_representation_plane(midpoint, context),
+                    FreeCAD.Vector(),
+                    ArchRepresentation.BIMEditOperation(
+                        "WallMove",
+                        "Move Wall",
+                        lambda _wall, points=points: (
+                            points[0].get_value() + points[1].get_value()
+                        )
+                        * 0.5,
+                        move_owned_path,
+                        property_name="Base.Points",
+                        value_kind="Point",
+                        available=lambda _wall, points=points: all(
+                            point.is_available() for point in points
+                        ),
+                        interaction_intent="WallMove",
+                    ),
+                    interaction="Planar",
+                    subelement="Base.Path",
+                    minimum=None,
+                    glyph="Circle",
+                )
+            )
+
+    @staticmethod
+    def _is_straight_owned_path(owner, points):
+        if owner is None or getattr(owner, "TypeId", "") == "Sketcher::SketchObject":
+            return False
+        try:
+            edges = tuple(owner.Shape.Edges)
+            return len(points) == 2 and len(edges) == 1 and not bool(edges[0].Closed)
+        except Exception:
+            return False
 
     def _add_native_path_edit_handles(self, representation, wall, context):
         if getattr(wall, "Base", None) is not None or not self._can_edit_native_path(wall):
             return
         endpoints = self.calc_endpoints(wall)
+        relation_controlled_ends = self._relation_controlled_native_ends(wall)
 
         def apply_endpoint(source, index, value):
             current = self.calc_endpoints(source)
@@ -1100,6 +1386,8 @@ class _Wall(ArchComponent.Component):
             source.Proxy.set_from_endpoints(source, current)
 
         for index, role in enumerate(("Start", "End")):
+            if role in relation_controlled_ends:
+                continue
             operation = ArchRepresentation.BIMEditOperation(
                 "WallPathEndpoint",
                 "Edit Wall Path Endpoint",
@@ -1108,6 +1396,7 @@ class _Wall(ArchComponent.Component):
                 property_name="Path.{}".format(role),
                 value_kind="Point",
                 available=lambda source: self._can_edit_native_path(source),
+                interaction_intent="WallStretch{}".format(role),
             )
             representation.add_edit_handle(
                 ArchRepresentation.BIMEditHandle(
@@ -1121,8 +1410,176 @@ class _Wall(ArchComponent.Component):
                     interaction="Planar",
                     subelement="Path.{}".format(role),
                     minimum=None,
+                    glyph="Square",
                 )
             )
+
+        midpoint = (endpoints[0] + endpoints[1]) * 0.5
+
+        def move_wall(source, value):
+            current = self.calc_endpoints(source)
+            if len(current) != 2:
+                raise ValueError("Wall no longer has an editable straight path")
+            delta = FreeCAD.Vector(value).sub((current[0] + current[1]) * 0.5)
+            source.Proxy.set_from_endpoints(
+                source,
+                [current[0].add(delta), current[1].add(delta)],
+            )
+
+        move_operation = ArchRepresentation.BIMEditOperation(
+            "WallMove",
+            "Move Wall",
+            lambda source: sum(self.calc_endpoints(source), FreeCAD.Vector()) * 0.5,
+            move_wall,
+            property_name="Path",
+            value_kind="Point",
+            available=lambda source: self._can_edit_native_path(source),
+            interaction_intent="WallMove",
+        )
+        representation.add_edit_handle(
+            ArchRepresentation.BIMEditHandle(
+                wall,
+                "WallMove",
+                ArchRepresentation.project_to_representation_plane(midpoint, context),
+                FreeCAD.Vector(),
+                move_operation,
+                interaction="Planar",
+                subelement="Path",
+                minimum=None,
+                glyph="Circle",
+            )
+        )
+
+    def _relation_controlled_native_ends(self, wall):
+        ends = set()
+        for joint in ArchWallRelation.iter_wall_joints(wall):
+            data = self._movable_wall_joint_data(joint)
+            if data is not None:
+                ends.add(data["ends"][wall])
+        return ends
+
+    def _movable_wall_joint_data(self, joint):
+        if not getattr(joint, "Enabled", True):
+            return None
+        solution = ArchWallRelation.solve_wall_joint(joint)
+        if not solution.is_ok():
+            return None
+        walls = tuple(ArchWallRelation.get_relation_walls(joint))
+        if len(walls) != 2 or any(not self._can_edit_native_path(wall) for wall in walls):
+            return None
+        ends = {}
+        for wall in walls:
+            claim = solution.trim_for_wall(wall)
+            if claim is None or claim.end_name not in ("Start", "End"):
+                return None
+            ends[wall] = claim.end_name
+        return {
+            "solution": solution,
+            "walls": walls,
+            "ends": ends,
+        }
+
+    def _add_wall_joint_edit_handles(self, representation, wall, context):
+        for joint in ArchWallRelation.iter_wall_joints(wall):
+            data = self._movable_wall_joint_data(joint)
+            if data is None:
+                continue
+
+            def get_joint_point(_source, joint=joint):
+                current = self._movable_wall_joint_data(joint)
+                if current is None:
+                    raise ValueError("Wall joint is no longer editable")
+                return current["solution"].intersection
+
+            def move_joint(_source, value, joint=joint):
+                current = self._movable_wall_joint_data(joint)
+                if current is None:
+                    raise ValueError("Wall joint is no longer editable")
+                target = FreeCAD.Vector(value)
+                for related_wall in current["walls"]:
+                    points = list(related_wall.Proxy.calc_endpoints(related_wall))
+                    index = 0 if current["ends"][related_wall] == "Start" else 1
+                    points[index] = FreeCAD.Vector(target)
+                    related_wall.Proxy.set_from_endpoints(related_wall, points)
+                document = getattr(joint, "Document", None)
+                if document is not None:
+                    document.recompute()
+                resolved = ArchWallRelation.solve_wall_joint(joint)
+                if not resolved.is_ok() or not resolved.intersection.isEqual(target, 1e-6):
+                    raise ValueError(
+                        "The target point cannot produce a valid finite wall joint"
+                    )
+
+            operation = ArchRepresentation.BIMEditOperation(
+                "WallJointMove.{}".format(joint.Name),
+                "Move Wall Joint",
+                get_joint_point,
+                move_joint,
+                property_name="Relation.{}".format(joint.Name),
+                value_kind="Point",
+                available=lambda _source, joint=joint: (
+                    self._movable_wall_joint_data(joint) is not None
+                ),
+            )
+            representation.add_edit_handle(
+                ArchRepresentation.BIMEditHandle(
+                    wall,
+                    "WallJointMove",
+                    ArchRepresentation.project_to_representation_plane(
+                        self._wall_joint_handle_point(
+                            representation, wall, data["solution"].intersection
+                        ),
+                        context,
+                    ),
+                    FreeCAD.Vector(),
+                    operation,
+                    interaction="Planar",
+                    subelement="Relation.{}".format(joint.Name),
+                    minimum=None,
+                    glyph="Diamond",
+                    glyph_size=13,
+                )
+            )
+
+    @staticmethod
+    def _wall_joint_handle_point(representation, wall, intersection):
+        """Return the visible center of the resolved wall end nearest a joint.
+
+        The editable value remains the baseline intersection.  Offset and
+        asymmetrically aligned walls can place the finished miter seam away
+        from that point, so the interaction glyph is anchored to the nearest
+        cut-boundary segment that crosses the wall section.
+        """
+
+        baseline = wall.Proxy.get_global_baseline(wall)
+        if baseline is None:
+            return FreeCAD.Vector(intersection)
+        axis = baseline.end_point.sub(baseline.start_point)
+        if axis.Length <= 1e-9:
+            return FreeCAD.Vector(intersection)
+        axis.normalize()
+        lateral = axis.cross(baseline.normal)
+        if lateral.Length <= 1e-9:
+            return FreeCAD.Vector(intersection)
+        lateral.normalize()
+
+        candidates = []
+        for face in representation.cut_geometry:
+            for edge in getattr(face, "Edges", ()) or ():
+                vertices = getattr(edge, "Vertexes", ()) or ()
+                if len(vertices) < 2:
+                    continue
+                start = FreeCAD.Vector(vertices[0].Point)
+                end = FreeCAD.Vector(vertices[-1].Point)
+                if abs(end.sub(start).dot(lateral)) <= 1e-7:
+                    continue
+                midpoint = start.add(end).multiply(0.5)
+                planar_delta = midpoint.sub(intersection)
+                planar_delta.z = 0
+                candidates.append((planar_delta.Length, midpoint))
+        if not candidates:
+            return FreeCAD.Vector(intersection)
+        return min(candidates, key=lambda item: item[0])[1]
 
     def _can_edit_native_path(self, wall):
         return bool(
@@ -2444,6 +2901,8 @@ class _ViewProviderWall(ArchComponent.ViewProviderComponent):
         of the display mode node.
         """
 
+        if not vobj.hasExtension("PartGui::ViewProviderPreviewExtensionPython"):
+            vobj.addExtension("PartGui::ViewProviderPreviewExtensionPython")
         self.Object = vobj.Object
         ArchComponent.ViewProviderComponent.attach(self, vobj)
 

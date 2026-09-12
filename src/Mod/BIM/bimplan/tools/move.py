@@ -45,6 +45,5 @@ def activate_move_tool(session):
     session.wall_relations.clear_plan_relation_status()
     session.selection.refresh.clear_selected_visuals(
         kinds=_MOVE_TOOL_SELECTION_KINDS,
-        include_wall_grips=True,
     )
     return _start_move_tool(session)
