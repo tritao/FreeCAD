@@ -197,6 +197,7 @@ class DraftSnapper(test_base.DraftTestCaseDoc):
         snapper = Gui.Snapper
         toolbar = self._FakeToolbar()
         view = self._FakeView()
+        plane = object()
         calls = []
 
         def resolve(ctrl, shift, alt):
@@ -207,12 +208,18 @@ class DraftSnapper(test_base.DraftTestCaseDoc):
         ), patch.object(gui_snapper.Gui, "draftToolBar", toolbar, create=True), patch.object(
             snapper, "snap", side_effect=lambda *args, **kwargs: calls.append(kwargs) or App.Vector()
         ), patch.object(snapper, "unconstrain", return_value=None):
-            snapper.getPoint(callback=lambda point: None, modifier_resolver=resolve)
+            snapper.getPoint(
+                callback=lambda point: None,
+                modifier_resolver=resolve,
+                interaction_plane=plane,
+                noTracker=True,
+            )
             view.move_callback(self._FakeEventCallback(self._FakeMoveEvent()))
 
         self.assertEqual(len(calls), 1)
         self.assertFalse(calls[0]["active"])
         self.assertTrue(calls[0]["constrain"])
+        self.assertTrue(calls[0]["noTracker"])
 
     def test_interaction_plane_is_used_and_cleared_on_cancel(self):
         """A point request uses only its supplied plane and clears it on teardown."""
