@@ -204,6 +204,7 @@ SET(Document_CPP_SRCS
     Transactions.cpp
     TransactionalObject.cpp
     VRMLObject.cpp
+    ViewDefinition.cpp
     MaterialObject.cpp
     MergeDocuments.cpp
     TextDocument.cpp
@@ -254,6 +255,7 @@ SET(Document_HPP_SRCS
     Transactions.h
     TransactionalObject.h
     VRMLObject.h
+    ViewDefinition.h
     MaterialObject.h
     MergeDocuments.h
     TextDocument.h

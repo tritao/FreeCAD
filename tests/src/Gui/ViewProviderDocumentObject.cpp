@@ -12,6 +12,7 @@
 
 #include <App/Application.h>
 #include <App/Document.h>
+#include <App/ViewDefinition.h>
 #include <Gui/Application.h>
 #include <Gui/Inventor/SoViewContextElement.h>
 #include <Gui/Selection/SoFCUnifiedSelection.h>
@@ -179,4 +180,66 @@ TEST_F(ViewProviderDocumentObjectTest, auxiliaryRootGateDoesNotRetainViewProvide
     action.apply(gate);
     EXPECT_TRUE(action.getBoundingBox().isEmpty());
     gate->unref();
+}
+
+TEST_F(ViewProviderDocumentObjectTest, viewDefinitionAppliesAndCapturesContextOverrides)
+{
+    auto* definition = _doc->addObject("App::ViewDefinition", "SavedView");
+    auto* viewDefinition = dynamic_cast<App::ViewDefinition*>(definition);
+    ASSERT_NE(viewDefinition, nullptr);
+    viewDefinition->ForcedHidden.setValues({_child});
+
+    Gui::ViewContext context;
+    ASSERT_TRUE(context.applyDefinition(viewDefinition));
+    EXPECT_EQ(context.visibility(_child), Gui::ViewContext::Visibility::Hidden);
+
+    viewDefinition->ForcedHidden.setValues({});
+    ASSERT_TRUE(context.captureDefinition(viewDefinition));
+    ASSERT_EQ(viewDefinition->ForcedHidden.getValues().size(), 1U);
+    EXPECT_EQ(viewDefinition->ForcedHidden.getValues().front(), _child);
+}
+
+TEST_F(ViewProviderDocumentObjectTest, viewDefinitionCaptureFlattensLayerOverrides)
+{
+    auto* definition = static_cast<App::ViewDefinition*>(
+        _doc->addObject("App::ViewDefinition", "SavedView")
+    );
+
+    Gui::ViewContext context;
+    const auto olderLayer = context.pushLayer();
+    ASSERT_TRUE(
+        context.setVisibility(olderLayer, _child, Gui::ViewContext::Visibility::Hidden)
+    );
+    const auto newerLayer = context.pushLayer();
+    ASSERT_TRUE(
+        context.setVisibility(newerLayer, _child, Gui::ViewContext::Visibility::Visible)
+    );
+    ASSERT_EQ(context.visibility(_child), Gui::ViewContext::Visibility::Visible);
+
+    ASSERT_TRUE(context.captureDefinition(definition));
+    ASSERT_EQ(definition->ForcedVisible.getValues().size(), 1U);
+    EXPECT_EQ(definition->ForcedVisible.getValues().front(), _child);
+    EXPECT_TRUE(definition->ForcedHidden.getValues().empty());
+
+    Gui::ViewContext restored;
+    ASSERT_TRUE(restored.applyDefinition(definition));
+    EXPECT_EQ(restored.visibility(_child), Gui::ViewContext::Visibility::Visible);
+}
+
+TEST_F(ViewProviderDocumentObjectTest, viewDefinitionAppliesAndCapturesReferenceFrame)
+{
+    auto* definition = static_cast<App::ViewDefinition*>(
+        _doc->addObject("App::ViewDefinition", "SavedView")
+    );
+    const Base::Placement savedFrame(Base::Vector3d(10.0, 20.0, 30.0), Base::Rotation());
+    definition->ReferenceFrame.setValue(savedFrame);
+
+    Gui::ViewContext context;
+    ASSERT_TRUE(context.applyDefinition(definition));
+    EXPECT_TRUE(context.referenceFrame() == savedFrame);
+
+    const Base::Placement capturedFrame(Base::Vector3d(-1.0, -2.0, -3.0), Base::Rotation());
+    context.setReferenceFrame(capturedFrame);
+    ASSERT_TRUE(context.captureDefinition(definition));
+    EXPECT_TRUE(definition->ReferenceFrame.getValue() == capturedFrame);
 }
