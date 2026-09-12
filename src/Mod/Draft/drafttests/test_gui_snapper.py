@@ -137,3 +137,18 @@ class DraftSnapper(test_base.DraftTestCaseDoc):
         self.assertIsNone(snapper.callbackClick)
         self.assertIsNone(snapper.callbackMove)
         self.assertEqual(toolbar.off_ui_calls, 1)
+
+    def test_temporary_snap_profiles_restore_without_persisting(self):
+        """Nested host profiles should restore prior snaps without writing preferences."""
+
+        snapper = Gui.Snapper
+        original = snapper.get_snap_modes()
+        first, second = snapper.snaps[:2]
+
+        with patch.object(snapper, "save_snap_state") as save_snap_state:
+            self.assertEqual(snapper.push_snap_modes([first]), [first])
+            self.assertEqual(snapper.push_snap_modes([second]), [second])
+            self.assertEqual(snapper.pop_snap_modes(), [first])
+            self.assertEqual(snapper.pop_snap_modes(), original)
+
+        save_snap_state.assert_not_called()
