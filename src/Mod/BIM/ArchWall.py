@@ -1023,7 +1023,90 @@ class _Wall(ArchComponent.Component):
             representation.add_geometry(
                 "cut_geometry", face, "PlanCutFace", subelement=f"PlanFace{index}"
             )
+            for edge_index, edge in enumerate(face.Edges, start=1):
+                representation.add_geometry(
+                    "snap_geometry",
+                    edge,
+                    "PlanCutEdge",
+                    subelement=f"PlanFace{index}.Edge{edge_index}",
+                )
+        self._add_owned_path_edit_handles(representation, obj, context)
+        self._add_native_path_edit_handles(representation, obj, context)
         return representation
+
+    @staticmethod
+    def _add_owned_path_edit_handles(representation, wall, context):
+        from bimplan.editable_points import get_contextual_edit_points
+
+        points = get_contextual_edit_points(getattr(wall, "Base", None), context)
+        for index, point in enumerate(points):
+            role = point.semantic_id or "Vertex{}".format(index + 1)
+            operation = ArchRepresentation.BIMEditOperation(
+                "WallPathVertex",
+                "Edit Wall Path Vertex",
+                lambda _wall, point=point: point.get_value(),
+                lambda _wall, value, point=point: point.apply_value(value),
+                property_name="Base.{}".format(point.property_name),
+                value_kind="Point",
+                available=lambda _wall, point=point: point.is_available(),
+            )
+            representation.add_edit_handle(
+                ArchRepresentation.BIMEditHandle(
+                    wall,
+                    "WallPath{}".format(role),
+                    ArchRepresentation.project_to_representation_plane(point.point, context),
+                    FreeCAD.Vector(),
+                    operation,
+                    interaction="Planar",
+                    subelement="Base.{}".format(point.subelement),
+                    minimum=None,
+                )
+            )
+
+    def _add_native_path_edit_handles(self, representation, wall, context):
+        if getattr(wall, "Base", None) is not None or not self._can_edit_native_path(wall):
+            return
+        endpoints = self.calc_endpoints(wall)
+
+        def apply_endpoint(source, index, value):
+            current = self.calc_endpoints(source)
+            if len(current) != 2:
+                raise ValueError("Wall no longer has an editable straight path")
+            current[index] = FreeCAD.Vector(value)
+            source.Proxy.set_from_endpoints(source, current)
+
+        for index, role in enumerate(("Start", "End")):
+            operation = ArchRepresentation.BIMEditOperation(
+                "WallPathEndpoint",
+                "Edit Wall Path Endpoint",
+                lambda source, index=index: self.calc_endpoints(source)[index],
+                lambda source, value, index=index: apply_endpoint(source, index, value),
+                property_name="Path.{}".format(role),
+                value_kind="Point",
+                available=lambda source: self._can_edit_native_path(source),
+            )
+            representation.add_edit_handle(
+                ArchRepresentation.BIMEditHandle(
+                    wall,
+                    "WallPath{}".format(role),
+                    ArchRepresentation.project_to_representation_plane(
+                        endpoints[index], context
+                    ),
+                    FreeCAD.Vector(),
+                    operation,
+                    interaction="Planar",
+                    subelement="Path.{}".format(role),
+                    minimum=None,
+                )
+            )
+
+    def _can_edit_native_path(self, wall):
+        return bool(
+            getattr(wall, "Base", None) is None
+            and len(self.calc_endpoints(wall)) == 2
+            and not ArchRepresentation.is_property_expression_driven(wall, "Length")
+            and not ArchRepresentation.is_property_expression_driven(wall, "Placement")
+        )
 
     def _getPlanCutFaces(self, obj, context):
         """Build horizontal cut faces used by the plan representation."""

@@ -4,6 +4,7 @@ import unittest
 
 import FreeCAD
 import Part
+import Arch
 
 from ArchRepresentation import (
     BIMEditHandle,
@@ -17,6 +18,7 @@ from ArchRepresentation import (
     representation_for,
 )
 from bimplan.contextual_editing import BIMContextualHandleEditor
+from bimplan.editable_points import get_contextual_edit_points
 
 
 class TestArchRepresentation(unittest.TestCase):
@@ -131,6 +133,79 @@ class TestArchRepresentation(unittest.TestCase):
         self.assertEqual(125.0, source["width"])
         self.assertEqual([source], refreshed)
         self.assertIsNone(editor.handle)
+
+    def test_object_owned_contextual_points_preserve_global_coordinates(self):
+        class Owner:
+            Points = [FreeCAD.Vector(1, 2, 3), FreeCAD.Vector(4, 5, 6)]
+
+            class ProxyType:
+                def getContextualEditPoints(self, owner, context):
+                    del context
+                    return tuple(owner.Points)
+
+                def setContextualEditPoint(self, owner, index, point):
+                    owner.Points[index] = FreeCAD.Vector(point)
+
+            Proxy = ProxyType()
+
+            @staticmethod
+            def getGlobalPlacement():
+                return FreeCAD.Placement()
+
+        owner = Owner()
+        points = get_contextual_edit_points(owner, RepresentationContext(purpose="Plan"))
+
+        self.assertEqual(2, len(points))
+        self.assertEqual("Vertex2", points[1].subelement)
+        points[1].apply_value(FreeCAD.Vector(7, 8, 9))
+        self.assertEqual(FreeCAD.Vector(7, 8, 9), points[1].get_value())
+
+    def test_planar_contextual_handle_moves_a_point_value(self):
+        source = {"point": FreeCAD.Vector(1, 2, 0)}
+        operation = BIMEditOperation(
+            "move-point",
+            "Move point",
+            lambda value: value["point"],
+            lambda value, point: value.__setitem__("point", point),
+            value_kind="Point",
+            manages_transaction=True,
+        )
+        handle = BIMEditHandle(
+            source,
+            "path-point",
+            source["point"],
+            FreeCAD.Vector(),
+            operation,
+            interaction="Planar",
+        )
+        editor = BIMContextualHandleEditor(RepresentationContext(purpose="Plan"))
+
+        editor.begin(handle)
+        result = editor.commit(FreeCAD.Vector(6, 8, 20))
+
+        self.assertTrue(result.success)
+        self.assertEqual(FreeCAD.Vector(6, 8, 20), source["point"])
+
+    def test_native_wall_path_exposes_semantic_endpoint_handles(self):
+        document = FreeCAD.newDocument("ContextualPathRepresentationTest")
+        self.addCleanup(FreeCAD.closeDocument, document.Name)
+        wall = Arch.makeWall(length=4000, width=200, height=3000)
+        document.recompute()
+
+        representation = wall.Proxy.getRepresentation(
+            wall,
+            RepresentationContext(
+                purpose="Plan",
+                cut_offset=1000,
+                target_offset=0,
+            ),
+        )
+
+        handles = {
+            handle.subelement: handle for handle in representation.edit_handles
+        }
+        self.assertEqual({"Path.Start", "Path.End"}, set(handles))
+        self.assertEqual("Point", handles["Path.End"].operation.value_kind)
 
     def test_snap_query_preserves_semantic_identity(self):
         source = object()
