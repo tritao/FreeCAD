@@ -5,6 +5,7 @@
 #include "ViewContext.h"
 
 #include <set>
+#include <utility>
 #include <vector>
 
 #include <App/DocumentObject.h>
@@ -102,6 +103,11 @@ bool ViewContext::applyDefinition(const App::ViewDefinition* definition)
         return false;
     }
     clear();
+    activeCameraState = {
+        definition->CameraCodec.getValue(),
+        definition->CameraVersion.getValue(),
+        definition->CameraPayload.getValue()
+    };
     activeReferenceFrame = definition->ReferenceFrame.getValue();
     const auto layer = pushLayer();
     for (auto* object : definition->ForcedVisible.getValues()) {
@@ -144,8 +150,21 @@ bool ViewContext::captureDefinition(App::ViewDefinition* definition) const
     }
     definition->ForcedVisible.setValues(std::move(forcedVisible));
     definition->ForcedHidden.setValues(std::move(forcedHidden));
+    definition->CameraPayload.setValue(activeCameraState.payload);
+    definition->CameraCodec.setValue(activeCameraState.codec);
+    definition->CameraVersion.setValue(activeCameraState.version);
     definition->ReferenceFrame.setValue(activeReferenceFrame);
     return true;
+}
+
+void ViewContext::setCameraState(CameraState state)
+{
+    activeCameraState = std::move(state);
+}
+
+const ViewContext::CameraState& ViewContext::cameraState() const
+{
+    return activeCameraState;
 }
 
 void ViewContext::setReferenceFrame(const Base::Placement& frame)

@@ -51,6 +51,7 @@
 #include "View3DPy.h"
 
 #include "Camera.h"
+#include "CoinCameraCodec.h"
 #include "Document.h"
 #include "Inventor/SoMouseWheelEvent.h"
 #include "Navigation/NavigationStyle.h"
@@ -1091,7 +1092,22 @@ Py::Object View3DInventorPy::applyViewDefinition(const Py::Tuple& args)
     if (!definition) {
         throw Py::TypeError("definition must be an App::ViewDefinition");
     }
-    return Py::Boolean(getView3DInventorPtr()->getViewer()->getViewContext().applyDefinition(definition));
+    if (!definition->getDocument()) {
+        return Py::Boolean(false);
+    }
+    const ViewContext::CameraState camera {
+        definition->CameraCodec.getValue(),
+        definition->CameraVersion.getValue(),
+        definition->CameraPayload.getValue()
+    };
+    if (!CoinCameraCodec::supports(camera)) {
+        throw Py::ValueError("unsupported saved camera codec or version");
+    }
+    auto* view = getView3DInventorPtr();
+    if (!CoinCameraCodec::apply(camera, *view)) {
+        return Py::Boolean(false);
+    }
+    return Py::Boolean(view->getViewer()->getViewContext().applyDefinition(definition));
 }
 
 Py::Object View3DInventorPy::captureViewDefinition(const Py::Tuple& args)
@@ -1105,7 +1121,10 @@ Py::Object View3DInventorPy::captureViewDefinition(const Py::Tuple& args)
     if (!definition) {
         throw Py::TypeError("definition must be an App::ViewDefinition");
     }
-    return Py::Boolean(getView3DInventorPtr()->getViewer()->getViewContext().captureDefinition(definition));
+    auto* view = getView3DInventorPtr();
+    auto& context = view->getViewer()->getViewContext();
+    context.setCameraState(CoinCameraCodec::capture(*view));
+    return Py::Boolean(context.captureDefinition(definition));
 }
 
 Py::Object View3DInventorPy::setAnimationEnabled(const Py::Tuple& args)
