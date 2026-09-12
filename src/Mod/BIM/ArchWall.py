@@ -1013,13 +1013,16 @@ class _Wall(ArchComponent.Component):
 
         if context is None:
             context = self.getDefaultPlanContext(obj)
-        if context.purpose != ArchRepresentation.RepresentationPurpose.PLAN:
+        if context.purpose not in (
+            ArchRepresentation.RepresentationPurpose.PLAN,
+            ArchRepresentation.RepresentationPurpose.SECTION,
+            ArchRepresentation.RepresentationPurpose.ELEVATION,
+        ):
             raise ArchRepresentation.RepresentationUnavailable(
-                "Wall plan provider only supports Plan contexts"
+                f"Wall does not provide a {context.purpose.value} representation"
             )
-
         representation = ArchRepresentation.BIMRepresentation(source=obj, context=context)
-        for index, face in enumerate(self._getPlanCutFaces(obj, context), start=1):
+        for index, face in enumerate(self._getCutRepresentation(obj, context), start=1):
             representation.add_geometry(
                 "cut_geometry", face, "PlanCutFace", subelement=f"PlanFace{index}"
             )
@@ -1030,10 +1033,85 @@ class _Wall(ArchComponent.Component):
                     "PlanCutEdge",
                     subelement=f"PlanFace{index}.Edge{edge_index}",
                 )
-        self._add_owned_path_edit_handles(representation, obj, context)
-        self._add_native_path_edit_handles(representation, obj, context)
-        self._add_section_property_edit_handles(representation, obj, context)
+            for vertex_index, vertex in enumerate(face.Vertexes, start=1):
+                representation.add_geometry(
+                    "snap_geometry",
+                    vertex,
+                    "PlanCutVertex",
+                    subelement=f"PlanFace{index}.Vertex{vertex_index}",
+                )
+        purpose = context.purpose
+        if purpose == ArchRepresentation.RepresentationPurpose.PLAN:
+            self._add_owned_path_edit_handles(representation, obj, context)
+            self._add_native_path_edit_handles(representation, obj, context)
+            self._add_section_property_edit_handles(representation, obj, context)
+        elif purpose in (
+            ArchRepresentation.RepresentationPurpose.SECTION,
+            ArchRepresentation.RepresentationPurpose.ELEVATION,
+        ):
+            self._add_vertical_edit_handles(representation, obj, context)
         return representation
+
+    def _add_vertical_edit_handles(self, representation, wall, context):
+        direction = ArchComponent.representation_vertical_direction(context)
+        if direction is None:
+            return
+        low, high = ArchComponent.representation_extent_points(
+            wall.Shape, context, direction
+        )
+        height_operation = ArchRepresentation.BIMEditOperation(
+            "WallHeight",
+            "Edit Wall Height",
+            lambda source: source.Height.Value,
+            lambda source, value: setattr(source, "Height", value),
+            property_name="Height",
+            minimum=1.0,
+            available=lambda source: not ArchRepresentation.is_property_expression_driven(
+                source, "Height"
+            ),
+        )
+        if high is not None and height_operation.is_available(wall):
+            representation.add_edit_handle(
+                ArchRepresentation.BIMEditHandle(
+                    wall,
+                    "WallHeight",
+                    high,
+                    direction,
+                    height_operation,
+                    subelement="Height",
+                    minimum=1.0,
+                )
+            )
+        if low is None or getattr(wall, "Base", None) is not None:
+            return
+
+        def set_elevation(source, value):
+            placement = FreeCAD.Placement(source.Placement)
+            placement.Base.z = value
+            source.Placement = placement
+
+        base_operation = ArchRepresentation.BIMEditOperation(
+            "WallBaseElevation",
+            "Edit Wall Base Elevation",
+            lambda source: source.Placement.Base.z,
+            set_elevation,
+            property_name="Placement.Base.z",
+            available=lambda source: not ArchRepresentation.is_property_expression_driven(
+                source, "Placement.Base.z"
+            ),
+        )
+        if base_operation.is_available(wall):
+            representation.add_edit_handle(
+                ArchRepresentation.BIMEditHandle(
+                    wall,
+                    "WallBaseElevation",
+                    low,
+                    direction,
+                    base_operation,
+                    subelement="Placement.Base.z",
+                    minimum=None,
+                )
+            )
 
     def _add_section_property_edit_handles(self, representation, wall, context):
         baseline = self.get_global_baseline(wall)
@@ -1197,10 +1275,12 @@ class _Wall(ArchComponent.Component):
             and not ArchRepresentation.is_property_expression_driven(wall, "Placement")
         )
 
-    def _getPlanCutFaces(self, obj, context):
-        """Build horizontal cut faces used by the plan representation."""
+    def _getCutRepresentation(self, obj, context):
+        """Build cut faces on a horizontal or arbitrary representation frame."""
 
         shape = obj.Shape
+        if getattr(context, "reference_frame", None) is not None:
+            return ArchComponent.get_reference_slice_faces(shape, context)
         if shape and (not shape.isNull()) and shape.Solids:
             bb = shape.BoundBox
             if bb.ZLength > 0.001 and context.cut_offset is not None:

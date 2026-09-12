@@ -254,6 +254,32 @@ class TestArchRepresentation(unittest.TestCase):
             all(mapping.source is opening for mapping in representation.source_mappings)
         )
 
+    def test_wall_representation_supports_a_rotated_section_frame(self):
+        document = FreeCAD.newDocument("ArbitraryWallRepresentationTest")
+        self.addCleanup(FreeCAD.closeDocument, document.Name)
+        wall = Arch.makeWall(length=3000, width=200, height=2500)
+        document.recompute()
+        frame = FreeCAD.Placement(
+            FreeCAD.Vector(1500, 0, 0),
+            FreeCAD.Rotation(FreeCAD.Vector(0, 1, 0), 90),
+        )
+        context = RepresentationContext(
+            purpose="Section",
+            reference_frame=frame,
+            cut_offset=0,
+            target_offset=0,
+        )
+
+        representation = wall.Proxy.getRepresentation(wall, context)
+
+        self.assertTrue(representation.cut_geometry)
+        self.assertTrue(representation.snap_geometry)
+        roles = {handle.role for handle in representation.edit_handles}
+        self.assertIn("WallHeight", roles)
+        self.assertTrue(
+            all(mapping.source is wall for mapping in representation.source_mappings)
+        )
+
     def test_snap_query_preserves_semantic_identity(self):
         source = object()
         edge = Part.makeLine(FreeCAD.Vector(0, 0, 0), FreeCAD.Vector(10, 0, 0))

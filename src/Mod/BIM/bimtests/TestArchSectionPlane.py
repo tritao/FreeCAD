@@ -23,6 +23,7 @@
 # ***************************************************************************
 
 import Arch
+import ArchRepresentation
 import ArchSectionPlane
 import Draft
 import os
@@ -52,6 +53,23 @@ class TestArchSectionPlane(TestArchBase.TestArchBase):
         self.assertEqual(
             section_plane.Label, "TestSectionPlane", "Section plane label is incorrect."
         )
+
+    def testRepresentationContextUsesArbitrarySectionFrame(self):
+        """Section planes expose the canonical renderer-neutral context."""
+
+        section_plane = Arch.makeSectionPlane(name="RepresentationSection")
+        section_plane.Placement = App.Placement(
+            App.Vector(100, 200, 300), App.Rotation(App.Vector(0, 1, 0), 35)
+        )
+        section_plane.Depth = 2500
+        self.document.recompute()
+
+        context = section_plane.Proxy.getRepresentationContext(section_plane)
+
+        self.assertIsInstance(context, ArchRepresentation.RepresentationContext)
+        self.assertIs(context.purpose, ArchRepresentation.RepresentationPurpose.SECTION)
+        self.assertEqual(context.reference_frame, section_plane.Placement)
+        self.assertEqual(context.projection_range, (0.0, 2500.0))
 
     def testSectionPlaneFitUsesLocalAxesAfterRotateY(self):
         """Resize-to-fit dimensions follow the rotated section plane axes."""
