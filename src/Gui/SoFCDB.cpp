@@ -83,6 +83,7 @@
 #include "Inventor/SoFCBoundingBox.h"
 #include "Inventor/SoNaviCube.h"
 #include "Inventor/SoMouseWheelEvent.h"
+#include "Inventor/SoFCOverlayGlyph.h"
 #include "Inventor/SoFCTransform.h"
 #include "Inventor/SoToggleSwitch.h"
 #include "propertyeditor/PropertyItem.h"
@@ -113,6 +114,7 @@ void Gui::SoFCDB::init()
     SoViewContextElement::initClass();
     SoViewContextSwitch::initClass();
     SoViewContextGate::initClass();
+    SoFCOverlayGlyph::initClass();
     SoFCColorBar::initClass();
     SoFCScreenSpaceGroup::initClass();
     SoFCBackgroundGradient::initClass();
@@ -252,6 +254,7 @@ void Gui::SoFCDB::finish()
     // to invoke the private member function 'atexit_cleanup()'.
     SoFCColorBar::finish();
     SoFCBackgroundGradient::finish();
+    SoFCOverlayGlyph::finish();
     SoFCBoundingBox::finish();
     SoFCSelection::finish();
     SoFCPreselectionAction::finish();
