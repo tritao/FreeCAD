@@ -524,7 +524,7 @@ class AddOpenSCADElement:
 
     def Activated(self):
         panel = AddSCADTask()
-        FreeCADGui.Control.showDialog(panel)
+        FreeCADGui.Control.showDialog(panel, FreeCADGui.ActiveDocument)
 
     def GetResources(self):
         return {'Pixmap'  : 'OpenSCAD_AddOpenSCADElement',
@@ -539,7 +539,7 @@ class OpenSCADMeshBoolean:
 
     def Activated(self):
         panel = OpenSCADMeshBooleanTask()
-        FreeCADGui.Control.showDialog(panel)
+        FreeCADGui.Control.showDialog(panel, FreeCADGui.ActiveDocument)
 
     def GetResources(self):
         return {'Pixmap'  : 'OpenSCAD_MeshBooleans',

@@ -30,6 +30,8 @@
 
 
 #include <Gui/Control.h>
+#include <Gui/Document.h>
+#include <Gui/Application.h>
 #include <Gui/MainWindow.h>
 #include <Gui/Selection/Selection.h>
 
@@ -63,7 +65,10 @@ bool ViewProviderFemMeshShapeNetgen::setEdit(int ModNum)
         // clear the selection (convenience)
         Gui::Selection().clearSelection();
 #ifdef FCWithNetgen
-        Gui::Control().showDialog(new TaskDlgMeshShapeNetgen(this));
+        Gui::Control().showDialog(
+            new TaskDlgMeshShapeNetgen(this),
+            Gui::Application::Instance->activeDocument()->getDocument()
+        );
         return true;
 #else
         QMessageBox::critical(

@@ -32,6 +32,8 @@
 
 
 #include "Gui/Control.h"
+#include "Gui/Document.h"
+#include "Gui/Application.h"
 #include <Base/Console.h>
 #include <Base/Tools.h>
 #include <Mod/Fem/App/FemConstraintGear.h>
@@ -59,7 +61,10 @@ bool ViewProviderFemConstraintGear::setEdit(int ModNum)
         Gui::Control().closeDialog();
         // clear the selection (convenience)
         Gui::Selection().clearSelection();
-        Gui::Control().showDialog(new TaskDlgFemConstraintGear(this));
+        Gui::Control().showDialog(
+            new TaskDlgFemConstraintGear(this),
+            Gui::Application::Instance->activeDocument()->getDocument()
+        );
 
         return true;
     }

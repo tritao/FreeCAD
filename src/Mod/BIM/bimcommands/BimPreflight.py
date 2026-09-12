@@ -74,7 +74,7 @@ class BIM_Preflight:
 
     def Activated(self):
         FreeCADGui.BIMPreflightDone = False
-        FreeCADGui.Control.showDialog(BIM_Preflight_TaskPanel())
+        FreeCADGui.Control.showDialog(BIM_Preflight_TaskPanel(), FreeCADGui.ActiveDocument)
 
 
 class BIM_Preflight_TaskPanel:

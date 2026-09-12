@@ -1092,7 +1092,7 @@ def survey(callback=False):
             FreeCAD.SurveyObserver = _SurveyObserver(callback=survey)
             FreeCADGui.Selection.addObserver(FreeCAD.SurveyObserver)
             FreeCAD.SurveyDialog = SurveyTaskPanel()
-            FreeCADGui.Control.showDialog(FreeCAD.SurveyDialog)
+            FreeCADGui.Control.showDialog(FreeCAD.SurveyDialog, FreeCADGui.ActiveDocument)
     else:
         sel = FreeCADGui.Selection.getSelectionEx()
         if hasattr(FreeCAD, "SurveyObserver"):

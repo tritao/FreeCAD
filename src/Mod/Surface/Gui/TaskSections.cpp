@@ -33,6 +33,7 @@
 #include <App/Document.h>
 #include <Base/Tools.h>
 #include <Gui/Application.h>
+#include <Gui/Document.h>
 #include <Gui/BitmapFactory.h>
 #include <Gui/Command.h>
 #include <Gui/Control.h>
@@ -78,10 +79,10 @@ bool ViewProviderSections::setEdit(int ModNum)
             if (tDlg) {
                 tDlg->setEditedObject(obj);
             }
-            Gui::Control().showDialog(dlg);
+            Gui::Control().showDialog(dlg, Gui::Application::Instance->activeDocument()->getDocument());
         }
         else {
-            Gui::Control().showDialog(new TaskSections(this, obj));
+            Gui::Control().showDialog(new TaskSections(this, obj), obj->getDocument());
         }
         return true;
     }

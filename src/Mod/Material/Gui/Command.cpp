@@ -26,6 +26,8 @@
 
 #include <Gui/Command.h>
 #include <Gui/Control.h>
+#include <Gui/Document.h>
+#include <Gui/Application.h>
 #include <Gui/MainWindow.h>
 #include <Gui/Selection/Selection.h>
 
@@ -97,7 +99,7 @@ StdCmdSetAppearance::StdCmdSetAppearance()
 void StdCmdSetAppearance::activated(int iMsg)
 {
     Q_UNUSED(iMsg);
-    Gui::Control().showDialog(new MatGui::TaskDisplayProperties());
+    Gui::Control().showDialog(new MatGui::TaskDisplayProperties(), Gui::Application::Instance->activeDocument()->getDocument());
 }
 
 bool StdCmdSetAppearance::isActive()
@@ -126,7 +128,7 @@ StdCmdSetMaterial::StdCmdSetMaterial()
 void StdCmdSetMaterial::activated(int iMsg)
 {
     Q_UNUSED(iMsg);
-    Gui::Control().showDialog(new MatGui::TaskMaterial());
+    Gui::Control().showDialog(new MatGui::TaskMaterial(), Gui::Application::Instance->activeDocument()->getDocument());
 }
 
 bool StdCmdSetMaterial::isActive()
@@ -153,7 +155,7 @@ CmdInspectAppearance::CmdInspectAppearance()
 void CmdInspectAppearance::activated(int iMsg)
 {
     Q_UNUSED(iMsg);
-    Gui::Control().showDialog(new MatGui::TaskInspectAppearance());
+    Gui::Control().showDialog(new MatGui::TaskInspectAppearance(), Gui::Application::Instance->activeDocument()->getDocument());
 }
 
 bool CmdInspectAppearance::isActive()
@@ -180,7 +182,7 @@ CmdInspectMaterial::CmdInspectMaterial()
 void CmdInspectMaterial::activated(int iMsg)
 {
     Q_UNUSED(iMsg);
-    Gui::Control().showDialog(new MatGui::TaskInspectMaterial());
+    Gui::Control().showDialog(new MatGui::TaskInspectMaterial(), Gui::Application::Instance->activeDocument()->getDocument());
 }
 
 bool CmdInspectMaterial::isActive()
@@ -210,7 +212,7 @@ void CmdMigrateToExternal::activated(int iMsg)
 {
     Q_UNUSED(iMsg);
     MatGui::TaskMigrateExternal* dlg = new MatGui::TaskMigrateExternal();
-    Gui::Control().showDialog(dlg);
+    Gui::Control().showDialog(dlg, Gui::Application::Instance->activeDocument()->getDocument());
 }
 
 bool CmdMigrateToExternal::isActive()

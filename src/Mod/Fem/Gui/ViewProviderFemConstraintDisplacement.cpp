@@ -34,6 +34,8 @@
 #include "TaskFemConstraintDisplacement.h"
 #include "ViewProviderFemConstraintDisplacement.h"
 #include <Gui/Control.h>
+#include <Gui/Document.h>
+#include <Gui/Application.h>
 
 
 using namespace FemGui;
@@ -58,7 +60,10 @@ bool ViewProviderFemConstraintDisplacement::setEdit(int ModNum)
         Gui::Control().closeDialog();
         // clear the selection (convenience)
         Gui::Selection().clearSelection();
-        Gui::Control().showDialog(new TaskDlgFemConstraintDisplacement(this));
+        Gui::Control().showDialog(
+            new TaskDlgFemConstraintDisplacement(this),
+            Gui::Application::Instance->activeDocument()->getDocument()
+        );
 
         return true;
     }

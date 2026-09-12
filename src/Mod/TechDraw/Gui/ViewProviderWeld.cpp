@@ -31,6 +31,8 @@
 #include <App/Application.h>
 #include <App/DocumentObject.h>
 #include <Gui/Control.h>
+#include <Gui/Document.h>
+#include <Gui/Application.h>
 #include <Gui/MainWindow.h>
 #include <Gui/Selection/Selection.h>
 
@@ -103,7 +105,7 @@ bool ViewProviderWeld::setEdit(int ModNum)
     }
     // clear the selection (convenience)
     Gui::Selection().clearSelection();
-    Gui::Control().showDialog(new TaskDlgWeldingSymbol(getFeature()));
+    Gui::Control().showDialog(new TaskDlgWeldingSymbol(getFeature()), Gui::Application::Instance->activeDocument()->getDocument());
     return true;
 }
 

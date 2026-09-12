@@ -116,7 +116,7 @@ class Arch_Rebar:
             translate("Arch", "Select a base face on a structural object") + "\n"
         )
         FreeCADGui.Control.closeDialog()
-        FreeCADGui.Control.showDialog(ArchComponent.SelectionTaskPanel())
+        FreeCADGui.Control.showDialog(ArchComponent.SelectionTaskPanel(), FreeCADGui.ActiveDocument)
         FreeCAD.ArchObserver = ArchComponent.ArchSelectionObserver(nextCommand="Arch_Rebar")
         FreeCADGui.Selection.addObserver(FreeCAD.ArchObserver)
 

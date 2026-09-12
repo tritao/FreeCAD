@@ -123,7 +123,7 @@ class LineSlope(gui_base.GuiCommandNeedsSelection):
         # when we press the "OK" button.
         # Then we must show the container widget.
         taskwidget.accept = self.accept
-        dia = Gui.Control.showDialog(taskwidget)
+        dia = Gui.Control.showDialog(taskwidget, Gui.ActiveDocument)
         dia.setDocumentName(self.doc.Name)
         dia.setAutoCloseOnDeletedDocument(True)
 

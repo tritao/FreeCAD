@@ -65,7 +65,10 @@ CmdMeshPartMesher::CmdMeshPartMesher()
 
 void CmdMeshPartMesher::activated(int)
 {
-    Gui::Control().showDialog(new MeshPartGui::TaskTessellation());
+    Gui::Control().showDialog(
+        new MeshPartGui::TaskTessellation(),
+        Gui::Application::Instance->activeDocument()->getDocument()
+    );
 }
 
 bool CmdMeshPartMesher::isActive()
@@ -295,7 +298,7 @@ void CmdMeshPartCrossSections::activated(int iMsg)
         }
         dlg = new MeshPartGui::TaskCrossSections(bbox);
     }
-    Gui::Control().showDialog(dlg);
+    Gui::Control().showDialog(dlg, Gui::Application::Instance->activeDocument()->getDocument());
 }
 
 bool CmdMeshPartCrossSections::isActive()
@@ -326,7 +329,8 @@ void CmdMeshPartCurveOnMesh::activated(int)
     }
 
     Gui::Control().showDialog(
-        new MeshPartGui::TaskCurveOnMesh(static_cast<Gui::View3DInventor*>(mdis.front()))
+        new MeshPartGui::TaskCurveOnMesh(static_cast<Gui::View3DInventor*>(mdis.front())),
+        doc->getDocument()
     );
 }
 

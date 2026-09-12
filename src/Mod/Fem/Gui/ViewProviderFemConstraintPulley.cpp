@@ -32,6 +32,8 @@
 
 #include <Base/Tools.h>
 #include "Gui/Control.h"
+#include "Gui/Document.h"
+#include "Gui/Application.h"
 #include "FemGuiTools.h"
 #include "TaskFemConstraintPulley.h"
 #include "ViewProviderFemConstraintPulley.h"
@@ -56,7 +58,10 @@ bool ViewProviderFemConstraintPulley::setEdit(int ModNum)
         Gui::Control().closeDialog();
         // clear the selection (convenience)
         Gui::Selection().clearSelection();
-        Gui::Control().showDialog(new TaskDlgFemConstraintPulley(this));
+        Gui::Control().showDialog(
+            new TaskDlgFemConstraintPulley(this),
+            Gui::Application::Instance->activeDocument()->getDocument()
+        );
 
         return true;
     }
