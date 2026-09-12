@@ -4,12 +4,14 @@
 
 #include "ViewContext.h"
 
+#include <algorithm>
 #include <set>
 #include <utility>
 #include <vector>
 
 #include <App/DocumentObject.h>
 #include <App/Document.h>
+#include <App/ClippingPlane.h>
 #include <App/ViewDefinition.h>
 
 #include "Application.h"
@@ -17,8 +19,9 @@
 
 using namespace Gui;
 
-ViewContext::ViewContext(ChangedCallback changed)
+ViewContext::ViewContext(ChangedCallback changed, ClippingChangedCallback clippingChanged)
     : changed(std::move(changed))
+    , clippingChanged(std::move(clippingChanged))
 {}
 
 ViewContext::LayerId ViewContext::pushLayer()
@@ -116,6 +119,13 @@ bool ViewContext::applyDefinition(const App::ViewDefinition* definition)
     for (auto* object : definition->ForcedHidden.getValues()) {
         setVisibility(layer, object, Visibility::Hidden);
     }
+    std::vector<const App::ClippingPlane*> planes;
+    for (auto* object : definition->ClippingPlanes.getValues()) {
+        if (auto* plane = dynamic_cast<const App::ClippingPlane*>(object)) {
+            planes.push_back(plane);
+        }
+    }
+    setClippingPlanes(planes);
     return true;
 }
 
@@ -154,6 +164,12 @@ bool ViewContext::captureDefinition(App::ViewDefinition* definition) const
     definition->CameraCodec.setValue(activeCameraState.codec);
     definition->CameraVersion.setValue(activeCameraState.version);
     definition->ReferenceFrame.setValue(activeReferenceFrame);
+    std::vector<App::DocumentObject*> planes;
+    planes.reserve(activeClippingPlanes.size());
+    for (const auto* plane : activeClippingPlanes) {
+        planes.push_back(const_cast<App::ClippingPlane*>(plane));
+    }
+    definition->ClippingPlanes.setValues(planes);
     return true;
 }
 
@@ -177,11 +193,35 @@ const Base::Placement& ViewContext::referenceFrame() const
     return activeReferenceFrame;
 }
 
+void ViewContext::setClippingPlanes(const std::vector<const App::ClippingPlane*>& planes)
+{
+    if (activeClippingPlanes == planes) {
+        return;
+    }
+    activeClippingPlanes = planes;
+    if (clippingChanged) {
+        clippingChanged(activeClippingPlanes);
+    }
+}
+
+const std::vector<const App::ClippingPlane*>& ViewContext::clippingPlanes() const
+{
+    return activeClippingPlanes;
+}
+
 void ViewContext::removeObject(const App::DocumentObject* object)
 {
     for (auto& [id, values] : layers) {
         (void)id;
         values.erase(object);
+    }
+    const auto oldSize = activeClippingPlanes.size();
+    activeClippingPlanes.erase(
+        std::remove(activeClippingPlanes.begin(), activeClippingPlanes.end(), object),
+        activeClippingPlanes.end()
+    );
+    if (oldSize != activeClippingPlanes.size() && clippingChanged) {
+        clippingChanged(activeClippingPlanes);
     }
 }
 
@@ -196,8 +236,13 @@ void ViewContext::clear()
         }
     }
     layers.clear();
+    const bool hadClippingPlanes = !activeClippingPlanes.empty();
+    activeClippingPlanes.clear();
     for (const auto* object : affected) {
         notify(object);
+    }
+    if (hadClippingPlanes && clippingChanged) {
+        clippingChanged(activeClippingPlanes);
     }
 }
 

@@ -98,6 +98,11 @@ namespace Base
 class BoundBox2d;
 }
 
+namespace App
+{
+class ClippingPlane;
+}
+
 namespace Gui
 {
 class NavigationAnimation;
@@ -678,8 +683,10 @@ private:
     SoGroup* objectGroup;
 
     void updateContextVisibility(const ViewProviderDocumentObject* provider);
+    void updateContextClipping(const std::vector<const App::ClippingPlane*>& planes);
     std::unordered_map<const ViewProvider*, SoSeparator*> contextFrontRoots;
     std::unordered_map<const ViewProvider*, SoSeparator*> contextBackRoots;
+    std::vector<SoClipPlane*> contextClipPlanes;
     ViewContext viewContext;
 
     std::unique_ptr<View3DInventorSelection> inventorSelection;

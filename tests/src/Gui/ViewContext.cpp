@@ -45,3 +45,27 @@ TEST(ViewContextTest, rejectsUnknownLayersAndDropsRemovedObjects)
     EXPECT_EQ(context.visibility(object), Gui::ViewContext::Visibility::Inherit);
     EXPECT_FALSE(context.removeLayer(layer + 1));
 }
+
+TEST(ViewContextTest, clippingChangesNotifyViewerAndClearStaleDefinitions)
+{
+    const auto* plane = reinterpret_cast<const App::ClippingPlane*>(0x2);
+    std::vector<std::vector<const App::ClippingPlane*>> events;
+    Gui::ViewContext context(
+        Gui::ViewContext::ChangedCallback {},
+        [&](const std::vector<const App::ClippingPlane*>& planes) {
+            events.push_back(planes);
+        }
+    );
+
+    context.setClippingPlanes({plane});
+    ASSERT_EQ(events.size(), 1U);
+    ASSERT_EQ(events.back().size(), 1U);
+    EXPECT_EQ(events.back().front(), plane);
+
+    context.setClippingPlanes({plane});
+    EXPECT_EQ(events.size(), 1U);
+
+    context.removeObject(reinterpret_cast<const App::DocumentObject*>(plane));
+    ASSERT_EQ(events.size(), 2U);
+    EXPECT_TRUE(events.back().empty());
+}

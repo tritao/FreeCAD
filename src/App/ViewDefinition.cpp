@@ -53,4 +53,11 @@ ViewDefinition::ViewDefinition()
         Prop_None,
         "Objects forced hidden by this view"
     );
+    ADD_PROPERTY_TYPE(
+        ClippingPlanes,
+        (),
+        "View",
+        Prop_None,
+        "Persistent clipping definitions referenced by this view"
+    );
 }
