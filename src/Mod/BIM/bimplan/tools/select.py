@@ -77,6 +77,13 @@ def _activate_edit_node(session, node, event_callback):
             node, event_callback
         ):
             return False
+    elif node_kind == "contextual_handle":
+        obj, handle = plan_edit_nodes.get_edit_node_payload(node)
+        if not session.viewport.queue_scene_graph_mutation(
+            ("activate-contextual-handle", id(handle)),
+            lambda: _activate_contextual_handle(session, obj, handle),
+        ):
+            return False
     else:
         edit_point = _get_ray_edit_node_point(node)
         if edit_point is None:
@@ -102,3 +109,13 @@ def _get_ray_edit_node_point(node):
     except Exception:
         return None
     return obj, index
+
+
+def _activate_contextual_handle(session, obj, handle):
+    """Start point acquisition only after the current Coin event has returned."""
+
+    target_ref = session.selection.targets.get_plan_target_for_object(obj)
+    if target_ref.kind is not None:
+        session.selection.state.set_selected_plan_target_state(target_ref.kind, target_ref.obj)
+        session.selection.sync.set_gui_selection_object(target_ref.obj)
+    return session.contextual_editing.activate(handle)

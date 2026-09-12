@@ -15,6 +15,11 @@ def get_plan_target_from_edit_node(session, node):
     if not node:
         return plan_target_kinds.make_plan_target_ref()
     node_kind = plan_edit_nodes.get_edit_node_kind(node)
+    if node_kind == "contextual_handle":
+        source, _handle = plan_edit_nodes.get_edit_node_payload(node)
+        return plan_target_kinds.coerce_plan_target_ref(
+            plan_targets.get_plan_target_for_object(session, source)
+        )
     if node_kind in ("provider_overlay_point", "provider_overlay_target"):
         target_ref = plan_provider_picking.get_provider_overlay_target_from_edit_node(session, node)
         if session.selection.state.is_valid_plan_target(target_ref.kind, target_ref.obj):
@@ -56,7 +61,22 @@ def get_edit_node(session, mouse_pos):
     node = _get_provider_overlay_edit_node(session, mouse_pos)
     if node is not None:
         return node
+    node = _get_contextual_handle_edit_node(session, mouse_pos)
+    if node is not None:
+        return node
     return _get_ray_picked_edit_node(session, mouse_pos)
+
+
+def _get_contextual_handle_edit_node(session, mouse_pos):
+    handle = session.contextual_rendering.pick_edit_handle(mouse_pos, radius_px=8)
+    if handle is None:
+        return None
+    return _emit_get_edit_node_result(
+        session,
+        mouse_pos,
+        "contextual_representation_handle",
+        plan_edit_nodes.ContextualHandleEditNode(handle.source, handle),
+    )
 
 
 def _emit_get_edit_node_result(session, mouse_pos, source, result):

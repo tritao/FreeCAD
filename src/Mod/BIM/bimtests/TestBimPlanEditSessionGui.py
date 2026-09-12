@@ -10,6 +10,7 @@ import FreeCADGui
 from bimtests.TestArchBaseGui import TestArchBaseGui
 from bimplan.runtime.session import PlanEditSession
 from bimplan.providers import PlanEditProvider, PlanEditRegistry
+from BimContextualRendering import ContextualNodeMapping
 
 
 class _TestProvider(PlanEditProvider):
@@ -148,8 +149,93 @@ class TestBimPlanEditSessionGui(TestArchBaseGui):
 
         self.assertTrue(session.enter())
         self.assertIsNotNone(session.task_panel)
+        gui_document = session.gui_doc
+        self.assertTrue(FreeCADGui.Control.activeDialog(gui_document))
+        from PySide import QtGui
+
+        main_window = FreeCADGui.getMainWindow()
+        self.assertIsNotNone(
+            main_window.findChild(QtGui.QWidget, "BIMPlanEditContextControls")
+        )
         session.task_panel.exit_button.click()
 
         self.assertIsNone(session.task_panel)
         self.assertIsNone(session.viewport_state.view_context_layer)
         self.assertFalse(FreeCADGui.Control.activeDialog(gui_document))
+
+    def test_contextual_wall_width_edit_is_transactional(self):
+        wall = Arch.makeWall(length=3000, width=200, height=2500, align="Center")
+        self.document.recompute()
+        session = PlanEditSession()
+        self.assertTrue(session.enter())
+        try:
+            handle = next(
+                item
+                for item in session.contextual_rendering.edit_handles_for(wall)
+                if item.role == "WallWidth"
+            )
+            session.contextual_editing.begin(handle)
+            result = session.contextual_editing.commit(
+                handle.point + handle.direction * 50
+            )
+
+            self.assertTrue(result.success)
+            self.assertAlmostEqual(300.0, wall.Width.Value)
+            self.document.undo()
+            self.assertAlmostEqual(200.0, wall.Width.Value)
+        finally:
+            session.shutdown(close_dialog=False)
+
+    def test_contextual_representation_mapping_drives_wall_pick_and_handle_pick(self):
+        from bimplan.picking import edit_nodes as picking_edit_nodes
+        from bimplan.selection import edit_nodes as selection_edit_nodes
+
+        wall = Arch.makeWall(length=3000, width=200, height=2500, align="Center")
+        self.document.recompute()
+        session = PlanEditSession()
+        self.assertTrue(session.enter())
+        try:
+            session.view.fitAll()
+            self.pump_gui_events()
+            screen_point = session.view.getPointOnScreen(wall.Shape.BoundBox.Center)
+            picked_mapping = session.contextual_rendering.pick_mapping(screen_point, radius_px=8)
+            self.assertIsNotNone(picked_mapping)
+            self.assertIs(wall, picked_mapping.source)
+            self.assertTrue(session.picking.hover(screen_point, force=True))
+            self.assertIs(wall, session.hovered_wall)
+            self.assertGreater(len(session.overlay_tracker_state.wall_hover_trackers), 0)
+
+            geometry_mapping = ContextualNodeMapping(wall, "Face1", "Cut", object())
+            with patch.object(
+                session.contextual_rendering,
+                "pick_mapping",
+                return_value=geometry_mapping,
+            ):
+                target = session.picking.pick((10, 10))
+            self.assertEqual("wall", target.kind)
+            self.assertIs(wall, target.obj)
+
+            handle = next(
+                item
+                for item in session.contextual_rendering.edit_handles_for(wall)
+                if item.role == "WallWidth"
+            )
+            handle_screen_point = session.view.getPointOnScreen(handle.point)
+            self.assertIsNone(
+                session.contextual_rendering.pick_edit_handle(handle_screen_point)
+            )
+            session.selection.state.set_selected_plan_target("wall", wall)
+            self.assertIs(
+                handle,
+                session.contextual_rendering.pick_edit_handle(handle_screen_point),
+            )
+            with patch.object(
+                session.contextual_rendering,
+                "pick_edit_handle",
+                return_value=handle,
+            ):
+                node = picking_edit_nodes.get_edit_node(session, (10, 10))
+            self.assertEqual("contextual_handle", selection_edit_nodes.get_edit_node_kind(node))
+            self.assertEqual((wall, handle), selection_edit_nodes.get_edit_node_payload(node))
+        finally:
+            session.shutdown(close_dialog=False)

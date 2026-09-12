@@ -87,6 +87,7 @@ SET(Arch_SRCS
 SET(bimplan_SRCS
     bimplan/__init__.py
     bimplan/contextual_rendering.py
+    bimplan/contextual_editing.py
     bimplan/document_visuals.py
     bimplan/object_visibility.py
     bimplan/overlays/__init__.py

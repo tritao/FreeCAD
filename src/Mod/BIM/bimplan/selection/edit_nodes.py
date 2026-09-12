@@ -47,6 +47,14 @@ class ProviderOverlayPointEditNode:
 
 
 @dataclass(frozen=True, slots=True)
+class ContextualHandleEditNode:
+    source: object
+    handle: object
+
+    kind = "contextual_handle"
+
+
+@dataclass(frozen=True, slots=True)
 class RayEditNode:
     point: object
 
@@ -108,6 +116,13 @@ def get_edit_node_payload(node):
             return (_get_node_attr(node, "point"),)
         try:
             return (node[1],)
+        except Exception:
+            return ()
+    if kind == "contextual_handle":
+        if _has_dataclass_payload(node, "source"):
+            return (_get_node_attr(node, "source"), _get_node_attr(node, "handle"))
+        try:
+            return (node[1], node[2])
         except Exception:
             return ()
     try:
