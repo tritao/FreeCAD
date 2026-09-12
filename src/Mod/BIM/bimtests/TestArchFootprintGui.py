@@ -884,8 +884,8 @@ class TestArchFootprintGui(TestArchBaseGui.TestArchBaseGui):
         self.assertGreater(len(xs), 0)
         self.assertLess(max(xs), 8000.0)
         self.assertGreater(min(xs), 5000.0)
-        self.assertLess(max(ys), 4500.0)
-        self.assertGreater(min(ys), 3500.0)
+        self.assertLess(max(ys), wall.Width.Value)
+        self.assertGreater(min(ys), -wall.Width.Value)
 
     def test_host_shape_changes_refresh_legacy_opening_footprint(self):
         """Hosted legacy opening symbols should refresh when the host shape changes."""

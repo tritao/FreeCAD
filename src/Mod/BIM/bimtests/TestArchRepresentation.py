@@ -5,6 +5,7 @@ import unittest
 import FreeCAD
 import Part
 import Arch
+import Draft
 
 from ArchRepresentation import (
     BIMEditHandle,
@@ -204,8 +205,54 @@ class TestArchRepresentation(unittest.TestCase):
         handles = {
             handle.subelement: handle for handle in representation.edit_handles
         }
-        self.assertEqual({"Path.Start", "Path.End"}, set(handles))
+        self.assertTrue({"Path.Start", "Path.End"}.issubset(handles))
         self.assertEqual("Point", handles["Path.End"].operation.value_kind)
+
+    def test_wall_width_handle_uses_alignment_sensitivity(self):
+        document = FreeCAD.newDocument("ContextualWallWidthTest")
+        self.addCleanup(FreeCAD.closeDocument, document.Name)
+        wall = Arch.makeWall(length=3000, width=200, height=3000, align="Center")
+        document.recompute()
+        context = RepresentationContext(
+            purpose="Plan", cut_offset=1000, target_offset=0
+        )
+        representation = wall.Proxy.getRepresentation(wall, context)
+        handle = next(item for item in representation.edit_handles if item.role == "WallWidth")
+
+        self.assertEqual(2.0, handle.operation.sensitivity)
+        editor = BIMContextualHandleEditor(context)
+        editor.begin(handle)
+        result = editor.commit(handle.point + handle.direction * 50)
+
+        self.assertTrue(result.success)
+        self.assertAlmostEqual(300.0, wall.Width.Value)
+
+    def test_hosted_opening_exposes_semantic_plan_geometry_and_handles(self):
+        document = FreeCAD.newDocument("ContextualOpeningRepresentationTest")
+        self.addCleanup(FreeCAD.closeDocument, document.Name)
+        wall = Arch.makeWall(length=3000, width=200, height=3000)
+        base = Draft.make_rectangle(900, 2100)
+        base.Placement.Rotation = FreeCAD.Rotation(FreeCAD.Vector(1, 0, 0), 90)
+        opening = Arch.makeWindow(baseobj=base, name="ContextualOpening")
+        opening.Width = 900
+        opening.Height = 2100
+        Arch.addComponents(opening, wall)
+        document.recompute()
+
+        representation = opening.Proxy.getRepresentation(
+            opening,
+            RepresentationContext(
+                purpose="Plan", cut_offset=1000, target_offset=0
+            ),
+        )
+
+        self.assertIs(representation.source, opening)
+        self.assertTrue(representation.projected_geometry)
+        self.assertTrue(representation.snap_geometry)
+        self.assertTrue(representation.edit_handles)
+        self.assertTrue(
+            all(mapping.source is opening for mapping in representation.source_mappings)
+        )
 
     def test_snap_query_preserves_semantic_identity(self):
         source = object()

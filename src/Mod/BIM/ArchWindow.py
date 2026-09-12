@@ -35,11 +35,14 @@ __url__ = "https://www.freecad.org"
 #  of wires, and that can be inserted into other Arch objects,
 #  by defining a volume that gets subtracted from them.
 
+import math
 import os
+from dataclasses import dataclass
 
 import FreeCAD
 import ArchCommands
 import ArchComponent
+import ArchRepresentation
 import ArchWindowPresets
 import Draft
 import DraftVecUtils
@@ -81,6 +84,13 @@ WindowOpeningModes = [
     "Sliding inv",
 ]
 WindowPresets = ArchWindowPresets.WindowPresets
+_WINDOW_PRESET_REWRITE_METHODS = (
+    "deleteAllConstraints",
+    "deleteAllGeometry",
+    "addConstraint",
+    "addGeometry",
+)
+_WINDOW_RESIZE_REWRITE_METHODS = _WINDOW_PRESET_REWRITE_METHODS
 
 
 def recolorize(attr):  # names is [docname,objname]
@@ -102,17 +112,2350 @@ def recolorize(attr):  # names is [docname,objname]
             obj.ViewObject.Proxy.colorize(obj)
 
 
-def isWindowObject(obj):
-    """Return whether *obj* exposes the semantic Arch Window contract."""
+def getWindowPresetNames(preset_kind=None):
+    """Return built-in preset names filtered by preset kind."""
 
-    return bool(
-        obj
-        and hasattr(obj, "Proxy")
-        and getattr(obj.Proxy, "Type", "") == "Window"
+    preset_kind = str(preset_kind or "").strip().lower()
+    if preset_kind and preset_kind not in {"window", "door", "opening"}:
+        return tuple()
+
+    presets = []
+    for preset_name in WindowPresets:
+        preset_name = str(preset_name or "").strip()
+        if not preset_name:
+            continue
+        if preset_kind and _get_window_preset_kind(preset_name) != preset_kind:
+            continue
+        presets.append(preset_name)
+    return tuple(presets)
+
+
+def getWindowPresetName(obj):
+    """Return the preset name currently stored on this Arch window object."""
+
+    try:
+        preset_index = int(getattr(obj, "Preset", 0) or 0)
+    except Exception:
+        return ""
+    if preset_index <= 0 or preset_index > len(WindowPresets):
+        return ""
+    return str(WindowPresets[preset_index - 1] or "").strip()
+
+
+def isWindowObject(obj):
+    """Return True when this Arch Window object semantically represents a window."""
+
+    return _get_window_object_kind(obj) == "window"
+
+
+def validateWindowPresetApplication(obj, preset_name=None):
+    """Return a structured validation status for applying a built-in opening preset."""
+
+    preset_name = str(preset_name or "").strip()
+    object_kind = _get_window_object_kind(obj)
+    current_preset_name = getWindowPresetName(obj)
+    preset_kind = _get_window_preset_kind(preset_name) if preset_name else ""
+
+    if object_kind not in {"window", "door", "opening"}:
+        return WindowPresetApplicationStatus(
+            allowed=False,
+            reason=translate("Arch", "Object is not an Arch window, door, or opening."),
+            object_kind=object_kind,
+            preset_name=preset_name,
+            preset_kind=preset_kind,
+            current_preset_name=current_preset_name,
+        )
+
+    if _is_link_object(obj):
+        return WindowPresetApplicationStatus(
+            allowed=False,
+            reason=translate("Arch", "Linked openings cannot be rewritten in place."),
+            object_kind=object_kind,
+            preset_name=preset_name,
+            preset_kind=preset_kind,
+            current_preset_name=current_preset_name,
+        )
+
+    if preset_name:
+        if not preset_kind:
+            return WindowPresetApplicationStatus(
+                allowed=False,
+                reason=translate("Arch", "Unknown built-in opening preset."),
+                object_kind=object_kind,
+                preset_name=preset_name,
+                preset_kind=preset_kind,
+                current_preset_name=current_preset_name,
+            )
+        if preset_kind != object_kind:
+            return WindowPresetApplicationStatus(
+                allowed=False,
+                reason=translate("Arch", "Preset kind does not match the selected opening."),
+                object_kind=object_kind,
+                preset_name=preset_name,
+                preset_kind=preset_kind,
+                current_preset_name=current_preset_name,
+            )
+        if preset_name == current_preset_name:
+            return WindowPresetApplicationStatus(
+                allowed=False,
+                reason=translate("Arch", "Preset is already applied."),
+                object_kind=object_kind,
+                preset_name=preset_name,
+                preset_kind=preset_kind,
+                current_preset_name=current_preset_name,
+            )
+
+    base = getattr(obj, "Base", None)
+    if base is None:
+        return WindowPresetApplicationStatus(
+            allowed=False,
+            reason=translate("Arch", "Opening has no editable base sketch."),
+            object_kind=object_kind,
+            preset_name=preset_name,
+            preset_kind=preset_kind,
+            current_preset_name=current_preset_name,
+        )
+
+    if not all(hasattr(base, method_name) for method_name in _WINDOW_PRESET_REWRITE_METHODS):
+        return WindowPresetApplicationStatus(
+            allowed=False,
+            reason=translate("Arch", "Opening base does not support in-place preset rewrites."),
+            object_kind=object_kind,
+            preset_name=preset_name,
+            preset_kind=preset_kind,
+            current_preset_name=current_preset_name,
+        )
+
+    width = _resolve_window_width_mm(obj)
+    if width is None or width <= 0.0:
+        return WindowPresetApplicationStatus(
+            allowed=False,
+            reason=translate("Arch", "Opening width could not be resolved."),
+            object_kind=object_kind,
+            preset_name=preset_name,
+            preset_kind=preset_kind,
+            current_preset_name=current_preset_name,
+        )
+
+    height = _resolve_window_height_mm(obj)
+    if height is None or height <= 0.0:
+        return WindowPresetApplicationStatus(
+            allowed=False,
+            reason=translate("Arch", "Opening height could not be resolved."),
+            object_kind=object_kind,
+            preset_name=preset_name,
+            preset_kind=preset_kind,
+            current_preset_name=current_preset_name,
+        )
+
+    return WindowPresetApplicationStatus(
+        allowed=True,
+        object_kind=object_kind,
+        preset_name=preset_name,
+        preset_kind=preset_kind,
+        current_preset_name=current_preset_name,
     )
 
 
-class _Window(ArchComponent.Component):
+def _set_placement_if_changed(obj, placement):
+    """Assign placement without dirtying the object when it is unchanged."""
+
+    try:
+        delta = FreeCAD.Placement(obj.Placement).inverse().multiply(
+            FreeCAD.Placement(placement)
+        )
+        unchanged = delta.Base.Length < 1e-6 and delta.Rotation.Angle < 1e-6
+    except Exception:
+        unchanged = False
+    if not unchanged:
+        obj.Placement = placement
+
+
+def canApplyWindowPreset(obj, preset_name=None):
+    """Return True when the object can accept an in-place built-in preset rewrite."""
+
+    return validateWindowPresetApplication(obj, preset_name).allowed
+
+
+def getWindowWidthMm(obj):
+    """Return the resolved width of this opening in millimeters."""
+
+    width = _resolve_window_width_mm(obj)
+    if width is None or width <= 0.0:
+        return None
+    return float(width)
+
+
+def getWindowHeightMm(obj):
+    """Return the resolved height of this opening in millimeters."""
+
+    height = _resolve_window_height_mm(obj)
+    if height is None or height <= 0.0:
+        return None
+    return float(height)
+
+
+def getWindowWidthUserString(obj):
+    """Return the resolved width formatted in user units."""
+
+    width = getWindowWidthMm(obj)
+    if width is None:
+        return ""
+    return FreeCAD.Units.Quantity(width, FreeCAD.Units.Length).UserString
+
+
+def getWindowHeightUserString(obj):
+    """Return the resolved height formatted in user units."""
+
+    height = getWindowHeightMm(obj)
+    if height is None:
+        return ""
+    return FreeCAD.Units.Quantity(height, FreeCAD.Units.Length).UserString
+
+
+def validateWindowResize(obj, width=None, height=None):
+    """Return a structured validation status for editing opening size in place."""
+
+    object_kind = _get_window_object_kind(obj)
+    current_width = getWindowWidthMm(obj)
+    current_height = getWindowHeightMm(obj)
+    base = getattr(obj, "Base", None)
+    width_mode = _get_window_resize_mode(base, "Width", current_width)
+    height_mode = _get_window_resize_mode(base, "Height", current_height)
+
+    if object_kind not in {"window", "door", "opening"}:
+        return WindowResizeStatus(
+            allowed=False,
+            reason=translate("Arch", "Object is not an Arch window, door, or opening."),
+            object_kind=object_kind,
+            current_width=current_width,
+            current_height=current_height,
+            width_mode=width_mode,
+            height_mode=height_mode,
+        )
+
+    if _is_link_object(obj):
+        return WindowResizeStatus(
+            allowed=False,
+            reason=translate("Arch", "Linked openings cannot be resized in place."),
+            object_kind=object_kind,
+            current_width=current_width,
+            current_height=current_height,
+            width_mode=width_mode,
+            height_mode=height_mode,
+        )
+
+    target_width = current_width
+    target_height = current_height
+
+    if width is not None:
+        target_width = _parse_length_mm(width)
+        if target_width is None or target_width <= 0.0:
+            return WindowResizeStatus(
+                allowed=False,
+                reason=translate("Arch", "Opening width is invalid."),
+                object_kind=object_kind,
+                current_width=current_width,
+                current_height=current_height,
+                width_mode=width_mode,
+                height_mode=height_mode,
+            )
+        if not width_mode:
+            return WindowResizeStatus(
+                allowed=False,
+                reason=translate("Arch", "Opening width cannot be edited in place."),
+                object_kind=object_kind,
+                current_width=current_width,
+                current_height=current_height,
+                target_width=target_width,
+                target_height=target_height,
+                width_mode=width_mode,
+                height_mode=height_mode,
+            )
+
+    if height is not None:
+        target_height = _parse_length_mm(height)
+        if target_height is None or target_height <= 0.0:
+            return WindowResizeStatus(
+                allowed=False,
+                reason=translate("Arch", "Opening height is invalid."),
+                object_kind=object_kind,
+                current_width=current_width,
+                current_height=current_height,
+                width_mode=width_mode,
+                height_mode=height_mode,
+            )
+        if not height_mode:
+            return WindowResizeStatus(
+                allowed=False,
+                reason=translate("Arch", "Opening height cannot be edited in place."),
+                object_kind=object_kind,
+                current_width=current_width,
+                current_height=current_height,
+                target_width=target_width,
+                target_height=target_height,
+                width_mode=width_mode,
+                height_mode=height_mode,
+            )
+
+    requested_resize = bool(width is not None or height is not None)
+    if (
+        requested_resize
+        and "rewrite" in {width_mode, height_mode}
+        and (("property" in {width_mode, height_mode}) or (base is None))
+    ):
+        return WindowResizeStatus(
+            allowed=False,
+            reason=translate("Arch", "Opening dimensions require incompatible resize modes."),
+            object_kind=object_kind,
+            current_width=current_width,
+            current_height=current_height,
+            target_width=target_width,
+            target_height=target_height,
+            width_mode=width_mode,
+            height_mode=height_mode,
+        )
+
+    allowed = bool(requested_resize or width_mode or height_mode)
+    noop = bool(
+        (not requested_resize)
+        or (
+            requested_resize
+            and (
+                width is None
+                or (current_width is not None and abs(target_width - current_width) <= 1e-6)
+            )
+            and (
+                height is None
+                or (current_height is not None and abs(target_height - current_height) <= 1e-6)
+            )
+        )
+    )
+
+    return WindowResizeStatus(
+        allowed=allowed,
+        object_kind=object_kind,
+        current_width=current_width,
+        current_height=current_height,
+        target_width=target_width,
+        target_height=target_height,
+        width_mode=width_mode,
+        height_mode=height_mode,
+        noop=noop,
+    )
+
+
+def canResizeWindow(obj, width=None, height=None):
+    """Return True when this opening can accept the requested size edit."""
+
+    return validateWindowResize(obj, width=width, height=height).allowed
+
+
+def canEditWindowWidth(obj):
+    """Return True when this opening supports width edits in place."""
+
+    current_width = getWindowWidthMm(obj)
+    if current_width is None or current_width <= 0.0:
+        return False
+    return validateWindowResize(obj, width=current_width).allowed
+
+
+def canEditWindowHeight(obj):
+    """Return True when this opening supports height edits in place."""
+
+    current_height = getWindowHeightMm(obj)
+    if current_height is None or current_height <= 0.0:
+        return False
+    return validateWindowResize(obj, height=current_height).allowed
+
+
+def resizeWindow(
+    obj,
+    width=None,
+    height=None,
+    preserve_anchor=True,
+    transaction_label=None,
+    raise_on_error=False,
+    anchor_shift=None,
+):
+    """Resize an existing Arch opening in place."""
+
+    status = validateWindowResize(obj, width=width, height=height)
+    if not status.allowed:
+        if raise_on_error:
+            raise ValueError(str(status.reason or "Invalid window resize"))
+        return False
+    if status.noop:
+        return True
+
+    doc = getattr(obj, "Document", None) or FreeCAD.ActiveDocument
+    if doc is None:
+        if raise_on_error:
+            raise ValueError("Opening document is unavailable")
+        return False
+
+    base = getattr(obj, "Base", None)
+    old_anchor = _get_window_anchor(obj) if preserve_anchor else None
+    if not transaction_label:
+        transaction_label = translate("Arch", "Resize Opening")
+
+    try:
+        doc.openTransaction(transaction_label)
+
+        if "rewrite" in {status.width_mode, status.height_mode}:
+            if base is None:
+                raise RuntimeError("Opening base sketch is unavailable")
+            if not _rewrite_window_size_by_scaling(
+                base,
+                target_width=status.target_width if width is not None else None,
+                target_height=status.target_height if height is not None else None,
+            ):
+                raise RuntimeError("Opening size rewrite failed")
+
+        if width is not None and hasattr(obj, "Width"):
+            obj.Width = status.target_width
+        if height is not None and hasattr(obj, "Height"):
+            obj.Height = status.target_height
+
+        doc.recompute()
+        _preserve_window_anchor(obj, old_anchor)
+        if anchor_shift is not None:
+            target = getattr(obj, "Base", None) or obj
+            placement = FreeCAD.Placement(target.Placement)
+            placement.Base = placement.Base.add(FreeCAD.Vector(anchor_shift))
+            target.Placement = placement
+        doc.recompute()
+        doc.commitTransaction()
+    except Exception:
+        try:
+            doc.abortTransaction()
+        except Exception:
+            pass
+        if raise_on_error:
+            raise
+        return False
+
+    return True
+
+
+def setWindowWidth(
+    obj,
+    value,
+    preserve_anchor=True,
+    transaction_label=None,
+    raise_on_error=False,
+    anchor_shift=None,
+):
+    """Resize an opening by changing its width."""
+
+    if not transaction_label:
+        transaction_label = translate("Arch", "Change Opening Width")
+    return resizeWindow(
+        obj,
+        width=value,
+        preserve_anchor=preserve_anchor,
+        anchor_shift=anchor_shift,
+        transaction_label=transaction_label,
+        raise_on_error=raise_on_error,
+    )
+
+
+def setWindowHeight(
+    obj,
+    value,
+    preserve_anchor=True,
+    transaction_label=None,
+    raise_on_error=False,
+):
+    """Resize an opening by changing its height."""
+
+    if not transaction_label:
+        transaction_label = translate("Arch", "Change Opening Height")
+    return resizeWindow(
+        obj,
+        height=value,
+        preserve_anchor=preserve_anchor,
+        transaction_label=transaction_label,
+        raise_on_error=raise_on_error,
+    )
+
+
+def _opening_height_edit_operation():
+    def apply_height(obj, value):
+        return setWindowHeight(
+            obj,
+            value,
+            transaction_label=translate("Arch", "Edit Opening Height"),
+            raise_on_error=True,
+        )
+
+    return ArchRepresentation.BIMEditOperation(
+        "OpeningHeight",
+        translate("Arch", "Edit Opening Height"),
+        getWindowHeightMm,
+        apply_height,
+        property_name="Height",
+        manages_transaction=True,
+        minimum=1.0,
+        available=lambda obj: not ArchRepresentation.is_property_expression_driven(obj, "Height"),
+    )
+
+
+def _opening_sill_property_edit_operation():
+    return ArchRepresentation.BIMEditOperation(
+        "OpeningSill",
+        translate("Arch", "Edit Opening Sill"),
+        lambda obj: obj.SillHeight.Value,
+        lambda obj, value: setattr(obj, "SillHeight", value),
+        property_name="SillHeight",
+        minimum=0.0,
+        available=lambda obj: not ArchRepresentation.is_property_expression_driven(obj, "SillHeight"),
+    )
+
+
+def _opening_attachment_sill_edit_operation():
+    def set_offset(obj, value):
+        placement = FreeCAD.Placement(obj.AttachmentOffset)
+        placement.Base.z = value
+        obj.AttachmentOffset = placement
+
+    return ArchRepresentation.BIMEditOperation(
+        "OpeningSill",
+        translate("Arch", "Edit Opening Sill"),
+        lambda obj: obj.AttachmentOffset.Base.z,
+        set_offset,
+        property_name="AttachmentOffset.Base.z",
+        minimum=0.0,
+        available=lambda obj: not ArchRepresentation.is_property_expression_driven(
+            obj, "AttachmentOffset.Base.z"
+        ),
+    )
+
+
+def _opening_base_placement_sill_edit_operation():
+    def set_offset(obj, value):
+        placement = FreeCAD.Placement(obj.Base.Placement)
+        placement.Base.z = value
+        obj.Base.Placement = placement
+
+    return ArchRepresentation.BIMEditOperation(
+        "OpeningSill",
+        translate("Arch", "Edit Opening Sill"),
+        lambda obj: obj.Base.Placement.Base.z,
+        set_offset,
+        property_name="Base.Placement.Base.z",
+        minimum=0.0,
+        available=lambda obj: not ArchRepresentation.is_property_expression_driven(
+            obj.Base, "Placement.Base.z"
+        ),
+    )
+
+
+def _opening_position_edit_operation(helper):
+    move_context = helper.get_plan_move_context()
+    if not move_context:
+        return None
+    origin = move_context["origin"]
+    axis = move_context["axis_u"]
+    center = move_context["center_point"]
+    center_u = FreeCAD.Vector(center).sub(origin).dot(axis)
+    target, _placement = helper._get_plan_move_target()
+    source = helper.Object
+    property_name = "Placement.Base"
+    if target is not source:
+        property_name = "Base.Placement.Base"
+
+    def apply_position(_source, value):
+        point = origin.add(FreeCAD.Vector(axis).multiply(value))
+        point.z = center.z
+        if not helper.move_along_host(point):
+            raise ValueError(translate("Arch", "Opening cannot move along its host"))
+
+    return ArchRepresentation.BIMEditOperation(
+        "OpeningPosition",
+        translate("Arch", "Edit Opening Position"),
+        lambda _source: center_u,
+        apply_position,
+        property_name=property_name,
+        minimum=move_context.get("move_u_min"),
+        maximum=move_context.get("move_u_max"),
+        available=lambda _source: not ArchRepresentation.is_property_expression_driven(
+            target, "Placement.Base"
+        ),
+    )
+
+
+def _opening_width_edit_operation(helper, side):
+    move_context = helper.get_plan_move_context()
+    source = helper.Object
+    width = getWindowWidthMm(source)
+    if not move_context or not width or not canEditWindowWidth(source):
+        return None
+    origin = move_context["origin"]
+    axis = move_context["axis_u"]
+    center_u = FreeCAD.Vector(move_context["center_point"]).sub(origin).dot(axis)
+    half_width = width * 0.5
+    left_u = center_u - half_width
+    right_u = center_u + half_width
+    host_min = move_context.get("move_u_min")
+    host_max = move_context.get("move_u_max")
+    host_min = None if host_min is None else host_min - half_width
+    host_max = None if host_max is None else host_max + half_width
+
+    def apply_jamb(_source, value):
+        if side == "Left":
+            new_width = right_u - value
+            new_center_u = (right_u + value) * 0.5
+        else:
+            new_width = value - left_u
+            new_center_u = (left_u + value) * 0.5
+        shift = FreeCAD.Vector(axis).multiply(new_center_u - center_u)
+        setWindowWidth(
+            source,
+            new_width,
+            anchor_shift=shift,
+            transaction_label=translate("Arch", "Edit Opening Width"),
+            raise_on_error=True,
+        )
+
+    minimum = host_min if side == "Left" else left_u + 1.0
+    maximum = right_u - 1.0 if side == "Left" else host_max
+    return ArchRepresentation.BIMEditOperation(
+        "Opening{}Jamb".format(side),
+        translate("Arch", "Edit Opening Width"),
+        lambda _source: left_u if side == "Left" else right_u,
+        apply_jamb,
+        property_name="Width",
+        manages_transaction=True,
+        minimum=minimum,
+        maximum=maximum,
+        available=lambda _source: canEditWindowWidth(source),
+    )
+
+
+def applyWindowPreset(
+    obj,
+    preset_name,
+    preserve_anchor=True,
+    transaction_label=None,
+    raise_on_error=False,
+):
+    """Apply a built-in preset to an existing Arch opening in place."""
+
+    preset_name = str(preset_name or "").strip()
+    status = validateWindowPresetApplication(obj, preset_name)
+    if not status.allowed:
+        if raise_on_error:
+            raise ValueError(str(status.reason or "Invalid window preset application"))
+        return False
+
+    width = _resolve_window_width_mm(obj)
+    height = _resolve_window_height_mm(obj)
+    if width is None or width <= 0.0 or height is None or height <= 0.0:
+        if raise_on_error:
+            raise ValueError("Opening size could not be resolved")
+        return False
+
+    doc = getattr(obj, "Document", None) or FreeCAD.ActiveDocument
+    target_base = getattr(obj, "Base", None)
+    if doc is None or target_base is None:
+        if raise_on_error:
+            raise ValueError("Opening document or base sketch is unavailable")
+        return False
+
+    old_anchor = _get_window_anchor(obj) if preserve_anchor else None
+    temp_window = None
+    temp_base = None
+    temp_window_name = ""
+    temp_base_name = ""
+    if not transaction_label:
+        transaction_label = translate("Arch", "Change Window Preset")
+
+    try:
+        doc.openTransaction(transaction_label)
+
+        temp_window = _make_window_preset_object(obj, preset_name, width, height)
+        if temp_window is None:
+            raise RuntimeError("Window preset creation failed")
+        temp_window_name = str(getattr(temp_window, "Name", "") or "")
+
+        temp_base = getattr(temp_window, "Base", None)
+        if temp_base is None:
+            raise RuntimeError("Window preset base sketch missing")
+        temp_base_name = str(getattr(temp_base, "Name", "") or "")
+
+        _rewrite_sketch_geometry(target_base, temp_base)
+
+        obj.WindowParts = list(getattr(temp_window, "WindowParts", ()) or ())
+        if hasattr(obj, "Preset"):
+            obj.Preset = int(getattr(temp_window, "Preset", 0) or 0)
+        if hasattr(obj, "Frame") and hasattr(temp_window, "Frame"):
+            obj.Frame = temp_window.Frame
+        if hasattr(obj, "Offset") and hasattr(temp_window, "Offset"):
+            obj.Offset = temp_window.Offset
+        if hasattr(obj, "Width"):
+            obj.Width = width
+        if hasattr(obj, "Height"):
+            obj.Height = height
+        if hasattr(obj, "IfcType") and hasattr(temp_window, "IfcType"):
+            obj.IfcType = temp_window.IfcType
+
+        doc.recompute()
+
+        _preserve_window_anchor(obj, old_anchor)
+
+        _remove_document_object_if_present(doc, temp_window_name)
+        _remove_document_object_if_present(doc, temp_base_name)
+
+        doc.recompute()
+        doc.commitTransaction()
+    except Exception:
+        try:
+            doc.abortTransaction()
+        except Exception:
+            pass
+        if raise_on_error:
+            raise
+        return False
+
+    return True
+
+
+def _get_window_object_kind(obj):
+    if obj is None:
+        return ""
+    ifc_type = str(getattr(obj, "IfcType", "") or "").strip()
+    if ifc_type == "Door":
+        return "door"
+    if ifc_type == "Opening Element":
+        return "opening"
+    if ifc_type == "Window":
+        return "window"
+    try:
+        if Draft.getType(obj) == "Window":
+            return "window"
+    except Exception:
+        pass
+    return ""
+
+
+def _get_window_preset_kind(preset_name):
+    return str(ArchWindowPresets.getWindowPresetKind(preset_name) or "").strip().lower()
+
+
+def _is_link_object(obj):
+    try:
+        return bool(obj and obj.isDerivedFrom("App::Link"))
+    except Exception:
+        return False
+
+
+def _resolve_window_width_mm(obj):
+    width = _get_property_length_mm(obj, "Width")
+    if width and width > 0.0:
+        return width
+
+    base = getattr(obj, "Base", None)
+    width = _get_named_sketch_constraint_mm(base, "Width")
+    if width and width > 0.0:
+        return width
+
+    local_extents = _get_sketch_local_axis_extents_mm(base)
+    if local_extents:
+        width = local_extents[0]
+        if width > 0.0:
+            return width
+
+    shape = getattr(base, "Shape", None)
+    extents = _get_shape_planar_extents(shape)
+    if extents:
+        width = extents[0]
+        if width > 0.0:
+            return width
+
+    return None
+
+
+def _resolve_window_height_mm(obj):
+    height = _get_property_length_mm(obj, "Height")
+    if height and height > 0.0:
+        return height
+
+    base = getattr(obj, "Base", None)
+    height = _get_named_sketch_constraint_mm(base, "Height")
+    if height and height > 0.0:
+        return height
+
+    local_extents = _get_sketch_local_axis_extents_mm(base)
+    if local_extents:
+        height = local_extents[1]
+        if height > 0.0:
+            return height
+
+    shape = getattr(base, "Shape", None)
+    extents = _get_shape_planar_extents(shape)
+    if len(extents) > 1:
+        height = extents[1]
+        if height > 0.0:
+            return height
+
+    return None
+
+
+def _get_window_anchor(obj):
+    base = getattr(obj, "Base", None)
+    anchor = _get_object_shape_center(base)
+    if anchor is not None:
+        return anchor
+    return _get_object_shape_center(obj)
+
+
+def _get_object_shape_center(obj):
+    shape = getattr(obj, "Shape", None)
+    if not shape:
+        return None
+    try:
+        if shape.isNull():
+            return None
+    except Exception:
+        pass
+    bound_box = getattr(shape, "BoundBox", None)
+    if bound_box is None:
+        return None
+    return FreeCAD.Vector(
+        (float(bound_box.XMin) + float(bound_box.XMax)) * 0.5,
+        (float(bound_box.YMin) + float(bound_box.YMax)) * 0.5,
+        (float(bound_box.ZMin) + float(bound_box.ZMax)) * 0.5,
+    )
+
+
+def _make_window_preset_object(obj, preset_name, width, height):
+    frame_depth = _get_property_length_mm(obj, "Frame")
+    frame_offset = _get_property_length_mm(obj, "Offset")
+    if frame_depth is None or frame_depth <= 0.0:
+        frame_depth = _get_positive_arch_window_param("WindowW2", 40.0)
+
+    return ArchWindowPresets.makeWindowPreset(
+        preset_name,
+        width,
+        height,
+        _get_positive_arch_window_param("WindowH1", 50.0),
+        _get_positive_arch_window_param("WindowH2", 50.0),
+        _get_arch_window_param("WindowH3", 50.0),
+        _get_positive_arch_window_param("WindowW1", 50.0),
+        frame_depth,
+        frame_offset if frame_offset is not None else _get_arch_window_param("WindowO1", 0.0),
+        _get_arch_window_param("WindowO2", 0.0),
+    )
+
+
+def _get_named_sketch_constraint_mm(sketch, name):
+    if sketch is None or not hasattr(sketch, "getDatum"):
+        return None
+    try:
+        return _coerce_length_mm(sketch.getDatum(str(name or "").strip()))
+    except Exception:
+        return None
+
+
+def _get_sketch_local_axis_extents_mm(sketch):
+    geometry = tuple(getattr(sketch, "Geometry", ()) or ())
+    if not geometry:
+        return tuple()
+
+    min_x = None
+    min_y = None
+    min_z = None
+    max_x = None
+    max_y = None
+    max_z = None
+
+    for element in geometry:
+        try:
+            bound_box = element.toShape().BoundBox
+        except Exception:
+            continue
+
+        min_x = float(bound_box.XMin) if min_x is None else min(min_x, float(bound_box.XMin))
+        min_y = float(bound_box.YMin) if min_y is None else min(min_y, float(bound_box.YMin))
+        min_z = float(bound_box.ZMin) if min_z is None else min(min_z, float(bound_box.ZMin))
+        max_x = float(bound_box.XMax) if max_x is None else max(max_x, float(bound_box.XMax))
+        max_y = float(bound_box.YMax) if max_y is None else max(max_y, float(bound_box.YMax))
+        max_z = float(bound_box.ZMax) if max_z is None else max(max_z, float(bound_box.ZMax))
+
+    if min_x is None or min_y is None or min_z is None:
+        return tuple()
+
+    return (
+        max(0.0, max_x - min_x),
+        max(0.0, max_y - min_y),
+        max(0.0, max_z - min_z),
+    )
+
+
+def _get_shape_planar_extents(shape):
+    bound_box = getattr(shape, "BoundBox", None)
+    if bound_box is None:
+        return tuple()
+
+    lengths = sorted(
+        (
+            abs(float(bound_box.XLength)),
+            abs(float(bound_box.YLength)),
+            abs(float(bound_box.ZLength)),
+        ),
+        reverse=True,
+    )
+    return tuple(length for length in lengths if length > 1e-7)
+
+
+def _get_arch_window_param(name, default):
+    try:
+        return float(params.get_param_arch(name))
+    except Exception:
+        return float(default)
+
+
+def _get_positive_arch_window_param(name, default):
+    value = _get_arch_window_param(name, default)
+    if value > 0.0:
+        return value
+    return float(default)
+
+
+def _remove_document_object_if_present(doc, object_name):
+    object_name = str(object_name or "").strip()
+    if not object_name:
+        return
+    try:
+        if doc.getObject(object_name) is None:
+            return
+    except Exception:
+        pass
+    doc.removeObject(object_name)
+
+
+def _rewrite_sketch_geometry(target, source):
+    placement = FreeCAD.Placement(target.Placement)
+
+    target.deleteAllConstraints()
+    target.deleteAllGeometry()
+    target.Placement = placement
+
+    for geometry in tuple(getattr(source, "Geometry", ()) or ()):
+        target.addGeometry(geometry)
+
+    for constraint in tuple(getattr(source, "Constraints", ()) or ()):
+        index = target.addConstraint(constraint)
+        name = str(getattr(constraint, "Name", "") or "").strip()
+        if not name:
+            continue
+        try:
+            target.renameConstraint(index, name)
+        except Exception:
+            pass
+
+
+def _rewrite_window_size_by_scaling(base, target_width=None, target_height=None):
+    import Part
+
+    if base is None or not _is_simple_window_scalable_sketch(base):
+        return False
+
+    bounds = _get_sketch_local_axis_bounds_mm(base)
+    if not bounds:
+        return False
+
+    x_bounds, y_bounds = bounds
+    current_width = x_bounds[1] - x_bounds[0]
+    current_height = y_bounds[1] - y_bounds[0]
+    if current_width <= 1e-6 or current_height <= 1e-6:
+        return False
+
+    if target_width is None:
+        target_width = current_width
+    if target_height is None:
+        target_height = current_height
+    if target_width <= 0.0 or target_height <= 0.0:
+        return False
+
+    center_x = (x_bounds[0] + x_bounds[1]) * 0.5
+    center_y = (y_bounds[0] + y_bounds[1]) * 0.5
+    scale_x = float(target_width) / float(current_width)
+    scale_y = float(target_height) / float(current_height)
+    placement = FreeCAD.Placement(base.Placement)
+    geometry = tuple(getattr(base, "Geometry", ()) or ())
+    constraints = tuple(getattr(base, "Constraints", ()) or ())
+
+    scaled_geometry = []
+    for element in geometry:
+        if element.__class__.__name__ != "LineSegment":
+            return False
+        start_point = FreeCAD.Vector(element.StartPoint)
+        end_point = FreeCAD.Vector(element.EndPoint)
+        start_point.x = center_x + ((start_point.x - center_x) * scale_x)
+        end_point.x = center_x + ((end_point.x - center_x) * scale_x)
+        start_point.y = center_y + ((start_point.y - center_y) * scale_y)
+        end_point.y = center_y + ((end_point.y - center_y) * scale_y)
+        scaled_geometry.append(Part.LineSegment(start_point, end_point))
+
+    base.deleteAllConstraints()
+    base.deleteAllGeometry()
+    base.Placement = placement
+
+    for element in scaled_geometry:
+        base.addGeometry(element)
+
+    for constraint in constraints:
+        index = base.addConstraint(constraint)
+        name = str(getattr(constraint, "Name", "") or "").strip()
+        if not name:
+            continue
+        try:
+            base.renameConstraint(index, name)
+        except Exception:
+            pass
+
+    return True
+
+
+def _get_window_resize_mode(base, prop_name, current_length):
+    if base is None:
+        return "property"
+    if _has_named_constraint(base, prop_name):
+        return "property"
+    if current_length and current_length > 0.0:
+        if _supports_window_sketch_rewrite(base) and _is_simple_window_scalable_sketch(base):
+            return "rewrite"
+    return ""
+
+
+def _supports_window_sketch_rewrite(sketch):
+    return bool(
+        sketch is not None
+        and all(hasattr(sketch, method_name) for method_name in _WINDOW_RESIZE_REWRITE_METHODS)
+    )
+
+
+def _is_simple_window_scalable_sketch(sketch):
+    geometry = tuple(getattr(sketch, "Geometry", ()) or ())
+    if not geometry:
+        return False
+    if any(element.__class__.__name__ != "LineSegment" for element in geometry):
+        return False
+    constraints = tuple(getattr(sketch, "Constraints", ()) or ())
+    return not any(str(getattr(constraint, "Name", "") or "").strip() for constraint in constraints)
+
+
+def _get_sketch_local_axis_bounds_mm(sketch):
+    geometry = tuple(getattr(sketch, "Geometry", ()) or ())
+    if not geometry:
+        return tuple()
+
+    min_x = None
+    min_y = None
+    max_x = None
+    max_y = None
+    for element in geometry:
+        try:
+            bound_box = element.toShape().BoundBox
+        except Exception:
+            continue
+        min_x = float(bound_box.XMin) if min_x is None else min(min_x, float(bound_box.XMin))
+        min_y = float(bound_box.YMin) if min_y is None else min(min_y, float(bound_box.YMin))
+        max_x = float(bound_box.XMax) if max_x is None else max(max_x, float(bound_box.XMax))
+        max_y = float(bound_box.YMax) if max_y is None else max(max_y, float(bound_box.YMax))
+
+    if min_x is None or min_y is None or max_x is None or max_y is None:
+        return tuple()
+    return ((float(min_x), float(max_x)), (float(min_y), float(max_y)))
+
+
+def _has_named_constraint(sketch, name):
+    if sketch is None:
+        return False
+    name = str(name or "").strip()
+    if not name:
+        return False
+    constraints = tuple(getattr(sketch, "Constraints", ()) or ())
+    return any(
+        str(getattr(constraint, "Name", "") or "").strip() == name for constraint in constraints
+    )
+
+
+def _coerce_length_mm(value):
+    try:
+        value = value.Value
+    except AttributeError:
+        pass
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _get_property_length_mm(obj, name):
+    if obj is None or not hasattr(obj, name):
+        return None
+    try:
+        return _coerce_length_mm(getattr(obj, name))
+    except Exception:
+        return None
+
+
+def _parse_length_mm(value):
+    if value is None:
+        return None
+    length = _coerce_length_mm(value)
+    if length is not None:
+        return length
+    text = str(value or "").strip()
+    if not text:
+        return None
+    try:
+        return float(FreeCAD.Units.Quantity(text).Value)
+    except Exception:
+        return None
+
+
+def _preserve_window_anchor(obj, old_anchor):
+    if old_anchor is None:
+        return
+    new_anchor = _get_window_anchor(obj)
+    if new_anchor is None:
+        return
+    delta = old_anchor.sub(new_anchor)
+    if delta.Length <= 1e-6:
+        return
+
+    placement_target = getattr(obj, "Base", None) or obj
+    if not hasattr(placement_target, "Placement"):
+        return
+
+    placement = FreeCAD.Placement(placement_target.Placement)
+    placement.Base = placement.Base.add(delta)
+    placement_target.Placement = placement
+
+
+@dataclass(frozen=True)
+class OpeningPlanEditHandle:
+    role: str
+    point: Vector
+    interaction: str = "immediate"
+    title: str = ""
+    transaction: str = ""
+
+
+@dataclass(frozen=True)
+class WindowPresetApplicationStatus:
+    allowed: bool
+    reason: str = ""
+    object_kind: str = ""
+    preset_name: str = ""
+    preset_kind: str = ""
+    current_preset_name: str = ""
+
+
+@dataclass(frozen=True)
+class WindowResizeStatus:
+    allowed: bool
+    reason: str = ""
+    object_kind: str = ""
+    current_width: float | None = None
+    current_height: float | None = None
+    target_width: float | None = None
+    target_height: float | None = None
+    width_mode: str = ""
+    height_mode: str = ""
+    noop: bool = False
+
+
+class _HostedOpeningPlanGeometry:
+    """Shared hosted-opening plan geometry helpers for proxies and view providers."""
+
+    def _get_footprint_cut_context(self):
+        host = None
+        hosts = getattr(self.Object, "Hosts", None) or []
+        if hosts:
+            host = hosts[0]
+
+        shape = getattr(self.Object, "Shape", None)
+        has_real_shape = bool(shape) and not shape.isNull()
+        if has_real_shape:
+            shape_bb = shape.BoundBox
+        else:
+            shape_bb = self._get_base_footprint_boundbox()
+            if shape_bb is None:
+                return None, None
+
+        cut_height = 1000.0
+
+        if host and hasattr(host, "Shape") and host.Shape and not host.Shape.isNull():
+            host_bb = host.Shape.BoundBox
+            base_z = host_bb.ZMin
+            cut_z = max(host_bb.ZMin + 0.001, min(host_bb.ZMax - 0.001, host_bb.ZMin + cut_height))
+            if not has_real_shape:
+                return cut_z, base_z
+        else:
+            bb = shape_bb
+            base_z = bb.ZMin
+            cut_z = max(bb.ZMin + 0.001, min(bb.ZMax - 0.001, bb.ZMin + cut_height))
+
+        if cut_z < shape_bb.ZMin - 0.001 or cut_z > shape_bb.ZMax + 0.001:
+            return None, None
+
+        return cut_z, base_z
+
+    def _get_base_global_point_lists(self):
+        base = getattr(self.Object, "Base", None)
+        if not base or not hasattr(base, "Shape") or not base.Shape:
+            return []
+
+        point_lists = []
+        for edge in getattr(base.Shape, "Edges", []) or []:
+            points = self._collect_edge_points(edge)
+            if len(points) < 2:
+                continue
+            point_lists.append(points)
+        return point_lists
+
+    def _get_base_footprint_boundbox(self):
+        point_lists = self._get_base_global_point_lists()
+        if not point_lists:
+            return None
+
+        xs = []
+        ys = []
+        zs = []
+        for points in point_lists:
+            for point in points:
+                xs.append(point.x)
+                ys.append(point.y)
+                zs.append(point.z)
+        if not xs:
+            return None
+
+        return FreeCAD.BoundBox(min(xs), min(ys), min(zs), max(xs), max(ys), max(zs))
+
+    def _collect_edge_points(self, edge):
+        points = edge.tessellate(1)
+        if isinstance(points, tuple):
+            points = points[0]
+        if len(points) < 2:
+            try:
+                points = edge.discretize(Deflection=1.0)
+            except Exception:
+                points = []
+        if len(points) < 2 and getattr(edge, "Vertexes", None):
+            points = [vertex.Point for vertex in edge.Vertexes]
+        return points
+
+    def _get_section_footprint_edges(self, shape, cut_z):
+        import Part
+
+        bbox = shape.BoundBox
+        size = max(bbox.XLength, bbox.YLength, bbox.ZLength, 1.0) + 1000.0
+        cut_plane = Part.makePlane(
+            size,
+            size,
+            FreeCAD.Vector(bbox.Center.x - (size * 0.5), bbox.Center.y - (size * 0.5), cut_z),
+        )
+        try:
+            section = shape.section(cut_plane)
+        except Part.OCCError:
+            return []
+        if section and section.Edges:
+            return list(section.Edges)
+        return []
+
+    def _get_host_plan_basis(self):
+        host = None
+        hosts = getattr(self.Object, "Hosts", None) or []
+        if hosts:
+            host = hosts[0]
+
+        origin = FreeCAD.Vector()
+        axis_u = FreeCAD.Vector(1, 0, 0)
+        axis_v = FreeCAD.Vector(0, 1, 0)
+
+        if host and getattr(host, "Placement", None):
+            origin = FreeCAD.Vector(host.Placement.Base)
+            axis_u = host.Placement.Rotation.multVec(FreeCAD.Vector(1, 0, 0))
+            axis_v = host.Placement.Rotation.multVec(FreeCAD.Vector(0, 1, 0))
+
+        axis_u = FreeCAD.Vector(axis_u.x, axis_u.y, 0)
+        axis_v = FreeCAD.Vector(axis_v.x, axis_v.y, 0)
+
+        if DraftVecUtils.isNull(axis_u):
+            axis_u = FreeCAD.Vector(1, 0, 0)
+        else:
+            axis_u.normalize()
+
+        if DraftVecUtils.isNull(axis_v) or abs(axis_u.dot(axis_v)) > 0.9:
+            axis_v = FreeCAD.Vector(-axis_u.y, axis_u.x, 0)
+        else:
+            axis_v.normalize()
+
+        return origin, axis_u, axis_v
+
+    def _get_host_plan_object(self):
+        hosts = getattr(self.Object, "Hosts", None) or []
+        return hosts[0] if hosts else None
+
+    def _get_section_plan_basis(self, section_edges):
+        if not section_edges:
+            return None
+
+        longest_edge = None
+        longest_length = 0.0
+        for edge in section_edges:
+            points = self._collect_edge_points(edge)
+            if len(points) < 2:
+                continue
+            direction = FreeCAD.Vector(points[-1].sub(points[0]))
+            direction.z = 0
+            length = direction.Length
+            if length > longest_length:
+                longest_length = length
+                longest_edge = (points, direction)
+
+        if not longest_edge or longest_length <= 0.0:
+            return None
+
+        points, direction = longest_edge
+        axis_u = FreeCAD.Vector(direction)
+        axis_u.normalize()
+        axis_v = FreeCAD.Vector(-axis_u.y, axis_u.x, 0)
+        origin = FreeCAD.Vector(points[0].x, points[0].y, 0)
+        return origin, axis_u, axis_v
+
+    def _get_point_lists_plan_basis(self, point_lists):
+        if not point_lists:
+            return None
+
+        longest = None
+        longest_length = 0.0
+        for points in point_lists:
+            if len(points) < 2:
+                continue
+            for start, end in zip(points, points[1:]):
+                direction = end.sub(start)
+                direction.z = 0
+                length = direction.Length
+                if length > longest_length:
+                    longest_length = length
+                    longest = (start, direction)
+
+        if not longest or longest_length <= 0.0:
+            return None
+
+        start, direction = longest
+        axis_u = FreeCAD.Vector(direction)
+        axis_u.normalize()
+        axis_v = FreeCAD.Vector(-axis_u.y, axis_u.x, 0)
+        origin = FreeCAD.Vector(start.x, start.y, 0)
+        return origin, axis_u, axis_v
+
+    def _get_opening_section_profile(self, shape, cut_z):
+        edges = self._get_section_footprint_edges(shape, cut_z)
+        if not edges:
+            return None
+
+        points = []
+        for edge in edges:
+            points.extend(self._collect_edge_points(edge))
+        if len(points) < 2:
+            return None
+
+        basis = self._get_section_plan_basis(edges)
+        if basis is None:
+            basis = self._get_host_plan_basis()
+        origin, axis_u, axis_v = basis
+        u_values = []
+        v_values = []
+        for point in points:
+            delta = point.sub(origin)
+            u_values.append(delta.dot(axis_u))
+            v_values.append(delta.dot(axis_v))
+        if not u_values or not v_values:
+            return None
+
+        return {
+            "origin": origin,
+            "axis_u": axis_u,
+            "axis_v": axis_v,
+            "umin": min(u_values),
+            "umax": max(u_values),
+            "vmin": min(v_values),
+            "vmax": max(v_values),
+        }
+
+    def _get_host_plan_thickness(self, host=None, fallback=120.0, allow_shape_fallback=True):
+        if host is None:
+            host = self._get_host_plan_object()
+        if not host:
+            return fallback
+
+        width = getattr(host, "Width", None)
+        if width is not None:
+            try:
+                value = float(width.Value)
+            except Exception:
+                try:
+                    value = float(width)
+                except Exception:
+                    value = 0.0
+            if value > 0.0:
+                return value
+
+        override_width = getattr(host, "OverrideWidth", None)
+        if override_width:
+            try:
+                if isinstance(override_width, (list, tuple)):
+                    value = max(float(item) for item in override_width if float(item) > 0.0)
+                    if value > 0.0:
+                        return value
+                else:
+                    value = float(override_width)
+                    if value > 0.0:
+                        return value
+            except Exception:
+                pass
+
+        host_shape = getattr(host, "Shape", None)
+        if allow_shape_fallback and host_shape and not host_shape.isNull():
+            bb = host_shape.BoundBox
+            lengths = [length for length in (bb.XLength, bb.YLength) if length > 0.0]
+            if lengths:
+                return min(lengths)
+
+        return fallback
+
+    def _is_simple_wall_host_for_plan_span(self, host):
+        try:
+            if Draft.getType(host) != "Wall":
+                return False
+        except Exception:
+            return False
+
+        base = getattr(host, "Base", None)
+        shape = getattr(base, "Shape", None) if base else None
+        if shape:
+            try:
+                if len(shape.Edges) > 1:
+                    return False
+            except Exception:
+                return False
+        return True
+
+    def _get_host_plan_v_bounds_from_thickness(self, center_v):
+        host = self._get_host_plan_object()
+        if not host or not self._is_simple_wall_host_for_plan_span(host):
+            return None
+
+        thickness = self._get_host_plan_thickness(host=host, fallback=None)
+        if thickness is None or thickness <= 0.0:
+            return None
+
+        half_thickness = thickness * 0.5
+        return center_v - half_thickness, center_v + half_thickness
+
+    def _get_host_plan_v_bounds(self, origin, axis_u, axis_v):
+        host = self._get_host_plan_object()
+        if not host:
+            return None
+
+        proxy = getattr(host, "Proxy", None)
+        if not proxy or not hasattr(proxy, "getFootprint"):
+            return None
+
+        try:
+            faces = proxy.getFootprint(host)
+        except Exception:
+            return None
+        if not faces:
+            return None
+
+        v_values = []
+        for face in faces:
+            for wire in face.Wires:
+                for edge in wire.Edges:
+                    for point in self._collect_edge_points(edge):
+                        delta = point.sub(origin)
+                        v_values.append(delta.dot(axis_v))
+
+        if not v_values:
+            return None
+
+        return min(v_values), max(v_values)
+
+    def _get_base_opening_profile(self, base_z):
+        point_lists = self._get_base_global_point_lists()
+        if not point_lists:
+            return None
+
+        basis = self._get_point_lists_plan_basis(point_lists)
+        if basis is None:
+            basis = self._get_host_plan_basis()
+        origin, axis_u, axis_v = basis
+
+        points = []
+        for point_list in point_lists:
+            points.extend(point_list)
+        if len(points) < 2:
+            return None
+
+        u_values = []
+        v_values = []
+        for point in points:
+            delta = point.sub(origin)
+            u_values.append(delta.dot(axis_u))
+            v_values.append(delta.dot(axis_v))
+        if not u_values:
+            return None
+
+        v_center = 0.0
+        if v_values:
+            v_center = sum(v_values) / len(v_values)
+        half_thickness = self._get_host_plan_thickness() * 0.5
+
+        return {
+            "origin": origin,
+            "axis_u": axis_u,
+            "axis_v": axis_v,
+            "umin": min(u_values),
+            "umax": max(u_values),
+            "vmin": v_center - half_thickness,
+            "vmax": v_center + half_thickness,
+        }
+
+    def _get_hosted_subvolume_section_profile(self, cut_z):
+        """Return a hosted opening profile from the same subvolume used to cut the host."""
+
+        hosts = getattr(self.Object, "Hosts", None) or []
+        host = hosts[0] if hosts else None
+        if not host:
+            return None
+
+        object_proxy = getattr(self.Object, "Proxy", None)
+        if not object_proxy or not hasattr(object_proxy, "getSubVolume"):
+            return None
+
+        try:
+            subvolume = object_proxy.getSubVolume(self.Object, host=host)
+        except Exception:
+            subvolume = None
+        if not subvolume or subvolume.isNull():
+            return None
+
+        return self._get_opening_section_profile(subvolume, cut_z)
+
+    def _get_plan_symbol_source_profile(self, shape, cut_z, base_z):
+        """Return the raw opening profile used to size plan-edit symbols."""
+
+        hosts = getattr(self.Object, "Hosts", None) or []
+        if hosts:
+            # Prefer the base profile for interactive plan geometry. Hosted
+            # openings often keep their authored base wire in the same local
+            # frame used for plan editing, even when the host itself is moved
+            # or rotated in world space.
+            profile = self._get_base_opening_profile(base_z)
+            if profile is not None:
+                return profile
+
+            profile = self._get_hosted_subvolume_section_profile(cut_z)
+            if profile is not None:
+                return profile
+        if shape and not shape.isNull():
+            profile = self._get_opening_section_profile(shape, cut_z)
+            if profile is not None:
+                return profile
+
+        return self._get_base_opening_profile(base_z)
+
+    def _host_plan_vectors_align(self, first, second, tolerance=1e-6):
+        first = FreeCAD.Vector(first.x, first.y, 0)
+        second = FreeCAD.Vector(second.x, second.y, 0)
+        if first.Length <= tolerance or second.Length <= tolerance:
+            return False
+        first.normalize()
+        second.normalize()
+        return abs(abs(first.dot(second)) - 1.0) <= tolerance
+
+    def _get_host_plan_basis_from_endpoints(self):
+        """Return a stable host-wall basis anchored at the wall start point."""
+
+        hosts = getattr(self.Object, "Hosts", None) or []
+        host = hosts[0] if hosts else None
+        if not host:
+            return None
+
+        proxy = getattr(host, "Proxy", None)
+        if proxy and hasattr(proxy, "calc_endpoints"):
+            try:
+                endpoints = proxy.calc_endpoints(host)
+            except Exception:
+                endpoints = None
+            if endpoints and len(endpoints) == 2:
+                start = FreeCAD.Vector(endpoints[0])
+                end = FreeCAD.Vector(endpoints[1])
+                axis_u = end.sub(start)
+                axis_u.z = 0
+                if axis_u.Length > 1e-9:
+                    axis_u.normalize()
+                    axis_v = FreeCAD.Vector(-axis_u.y, axis_u.x, 0)
+                    origin = FreeCAD.Vector(start.x, start.y, 0)
+                    return origin, axis_u, axis_v
+
+        return self._get_host_plan_basis()
+
+    def _get_hosted_opening_plan_frame(self, shape, cut_z, base_z):
+        """Return one canonical host-wall frame for hosted opening plan geometry."""
+
+        source_profile = self._get_plan_symbol_source_profile(shape, cut_z, base_z)
+        if not source_profile:
+            return None
+
+        basis = self._get_host_plan_basis_from_endpoints()
+        if not basis:
+            return source_profile
+        origin, axis_u, axis_v = basis
+
+        source_center_u = (source_profile["umin"] + source_profile["umax"]) * 0.5
+        source_center_v = (source_profile["vmin"] + source_profile["vmax"]) * 0.5
+        source_center = (
+            source_profile["origin"]
+            .add(FreeCAD.Vector(source_profile["axis_u"]).multiply(source_center_u))
+            .add(FreeCAD.Vector(source_profile["axis_v"]).multiply(source_center_v))
+        )
+        source_axis_u = FreeCAD.Vector(source_profile["axis_u"])
+        source_axis_v = FreeCAD.Vector(source_profile["axis_v"])
+        if self._host_plan_vectors_align(source_axis_u, axis_u) and self._host_plan_vectors_align(
+            source_axis_v, axis_v
+        ):
+            center_delta = source_center.sub(origin)
+            center_u = center_delta.dot(axis_u)
+            center_v = center_delta.dot(axis_v)
+        else:
+            # Some hosted bases stay in the local wall XY frame even after the
+            # host rotates in world space. Treat those coordinates as host-local
+            # instead of projecting them as if they were already global.
+            center_u = source_center.x
+            center_v = source_center.y
+
+        half_width_u = max(source_profile["umax"] - source_profile["umin"], 0.0) * 0.5
+        half_width_v = max(source_profile["vmax"] - source_profile["vmin"], 0.0) * 0.5
+        umin = center_u - half_width_u
+        umax = center_u + half_width_u
+        source_vmin = center_v - half_width_v
+        source_vmax = center_v + half_width_v
+
+        host_v_bounds = self._get_host_plan_v_bounds_from_thickness(center_v)
+        if host_v_bounds is None:
+            host_v_bounds = self._get_host_plan_v_bounds(origin, axis_u, axis_v)
+        if host_v_bounds is not None:
+            vmin, vmax = host_v_bounds
+            host_span_v = max(vmax - vmin, 0.0)
+            source_span_v = max(source_vmax - source_vmin, 0.0)
+            if host_span_v > 0.0 and source_span_v + 1e-6 >= host_span_v:
+                source_vmin = vmin
+                source_vmax = vmax
+        else:
+            vmin = source_vmin
+            vmax = source_vmax
+
+        return {
+            "origin": origin,
+            "axis_u": axis_u,
+            "axis_v": axis_v,
+            "umin": umin,
+            "umax": umax,
+            "vmin": vmin,
+            "vmax": vmax,
+            "source_profile": source_profile,
+            "source_vmin": source_vmin,
+            "source_vmax": source_vmax,
+        }
+
+    def _get_plan_move_target(self):
+        obj = getattr(self, "Object", None)
+        if not obj:
+            return None, None
+        target = getattr(obj, "Base", None) or obj
+        placement = getattr(target, "Placement", None)
+        if placement is None:
+            return target, None
+        return target, FreeCAD.Placement(placement)
+
+    def get_plan_center_point(self):
+        """Return the current hosted-opening center point used by plan editing."""
+
+        if not hasattr(self, "Object"):
+            return None
+
+        shape = getattr(self.Object, "Shape", None)
+        cut_z, base_z = self._get_footprint_cut_context()
+        if cut_z is None:
+            return None
+
+        frame = self._get_hosted_opening_plan_frame(shape, cut_z, base_z)
+        if not frame:
+            return None
+
+        center_u = (frame["umin"] + frame["umax"]) * 0.5
+        center_v = (frame["vmin"] + frame["vmax"]) * 0.5
+        point = (
+            frame["origin"]
+            .add(FreeCAD.Vector(frame["axis_u"]).multiply(center_u))
+            .add(FreeCAD.Vector(frame["axis_v"]).multiply(center_v))
+        )
+        point.z = base_z
+        return point
+
+    def get_plan_move_anchor_modes(self):
+        """Return supported move anchors for plan editing."""
+
+        return ("center", "left", "right")
+
+    def get_plan_move_context(self):
+        """Return the host-aligned move context for plan editing."""
+
+        if not hasattr(self, "Object"):
+            return None
+
+        shape = getattr(self.Object, "Shape", None)
+        cut_z, base_z = self._get_footprint_cut_context()
+        if cut_z is None:
+            return None
+
+        section_profile = self._get_hosted_opening_plan_frame(shape, cut_z, base_z)
+        if not section_profile:
+            return None
+
+        center_u = (section_profile["umin"] + section_profile["umax"]) * 0.5
+        center_v = (section_profile["vmin"] + section_profile["vmax"]) * 0.5
+        center_point = (
+            section_profile["origin"]
+            .add(FreeCAD.Vector(section_profile["axis_u"]).multiply(center_u))
+            .add(FreeCAD.Vector(section_profile["axis_v"]).multiply(center_v))
+        )
+        center_point.z = base_z
+
+        _target, placement = self._get_plan_move_target()
+        reference_offset = FreeCAD.Vector()
+        if placement is not None:
+            reference_offset = FreeCAD.Vector(placement.Base).sub(center_point)
+
+        move_u_min = move_u_max = None
+        opening_half_width_u = max(section_profile["umax"] - section_profile["umin"], 0.0) * 0.5
+        host = next(iter(getattr(self.Object, "Hosts", None) or []), None)
+        if host and getattr(host, "Proxy", None) and hasattr(host.Proxy, "calc_endpoints"):
+            try:
+                endpoints = host.Proxy.calc_endpoints(host)
+            except Exception:
+                endpoints = None
+            if endpoints and len(endpoints) == 2:
+                origin = section_profile["origin"]
+                axis_u = section_profile["axis_u"]
+                endpoint_u = [FreeCAD.Vector(point).sub(origin).dot(axis_u) for point in endpoints]
+                host_u_min = min(endpoint_u)
+                host_u_max = max(endpoint_u)
+                move_u_min = host_u_min + opening_half_width_u
+                move_u_max = host_u_max - opening_half_width_u
+                if move_u_min > move_u_max:
+                    midpoint_u = (host_u_min + host_u_max) * 0.5
+                    move_u_min = midpoint_u
+                    move_u_max = midpoint_u
+
+        return {
+            "origin": FreeCAD.Vector(section_profile["origin"]),
+            "axis_u": FreeCAD.Vector(section_profile["axis_u"]),
+            "axis_v": FreeCAD.Vector(section_profile["axis_v"]),
+            "base_z": base_z,
+            "opening_half_width_u": opening_half_width_u,
+            "center_point": center_point,
+            "reference_offset": reference_offset,
+            "move_u_min": move_u_min,
+            "move_u_max": move_u_max,
+        }
+
+    def clamp_point_to_host_span(self, point, context=None):
+        """Clamp a point on the move axis to the valid host span for this opening."""
+
+        obj = getattr(self, "Object", None)
+        if not obj or point is None:
+            return point
+
+        if context is None:
+            context = self.get_plan_move_context()
+        if not context:
+            return point
+
+        move_u_min = context.get("move_u_min")
+        move_u_max = context.get("move_u_max")
+        if move_u_min is None or move_u_max is None:
+            return point
+
+        origin = context["origin"]
+        axis_u = context["axis_u"]
+        axis_v = context["axis_v"]
+        delta = FreeCAD.Vector(point).sub(origin)
+        target_u = delta.dot(axis_u)
+        target_v = delta.dot(axis_v)
+        clamped_u = min(max(target_u, move_u_min), move_u_max)
+        clamped = origin.add(FreeCAD.Vector(axis_u).multiply(clamped_u)).add(
+            FreeCAD.Vector(axis_v).multiply(target_v)
+        )
+        clamped.z = point.z
+        return clamped
+
+    def _get_plan_move_anchor_offset_u(self, anchor="center", context=None):
+        """Return the axis-U offset for a named move anchor relative to the opening center."""
+
+        if context is None:
+            context = self.get_plan_move_context()
+        if not context:
+            return 0.0
+
+        half_width = float(context.get("opening_half_width_u") or 0.0)
+        if anchor == "left":
+            return -half_width
+        if anchor == "right":
+            return half_width
+        return 0.0
+
+    def project_point_to_host_axis(self, point, anchor="center"):
+        """Project a picked plan point onto the hosted opening move axis."""
+
+        obj = getattr(self, "Object", None)
+        if not obj or point is None:
+            return point
+
+        context = self.get_plan_move_context()
+        if not context:
+            return point
+
+        center_point = context.get("center_point")
+        if center_point is None:
+            return point
+
+        origin = context["origin"]
+        axis_u = context["axis_u"]
+        axis_v = context["axis_v"]
+        delta = point.sub(origin)
+        current_delta = FreeCAD.Vector(center_point).sub(origin)
+        anchor_offset_u = self._get_plan_move_anchor_offset_u(anchor, context=context)
+        target_u = delta.dot(axis_u) - anchor_offset_u
+        current_v = current_delta.dot(axis_v)
+        projected = origin.add(FreeCAD.Vector(axis_u).multiply(target_u)).add(
+            FreeCAD.Vector(axis_v).multiply(current_v)
+        )
+        projected.z = center_point.z
+        return self.clamp_point_to_host_span(projected, context=context)
+
+    def move_along_host(self, point, anchor="center"):
+        """Move the opening base along the host wall axis."""
+
+        obj = getattr(self, "Object", None)
+        if not obj or point is None:
+            return False
+
+        target, placement = self._get_plan_move_target()
+        if placement is None:
+            return False
+        context = self.get_plan_move_context()
+        if not context:
+            return False
+
+        new_center = self.project_point_to_host_axis(point, anchor=anchor)
+        if new_center is None:
+            return False
+        placement.Base = FreeCAD.Vector(new_center).add(
+            context.get("reference_offset") or FreeCAD.Vector()
+        )
+        target.Placement = placement
+        self._touch_hosts(moved_target=target)
+        return True
+
+    def _touch_hosts(self, moved_target=None):
+        obj = getattr(self, "Object", None)
+        if not obj:
+            return
+        if moved_target is not obj:
+            obj.touch()
+        for host in set(getattr(obj, "Hosts", None) or []):
+            host.touch()
+
+
+class _HostedOpeningRepresentationGeometry:
+    """Renderer-independent hosted-opening symbols and semantic representation."""
+
+    def _get_default_opening_plan_context(self, obj):
+        proxy = getattr(obj, "Proxy", None)
+        if proxy is not self and hasattr(proxy, "getDefaultPlanContext"):
+            return proxy.getDefaultPlanContext(obj)
+        return self.getDefaultPlanContext(obj)
+
+    def _get_door_symbol_style(self):
+        hinge_at_min = True
+        swing_sign = -1.0
+        for item in getattr(self.Object, "WindowParts", []) or []:
+            for token in item.split(","):
+                if token.startswith("Edge"):
+                    try:
+                        edge_idx = int(token[4:])
+                    except ValueError:
+                        continue
+                    if edge_idx in (2, 3):
+                        hinge_at_min = False
+                    elif edge_idx in (1, 4):
+                        hinge_at_min = True
+                elif token.startswith("Mode"):
+                    try:
+                        mode_idx = int(token[4:])
+                    except ValueError:
+                        continue
+                    if mode_idx in (2, 4, 6, 8, 10):
+                        swing_sign = 1.0
+                    else:
+                        swing_sign = -1.0
+        return hinge_at_min, swing_sign
+
+    def _get_host_base_z(self):
+        hosts = getattr(self.Object, "Hosts", None) or []
+        host = hosts[0] if hosts else None
+        host_shape = getattr(host, "Shape", None) if host else None
+        if host_shape and not host_shape.isNull():
+            return host_shape.BoundBox.ZMin
+        return None
+
+    def _get_object_height_value(self):
+        height = getattr(self.Object, "Height", None)
+        if height is None:
+            return None
+        try:
+            return float(height.Value)
+        except Exception:
+            try:
+                return float(height)
+            except Exception:
+                return None
+
+    def _get_base_sill_height(self):
+        base = getattr(self.Object, "Base", None)
+        if not base:
+            return None
+        base_placement = None
+        if hasattr(base, "getGlobalPlacement"):
+            try:
+                base_placement = base.getGlobalPlacement()
+            except Exception:
+                base_placement = None
+        if base_placement is None:
+            base_placement = getattr(base, "Placement", None)
+        if base_placement is None:
+            return None
+        host_base_z = self._get_host_base_z()
+        if host_base_z is None:
+            return None
+        return abs(base_placement.Base.z - host_base_z)
+
+    def _looks_like_legacy_door(self):
+        if getattr(self.Object, "IfcType", "") not in {"", "Opening Element"}:
+            return False
+        if getattr(self.Object, "WindowParts", None):
+            return False
+        sill_height = self._get_base_sill_height()
+        height = self._get_object_height_value()
+        if sill_height is None or height is None:
+            return False
+        return sill_height <= 50.0 and height >= 1800.0
+
+    def _get_effective_opening_kind(self):
+        if getattr(self.Object, "IfcType", "") == "Door":
+            return "Door"
+        if getattr(self.Object, "IfcType", "") == "Window":
+            return "Window"
+        parts = list(getattr(self.Object, "WindowParts", []) or [])
+        for index in range(0, len(parts), 5):
+            chunk = [str(value) for value in parts[index : index + 5]]
+            if "door" in " ".join(chunk).lower():
+                return "Door"
+        if self._looks_like_legacy_door():
+            return "Door"
+        return "Window"
+
+    @staticmethod
+    def _make_arc_polyline(center, start_vec, end_vec, sweep_positive, segments=16):
+        start_angle = math.atan2(start_vec.y, start_vec.x)
+        end_angle = math.atan2(end_vec.y, end_vec.x)
+        if sweep_positive:
+            while end_angle <= start_angle:
+                end_angle += 2.0 * math.pi
+        else:
+            while end_angle >= start_angle:
+                end_angle -= 2.0 * math.pi
+        return [
+            FreeCAD.Vector(
+                center.x + (start_vec.Length * math.cos(angle)),
+                center.y + (start_vec.Length * math.sin(angle)),
+                center.z,
+            )
+            for angle in (
+                start_angle + ((end_angle - start_angle) * index / segments)
+                for index in range(segments + 1)
+            )
+        ]
+
+    @staticmethod
+    def _clamp_symbol_polyline_u(polyline, origin, axis_u, axis_v, umin, umax):
+        clamped = []
+        for point in polyline:
+            delta = FreeCAD.Vector(point).sub(origin)
+            u = min(max(delta.dot(axis_u), umin), umax)
+            result = origin.add(FreeCAD.Vector(axis_u).multiply(u)).add(
+                FreeCAD.Vector(axis_v).multiply(delta.dot(axis_v))
+            )
+            result.z = point.z
+            clamped.append(result)
+        return clamped
+
+    def _clamp_symbol_polylines_u(self, polylines, origin, axis_u, axis_v, umin, umax):
+        return [
+            self._clamp_symbol_polyline_u(polyline, origin, axis_u, axis_v, umin, umax)
+            for polyline in polylines
+            if polyline
+        ]
+
+    @staticmethod
+    def _get_door_symbol_v_bounds(section_profile):
+        source_vmin = section_profile.get("source_vmin")
+        source_vmax = section_profile.get("source_vmax")
+        if source_vmin is not None and source_vmax is not None:
+            source_vmin = float(source_vmin)
+            source_vmax = float(source_vmax)
+            if source_vmax > source_vmin:
+                return source_vmin, source_vmax
+        return float(section_profile.get("vmin", 0.0)), float(section_profile.get("vmax", 0.0))
+
+    def _get_symbol_footprint_polylines(self, profile, base_z):
+        if not profile:
+            return []
+        origin = profile["origin"]
+        axis_u = profile["axis_u"]
+        axis_v = profile["axis_v"]
+        umin, umax = profile["umin"], profile["umax"]
+        vmin, vmax = profile["vmin"], profile["vmax"]
+        width_u = max(umax - umin, 0.0)
+        if width_u <= 0.0:
+            return []
+        if self._get_effective_opening_kind() == "Door":
+            door_vmin, door_vmax = self._get_door_symbol_v_bounds(profile)
+            hinge_at_min, swing_sign = self._get_door_symbol_style()
+            hinge_u = umin if hinge_at_min else umax
+            closed_u = umax if hinge_at_min else umin
+            hinge_v = door_vmin if swing_sign < 0 else door_vmax
+            hinge = origin.add(FreeCAD.Vector(axis_u).multiply(hinge_u)).add(
+                FreeCAD.Vector(axis_v).multiply(hinge_v)
+            )
+            closed = origin.add(FreeCAD.Vector(axis_u).multiply(closed_u)).add(
+                FreeCAD.Vector(axis_v).multiply(hinge_v)
+            )
+            opened = origin.add(FreeCAD.Vector(axis_u).multiply(hinge_u)).add(
+                FreeCAD.Vector(axis_v).multiply(hinge_v + swing_sign * width_u)
+            )
+            for point in (hinge, closed, opened):
+                point.z = base_z
+            arc = self._make_arc_polyline(
+                hinge,
+                closed.sub(hinge),
+                opened.sub(hinge),
+                sweep_positive=swing_sign > 0,
+            )
+            return self._clamp_symbol_polylines_u(
+                [[hinge, closed], [hinge, opened], arc],
+                origin,
+                axis_u,
+                axis_v,
+                umin,
+                umax,
+            )
+
+        width_v = max(vmax - vmin, 0.0)
+        inset = min(width_v * 0.25, 30.0)
+        symbol_vmin, symbol_vmax = vmin + inset, vmax - inset
+        if symbol_vmax <= symbol_vmin:
+            symbol_vmin, symbol_vmax = vmin, vmax
+        center_u = (umin + umax) * 0.5
+        offset = min(width_u * 0.2, 60.0)
+        offsets = [0.0] if width_u < offset * 2.0 else [-offset, offset]
+        polylines = []
+        for delta_u in offsets:
+            points = [
+                origin.add(FreeCAD.Vector(axis_u).multiply(center_u + delta_u)).add(
+                    FreeCAD.Vector(axis_v).multiply(value)
+                )
+                for value in (symbol_vmin, symbol_vmax)
+            ]
+            for point in points:
+                point.z = base_z
+            polylines.append(points)
+        if symbol_vmax > symbol_vmin:
+            span = min(width_u * 0.3, 120.0)
+            mid_v = (symbol_vmin + symbol_vmax) * 0.5
+            points = [
+                origin.add(FreeCAD.Vector(axis_u).multiply(center_u + delta)).add(
+                    FreeCAD.Vector(axis_v).multiply(mid_v)
+                )
+                for delta in (-span, span)
+            ]
+            for point in points:
+                point.z = base_z
+            polylines.append(points)
+        return self._clamp_symbol_polylines_u(polylines, origin, axis_u, axis_v, umin, umax)
+
+    @staticmethod
+    def _get_plan_overlay_guide_polylines(profile, base_z):
+        if not profile or profile["vmax"] <= profile["vmin"]:
+            return []
+        mid_v = (profile["vmin"] + profile["vmax"]) * 0.5
+        points = [
+            profile["origin"]
+            .add(FreeCAD.Vector(profile["axis_u"]).multiply(value))
+            .add(FreeCAD.Vector(profile["axis_v"]).multiply(mid_v))
+            for value in (profile["umin"], profile["umax"])
+        ]
+        for point in points:
+            point.z = base_z
+        return [points]
+
+    def get_plan_overlay_geometry(self, context=None):
+        """Return horizontal plan symbols for the supplied representation context."""
+
+        if context is None:
+            context = self._get_default_opening_plan_context(self.Object)
+        if getattr(context, "reference_frame", None) is not None:
+            return {"symbol_polylines": (), "guide_polylines": ()}
+
+        shape = getattr(self.Object, "Shape", None)
+        cut_z = getattr(context, "cut_offset", None)
+        base_z = getattr(context, "target_offset", None)
+        if cut_z is None or base_z is None:
+            default_context = self._get_default_opening_plan_context(self.Object)
+            if cut_z is None:
+                cut_z = default_context.cut_offset
+            if base_z is None:
+                base_z = default_context.target_offset
+        if cut_z is None:
+            return {"symbol_polylines": (), "guide_polylines": ()}
+        profile = self._get_hosted_opening_plan_frame(shape, cut_z, base_z)
+        if not profile:
+            return {"symbol_polylines": (), "guide_polylines": ()}
+        return {
+            "symbol_polylines": tuple(
+                tuple(polyline)
+                for polyline in self._get_symbol_footprint_polylines(profile, base_z)
+            ),
+            "guide_polylines": tuple(
+                tuple(polyline)
+                for polyline in self._get_plan_overlay_guide_polylines(profile, base_z)
+            ),
+        }
+
+    def getRepresentation(self, obj=None, context=None):
+        source = obj or self.Object
+        if context is None:
+            context = self._get_default_opening_plan_context(source)
+        representation = ArchRepresentation.BIMRepresentation(source=source, context=context)
+        self._add_position_edit_handle(representation, source, context)
+        if getattr(context, "reference_frame", None) is not None:
+            faces = ArchComponent.get_reference_slice_faces(source.Shape, context)
+            self._add_section_geometry(representation, faces)
+            self._add_section_edit_handles(representation, source, context)
+            return representation
+
+        purpose = getattr(context, "purpose", ArchRepresentation.RepresentationPurpose.PLAN)
+        if purpose != ArchRepresentation.RepresentationPurpose.PLAN:
+            cut_z = getattr(context, "cut_offset", None)
+            if cut_z is None:
+                return representation
+            target_z = getattr(context, "target_offset", None)
+            if target_z is None:
+                target_z = source.Shape.BoundBox.ZMin
+            faces = ArchComponent.get_horizontal_slice_faces(
+                source.Shape, cut_z, translate_z=target_z - cut_z
+            )
+            self._add_section_geometry(representation, faces)
+            self._add_section_edit_handles(representation, source, context)
+            return representation
+
+        geometry = self.get_plan_overlay_geometry(context)
+        for role, polylines in (
+            ("OpeningSymbol", geometry["symbol_polylines"]),
+            ("OpeningGuide", geometry["guide_polylines"]),
+        ):
+            for index, polyline in enumerate(polylines, start=1):
+                polyline = tuple(polyline)
+                representation.add_geometry(
+                    "projected_geometry",
+                    polyline,
+                    role,
+                    subelement=f"{role}{index}",
+                )
+                representation.snap_geometry.append(polyline)
+        return representation
+
+    def _add_position_edit_handle(self, representation, source, context):
+        purpose = getattr(context, "purpose", ArchRepresentation.RepresentationPurpose.PLAN)
+        if purpose not in (
+            ArchRepresentation.RepresentationPurpose.PLAN,
+            ArchRepresentation.RepresentationPurpose.SECTION,
+            ArchRepresentation.RepresentationPurpose.ELEVATION,
+        ):
+            return
+        move_context = self.get_plan_move_context()
+        operation = _opening_position_edit_operation(self)
+        if not move_context or operation is None or not operation.is_available(source):
+            return
+        point = ArchRepresentation.project_to_representation_plane(
+            move_context["center_point"], context
+        )
+        direction = ArchRepresentation.project_direction_to_representation_plane(
+            move_context["axis_u"], context
+        )
+        if direction is None:
+            return
+        representation.add_edit_handle(
+            ArchRepresentation.BIMEditHandle(
+                source,
+                "OpeningPosition",
+                point,
+                direction,
+                operation,
+                subelement=operation.property_name,
+                minimum=operation.minimum,
+            )
+        )
+        for side, jamb_u in (
+            (
+                "Left",
+                move_context["center_point"].sub(move_context["origin"]).dot(move_context["axis_u"])
+                - move_context["opening_half_width_u"],
+            ),
+            (
+                "Right",
+                move_context["center_point"].sub(move_context["origin"]).dot(move_context["axis_u"])
+                + move_context["opening_half_width_u"],
+            ),
+        ):
+            jamb_operation = _opening_width_edit_operation(self, side)
+            if jamb_operation is None or not jamb_operation.is_available(source):
+                continue
+            jamb_point = move_context["origin"].add(
+                FreeCAD.Vector(move_context["axis_u"]).multiply(jamb_u)
+            )
+            jamb_point.z = move_context["center_point"].z
+            representation.add_edit_handle(
+                ArchRepresentation.BIMEditHandle(
+                    source,
+                    "Opening{}Jamb".format(side),
+                    ArchRepresentation.project_to_representation_plane(jamb_point, context),
+                    direction,
+                    jamb_operation,
+                    subelement="Width.{}".format(side),
+                    minimum=jamb_operation.minimum,
+                )
+            )
+
+    @staticmethod
+    def _add_section_geometry(representation, faces):
+        for face_index, face in enumerate(faces, start=1):
+            representation.add_geometry(
+                "cut_geometry", face, "OpeningCutFace", subelement=f"CutFace{face_index}"
+            )
+            for edge_index, edge in enumerate(face.Edges, start=1):
+                representation.add_geometry(
+                    "snap_geometry",
+                    edge,
+                    "OpeningCutEdge",
+                    subelement=f"CutFace{face_index}.Edge{edge_index}",
+                )
+            for vertex_index, vertex in enumerate(face.Vertexes, start=1):
+                representation.add_geometry(
+                    "snap_geometry",
+                    vertex,
+                    "OpeningCutVertex",
+                    subelement=f"CutFace{face_index}.Vertex{vertex_index}",
+                )
+
+    @staticmethod
+    def _add_section_edit_handles(representation, source, context):
+        purpose = getattr(context, "purpose", None)
+        if purpose not in (
+            ArchRepresentation.RepresentationPurpose.SECTION,
+            ArchRepresentation.RepresentationPurpose.ELEVATION,
+        ):
+            return
+        direction = ArchComponent.representation_vertical_direction(context)
+        if direction is None:
+            return
+        low, high = ArchComponent.representation_extent_points(source.Shape, context, direction)
+        height_operation = _opening_height_edit_operation()
+        if (
+            high is not None
+            and canEditWindowHeight(source)
+            and height_operation.is_available(source)
+        ):
+            representation.add_edit_handle(
+                ArchRepresentation.BIMEditHandle(
+                    source,
+                    "OpeningHeight",
+                    high,
+                    direction,
+                    height_operation,
+                    subelement="Height",
+                    minimum=1.0,
+                )
+            )
+        if low is None:
+            return
+        if hasattr(source, "SillHeight"):
+            operation = _opening_sill_property_edit_operation()
+        elif hasattr(source, "AttachmentOffset"):
+            operation = _opening_attachment_sill_edit_operation()
+        elif getattr(source, "Base", None) is not None and hasattr(source.Base, "Placement"):
+            operation = _opening_base_placement_sill_edit_operation()
+        else:
+            return
+        if not operation.is_available(source):
+            return
+        representation.add_edit_handle(
+            ArchRepresentation.BIMEditHandle(
+                source,
+                "OpeningSill",
+                low,
+                direction,
+                operation,
+                subelement=operation.property_name,
+                minimum=0.0,
+            )
+        )
+
+
+class _HostedOpeningPlanGeometryHelper(
+    _HostedOpeningPlanGeometry, _HostedOpeningRepresentationGeometry
+):
+    """Stateless helper exposing hosted-opening plan geometry for one object."""
+
+    def __init__(self, obj):
+        self.Object = obj
+
+
+class _Window(
+    _HostedOpeningPlanGeometry,
+    _HostedOpeningRepresentationGeometry,
+    ArchComponent.Component,
+):
     "The Window object"
 
     # Configure App::Link shadowing, so that linked windows can have independent Hosts properties
@@ -122,6 +2465,7 @@ class _Window(ArchComponent.Component):
     def __init__(self, obj):
 
         ArchComponent.Component.__init__(self, obj)
+        self.Object = obj
         self.Type = "Window"
         self.setProperties(obj)
         obj.IfcType = "Window"
@@ -304,6 +2648,7 @@ class _Window(ArchComponent.Component):
 
     def onDocumentRestored(self, obj):
 
+        self.Object = obj
         ArchComponent.Component.onDocumentRestored(self, obj)
         self.setProperties(obj, mode="ODR")
 
@@ -717,11 +3062,13 @@ class _Window(ArchComponent.Component):
                     base = Part.makeCompound([base] + b)
                     # base = Part.makeCompound([base]+self.sshapes+self.vshapes)
                 self.applyShape(obj, base, pl, allowinvalid=True, allownosolid=True)
-                obj.Placement = pl
+            _set_placement_if_changed(obj, pl)
         else:
             obj.Shape = Part.Shape()
         if hasattr(obj, "Area"):
-            obj.Area = obj.Width.Value * obj.Height.Value
+            area = obj.Width.Value * obj.Height.Value
+            if abs(obj.Area.Value - area) > 1e-9:
+                obj.Area = area
 
         self.executeSketchArchFeatures(obj)
 
@@ -879,9 +3226,15 @@ class _Window(ArchComponent.Component):
             v2 = v1.negative()
             v2 = Vector(v1).multiply(-2)
             f = f.extrude(v2)
+            target = obj
+            if not plac:
+                target, _placement = self._get_plan_move_target()
             if plac:
                 f.Placement = plac
-            else:
+            elif target is obj:
+                # When plan editing moves the Base object, the base wire shape is
+                # already in the correct global position. Reapplying obj.Placement
+                # here shifts the host cut away from the committed plan symbol.
                 f.Placement = obj.Placement
             return f
         return None
@@ -896,6 +3249,27 @@ class _ViewProviderWindow(ArchComponent.ViewProviderComponent):
     def __init__(self, vobj):
 
         ArchComponent.ViewProviderComponent.__init__(self, vobj)
+
+    def _get_plan_geometry(self, *attrs):
+        obj = getattr(self, "Object", None)
+        helper = _HostedOpeningPlanGeometryHelper(obj) if obj else None
+        if helper and all(hasattr(helper, attr) for attr in attrs):
+            return helper
+        return None
+
+    def _get_effective_opening_kind(self):
+        helper = self._get_plan_geometry("_get_effective_opening_kind")
+        return helper._get_effective_opening_kind() if helper else "Window"
+
+    def _get_door_symbol_style(self):
+        helper = self._get_plan_geometry("_get_door_symbol_style")
+        return helper._get_door_symbol_style() if helper else (True, -1.0)
+
+    def _get_door_symbol_v_bounds(self, section_profile):
+        helper = self._get_plan_geometry("_get_door_symbol_v_bounds")
+        if helper:
+            return helper._get_door_symbol_v_bounds(section_profile)
+        return float(section_profile.get("vmin", 0.0)), float(section_profile.get("vmax", 0.0))
 
     def getIcon(self):
 
@@ -1247,6 +3621,7 @@ class _ViewProviderWindow(ArchComponent.ViewProviderComponent):
                         if len(obj.CloneOf.ViewObject.DiffuseColor) > 1:
                             obj.ViewObject.DiffuseColor = obj.CloneOf.ViewObject.DiffuseColor
                             obj.ViewObject.update()
+        ArchComponent.ViewProviderComponent.updateData(self, obj, prop)
 
     def onDelete(self, vobj, subelements):
 
@@ -1385,6 +3760,28 @@ class _ViewProviderWindow(ArchComponent.ViewProviderComponent):
                 if "Edge" in s:
                     idxs.append(int(s[4:]) - 1)  # Edge indices in string are 1-based.
         return idxs
+
+    def _get_plan_edit_capabilities(self):
+        parts = getattr(self.Object, "WindowParts", []) or []
+        has_opening_mode = any(
+            token.startswith("Mode") and token[4:].isdigit()
+            for part in parts
+            for token in part.split(",")
+        )
+        parts_str = "".join(getattr(self.Object, "WindowParts", []) or [])
+        is_door = self._get_effective_opening_kind() == "Door"
+        can_flip_opening = is_door and has_opening_mode
+        can_flip_hinge = (
+            can_flip_opening
+            and len(self.getHingeEdgeIndices()) == 1
+            and "Mode9" not in parts_str
+            and "Mode10" not in parts_str
+        )
+        return {
+            "can_move": True,
+            "can_flip_opening": can_flip_opening,
+            "can_flip_hinge": can_flip_hinge,
+        }
 
     def setEdit(self, vobj, mode):
         if mode != 0:
@@ -2086,8 +4483,14 @@ class _ArchWindowTaskPanel:
 
     def accept(self):
         if self.obj:
-            self.obj.Width = self.widthWidget.property("value")
-            self.obj.Height = self.heightWidget.property("value")
+            if not resizeWindow(
+                self.obj,
+                width=self.widthWidget.property("value"),
+                height=self.heightWidget.property("value"),
+                preserve_anchor=True,
+                transaction_label=translate("Arch", "Resize Opening"),
+            ):
+                _wrn(translate("Arch", "Unable to resize opening in place") + "\n")
             self.obj.Opening = self.openingWidget.property("value")
         self.basepanel.obj = self.obj
         return self.basepanel.accept()

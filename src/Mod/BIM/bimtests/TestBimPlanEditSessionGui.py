@@ -152,3 +152,26 @@ class TestBimPlanEditSessionGui(TestArchBaseGui):
 
         self.assertIsNone(session.task_panel)
         self.assertIsNone(session.viewport_state.view_context_layer)
+
+    def test_contextual_wall_width_edit_is_transactional(self):
+        wall = Arch.makeWall(length=3000, width=200, height=2500, align="Center")
+        self.document.recompute()
+        session = PlanEditSession()
+        self.assertTrue(session.enter())
+        try:
+            handle = next(
+                item
+                for item in session.contextual_rendering.edit_handles_for(wall)
+                if item.role == "WallWidth"
+            )
+            session.contextual_editing.begin(handle)
+            result = session.contextual_editing.commit(
+                handle.point + handle.direction * 50
+            )
+
+            self.assertTrue(result.success)
+            self.assertAlmostEqual(300.0, wall.Width.Value)
+            self.document.undo()
+            self.assertAlmostEqual(200.0, wall.Width.Value)
+        finally:
+            session.shutdown(close_dialog=False)

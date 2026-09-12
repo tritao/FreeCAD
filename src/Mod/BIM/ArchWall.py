@@ -1032,7 +1032,96 @@ class _Wall(ArchComponent.Component):
                 )
         self._add_owned_path_edit_handles(representation, obj, context)
         self._add_native_path_edit_handles(representation, obj, context)
+        self._add_section_property_edit_handles(representation, obj, context)
         return representation
+
+    def _add_section_property_edit_handles(self, representation, wall, context):
+        baseline = self.get_global_baseline(wall)
+        section = self.get_resolved_section(wall)
+        if baseline is None or section is None or not self._can_edit_uniform_section(wall):
+            return
+        axis = baseline.end_point.sub(baseline.start_point)
+        if axis.Length <= 1e-9:
+            return
+        axis.normalize()
+        lateral = axis.cross(baseline.normal)
+        if lateral.Length <= 1e-9:
+            return
+        lateral.normalize()
+        midpoint = (baseline.start_point + baseline.end_point) * 0.5
+        align = str(wall.Align)
+        if align == "Left":
+            width_direction = -lateral
+            width_coordinate = section.y_min
+        else:
+            width_direction = lateral
+            width_coordinate = section.y_max
+        width_operation = ArchRepresentation.BIMEditOperation(
+            "WallWidth",
+            "Edit Wall Width",
+            lambda source: source.Width.Value,
+            lambda source, value: setattr(source, "Width", value),
+            property_name="Width",
+            minimum=1.0,
+            sensitivity=2.0 if align == "Center" else 1.0,
+            available=lambda source: self._can_edit_uniform_section(source),
+        )
+        representation.add_edit_handle(
+            ArchRepresentation.BIMEditHandle(
+                wall,
+                "WallWidth",
+                ArchRepresentation.project_to_representation_plane(
+                    midpoint + lateral * width_coordinate, context
+                ),
+                width_direction,
+                width_operation,
+                subelement="Width",
+                minimum=1.0,
+            )
+        )
+        if align not in ("Left", "Right"):
+            return
+        offset_direction = -lateral if align == "Left" else lateral
+        offset_operation = ArchRepresentation.BIMEditOperation(
+            "WallOffset",
+            "Edit Wall Offset",
+            lambda source: source.Offset.Value,
+            lambda source, value: setattr(source, "Offset", value),
+            property_name="Offset",
+            available=lambda source: self._can_edit_uniform_section(source),
+        )
+        representation.add_edit_handle(
+            ArchRepresentation.BIMEditHandle(
+                wall,
+                "WallOffset",
+                ArchRepresentation.project_to_representation_plane(
+                    midpoint + lateral * ((section.y_min + section.y_max) * 0.5), context
+                ),
+                offset_direction,
+                offset_operation,
+                subelement="Offset",
+                minimum=None,
+            )
+        )
+
+    @staticmethod
+    def _can_edit_uniform_section(wall):
+        material = getattr(wall, "Material", None)
+        base = getattr(wall, "Base", None)
+        return bool(
+            hasattr(wall, "Width")
+            and not getattr(material, "Thicknesses", None)
+            and not (
+                getattr(wall, "ArchSketchData", False)
+                and base
+                and Draft.getType(base) == "ArchSketch"
+            )
+            and not list(getattr(wall, "OverrideWidth", ()) or ())
+            and not list(getattr(wall, "OverrideAlign", ()) or ())
+            and not list(getattr(wall, "OverrideOffset", ()) or ())
+            and not ArchRepresentation.is_property_expression_driven(wall, "Width")
+            and not ArchRepresentation.is_property_expression_driven(wall, "Offset")
+        )
 
     @staticmethod
     def _add_owned_path_edit_handles(representation, wall, context):
