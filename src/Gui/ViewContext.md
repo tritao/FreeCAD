@@ -24,6 +24,11 @@ A `Visible` override traverses the provider's default display-mode child through
 and its scene graph may be shared by multiple viewers with different contexts. A `Hidden` override
 stops traversal for that viewer only, while `Inherit` preserves the provider's persistent state.
 
+The context also owns active references to persistent `App::ClippingPlane`
+definitions. The viewer callback realizes those references as Coin clip nodes
+under that viewer's model root; changing or clearing a context removes only
+that viewer's nodes.
+
 ## Contract
 
 Viewer-local overrides are presentation state. They must not create document transactions, alter

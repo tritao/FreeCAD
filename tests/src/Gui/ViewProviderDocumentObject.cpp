@@ -2,6 +2,8 @@
 
 #include <gtest/gtest.h>
 
+#include <vector>
+
 #include <Inventor/SoDB.h>
 #include <Inventor/SbViewportRegion.h>
 #include <Inventor/actions/SoGetBoundingBoxAction.h>
@@ -11,6 +13,7 @@
 #include <Inventor/nodes/SoSeparator.h>
 
 #include <App/Application.h>
+#include <App/ClippingPlane.h>
 #include <App/Document.h>
 #include <App/ViewDefinition.h>
 #include <Gui/Application.h>
@@ -263,4 +266,39 @@ TEST_F(ViewProviderDocumentObjectTest, viewDefinitionRoundTripsTypedCameraState)
     EXPECT_EQ(restored.cameraState().codec, "CoinCamera");
     EXPECT_EQ(restored.cameraState().version, Gui::CoinCameraCodec::CurrentVersion);
     EXPECT_EQ(restored.cameraState().payload, "PerspectiveCamera { position 1 2 3 }");
+}
+
+TEST_F(ViewProviderDocumentObjectTest, clippingReferencesPersistAndRemainViewerLocal)
+{
+    auto* definition = static_cast<App::ViewDefinition*>(
+        _doc->addObject("App::ViewDefinition", "SavedView")
+    );
+    auto* clipping = static_cast<App::ClippingPlane*>(
+        _doc->addObject("App::ClippingPlane", "SectionClip")
+    );
+    clipping->Offset.setValue(125.0);
+    definition->ClippingPlanes.setValues({clipping});
+
+    std::vector<const App::ClippingPlane*> firstNotifications;
+    Gui::ViewContext first(
+        {},
+        [&firstNotifications](const auto& planes) { firstNotifications = planes; }
+    );
+    Gui::ViewContext second;
+    ASSERT_TRUE(first.applyDefinition(definition));
+    ASSERT_EQ(first.clippingPlanes().size(), 1U);
+    EXPECT_EQ(first.clippingPlanes().front(), clipping);
+    EXPECT_TRUE(second.clippingPlanes().empty());
+    ASSERT_EQ(firstNotifications.size(), 1U);
+    EXPECT_EQ(firstNotifications.front(), clipping);
+
+    definition->ClippingPlanes.setValues({});
+    ASSERT_TRUE(first.captureDefinition(definition));
+    ASSERT_EQ(definition->ClippingPlanes.getValues().size(), 1U);
+    EXPECT_EQ(definition->ClippingPlanes.getValues().front(), clipping);
+
+    first.removeObject(clipping);
+    EXPECT_TRUE(first.clippingPlanes().empty());
+    EXPECT_TRUE(second.clippingPlanes().empty());
+    EXPECT_TRUE(firstNotifications.empty());
 }

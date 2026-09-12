@@ -25,6 +25,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <limits>
 
 #include <Inventor/SoFCPlacementIndicatorKit.h>
 
@@ -40,6 +41,8 @@
 #endif
 
 #include <fmt/format.h>
+
+#include <App/ClippingPlane.h>
 
 #include <algorithm>
 #include <array>
@@ -993,6 +996,8 @@ View3DInventorViewer::View3DInventorViewer(QWidget* parent, const QOpenGLWidget*
     , objectGroup(nullptr)
     , viewContext([this](const ViewProviderDocumentObject* provider) {
         updateContextVisibility(provider);
+    }, [this](const std::vector<const App::ClippingPlane*>& planes) {
+        updateContextClipping(planes);
     })
     , navigation(nullptr)
     , renderType(Native)
@@ -1020,6 +1025,8 @@ View3DInventorViewer::View3DInventorViewer(
     , objectGroup(nullptr)
     , viewContext([this](const ViewProviderDocumentObject* provider) {
         updateContextVisibility(provider);
+    }, [this](const std::vector<const App::ClippingPlane*>& planes) {
+        updateContextClipping(planes);
     })
     , navigation(nullptr)
     , renderType(Native)
@@ -1373,6 +1380,14 @@ View3DInventorViewer::~View3DInventorViewer()
     // the root node but isn't destroyed when closing this viewer so
     // that it prevents all children from being deleted. To reduce this
     // likelihood we explicitly remove all child nodes now.
+    for (auto* clip : contextClipPlanes) {
+        const auto index = pcViewProviderRoot->findChild(clip);
+        if (index >= 0) {
+            pcViewProviderRoot->removeChild(index);
+        }
+        clip->unref();
+    }
+    contextClipPlanes.clear();
     coinRemoveAllChildren(this->pcViewProviderRoot);
     this->pcViewProviderRoot->unref();
     this->pcViewProviderRoot = nullptr;
@@ -4102,6 +4117,45 @@ void View3DInventorViewer::toggleClippingPlane(
 bool View3DInventorViewer::hasClippingPlane() const
 {
     return pcClipPlane != nullptr;
+}
+
+void View3DInventorViewer::updateContextClipping(
+    const std::vector<const App::ClippingPlane*>& planes
+)
+{
+    if (!pcViewProviderRoot) {
+        return;
+    }
+
+    for (auto* clip : contextClipPlanes) {
+        const auto index = pcViewProviderRoot->findChild(clip);
+        if (index >= 0) {
+            pcViewProviderRoot->removeChild(index);
+        }
+        clip->unref();
+    }
+    contextClipPlanes.clear();
+
+    for (const auto* definition : planes) {
+        if (!definition || !definition->Enabled.getValue()) {
+            continue;
+        }
+        Base::Vector3d normal = definition->Normal.getValue();
+        if (normal.Length() <= std::numeric_limits<double>::epsilon()) {
+            continue;
+        }
+        normal.Normalize();
+        auto* clip = new SoClipPlane;
+        clip->plane.setValue(
+            SbPlane(
+                Base::convertTo<SbVec3f>(normal),
+                static_cast<float>(definition->Offset.getValue())
+            )
+        );
+        clip->ref();
+        pcViewProviderRoot->insertChild(clip, 0);
+        contextClipPlanes.push_back(clip);
+    }
 }
 
 /**

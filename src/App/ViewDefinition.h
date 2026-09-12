@@ -32,6 +32,8 @@ public:
     PropertyLinkList ForcedVisible;
     /// Objects explicitly forced hidden in this view; absence means inherit.
     PropertyLinkList ForcedHidden;
+    /// Persistent clipping definitions referenced by this view.
+    PropertyLinkList ClippingPlanes;
 
     const char* getViewProviderName() const override
     {
