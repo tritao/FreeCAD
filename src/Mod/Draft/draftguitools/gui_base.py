@@ -50,6 +50,13 @@ class DraftInteractionHost:
     This keeps point acquisition, task UI ownership, working-plane access and
     command activation in one place so commands can later be embedded in other
     hosts without having to rewrite their internal state machines.
+
+    Host policy hooks are intentionally small:
+    - `supports_extra_widget`: whether point requests may attach a task widget
+    - `resolve_point_request_modifiers`: map raw ctrl/shift/alt to Snapper flags
+    - `default_ortho_enabled`: whether wall-like tools prefer ortho by default
+    - `free_angle_override_active`: whether the host is currently requesting
+      a temporary escape from that ortho policy
     """
 
     def __init__(self, command=None):
@@ -68,10 +75,14 @@ class DraftInteractionHost:
     def get_working_plane(self):
         return WorkingPlane.get_working_plane()
 
+    def get_interaction_plane(self):
+        """Return an explicit plane for this interactive request, if any."""
+        return self.get_working_plane()
+
     def project_point(self, point, working_plane=None):
         if point is None:
             return None
-        wp = working_plane or self.get_working_plane()
+        wp = working_plane or self.get_interaction_plane()
         if not wp or not hasattr(wp, "project_point"):
             return point
         try:
@@ -80,7 +91,9 @@ class DraftInteractionHost:
             return point
 
     def create_box_tracker(self):
-        return trackers.boxTracker()
+        tracker = trackers.boxTracker()
+        tracker.working_plane = self.get_interaction_plane()
+        return tracker
 
     def request_point(
         self,
@@ -113,18 +126,25 @@ class DraftInteractionHost:
             kwargs["hints"] = hints
         if modifier_resolver is not None:
             kwargs["modifier_resolver"] = modifier_resolver
+        interaction_plane = self.get_interaction_plane()
+        if interaction_plane is not None:
+            kwargs["interaction_plane"] = interaction_plane
         Gui.Snapper.getPoint(**kwargs)
 
     def supports_extra_widget(self):
+        """Return True when point requests may attach an extra task widget."""
         return True
 
     def resolve_point_request_modifiers(self, ctrl, shift, alt):
+        """Map raw keyboard modifiers to Snapper's active/constrain flags."""
         return ctrl, shift
 
     def default_ortho_enabled(self):
+        """Return True when embedded wall creation should prefer ortho by default."""
         return False
 
     def free_angle_override_active(self):
+        """Return True when the current host wants to bypass default ortho."""
         return False
 
     def stop_point_request(self):
