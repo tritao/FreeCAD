@@ -70,6 +70,10 @@ public:
     Py::Object startAnimating(const Py::Tuple&);
     Py::Object stopAnimating();
     Py::Object waitForCameraAnimation();
+    Py::Object pushViewContextLayer();
+    Py::Object removeViewContextLayer(const Py::Tuple&);
+    Py::Object setViewVisibility(const Py::Tuple&);
+    Py::Object getViewVisibility(const Py::Tuple&);
     Py::Object setAnimationEnabled(const Py::Tuple&);
     Py::Object isAnimationEnabled();
     Py::Object setPopupMenuEnabled(const Py::Tuple&);
@@ -116,6 +120,7 @@ public:
     Py::Object removeDraggerCallback(const Py::Tuple&);
     Py::Object getViewProvidersOfType(const Py::Tuple&);
     Py::Object redraw();
+    Py::Object scheduleRedraw();
     Py::Object setName(const Py::Tuple&);
     Py::Object toggleClippingPlane(const Py::Tuple& args, const Py::Dict&);
     Py::Object hasClippingPlane();

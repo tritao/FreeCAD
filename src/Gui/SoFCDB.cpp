@@ -63,6 +63,7 @@
 #include "SoDevicePixelRatioElement.h"
 #include "SoFCColorBar.h"
 #include "SoFCInteractiveElement.h"
+#include "Inventor/SoViewContextElement.h"
 #include "SoFCSelection.h"
 #include "SoFCSelectionAction.h"
 #include "SoFCUnifiedSelection.h"
@@ -109,6 +110,9 @@ void Gui::SoFCDB::init()
     SoGLRenderActionElement::initClass();
     SoFCInteractiveElement::initClass();
     SoGLWidgetElement::initClass();
+    SoViewContextElement::initClass();
+    SoViewContextSwitch::initClass();
+    SoViewContextGate::initClass();
     SoFCColorBar::initClass();
     SoFCScreenSpaceGroup::initClass();
     SoFCBackgroundGradient::initClass();

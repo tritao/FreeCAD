@@ -78,6 +78,9 @@
 
 #include <App/Document.h>
 #include <App/GeoFeature.h>
+
+#include "../ViewContext.h"
+#include "../Inventor/SoViewContextElement.h"
 #include <App/ElementNamingUtils.h>
 #include <Base/Tools.h>
 #include <Base/UnitsApi.h>
@@ -727,6 +730,47 @@ void SoFCUnifiedSelection::doAction(SoAction* action)
     inherited::doAction(action);
 }
 
+void SoFCUnifiedSelection::setViewContextElement(SoAction* action) const
+{
+    SoViewContextElement::set(action->getState(), viewContext);
+}
+
+void SoFCUnifiedSelection::callback(SoCallbackAction* action)
+{
+    setViewContextElement(action);
+    inherited::callback(action);
+}
+
+void SoFCUnifiedSelection::getBoundingBox(SoGetBoundingBoxAction* action)
+{
+    setViewContextElement(action);
+    inherited::getBoundingBox(action);
+}
+
+void SoFCUnifiedSelection::getMatrix(SoGetMatrixAction* action)
+{
+    setViewContextElement(action);
+    inherited::getMatrix(action);
+}
+
+void SoFCUnifiedSelection::getPrimitiveCount(SoGetPrimitiveCountAction* action)
+{
+    setViewContextElement(action);
+    inherited::getPrimitiveCount(action);
+}
+
+void SoFCUnifiedSelection::pick(SoPickAction* action)
+{
+    setViewContextElement(action);
+    inherited::pick(action);
+}
+
+void SoFCUnifiedSelection::rayPick(SoRayPickAction* action)
+{
+    setViewContextElement(action);
+    inherited::rayPick(action);
+}
+
 bool SoFCUnifiedSelection::setPreselect(const PickedInfo& info)
 {
     if (!info.pp) {
@@ -985,6 +1029,7 @@ bool SoFCUnifiedSelection::setSelection(const std::vector<PickedInfo>& infos, bo
 // doc from parent
 void SoFCUnifiedSelection::handleEvent(SoHandleEventAction* action)
 {
+    setViewContextElement(action);
     // If off then don't handle this event
     if (!selectionEnabled.getValue()) {
         inherited::handleEvent(action);
@@ -1049,6 +1094,7 @@ bool SoFCUnifiedSelection::getShowSelectionBoundingBox()
 
 void SoFCUnifiedSelection::GLRenderBelowPath(SoGLRenderAction* action)
 {
+    setViewContextElement(action);
     bool bbox = _ShowBoundBox;
     if (this->selectAll) {
         _ShowBoundBox = true;
@@ -1075,6 +1121,12 @@ void SoFCUnifiedSelection::GLRenderBelowPath(SoGLRenderAction* action)
             }
         }
     }
+}
+
+void SoFCUnifiedSelection::GLRenderInPath(SoGLRenderAction* action)
+{
+    setViewContextElement(action);
+    inherited::GLRenderInPath(action);
 }
 
 // ---------------------------------------------------------------
@@ -1723,8 +1775,23 @@ bool SoFCSelectionRoot::renderBBox(
 
 static std::time_t _CyclicLastReported;
 
+namespace
+{
+ViewContext::Visibility contextVisibility(SoState* state, ViewProvider* provider)
+{
+    const auto* documentProvider = dynamic_cast<ViewProviderDocumentObject*>(provider);
+    const auto* context = SoViewContextElement::get(state);
+    return context && documentProvider ? context->visibility(documentProvider->getObject())
+                                       : ViewContext::Visibility::Inherit;
+}
+
+}  // namespace
+
 void SoFCSelectionRoot::renderPrivate(SoGLRenderAction* action, bool inPath)
 {
+    if (contextVisibility(action->getState(), viewProvider) == ViewContext::Visibility::Hidden) {
+        return;
+    }
     if (ViewParams::instance()->getCoinCycleCheck() && !SelStack.nodeSet.insert(this).second) {
         std::time_t t = std::time(nullptr);
         if (_CyclicLastReported < t) {
@@ -1970,6 +2037,9 @@ void SoFCSelectionRoot::moveActionStack(SoAction* from, SoAction* to, bool erase
 
 void SoFCSelectionRoot::pick(SoPickAction* action)
 {
+    if (contextVisibility(action->getState(), viewProvider) == ViewContext::Visibility::Hidden) {
+        return;
+    }
     BEGIN_ACTION;
     if (doActionPrivate(stack, action)) {
         inherited::pick(action);
@@ -1979,6 +2049,9 @@ void SoFCSelectionRoot::pick(SoPickAction* action)
 
 void SoFCSelectionRoot::rayPick(SoRayPickAction* action)
 {
+    if (contextVisibility(action->getState(), viewProvider) == ViewContext::Visibility::Hidden) {
+        return;
+    }
     BEGIN_ACTION;
     if (doActionPrivate(stack, action)) {
         inherited::rayPick(action);
@@ -1988,6 +2061,9 @@ void SoFCSelectionRoot::rayPick(SoRayPickAction* action)
 
 void SoFCSelectionRoot::handleEvent(SoHandleEventAction* action)
 {
+    if (contextVisibility(action->getState(), viewProvider) == ViewContext::Visibility::Hidden) {
+        return;
+    }
     BEGIN_ACTION;
     inherited::handleEvent(action);
     END_ACTION;
@@ -2002,6 +2078,9 @@ void SoFCSelectionRoot::search(SoSearchAction* action)
 
 void SoFCSelectionRoot::getPrimitiveCount(SoGetPrimitiveCountAction* action)
 {
+    if (contextVisibility(action->getState(), viewProvider) == ViewContext::Visibility::Hidden) {
+        return;
+    }
     BEGIN_ACTION;
     inherited::getPrimitiveCount(action);
     END_ACTION;
@@ -2009,6 +2088,9 @@ void SoFCSelectionRoot::getPrimitiveCount(SoGetPrimitiveCountAction* action)
 
 void SoFCSelectionRoot::getBoundingBox(SoGetBoundingBoxAction* action)
 {
+    if (contextVisibility(action->getState(), viewProvider) == ViewContext::Visibility::Hidden) {
+        return;
+    }
     BEGIN_ACTION;
     if (doActionPrivate(stack, action)) {
         inherited::getBoundingBox(action);
@@ -2018,6 +2100,9 @@ void SoFCSelectionRoot::getBoundingBox(SoGetBoundingBoxAction* action)
 
 void SoFCSelectionRoot::getMatrix(SoGetMatrixAction* action)
 {
+    if (contextVisibility(action->getState(), viewProvider) == ViewContext::Visibility::Hidden) {
+        return;
+    }
     BEGIN_ACTION;
     if (doActionPrivate(stack, action)) {
         inherited::getMatrix(action);
@@ -2027,6 +2112,9 @@ void SoFCSelectionRoot::getMatrix(SoGetMatrixAction* action)
 
 void SoFCSelectionRoot::callback(SoCallbackAction* action)
 {
+    if (contextVisibility(action->getState(), viewProvider) == ViewContext::Visibility::Hidden) {
+        return;
+    }
     BEGIN_ACTION;
     inherited::callback(action);
     END_ACTION;

@@ -59,6 +59,7 @@
 #include "Command.h"
 #include "Control.h"
 #include "FileDialog.h"
+#include "Inventor/SoViewContextElement.h"
 #include "MainWindow.h"
 #include "MDIView.h"
 #include "NotificationArea.h"
@@ -1108,6 +1109,7 @@ void Document::slotDeletedObject(const App::DocumentObject& Obj)
         for (auto* v : d->baseViews) {
             auto activeView = dynamic_cast<View3DInventor*>(v);
             if (activeView) {
+                activeView->getViewer()->getViewContext().removeObject(&Obj);
                 activeView->getViewer()->removeViewProvider(viewProvider);
             }
         }
@@ -3108,7 +3110,9 @@ void Document::handleChildren3D(ViewProvider* viewProvider, bool deleting)
                                 );
                             }
                             else if (frontGroup) {
-                                frontGroup->addChild(childFrontNode);
+                                frontGroup->addChild(
+                                    new SoViewContextGate(ChildViewProvider, childFrontNode)
+                                );
                             }
                         }
 
@@ -3121,7 +3125,7 @@ void Document::handleChildren3D(ViewProvider* viewProvider, bool deleting)
                                 );
                             }
                             else if (backGroup) {
-                                backGroup->addChild(childBackNode);
+                                backGroup->addChild(new SoViewContextGate(ChildViewProvider, childBackNode));
                             }
                         }
 
