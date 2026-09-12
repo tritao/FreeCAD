@@ -39,6 +39,8 @@
 
 #include <unordered_map>
 
+#include <App/Application.h>
+#include <App/Document.h>
 #include <Base/BoundBox.h>
 #include <Base/Console.h>
 #include <Base/Exception.h>
@@ -60,6 +62,7 @@
 #include "View3DInventorViewer.h"
 #include "ViewParams.h"
 #include "ViewProviderExtension.h"
+#include "ViewProviderDocumentObject.h"
 #include "ViewProviderLink.h"
 #include "ViewProviderPy.h"
 
@@ -417,6 +420,28 @@ void ViewProvider::addDisplayMaskMode(SoNode* node, const char* type)
 {
     _sDisplayMaskModes[type] = pcModeSwitch->getNumChildren();
     pcModeSwitch->addChild(node);
+
+    if (App::GetApplication().isRestoring()) {
+        return;
+    }
+
+    auto* documentViewProvider = dynamic_cast<ViewProviderDocumentObject*>(this);
+    auto* guiDocument = documentViewProvider ? documentViewProvider->getDocument() : nullptr;
+    auto* appDocument = guiDocument ? guiDocument->getDocument() : nullptr;
+    if (!appDocument) {
+        return;
+    }
+
+    const std::string documentName = appDocument->getName();
+    const std::string modeType(type);
+    QTimer::singleShot(0, [documentName, modeType]() {
+        if (!Application::Instance) {
+            return;
+        }
+        if (auto* guiDocument = Application::Instance->getDocument(documentName.c_str())) {
+            guiDocument->reapplyViewOverrides(modeType);
+        }
+    });
 }
 
 void ViewProvider::setDisplayMaskMode(const char* type)

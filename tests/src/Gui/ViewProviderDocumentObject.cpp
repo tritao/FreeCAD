@@ -28,6 +28,17 @@
 namespace
 {
 
+class DynamicDisplayModeProvider final: public Gui::ViewProviderDocumentObject
+{
+public:
+    std::vector<std::string> modes {"Flat Lines", "Shaded"};
+
+    std::vector<std::string> getDisplayModes() const override
+    {
+        return modes;
+    }
+};
+
 class ViewProviderDocumentObjectTest: public ::testing::Test
 {
 protected:
@@ -65,6 +76,20 @@ protected:
 };
 
 }  // namespace
+
+TEST_F(ViewProviderDocumentObjectTest, refreshDisplayModesPreservesSupportedModeAndAddsNewModes)
+{
+    DynamicDisplayModeProvider viewProvider;
+    viewProvider.attach(_child);
+    viewProvider.DisplayMode.setValue("Shaded");
+
+    viewProvider.modes.emplace_back("Plan");
+    viewProvider.refreshDisplayModes(true);
+
+    EXPECT_STREQ(viewProvider.DisplayMode.getValueAsString(), "Shaded");
+    EXPECT_NO_THROW(viewProvider.DisplayMode.setValue("Plan"));
+    EXPECT_STREQ(viewProvider.DisplayMode.getValueAsString(), "Plan");
+}
 
 TEST_F(ViewProviderDocumentObjectTest, viewContextTraversesHiddenProviderWithoutChangingModeSwitch)
 {
