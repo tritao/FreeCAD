@@ -196,7 +196,38 @@ class TestBimPlanEditSessionGui(TestArchBaseGui):
         session.shutdown(close_dialog=False)
 
         self.assertFalse(callbacks)
+        self.assertTrue(session.viewport_state.scene_graph_mutations)
+        session.viewport.flush_scene_graph_mutations()
         self.assertFalse(session.viewport_state.scene_graph_mutations)
+
+    def test_contextual_renderer_mutations_are_deferred_and_coalesced(self):
+        wall = Arch.makeWall(length=3000, width=200, height=2500, align="Center")
+        self.document.recompute()
+        session = PlanEditSession()
+        self.assertTrue(session.enter())
+        try:
+            renderer = session.contextual_rendering.renderer
+            original_node = renderer._object_nodes[wall]
+
+            session.overlays.geometry.invalidate_plan_overlay_geometry_cache(
+                wall, kinds=("representation",)
+            )
+            session.contextual_rendering.refresh_object(wall)
+            session.contextual_rendering.refresh_object(wall)
+
+            key = ("contextual-renderer", ("representation", wall))
+            self.assertIn(key, session.viewport_state.scene_graph_mutations)
+            self.assertIs(original_node, renderer._object_nodes[wall])
+            session.viewport.flush_scene_graph_mutations()
+            self.assertIsNot(original_node, renderer._object_nodes[wall])
+
+            session.contextual_rendering.close()
+            self.assertIsNone(session.contextual_rendering.renderer)
+            self.assertIsNotNone(renderer.root)
+            session.viewport.flush_scene_graph_mutations()
+            self.assertIsNone(renderer.root)
+        finally:
+            session.shutdown(close_dialog=False)
 
     def test_contextual_wall_width_edit_is_transactional(self):
         wall = Arch.makeWall(length=3000, width=200, height=2500, align="Center")
@@ -332,8 +363,10 @@ class TestBimPlanEditSessionGui(TestArchBaseGui):
 
             renderer = session.contextual_rendering.renderer
             self.assertTrue(session.contextual_rendering.set_source_visible(wall, False))
+            session.viewport.flush_scene_graph_mutations()
             self.assertEqual(coin.SO_SWITCH_NONE, renderer._object_nodes[wall].whichChild.getValue())
             self.assertTrue(session.contextual_rendering.set_source_visible(wall, True))
+            session.viewport.flush_scene_graph_mutations()
             self.assertEqual(coin.SO_SWITCH_ALL, renderer._object_nodes[wall].whichChild.getValue())
 
             handle = next(
@@ -496,6 +529,7 @@ class TestBimPlanEditSessionGui(TestArchBaseGui):
             self.assertIn("WallJointMove", [handle.role for handle in direct.edit_handles])
             session.selection.state.set_selected_plan_target("wall", wall)
             session.contextual_rendering.refresh_object(wall)
+            session.viewport.flush_scene_graph_mutations()
             handles = session.contextual_rendering.edit_handles_for(wall)
             self.assertIn("WallJointMove", [handle.role for handle in handles])
             joint_handle = next(handle for handle in handles if handle.role == "WallJointMove")
@@ -568,6 +602,7 @@ class TestBimPlanEditSessionGui(TestArchBaseGui):
                 session.contextual_rendering.pick_edit_handle(handle_screen_point)
             )
             session.selection.state.set_selected_plan_target("wall", wall)
+            session.viewport.flush_scene_graph_mutations()
             self.assertIs(
                 handle,
                 session.contextual_rendering.pick_edit_handle(handle_screen_point),

@@ -2,6 +2,8 @@
 
 """Input event routing for BIM Plan Edit."""
 
+import FreeCAD
+
 from bimplan.providers.edit import ProviderMoveTool
 from bimplan.providers.point import ProviderPointTool
 from bimplan.runtime.tools import PlanTool, coerce_plan_tool
@@ -124,6 +126,20 @@ def _get_event_handled_setter(event_callback):
     return setter if callable(setter) else None
 
 
+def _event_is_handled(event_callback):
+    getter = getattr(event_callback, "isHandled", None)
+    if not callable(getter):
+        return bool(getattr(event_callback, "_handled", False))
+    try:
+        return bool(getter())
+    except Exception:
+        return False
+
+
+def _draft_point_request_owns_pointer(session):
+    return getattr(FreeCAD, "activeDraftCommand", None) is session
+
+
 def _coerce_current_tool(session):
     return coerce_plan_tool(session.current_tool)
 
@@ -205,6 +221,10 @@ def _record_hovered_after(session):
 def on_mouse_pressed(session, event_callback):
     if session.lifecycle_state.tearing_down:
         return
+    if _event_is_handled(event_callback) or _draft_point_request_owns_pointer(
+        session
+    ):
+        return
     try:
         from pivy import coin
     except Exception:
@@ -249,6 +269,10 @@ def on_mouse_pressed(session, event_callback):
 
 def on_mouse_moved(session, event_callback):
     if session.lifecycle_state.tearing_down:
+        return
+    if _event_is_handled(event_callback) or _draft_point_request_owns_pointer(
+        session
+    ):
         return
     mouse_pos = _get_mouse_event_position(event_callback.getEvent())
     hovered_before = session.selection.hover.get_hovered_plan_target()

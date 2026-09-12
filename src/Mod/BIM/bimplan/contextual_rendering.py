@@ -13,6 +13,7 @@ class PlanContextualRenderingAPI:
         self._session = session
         self._renderer = None
         self._sources = set()
+        self._generation = 0
 
     @property
     def renderer(self):
@@ -23,7 +24,9 @@ class PlanContextualRenderingAPI:
             self._renderer = BimContextualRendering.ContextualRepresentationRenderer(
                 self._session.view
             )
+            self._generation += 1
         self.refresh_all()
+        self._session.viewport.flush_scene_graph_mutations()
         self._session.snap.enable_semantic_snapping()
 
     def close(self):
@@ -31,8 +34,28 @@ class PlanContextualRenderingAPI:
         renderer = self._renderer
         self._renderer = None
         self._sources.clear()
+        self._generation += 1
         if renderer is not None:
-            renderer.close()
+            self._session.viewport.queue_scene_graph_mutation(
+                ("contextual-renderer-close", id(renderer)),
+                renderer.close,
+                finalizer=True,
+            )
+
+    def _queue_renderer_mutation(self, key, callback):
+        renderer = self._renderer
+        generation = self._generation
+        if renderer is None:
+            return False
+
+        def guarded_mutation():
+            if self._renderer is not renderer or self._generation != generation:
+                return False
+            return callback(renderer)
+
+        return self._session.viewport.queue_scene_graph_mutation(
+            ("contextual-renderer", key), guarded_mutation
+        )
 
     def mapping_for_node(self, node):
         if self._renderer is None:
@@ -71,12 +94,10 @@ class PlanContextualRenderingAPI:
         return changed
 
     def set_handle_state(self, handle, state):
-        if self._renderer is None:
-            return False
-        changed = self._renderer.set_handle_state(handle, state)
-        if changed:
-            self._session.viewport.request_view_redraw()
-        return changed
+        return self._queue_renderer_mutation(
+            ("handle-state", handle.source, handle.subelement),
+            lambda renderer: renderer.set_handle_state(handle, state),
+        )
 
     def set_preview_shape(self, source, shape):
         renderer = self._renderer
@@ -112,18 +133,17 @@ class PlanContextualRenderingAPI:
         _kind, source = self._session.selection.state.get_selected_plan_target()
         if self._session.current_tool != "Select":
             source = None
-        changed = self._renderer.set_visible_handle_sources((source,) if source else ())
-        if changed:
-            self._session.viewport.request_view_redraw()
-        return changed
+        sources = (source,) if source else ()
+        return self._queue_renderer_mutation(
+            "visible-handle-sources",
+            lambda renderer: renderer.set_visible_handle_sources(sources),
+        )
 
     def set_source_visible(self, source, visible):
-        if self._renderer is None:
-            return False
-        changed = self._renderer.set_source_visible(source, visible)
-        if changed:
-            self._session.viewport.request_view_redraw()
-        return changed
+        return self._queue_renderer_mutation(
+            ("source-visible", source),
+            lambda renderer: renderer.set_source_visible(source, visible),
+        )
 
     def refresh_all(self):
         if self._renderer is None:
@@ -136,13 +156,18 @@ class PlanContextualRenderingAPI:
             if representation is None:
                 continue
             source = representation.source
-            self._renderer.set_representation(representation)
+            self._queue_renderer_mutation(
+                ("representation", source),
+                lambda renderer, value=representation: renderer.set_representation(value),
+            )
             current.add(source)
         for source in self._sources - current:
-            self._renderer.remove_representation(source)
+            self._queue_renderer_mutation(
+                ("representation", source),
+                lambda renderer, value=source: renderer.remove_representation(value),
+            )
         self._sources = current
         self.sync_visible_handles()
-        self._session.viewport.request_view_redraw()
 
     def refresh_object(self, obj):
         if self._renderer is None or obj is None:
@@ -156,7 +181,6 @@ class PlanContextualRenderingAPI:
                 affected.add(opening)
         for source in affected:
             self._refresh_source(source)
-        self._session.viewport.request_view_redraw()
 
     def refresh_edit_dependencies(self, obj):
         """Refresh the bounded semantic neighborhood affected by a BIM edit."""
@@ -193,9 +217,11 @@ class PlanContextualRenderingAPI:
         semantic_obj = self._session.visibility.get_plan_semantic_object(obj)
         for source in (obj, semantic_obj):
             if source in self._sources:
-                self._renderer.remove_representation(source)
+                self._queue_renderer_mutation(
+                    ("representation", source),
+                    lambda renderer, value=source: renderer.remove_representation(value),
+                )
                 self._sources.discard(source)
-        self._session.viewport.request_view_redraw()
 
     def _refresh_source(self, source):
         representation = None
@@ -203,10 +229,16 @@ class PlanContextualRenderingAPI:
             representation = self._representation_for(source)
         if representation is None:
             if source in self._sources:
-                self._renderer.remove_representation(source)
+                self._queue_renderer_mutation(
+                    ("representation", source),
+                    lambda renderer, value=source: renderer.remove_representation(value),
+                )
                 self._sources.discard(source)
             return
-        self._renderer.set_representation(representation)
+        self._queue_renderer_mutation(
+            ("representation", source),
+            lambda renderer: renderer.set_representation(representation),
+        )
         self._sources.add(representation.source)
 
     def _representation_for(self, obj):

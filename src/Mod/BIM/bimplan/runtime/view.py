@@ -166,8 +166,10 @@ class PlanViewportAPI:
     def request_view_redraw(self):
         return request_view_redraw(self.session)
 
-    def queue_scene_graph_mutation(self, key, callback):
-        return queue_scene_graph_mutation(self.session, key, callback)
+    def queue_scene_graph_mutation(self, key, callback, *, finalizer=False):
+        return queue_scene_graph_mutation(
+            self.session, key, callback, finalizer=finalizer
+        )
 
     def flush_scene_graph_mutations(self):
         return flush_scene_graph_mutations(self.session)
@@ -626,8 +628,20 @@ def restore_state(session):
             session.view = None
     if session.view and viewport_state.saved_camera:
         try:
+            camera = session.view.getCameraNode()
+            for field_name in ("nearDistance", "farDistance"):
+                field = getattr(camera, field_name, None)
+                if field is not None:
+                    field.setDefault(True)
             session.view.setCamera(viewport_state.saved_camera)
-        except RuntimeError:
+            camera = session.view.getCameraNode()
+            for field_name in ("nearDistance", "farDistance"):
+                if field_name in viewport_state.saved_camera:
+                    continue
+                field = getattr(camera, field_name, None)
+                if field is not None:
+                    field.setDefault(True)
+        except (AttributeError, RuntimeError):
             session.view = None
 
     wp = viewport_state.working_plane or WorkingPlane.get_working_plane(update=False)
@@ -1014,13 +1028,15 @@ def clear_viewport_status_chip(session):
         pass
 
 
-def queue_scene_graph_mutation(session, key, callback):
+def queue_scene_graph_mutation(session, key, callback, *, finalizer=False):
     """Coalesce a Coin graph mutation outside the active event traversal."""
 
-    if session.lifecycle_state.tearing_down or session.lifecycle_state.finishing:
+    if (
+        session.lifecycle_state.tearing_down or session.lifecycle_state.finishing
+    ) and not finalizer:
         return False
     state = session.viewport_state
-    state.scene_graph_mutations[key] = callback
+    state.scene_graph_mutations[key] = (callback, bool(finalizer))
     if state.scene_graph_flush_queued:
         return True
     try:
@@ -1040,10 +1056,11 @@ def flush_scene_graph_mutations(session):
     state.scene_graph_flush_queued = False
     mutations = tuple(state.scene_graph_mutations.values())
     state.scene_graph_mutations.clear()
-    if session.lifecycle_state.tearing_down or session.lifecycle_state.finishing:
-        return False
     changed = False
-    for mutation in mutations:
+    stopping = session.lifecycle_state.tearing_down or session.lifecycle_state.finishing
+    for mutation, finalizer in mutations:
+        if stopping and not finalizer:
+            continue
         try:
             changed = bool(mutation()) or changed
         except Exception:

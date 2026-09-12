@@ -3,9 +3,11 @@
 """End-to-end GUI checks for the generated BIM Plan Edit examples."""
 
 import os
+from unittest.mock import patch
 
 import FreeCAD
 import FreeCADGui
+from pivy import coin
 from bimtests.TestArchBaseGui import TestArchBaseGui
 from bimplan.runtime.session import PlanEditSession
 
@@ -109,9 +111,104 @@ class TestBimPlanEditExamplesGui(TestArchBaseGui):
         session.contextual_editing.begin(handle)
         result = session.contextual_editing.commit(handle.point + handle.direction * 50)
         self.assertTrue(result.success)
-        self.assertAlmostEqual(width + 100, wall.Width.Value)
+        self.assertAlmostEqual(width + 50, wall.Width.Value)
         document.undo()
         self.assertAlmostEqual(width, wall.Width.Value)
+
+    def test_basic_example_coin_drag_survives_refresh_undo_and_reentry(self):
+        """Exercise the real Coin/Draft drag lifecycle on the installed fixture."""
+
+        import DraftGui
+        from bimplan.selection import edit_nodes as plan_edit_nodes
+        from draftguitools import gui_snapper
+
+        document = self._open_example("BIMPlanEditBasic.FCStd")
+        wall = self._objects_with_ifc_type(document, "Wall")[0]
+        storey = self._objects_with_ifc_type(document, "Building Storey")[0]
+        original_width = wall.Width.Value
+        created_toolbar = not hasattr(FreeCADGui, "draftToolBar")
+        if created_toolbar:
+            FreeCADGui.draftToolBar = DraftGui.DraftToolBar()
+        created_snapper = not hasattr(FreeCADGui, "Snapper")
+        if created_snapper:
+            FreeCADGui.Snapper = gui_snapper.Snapper()
+
+        session = self._enter_plan_edit(storey)
+        try:
+            event_manager = session.viewer.getSoEventManager()
+
+            def send_move(point):
+                event = coin.SoLocation2Event()
+                event.setPosition(coin.SbVec2s(round(point[0]), round(point[1])))
+                event_manager.processEvent(event)
+
+            def send_button(point, state):
+                event = coin.SoMouseButtonEvent()
+                event.setPosition(coin.SbVec2s(round(point[0]), round(point[1])))
+                event.setButton(coin.SoMouseButtonEvent.BUTTON1)
+                event.setState(state)
+                event_manager.processEvent(event)
+
+            for offset in (35.0, 55.0, 40.0):
+                session.selection.state.set_selected_plan_target_state("wall", wall)
+                session.contextual_rendering.sync_visible_handles()
+                session.viewport.flush_scene_graph_mutations()
+                session.view.fitAll()
+                self.pump_gui_events()
+                handle = next(
+                    item
+                    for item in session.contextual_rendering.edit_handles_for(wall)
+                    if item.subelement == "Width.PositiveFace"
+                )
+                start = session.view.getPointOnScreen(handle.point)
+                target = session.view.getPointOnScreen(
+                    handle.point + handle.direction * offset
+                )
+                self.assertIs(
+                    handle, session.contextual_rendering.pick_edit_handle(start)
+                )
+
+                edit_node = plan_edit_nodes.ContextualHandleEditNode(wall, handle)
+                send_move(start)
+                self.pump_gui_events(20)
+                with patch.object(
+                    session.picking, "pick_edit_node", return_value=edit_node
+                ):
+                    send_button(start, coin.SoButtonEvent.DOWN)
+                self.pump_gui_events(20)
+                self.assertIsNotNone(session.contextual_editing.editor)
+
+                world_target = handle.point + handle.direction * offset
+                with patch.object(
+                    FreeCADGui.Snapper, "snap", return_value=world_target
+                ):
+                    send_move(target)
+                self.pump_gui_events(20)
+                send_button(target, coin.SoButtonEvent.DOWN)
+                send_button(target, coin.SoButtonEvent.UP)
+                self.pump_gui_events(50)
+                self.assertIsNone(session.contextual_editing.editor)
+                self.assertAlmostEqual(original_width + offset, wall.Width.Value)
+
+                document.undo()
+                document.recompute()
+                self.pump_gui_events(30)
+                self.assertAlmostEqual(original_width, wall.Width.Value)
+
+            session.shutdown(close_dialog=False)
+            self.pump_gui_events(50)
+            session = self._enter_plan_edit(storey)
+            self.assertIn(wall, session.contextual_rendering.renderer.sources)
+            session.selection.state.set_selected_plan_target_state("wall", wall)
+            session.contextual_rendering.sync_visible_handles()
+            session.viewport.flush_scene_graph_mutations()
+            self.assertTrue(session.contextual_rendering.edit_handles_for(wall))
+        finally:
+            session.shutdown(close_dialog=False)
+            if created_snapper:
+                del FreeCADGui.Snapper
+            if created_toolbar:
+                del FreeCADGui.draftToolBar
 
     def test_path_ownership_example_exposes_owner_specific_handles(self):
         document = self._open_example("BIMPlanEditPathOwnership.FCStd")

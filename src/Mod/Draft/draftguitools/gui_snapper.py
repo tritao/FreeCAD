@@ -130,6 +130,7 @@ class Snapper:
         self.running = False
         self.callbackClick = None
         self.callbackMove = None
+        self._point_request_generation = 0
         self.snapObjectIndex = 0
         self.pointConstraintProvider = None
         self.semanticSnapProviders = []
@@ -1415,27 +1416,37 @@ class Snapper:
 
     def _clear_point_callbacks(self):
         """Remove the current point-picking callbacks, if any."""
-        had_callbacks = bool(self.callbackClick or self.callbackMove)
+        self._point_request_generation += 1
+        callback_click = self.callbackClick
+        callback_move = self.callbackMove
+        had_callbacks = bool(callback_click or callback_move)
         view = getattr(self, "view", None) or gui_utils.get_3d_view()
 
-        try:
-            if view and self.callbackClick:
-                view.removeEventCallbackPivy(
-                    coin.SoMouseButtonEvent.getClassTypeId(), self.callbackClick
-                )
-            if view and self.callbackMove:
-                view.removeEventCallbackPivy(
-                    coin.SoLocation2Event.getClassTypeId(), self.callbackMove
-                )
-            if had_callbacks:
-                # Next line fixes https://github.com/FreeCAD/FreeCAD/issues/10469:
-                gui_utils.end_all_events()
-        except RuntimeError:
-            # the view has been deleted already
-            pass
-
+        # Invalidate the Python closures immediately, but remove their Coin
+        # callbacks only after the current event traversal has returned. Coin
+        # callback lists must not be mutated by the callback being traversed.
         self.callbackClick = None
         self.callbackMove = None
+
+        def remove_callbacks():
+            try:
+                if view and callback_click:
+                    view.removeEventCallbackPivy(
+                        coin.SoMouseButtonEvent.getClassTypeId(), callback_click
+                    )
+                if view and callback_move:
+                    view.removeEventCallbackPivy(
+                        coin.SoLocation2Event.getClassTypeId(), callback_move
+                    )
+                if had_callbacks:
+                    # Next line fixes https://github.com/FreeCAD/FreeCAD/issues/10469:
+                    gui_utils.end_all_events()
+            except RuntimeError:
+                # the view has been deleted already
+                pass
+
+        if had_callbacks:
+            QtCore.QTimer.singleShot(0, remove_callbacks)
 
     def _teardown_point_request(self, hide_hints=False):
         """Finish the current point-picking request and restore the Draft UI."""
@@ -1633,8 +1644,11 @@ class Snapper:
 
         # remove any previous leftover callbacks
         self._clear_point_callbacks()
+        request_generation = self._point_request_generation
 
         def move(event_cb):
+            if request_generation != self._point_request_generation:
+                return
             if not self.ui.mouse:
                 return
             event = event_cb.getEvent()
@@ -1660,6 +1674,8 @@ class Snapper:
 
         def getcoords(point, global_mode=True, relative_mode=False):
             """Get the global coordinates from a point."""
+            if request_generation != self._point_request_generation:
+                return
             # Same algorithm as in validatePoint in DraftGui.py.
             ref = App.Vector(0, 0, 0)
             if global_mode is False:
@@ -1672,6 +1688,8 @@ class Snapper:
             accept()
 
         def click(event_cb):
+            if request_generation != self._point_request_generation:
+                return
             if not self.ui.mouse:
                 return
 
@@ -1686,6 +1704,8 @@ class Snapper:
                 accept()
 
         def accept():
+            if request_generation != self._point_request_generation:
+                return
             point = self.pt
             snap_info = dict(self.snapInfo) if isinstance(self.snapInfo, dict) else self.snapInfo
             self._teardown_point_request(hide_hints=bool(hints))
@@ -1700,6 +1720,8 @@ class Snapper:
             self.pt = None
 
         def cancel():
+            if request_generation != self._point_request_generation:
+                return
             self._teardown_point_request(hide_hints=bool(hints))
             if callback:
                 if len(inspect.getfullargspec(callback).args) > 1:
