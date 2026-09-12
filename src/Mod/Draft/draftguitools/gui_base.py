@@ -194,6 +194,14 @@ class DraftInteractionHost:
         toolbar = getattr(Gui, "draftToolBar", None)
         return bool(getattr(toolbar, "continueMode", False))
 
+    def continue_wall_chain_enabled(self):
+        """Return True when interactive wall creation should keep chaining segments."""
+        return False
+
+    def on_created_object(self, obj):
+        """Hook called after a command creates a new document object."""
+        del obj
+
     def reset_edit(self):
         if Gui.ActiveDocument:
             try:

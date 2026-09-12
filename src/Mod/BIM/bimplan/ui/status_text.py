@@ -1,0 +1,786 @@
+# SPDX-License-Identifier: LGPL-2.1-or-later
+
+"""Status text and input hint helpers for BIM Plan Edit."""
+
+import FreeCAD
+from bimplan.runtime import tools as plan_runtime_tools
+import FreeCADGui
+from bimplan.providers import runtime as plan_provider_runtime
+from bimplan.selection import target_kinds as plan_target_kinds
+
+translate = FreeCAD.Qt.translate
+
+
+class PlanStatusTextAPI:
+    """Owned session surface for Plan Edit status text and input hints."""
+
+    __slots__ = ("_session",)
+
+    def __init__(self, session):
+        self._session = session
+
+    @property
+    def session(self):
+        return self._session
+
+    def get_plan_selection_summary_text(self):
+        return get_plan_selection_summary_text(self.session)
+
+    def format_provider_target_role_label(self, obj):
+        return format_provider_target_role_label(self.session, obj)
+
+    def format_provider_target_help(self, obj):
+        return format_provider_target_help(self.session, obj)
+
+    def get_opening_display_kind_key(self, opening):
+        return get_opening_display_kind_key(self.session, opening)
+
+    def get_opening_display_kind(self, opening):
+        return get_opening_display_kind(self.session, opening)
+
+    def format_opening_selection_help(self, opening):
+        return format_opening_selection_help(self.session, opening)
+
+    def format_plan_target_selection_state(self, kind, obj):
+        return format_plan_target_selection_state(self.session, kind, obj)
+
+    def get_provider_selected_objects(self):
+        return get_provider_selected_objects(self.session)
+
+    def format_provider_selected_object_state(self):
+        return format_provider_selected_object_state(self.session)
+
+    def format_provider_selected_object_help(self):
+        return format_provider_selected_object_help(self.session)
+
+    def get_status_chip_text(self):
+        return get_status_chip_text(self.session)
+
+    def get_input_hint_specs(self):
+        return get_input_hint_specs(self.session)
+
+    def get_input_hints(self):
+        return get_input_hints(self.session)
+
+    def update_input_hints(self):
+        return update_input_hints(self.session)
+
+    def format_plan_target_count_label(self, kind, count):
+        del self
+        return format_plan_target_count_label(kind, count)
+
+    def summarize_plan_targets(self, targets):
+        del self
+        return summarize_plan_targets(targets)
+
+    def format_status_chip_action(self, message):
+        del self
+        return format_status_chip_action(message)
+
+    def get_plan_target_display_label(self, obj):
+        del self
+        return get_plan_target_display_label(obj)
+
+    def clear_input_hints(self):
+        del self
+        return clear_input_hints()
+
+    def make_input_hint(self, label, value, interactive=False):
+        del self
+        return make_input_hint(label, value, interactive=interactive)
+
+
+def get_plan_selection_summary_text(session):
+    if session.current_tool != plan_runtime_tools.PlanTool.SELECT:
+        return ""
+    targets = session.selection.state.get_selected_plan_targets()
+    preflight_text = session.spaces.format_space_preflight_text(
+        session.spaces.build_space_preflight_report(targets)
+    )
+    if len(targets) <= 1:
+        return preflight_text
+    region_seed_space, wall_targets = session.spaces.resolve_space_region_seed_targets(targets)
+    if region_seed_space is not None and wall_targets:
+        summary = translate("BIM_PlanEdit", "Boundary candidates: {summary}").format(
+            summary=summarize_plan_targets(wall_targets)
+        )
+    else:
+        summary = translate("BIM_PlanEdit", "Selection set: {summary}").format(
+            summary=summarize_plan_targets(targets)
+        )
+    if preflight_text:
+        return "{}\n{}".format(summary, preflight_text)
+    return summary
+
+
+def format_plan_target_count_label(kind, count):
+    labels = {
+        plan_target_kinds.PLAN_TARGET_WALL: (
+            translate("BIM_PlanEdit", "wall"),
+            translate("BIM_PlanEdit", "walls"),
+        ),
+        plan_target_kinds.PLAN_TARGET_OPENING: (
+            translate("BIM_PlanEdit", "opening"),
+            translate("BIM_PlanEdit", "openings"),
+        ),
+        plan_target_kinds.PLAN_TARGET_SYMBOL: (
+            translate("BIM_PlanEdit", "symbol"),
+            translate("BIM_PlanEdit", "symbols"),
+        ),
+        plan_target_kinds.PLAN_TARGET_REGION: (
+            translate("BIM_PlanEdit", "region"),
+            translate("BIM_PlanEdit", "regions"),
+        ),
+        plan_target_kinds.PLAN_TARGET_SPACE: (
+            translate("BIM_PlanEdit", "space"),
+            translate("BIM_PlanEdit", "spaces"),
+        ),
+    }
+    singular, plural = labels.get(
+        kind,
+        (translate("BIM_PlanEdit", "item"), translate("BIM_PlanEdit", "items")),
+    )
+    return "{} {}".format(count, singular if count == 1 else plural)
+
+
+def summarize_plan_targets(targets):
+    counts = {}
+    for target_kind, _target_obj in targets or []:
+        counts[target_kind] = counts.get(target_kind, 0) + 1
+    parts = [
+        format_plan_target_count_label(kind, counts[kind])
+        for kind in plan_target_kinds.SUMMARY_PLAN_TARGET_KINDS
+        if counts.get(kind)
+    ]
+    return ", ".join(parts)
+
+
+def format_status_chip_action(message):
+    if not message:
+        return ""
+    text = str(message)
+    if text.startswith("%1 "):
+        text = text[3:]
+    elif text.startswith("%1"):
+        text = text[2:]
+    text = text.strip()
+    if not text:
+        return ""
+    return text[0].upper() + text[1:]
+
+
+def get_plan_target_display_label(obj):
+    return getattr(obj, "Label", getattr(obj, "Name", ""))
+
+
+def format_provider_target_role_label(session, obj):
+    return plan_provider_runtime.get_plan_provider_target_role_label(session, obj)
+
+
+def format_provider_target_help(session, obj):
+    return plan_provider_runtime.format_plan_provider_target_help(session, obj)
+
+
+def get_opening_display_kind_key(session, opening):
+    if not opening:
+        return "Opening"
+    semantic_obj = session.visibility.get_plan_semantic_object(opening)
+    ifc_type = getattr(semantic_obj, "IfcType", "") if semantic_obj else ""
+    if ifc_type in {"Window", "Door"}:
+        return ifc_type
+    try:
+        import Draft
+
+        if Draft.getType(semantic_obj) == "Window":
+            return "Window"
+    except Exception:
+        pass
+    return "Opening"
+
+
+def get_opening_display_kind(session, opening):
+    return translate("BIM_PlanEdit", get_opening_display_kind_key(session, opening))
+
+
+def format_opening_selection_help(session, opening):
+    opening_kind = get_opening_display_kind_key(session, opening)
+    if opening_kind == "Door":
+        return translate(
+            "BIM_PlanEdit",
+            "Use in-view handles to move or flip the selected door.",
+        )
+    if opening_kind == "Window":
+        help_text = translate(
+            "BIM_PlanEdit",
+            "Use the in-view handle to move the selected window along its host wall.",
+        )
+        can_edit_width = session.windows.can_edit_window_width(opening)
+        can_edit_height = session.windows.can_edit_window_height(opening)
+        can_apply_style = session.windows.can_apply_window_style_preset(opening)
+        if (can_edit_width or can_edit_height) and can_apply_style:
+            help_text = "{} {}".format(
+                help_text,
+                translate(
+                    "BIM_PlanEdit",
+                    "Use the window controls below to change its width, height, or style.",
+                ),
+            )
+        elif can_edit_width and can_edit_height:
+            help_text = "{} {}".format(
+                help_text,
+                translate(
+                    "BIM_PlanEdit",
+                    "Use the window controls below to change its width or height.",
+                ),
+            )
+        elif can_edit_width:
+            help_text = "{} {}".format(
+                help_text,
+                translate(
+                    "BIM_PlanEdit",
+                    "Use the window controls below to change its width.",
+                ),
+            )
+        elif can_edit_height:
+            help_text = "{} {}".format(
+                help_text,
+                translate(
+                    "BIM_PlanEdit",
+                    "Use the window controls below to change its height.",
+                ),
+            )
+        elif can_apply_style:
+            help_text = "{} {}".format(
+                help_text,
+                translate(
+                    "BIM_PlanEdit",
+                    "Use the window controls below to change its style.",
+                ),
+            )
+        return help_text
+    return translate(
+        "BIM_PlanEdit",
+        "Use in-view handles to move or flip the selected opening.",
+    )
+
+
+def format_plan_target_selection_state(session, kind, obj):
+    if not kind or not obj:
+        return ""
+    if kind == "opening":
+        return translate("BIM_PlanEdit", "{kind}: {label}").format(
+            kind=get_opening_display_kind(session, obj),
+            label=get_plan_target_display_label(obj),
+        )
+    templates = {
+        "symbol": translate("BIM_PlanEdit", "Symbol: {label}"),
+        "region": translate("BIM_PlanEdit", "Region: {label}"),
+        "space": translate("BIM_PlanEdit", "Space: {label}"),
+        "wall": translate("BIM_PlanEdit", "Wall: {label}"),
+    }
+    if kind == "provider":
+        return translate("BIM_PlanEdit", "{kind}: {label}").format(
+            kind=format_provider_target_role_label(session, obj),
+            label=get_plan_target_display_label(obj),
+        )
+    template = templates.get(kind)
+    if not template:
+        return ""
+    return template.format(label=get_plan_target_display_label(obj))
+
+
+def get_provider_selected_objects(session):
+    return tuple(
+        session.selection.sync.normalize_gui_object_selection(
+            session.provider_transient_state.provider_selected_objects
+        )
+    )
+
+
+def format_provider_selected_object_state(session):
+    objects = get_provider_selected_objects(session)
+    if not objects:
+        return ""
+    if len(objects) == 1:
+        return translate("BIM_PlanEdit", "Object: {label}").format(
+            label=get_plan_target_display_label(objects[0])
+        )
+    return translate("BIM_PlanEdit", "{count} integration objects selected").format(
+        count=len(objects)
+    )
+
+
+def format_provider_selected_object_help(session):
+    if not get_provider_selected_objects(session):
+        return ""
+    return translate(
+        "BIM_PlanEdit",
+        "Use the integration details and actions below for the selected object.",
+    )
+
+
+def _format_status_chip_title(tool):
+    return translate("BIM_PlanEdit", "Plan Edit · {tool}").format(tool=tool)
+
+
+def _get_move_status_chip_text(title, context, label):
+    action = translate("BIM_PlanEdit", "Click target point")
+    return title, "{}\n{}".format(context or label, action)
+
+
+def _get_direct_tool_status_chip_text(
+    session, title, selected_kind, selected_obj, selected_context
+):
+    if session.current_tool == plan_runtime_tools.PlanTool.PROVIDER_POINT:
+        return (
+            _format_status_chip_title(session.providers.get_provider_point_tool_label()),
+            session.providers.get_provider_point_tool_prompt(),
+        )
+
+    if session.current_tool == plan_runtime_tools.PlanTool.MOVE_OPENING:
+        context = (
+            selected_context
+            if selected_kind == "opening" and selected_obj is not None
+            else (translate("BIM_PlanEdit", "Opening move"))
+        )
+        return _get_move_status_chip_text(title, context, translate("BIM_PlanEdit", "Opening move"))
+
+    if session.current_tool == plan_runtime_tools.PlanTool.MOVE_SYMBOL:
+        context = (
+            selected_context
+            if selected_kind == "symbol" and selected_obj is not None
+            else (translate("BIM_PlanEdit", "Symbol move"))
+        )
+        return _get_move_status_chip_text(title, context, translate("BIM_PlanEdit", "Symbol move"))
+
+    if session.current_tool == plan_runtime_tools.PlanTool.MOVE_PROVIDER:
+        context = (
+            selected_context
+            if selected_kind == "provider" and selected_obj is not None
+            else translate("BIM_PlanEdit", "Integration move")
+        )
+        return _get_move_status_chip_text(
+            title,
+            context,
+            translate("BIM_PlanEdit", "Integration move"),
+        )
+
+    if session.current_tool == plan_runtime_tools.PlanTool.ROTATE_SYMBOL:
+        context = (
+            selected_context
+            if selected_kind == "symbol" and selected_obj is not None
+            else translate("BIM_PlanEdit", "Symbol rotation")
+        )
+        if session.symbols.symbol_rotation_snap_enabled():
+            action = translate(
+                "BIM_PlanEdit", "Click target angle ({snap} snap, Shift = free)"
+            ).format(snap=session.symbols.format_symbol_rotation_snap_label())
+        else:
+            action = translate("BIM_PlanEdit", "Click target angle")
+        return title, "{}\n{}".format(context, action)
+
+    if session.current_tool == plan_runtime_tools.PlanTool.MOVE_WALL:
+        context = (
+            selected_context
+            if selected_kind == "wall" and selected_obj is not None
+            else translate("BIM_PlanEdit", "Wall move")
+        )
+        return _get_move_status_chip_text(title, context, translate("BIM_PlanEdit", "Wall move"))
+
+    if session.current_tool == plan_runtime_tools.PlanTool.JOIN:
+        target_wall, joint, detail = session.wall_relations.get_plan_join_candidate_state()
+        context = (
+            translate("BIM_PlanEdit", "Source wall: {label}").format(
+                label=get_plan_target_display_label(selected_obj)
+            )
+            if selected_kind == "wall" and selected_obj is not None
+            else translate("BIM_PlanEdit", "Wall join")
+        )
+        action = session.wall_relations.get_plan_join_mode_action_text(target_wall, joint)
+        if detail:
+            return title, "{}\n{}\n{}".format(context, detail, action)
+        return title, "{}\n{}".format(context, action)
+
+    if session.current_tool.startswith("Stretch "):
+        context = (
+            selected_context
+            if selected_kind == "wall" and selected_obj is not None
+            else translate("BIM_PlanEdit", "Wall stretch")
+        )
+        action = translate("BIM_PlanEdit", "Click endpoint or press Enter to type a value")
+        return title, "{}\n{}".format(context, action)
+
+    if session.current_tool == plan_runtime_tools.PlanTool.REGION:
+        parent_space = session.spaces.get_plan_region_parent_space()
+        context = (
+            translate("BIM_PlanEdit", "Parent space: {label}").format(label=parent_space.Label)
+            if session.selection.targets.is_plan_space_object(parent_space)
+            else translate("BIM_PlanEdit", "Plan region")
+        )
+        action = translate(
+            "BIM_PlanEdit",
+            "Click polygon points, press Enter to finish, or click near the first point to close",
+        )
+        return title, "{}\n{}".format(context, action)
+
+    return None
+
+
+def _get_default_status_chip_context(session, selected_context, provider_context):
+    if selected_context:
+        context = selected_context
+    elif provider_context:
+        context = provider_context
+    else:
+        context = translate("BIM_PlanEdit", "Storey: {label}").format(
+            label=session.storey.get_storey_label(session.active_storey)
+        )
+    selection_summary = get_plan_selection_summary_text(session)
+    if selection_summary:
+        context = "{}\n{}".format(context, selection_summary)
+    return context
+
+
+def _get_default_status_chip_action(
+    session,
+    selected_kind,
+    selected_obj,
+    provider_context,
+    provider_action,
+):
+    hints = get_input_hint_specs(session)
+    action = format_status_chip_action(hints[0][0]) if hints else ""
+    if selected_kind == "region" and session.current_tool == plan_runtime_tools.PlanTool.SELECT:
+        action = translate(
+            "BIM_PlanEdit",
+            "Edit label, scheme, type, and parent space in the task panel",
+        )
+    if (
+        selected_kind == "provider" or provider_context
+    ) and session.current_tool == plan_runtime_tools.PlanTool.SELECT:
+        if selected_kind == "provider":
+            action = format_provider_target_help(session, selected_obj)
+        else:
+            action = provider_action
+    relation_status_message = session.task_panel_state.relation_status_message
+    if relation_status_message:
+        action = relation_status_message
+    if not action:
+        action = translate("BIM_PlanEdit", "Work directly in the viewport")
+    return action
+
+
+def get_status_chip_text(session):
+    title = _format_status_chip_title(session.current_tool)
+    selected_kind, selected_obj = session.selection.state.get_selected_plan_target()
+    selected_context = format_plan_target_selection_state(session, selected_kind, selected_obj)
+    provider_context = format_provider_selected_object_state(session)
+    provider_action = format_provider_selected_object_help(session)
+    direct_text = _get_direct_tool_status_chip_text(
+        session,
+        title,
+        selected_kind,
+        selected_obj,
+        selected_context,
+    )
+    if direct_text is not None:
+        return direct_text
+    context = _get_default_status_chip_context(session, selected_context, provider_context)
+    action = _get_default_status_chip_action(
+        session,
+        selected_kind,
+        selected_obj,
+        provider_context,
+        provider_action,
+    )
+    return title, "{}\n{}".format(context, action)
+
+
+def clear_input_hints():
+    hide_hints = _get_hint_manager_method("hide")
+    if hide_hints is None:
+        return
+    try:
+        hide_hints()
+    except Exception:
+        pass
+
+
+def _get_hint_manager_method(method_name):
+    hint_manager = getattr(FreeCADGui, "HintManager", None)
+    if not hint_manager:
+        return None
+    method = getattr(hint_manager, method_name, None)
+    return method if callable(method) else None
+
+
+def _get_input_hint_type():
+    hint_type = getattr(FreeCADGui, "InputHint", None)
+    return hint_type if callable(hint_type) else None
+
+
+def make_input_hint(message, *sequences):
+    input_hint = _get_input_hint_type()
+    if input_hint is None:
+        return None
+    if message is None:
+        return None
+    raw_message = str(message)
+    if not raw_message.strip():
+        return None
+    try:
+        return input_hint(raw_message, *sequences)
+    except Exception:
+        return None
+
+
+def _get_select_input_hint_specs(session, ui):
+    selected_kind, selected_obj = session.selection.state.get_selected_plan_target()
+    additive_hint = (
+        translate("BIM_PlanEdit", "%1 add or remove from selection"),
+        (ui.KeyControl, ui.MouseLeft),
+    )
+    if selected_kind == "opening":
+        primary_hint = translate("BIM_PlanEdit", "%1 pick opening handle")
+    elif selected_kind == "symbol":
+        primary_hint = translate("BIM_PlanEdit", "%1 pick symbol handle")
+    elif selected_kind == "wall":
+        primary_hint = translate("BIM_PlanEdit", "%1 pick wall grip")
+    elif selected_kind == "region":
+        primary_hint = translate("BIM_PlanEdit", "%1 select another target")
+    elif selected_kind == "space":
+        primary_hint = translate("BIM_PlanEdit", "%1 select space boundary target")
+    elif selected_kind == "provider":
+        provider_handles = tuple(
+            session.providers.get_selected_provider_edit_handles(selected_obj) or ()
+        )
+        primary_hint = translate(
+            "BIM_PlanEdit",
+            (
+                "%1 pick integration handle"
+                if provider_handles
+                else "%1 select another integration target"
+            ),
+        )
+    else:
+        primary_hint = translate(
+            "BIM_PlanEdit",
+            "%1 select wall, opening, symbol, integration target, region, or space",
+        )
+    return ((primary_hint, ui.MouseLeft), additive_hint)
+
+
+def _get_join_input_hint_specs(session, ui):
+    hints = [
+        (
+            translate("BIM_PlanEdit", "%1 pick wall to join"),
+            ui.MouseLeft,
+        ),
+        (
+            translate("BIM_PlanEdit", "%1 cycle join type ({joint_type})").format(
+                joint_type=session.wall_relations.get_plan_join_type_label()
+            ),
+            ui.KeyTab,
+        ),
+    ]
+    if session.wall_relations.get_plan_candidate_joint() is not None:
+        hints.append(
+            (
+                translate("BIM_PlanEdit", "%1 unjoin pair"),
+                ui.KeyDelete,
+            )
+        )
+    hints.append(
+        (
+            translate("BIM_PlanEdit", "%1 cancel"),
+            ui.KeyEscape,
+        )
+    )
+    return tuple(hints)
+
+
+def _get_stretch_input_hint_specs(ui):
+    return (
+        (
+            translate("BIM_PlanEdit", "%1 place endpoint"),
+            ui.MouseLeft,
+        ),
+        (
+            translate("BIM_PlanEdit", "%1 edit length"),
+            ui.KeyReturn,
+        ),
+        (
+            translate("BIM_PlanEdit", "%1 cancel"),
+            ui.KeyEscape,
+        ),
+    )
+
+
+def _get_provider_point_input_hint_specs(session, ui):
+    return (
+        (
+            translate("BIM_PlanEdit", "%1 place point for {tool}").format(
+                tool=session.providers.get_provider_point_tool_label()
+            ),
+            ui.MouseLeft,
+        ),
+        (
+            translate("BIM_PlanEdit", "%1 cancel"),
+            ui.KeyEscape,
+        ),
+    )
+
+
+def _get_move_provider_input_hint_specs(ui):
+    return (
+        (
+            translate("BIM_PlanEdit", "%1 place target"),
+            ui.MouseLeft,
+        ),
+        (
+            translate("BIM_PlanEdit", "%1 cancel"),
+            ui.KeyEscape,
+        ),
+    )
+
+
+def _get_default_tool_input_hint_specs(ui):
+    return {
+        "Window": (
+            (
+                translate("BIM_PlanEdit", "%1 place window"),
+                ui.MouseLeft,
+            ),
+            (
+                translate("BIM_PlanEdit", "%1 cancel"),
+                ui.KeyEscape,
+            ),
+        ),
+        "Move Opening": (
+            (
+                translate("BIM_PlanEdit", "%1 place opening"),
+                ui.MouseLeft,
+            ),
+            (
+                translate("BIM_PlanEdit", "%1 cycle move anchor"),
+                ui.KeyA,
+            ),
+            (
+                translate("BIM_PlanEdit", "%1 cancel"),
+                ui.KeyEscape,
+            ),
+        ),
+        "Move Symbol": (
+            (
+                translate("BIM_PlanEdit", "%1 place symbol"),
+                ui.MouseLeft,
+            ),
+            (
+                translate("BIM_PlanEdit", "%1 cancel"),
+                ui.KeyEscape,
+            ),
+        ),
+        "Rotate Symbol": (
+            (
+                translate("BIM_PlanEdit", "%1 place rotation"),
+                ui.MouseLeft,
+            ),
+            (
+                translate("BIM_PlanEdit", "%1 cancel"),
+                ui.KeyEscape,
+            ),
+        ),
+        "Move Wall": (
+            (
+                translate("BIM_PlanEdit", "%1 place wall"),
+                ui.MouseLeft,
+            ),
+            (
+                translate("BIM_PlanEdit", "%1 edit current offset"),
+                ui.KeyReturn,
+            ),
+            (
+                translate("BIM_PlanEdit", "%1 cycle X/Y offset"),
+                ui.KeyTab,
+            ),
+            (
+                translate("BIM_PlanEdit", "%1 cancel"),
+                ui.KeyEscape,
+            ),
+        ),
+        "Set Space Text": (
+            (
+                translate("BIM_PlanEdit", "%1 place text"),
+                ui.MouseLeft,
+            ),
+            (
+                translate("BIM_PlanEdit", "%1 cancel"),
+                ui.KeyEscape,
+            ),
+        ),
+        "Region": (
+            (
+                translate("BIM_PlanEdit", "%1 place region point"),
+                ui.MouseLeft,
+            ),
+            (
+                translate("BIM_PlanEdit", "%1 finish region"),
+                ui.KeyReturn,
+            ),
+            (
+                translate("BIM_PlanEdit", "%1 cancel"),
+                ui.KeyEscape,
+            ),
+        ),
+        "Separator": (
+            (
+                translate("BIM_PlanEdit", "%1 place separator"),
+                ui.MouseLeft,
+            ),
+            (
+                translate("BIM_PlanEdit", "%1 cancel"),
+                ui.KeyEscape,
+            ),
+        ),
+    }
+
+
+def get_input_hint_specs(session):
+    ui = FreeCADGui.UserInput
+    if session.current_tool == plan_runtime_tools.PlanTool.SELECT:
+        return _get_select_input_hint_specs(session, ui)
+
+    if session.current_tool == plan_runtime_tools.PlanTool.JOIN:
+        return _get_join_input_hint_specs(session, ui)
+
+    if session.current_tool.startswith("Stretch "):
+        return _get_stretch_input_hint_specs(ui)
+
+    if session.current_tool == plan_runtime_tools.PlanTool.PROVIDER_POINT:
+        return _get_provider_point_input_hint_specs(session, ui)
+
+    if session.current_tool == plan_runtime_tools.PlanTool.MOVE_PROVIDER:
+        return _get_move_provider_input_hint_specs(ui)
+
+    return _get_default_tool_input_hint_specs(ui).get(session.current_tool, ())
+
+
+def get_input_hints(session):
+    return [
+        make_input_hint(message, *sequences)
+        for message, *sequences in get_input_hint_specs(session)
+    ]
+
+
+def update_input_hints(session):
+    show_hints = _get_hint_manager_method("show")
+    if show_hints is None:
+        return
+    hints = [hint for hint in get_input_hints(session) if hint is not None]
+    if not hints:
+        clear_input_hints()
+        return
+    try:
+        show_hints(*hints)
+    except Exception:
+        pass

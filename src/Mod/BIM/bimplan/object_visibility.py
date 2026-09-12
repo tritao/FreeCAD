@@ -1,0 +1,937 @@
+# SPDX-License-Identifier: LGPL-2.1-or-later
+
+"""Object classification and visibility helpers for BIM Plan Edit."""
+
+from __future__ import annotations
+
+import FreeCAD
+
+from bimplan.runtime import capabilities as runtime_capabilities
+
+
+def _perf_count(session, name, delta=1):
+    return session.performance.plan_perf_count(name, delta=delta)
+
+
+def _perf_trace_span(session, name, **fields):
+    return session.performance.plan_perf_trace_span(name, **fields)
+
+
+def _perf_describe_object(session, obj):
+    return session.performance.plan_perf_describe_object(obj)
+
+
+def _viewport_state(session):
+    return session.viewport_state
+
+
+def _get_callable(obj, method_name):
+    return runtime_capabilities.get_callable(obj, method_name)
+
+
+def _has_view_object_property(view_object, property_name):
+    return view_object is not None and hasattr(view_object, property_name)
+
+
+def _get_view_object_owner_name(view_object):
+    owner = runtime_capabilities.get_attr(view_object, "Object", None)
+    if owner is None:
+        return None
+    try:
+        return getattr(owner, "Name", None)
+    except Exception:
+        return None
+
+
+def _track_view_object_property_change(session, view_object, property_name, value):
+    if session is None:
+        return
+    saved_state = _viewport_state(session).saved_object_view_state
+    if not saved_state:
+        return
+    obj_name = _get_view_object_owner_name(view_object)
+    if not obj_name:
+        return
+    original_state = saved_state.get(obj_name)
+    if not original_state or property_name not in original_state:
+        return
+    changed_state = _viewport_state(session).changed_object_view_state
+    if value == original_state[property_name]:
+        changed_props = changed_state.get(obj_name)
+        if not changed_props:
+            return
+        changed_props.discard(property_name)
+        if not changed_props:
+            changed_state.pop(obj_name, None)
+        return
+    changed_state.setdefault(obj_name, set()).add(property_name)
+
+
+def _get_view_object_owner(view_object):
+    return runtime_capabilities.get_attr(view_object, "Object", None)
+
+
+def _can_set_group_visibility_without_propagation(view_object, property_name):
+    if property_name != "Visibility":
+        return False
+    owner = _get_view_object_owner(view_object)
+    return owner is not None and (_is_document_object_group(owner) or _has_group_extension(owner))
+
+
+def _set_group_visibility_without_propagation(view_object, value):
+    setter = _get_callable(view_object, "setTemporaryVisibility")
+    if setter is None:
+        return False
+    try:
+        setter(bool(value))
+        return True
+    except Exception:
+        return False
+
+
+def _set_view_object_property(session, view_object, property_name, value):
+    if not _has_view_object_property(view_object, property_name):
+        return False
+    if property_name == "Visibility":
+        layer = getattr(_viewport_state(session), "view_context_layer", None)
+        owner = _get_view_object_owner(view_object)
+        setter = _get_callable(getattr(session, "view", None), "setViewVisibility")
+        if layer is not None and owner is not None and setter is not None:
+            try:
+                return bool(setter(layer, owner, "Visible" if value else "Hidden"))
+            except (ReferenceError, RuntimeError):
+                session.view = None
+                return False
+    current_value = _get_view_object_property(view_object, property_name)
+    if current_value == value:
+        return False
+    if _can_set_group_visibility_without_propagation(view_object, property_name):
+        applied = _set_group_visibility_without_propagation(view_object, value)
+    else:
+        applied = runtime_capabilities.set_attr_if_present(view_object, property_name, value)
+    if applied:
+        _track_view_object_property_change(session, view_object, property_name, value)
+    return applied
+
+
+def _get_view_object_property(view_object, property_name):
+    if not _has_view_object_property(view_object, property_name):
+        return None
+    return runtime_capabilities.get_attr(view_object, property_name, None)
+
+
+def _capture_view_object_state(view_object, property_names):
+    state = {}
+    for property_name in property_names:
+        value = _get_view_object_property(view_object, property_name)
+        if value is not None:
+            state[property_name] = value
+    return state
+
+
+def _restore_view_object_properties(session, view_object, state):
+    applied = False
+    for property_name, value in dict(state or {}).items():
+        applied = _set_view_object_property(session, view_object, property_name, value) or applied
+    return applied
+
+
+def _get_global_placement_if_available(obj):
+    get_global_placement = _get_callable(obj, "getGlobalPlacement")
+    if get_global_placement is None:
+        return None
+    try:
+        return get_global_placement()
+    except Exception:
+        return None
+
+
+def _is_document_object_group(obj):
+    is_derived_from = _get_callable(obj, "isDerivedFrom")
+    return bool(is_derived_from and is_derived_from("App::DocumentObjectGroup"))
+
+
+def _has_group_extension(obj):
+    has_extension = _get_callable(obj, "hasExtension")
+    return bool(has_extension and has_extension("App::GroupExtension"))
+
+
+def _get_linked_object(current):
+    linked = getattr(current, "LinkedObject", None)
+    if linked is not None:
+        return linked
+    get_linked_object = _get_callable(current, "getLinkedObject")
+    if get_linked_object is None:
+        return None
+    try:
+        return get_linked_object(True)
+    except TypeError:
+        try:
+            return get_linked_object()
+        except Exception:
+            return None
+    except Exception:
+        return None
+
+
+def _add_object_to_storey(storey, obj):
+    add_object = _get_callable(storey, "addObject")
+    if add_object is None:
+        return False
+    try:
+        add_object(obj)
+        return True
+    except Exception:
+        return False
+
+
+def is_live_document_object(_session, obj):
+    if obj is None:
+        return False
+    try:
+        _ = obj.Name
+        return True
+    except (AttributeError, ReferenceError, RuntimeError):
+        return False
+
+
+def get_document_object_key(_session, obj):
+    if obj is None:
+        return None
+    try:
+        return (
+            getattr(getattr(obj, "Document", None), "Name", None),
+            getattr(obj, "Name", None),
+        )
+    except Exception:
+        return None
+
+
+def safe_plan_object_name(_session, obj):
+    if obj is None:
+        return ""
+    try:
+        return str(getattr(obj, "Name", "") or "")
+    except Exception:
+        return ""
+
+
+def copy_placement(_session, placement):
+    if placement is None:
+        return FreeCAD.Placement()
+    try:
+        return placement.copy()
+    except Exception:
+        return FreeCAD.Placement(placement)
+
+
+def get_plan_object_global_placement(session, obj):
+    if not obj:
+        return FreeCAD.Placement()
+    placement = _get_global_placement_if_available(obj)
+    if placement is not None:
+        return placement
+    return getattr(obj, "Placement", FreeCAD.Placement())
+
+
+def invalidate_plan_classification_cache(session):
+    cache_state = session.overlay_cache_state
+    cache_state.plan_semantic_object_cache.clear()
+    cache_state.plan_object_storeys_cache.clear()
+    cache_state.plan_symbol_instances_cache = None
+    cache_state.plan_space_instances_cache = None
+    cache_state.plan_region_instances_cache = None
+    cache_state.symbol_overlay_screen_cache.clear()
+
+
+def is_storey_object(_session, obj):
+    if not obj:
+        return False
+    if getattr(obj, "IfcType", "") == "Building Storey":
+        return True
+    try:
+        import Draft
+
+        return Draft.getType(obj) == "Floor"
+    except Exception:
+        return False
+
+
+def is_plan_container_object(_session, obj):
+    if not obj:
+        return False
+    if getattr(obj, "IfcType", "") in {"Site", "Building", "Building Storey"}:
+        return True
+    if _is_document_object_group(obj):
+        return True
+    if _has_group_extension(obj):
+        return True
+    try:
+        import Draft
+
+        return Draft.getType(obj) in {
+            "Site",
+            "Building",
+            "Floor",
+            "BuildingPart",
+            "Group",
+        }
+    except Exception:
+        return False
+
+
+def is_plan_background_object(session, obj):
+    if not obj:
+        return False
+    obj = get_plan_semantic_object(session, obj)
+    if getattr(obj, "IfcType", "") == "Slab":
+        return True
+    try:
+        import Draft
+
+        return Draft.getType(obj) == "Structure" and getattr(obj, "IfcType", "") == "Slab"
+    except Exception:
+        return False
+
+
+def is_direct_plan_equipment_object(_session, obj):
+    if not obj:
+        return False
+    try:
+        import Draft
+
+        if Draft.getType(obj) == "Equipment":
+            return True
+    except Exception:
+        pass
+    proxy = getattr(obj, "Proxy", None)
+    return getattr(proxy, "Type", None) == "Equipment"
+
+
+def get_direct_plan_symbol_owner(session, obj):
+    if not obj:
+        return None
+    for parent in getattr(obj, "InListRecursive", []) or getattr(obj, "InList", []):
+        if not is_direct_plan_equipment_object(session, parent):
+            continue
+        if obj == getattr(parent, "Base", None):
+            return parent
+        if obj in (getattr(parent, "PlanSymbols", None) or []):
+            return parent
+    return None
+
+
+def get_plan_semantic_object(session, obj):
+    key = get_document_object_key(session, obj)
+    semantic_cache = session.overlay_cache_state.plan_semantic_object_cache
+    if key is not None and key in semantic_cache:
+        session.performance.plan_perf_count("semantic_object_cache_hits")
+        return semantic_cache[key]
+
+    current = obj
+    seen = set()
+    while current:
+        if not is_live_document_object(session, current):
+            current = None
+            break
+        name = getattr(current, "Name", None)
+        if name in seen:
+            break
+        if name:
+            seen.add(name)
+        if getattr(current, "TypeId", "") != "App::Link":
+            break
+        linked = _get_linked_object(current)
+        if not linked or linked == current:
+            break
+        current = linked
+    owner = get_direct_plan_symbol_owner(session, current)
+    result = owner or current or obj
+    if key is not None:
+        semantic_cache[key] = result
+    return result
+
+
+def get_plan_text_property(_session, obj, property_names, default=""):
+    from bimplan.selection import targets as plan_targets
+
+    return plan_targets.get_plan_text_property(obj, property_names, default=default)
+
+
+def get_plan_float_property(_session, obj, property_names):
+    from bimplan.selection import targets as plan_targets
+
+    return plan_targets.get_plan_float_property(obj, property_names)
+
+
+def is_plan_equipment_object(session, obj):
+    if not obj:
+        return False
+    return is_direct_plan_equipment_object(session, get_plan_semantic_object(session, obj))
+
+
+def is_cabinetry_plan_context_object(obj):
+    if not obj:
+        return False
+    proxy_type = str(getattr(getattr(obj, "Proxy", None), "Type", "") or "")
+    return proxy_type in {
+        "CabinetryApplianceTower",
+        "CabinetryBaseCabinet",
+        "CabinetryBlindCornerBaseCabinet",
+        "CabinetryFridgeSurround",
+        "CabinetryProject",
+        "CabinetryRunAccessories",
+        "CabinetryRunApplianceRepresentation",
+        "CabinetryRunGuide",
+        "CabinetryRunProfileRepresentation",
+        "CabinetryRunReservation",
+        "CabinetryRunReservationRepresentation",
+        "CabinetryTallCabinet",
+        "CabinetryVanityBase",
+        "CabinetryWallCabinet",
+        "CabinetZone",
+        "CabinetRun",
+        "CabinetRunJunction",
+    }
+
+
+def has_direct_plan_symbols(obj):
+    if not obj:
+        return False
+    try:
+        if "PlanSymbols" not in (getattr(obj, "PropertiesList", []) or []):
+            return False
+        return any(symbol is not None for symbol in (getattr(obj, "PlanSymbols", []) or []))
+    except Exception:
+        return False
+
+
+def is_plan_symbol_instance(session, obj):
+    if not obj:
+        return False
+    if session.document_visuals.is_hidden_library_definition_object(obj):
+        return False
+    if not is_plan_equipment_object(session, obj):
+        return False
+    if getattr(obj, "TypeId", "") == "App::Link":
+        return True
+    semantic_obj = get_plan_semantic_object(session, obj)
+    return obj == semantic_obj and has_direct_plan_symbols(semantic_obj)
+
+
+def is_plan_context_only_object(session, obj):
+    if not obj:
+        return False
+    if is_plan_symbol_instance(session, obj):
+        return False
+    return (
+        is_plan_container_object(session, obj)
+        or is_plan_background_object(session, obj)
+        or is_plan_equipment_object(session, obj)
+        or is_cabinetry_plan_context_object(obj)
+    )
+
+
+def is_component_addition_object(obj):
+    if not obj:
+        return False
+    for parent in getattr(obj, "InList", []) or []:
+        try:
+            if obj in getattr(parent, "Additions", []):
+                return True
+        except Exception:
+            pass
+    return False
+
+
+def is_supported_plan_object(session, obj):
+    if not obj:
+        return False
+    if is_plan_symbol_instance(session, obj):
+        return True
+    if session.selection.targets.is_plan_region_object(obj):
+        return True
+    if session.selection.targets.is_plan_space_separator_object(obj):
+        return True
+    if is_plan_context_only_object(session, obj):
+        return True
+    semantic_obj = get_plan_semantic_object(session, obj)
+    try:
+        import Draft
+
+        obj_type = Draft.getType(semantic_obj)
+    except Exception:
+        obj_type = ""
+
+    if obj_type in {"Wall", "Window", "Space", "Axis", "AxisSystem"}:
+        return True
+
+    if getattr(semantic_obj, "IfcType", "") in {
+        "Wall",
+        "Window",
+        "Door",
+        "Space",
+        "Column",
+        "Grid",
+        "Stair",
+        "Curtain Wall",
+    }:
+        return True
+
+    return False
+
+
+def _iter_storey_scope_hosts(obj):
+    try:
+        hosts = tuple(getattr(obj, "Hosts", None) or ())
+    except Exception:
+        hosts = ()
+    for host in hosts:
+        if host:
+            yield host
+    try:
+        host = getattr(obj, "Host", None)
+    except Exception:
+        host = None
+    if host:
+        yield host
+
+
+def get_object_storeys(session, obj, _visited=None):
+    if not obj:
+        return []
+    key = get_document_object_key(session, obj)
+    visit_key = key if key is not None else id(obj)
+    if _visited is None:
+        _visited = set()
+    if visit_key in _visited:
+        return []
+    _visited.add(visit_key)
+    cache = session.overlay_cache_state.plan_object_storeys_cache
+    if key is not None and key in cache:
+        _perf_count(session, "object_storeys_cache_hits")
+        return list(cache[key])
+
+    storeys = []
+    seen = set()
+    parents = list(getattr(obj, "InListRecursive", []) or getattr(obj, "InList", []))
+    if is_storey_object(session, obj):
+        parents.insert(0, obj)
+    for parent in parents:
+        if not parent or parent.Name in seen:
+            continue
+        seen.add(parent.Name)
+        if is_storey_object(session, parent):
+            storeys.append(parent)
+    for host in _iter_storey_scope_hosts(obj):
+        if host is obj:
+            continue
+        for storey in get_object_storeys(session, host, _visited):
+            if storey and storey.Name not in seen:
+                seen.add(storey.Name)
+                storeys.append(storey)
+    if key is not None:
+        cache[key] = tuple(storeys)
+    return storeys
+
+
+def capture_object_view_state(session):
+    viewport_state = _viewport_state(session)
+    viewport_state.saved_object_view_state = {}
+    viewport_state.changed_object_view_state = {}
+    if not session.doc:
+        return
+    with _perf_trace_span(session, "capture_object_view_state_objects"):
+        for obj in session.doc.Objects:
+            _perf_count(session, "capture_view_state_objects_scanned")
+            register_object_view_state(session, obj)
+
+
+def begin_view_context(session):
+    viewport_state = _viewport_state(session)
+    if viewport_state.view_context_layer is not None:
+        return
+    push_layer = _get_callable(getattr(session, "view", None), "pushViewContextLayer")
+    if push_layer is None:
+        return
+    try:
+        viewport_state.view_context_layer = push_layer()
+    except (ReferenceError, RuntimeError):
+        session.view = None
+
+
+def end_view_context(session):
+    viewport_state = _viewport_state(session)
+    layer = viewport_state.view_context_layer
+    viewport_state.view_context_layer = None
+    if layer is None:
+        return
+    remove_layer = _get_callable(getattr(session, "view", None), "removeViewContextLayer")
+    if remove_layer is None:
+        return
+    try:
+        remove_layer(layer)
+    except (ReferenceError, RuntimeError):
+        session.view = None
+
+
+def register_object_view_state(session, obj):
+    viewport_state = _viewport_state(session)
+    if not obj:
+        return
+    view_object = getattr(obj, "ViewObject", None)
+    if not view_object:
+        return
+    state = _capture_view_object_state(view_object, ("Visibility", "Transparency", "Selectable"))
+    if state:
+        viewport_state.saved_object_view_state[obj.Name] = state
+
+
+def add_object_to_active_storey(session, obj):
+    storey = session.active_storey
+    if not storey or not obj:
+        return False
+    if obj is storey or obj in getattr(storey, "InListRecursive", []):
+        return True
+    if _add_object_to_storey(storey, obj):
+        return True
+    group = getattr(storey, "Group", None)
+    if group is None:
+        return False
+    try:
+        if obj not in group:
+            storey.Group = list(group) + [obj]
+        return True
+    except Exception:
+        return False
+
+
+def register_plan_object(session, obj):
+    register_plan_objects(session, (obj,))
+
+
+def register_plan_objects(session, objects):
+    registered = []
+    seen_names = set()
+    for obj in tuple(objects or ()):
+        if not obj:
+            continue
+        name = getattr(obj, "Name", None)
+        if name and name in seen_names:
+            continue
+        if name:
+            seen_names.add(name)
+        add_object_to_active_storey(session, obj)
+        register_object_view_state(session, obj)
+        registered.append(obj)
+    if not registered:
+        return
+    apply_storey_visibility(session)
+    for obj in registered:
+        session.document_visuals.refresh_plan_object_footprint_display(obj, request_redraw=False)
+    session.viewport.request_view_redraw()
+
+
+def restore_object_view_state(session):
+    viewport_state = _viewport_state(session)
+    if not session.doc or not viewport_state.saved_object_view_state:
+        return
+    changed_state = {
+        obj_name: tuple(changed_props)
+        for obj_name, changed_props in dict(viewport_state.changed_object_view_state).items()
+        if changed_props
+    }
+    if not changed_state:
+        return
+    viewport_state.changed_object_view_state = {}
+    try:
+        doc = session.doc
+        _ = doc.Name
+    except Exception:
+        session.doc = None
+        return
+    for obj_name, changed_props in changed_state.items():
+        try:
+            obj = doc.getObject(obj_name)
+        except Exception:
+            session.doc = None
+            return
+        if not obj:
+            continue
+        view_object = getattr(obj, "ViewObject", None)
+        if not view_object:
+            continue
+        state = viewport_state.saved_object_view_state.get(obj_name, {})
+        _restore_view_object_properties(
+            session,
+            view_object,
+            {prop: state[prop] for prop in changed_props if prop in state},
+        )
+
+
+def object_belongs_to_active_storey(session, obj):
+    active_storey_name = getattr(session.active_storey, "Name", None)
+    if active_storey_name is None:
+        return False
+    return any(
+        parent.Name == active_storey_name
+        for parent in get_object_storeys(session, obj)
+    )
+
+
+def get_supported_plan_visibility(session, obj, state):
+    if is_component_addition_object(obj):
+        return False
+    visibility = state.get("Visibility", True)
+    # Hosted openings are commonly hidden in the regular 3D workflow while
+    # their wall cuts carry the main visual meaning. In Plan Edit we want
+    # their committed footprint symbols to be visible whenever they are a
+    # supported plan object.
+    if session.openings.is_hosted_opening_object(obj):
+        return True
+    return visibility
+
+
+def apply_context_object_selectability(session, obj, view_object):
+    if not _has_view_object_property(view_object, "Selectable"):
+        return
+    semantic_obj = get_plan_semantic_object(session, obj)
+    if semantic_obj is not None and session.overlays.symbols.is_symbol_visual_dependency(
+        semantic_obj,
+        obj,
+    ):
+        _set_view_object_property(session, view_object, "Selectable", True)
+        return
+    # Openings, spaces, and plan regions are selected through Plan Edit's
+    # semantic picking paths. Leaving their native 3D view objects
+    # selectable lets the viewer replace the intended target with
+    # overlapping native hits on button release.
+    if session.selection.targets.is_plan_custom_pick_only_object(semantic_obj or obj):
+        _set_view_object_property(session, view_object, "Selectable", False)
+        return
+    if not is_plan_context_only_object(session, obj):
+        return
+    _set_view_object_property(session, view_object, "Selectable", False)
+
+
+def apply_hidden_object_state(session, view_object):
+    if not view_object:
+        return
+    _set_view_object_property(session, view_object, "Visibility", False)
+    _set_view_object_property(session, view_object, "Selectable", False)
+
+
+def _restore_view_object_state(session, view_object, state):
+    for prop, value in state.items():
+        _set_view_object_property(session, view_object, prop, value)
+
+
+def _apply_supported_object_view_state(session, obj, view_object, state):
+    _perf_count(session, "storey_visibility_supported")
+    _restore_view_object_state(session, view_object, state)
+    _set_view_object_property(
+        session,
+        view_object,
+        "Visibility",
+        get_supported_plan_visibility(session, obj, state),
+    )
+    apply_context_object_selectability(session, obj, view_object)
+
+
+def _apply_global_plan_visibility(session):
+    viewport_state = _viewport_state(session)
+    with _perf_trace_span(session, "restore_object_view_state_for_global_plan"):
+        restore_object_view_state(session)
+    for obj in session.doc.Objects:
+        _perf_count(session, "storey_visibility_objects_scanned")
+        view_object = getattr(obj, "ViewObject", None)
+        state = viewport_state.saved_object_view_state.get(obj.Name, {})
+        if not is_supported_plan_object(session, obj):
+            _perf_count(session, "storey_visibility_hidden_unsupported")
+            apply_hidden_object_state(session, view_object)
+            continue
+        _set_view_object_property(
+            session,
+            view_object,
+            "Visibility",
+            get_supported_plan_visibility(session, obj, state),
+        )
+        apply_context_object_selectability(session, obj, view_object)
+
+
+def _apply_storey_visibility_for_global_object(session, obj, view_object, state):
+    _perf_count(session, "storey_visibility_global_objects")
+    if not is_supported_plan_object(session, obj):
+        _perf_count(session, "storey_visibility_hidden_unsupported")
+        apply_hidden_object_state(session, view_object)
+        return
+    _apply_supported_object_view_state(session, obj, view_object, state)
+
+
+def _apply_storey_visibility_for_active_storey_object(session, obj, view_object, state):
+    _perf_count(session, "storey_visibility_active_storey_objects")
+    if not is_supported_plan_object(session, obj):
+        _perf_count(session, "storey_visibility_hidden_unsupported")
+        apply_hidden_object_state(session, view_object)
+        return
+    _apply_supported_object_view_state(session, obj, view_object, state)
+
+
+def _apply_storey_visibility_for_other_storey_object(session, obj, view_object, state):
+    _perf_count(session, "storey_visibility_other_storey_objects")
+    apply_hidden_object_state(session, view_object)
+
+
+def apply_storey_visibility(session):
+    viewport_state = _viewport_state(session)
+    with _perf_trace_span(
+        session,
+        "apply_storey_visibility",
+        active_storey=_perf_describe_object(session, session.active_storey),
+    ):
+        if not session.doc or not viewport_state.saved_object_view_state:
+            return
+
+        active_storey_name = getattr(session.active_storey, "Name", None)
+
+        if active_storey_name is None:
+            _apply_global_plan_visibility(session)
+            return
+
+        for obj in session.doc.Objects:
+            _perf_count(session, "storey_visibility_objects_scanned")
+            view_object = getattr(obj, "ViewObject", None)
+            state = viewport_state.saved_object_view_state.get(obj.Name)
+            if not view_object or not state:
+                _perf_count(session, "storey_visibility_objects_skipped_no_view_state")
+                continue
+
+            storeys = get_object_storeys(session, obj)
+            if not storeys:
+                _apply_storey_visibility_for_global_object(session, obj, view_object, state)
+                continue
+
+            belongs_to_active = any(parent.Name == active_storey_name for parent in storeys)
+            if belongs_to_active:
+                _apply_storey_visibility_for_active_storey_object(session, obj, view_object, state)
+                continue
+
+            _apply_storey_visibility_for_other_storey_object(session, obj, view_object, state)
+
+
+class PlanVisibilityAPI:
+    """Owned session surface for Plan Edit object visibility and classification."""
+
+    __slots__ = ("_session",)
+
+    def __init__(self, session):
+        self._session = session
+
+    @property
+    def session(self):
+        return self._session
+
+    def invalidate_plan_classification_cache(self, *args, **kwargs):
+        return invalidate_plan_classification_cache(self.session, *args, **kwargs)
+
+    def is_live_document_object(self, *args, **kwargs):
+        return is_live_document_object(self.session, *args, **kwargs)
+
+    def get_document_object_key(self, *args, **kwargs):
+        return get_document_object_key(self.session, *args, **kwargs)
+
+    def safe_plan_object_name(self, *args, **kwargs):
+        return safe_plan_object_name(self.session, *args, **kwargs)
+
+    def copy_placement(self, *args, **kwargs):
+        return copy_placement(self.session, *args, **kwargs)
+
+    def get_plan_object_global_placement(self, *args, **kwargs):
+        return get_plan_object_global_placement(self.session, *args, **kwargs)
+
+    def capture_object_view_state(self, *args, **kwargs):
+        return capture_object_view_state(self.session, *args, **kwargs)
+
+    def begin_view_context(self):
+        return begin_view_context(self.session)
+
+    def end_view_context(self):
+        return end_view_context(self.session)
+
+    def register_object_view_state(self, *args, **kwargs):
+        return register_object_view_state(self.session, *args, **kwargs)
+
+    def add_object_to_active_storey(self, *args, **kwargs):
+        return add_object_to_active_storey(self.session, *args, **kwargs)
+
+    def register_plan_object(self, *args, **kwargs):
+        return register_plan_object(self.session, *args, **kwargs)
+
+    def register_plan_objects(self, *args, **kwargs):
+        return register_plan_objects(self.session, *args, **kwargs)
+
+    def restore_object_view_state(self, *args, **kwargs):
+        return restore_object_view_state(self.session, *args, **kwargs)
+
+    def is_storey_object(self, *args, **kwargs):
+        return is_storey_object(self.session, *args, **kwargs)
+
+    def is_plan_container_object(self, *args, **kwargs):
+        return is_plan_container_object(self.session, *args, **kwargs)
+
+    def is_plan_background_object(self, *args, **kwargs):
+        return is_plan_background_object(self.session, *args, **kwargs)
+
+    def is_direct_plan_equipment_object(self, *args, **kwargs):
+        return is_direct_plan_equipment_object(self.session, *args, **kwargs)
+
+    def get_direct_plan_symbol_owner(self, *args, **kwargs):
+        return get_direct_plan_symbol_owner(self.session, *args, **kwargs)
+
+    def get_plan_semantic_object(self, *args, **kwargs):
+        return get_plan_semantic_object(self.session, *args, **kwargs)
+
+    def get_plan_text_property(self, *args, **kwargs):
+        return get_plan_text_property(self.session, *args, **kwargs)
+
+    def get_plan_float_property(self, *args, **kwargs):
+        return get_plan_float_property(self.session, *args, **kwargs)
+
+    def is_plan_equipment_object(self, *args, **kwargs):
+        return is_plan_equipment_object(self.session, *args, **kwargs)
+
+    def is_cabinetry_plan_context_object(self, *args, **kwargs):
+        return is_cabinetry_plan_context_object(*args, **kwargs)
+
+    def has_direct_plan_symbols(self, *args, **kwargs):
+        return has_direct_plan_symbols(*args, **kwargs)
+
+    def is_plan_symbol_instance(self, *args, **kwargs):
+        return is_plan_symbol_instance(self.session, *args, **kwargs)
+
+    def is_plan_context_only_object(self, *args, **kwargs):
+        return is_plan_context_only_object(self.session, *args, **kwargs)
+
+    def object_belongs_to_active_storey(self, *args, **kwargs):
+        return object_belongs_to_active_storey(self.session, *args, **kwargs)
+
+    def is_component_addition_object(self, *args, **kwargs):
+        return is_component_addition_object(*args, **kwargs)
+
+    def is_supported_plan_object(self, *args, **kwargs):
+        return is_supported_plan_object(self.session, *args, **kwargs)
+
+    def get_supported_plan_visibility(self, *args, **kwargs):
+        return get_supported_plan_visibility(self.session, *args, **kwargs)
+
+    def apply_context_object_selectability(self, *args, **kwargs):
+        return apply_context_object_selectability(self.session, *args, **kwargs)
+
+    def apply_hidden_object_state(self, *args, **kwargs):
+        return apply_hidden_object_state(self.session, *args, **kwargs)
+
+    def get_object_storeys(self, *args, **kwargs):
+        return get_object_storeys(self.session, *args, **kwargs)
+
+    def apply_storey_visibility(self, *args, **kwargs):
+        return apply_storey_visibility(self.session, *args, **kwargs)

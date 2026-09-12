@@ -81,14 +81,95 @@ SET(Arch_SRCS
     ArchSql.py
     BimAssetSemantics.py
     BimLibrarySources.py
+    BimContextualRendering.py
 )
 
 SET(bimplan_SRCS
     bimplan/__init__.py
+    bimplan/contextual_rendering.py
+    bimplan/document_visuals.py
+    bimplan/object_visibility.py
+    bimplan/overlays/__init__.py
+    bimplan/overlays/geometry.py
+    bimplan/overlays/manager.py
+    bimplan/overlays/openings.py
+    bimplan/overlays/providers.py
+    bimplan/overlays/runtime.py
+    bimplan/overlays/spaces.py
+    bimplan/overlays/symbols.py
+    bimplan/overlays/walls.py
+    bimplan/performance.py
+    bimplan/picking/__init__.py
+    bimplan/picking/area.py
+    bimplan/picking/coordinator.py
+    bimplan/picking/debug.py
+    bimplan/picking/edit_nodes.py
+    bimplan/picking/geometry.py
+    bimplan/picking/hover.py
+    bimplan/picking/overlays.py
+    bimplan/picking/service.py
+    bimplan/providers/__init__.py
+    bimplan/providers/action_payloads.py
+    bimplan/providers/builtin.py
+    bimplan/providers/builtin_edit.py
+    bimplan/providers/commands.py
+    bimplan/providers/context.py
+    bimplan/providers/edit.py
+    bimplan/providers/contracts.py
+    bimplan/providers/payloads.py
+    bimplan/providers/picking.py
+    bimplan/providers/point.py
+    bimplan/providers/registry.py
+    bimplan/providers/runtime.py
     bimplan/runtime/__init__.py
+    bimplan/runtime/capabilities.py
+    bimplan/runtime/command_gate.py
+    bimplan/runtime/embedded_commands.py
+    bimplan/runtime/input.py
+    bimplan/runtime/lifecycle.py
     bimplan/runtime/session.py
+    bimplan/runtime/session_state.py
+    bimplan/runtime/tools.py
+    bimplan/runtime/view.py
+    bimplan/selection/__init__.py
+    bimplan/selection/edit_nodes.py
+    bimplan/selection/gui_sync.py
+    bimplan/selection/selection.py
+    bimplan/selection/service_common.py
+    bimplan/selection/service_interaction.py
+    bimplan/selection/service_primary.py
+    bimplan/selection/target_dispatch.py
+    bimplan/selection/target_kinds.py
+    bimplan/selection/targets.py
+    bimplan/semantics.py
+    bimplan/snap.py
+    bimplan/storeys.py
+    bimplan/tools/__init__.py
+    bimplan/tools/hosted_openings.py
+    bimplan/tools/move.py
+    bimplan/tools/opening_edit.py
+    bimplan/tools/select.py
+    bimplan/tools/space_boundaries.py
+    bimplan/tools/space_editing.py
+    bimplan/tools/space_geometry.py
+    bimplan/tools/space_interaction.py
+    bimplan/tools/space_regions.py
+    bimplan/tools/spaces.py
+    bimplan/tools/symbol_edit.py
+    bimplan/tools/wall_create.py
+    bimplan/tools/wall_edit.py
+    bimplan/tools/wall_relations.py
+    bimplan/tools/window_create.py
+    bimplan/transactions.py
     bimplan/ui/__init__.py
-    bimplan/ui/session_panel.py
+    bimplan/ui/control_editors.py
+    bimplan/ui/control_integrations.py
+    bimplan/ui/control_shell.py
+    bimplan/ui/controls.py
+    bimplan/ui/qt_lifetime.py
+    bimplan/ui/status_text.py
+    bimplan/ui/task_panel.py
+    bimplan/ui/task_panel_view_model.py
 )
 
 SET(importers_SRCS
