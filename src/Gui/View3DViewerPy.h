@@ -69,8 +69,12 @@ public:
     Py::Object resetEditingRoot(const Py::Tuple& args);
 
     Py::Object setGradientBackground(const Py::Tuple& args);
+    Py::Object getGradientBackground(const Py::Tuple& args);
     Py::Object setGradientBackgroundColor(const Py::Tuple& args);
     Py::Object setBackgroundColor(const Py::Tuple& args);
+    Py::Object getBackgroundColor(const Py::Tuple& args);
+    Py::Object setBackgroundAppearanceOverride(const Py::Tuple& args);
+    Py::Object clearBackgroundAppearanceOverride(const Py::Tuple& args);
     Py::Object setRedirectToSceneGraph(const Py::Tuple& args);
     Py::Object isRedirectedToSceneGraph(const Py::Tuple& args);
     Py::Object renderToImage(const Py::Tuple& args, const Py::Dict& kwds);
@@ -81,6 +85,8 @@ public:
     // NaviCube handling
     Py::Object setEnabledNaviCube(const Py::Tuple& args);
     Py::Object isEnabledNaviCube(const Py::Tuple& args);
+    Py::Object setNaviCubeEnabledOverride(const Py::Tuple& args);
+    Py::Object clearNaviCubeEnabledOverride(const Py::Tuple& args);
     Py::Object setNaviCubeCorner(const Py::Tuple& args);
     Py::Object isSpinning();
 
