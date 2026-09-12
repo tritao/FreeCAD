@@ -897,6 +897,325 @@ class _ViewProviderWindow(ArchComponent.ViewProviderComponent):
                     return ":/icons/Arch_Window_Clone.svg"
         return ":/icons/Arch_Window_Tree.svg"
 
+    def createFootprintGroup(self):
+        """Set up a line-only footprint style for committed plan symbols."""
+
+        from pivy import coin
+
+        self.lcoords = coin.SoCoordinate3()
+        self.lset = coin.SoLineSet()
+
+        loffset = coin.SoPolygonOffset()
+        loffset.styles = coin.SoPolygonOffsetElement.LINES
+        loffset.factor = -1.0
+        loffset.units = -3.0
+        loffset.on = True
+        lstyle = coin.SoDrawStyle()
+        lstyle.lineWidth = 1.5
+        lmat = coin.SoBaseColor()
+        lmat.rgb = (0.1, 0.1, 0.1)
+
+        sep = coin.SoSeparator()
+        sep.addChild(loffset)
+        sep.addChild(lmat)
+        sep.addChild(lstyle)
+        sep.addChild(self.lcoords)
+        sep.addChild(self.lset)
+        return sep
+
+    def _get_footprint_inverse_placement(self):
+        if not hasattr(self, "Object"):
+            return None
+        placement = getattr(self.Object, "Placement", None)
+        if placement:
+            try:
+                return placement.inverse()
+            except Exception:
+                return None
+        return None
+
+    def _get_footprint_cut_context(self):
+        helper = self._get_plan_geometry("_get_footprint_cut_context")
+        if not helper:
+            return None, None
+        return helper._get_footprint_cut_context()
+
+    def _collect_edge_points(self, edge):
+        helper = self._get_plan_geometry("_collect_edge_points")
+        if helper:
+            return helper._collect_edge_points(edge)
+        return []
+
+    def _get_host_plan_v_bounds(self, origin, axis_u, axis_v):
+        helper = self._get_plan_geometry("_get_host_plan_v_bounds")
+        if not helper:
+            return None
+        return helper._get_host_plan_v_bounds(origin, axis_u, axis_v)
+
+    def _get_opening_section_profile(self, shape, cut_z):
+        helper = self._get_plan_geometry("_get_opening_section_profile")
+        if not helper:
+            return None
+        return helper._get_opening_section_profile(shape, cut_z)
+
+    def _get_hosted_opening_plan_frame(self, shape, cut_z, base_z):
+        helper = self._get_plan_geometry("_get_hosted_opening_plan_frame")
+        if not helper:
+            return None
+        return helper._get_hosted_opening_plan_frame(shape, cut_z, base_z)
+
+    def get_plan_center_point(self):
+        helper = self._get_plan_geometry("get_plan_center_point")
+        if not helper:
+            return None
+        return helper.get_plan_center_point()
+
+    def get_plan_move_anchor_modes(self):
+        helper = self._get_plan_geometry("get_plan_move_anchor_modes")
+        if not helper:
+            return ("center", "left", "right")
+        return helper.get_plan_move_anchor_modes()
+
+    def get_plan_move_context(self):
+        helper = self._get_plan_geometry("get_plan_move_context")
+        if not helper:
+            return None
+        return helper.get_plan_move_context()
+
+    def _get_plan_move_anchor_offset_u(self, anchor="center", context=None):
+        helper = self._get_plan_geometry("_get_plan_move_anchor_offset_u")
+        if not helper:
+            return 0.0
+        return helper._get_plan_move_anchor_offset_u(anchor=anchor, context=context)
+
+    def project_point_to_host_axis(self, point, anchor="center"):
+        helper = self._get_plan_geometry("project_point_to_host_axis")
+        if not helper:
+            return point
+        return helper.project_point_to_host_axis(point, anchor=anchor)
+
+    def move_along_host(self, point, anchor="center"):
+        helper = self._get_plan_geometry("move_along_host")
+        if not helper:
+            return False
+        return helper.move_along_host(point, anchor=anchor)
+
+    def _points_to_local_footprint_polyline(self, points, base_z, inverse_placement):
+        if len(points) < 2:
+            return None
+        local_points = []
+        for point in points:
+            point = FreeCAD.Vector(point.x, point.y, base_z)
+            if inverse_placement is not None:
+                point = inverse_placement.multVec(point)
+            local_points.append([point.x, point.y, point.z])
+        return local_points
+
+    def _edge_to_local_footprint_polyline(self, edge, base_z, inverse_placement):
+        return self._points_to_local_footprint_polyline(
+            self._collect_edge_points(edge), base_z, inverse_placement
+        )
+
+    def _collect_local_footprint_polylines(self):
+        """Return App-generated symbol geometry in the ViewProvider's local frame.
+
+        The semantic opening proxy owns plan-symbol generation.  The committed
+        Coin footprint still lives below the ViewProvider placement, so this
+        adapter performs only the global-to-local conversion needed by those
+        nodes.
+        """
+        if not hasattr(self, "Object"):
+            return []
+
+        _cut_z, base_z = self._get_footprint_cut_context()
+        if base_z is None:
+            return []
+        inverse_placement = self._get_footprint_inverse_placement()
+        geometry = self.get_plan_overlay_geometry()
+        polylines = []
+        for points in geometry["symbol_polylines"]:
+            polyline = self._points_to_local_footprint_polyline(points, base_z, inverse_placement)
+            if polyline:
+                polylines.append(polyline)
+        return polylines
+
+    def get_plan_overlay_geometry(self):
+        """Return structured global-space plan geometry for overlays and picking."""
+
+        helper = self._get_plan_geometry("get_plan_overlay_geometry")
+        if not helper:
+            return {"symbol_polylines": (), "guide_polylines": ()}
+        return helper.get_plan_overlay_geometry()
+
+    def getRepresentation(self, obj=None, context=None):
+        """Provide the opening's semantic representation for a context."""
+
+        helper = self._get_plan_geometry("getRepresentation")
+        if not helper:
+            return ArchRepresentation.BIMRepresentation(source=obj, context=context)
+        return helper.getRepresentation(obj=obj, context=context)
+
+    def get_plan_overlay_polylines(self):
+        """Return global-space plan overlay polylines for selection highlighting."""
+
+        geometry = self.get_plan_overlay_geometry()
+        return list(geometry["symbol_polylines"] + geometry["guide_polylines"])
+
+    def get_plan_move_preview_state(self, point, anchor="center"):
+        """Return visible preview geometry for moving the opening along its host."""
+
+        if point is None:
+            return None
+
+        handles = self.get_plan_edit_handles()
+        move_handle = next((handle for handle in handles if handle.role == "move"), None)
+        projected = self.project_point_to_host_axis(point, anchor=anchor)
+        context = self.get_plan_move_context()
+        if not move_handle or move_handle.point is None or projected is None or not context:
+            return None
+
+        axis_u = context["axis_u"]
+        anchor_offset_u = self._get_plan_move_anchor_offset_u(anchor, context=context)
+        delta_vec = projected.sub(move_handle.point)
+        delta = FreeCAD.Vector(axis_u).multiply(delta_vec.dot(axis_u))
+        preview_point = FreeCAD.Vector(move_handle.point).add(delta)
+        anchor_offset = FreeCAD.Vector(axis_u).multiply(anchor_offset_u)
+        polylines = []
+        for polyline in self.get_plan_overlay_polylines():
+            if len(polyline) < 2:
+                continue
+            polylines.append([FreeCAD.Vector(point).add(delta) for point in polyline])
+        return {
+            "guide_start": FreeCAD.Vector(move_handle.point).add(anchor_offset),
+            "guide_end": FreeCAD.Vector(preview_point).add(anchor_offset),
+            "polylines": polylines,
+        }
+
+    def get_plan_edit_handles(self):
+        """Return plan-edit handle specs for hosted openings."""
+
+        if not hasattr(self, "Object"):
+            return []
+
+        shape = getattr(self.Object, "Shape", None)
+        cut_z, base_z = self._get_footprint_cut_context()
+        if cut_z is None:
+            return []
+
+        section_profile = self._get_hosted_opening_plan_frame(shape, cut_z, base_z)
+        if not section_profile:
+            return []
+
+        origin = section_profile["origin"]
+        axis_u = section_profile["axis_u"]
+        axis_v = section_profile["axis_v"]
+        umin = section_profile["umin"]
+        umax = section_profile["umax"]
+        vmin = section_profile["vmin"]
+        vmax = section_profile["vmax"]
+
+        width_v = max(vmax - vmin, 0.0)
+        symbol_inset = min(width_v * 0.25, 30.0)
+        symbol_vmin = vmin + symbol_inset
+        symbol_vmax = vmax - symbol_inset
+        if symbol_vmax <= symbol_vmin:
+            symbol_vmin = vmin
+            symbol_vmax = vmax
+
+        mid_u = (umin + umax) * 0.5
+        mid_v = (symbol_vmin + symbol_vmax) * 0.5
+        move_point = origin.add(FreeCAD.Vector(axis_u).multiply(mid_u)).add(
+            FreeCAD.Vector(axis_v).multiply(mid_v)
+        )
+        move_point.z = base_z
+        handles = [
+            OpeningPlanEditHandle(
+                role="move",
+                point=move_point,
+                interaction="point_pick",
+                title=translate("BIM_PlanEdit", "Pick new opening position"),
+                transaction=translate("BIM_PlanEdit", "Move Opening"),
+            )
+        ]
+
+        capabilities = self._get_plan_edit_capabilities()
+        if capabilities["can_flip_opening"]:
+            door_vmin, door_vmax = self._get_door_symbol_v_bounds(section_profile)
+            hinge_at_min, swing_sign = self._get_door_symbol_style()
+            hinge_u = umin if hinge_at_min else umax
+            hinge_v = door_vmin if swing_sign < 0 else door_vmax
+            flip_open_v = door_vmax if swing_sign < 0 else door_vmin
+            flip_open = origin.add(FreeCAD.Vector(axis_u).multiply(mid_u)).add(
+                FreeCAD.Vector(axis_v).multiply(flip_open_v)
+            )
+            flip_open.z = base_z
+            if capabilities["can_flip_hinge"]:
+                flip_hinge_u = umax if hinge_at_min else umin
+                flip_hinge = origin.add(FreeCAD.Vector(axis_u).multiply(flip_hinge_u)).add(
+                    FreeCAD.Vector(axis_v).multiply(hinge_v)
+                )
+                flip_hinge.z = base_z
+                handles.append(
+                    OpeningPlanEditHandle(
+                        role="flip_hinge",
+                        point=flip_hinge,
+                        interaction="immediate",
+                        transaction=translate("BIM_PlanEdit", "Flip Opening Hinge"),
+                    )
+                )
+            handles.append(
+                OpeningPlanEditHandle(
+                    role="flip_opening",
+                    point=flip_open,
+                    interaction="immediate",
+                    transaction=translate("BIM_PlanEdit", "Flip Opening Direction"),
+                )
+            )
+
+        return handles
+
+    def execute_plan_edit_handle(self, handle_index, point=None, anchor="center"):
+        """Execute a previously advertised plan-edit handle."""
+
+        handles = self.get_plan_edit_handles()
+        if handle_index < 0 or handle_index >= len(handles):
+            return False
+
+        role = handles[handle_index].role
+        if role == "move":
+            return self.move_along_host(point, anchor=anchor)
+        if role == "flip_hinge":
+            self.invertHinge()
+            return True
+        if role == "flip_opening":
+            self.invertOpening()
+            return True
+        return False
+
+    def updateFootprint(self):
+        if not hasattr(self, "lcoords") or not hasattr(self, "lset"):
+            return
+
+        polylines = self._collect_local_footprint_polylines()
+
+        verts = []
+        counts = []
+        for polyline in polylines:
+            if len(polyline) < 2:
+                continue
+            verts.extend(polyline)
+            counts.append(len(polyline))
+
+        self._update_footprint_line_nodes(
+            self.lcoords,
+            self.lset,
+            verts,
+            counts,
+        )
+
+        if FreeCAD.GuiUp:
+            ArchComponent.notify_plan_footprint_changed(self)
+
     def updateData(self, obj, prop):
 
         if prop == "Shape":

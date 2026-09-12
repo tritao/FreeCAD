@@ -621,9 +621,15 @@ class _ViewProviderEquipment(ArchComponent.ViewProviderComponent):
             verts.extend(polyline)
             counts.append(len(polyline))
 
-        if verts:
-            self.lcoords.point.setValues(verts)
-            self.lset.numVertices.setValues(0, len(counts), counts)
+        self._update_footprint_line_nodes(
+            self.lcoords,
+            self.lset,
+            verts,
+            counts,
+        )
+
+        if FreeCAD.GuiUp:
+            ArchComponent.notify_plan_footprint_changed(self)
 
     def setEdit(self, vobj, mode):
         if mode != 0:
