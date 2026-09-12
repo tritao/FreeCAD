@@ -25,6 +25,7 @@
 import Arch
 import ArchRepresentation
 import ArchSectionPlane
+import TechDrawBIM
 import Draft
 import os
 import FreeCAD as App
@@ -70,6 +71,43 @@ class TestArchSectionPlane(TestArchBase.TestArchBase):
         self.assertIs(context.purpose, ArchRepresentation.RepresentationPurpose.SECTION)
         self.assertEqual(context.reference_frame, section_plane.Placement)
         self.assertEqual(context.projection_range, (0.0, 2500.0))
+
+    def testTechDrawUsesSemanticRepresentationWithoutLegacyCutShapes(self):
+        """The production section path consumes provider geometry directly."""
+
+        wall = Arch.makeWall(length=3000, width=200, height=3000)
+        section_plane = Arch.makeSectionPlane([wall])
+        section_plane.Placement = App.Placement(
+            App.Vector(1500, 0, 0), App.Rotation(App.Vector(0, 1, 0), 90)
+        )
+        self.document.recompute()
+        calls = []
+        original_project = TechDrawBIM.project_representation_to_svg
+        original_cut_shapes = ArchSectionPlane.getCutShapes
+
+        def capture_project(
+            representation, direction, collection="projected_geometry", **styles
+        ):
+            calls.append(collection)
+            return original_project(
+                representation, direction, collection=collection, **styles
+            )
+
+        def fail_legacy_cut_shapes(*args, **kwargs):
+            raise AssertionError("semantic TechDraw must not build legacy cut shapes")
+
+        TechDrawBIM.project_representation_to_svg = capture_project
+        ArchSectionPlane.getCutShapes = fail_legacy_cut_shapes
+        try:
+            svg = ArchSectionPlane.getSVG(
+                section_plane, techdraw=True, renderMode="Wireframe"
+            )
+        finally:
+            TechDrawBIM.project_representation_to_svg = original_project
+            ArchSectionPlane.getCutShapes = original_cut_shapes
+
+        self.assertTrue(svg)
+        self.assertIn("cut_geometry", calls)
 
     def testSectionPlaneFitUsesLocalAxesAfterRotateY(self):
         """Resize-to-fit dimensions follow the rotated section plane axes."""

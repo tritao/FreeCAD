@@ -11,6 +11,7 @@ endif(BUILD_GUI)
 
 set(TechDraw_Scripts
     Init.py
+    TechDrawBIM.py
     TestTechDrawApp.py
     TestTechDrawGui.py
 )
@@ -215,4 +216,3 @@ fc_copy_sources(TDTestTarget "${CMAKE_BINARY_DIR}/Mod/TechDraw" ${TDAllTest})
 # install Python packages (for make install)
 INSTALL(FILES ${TDTest_SRCS} DESTINATION Mod/TechDraw/TDTest)
 INSTALL(FILES ${TDTestFile_SRCS} DESTINATION Mod/TechDraw/TDTest)
-
