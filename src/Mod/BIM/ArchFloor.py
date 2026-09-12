@@ -444,6 +444,12 @@ class _ViewProviderFloor:
 
         if FreeCADGui.activeWorkbench().name() != "BIMWorkbench":
             return
+        actionPlanEdit = QtGui.QAction(
+            QtGui.QIcon(":/icons/Arch_Floor.svg"), "Plan Edit", menu
+        )
+        actionPlanEdit.triggered.connect(lambda _checked=False: self.startPlanEdit())
+        menu.addAction(actionPlanEdit)
+
         action1 = QtGui.QAction(
             QtGui.QIcon(":/icons/Arch_BuildingPart.svg"), "Convert to BuildingPart", menu
         )
@@ -461,6 +467,11 @@ class _ViewProviderFloor:
             from draftutils import todo
 
             todo.ToDo.delay(ArchBuildingPart.convertFloors, self.Object)
+
+    def startPlanEdit(self):
+        from bimcommands.BimPlanEdit import start_plan_edit_for
+
+        start_plan_edit_for(getattr(self, "Object", None))
 
 
 if FreeCAD.GuiUp:

@@ -79,6 +79,14 @@ SET(Arch_SRCS
     ArchSql.py
 )
 
+SET(bimplan_SRCS
+    bimplan/__init__.py
+    bimplan/runtime/__init__.py
+    bimplan/runtime/session.py
+    bimplan/ui/__init__.py
+    bimplan/ui/session_panel.py
+)
+
 SET(importers_SRCS
     importers/__init__.py
     importers/importIFC.py
@@ -165,6 +173,7 @@ SET(bimcommands_SRCS
     bimcommands/BimLayers.py
     bimcommands/BimLeader.py
     bimcommands/BimLibrary.py
+    bimcommands/BimPlanEdit.py
     bimcommands/BimLink.py
     bimcommands/BimMaterial.py
     bimcommands/BimMoveView.py
@@ -285,6 +294,7 @@ SET(bimtests_SRCS
     bimtests/TestArchFootprintGui.py
     bimtests/TestArchImportersGui.py
     bimtests/TestArchBuildingPartGui.py
+    bimtests/TestBimPlanEditSessionGui.py
     bimtests/TestArchStairsGui.py
     bimtests/TestArchReport.py
     bimtests/TestArchReportGui.py
@@ -357,6 +367,7 @@ add_custom_command(
 ADD_CUSTOM_TARGET(BIM ALL
     DEPENDS ${Arch_QRC_SRCS}
     SOURCES ${Arch_SRCS}
+            ${bimplan_SRCS}
             ${Dice3DS_SRCS}
             ${Arch_presets}
             ${ArchGuiIcon_SVG}
@@ -374,6 +385,7 @@ add_custom_target(ArchSqlParser ALL DEPENDS ${BIM_GENERATED_PARSER})
 
 # Populate the build tree with the BIM workbench sources and test data
 fc_copy_sources(BIM "${CMAKE_BINARY_DIR}/Mod/BIM" ${Arch_SRCS})
+fc_copy_sources(BIM "${CMAKE_BINARY_DIR}/Mod/BIM" ${bimplan_SRCS})
 fc_copy_sources(BIM "${CMAKE_BINARY_DIR}/Mod/BIM" ${Dice3DS_SRCS})
 fc_copy_sources(BIM "${CMAKE_BINARY_DIR}/Mod/BIM" ${importers_SRCS})
 fc_copy_sources(BIM "${CMAKE_BINARY_DIR}/Mod/BIM" ${bimcommands_SRCS})
@@ -409,6 +421,12 @@ INSTALL(
         ${Arch_SRCS}
         ${Arch_QRC_SRCS}
     DESTINATION Mod/BIM
+)
+
+INSTALL(
+    DIRECTORY bimplan
+    DESTINATION Mod/BIM
+    FILES_MATCHING PATTERN "*.py"
 )
 
 INSTALL(
