@@ -28,6 +28,7 @@ import FreeCAD as App
 import FreeCADGui as Gui
 from draftguitools import gui_base
 from draftguitools import gui_snapper
+from draftguitools import gui_trackers
 from drafttests import test_base
 from pivy import coin
 from types import SimpleNamespace
@@ -212,3 +213,29 @@ class DraftSnapper(test_base.DraftTestCaseDoc):
         self.assertEqual(len(calls), 1)
         self.assertFalse(calls[0]["active"])
         self.assertTrue(calls[0]["constrain"])
+
+    def test_interaction_plane_is_used_and_cleared_on_cancel(self):
+        """A point request uses only its supplied plane and clears it on teardown."""
+
+        snapper = Gui.Snapper
+        toolbar = self._FakeToolbar()
+        view = self._FakeView()
+        plane = object()
+
+        with patch.object(gui_snapper.gui_utils, "get_3d_view", return_value=view), patch.object(
+            gui_snapper.gui_utils, "end_all_events", return_value=None
+        ), patch.object(gui_snapper.Gui, "draftToolBar", toolbar, create=True), patch.object(
+            gui_snapper.WorkingPlane, "get_working_plane", side_effect=AssertionError
+        ), patch.object(snapper, "off", return_value=None):
+            snapper.getPoint(callback=lambda point: None, interaction_plane=plane)
+            self.assertIs(snapper._get_wp(), plane)
+            snapper.cancelPointRequest()
+
+        self.assertIsNone(snapper.interaction_plane)
+
+    def test_tracker_uses_an_explicit_working_plane(self):
+        """Trackers embedded in a host should prefer their assigned plane."""
+
+        plane = object()
+        tracker = SimpleNamespace(working_plane=plane)
+        self.assertIs(gui_trackers.Tracker._get_wp(tracker), plane)
