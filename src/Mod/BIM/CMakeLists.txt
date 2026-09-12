@@ -18,6 +18,7 @@ SET(Arch_SRCS
     Init.py
     InitGui.py
     ArchComponent.py
+    ArchRepresentation.py
     ArchIFC.py
     ArchIFCView.py
     ArchIFCSchema.py
@@ -231,6 +232,7 @@ SET(bimtests_SRCS
     bimtests/TestArchBase.py
     bimtests/TestArchBaseGui.py
     bimtests/TestArchComponent.py
+    bimtests/TestArchRepresentation.py
     bimtests/TestArchCovering.py
     bimtests/TestArchCoveringGui.py
     bimtests/TestArchBuildingPart.py
