@@ -159,6 +159,7 @@
 #include "TextDocument.h"
 #include "Transactions.h"
 #include "VRMLObject.h"
+#include "ViewDefinition.h"
 
 // If you stumble here, run the target "BuildExtractRevision" on Windows systems
 // or the Python script "SubWCRev.py" on Linux based systems which builds
@@ -2327,6 +2328,7 @@ void Application::initTypes()
     Image::ImagePlane              ::init();
     App::InventorObject            ::init();
     App::VRMLObject                ::init();
+    App::ViewDefinition            ::init();
     App::Annotation                ::init();
     App::AnnotationLabel           ::init();
     App::MaterialObject            ::init();

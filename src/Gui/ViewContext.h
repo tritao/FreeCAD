@@ -8,10 +8,12 @@
 #include <unordered_map>
 
 #include <FCGlobal.h>
+#include <Base/Placement.h>
 
 namespace App
 {
 class DocumentObject;
+class ViewDefinition;
 }
 
 namespace Gui
@@ -39,6 +41,10 @@ public:
     bool setVisibility(LayerId layer, const App::DocumentObject* object, Visibility visibility);
     Visibility visibility(const App::DocumentObject* object) const;
     bool effectiveVisibility(const ViewProviderDocumentObject* provider) const;
+    bool applyDefinition(const App::ViewDefinition* definition);
+    bool captureDefinition(App::ViewDefinition* definition) const;
+    void setReferenceFrame(const Base::Placement& frame);
+    const Base::Placement& referenceFrame() const;
     void removeObject(const App::DocumentObject* object);
     void clear();
 
@@ -50,6 +56,7 @@ private:
     std::map<LayerId, VisibilityMap> layers;
     LayerId nextLayerId = 1;
     ChangedCallback changed;
+    Base::Placement activeReferenceFrame;
 };
 
 }  // namespace Gui
