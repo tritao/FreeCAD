@@ -29,10 +29,24 @@ from unittest import mock
 
 import FreeCAD as App
 from draftguitools import gui_lines
+from draftviewproviders import view_wire
 
 
 class DraftGuiLines(unittest.TestCase):
     """Tests for the public line and wire GUI input paths."""
+
+    def test_optional_wire_child_removal_checks_ownership(self):
+        """Detached arrow nodes must not be removed from a wire scene graph again."""
+        parent = mock.Mock()
+        child = object()
+
+        parent.findChild.return_value = -1
+        view_wire._remove_child_if_present(parent, child)
+        parent.removeChild.assert_not_called()
+
+        parent.findChild.return_value = 2
+        view_wire._remove_child_if_present(parent, child)
+        parent.removeChild.assert_called_once_with(child)
 
     def test_numeric_input_rejects_duplicate_line_point(self):
         """Duplicate numeric input should be rejected for straight lines."""
