@@ -1203,6 +1203,14 @@ class ViewProviderBuildingPart:
         )
         menu.addAction(actionSetWorkingPlane)
 
+        actionPlanEdit = QtGui.QAction(
+            QtGui.QIcon(":/icons/Arch_Floor.svg"),
+            translate("Arch", "Plan Edit"),
+            menu,
+        )
+        actionPlanEdit.triggered.connect(lambda _checked=False: self.startPlanEdit())
+        menu.addAction(actionPlanEdit)
+
         actionWriteCamera = QtGui.QAction(
             QtGui.QIcon(":/icons/Draft_SelectPlane.svg"),
             translate("Arch", "Save Camera View"),
@@ -1229,6 +1237,11 @@ class ViewProviderBuildingPart:
         if self.Object.ViewObject.DoubleClickActivates:
             _toggle_active_container(self.Object, action)
         FreeCADGui.Selection.clearSelection()
+
+    def startPlanEdit(self):
+        from bimcommands.BimPlanEdit import start_plan_edit_for
+
+        start_plan_edit_for(getattr(self, "Object", None))
 
     def setWorkingPlane(self, restore=False):
         import WorkingPlane
