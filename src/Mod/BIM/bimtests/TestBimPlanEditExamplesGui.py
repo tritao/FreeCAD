@@ -1,0 +1,146 @@
+# SPDX-License-Identifier: LGPL-2.1-or-later
+
+"""End-to-end GUI checks for the generated BIM Plan Edit examples."""
+
+import os
+
+import FreeCAD
+import FreeCADGui
+from bimtests.TestArchBaseGui import TestArchBaseGui
+from bimplan.runtime.session import PlanEditSession
+
+
+class TestBimPlanEditExamplesGui(TestArchBaseGui):
+    """Treat installed example documents as executable integration fixtures."""
+
+    def _example_path(self, filename):
+        candidates = []
+        source_dir = os.environ.get("FREECAD_SOURCE_DIR")
+        if source_dir:
+            candidates.append(os.path.join(source_dir, "data", "examples", filename))
+        candidates.append(os.path.join(FreeCAD.getResourceDir(), "examples", filename))
+        path = next((item for item in candidates if os.path.isfile(item)), candidates[-1])
+        self.assertTrue(os.path.isfile(path), f"Plan Edit example is missing: {path}")
+        return path
+
+    def _open_example(self, filename):
+        FreeCAD.closeDocument(self.document.Name)
+        self.document = FreeCAD.openDocument(self._example_path(filename))
+        FreeCAD.setActiveDocument(self.document.Name)
+        FreeCADGui.ActiveDocument = FreeCADGui.getDocument(self.document.Name)
+        self.document.UndoMode = 1
+        self.pump_gui_events()
+        return self.document
+
+    @staticmethod
+    def _objects_with_ifc_type(document, ifc_type):
+        return [obj for obj in document.Objects if getattr(obj, "IfcType", "") == ifc_type]
+
+    def _enter_plan_edit(self, storey):
+        FreeCADGui.Selection.clearSelection()
+        FreeCADGui.Selection.addSelection(storey)
+        session = PlanEditSession()
+        self.assertTrue(session.enter())
+        self.assertIs(session.active_storey, storey)
+        self.addCleanup(session.shutdown, close_dialog=False)
+        self.pump_gui_events()
+        return session
+
+    def test_basic_example_loads_and_renders_semantically(self):
+        document = self._open_example("BIMPlanEditBasic.FCStd")
+        walls = self._objects_with_ifc_type(document, "Wall")
+        doors = self._objects_with_ifc_type(document, "Door")
+        windows = self._objects_with_ifc_type(document, "Window")
+        spaces = self._objects_with_ifc_type(document, "Space")
+        storeys = self._objects_with_ifc_type(document, "Building Storey")
+        joints = [
+            obj
+            for obj in document.Objects
+            if getattr(getattr(obj, "Proxy", None), "Type", None) == "WallJoint"
+        ]
+        self.assertEqual(5, len(walls))
+        self.assertEqual(1, len(doors))
+        self.assertEqual(1, len(windows))
+        self.assertEqual(100, doors[0].Opening)
+        self.assertEqual(1, len(spaces))
+        self.assertEqual(1, len(storeys))
+        self.assertEqual(6, len(joints))
+        self.assertEqual(4, sum(joint.JointType == "Miter" for joint in joints))
+        self.assertEqual(2, sum(joint.JointType == "Tee" for joint in joints))
+        self.assertTrue(
+            all(joint.Status == "OK" for joint in joints),
+            [(joint.Label, joint.Status, joint.StatusMessage) for joint in joints],
+        )
+        for wall in walls:
+            self.assertIsInstance(wall.Proxy._resolved_geometry_signatures, dict)
+            self.assertFalse(wall.Proxy._invalidating_wall_relations)
+            wall.touch()
+        document.recompute()
+        self.assertTrue(all(not wall.Shape.isNull() for wall in walls))
+        for opening in doors + windows:
+            self.assertTrue(opening.WindowParts)
+            self.assertGreater(len(opening.Shape.Solids), 1)
+            self.assertEqual(len(opening.Hosts), 1)
+            host = opening.Hosts[0]
+            subvolume = opening.Proxy.getSubVolume(opening, host=host)
+            self.assertIsNotNone(subvolume)
+            self.assertAlmostEqual(host.Shape.common(subvolume).Volume, 0.0, delta=1e-6)
+        space_bounds = spaces[0].Shape.BoundBox
+        self.assertAlmostEqual(walls[3].Shape.BoundBox.XMax, space_bounds.XMin)
+        self.assertAlmostEqual(walls[4].Shape.BoundBox.XMin, space_bounds.XMax)
+        self.assertAlmostEqual(walls[2].Shape.BoundBox.YMax, space_bounds.YMin)
+        self.assertAlmostEqual(walls[0].Shape.BoundBox.YMin, space_bounds.YMax)
+
+        session = self._enter_plan_edit(storeys[0])
+        self.assertTrue(all(wall in session.contextual_rendering.renderer.sources for wall in walls))
+        self.assertGreater(session.contextual_rendering.renderer.root.getNumChildren(), 0)
+
+    def test_basic_example_wall_edit_roundtrips(self):
+        document = self._open_example("BIMPlanEditBasic.FCStd")
+        wall = self._objects_with_ifc_type(document, "Wall")[0]
+        storey = self._objects_with_ifc_type(document, "Building Storey")[0]
+        session = self._enter_plan_edit(storey)
+        handle = next(
+            item
+            for item in session.contextual_rendering.edit_handles_for(wall)
+            if item.role == "WallWidth"
+        )
+        width = wall.Width.Value
+        session.contextual_editing.begin(handle)
+        result = session.contextual_editing.commit(handle.point + handle.direction * 50)
+        self.assertTrue(result.success)
+        self.assertAlmostEqual(width + 100, wall.Width.Value)
+        document.undo()
+        self.assertAlmostEqual(width, wall.Width.Value)
+
+    def test_path_ownership_example_exposes_owner_specific_handles(self):
+        document = self._open_example("BIMPlanEditPathOwnership.FCStd")
+        storey = self._objects_with_ifc_type(document, "Building Storey")[0]
+        session = self._enter_plan_edit(storey)
+        expected = {
+            "Wall": ("WallPathStart", "WallPathEnd"),
+            "Wall001": ("WallPathVertex1", "WallPathVertex2"),
+            "Wall002": ("WallPathVertex1", "WallPathVertex2", "WallPathVertex3"),
+            "Wall003": ("WallPathG0P1", "WallPathG0P2_G1P1", "WallPathG1P2"),
+            "Wall004": (),
+            "Wall005": (),
+        }
+        actual = {
+            wall.Name: tuple(
+                handle.role
+                for handle in session.contextual_rendering.edit_handles_for(wall)
+                if handle.role.startswith("WallPath")
+            )
+            for wall in self._objects_with_ifc_type(document, "Wall")
+        }
+        self.assertEqual(expected, actual)
+        line_wall = document.getObject("Wall001")
+        line_handles = session.contextual_rendering.edit_handles_for(line_wall)
+        self.assertEqual(
+            {"WallStretchStart", "WallStretchEnd", "WallMove"},
+            {
+                handle.operation.interaction_intent
+                for handle in line_handles
+                if handle.operation.interaction_intent
+            },
+        )

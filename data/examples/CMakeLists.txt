@@ -7,6 +7,10 @@ SET(Examples_Files
     BIMExample.FCStd
     BIMWallJoins.py
     BIMWallJoins.FCStd
+    BIMPlanEditBasic.py
+    BIMPlanEditBasic.FCStd
+    BIMPlanEditPathOwnership.py
+    BIMPlanEditPathOwnership.FCStd
     FEMExample.FCStd
     AssemblyExample.FCStd
     ArchDetail.FCStd
