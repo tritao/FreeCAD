@@ -56,6 +56,7 @@ from bimplan.ui.status_text import PlanStatusTextAPI
 from bimplan.ui.controls import PlanEditControlsWidget
 from bimplan.contextual_rendering import PlanContextualRenderingAPI
 from bimplan.representation_context import PlanRepresentationContextAPI
+from bimplan.contextual_editing import PlanContextualEditingAPI
 
 QT_TRANSLATE_NOOP = FreeCAD.Qt.QT_TRANSLATE_NOOP
 translate = FreeCAD.Qt.translate
@@ -201,6 +202,7 @@ class PlanEditSession:
         self.document_visuals = PlanDocumentVisualsAPI(self)
         self.contextual_rendering = PlanContextualRenderingAPI(self)
         self.representation_context = PlanRepresentationContextAPI(self)
+        self.contextual_editing = PlanContextualEditingAPI(self)
         self.status_text = PlanStatusTextAPI(self)
         self.task_panels = plan_task_panel.PlanTaskPanelsAPI(self)
         plan_session_state.initialize_session_state(self)

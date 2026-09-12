@@ -303,7 +303,9 @@ class BIMRepresentation:
                 )
 
 
-def _project_to_context_plane(point, context):
+def project_to_representation_plane(point, context):
+    """Project *point* onto the target plane of a representation context."""
+
     frame = getattr(context, "reference_frame", None)
     if frame is None:
         target_offset = getattr(context, "target_offset", None)
@@ -367,7 +369,11 @@ def _nearest_snap_point(geometry, point):
 def query_representation_snap(representations, point, tolerance, context=None):
     """Return the nearest semantic representation target within ``tolerance``."""
 
-    query_point = _project_to_context_plane(FreeCAD.Vector(point), context) if context else point
+    query_point = (
+        project_to_representation_plane(FreeCAD.Vector(point), context)
+        if context
+        else point
+    )
     winner = None
     for representation in representations or ():
         for target in representation.iter_snap_targets():

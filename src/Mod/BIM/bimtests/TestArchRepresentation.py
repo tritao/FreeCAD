@@ -16,6 +16,7 @@ from ArchRepresentation import (
     query_representation_snap,
     representation_for,
 )
+from bimplan.contextual_editing import BIMContextualHandleEditor
 
 
 class TestArchRepresentation(unittest.TestCase):
@@ -97,6 +98,39 @@ class TestArchRepresentation(unittest.TestCase):
         operation.apply(source, 250.0)
         self.assertEqual(250.0, source["width"])
         self.assertIs(handle.operation, operation)
+
+    def test_contextual_editor_projects_previews_and_commits(self):
+        source = {"width": 100.0}
+        operation = BIMEditOperation(
+            "set-width",
+            "Set width",
+            lambda value: value["width"],
+            lambda value, width: value.__setitem__("width", width),
+            minimum=10.0,
+            manages_transaction=True,
+        )
+        handle = BIMEditHandle(
+            source,
+            "width",
+            FreeCAD.Vector(0, 0, 0),
+            FreeCAD.Vector(1, 0, 0),
+            operation,
+        )
+        refreshed = []
+        editor = BIMContextualHandleEditor(
+            RepresentationContext(purpose="Plan"), refreshed.append
+        )
+
+        editor.begin(handle)
+        preview = editor.preview(FreeCAD.Vector(25, 50, 10))
+        self.assertEqual(125.0, preview.value)
+        self.assertEqual(FreeCAD.Vector(25, 0, 0), preview.point)
+        result = editor.commit(FreeCAD.Vector(25, 50, 10))
+
+        self.assertTrue(result.success)
+        self.assertEqual(125.0, source["width"])
+        self.assertEqual([source], refreshed)
+        self.assertIsNone(editor.handle)
 
     def test_snap_query_preserves_semantic_identity(self):
         source = object()
