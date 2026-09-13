@@ -91,6 +91,7 @@ SET(bimplan_SRCS
     bimplan/contextual_session.py
     bimplan/contextual_rendering.py
     bimplan/contextual_editing.py
+    bimplan/wall_construction.py
     bimplan/wall_semantic.py
     bimplan/document_visuals.py
     bimplan/editable_points.py
