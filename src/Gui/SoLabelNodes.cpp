@@ -358,6 +358,7 @@ SoFrameLabel::SoFrameLabel()
     SO_NODE_ADD_FIELD(string, (""));
     SO_NODE_ADD_FIELD(textColor, (SbVec3f(1.0f, 1.0f, 1.0f)));
     SO_NODE_ADD_FIELD(backgroundColor, (SbVec3f(0.0f, 0.333f, 1.0f)));
+    SO_NODE_ADD_FIELD(borderColor, (SbVec3f(0.0f, 0.0f, 0.498f)));
     SO_NODE_ADD_FIELD(justification, (LEFT));
     SO_NODE_ADD_FIELD(name, ("Helvetica"));
     SO_NODE_ADD_FIELD(size, (12));
@@ -365,6 +366,12 @@ SoFrameLabel::SoFrameLabel()
     SO_NODE_ADD_FIELD(border, (true));
     SO_NODE_ADD_FIELD(backgroundUseBaseColor, (false));
     SO_NODE_ADD_FIELD(textUseBaseColor, (false));
+    SO_NODE_ADD_FIELD(backgroundOpacity, (1.0f));
+    SO_NODE_ADD_FIELD(borderOpacity, (1.0f));
+    SO_NODE_ADD_FIELD(borderWidth, (2));
+    SO_NODE_ADD_FIELD(padding, (5));
+    SO_NODE_ADD_FIELD(cornerRadius, (5));
+    SO_NODE_ADD_FIELD(pixelOffset, (SbVec2s(0, 0)));
     // SO_NODE_ADD_FIELD(image, (SbVec2s(0,0), 0, NULL));
 }
 
@@ -380,7 +387,10 @@ void SoFrameLabel::notify(SoNotList* list)
     SoField* f = list->getLastField();
     if (f == &this->string || f == &this->textColor || f == &this->backgroundColor
         || f == &this->justification || f == &this->name || f == &this->size || f == &this->frame
-        || f == &this->border || f == &this->backgroundUseBaseColor || f == &this->textUseBaseColor) {
+        || f == &this->border || f == &this->backgroundUseBaseColor || f == &this->textUseBaseColor
+        || f == &this->borderColor || f == &this->backgroundOpacity || f == &this->borderOpacity
+        || f == &this->borderWidth || f == &this->padding || f == &this->cornerRadius
+        || f == &this->pixelOffset) {
         imageDirty = true;
     }
 
@@ -402,9 +412,20 @@ void SoFrameLabel::drawImage(const SbColor& effectiveBackground, const SbColor& 
     int h = fm.height() * num;
     QColor backgroundBrush;
     backgroundBrush.setRgbF(effectiveBackground[0], effectiveBackground[1], effectiveBackground[2]);
+    backgroundBrush.setAlphaF(std::clamp(backgroundOpacity.getValue(), 0.0f, 1.0f));
     QColor front;
     front.setRgbF(effectiveText[0], effectiveText[1], effectiveText[2]);
-    const QPen borderPen(QColor(0, 0, 127), 2, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin);
+    const SbColor borderValue = borderColor.getValue();
+    QColor borderBrush;
+    borderBrush.setRgbF(borderValue[0], borderValue[1], borderValue[2]);
+    borderBrush.setAlphaF(std::clamp(borderOpacity.getValue(), 0.0f, 1.0f));
+    const QPen borderPen(
+        borderBrush,
+        std::max(0, borderWidth.getValue()),
+        Qt::SolidLine,
+        Qt::RoundCap,
+        Qt::RoundJoin
+    );
 
     QStringList lines;
     for (int i = 0; i < num; i++) {
@@ -413,7 +434,7 @@ void SoFrameLabel::drawImage(const SbColor& effectiveBackground, const SbColor& 
         lines << line;
     }
 
-    int padding = 5;
+    const int labelPadding = std::max(0, padding.getValue());
 
     bool drawIcon = false;
     QImage iconImg;
@@ -422,16 +443,23 @@ void SoFrameLabel::drawImage(const SbColor& effectiveBackground, const SbColor& 
     if (!iconPixmap.isNull()) {
         drawIcon = true;
         iconImg = iconPixmap.toImage();
-        widthIcon = iconImg.width() + 2 * padding;
-        heightIcon = iconImg.height() + 2 * padding;
+        widthIcon = iconImg.width() + 2 * labelPadding;
+        heightIcon = iconImg.height() + 2 * labelPadding;
     }
 
-    int widthText = w + 2 * padding;
-    int heightText = h + 2 * padding;
-    int widthTotal = widthText + widthIcon;
-    int heightTotal = heightText > heightIcon ? heightText : heightIcon;
-    int paddingTextV = (heightTotal - h) / 2;
-    int paddingIconV = (heightTotal - iconImg.height()) / 2;
+    int widthText = w + 2 * labelPadding;
+    int heightText = h + 2 * labelPadding;
+    int labelWidth = widthText + widthIcon;
+    int labelHeight = heightText > heightIcon ? heightText : heightIcon;
+    const SbVec2s offset = pixelOffset.getValue();
+    const int offsetX = offset[0];
+    const int offsetY = offset[1];
+    int widthTotal = labelWidth + 2 * std::abs(offsetX);
+    int heightTotal = labelHeight + 2 * std::abs(offsetY);
+    const int labelLeft = std::abs(offsetX) + offsetX;
+    const int labelTop = std::abs(offsetY) + offsetY;
+    int paddingTextV = (labelHeight - h) / 2;
+    int paddingIconV = (labelHeight - iconImg.height()) / 2;
 
     QImage image(widthTotal, heightTotal, QImage::Format_ARGB32_Premultiplied);
     image.fill(0x00000000);
@@ -444,12 +472,13 @@ void SoFrameLabel::drawImage(const SbColor& effectiveBackground, const SbColor& 
         painter.setPen(drawBorder ? borderPen : QPen(Qt::transparent));
         painter.setBrush(QBrush(drawFrame ? backgroundBrush : Qt::transparent));
 
-        QRectF rectangle(0.0, 0.0, widthTotal, heightTotal);
-        painter.drawRoundedRect(rectangle, 5, 5);
+        QRectF rectangle(labelLeft, labelTop, labelWidth, labelHeight);
+        const int radius = std::max(0, cornerRadius.getValue());
+        painter.drawRoundedRect(rectangle, radius, radius);
     }
 
     if (drawIcon) {
-        painter.drawImage(QPoint(padding, paddingIconV), iconImg);
+        painter.drawImage(QPoint(labelLeft + labelPadding, labelTop + paddingIconV), iconImg);
     }
 
     painter.setPen(front);
@@ -466,7 +495,7 @@ void SoFrameLabel::drawImage(const SbColor& effectiveBackground, const SbColor& 
     }
     QString text = lines.join(QLatin1String("\n"));
     painter.setFont(font);
-    painter.drawText(widthIcon + padding, paddingTextV, w, h, align, text);
+    painter.drawText(labelLeft + widthIcon + labelPadding, labelTop + paddingTextV, w, h, align, text);
     painter.end();
 
     SoSFImage sfimage;

@@ -26,8 +26,10 @@
 #include <Inventor/fields/SoSFBool.h>
 #include <Inventor/fields/SoSFColor.h>
 #include <Inventor/fields/SoSFEnum.h>
+#include <Inventor/fields/SoSFFloat.h>
 #include <Inventor/fields/SoSFInt32.h>
 #include <Inventor/fields/SoSFName.h>
+#include <Inventor/fields/SoSFVec2s.h>
 #include <Inventor/SbColor.h>
 #include <Inventor/SbMatrix.h>
 #include <Inventor/SbVec2f.h>
@@ -133,6 +135,7 @@ public:
     SoMFString string;
     SoSFColor textColor;
     SoSFColor backgroundColor;
+    SoSFColor borderColor;
     SoSFEnum justification;
     SoSFName name;
     SoSFInt32 size;
@@ -140,6 +143,12 @@ public:
     SoSFBool border;
     SoSFBool backgroundUseBaseColor;
     SoSFBool textUseBaseColor;
+    SoSFFloat backgroundOpacity;
+    SoSFFloat borderOpacity;
+    SoSFInt32 borderWidth;
+    SoSFInt32 padding;
+    SoSFInt32 cornerRadius;
+    SoSFVec2s pixelOffset;
     // SoSFImage  image;
     QPixmap iconPixmap;
 
