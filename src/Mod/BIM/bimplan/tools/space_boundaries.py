@@ -316,13 +316,13 @@ def build_space_preflight_report(session, targets=None):
     if not request:
         return None
 
-    import ArchSpace
+    import ArchSpaceSemantic
 
-    return ArchSpace.analyzeBoundaryLinks(
+    return ArchSpaceSemantic.evaluate_boundaries(
         request.boundaries,
         label=request.label,
         seed_space=request.region_seed_space,
-    )
+    ).to_report()
 
 
 def format_space_preflight_text(report):

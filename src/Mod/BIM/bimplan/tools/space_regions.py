@@ -63,13 +63,14 @@ def _selection_refresh_api(session):
 
 
 def build_space_region_candidate_report(session, boundaries, label=None, seed_space=None):
-    import ArchSpace
+    import ArchSpaceSemantic
 
-    report = ArchSpace.getBoundaryRegionCandidates(
+    report = ArchSpaceSemantic.evaluate_boundaries(
         boundaries,
         label=label,
         seed_space=seed_space,
-    )
+        candidates=True,
+    ).to_report()
     return _normalize_space_region_candidate_report(
         session,
         report,
@@ -194,45 +195,6 @@ def _report_space_reassignment_failure(space):
     return False
 
 
-def _create_space_in_transaction(
-    session,
-    *,
-    create_space,
-    boundaries=None,
-    keep_boundaries=False,
-):
-    import ArchSpace
-
-    boundaries = list(boundaries or [])
-    space = None
-    reported_failure = False
-    try:
-        session.doc.openTransaction(translate("BIM_PlanEdit", "Create Space"))
-        space = create_space()
-        if not space:
-            raise RuntimeError("Unable to create space")
-        if keep_boundaries and boundaries:
-            ArchSpace.setBoundaryLinks(space, boundaries)
-        session.visibility.add_object_to_active_storey(space)
-        session.doc.recompute()
-        geometry_valid = bool(session.spaces.space_has_valid_geometry(space))
-        if not geometry_valid:
-            reported_failure = bool(session.spaces.report_space_creation_failure(space))
-            raise RuntimeError("Unable to create space")
-        session.doc.commitTransaction()
-    except Exception:
-        try:
-            session.doc.abortTransaction()
-        except Exception:
-            pass
-        if not reported_failure:
-            FreeCAD.Console.PrintError(
-                translate("BIM_PlanEdit", "Failed to create the selected space.\n")
-            )
-        return None
-    return space
-
-
 def _reassign_space_in_transaction(
     session,
     space,
@@ -240,7 +202,7 @@ def _reassign_space_in_transaction(
     *,
     boundaries=None,
 ):
-    import ArchSpace
+    import ArchSpaceSemantic
 
     if space is None or not isinstance(candidate, dict):
         return None
@@ -248,26 +210,16 @@ def _reassign_space_in_transaction(
     if sample_point is None:
         return None
     boundaries = list(boundaries or session.spaces.get_space_boundary_entries(space))
-    reported_failure = False
     try:
-        session.doc.openTransaction(translate("BIM_PlanEdit", "Reassign Space Region"))
-        if boundaries:
-            ArchSpace.setBoundaryLinks(space, boundaries)
-        ArchSpace.setBoundaryRegionReferencePoint(space, sample_point)
-        space.touch()
-        session.doc.recompute()
-        geometry_valid = bool(session.spaces.space_has_valid_geometry(space))
-        status = str(getattr(space, "BoundaryStatus", "") or "").strip()
-        if not geometry_valid or status == "Conflict":
-            reported_failure = _report_space_reassignment_failure(space)
-            raise RuntimeError("Unable to reassign space region")
-        session.doc.commitTransaction()
+        ArchSpaceSemantic.reassign_region(
+            session.doc,
+            space,
+            sample_point,
+            boundaries=boundaries,
+            transaction_name=translate("BIM_PlanEdit", "Reassign Space Region"),
+        )
     except Exception:
-        try:
-            session.doc.abortTransaction()
-        except Exception:
-            pass
-        if not reported_failure:
+        if not _report_space_reassignment_failure(space):
             FreeCAD.Console.PrintError(
                 translate("BIM_PlanEdit", "Failed to reassign the selected space.\n")
             )
@@ -608,12 +560,10 @@ def create_space_from_region_candidate(session, candidate, boundaries=None, keep
     if not isinstance(candidate, dict):
         return None
     import ArchSpaceConstruction
-    shape = plan_space_geometry.copy_shape_without_element_map(candidate.get("shape"))
     try:
-        return ArchSpaceConstruction.construct_space(
+        return ArchSpaceConstruction.construct_space_from_candidate(
             session.doc,
-            shape,
-            sample_point=candidate.get("sample_point"),
+            candidate,
             boundaries=boundaries if keep_boundaries else (),
             transaction_name=translate("BIM_PlanEdit", "Create Space"),
             add_to_container=session.visibility.add_object_to_active_storey,
@@ -659,8 +609,8 @@ def activate_space_region_candidate(session, candidate, event_callback=None):
 
 
 def create_space_from_current_selection(session):
-    import Arch
-    import ArchSpace
+    import ArchSpaceSemantic
+    import ArchSpaceConstruction
 
     request = plan_space_boundaries.build_space_creation_request(session)
     if not request:
@@ -698,7 +648,7 @@ def create_space_from_current_selection(session):
             keep_boundaries=False,
         )
 
-    report = ArchSpace.analyzeBoundaryLinks(boundaries)
+    report = ArchSpaceSemantic.evaluate_boundaries(boundaries).to_report()
     if report.get("code") == "multiple_regions":
         region_report = build_space_region_candidate_report(
             session,
@@ -712,10 +662,19 @@ def create_space_from_current_selection(session):
             keep_boundaries=True,
         )
 
-    space = _create_space_in_transaction(
-        session,
-        create_space=lambda: Arch.makeSpace(boundaries),
-    )
+    try:
+        space = ArchSpaceConstruction.construct_space_from_boundaries(
+            session.doc,
+            boundaries,
+            transaction_name=translate("BIM_PlanEdit", "Create Space"),
+            add_to_container=session.visibility.add_object_to_active_storey,
+            validate=session.spaces.space_has_valid_geometry,
+        )
+    except Exception:
+        FreeCAD.Console.PrintError(
+            translate("BIM_PlanEdit", "Failed to create the selected space.\n")
+        )
+        return False
     if not space:
         return False
 
@@ -725,18 +684,9 @@ def create_space_from_current_selection(session):
 def space_has_valid_geometry(session, space):
     if not _selection_targets_api(session).is_plan_space_object(space):
         return False
-    try:
-        shape = getattr(space, "Shape", None)
-    except Exception:
-        return False
-    if not shape:
-        return False
-    try:
-        if shape.isNull():
-            return False
-    except Exception:
-        pass
-    return bool(getattr(shape, "Solids", None))
+    import ArchSpaceSemantic
+
+    return ArchSpaceSemantic.has_valid_geometry(space)
 
 
 def report_space_creation_failure(space):

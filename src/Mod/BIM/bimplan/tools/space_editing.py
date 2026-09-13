@@ -133,19 +133,16 @@ def set_selected_region_parent_space(session, space):
 def set_space_boundaries(session, space, boundaries):
     if not _selection_targets_api(session).is_plan_space_object(space):
         return False
-    import ArchSpace
+    import ArchSpaceSemantic
 
-    boundaries = ArchSpace.normalizeBoundaryLinks(boundaries)
     try:
-        session.doc.openTransaction(translate("BIM_PlanEdit", "Edit Space Boundaries"))
-        ArchSpace.setBoundaryLinks(space, boundaries)
-        session.doc.commitTransaction()
-        session.doc.recompute()
+        ArchSpaceSemantic.set_boundaries(
+            session.doc,
+            space,
+            boundaries,
+            transaction_name=translate("BIM_PlanEdit", "Edit Space Boundaries"),
+        )
     except Exception:
-        try:
-            session.doc.abortTransaction()
-        except Exception:
-            pass
         return False
     refresh_selected_space_visuals(session)
     session.task_panels.refresh_task_panel_status()
