@@ -896,6 +896,26 @@ class TestBimPlanEditSessionGui(TestArchBaseGui):
         self.assertEqual(results[0], results[1])
         self.assertEqual(results[0], results[2])
 
+    def test_contextual_wall_creation_preview_and_cancel_are_reversible(self):
+        view = FreeCADGui.ActiveDocument.ActiveView
+        session = BIMContextualEditingSession(view, sources=())
+        requests = []
+        try:
+            self.pump_gui_events(20)
+            session.host.request_point = lambda callback, **kwargs: requests.append((callback, kwargs))
+            action = next(item for item in session.contextual_actions if item.key == "create-wall")
+            self.assertTrue(session.activate_action(action))
+            requests.pop(0)[0](FreeCAD.Vector())
+            callback, options = requests.pop(0)
+            options["move_callback"](FreeCAD.Vector(1200, 0, 0))
+            self.assertIn(session._creation_preview_source, session.renderer._preview_nodes)
+            self.assertIsNotNone(session.host._value_input)
+            callback(None)
+            self.assertNotIn(session._creation_preview_source, session.renderer._preview_nodes)
+            self.assertIsNone(session.host._value_input)
+        finally:
+            session.close()
+
     def test_standard_3d_ray_constraints_commit_path_move_and_offset(self):
         wall = Arch.makeWall(length=3000, width=200, height=2500, align="Left")
         self.document.recompute()

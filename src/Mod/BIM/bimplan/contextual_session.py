@@ -71,6 +71,9 @@ class BIMContextualEditingSession:
             )
         )
         self._provider_context = None
+        self._creation_preview_source = object()
+        self._wall_start = None
+        self._wall_direction = None
         self.action_panel = ContextualActionPanel()
         self.host = DraftInteractionHost(view=self.view)
 
@@ -139,6 +142,9 @@ class BIMContextualEditingSession:
                 wall, point, spec
             ),
             title="{} location".format(spec.validated().kind),
+            move_callback=lambda point, _info=None: self._preview_hosted_opening(
+                wall, point, spec
+            ),
         )
         return True
 
@@ -149,11 +155,19 @@ class BIMContextualEditingSession:
 
     def _accept_wall_point(self, point, _obj=None):
         if point is None:
+            self._wall_start = None
+            self._wall_direction = None
+            self.renderer.clear_preview(self._creation_preview_source)
+            self.host.clear_value_input()
             self._request_interaction()
             return None
         if self._wall_start is None:
             self._wall_start = FreeCAD.Vector(point)
-            self.host.request_point(self._accept_wall_point, title="Wall end")
+            self.host.request_point(
+                self._accept_wall_point,
+                move_callback=self._preview_wall,
+                title="Wall end",
+            )
             return None
         import ArchWallConstruction
         walls = ArchWallConstruction.construct_wall_run(
@@ -162,8 +176,50 @@ class BIMContextualEditingSession:
             transaction_name="Create Wall", auto_join=False,
         )
         self._wall_start = None
+        self.renderer.clear_preview(self._creation_preview_source)
         self._request_interaction()
         return walls[0]
+
+    def _preview_wall(self, point, _info=None):
+        if self._wall_start is None or point is None:
+            return
+        import Part
+        vector = FreeCAD.Vector(point).sub(self._wall_start)
+        if vector.Length < 10:
+            self.renderer.clear_preview(self._creation_preview_source)
+            return
+        shape = Part.makeBox(vector.Length, 200, 2500)
+        shape.Placement = FreeCAD.Placement(
+            self._wall_start,
+            FreeCAD.Rotation(FreeCAD.Vector(1, 0, 0), vector),
+        )
+        self.renderer.set_preview_shape(self._creation_preview_source, shape)
+        self._wall_direction = FreeCAD.Vector(vector).normalize()
+        self.host.set_value_input(
+            label="Wall length",
+            unit="Length",
+            value=vector.Length,
+            callback=self._commit_wall_length,
+        )
+
+    def _commit_wall_length(self, value):
+        if self._wall_start is None or self._wall_direction is None:
+            return
+        end = self._wall_start.add(
+            FreeCAD.Vector(self._wall_direction).multiply(float(value))
+        )
+        self._accept_wall_point(end)
+
+    def _preview_hosted_opening(self, wall, point, spec):
+        if point is None:
+            return
+        import Part
+        value = spec.validated()
+        shape = Part.makeBox(value.width, 200, value.height)
+        shape.Placement = ArchOpeningConstruction.hosted_opening_placement(
+            wall, point, value
+        )
+        self.renderer.set_preview_shape(self._creation_preview_source, shape)
 
     def _finish_hosted_opening_creation(self, wall, point, spec):
         if self._closed:
@@ -183,6 +239,7 @@ class BIMContextualEditingSession:
             self._show_feedback(exc)
             return None
         finally:
+            self.renderer.clear_preview(self._creation_preview_source)
             if not self._closed:
                 self._request_interaction()
 
@@ -216,6 +273,8 @@ class BIMContextualEditingSession:
         try:
             self.controller.cancel(refresh=False)
             self.host.stop_request()
+            self.host.clear_value_input()
+            self.renderer.clear_preview(self._creation_preview_source)
             self.action_panel.close()
             try:
                 self.renderer.close()
