@@ -109,6 +109,33 @@ class TestArchRepresentation(unittest.TestCase):
                     offenders.append("{}:{}".format(source.name, node.lineno))
         self.assertEqual([], offenders)
 
+    def test_contextual_session_has_no_construction_domain_ownership(self):
+        session_source = (
+            Path(__file__).resolve().parents[1] / "bimcontextual" / "session.py"
+        )
+        tree = ast.parse(
+            session_source.read_text(encoding="utf-8"), filename=str(session_source)
+        )
+        imported_modules = set()
+        method_names = set()
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Import):
+                imported_modules.update(alias.name for alias in node.names)
+            elif isinstance(node, ast.ImportFrom) and node.module:
+                imported_modules.add(node.module)
+            elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                method_names.add(node.name)
+        self.assertTrue(
+            imported_modules.isdisjoint(
+                {"ArchOpeningConstruction", "ArchWallConstruction"}
+            )
+        )
+        self.assertTrue(
+            method_names.isdisjoint(
+                {"begin_wall_creation", "begin_hosted_opening_creation"}
+            )
+        )
+
     def test_context_profiles_declare_purpose_and_capabilities(self):
         for purpose in RepresentationPurpose:
             profile = profile_for(RepresentationContext(purpose=purpose))
