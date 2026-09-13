@@ -15,6 +15,7 @@ from ArchRepresentation import BIMEditRay, RepresentationContext, Representation
 from bimtests.TestArchBaseGui import TestArchBaseGui
 from bimplan.runtime.session import PlanEditSession
 from bimplan.contextual_session import BIMContextualEditingSession
+from bimplan.wall_semantic import apply_wall_candidate
 from bimplan.providers import PlanEditProvider, PlanEditRegistry
 from BimContextualRendering import (
     ContextualInteractionRenderer,
@@ -1311,6 +1312,25 @@ class TestBimPlanEditSessionGui(TestArchBaseGui):
             self.assertTrue(opening.Placement.Base.isEqual(midpoint, 1e-7))
         finally:
             session.shutdown(close_dialog=False)
+
+    def test_semantic_wall_move_repositions_hosted_opening(self):
+        wall = Arch.makeWall(length=3000, width=200, height=2500, align="Center")
+        self.document.recompute()
+        endpoints = tuple(wall.Proxy.calc_endpoints(wall))
+        midpoint = (endpoints[0] + endpoints[1]) * 0.5
+        opening = self.document.addObject("Part::FeaturePython", "SemanticOpening")
+        opening.addProperty("App::PropertyLinkList", "Hosts")
+        opening.Hosts = [wall]
+        opening.Placement.Base = midpoint
+        opening.Proxy = _HostedOpeningProxy(opening)
+
+        delta = FreeCAD.Vector(0, 350, 0)
+        apply_wall_candidate(wall, "Move", midpoint + delta)
+
+        moved = wall.Proxy.calc_endpoints(wall)
+        self.assertTrue(moved[0].isEqual(endpoints[0] + delta, 1e-7))
+        self.assertTrue(moved[1].isEqual(endpoints[1] + delta, 1e-7))
+        self.assertTrue(opening.Placement.Base.isEqual(midpoint + delta, 1e-7))
 
     def test_joint_diamond_moves_both_wall_endpoints_atomically(self):
         wall = Arch.makeWall(length=3000, width=200, height=2500, align="Center")

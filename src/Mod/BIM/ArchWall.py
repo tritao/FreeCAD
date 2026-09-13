@@ -1629,13 +1629,10 @@ class _Wall(ArchComponent.Component):
         relation_controlled_ends = self._relation_controlled_native_ends(wall)
 
         def apply_endpoint(source, index, value):
-            from bimplan.wall_semantic import evaluate_wall_candidate
+            from bimplan.wall_semantic import apply_wall_candidate
 
             mode = "Start" if index == 0 else "End"
-            result = evaluate_wall_candidate(self.calc_endpoints(source), mode, value)
-            if not result.allowed:
-                raise ValueError(result.reason)
-            source.Proxy.set_from_endpoints(source, result.endpoints)
+            apply_wall_candidate(source, mode, value)
 
         for index, role in enumerate(("Start", "End")):
             if role in relation_controlled_ends:
@@ -1673,12 +1670,9 @@ class _Wall(ArchComponent.Component):
         midpoint = (endpoints[0] + endpoints[1]) * 0.5
 
         def move_wall(source, value):
-            from bimplan.wall_semantic import evaluate_wall_candidate
+            from bimplan.wall_semantic import apply_wall_candidate
 
-            result = evaluate_wall_candidate(self.calc_endpoints(source), "Move", value)
-            if not result.allowed:
-                raise ValueError(result.reason)
-            source.Proxy.set_from_endpoints(source, result.endpoints)
+            apply_wall_candidate(source, "Move", value)
 
         move_operation = ArchRepresentation.BIMEditOperation(
             "WallMove",
