@@ -1,15 +1,6 @@
 # SPDX-License-Identifier: LGPL-2.1-or-later
 
-"""Provider-facing models for BIM Plan Edit integrations."""
-
-from bimcontextual.actions import (
-    ContextualActionSpec,
-    ContextualInspectorSection,
-    ContextualProvider,
-    ContextualProviderContext,
-    ContextualToolSpec,
-    SemanticEditProvider,
-)
+"""Plan-specific provider models and integrations."""
 
 from .contracts import (
     PlanActionSpec,

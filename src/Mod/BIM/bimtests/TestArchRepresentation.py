@@ -81,10 +81,23 @@ class TestArchRepresentation(unittest.TestCase):
         self.assertTrue(ArchSpaceSemantic.has_valid_geometry(solid))
         self.assertFalse(ArchSpaceSemantic.has_valid_geometry(wire))
 
-    def test_shared_contextual_package_has_no_plan_imports(self):
-        package = Path(__file__).resolve().parents[1] / "bimcontextual"
+    def test_shared_contextual_and_domain_modules_have_no_plan_imports(self):
+        bim_root = Path(__file__).resolve().parents[1]
+        package = bim_root / "bimcontextual"
+        domain_modules = (
+            "ArchRepresentation.py",
+            "ArchWall.py",
+            "ArchWallSemantic.py",
+            "ArchWallConstruction.py",
+            "ArchOpeningConstruction.py",
+            "ArchSpaceConstruction.py",
+            "ArchSpaceSemantic.py",
+        )
+        sources = tuple(package.glob("*.py")) + tuple(
+            bim_root / name for name in domain_modules
+        )
         offenders = []
-        for source in package.glob("*.py"):
+        for source in sources:
             tree = ast.parse(source.read_text(encoding="utf-8"), filename=str(source))
             for node in ast.walk(tree):
                 names = []
@@ -93,7 +106,7 @@ class TestArchRepresentation(unittest.TestCase):
                 elif isinstance(node, ast.ImportFrom) and node.module:
                     names = [node.module]
                 if any(name == "bimplan" or name.startswith("bimplan.") for name in names):
-                    offenders.append(source.name)
+                    offenders.append("{}:{}".format(source.name, node.lineno))
         self.assertEqual([], offenders)
 
     def test_context_profiles_declare_purpose_and_capabilities(self):
