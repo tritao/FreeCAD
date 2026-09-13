@@ -32,7 +32,7 @@
 
 ## \addtogroup draftguitools
 # @{
-from PySide import QtCore
+from PySide import QtCore, QtWidgets
 from pivy import coin
 
 import FreeCAD as App
@@ -66,6 +66,7 @@ class DraftInteractionHost:
         self._drag_callbacks = []
         self._drag_request_serial = 0
         self._dragging = False
+        self._value_input = None
 
     def activate_command(self, command=None):
         if command is not None:
@@ -254,6 +255,61 @@ class DraftInteractionHost:
 
         self.stop_point_request()
         self._stop_drag_request()
+        self.clear_value_input()
+
+    def set_value_input(self, label, unit, value, callback):
+        """Expose a dimensional value editor for the active interaction."""
+
+        self.clear_value_input()
+        main_window = Gui.getMainWindow()
+        status_bar = main_window.statusBar()
+        container = QtWidgets.QWidget(status_bar)
+        layout = QtWidgets.QHBoxLayout(container)
+        layout.setContentsMargins(4, 0, 4, 0)
+        layout.addWidget(QtWidgets.QLabel(str(label), container))
+        field = Gui.UiLoader().createWidget("Gui::InputField")
+        field.setParent(container)
+        field.setMinimumWidth(120)
+        unit_type = getattr(App.Units, str(unit), None)
+        unit_text = (
+            unit_type.getUserPreferred()[2]
+            if unit_type is not None and hasattr(unit_type, "getUserPreferred")
+            else str(unit)
+        )
+        field.setProperty("unit", unit_text)
+        field.setProperty("rawValue", float(value))
+        layout.addWidget(field)
+
+        def submit():
+            if self._value_input is None or self._value_input[1] is not field:
+                return
+            callback(float(field.property("rawValue")))
+
+        field.returnPressed.connect(submit)
+        status_bar.addPermanentWidget(container)
+        container.show()
+        field.selectAll()
+        field.setFocus()
+        self._value_input = (container, field, submit)
+        return field
+
+    def clear_value_input(self):
+        value_input = self._value_input
+        self._value_input = None
+        if value_input is None:
+            return
+        container, field, submit = value_input
+        try:
+            field.returnPressed.disconnect(submit)
+        except (RuntimeError, TypeError):
+            pass
+        try:
+            status_bar = Gui.getMainWindow().statusBar()
+            status_bar.removeWidget(container)
+        except (RuntimeError, ReferenceError):
+            pass
+        container.hide()
+        container.deleteLater()
 
     def supports_extra_widget(self):
         """Return True when point requests may attach an extra task widget."""

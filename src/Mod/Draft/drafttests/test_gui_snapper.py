@@ -282,6 +282,21 @@ class DraftSnapper(test_base.DraftTestCaseDoc):
         self.assertEqual(3, len(removed))
         self.assertFalse(host._dragging)
 
+    def test_interaction_host_exposes_dimensional_value_input(self):
+        """Hosted value input should parse units before dispatching a value."""
+
+        values = []
+        host = gui_base.DraftInteractionHost()
+        field = host.set_value_input("Width", "Length", 200.0, values.append)
+        try:
+            field.setProperty("quantityString", "2.8 m")
+            field.returnPressed.emit()
+            self.assertEqual([2800.0], values)
+        finally:
+            host.clear_value_input()
+            QtCore.QCoreApplication.processEvents()
+        self.assertIsNone(host._value_input)
+
     def test_point_request_uses_host_modifier_resolution(self):
         """The Snapper applies a host's modifier policy before snapping."""
 
