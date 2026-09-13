@@ -29,6 +29,7 @@ import FreeCADGui
 import math
 from enum import Enum
 from draftguitools import gui_base
+from bimplan import wall_construction
 
 QT_TRANSLATE_NOOP = FreeCAD.Qt.QT_TRANSLATE_NOOP
 translate = FreeCAD.Qt.translate
@@ -52,38 +53,25 @@ def create_baseless_wall_from_endpoints(
     auto_group=True,
     on_created=None,
 ):
-    """Create one baseless wall segment from two global endpoints."""
+    """Compatibility wrapper around the shared wall construction service."""
 
-    import Arch
-
-    line_vector = p1.sub(p0)
-    length = line_vector.Length
-    if length <= 0:
-        return None
-
-    midpoint = (p0 + p1) * 0.5
-    direction = line_vector.normalize()
-    rotation = FreeCAD.Rotation(FreeCAD.Vector(1, 0, 0), direction)
-    wall = Arch.makeWall(
-        length=length,
+    spec = wall_construction.WallConstructionSpec(
         width=width,
         height=height,
         align=align,
         offset=offset,
+        material=material,
     )
-    wall.Placement = FreeCAD.Placement(midpoint, rotation)
-    if material is not None:
-        wall.Material = material
-    if auto_group and FreeCAD.GuiUp:
-        try:
-            import Draft
-
-            Draft.autogroup(wall)
-        except Exception:
-            pass
-    if on_created:
-        on_created(wall)
-    return wall
+    try:
+        return wall_construction.create_wall_segment(
+            p0,
+            p1,
+            spec,
+            auto_group=auto_group,
+            on_created=on_created,
+        )
+    except wall_construction.WallConstructionError:
+        return None
 
 
 def create_wall_run_from_points(
@@ -98,56 +86,33 @@ def create_wall_run_from_points(
     closed=False,
     on_created=None,
 ):
-    """Create a run of baseless wall segments from ordered global points."""
+    """Compatibility wrapper around the shared wall construction service."""
 
-    if not points or len(points) < 2:
-        return []
-
-    segments = list(zip(points, points[1:]))
-    if closed and len(points) > 2:
-        segments.append((points[-1], points[0]))
-
-    walls = []
-    for start, end in segments:
-        wall = create_baseless_wall_from_endpoints(
-            start,
-            end,
-            width=width,
-            height=height,
-            align=align,
-            offset=offset,
-            material=material,
-            auto_group=auto_group,
-            on_created=on_created,
+    spec = wall_construction.WallConstructionSpec(
+        width=width,
+        height=height,
+        align=align,
+        offset=offset,
+        material=material,
+    )
+    try:
+        return list(
+            wall_construction.create_wall_run(
+                points,
+                spec,
+                closed=closed,
+                auto_group=auto_group,
+                on_created=on_created,
+            )
         )
-        if wall is not None:
-            walls.append(wall)
-    return walls
+    except wall_construction.WallConstructionError:
+        return []
 
 
 def autojoin_wall_run(walls, *, closed=False):
-    """Apply the standard non-destructive autojoin policy to a wall run."""
+    """Compatibility wrapper around the shared wall construction service."""
 
-    from draftutils import params
-    import Arch
-
-    if not walls or len(walls) < 2:
-        return
-    if not params.get_param_arch("autoJoinWalls"):
-        return
-
-    host = walls[0]
-    if closed:
-        additions = [wall for wall in walls[1:] if wall is not None and wall is not host]
-        if additions:
-            Arch.addComponents(additions, host)
-        return
-
-    for wall in walls[1:]:
-        if wall is None or wall is host:
-            continue
-        Arch.addComponents(wall, host)
-        host = wall
+    return wall_construction.autojoin_wall_run(walls, closed=closed)
 
 
 class Arch_Wall:
