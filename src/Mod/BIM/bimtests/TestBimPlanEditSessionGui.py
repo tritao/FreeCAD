@@ -332,6 +332,86 @@ class TestBimPlanEditSessionGui(TestArchBaseGui):
             FreeCADGui.Selection.clearSelection()
         self.assertEqual("Inherit", view.getViewVisibility(wall))
 
+    def test_standard_3d_ray_constraints_commit_path_move_and_offset(self):
+        wall = Arch.makeWall(length=3000, width=200, height=2500, align="Left")
+        self.document.recompute()
+        view = FreeCADGui.ActiveDocument.ActiveView
+        FreeCADGui.Selection.clearSelection()
+        FreeCADGui.Selection.addSelection(wall)
+        session = BIM3DContextualEditingSession(view)
+        try:
+            self.pump_gui_events(20)
+
+            def edit_handle(subelement, ray_origin, ray_direction):
+                handle = next(
+                    item
+                    for item in session.renderer.edit_handles_for(wall)
+                    if item.subelement == subelement
+                )
+                self.assertTrue(session.begin_handle_edit(handle), subelement)
+                ray = BIMEditRay(ray_origin, ray_direction)
+                preview = session.preview_pointer(ray)
+                self.assertTrue(preview.validation.allowed, preview.validation.reason)
+                result = session.commit_pointer(ray)
+                self.assertTrue(result.success, result.reason)
+                self.pump_gui_events(20)
+                return preview
+
+            original = tuple(wall.Proxy.calc_endpoints(wall))
+            axis = original[1] - original[0]
+            axis.normalize()
+            lateral = axis.cross(FreeCAD.Vector(0, 0, 1))
+            lateral.normalize()
+
+            start_target = original[0] + axis * 100.0
+            edit_handle(
+                "Path.Start",
+                start_target + lateral * 1000.0,
+                -lateral,
+            )
+            stretched = tuple(wall.Proxy.calc_endpoints(wall))
+            self.assertTrue(stretched[0].isEqual(start_target, 1e-6))
+            self.assertTrue(stretched[1].isEqual(original[1], 1e-6))
+
+            end_target = stretched[1] + axis * 100.0
+            edit_handle(
+                "Path.End",
+                end_target + lateral * 1000.0,
+                -lateral,
+            )
+            extended = tuple(wall.Proxy.calc_endpoints(wall))
+            self.assertTrue(extended[1].isEqual(end_target, 1e-6))
+
+            midpoint = (extended[0] + extended[1]) * 0.5
+            move_target = midpoint + lateral * 150.0
+            edit_handle(
+                "Path",
+                move_target + FreeCAD.Vector(0, 0, 1000),
+                FreeCAD.Vector(0, 0, -1),
+            )
+            moved = tuple(wall.Proxy.calc_endpoints(wall))
+            move_delta = move_target - midpoint
+            self.assertTrue(moved[0].isEqual(extended[0] + move_delta, 1e-6))
+            self.assertTrue(moved[1].isEqual(extended[1] + move_delta, 1e-6))
+
+            initial_offset = wall.Offset.Value
+            offset_handle = next(
+                item
+                for item in session.renderer.edit_handles_for(wall)
+                if item.subelement == "Offset"
+            )
+            offset_target = offset_handle.point + offset_handle.direction * 50.0
+            edit_handle(
+                "Offset",
+                offset_target + FreeCAD.Vector(0, 0, 1000),
+                FreeCAD.Vector(0, 0, -1),
+            )
+            self.assertAlmostEqual(initial_offset + 50.0, wall.Offset.Value)
+            self.assertEqual("Inherit", view.getViewVisibility(wall))
+        finally:
+            session.close()
+            FreeCADGui.Selection.clearSelection()
+
     def test_standard_3d_contextual_editing_callbacks_toggle_with_command(self):
         from bimcommands.BimContextualEdit3D import BIM_ContextualEdit3D
         from bimplan.contextual_edit_3d import active_session
