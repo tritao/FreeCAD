@@ -167,9 +167,7 @@ class PlanViewportAPI:
         return request_view_redraw(self.session)
 
     def queue_scene_graph_mutation(self, key, callback, *, finalizer=False):
-        return queue_scene_graph_mutation(
-            self.session, key, callback, finalizer=finalizer
-        )
+        return queue_scene_graph_mutation(self.session, key, callback, finalizer=finalizer)
 
     def flush_scene_graph_mutations(self):
         return flush_scene_graph_mutations(self.session)
@@ -1071,11 +1069,13 @@ def flush_scene_graph_mutations(session):
 
 
 def discard_queued_view_updates(session):
-    """Cancel pending viewer work and release its Coin callback."""
+    """Cancel pending viewer work while retaining mandatory teardown finalizers."""
 
     state = session.viewport_state
-    state.scene_graph_flush_queued = False
+    finalizers = {key: queued for key, queued in state.scene_graph_mutations.items() if queued[1]}
     state.scene_graph_mutations.clear()
+    state.scene_graph_mutations.update(finalizers)
+    state.scene_graph_flush_queued = bool(finalizers)
     state.redraw_queued = False
 
 

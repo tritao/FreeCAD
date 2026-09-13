@@ -222,13 +222,90 @@ class TestBimPlanEditSessionGui(TestArchBaseGui):
             session.viewport.flush_scene_graph_mutations()
             self.assertIsNot(original_node, renderer._object_nodes[wall])
 
+            stale_callbacks = []
+            self.assertTrue(
+                session.contextual_rendering._queue_renderer_mutation(
+                    "stale-renderer-work", lambda _renderer: stale_callbacks.append(True)
+                )
+            )
             session.contextual_rendering.close()
             self.assertIsNone(session.contextual_rendering.renderer)
             self.assertIsNotNone(renderer.root)
             session.viewport.flush_scene_graph_mutations()
+            self.assertFalse(stale_callbacks)
             self.assertIsNone(renderer.root)
         finally:
             session.shutdown(close_dialog=False)
+
+    def test_document_close_discards_pending_semantic_preview(self):
+        original_document = self.document
+        preview_document = FreeCAD.newDocument("PlanEditPreviewTeardown")
+        preview_document_name = preview_document.Name
+        FreeCAD.setActiveDocument(preview_document_name)
+        FreeCADGui.activeDocument().activeView()
+        wall = Arch.makeWall(length=3000, width=200, height=2500, align="Center")
+        preview_document.recompute()
+        session = PlanEditSession()
+        self.assertTrue(session.enter())
+        renderer = session.contextual_rendering.renderer
+        try:
+            session.selection.state.set_selected_plan_target("wall", wall)
+            session.contextual_rendering.refresh_object(wall)
+            session.viewport.flush_scene_graph_mutations()
+            handle = next(
+                handle
+                for handle in session.contextual_rendering.edit_handles_for(wall)
+                if handle.role == "WallWidth"
+            )
+            self.assertTrue(session.contextual_editing.begin(handle))
+            preview = session.contextual_editing.preview(
+                FreeCAD.Vector(handle.point) + FreeCAD.Vector(0, 80, 0)
+            )
+            self.assertTrue(preview.validation.allowed)
+            self.assertTrue(session.viewport_state.scene_graph_mutations)
+
+            FreeCAD.closeDocument(preview_document_name)
+            self.pump_gui_events()
+
+            self.assertTrue(session.lifecycle_state.tearing_down)
+            self.assertIsNone(session.contextual_rendering.renderer)
+            self.assertIsNone(renderer.root)
+            self.assertFalse(session.viewport_state.scene_graph_mutations)
+        finally:
+            if preview_document_name in FreeCAD.listDocuments():
+                FreeCAD.closeDocument(preview_document_name)
+            FreeCAD.setActiveDocument(original_document.Name)
+
+    def test_repeated_sessions_release_preview_scene_nodes(self):
+        wall = Arch.makeWall(length=3000, width=200, height=2500, align="Center")
+        self.document.recompute()
+
+        for step in range(3):
+            session = PlanEditSession()
+            self.assertTrue(session.enter())
+            renderer = session.contextual_rendering.renderer
+            view = session.view
+            try:
+                session.selection.state.set_selected_plan_target("wall", wall)
+                session.contextual_rendering.refresh_object(wall)
+                session.viewport.flush_scene_graph_mutations()
+                handle = next(
+                    handle
+                    for handle in session.contextual_rendering.edit_handles_for(wall)
+                    if handle.role == "WallWidth"
+                )
+                self.assertTrue(session.contextual_editing.begin(handle))
+                preview = session.contextual_editing.preview(
+                    FreeCAD.Vector(handle.point) + FreeCAD.Vector(0, 25 * (step + 1), 0)
+                )
+                self.assertTrue(preview.validation.allowed)
+            finally:
+                session.shutdown(close_dialog=False)
+                session.viewport.flush_scene_graph_mutations()
+
+            self.assertIsNone(renderer.root)
+            self.assertFalse(session.viewport_state.scene_graph_mutations)
+            self.assertEqual("Inherit", view.getViewVisibility(wall))
 
     def test_contextual_interaction_renderer_preserves_source_visibility(self):
         wall = Arch.makeWall(length=3000, width=200, height=2500, align="Center")
@@ -590,7 +667,7 @@ class TestBimPlanEditSessionGui(TestArchBaseGui):
             )
             session.viewport.flush_scene_graph_mutations()
             preview_node = session.contextual_rendering.renderer._preview_nodes[wall]
-            self.assertTrue(preview_node.isOfType(coin.SoType.fromName("SoPreviewShape")))
+            self.assertTrue(preview_node.isOfType(coin.SoSeparator.getClassTypeId()))
             self.assertNotEqual(
                 -1, session.contextual_rendering.renderer.root.findChild(preview_node)
             )
@@ -865,11 +942,20 @@ class TestBimPlanEditSessionGui(TestArchBaseGui):
 
             target = original_corner + FreeCAD.Vector(250, 175, 0)
             self.assertTrue(session.contextual_editing.begin(joint_handle))
-            preview = session.contextual_editing.preview(target)
+            preview_targets = [
+                original_corner + FreeCAD.Vector(25 * step, 17.5 * step, 0) for step in range(1, 11)
+            ]
+            for preview_target in preview_targets:
+                preview = session.contextual_editing.preview(preview_target)
+                self.assertTrue(preview.validation.allowed)
+            target = preview_targets[-1]
+            preview_queue_key = ("contextual-preview-state", wall)
+            self.assertIn(preview_queue_key, session.viewport_state.scene_graph_mutations)
             session.viewport.flush_scene_graph_mutations()
             renderer = session.contextual_rendering.renderer
             self.assertTrue(preview.validation.allowed)
             self.assertEqual({wall, joined}, set(renderer._preview_nodes))
+            self.assertEqual(1, len(renderer._preview_groups))
             self.assertEqual({wall, joined}, renderer._preview_replaced_sources)
             self.assertTrue(
                 wall.Proxy.calc_endpoints(wall)[1].isEqual(original_wall_points[1], 1e-7)

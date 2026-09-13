@@ -229,25 +229,37 @@ class ContextualRepresentationRenderer:
         return hidden_before == bool(visible)
 
     def close(self):
-        if self.root is None:
+        root = self.root
+        if root is None:
             return
-        self.clear_preview()
-        self.scene.removeChild(self.root)
-        self.view.removeViewContextLayer(self.layer)
-        self._object_nodes.clear()
-        self._representations.clear()
-        self._node_mappings.clear()
-        self._handle_position_fields.clear()
-        self._handle_color_fields.clear()
-        self._handle_switches.clear()
-        self._preview_label_nodes.clear()
-        self._preview_label_parts.clear()
-        self._preview_replaced_sources.clear()
-        self._preview_groups.clear()
-        self._visible_handle_sources.clear()
-        self._hidden_sources.clear()
-        self.root.unref()
-        self.root = None
+        try:
+            self.clear_preview()
+        except (AttributeError, ReferenceError, RuntimeError):
+            pass
+        try:
+            self.scene.removeChild(root)
+        except (AttributeError, ReferenceError, RuntimeError):
+            pass
+        try:
+            self.view.removeViewContextLayer(self.layer)
+        except (AttributeError, ReferenceError, RuntimeError):
+            pass
+        finally:
+            self._object_nodes.clear()
+            self._representations.clear()
+            self._node_mappings.clear()
+            self._handle_position_fields.clear()
+            self._handle_color_fields.clear()
+            self._handle_switches.clear()
+            self._preview_nodes.clear()
+            self._preview_label_nodes.clear()
+            self._preview_label_parts.clear()
+            self._preview_replaced_sources.clear()
+            self._preview_groups.clear()
+            self._visible_handle_sources.clear()
+            self._hidden_sources.clear()
+            root.unref()
+            self.root = None
 
     def set_preview_shape(self, source, shape):
         """Realize one transient shape with Part's preview renderer."""
