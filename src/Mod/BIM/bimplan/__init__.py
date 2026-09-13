@@ -2,6 +2,14 @@
 
 """BIM-owned Plan Edit integration primitives."""
 
+from .contextual_actions import (
+    ContextualActionSpec,
+    ContextualInspectorSection,
+    ContextualProvider,
+    ContextualProviderContext,
+    ContextualToolSpec,
+)
+
 from .runtime.embedded_commands import (
     _PlanEditCommandHost,
     _PlanEditWallHost,
@@ -54,6 +62,11 @@ from .contextual_editing import (
 )
 
 __all__ = [
+    "ContextualActionSpec",
+    "ContextualInspectorSection",
+    "ContextualProvider",
+    "ContextualProviderContext",
+    "ContextualToolSpec",
     "PlanActionSpec",
     "PlanContextDetailSpec",
     "PlanContextPanelSpec",

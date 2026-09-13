@@ -6,7 +6,20 @@ from unittest.mock import patch
 import Arch
 import FreeCAD
 import Part
-import Arch
+
+from bimplan.contextual_actions import (
+    ContextualActionSpec,
+    ContextualInspectorSection,
+    ContextualProvider,
+    ContextualProviderContext,
+    ContextualToolSpec,
+)
+from bimplan.providers import (
+    PlanActionSpec,
+    PlanEditProvider,
+    PlanInspectorSection,
+    PlanToolSpec,
+)
 import Draft
 
 from ArchRepresentation import (
@@ -38,6 +51,21 @@ from bimplan.editable_points import get_contextual_edit_points
 
 
 class TestArchRepresentation(unittest.TestCase):
+    def test_plan_action_contracts_extend_contextual_contracts(self):
+        context = ContextualProviderContext(
+            representation_context=RepresentationContext(purpose="Model"),
+            selected_sources=(object(),),
+        )
+        provider = PlanEditProvider()
+
+        self.assertIsInstance(PlanActionSpec("move", "Move"), ContextualActionSpec)
+        self.assertIsInstance(PlanToolSpec("join", "Join"), ContextualToolSpec)
+        self.assertIsInstance(
+            PlanInspectorSection("wall", "Wall"), ContextualInspectorSection
+        )
+        self.assertIsInstance(provider, ContextualProvider)
+        self.assertEqual(1, len(context.get_selected_sources()))
+
     def test_context_accepts_enum_or_serialized_purpose(self):
         plan = RepresentationContext(purpose=RepresentationPurpose.PLAN)
         section = RepresentationContext(purpose="Section")

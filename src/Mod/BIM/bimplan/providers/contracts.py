@@ -11,6 +11,12 @@ from typing import Sequence, Tuple
 from .commands import PlanProviderActionContext
 from .context import PlanEditContext
 from .registry import PlanEditRegistry, get_plan_edit_registry
+from bimplan.contextual_actions import (
+    ContextualActionSpec,
+    ContextualInspectorSection,
+    ContextualProvider,
+    ContextualToolSpec,
+)
 
 
 PLAN_PROVIDER_OVERLAY_MODE_ALL = "all"
@@ -78,28 +84,15 @@ class PlanOverlayMarkerKind(_PlanContractEnum):
 
 
 @dataclass(frozen=True)
-class PlanActionSpec:
-    key: str
-    label: str
-    tooltip: str = ""
-    enabled: bool = True
-    transaction_label: str = ""
-    provider_id: str = ""
+class PlanActionSpec(ContextualActionSpec):
+    """Plan extension point for a generic contextual action."""
 
 
 @dataclass(frozen=True)
-class PlanToolSpec:
-    key: str
-    label: str
-    tooltip: str = ""
-    enabled: bool = True
-    transaction_label: str = ""
-    provider_id: str = ""
-    group: str = ""
-    priority: int = 0
+class PlanToolSpec(ContextualToolSpec):
+    """Plan tool with Plan's point/immediate interaction vocabulary."""
+
     interaction: PlanToolInteraction = PlanToolInteraction.IMMEDIATE
-    prompt: str = ""
-    default_host_target: tuple = ()
 
 
 @dataclass(frozen=True)
@@ -176,14 +169,10 @@ class PlanContextPanelSpec:
 
 
 @dataclass(frozen=True)
-class PlanInspectorSection:
-    key: str
-    title: str
-    body: str = ""
-    provider_id: str = ""
+class PlanInspectorSection(ContextualInspectorSection):
+    """Plan-compatible contextual inspector section."""
+
     actions: Tuple[PlanActionSpec, ...] = ()
-    role: str = ""
-    collapsed: bool = False
 
 
 @dataclass(frozen=True)
@@ -225,21 +214,8 @@ class PlanOverlaySpec:
     category: str = ""
 
 
-class PlanEditProvider:
-    provider_id = ""
-    display_name = ""
-
-    def get_provider_id(self):
-        provider_id = str(getattr(self, "provider_id", "") or "").strip()
-        if provider_id:
-            return provider_id
-        return self.__class__.__name__
-
-    def get_display_name(self):
-        display_name = str(getattr(self, "display_name", "") or "").strip()
-        if display_name:
-            return display_name
-        return self.get_provider_id()
+class PlanEditProvider(ContextualProvider):
+    """Plan-specific provider extension of the contextual provider contract."""
 
     def get_issues(self, context) -> Sequence[PlanIssueSpec]:
         del context

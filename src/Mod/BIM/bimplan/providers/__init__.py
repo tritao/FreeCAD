@@ -2,6 +2,14 @@
 
 """Provider-facing models for BIM Plan Edit integrations."""
 
+from bimplan.contextual_actions import (
+    ContextualActionSpec,
+    ContextualInspectorSection,
+    ContextualProvider,
+    ContextualProviderContext,
+    ContextualToolSpec,
+)
+
 from .contracts import (
     PlanActionSpec,
     PlanContextDetailSpec,
