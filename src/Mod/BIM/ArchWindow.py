@@ -2418,6 +2418,39 @@ class _HostedOpeningRepresentationGeometry:
         else:
             return None
 
+        return self._make_plan_preview_representation(profile, context, role, base_z)
+
+    def get_hosted_wall_preview_representation(self, context, host_face):
+        """Reinterpret this opening against a proposed planar host section."""
+
+        source = self.Object
+        cut_z = getattr(context, "cut_offset", None)
+        base_z = getattr(context, "target_offset", None)
+        if cut_z is None or base_z is None:
+            default_context = self._get_default_opening_plan_context(source)
+            cut_z = default_context.cut_offset if cut_z is None else cut_z
+            base_z = default_context.target_offset if base_z is None else base_z
+        profile = self._get_hosted_opening_plan_frame(source.Shape, cut_z, base_z)
+        if not profile or host_face is None or host_face.isNull():
+            return None
+        profile = dict(profile)
+        axis_v = FreeCAD.Vector(profile["axis_v"])
+        origin = FreeCAD.Vector(profile["origin"])
+        host_values = [
+            FreeCAD.Vector(vertex.Point).sub(origin).dot(axis_v) for vertex in host_face.Vertexes
+        ]
+        if not host_values:
+            return None
+        profile["vmin"] = min(host_values)
+        profile["vmax"] = max(host_values)
+        return self._make_plan_preview_representation(profile, context, "HostedWallSection", base_z)
+
+    def _make_plan_preview_representation(self, profile, context, role, base_z):
+        """Build renderer-neutral opening geometry from a resolved plan profile."""
+
+        import Part
+
+        source = self.Object
         representation = ArchRepresentation.BIMRepresentation(source=source, context=context)
         origin = profile["origin"]
         axis_u = profile["axis_u"]

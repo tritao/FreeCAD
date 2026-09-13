@@ -1301,6 +1301,11 @@ class _Wall(ArchComponent.Component):
                         self._get_width_face_preview_shape(source, side, value, preview_context)
                     )
                 ),
+                preview_state=(
+                    lambda source, value, preview_context, side=side: (
+                        self._get_width_face_preview_state(source, side, value, preview_context)
+                    )
+                ),
             )
             handle_point = _edit_handle_point(midpoint + lateral * coordinate, context)
             representation.add_edit_handle(
@@ -1391,6 +1396,66 @@ class _Wall(ArchComponent.Component):
             for point in points:
                 point.z = float(target)
         return Part.Face(Part.makePolygon(points + [points[0]]))
+
+    def _get_width_face_preview_state(self, wall, side, value, context):
+        """Return a proposed wall section and its hosted opening geometry."""
+
+        proposed_face = self._get_width_face_preview_shape(wall, side, value, context)
+        if proposed_face is None or proposed_face.isNull():
+            return None
+        opening_representations = []
+        document = getattr(wall, "Document", None)
+        for opening in getattr(document, "Objects", ()) or ():
+            if wall not in (getattr(opening, "Hosts", None) or ()):
+                continue
+            provider = getattr(
+                getattr(opening, "Proxy", None),
+                "get_hosted_wall_preview_representation",
+                None,
+            )
+            if not callable(provider):
+                continue
+            opening_representation = provider(context, proposed_face)
+            if opening_representation is None:
+                continue
+            for void in opening_representation.cut_geometry:
+                proposed_face = proposed_face.cut(void)
+            opening_representations.append(opening_representation)
+
+        wall_representation = ArchRepresentation.BIMRepresentation(source=wall, context=context)
+        for index, face in enumerate(proposed_face.Faces, start=1):
+            wall_representation.add_geometry(
+                "cut_geometry", face, "PlanCutFace", subelement=f"PlanFace{index}"
+            )
+            for wire_index, wire in enumerate(face.Wires, start=1):
+                vertices = tuple(FreeCAD.Vector(vertex.Point) for vertex in wire.Vertexes)
+                if len(vertices) > 1:
+                    wall_representation.add_geometry(
+                        "projected_geometry",
+                        (*vertices, vertices[0]),
+                        "PlanCutBoundary",
+                        subelement=f"PlanFace{index}.Wire{wire_index}",
+                    )
+
+        state = ArchRepresentation.BIMPreviewState(wall)
+        state.add_representation(wall_representation, replace_committed=True)
+        for opening_representation in opening_representations:
+            display = ArchRepresentation.BIMRepresentation(
+                source=opening_representation.source,
+                context=context,
+            )
+            for mapping in opening_representation.source_mappings:
+                if mapping.geometry not in opening_representation.projected_geometry:
+                    continue
+                display.add_geometry(
+                    "projected_geometry",
+                    mapping.geometry,
+                    mapping.role,
+                    subelement=mapping.subelement,
+                    related_sources=mapping.related_sources,
+                )
+            state.add_representation(display, replace_committed=True)
+        return state
 
     @staticmethod
     def _can_edit_uniform_section(wall):

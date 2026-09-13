@@ -625,6 +625,42 @@ class TestArchRepresentation(unittest.TestCase):
         self.assertFalse(
             any(face.isInside(newly_open_point, 1e-7, True) for face in preview_wall.cut_geometry)
         )
+        wall_representation = wall.Proxy.getRepresentation(wall, representation.context)
+        width_handle = next(
+            handle
+            for handle in wall_representation.edit_handles
+            if handle.subelement == "Width.PositiveFace"
+        )
+        original_width = wall.Width.Value
+        width_state = width_handle.operation.get_preview_state(
+            wall, original_width + 50.0, representation.context
+        )
+        width_entries = {
+            entry.representation.source: entry.representation for entry in width_state.entries
+        }
+        self.assertEqual({wall, opening}, set(width_entries))
+        preview_wall = width_entries[wall]
+        preview_opening = width_entries[opening]
+        jamb_lengths = [
+            mapping.geometry[0].distanceToPoint(mapping.geometry[-1])
+            for mapping in preview_opening.source_mappings
+            if mapping.role == "OpeningJambLine"
+        ]
+        self.assertEqual(2, len(jamb_lengths))
+        self.assertTrue(all(abs(length - 250.0) < 1e-7 for length in jamb_lengths))
+        opening_cut = opening.Proxy.get_hosted_wall_preview_representation(
+            representation.context,
+            wall.Proxy._get_width_face_preview_shape(
+                wall, "Positive", original_width + 50.0, representation.context
+            ),
+        ).cut_geometry[0]
+        self.assertFalse(
+            any(
+                face.isInside(opening_cut.CenterOfMass, 1e-7, True)
+                for face in preview_wall.cut_geometry
+            )
+        )
+        self.assertAlmostEqual(original_width, wall.Width.Value)
         self.assertEqual(before, base.Placement)
 
     def test_wall_representation_supports_a_rotated_section_frame(self):

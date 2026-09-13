@@ -283,6 +283,46 @@ class TestBimPlanEditExamplesGui(TestArchBaseGui):
                     icon_nodes.append(node)
             self.assertEqual(2, len(icon_nodes))
 
+            session.selection.state.set_selected_plan_target_state("wall", host)
+            session.contextual_rendering.sync_visible_handles()
+            session.viewport.flush_scene_graph_mutations()
+            wall_width_handle = next(
+                handle
+                for handle in session.contextual_rendering.edit_handles_for(host)
+                if handle.subelement == "Width.PositiveFace"
+            )
+            original_host_width = host.Width.Value
+            session.contextual_editing.begin(wall_width_handle)
+            wall_preview = session.contextual_editing.preview(
+                wall_width_handle.point + wall_width_handle.direction * 25.0
+            )
+            session.viewport.flush_scene_graph_mutations()
+            renderer = session.contextual_rendering.renderer
+            self.assertTrue(wall_preview.validation.allowed)
+            self.assertTrue({host, door}.issubset(renderer._preview_nodes))
+            self.assertTrue({host, door}.issubset(renderer._preview_replaced_sources))
+            self.assertAlmostEqual(original_host_width, host.Width.Value)
+            session.contextual_editing.cancel()
+            session.viewport.flush_scene_graph_mutations()
+            self.assertNotIn(host, renderer._preview_nodes)
+            self.assertNotIn(door, renderer._preview_nodes)
+            self.assertAlmostEqual(original_host_width, host.Width.Value)
+
+            session.contextual_editing.begin(wall_width_handle)
+            wall_commit = session.contextual_editing.commit(
+                wall_width_handle.point + wall_width_handle.direction * 25.0
+            )
+            session.viewport.flush_scene_graph_mutations()
+            self.assertTrue(wall_commit.success, wall_commit.reason)
+            self.assertAlmostEqual(original_host_width + 25.0, host.Width.Value)
+            self.assertNotIn(host, renderer._preview_nodes)
+            self.assertNotIn(door, renderer._preview_nodes)
+            document.undo()
+            document.recompute()
+            self.pump_gui_events(30)
+            self.assertAlmostEqual(original_host_width, host.Width.Value)
+
+            handles = select_and_sync()
             preview_handle = next(handle for handle in handles if handle.role == "OpeningRightJamb")
             preview_width = ArchWindow.getWindowWidthMm(door)
             renderer = session.contextual_rendering.renderer
