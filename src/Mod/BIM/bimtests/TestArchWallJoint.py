@@ -106,7 +106,7 @@ class TestArchWallJoint(TestArchBase.TestArchBase):
         """The plan representation must retain the diagonal miter seam."""
         wall1 = self._make_baseless_wall_between(App.Vector(-1000, 0, 0), App.Vector(0, 0, 0))
         wall2 = self._make_baseless_wall_between(App.Vector(0, 0, 0), App.Vector(0, 1000, 0))
-        Arch.makeWallJoint(wall1, wall2, "Miter")
+        joint = Arch.makeWallJoint(wall1, wall2, "Miter")
         self.document.recompute()
 
         context = RepresentationContext(
@@ -130,6 +130,80 @@ class TestArchWallJoint(TestArchBase.TestArchBase):
                 ),
                 "The semantic wall boundary should include its diagonal miter seam.",
             )
+            cut_lines = [
+                mapping
+                for mapping in representation.source_mappings
+                if mapping.role == "WallJointCutLine"
+            ]
+            self.assertEqual(1, len(cut_lines))
+            self.assertIn(cut_lines[0].geometry, representation.projected_geometry)
+            self.assertEqual((joint,), cut_lines[0].related_sources)
+            self.assertEqual(2, len(cut_lines[0].geometry))
+            cut_points = [
+                target
+                for target in representation.iter_snap_targets()
+                if target.role == "WallJointCutPoint"
+            ]
+            self.assertEqual(2, len(cut_points))
+            self.assertTrue(
+                all(joint in target.related_sources for target in cut_points)
+            )
+
+        rotated_frame = App.Placement(
+            App.Vector(250, -125, 0), App.Rotation(App.Vector(0, 0, 1), 37)
+        )
+        rotated_context = RepresentationContext(
+            purpose=RepresentationPurpose.PLAN,
+            reference_frame=rotated_frame,
+            cut_offset=1000,
+            target_offset=0,
+        )
+        for wall in (wall1, wall2):
+            representation = wall.Proxy.getRepresentation(wall, rotated_context)
+            cut_line = next(
+                mapping.geometry
+                for mapping in representation.source_mappings
+                if mapping.role == "WallJointCutLine"
+            )
+            self.assertTrue(
+                all(
+                    abs(rotated_frame.inverse().multVec(point).z) <= 1e-7
+                    for point in cut_line
+                )
+            )
+
+    def test_tee_trimmed_stem_does_not_expose_a_free_endpoint_handle(self):
+        """A relation-owned visible end must not advertise baseline resizing."""
+
+        support = self._make_baseless_wall_between(
+            App.Vector(-1000, 0, 0), App.Vector(1000, 0, 0)
+        )
+        stem = self._make_baseless_wall_between(
+            App.Vector(0, -1000, 0), App.Vector(0, 0, 0)
+        )
+        joint = Arch.makeWallJoint(stem, support, "Tee")
+        joint.TeeStem = "WallA"
+        self.document.recompute()
+        self.assertEqual("OK", joint.Status, joint.StatusMessage)
+
+        context = RepresentationContext(
+            purpose=RepresentationPurpose.PLAN,
+            cut_offset=1000,
+            target_offset=0,
+        )
+        stem_roles = {
+            handle.role
+            for handle in stem.Proxy.getRepresentation(stem, context).edit_handles
+        }
+        support_roles = {
+            handle.role
+            for handle in support.Proxy.getRepresentation(support, context).edit_handles
+        }
+
+        self.assertIn("WallPathStart", stem_roles)
+        self.assertNotIn("WallPathEnd", stem_roles)
+        self.assertIn("WallPathStart", support_roles)
+        self.assertIn("WallPathEnd", support_roles)
 
     def test_miter_respects_mixed_wall_section_alignment(self):
         """The miter seam must follow the real section faces, not the baselines."""

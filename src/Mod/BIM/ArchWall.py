@@ -1052,6 +1052,17 @@ class _Wall(ArchComponent.Component):
                     subelement=subelement,
                 )
         joint_edges = self._wall_joint_snap_edges(representation, obj)
+        for edge, joint in joint_edges:
+            points = tuple(FreeCAD.Vector(vertex.Point) for vertex in edge.Vertexes)
+            if len(points) < 2:
+                continue
+            representation.add_geometry(
+                "projected_geometry",
+                points,
+                "WallJointCutLine",
+                subelement="Relation.{}.CutLine".format(joint.Name),
+                related_sources=(joint,),
+            )
         for index, face in enumerate(cut_faces, start=1):
             for edge_index, edge in enumerate(face.Edges, start=1):
                 joint = self._joint_for_snap_edge(joint_edges, edge)
@@ -1080,7 +1091,7 @@ class _Wall(ArchComponent.Component):
                 representation.add_geometry(
                     "snap_geometry",
                     vertex,
-                    "WallCorner" if joints else "WallBoundaryVertex",
+                    "WallJointCutPoint" if joints else "WallBoundaryVertex",
                     subelement=f"PlanFace{index}.Vertex{vertex_index}",
                     related_sources=joints,
                 )
@@ -1522,9 +1533,14 @@ class _Wall(ArchComponent.Component):
     def _relation_controlled_native_ends(self, wall):
         ends = set()
         for joint in ArchWallRelation.iter_wall_joints(wall):
-            data = self._movable_wall_joint_data(joint)
-            if data is not None:
-                ends.add(data["ends"][wall])
+            if not getattr(joint, "Enabled", True):
+                continue
+            solution = ArchWallRelation.solve_wall_joint(joint)
+            if not solution.is_ok():
+                continue
+            claim = solution.trim_for_wall(wall)
+            if claim is not None and claim.end_name in ("Start", "End"):
+                ends.add(claim.end_name)
         return ends
 
     def _movable_wall_joint_data(self, joint):

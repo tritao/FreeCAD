@@ -109,6 +109,24 @@ class TestArchSectionPlane(TestArchBase.TestArchBase):
         self.assertTrue(svg)
         self.assertIn("cut_geometry", calls)
 
+    def testTechDrawConvertsSemanticPolylinesToProjectionGeometry(self):
+        """Semantic cut lines remain directly consumable by TechDraw."""
+
+        representation = ArchRepresentation.BIMRepresentation()
+        cut_line = (
+            App.Vector(0, 0, 0),
+            App.Vector(100, 75, 0),
+        )
+        representation.add_geometry(
+            "projected_geometry", cut_line, "WallJointCutLine"
+        )
+
+        geometry = TechDrawBIM._geometry(representation, "projected_geometry")
+
+        self.assertFalse(geometry.isNull())
+        self.assertEqual(1, len(geometry.Edges))
+        self.assertEqual(2, len(geometry.Vertexes))
+
     def testSectionPlaneFitUsesLocalAxesAfterRotateY(self):
         """Resize-to-fit dimensions follow the rotated section plane axes."""
 

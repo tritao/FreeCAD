@@ -281,8 +281,10 @@ class TestArchRepresentation(unittest.TestCase):
         )
         self.assertTrue(joint_targets)
         self.assertIn("WallJointBoundary", {target.role for target in joint_targets})
-        self.assertIn("WallCorner", {target.role for target in joint_targets})
-        corner = next(target for target in joint_targets if target.role == "WallCorner")
+        self.assertIn("WallJointCutPoint", {target.role for target in joint_targets})
+        corner = next(
+            target for target in joint_targets if target.role == "WallJointCutPoint"
+        )
         result = query_representation_snap(
             (representation, vertical_representation), corner.geometry.Point, 1.0
         )

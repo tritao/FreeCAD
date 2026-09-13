@@ -10,13 +10,23 @@ No temporary Draft or TechDraw document objects are created.
 
 def _geometry(representation, collection):
     """Return one shape suitable for TechDraw projection, or ``None``."""
-    geometries = list(getattr(representation, collection, ()))
+    import Part
+
+    geometries = []
+    for geometry in getattr(representation, collection, ()):
+        if hasattr(geometry, "ShapeType"):
+            geometries.append(geometry)
+            continue
+        try:
+            points = list(geometry)
+        except TypeError:
+            continue
+        if len(points) >= 2:
+            geometries.append(Part.makePolygon(points))
     if not geometries:
         return None
     if len(geometries) == 1:
         return geometries[0]
-
-    import Part
 
     return Part.makeCompound(geometries)
 
