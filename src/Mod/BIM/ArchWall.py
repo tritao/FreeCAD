@@ -1649,6 +1649,9 @@ class _Wall(ArchComponent.Component):
                 preview_state=lambda source, value, preview_context, index=index: (
                     self._get_endpoint_preview_state(source, index, value, preview_context)
                 ),
+                validator=lambda source, value, index=index: __import__(
+                    "ArchWallSemantic"
+                ).evaluate_wall_edit(source, "Start" if index == 0 else "End", value),
             )
 
             handle_point = _edit_handle_point(endpoints[index], context)
@@ -1686,6 +1689,9 @@ class _Wall(ArchComponent.Component):
             preview_state=lambda source, value, preview_context: (
                 self._get_wall_path_preview_state(source, "Move", value, preview_context)
             ),
+            validator=lambda source, value: __import__(
+                "ArchWallSemantic"
+            ).evaluate_wall_edit(source, "Move", value),
         )
         handle_point = _edit_handle_point(midpoint, context)
         representation.add_edit_handle(
@@ -1714,43 +1720,14 @@ class _Wall(ArchComponent.Component):
     def _get_wall_path_preview_state(self, wall, mode, value, context):
         """Return joined wall representations for a hypothetical path edit."""
 
-        import Part
-        from ArchWallSemantic import evaluate_wall_candidate
+        from ArchWallSemantic import evaluate_wall_edit
 
-        evaluation = evaluate_wall_candidate(self.calc_endpoints(wall), mode, value)
+        evaluation = evaluate_wall_edit(wall, mode, value)
         if not evaluation.allowed:
             return None
-        endpoints = evaluation.endpoints
-        normal = self.get_global_baseline(wall).normal
-        proposed_path = ArchWallGeometry.WallPath(Part.makeLine(*endpoints), normal)
-        paths = {wall: proposed_path}
-        affected = {wall}
-        claims = {}
-        for relation in ArchWallRelation.iter_wall_joints(wall):
-            if not getattr(relation, "Enabled", True):
-                continue
-            wall_a = relation.WallA
-            wall_b = relation.WallB
-            path_a = paths.get(wall_a) or ArchWallRelation.get_join_path(wall_a)
-            path_b = paths.get(wall_b) or ArchWallRelation.get_join_path(wall_b)
-            solution = ArchWallRelation.solve_wall_joint_inputs(
-                wall_a,
-                wall_b,
-                relation.JointType,
-                relation.ButtTrimmed,
-                relation.TeeStem,
-                relation.EndA,
-                relation.EndB,
-                path_a=path_a,
-                path_b=path_b,
-            )
-            if not solution.is_ok():
-                continue
-            affected.update((wall_a, wall_b))
-            paths.setdefault(wall_a, path_a)
-            paths.setdefault(wall_b, path_b)
-            for claim in solution.trim_claims:
-                claims.setdefault(claim.wall, {})[claim.end_name] = claim
+        paths = evaluation.relation_paths
+        affected = evaluation.affected_walls
+        claims = evaluation.relation_claims
 
         state = ArchRepresentation.BIMPreviewState(wall)
         for source in affected:

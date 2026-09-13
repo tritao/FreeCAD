@@ -321,6 +321,7 @@ class BIMEditOperation:
         preview_representation=None,
         preview_state=None,
         preview_label=None,
+        validator=None,
     ):
         self.key = str(key)
         self.label = str(label)
@@ -338,6 +339,7 @@ class BIMEditOperation:
         self._preview_representation = preview_representation
         self._preview_state = preview_state
         self._preview_label = preview_label
+        self._validator = validator
 
     def get_preview_shape(self, source, value, context):
         if not callable(self._preview_shape):
@@ -392,6 +394,17 @@ class BIMEditOperation:
                 minimum=self.minimum,
                 maximum=self.maximum,
             )
+        if value is not None and callable(self._validator):
+            result = self._validator(source, value)
+            if isinstance(result, BIMEditValidation):
+                return result
+            if not getattr(result, "allowed", bool(result)):
+                return BIMEditValidation(
+                    False,
+                    str(getattr(result, "reason", "") or "This value is not allowed."),
+                    minimum=self.minimum,
+                    maximum=self.maximum,
+                )
         return BIMEditValidation(True, minimum=self.minimum, maximum=self.maximum)
 
     def get_value(self, source):

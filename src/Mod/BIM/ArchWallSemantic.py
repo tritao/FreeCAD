@@ -15,6 +15,10 @@ class WallEditEvaluation:
     allowed: bool
     endpoints: tuple = ()
     reason: str = ""
+    opening_layout: tuple = ()
+    relation_paths: object = None
+    relation_claims: object = None
+    affected_walls: tuple = ()
 
 
 def _opening_proxy(opening):
@@ -118,17 +122,71 @@ def apply_wall_candidate(wall, mode, candidate):
     """Atomically-ready domain mutation for a wall and its hosted openings."""
 
     original = tuple(wall.Proxy.calc_endpoints(wall))
-    evaluation = evaluate_wall_candidate(original, mode, candidate)
+    evaluation = evaluate_wall_edit(wall, mode, candidate)
     if not evaluation.allowed:
         raise ValueError(evaluation.reason)
-    layout = evaluate_hosted_openings(wall, original, evaluation.endpoints, mode)
-    if layout is None:
-        raise ValueError("The resized wall cannot contain its hosted openings.")
     wall.Proxy.set_from_endpoints(wall, evaluation.endpoints)
-    for item in layout:
+    for item in evaluation.opening_layout:
         if not item["proxy"].move_along_host(item["target_point"]):
             raise ValueError("A hosted opening could not be repositioned.")
     return evaluation
+
+
+def evaluate_wall_edit(wall, mode, candidate):
+    """Evaluate geometry, relations, and hosted openings without document mutation."""
+
+    import Part
+    import ArchWallGeometry
+    import ArchWallRelation
+
+    original = tuple(wall.Proxy.calc_endpoints(wall))
+    base = evaluate_wall_candidate(original, mode, candidate)
+    if not base.allowed:
+        return base
+    layout = evaluate_hosted_openings(wall, original, base.endpoints, mode)
+    if layout is None:
+        return WallEditEvaluation(
+            False, base.endpoints,
+            "The resized wall cannot contain its hosted openings.",
+        )
+    baseline = wall.Proxy.get_global_baseline(wall)
+    proposed = ArchWallGeometry.WallPath(
+        Part.makeLine(*base.endpoints), baseline.normal
+    )
+    paths = {wall: proposed}
+    claims = {}
+    affected = {wall}
+    for relation in ArchWallRelation.iter_wall_joints(wall):
+        if not getattr(relation, "Enabled", True):
+            continue
+        wall_a, wall_b = relation.WallA, relation.WallB
+        path_a = paths.get(wall_a) or ArchWallRelation.get_join_path(wall_a)
+        path_b = paths.get(wall_b) or ArchWallRelation.get_join_path(wall_b)
+        solution = ArchWallRelation.solve_wall_joint_inputs(
+            wall_a, wall_b, relation.JointType, relation.ButtTrimmed,
+            relation.TeeStem, relation.EndA, relation.EndB,
+            path_a=path_a, path_b=path_b,
+        )
+        if not solution.is_ok():
+            return WallEditEvaluation(
+                False,
+                base.endpoints,
+                getattr(solution, "status_message", "")
+                or "The wall relation cannot be solved for this edit.",
+            )
+        affected.update((wall_a, wall_b))
+        paths.setdefault(wall_a, path_a)
+        paths.setdefault(wall_b, path_b)
+        for claim in solution.trim_claims:
+            claims.setdefault(claim.wall, {})[claim.end_name] = claim
+    return WallEditEvaluation(
+        True,
+        base.endpoints,
+        opening_layout=tuple(layout),
+        relation_paths=paths,
+        relation_claims=claims,
+        affected_walls=tuple(affected),
+    )
 
 
 def evaluate_wall_candidate(endpoints, mode, candidate, minimum=MINIMUM_WALL_LENGTH):
