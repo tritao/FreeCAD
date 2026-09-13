@@ -99,6 +99,37 @@ def create_wall_segment(
     return wall
 
 
+def create_wall_from_base(base, spec, *, normal=None, auto_group=True, on_created=None):
+    """Create one wall from an existing path through the shared domain policy."""
+
+    import Arch
+
+    if base is None:
+        raise WallConstructionError("A wall path object is required.")
+    spec = spec.validated()
+    wall = Arch.makeWall(
+        base,
+        width=spec.width,
+        height=spec.height,
+        align=spec.align,
+        offset=spec.offset,
+    )
+    if normal is not None:
+        wall.Normal = FreeCAD.Vector(normal)
+    if spec.material is not None:
+        wall.Material = spec.material
+    if auto_group and FreeCAD.GuiUp:
+        try:
+            import Draft
+
+            Draft.autogroup(wall)
+        except Exception:
+            pass
+    if on_created:
+        on_created(wall)
+    return wall
+
+
 def create_wall_run(
     points,
     spec,

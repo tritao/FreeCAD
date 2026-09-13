@@ -493,45 +493,24 @@ class Arch_Wall:
         """Creates a baseless wall and ensures all steps are macro-recordable."""
         import __main__
 
-        line_vector = p1.sub(p0)
-        length = line_vector.Length
-        midpoint = (p0 + p1) * 0.5
-        direction = line_vector.normalize()
-        rotation = FreeCAD.Rotation(FreeCAD.Vector(1, 0, 0), direction)
-
-        # This placement is local to the working plane.
-        local_placement = FreeCAD.Placement(midpoint, rotation)
-        # Transform the local placement into the global coordinate system.
-        final_placement = self._get_interaction_wp().get_placement().multiply(local_placement)
-
+        placement = self._get_interaction_wp().get_placement()
+        global_p0 = placement.multVec(p0)
+        global_p1 = placement.multVec(p1)
         wall_var = "new_baseless_wall"
-
-        # Construct command strings using the final, correct global placement.
-        placement_str = (
-            f"FreeCAD.Placement(FreeCAD.Vector({final_placement.Base.x}, {final_placement.Base.y}, {final_placement.Base.z}), "
-            f"FreeCAD.Rotation({final_placement.Rotation.Q[0]}, {final_placement.Rotation.Q[1]}, {final_placement.Rotation.Q[2]}, {final_placement.Rotation.Q[3]}))"
+        material = (
+            f"FreeCAD.ActiveDocument.{self.MultiMat.Name}" if self.MultiMat else "None"
         )
-
-        make_wall_cmd = (
-            f"{wall_var} = Arch.makeWall(length={length}, width={self.Width}, "
-            f"height={self.Height}, align='{self.Align}')"
+        FreeCADGui.doCommand("import ArchWallConstruction")
+        FreeCADGui.doCommand(
+            f"{wall_var} = ArchWallConstruction.create_wall_segment("
+            f"FreeCAD.Vector({global_p0.x}, {global_p0.y}, {global_p0.z}), "
+            f"FreeCAD.Vector({global_p1.x}, {global_p1.y}, {global_p1.z}), "
+            f"ArchWallConstruction.WallConstructionSpec({self.Width}, {self.Height}, "
+            f"'{self.Align}', material={material}))"
         )
-
-        # Execute creation and property-setting commands
-        FreeCADGui.doCommand("import Arch")
-        FreeCADGui.doCommand(make_wall_cmd)
-        FreeCADGui.doCommand(f"{wall_var}.Placement = {placement_str}")
-        if self.MultiMat:
-            FreeCADGui.doCommand(
-                f"{wall_var}.Material = FreeCAD.ActiveDocument.{self.MultiMat.Name}"
-            )
 
         # Get a reference to the newly created object
         newly_created_wall = getattr(__main__, wall_var)
-
-        # Now, issue the autogroup command using the object's actual name
-        FreeCADGui.doCommand("import Draft")
-        FreeCADGui.doCommand(f"Draft.autogroup({wall_var})")
 
         return newly_created_wall
 
@@ -613,27 +592,20 @@ class Arch_Wall:
         wall_var = "new_wall_from_base"
 
         # Construct command strings
-        make_wall_cmd = (
-            f"{wall_var} = Arch.makeWall(FreeCAD.ActiveDocument.{base_obj.Name}, "
-            f"width={self.Width}, height={self.Height}, align='{self.Align}')"
+        material = (
+            f"FreeCAD.ActiveDocument.{self.MultiMat.Name}" if self.MultiMat else "None"
         )
-        set_normal_cmd = f"{wall_var}.Normal = FreeCAD.{self._get_interaction_wp().axis}"
-
-        # Execute creation and property-setting commands
-        FreeCADGui.doCommand("import Arch")
-        FreeCADGui.doCommand(make_wall_cmd)
-        FreeCADGui.doCommand(set_normal_cmd)
-        if self.MultiMat:
-            FreeCADGui.doCommand(
-                f"{wall_var}.Material = FreeCAD.ActiveDocument.{self.MultiMat.Name}"
-            )
+        FreeCADGui.doCommand("import ArchWallConstruction")
+        FreeCADGui.doCommand(
+            f"{wall_var} = ArchWallConstruction.create_wall_from_base("
+            f"FreeCAD.ActiveDocument.{base_obj.Name}, "
+            f"ArchWallConstruction.WallConstructionSpec({self.Width}, {self.Height}, "
+            f"'{self.Align}', material={material}), "
+            f"normal=FreeCAD.{self._get_interaction_wp().axis})"
+        )
 
         # Get a reference to the newly-created object
         wall_obj = getattr(__main__, wall_var)
-
-        # Issue the autogroup command using the object's actual name
-        FreeCADGui.doCommand("import Draft")
-        FreeCADGui.doCommand(f"Draft.autogroup({wall_var})")
 
         return wall_obj
 
