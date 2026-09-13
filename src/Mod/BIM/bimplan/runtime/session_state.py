@@ -362,7 +362,8 @@ class PlanCreationPreviewState:
     space_separator_height: object = None
     space_separator_preview_trackers: list = field(default_factory=list)
     window_host_wall: object = None
-    window_preview_trackers: list = field(default_factory=list)
+    window_preview_source: object = None
+    window_preview_key: object = None
 
 
 PlanWallEditState = WallEditState

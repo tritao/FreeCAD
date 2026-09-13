@@ -126,6 +126,89 @@ class TestBimPlanEditSessionGui(TestArchBaseGui):
         self.assertEqual(4, len(representation.cut_geometry))
         self.assertEqual(4, len(representation.projected_geometry))
 
+    def test_window_creation_preview_coordinates_opening_and_host_cut(self):
+        from bimcommands import BimWall
+        from bimplan.tools.window_create import (
+            _build_window_creation_preview_state,
+            _get_window_preview_points,
+        )
+
+        wall = BimWall.create_baseless_wall_from_endpoints(
+            FreeCAD.Vector(0, 0, 0),
+            FreeCAD.Vector(2000, 0, 0),
+            width=200,
+            height=2500,
+            auto_group=False,
+        )
+        self.document.recompute()
+        context = RepresentationContext("Plan", cut_offset=1000, target_offset=0)
+        session = SimpleNamespace(
+            representation_context=SimpleNamespace(context=context),
+        )
+        points = _get_window_preview_points(
+            session,
+            FreeCAD.Vector(1000, 0, 0),
+            wall=wall,
+        )
+        source = object()
+        state = _build_window_creation_preview_state(session, wall, points, source)
+
+        self.assertIs(wall, state.primary_source)
+        opening_entry = state.entry_for(source)
+        host_entry = state.entry_for(wall)
+        self.assertIsNotNone(opening_entry)
+        self.assertIsNotNone(host_entry)
+        self.assertFalse(opening_entry.affects_spatial_boundary)
+        self.assertTrue(host_entry.replace_committed)
+        self.assertFalse(host_entry.affects_spatial_boundary)
+        self.assertEqual(1, len(opening_entry.representation.cut_geometry))
+        self.assertTrue(host_entry.representation.cut_geometry)
+        self.assertLess(
+            sum(face.Area for face in host_entry.representation.cut_geometry),
+            2000 * 200,
+        )
+
+    def test_window_creation_preview_realizes_and_clears_as_one_coin_state(self):
+        from bimcommands import BimWall
+        from bimplan.tools.window_create import (
+            _build_window_creation_preview_state,
+            _get_window_preview_points,
+        )
+
+        wall = BimWall.create_baseless_wall_from_endpoints(
+            FreeCAD.Vector(0, 0, 0),
+            FreeCAD.Vector(2000, 0, 0),
+            width=200,
+            height=2500,
+            auto_group=False,
+        )
+        self.document.recompute()
+        session = PlanEditSession()
+        self.assertTrue(session.enter())
+        try:
+            points = _get_window_preview_points(
+                session,
+                FreeCAD.Vector(1000, 0, 0),
+                wall=wall,
+            )
+            source = object()
+            state = _build_window_creation_preview_state(session, wall, points, source)
+            self.assertTrue(session.contextual_rendering.set_preview_state(state))
+            session.viewport.flush_scene_graph_mutations()
+
+            renderer = session.contextual_rendering.renderer
+            self.assertIn(source, renderer._preview_nodes)
+            self.assertIn(wall, renderer._preview_nodes)
+            self.assertIn(wall, renderer._preview_replaced_sources)
+            self.assertIn(wall, renderer._preview_groups)
+
+            self.assertTrue(session.contextual_rendering.clear_preview(wall))
+            session.viewport.flush_scene_graph_mutations()
+            self.assertFalse(renderer._preview_nodes)
+            self.assertFalse(renderer._preview_replaced_sources)
+        finally:
+            session.shutdown(close_dialog=False)
+
     def test_storey_entry_helper_selects_source_and_runs_shared_command(self):
         from bimcommands.BimPlanEdit import start_plan_edit_for
 

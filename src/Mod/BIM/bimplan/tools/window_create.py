@@ -3,8 +3,10 @@
 """Hosted window creation and editing helpers for BIM Plan Edit."""
 
 import ArchWindow
+import ArchRepresentation
 import FreeCAD
 import FreeCADGui
+import Part
 from bimplan.runtime import tools as plan_runtime_tools
 from bimplan.selection import target_kinds as plan_target_kinds
 from bimplan.tools import hosted_openings as plan_hosted_openings
@@ -396,8 +398,11 @@ def has_active_window_tool(session):
 
 def clear_window_preview(session):
     creation_preview_state = session.creation_preview_state
-    session.overlays.manager.finalize_trackers(creation_preview_state.window_preview_trackers)
-    creation_preview_state.window_preview_trackers = []
+    key = creation_preview_state.window_preview_key
+    if key is not None:
+        session.contextual_rendering.clear_preview(key)
+    creation_preview_state.window_preview_source = None
+    creation_preview_state.window_preview_key = None
 
 
 def cancel_window_tool(session, refresh=True):
@@ -608,33 +613,103 @@ def _get_window_preview_points(session, point, wall=None):
     )
 
 
+def _build_window_creation_preview_state(session, wall, points, source):
+    """Describe a proposed opening and its coordinated host-wall cut."""
+
+    if wall is None or len(points) != 4:
+        return None
+    context = session.representation_context.context
+    target = getattr(context, "target_offset", None)
+    corners = tuple(FreeCAD.Vector(point) for point in points)
+    if target is not None:
+        for point in corners:
+            point.z = float(target)
+    closed = (*corners, corners[0])
+    try:
+        opening_face = Part.Face(Part.makePolygon(closed))
+    except Part.OCCError:
+        return None
+
+    opening = ArchRepresentation.BIMRepresentation(source=source, context=context)
+    opening.add_geometry(
+        "cut_geometry",
+        opening_face,
+        "ProposedOpeningCut",
+        subelement="Opening",
+    )
+    opening.add_geometry(
+        "projected_geometry",
+        closed,
+        "ProposedOpeningBoundary",
+        subelement="Opening",
+    )
+    axis = corners[1].sub(corners[0])
+    depth = corners[3].sub(corners[0])
+    if axis.Length > 1e-9 and depth.Length > 1e-9:
+        center = (corners[0] + corners[1] + corners[2] + corners[3]) * 0.25
+        half_axis = axis * 0.35
+        opening.add_geometry(
+            "projected_geometry",
+            (center - half_axis, center + half_axis),
+            "ProposedWindowSymbol",
+            subelement="Centerline",
+        )
+
+    state = ArchRepresentation.BIMPreviewState(wall)
+    state.add_representation(opening, affects_spatial_boundary=False)
+    try:
+        committed_host = ArchRepresentation.representation_for(wall, context)
+    except ArchRepresentation.RepresentationUnavailable:
+        return ArchRepresentation.expand_preview_dependents(state, context)
+
+    host_faces = tuple(committed_host.cut_geometry)
+    if host_faces:
+        host_shape = host_faces[0]
+        for face in host_faces[1:]:
+            host_shape = host_shape.fuse(face)
+        host_shape = host_shape.cut(opening_face)
+        host_preview = ArchRepresentation.BIMRepresentation(source=wall, context=context)
+        for face_index, face in enumerate(host_shape.Faces, start=1):
+            host_preview.add_geometry(
+                "cut_geometry",
+                face,
+                "PlanCutFace",
+                subelement=f"PlanFace{face_index}",
+            )
+            for wire_index, wire in enumerate(face.Wires, start=1):
+                wire_points = tuple(FreeCAD.Vector(vertex.Point) for vertex in wire.Vertexes)
+                if len(wire_points) > 1:
+                    host_preview.add_geometry(
+                        "projected_geometry",
+                        (*wire_points, wire_points[0]),
+                        "PlanCutBoundary",
+                        subelement=f"PlanFace{face_index}.Wire{wire_index}",
+                    )
+        if host_preview.cut_geometry:
+            state.add_representation(
+                host_preview,
+                replace_committed=True,
+                affects_spatial_boundary=False,
+            )
+    return ArchRepresentation.expand_preview_dependents(state, context)
+
+
 def update_window_tool_preview(session, point=None, info=None):
     creation_preview_state = session.creation_preview_state
     wall = resolve_window_host_wall(session, snap_object=info, snap_info=info)
-    if wall is not None:
-        creation_preview_state.window_host_wall = wall
     points = _get_window_preview_points(session, point, wall=wall)
     clear_window_preview(session)
+    if wall is not None:
+        creation_preview_state.window_host_wall = wall
     if len(points) != 4:
         return
-    try:
-        import draftguitools.gui_trackers as DraftTrackers
-    except Exception:
+    source = object()
+    state = _build_window_creation_preview_state(session, wall, points, source)
+    if state is None:
         return
-    color = (0.12, 0.38, 0.95)
-    width = session.viewport.scaled_line_width(2)
-    for index, (start, end) in enumerate(zip(points, points[1:] + points[:1])):
-        tracker = session.overlays.manager.make_plan_line_tracker(
-            DraftTrackers,
-            "window-placement-preview:{}".format(index),
-            scolor=color,
-            swidth=width,
-            ontop=True,
-        )
-        tracker.p1(start)
-        tracker.p2(end)
-        tracker.on()
-        creation_preview_state.window_preview_trackers.append(tracker)
+    creation_preview_state.window_preview_source = source
+    creation_preview_state.window_preview_key = state.primary_source
+    session.contextual_rendering.set_preview_state(state)
 
 
 def _add_rectangle(sketch, x_min, y_min, x_max, y_max):
