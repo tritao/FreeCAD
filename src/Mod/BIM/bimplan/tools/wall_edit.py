@@ -4,7 +4,7 @@
 import FreeCAD
 
 from bimplan.runtime import capabilities as runtime_capabilities
-from ArchWallSemantic import MINIMUM_WALL_LENGTH, evaluate_hosted_openings
+from ArchWallSemantic import MINIMUM_WALL_LENGTH
 
 
 def _get_wall_endpoint_proxy(wall):
@@ -103,23 +103,6 @@ def refresh_wall_hosted_opening_footprints(session, wall):
         session.openings.refresh_opening_host_footprint_displays(opening)
 
 
-def compute_wall_hosted_opening_layout(session, wall, endpoints):
-    del session
-    if not wall or not endpoints or len(endpoints) != 2:
-        return []
-    return evaluate_hosted_openings(wall, endpoints, endpoints, "Move")
-
-
-def resolve_wall_hosted_opening_layout(session, wall):
-    proxy = _get_wall_endpoint_proxy(wall)
-    if proxy is None:
-        return True
-    layout = compute_wall_hosted_opening_layout(session, wall, proxy.calc_endpoints(wall))
-    if layout is None:
-        return False
-    return all(item["proxy"].move_along_host(item["target_point"]) for item in layout)
-
-
 class PlanWallEditAPI:
     def __init__(self, session):
         self.session = session
@@ -150,9 +133,3 @@ class PlanWallEditAPI:
 
     def refresh_wall_hosted_opening_footprints(self, *args, **kwargs):
         return refresh_wall_hosted_opening_footprints(self.session, *args, **kwargs)
-
-    def compute_wall_hosted_opening_layout(self, *args, **kwargs):
-        return compute_wall_hosted_opening_layout(self.session, *args, **kwargs)
-
-    def resolve_wall_hosted_opening_layout(self, *args, **kwargs):
-        return resolve_wall_hosted_opening_layout(self.session, *args, **kwargs)

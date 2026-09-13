@@ -111,18 +111,6 @@ def refresh_wall_hosted_opening_footprints(session, wall):
     return wall_edit.refresh_wall_hosted_opening_footprints(session, wall)
 
 
-def compute_wall_hosted_opening_layout(session, wall, endpoints):
-    from bimplan.tools import wall_edit
-
-    return wall_edit.compute_wall_hosted_opening_layout(session, wall, endpoints)
-
-
-def resolve_wall_hosted_opening_layout(session, wall):
-    from bimplan.tools import wall_edit
-
-    return wall_edit.resolve_wall_hosted_opening_layout(session, wall)
-
-
 def is_opening_visual_dependency(opening, obj):
     if not opening or not obj:
         return False
@@ -239,12 +227,6 @@ class PlanOpeningsAPI(_SessionAPI):
 
     def refresh_wall_hosted_opening_footprints(self, *args, **kwargs):
         return refresh_wall_hosted_opening_footprints(self.session, *args, **kwargs)
-
-    def compute_wall_hosted_opening_layout(self, *args, **kwargs):
-        return compute_wall_hosted_opening_layout(self.session, *args, **kwargs)
-
-    def resolve_wall_hosted_opening_layout(self, *args, **kwargs):
-        return resolve_wall_hosted_opening_layout(self.session, *args, **kwargs)
 
     def is_opening_visual_dependency(self, *args, **kwargs):
         return is_opening_visual_dependency(*args, **kwargs)
