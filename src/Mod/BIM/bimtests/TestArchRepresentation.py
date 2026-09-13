@@ -13,6 +13,7 @@ from ArchRepresentation import (
     BIMEditRay,
     BIMEditHandle,
     BIMEditOperation,
+    BIMPreviewState,
     BIMEditTransaction,
     BIMEditCapabilities,
     BIMRepresentation,
@@ -83,6 +84,21 @@ class TestArchRepresentation(unittest.TestCase):
     def test_representation_rejects_unknown_collection(self):
         with self.assertRaises(ValueError):
             BIMRepresentation().add_geometry("display", object(), "display")
+
+    def test_preview_entries_describe_spatial_boundary_effects(self):
+        source = object()
+        representation = BIMRepresentation(source=source)
+        state = BIMPreviewState(source)
+        state.add_representation(
+            representation,
+            replace_committed=True,
+            affects_spatial_boundary=False,
+        )
+
+        entry = state.entry_for(source)
+        self.assertIs(entry.representation, representation)
+        self.assertTrue(entry.replace_committed)
+        self.assertFalse(entry.affects_spatial_boundary)
 
     def test_wall_provider_exposes_semantic_cut_boundary(self):
         document = FreeCAD.newDocument("SemanticWallBoundary")

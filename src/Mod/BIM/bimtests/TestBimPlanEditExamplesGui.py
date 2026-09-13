@@ -358,7 +358,9 @@ class TestBimPlanEditExamplesGui(TestArchBaseGui):
             self.assertEqual(preview_width, ArchWindow.getWindowWidthMm(door))
             self.assertIn(door, session.contextual_rendering.renderer._preview_nodes)
             self.assertIn(host, session.contextual_rendering.renderer._preview_nodes)
+            self.assertIn(space, session.contextual_rendering.renderer._preview_nodes)
             self.assertIn(host, session.contextual_rendering.renderer._preview_replaced_sources)
+            self.assertNotIn(space, session.contextual_rendering.renderer._preview_replaced_sources)
             label_node = session.contextual_rendering.renderer._preview_label_nodes[door]
             search = coin.SoSearchAction()
             search.setType(coin.SoType.fromName("SoFrameLabel"))
@@ -384,6 +386,7 @@ class TestBimPlanEditExamplesGui(TestArchBaseGui):
             session.viewport.flush_scene_graph_mutations()
             self.assertNotIn(door, session.contextual_rendering.renderer._preview_nodes)
             self.assertNotIn(host, session.contextual_rendering.renderer._preview_nodes)
+            self.assertNotIn(space, session.contextual_rendering.renderer._preview_nodes)
             self.assertNotIn(host, session.contextual_rendering.renderer._preview_replaced_sources)
             self.assertEqual(
                 coin.SO_SWITCH_ALL,
@@ -411,6 +414,82 @@ class TestBimPlanEditExamplesGui(TestArchBaseGui):
             session.viewport.flush_scene_graph_mutations()
             self.assertNotIn(door, session.contextual_rendering.renderer._preview_nodes)
             self.assertNotIn(host, session.contextual_rendering.renderer._preview_nodes)
+
+            handles = select_and_sync()
+            position_handle = next(handle for handle in handles if handle.role == "OpeningPosition")
+            original_position = position_handle.operation.get_value(door)
+            proposed_position = original_position + 50.0
+            preview_state = position_handle.operation.get_preview_state(
+                door,
+                proposed_position,
+                session.representation_context.context,
+            )
+            ArchRepresentation.expand_preview_dependents(
+                preview_state, session.representation_context.context
+            )
+            expected_host_area = sum(
+                face.Area for face in preview_state.representation_for(host).cut_geometry
+            )
+            expected_space_area = sum(
+                face.Area for face in preview_state.representation_for(space).cut_geometry
+            )
+            original_host_area = sum(
+                face.Area
+                for face in host.Proxy.getRepresentation(
+                    host, session.representation_context.context
+                ).cut_geometry
+            )
+            original_space_area = sum(face.Area for face in space.Proxy.getFootprint(space))
+
+            self.assertTrue(session.contextual_editing.begin(position_handle))
+            committed_preview = session.contextual_editing.preview(
+                position_handle.point + position_handle.direction * 50.0
+            )
+            session.viewport.flush_scene_graph_mutations()
+            self.assertTrue(committed_preview.validation.allowed)
+            self.assertTrue(
+                {door, host, space}.issubset(session.contextual_rendering.renderer._preview_nodes)
+            )
+            session.contextual_editing.cancel()
+            session.viewport.flush_scene_graph_mutations()
+            self.assertFalse(
+                {door, host, space}.intersection(
+                    session.contextual_rendering.renderer._preview_nodes
+                )
+            )
+            self.assertAlmostEqual(original_position, position_handle.operation.get_value(door))
+
+            self.assertTrue(session.contextual_editing.begin(position_handle))
+            opening_commit = session.contextual_editing.commit(
+                position_handle.point + position_handle.direction * 50.0
+            )
+            session.viewport.flush_scene_graph_mutations()
+            document.recompute()
+            self.pump_gui_events(30)
+            self.assertTrue(opening_commit.success, opening_commit.reason)
+            committed_host_area = sum(
+                face.Area
+                for face in host.Proxy.getRepresentation(
+                    host, session.representation_context.context
+                ).cut_geometry
+            )
+            committed_space_area = sum(face.Area for face in space.Proxy.getFootprint(space))
+            self.assertAlmostEqual(expected_host_area, committed_host_area, delta=1e-6)
+            self.assertAlmostEqual(expected_space_area, committed_space_area, delta=1e-6)
+
+            document.undo()
+            document.recompute()
+            self.pump_gui_events(30)
+            restored_host_area = sum(
+                face.Area
+                for face in host.Proxy.getRepresentation(
+                    host, session.representation_context.context
+                ).cut_geometry
+            )
+            restored_space_area = sum(face.Area for face in space.Proxy.getFootprint(space))
+            self.assertAlmostEqual(original_position, position_handle.operation.get_value(door))
+            self.assertAlmostEqual(original_host_area, restored_host_area, delta=1e-6)
+            self.assertAlmostEqual(original_space_area, restored_space_area, delta=1e-6)
 
             for role, offset in (("OpeningPosition", 75.0), ("OpeningRightJamb", 50.0)):
                 handles = select_and_sync()

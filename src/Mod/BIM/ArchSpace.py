@@ -3520,6 +3520,33 @@ class _Space(ArchComponent.Component):
         current_faces = tuple(self.getFootprint(obj) or ())
         if not current_faces:
             return None
+        boundary_entries = tuple(
+            entry
+            for wall in boundary_walls
+            for entry in (state.entry_for(wall),)
+            if entry is not None
+        )
+        if boundary_entries and not any(
+            entry.affects_spatial_boundary for entry in boundary_entries
+        ):
+            representation = ArchRepresentation.BIMRepresentation(source=obj, context=context)
+            for face_index, face in enumerate(current_faces, start=1):
+                representation.add_geometry(
+                    "cut_geometry",
+                    face,
+                    "SpacePreviewRegion",
+                    subelement=f"Boundary{face_index}",
+                )
+                for wire_index, wire in enumerate(face.Wires, start=1):
+                    points = tuple(FreeCAD.Vector(vertex.Point) for vertex in wire.Vertexes)
+                    if len(points) > 1:
+                        representation.add_geometry(
+                            "projected_geometry",
+                            (*points, points[0]),
+                            "SpacePreviewBoundary",
+                            subelement=f"Boundary{face_index}.Wire{wire_index}",
+                        )
+            return representation
         seed = max(current_faces, key=lambda face: face.Area).CenterOfMass
         boundary_faces = []
         for wall in boundary_walls:
@@ -3529,7 +3556,15 @@ class _Space(ArchComponent.Component):
                     representation = ArchRepresentation.representation_for(wall, context)
                 except ArchRepresentation.RepresentationUnavailable:
                     return None
-            for face in representation.cut_geometry:
+            boundary_provider = getattr(
+                getattr(wall, "Proxy", None), "getSpaceBoundaryGeometry", None
+            )
+            faces = (
+                boundary_provider(wall, representation, context)
+                if callable(boundary_provider)
+                else representation.cut_geometry
+            )
+            for face in faces:
                 outer_wire = getattr(face, "OuterWire", None)
                 if outer_wire is not None:
                     boundary_faces.append(Part.Face(outer_wire))

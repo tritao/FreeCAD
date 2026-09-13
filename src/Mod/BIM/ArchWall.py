@@ -1028,6 +1028,49 @@ class _Wall(ArchComponent.Component):
             context = self.getDefaultPlanContext(obj)
         return self.getRepresentation(obj, context).cut_geometry
 
+    def getSpaceBoundaryGeometry(self, obj, representation, context):
+        """Return continuous planar wall geometry suitable for room enclosure.
+
+        Wall display sections contain hosted opening voids.  Those voids must
+        not break the spatial boundary used to resolve an enclosed room.
+        """
+
+        import Part
+
+        baseline = self.get_global_baseline(obj)
+        faces = tuple(getattr(representation, "cut_geometry", ()) or ())
+        if baseline is None or not faces:
+            return faces
+        axis_u = baseline.end_point - baseline.start_point
+        if axis_u.Length <= 1e-9:
+            return faces
+        axis_u.normalize()
+        axis_v = axis_u.cross(baseline.normal)
+        if axis_v.Length <= 1e-9:
+            return faces
+        axis_v.normalize()
+        origin = FreeCAD.Vector(baseline.start_point)
+        vertices = tuple(FreeCAD.Vector(vertex.Point) for face in faces for vertex in face.Vertexes)
+        if not vertices:
+            return faces
+        values_u = [point.sub(origin).dot(axis_u) for point in vertices]
+        values_v = [point.sub(origin).dot(axis_v) for point in vertices]
+        target_offset = getattr(context, "target_offset", None)
+        z = vertices[0].z if target_offset is None else float(target_offset)
+
+        def frame_point(u, v):
+            point = origin.add(axis_u * u).add(axis_v * v)
+            point.z = z
+            return point
+
+        corners = (
+            frame_point(min(values_u), min(values_v)),
+            frame_point(max(values_u), min(values_v)),
+            frame_point(max(values_u), max(values_v)),
+            frame_point(min(values_u), max(values_v)),
+        )
+        return (Part.Face(Part.makePolygon((*corners, corners[0]))),)
+
     def getRepresentation(self, obj, context):
         """Return this wall's renderer-neutral plan representation."""
 

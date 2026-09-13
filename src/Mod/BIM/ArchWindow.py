@@ -2490,6 +2490,8 @@ class _HostedOpeningRepresentationGeometry:
     def get_plan_edit_preview_state(self, role, value, context):
         """Build one proposed opening state and its affected host wall cut."""
 
+        import Part
+
         proposed = self.get_plan_edit_preview_representation(role, value, context)
         if proposed is None:
             return None
@@ -2522,14 +2524,50 @@ class _HostedOpeningRepresentationGeometry:
             return state
 
         preview_host = ArchRepresentation.BIMRepresentation(source=host, context=context)
-        result_faces = []
-        for face in host_representation.cut_geometry:
-            result = face
-            for void in current_voids:
-                result = result.fuse(void)
-            for void in proposed_voids:
-                result = result.cut(void)
-            result_faces.extend(result.Faces)
+        host_faces = tuple(host_representation.cut_geometry)
+        if not host_faces:
+            return state
+        axis_u = FreeCAD.Vector(profile["axis_u"])
+        axis_v = FreeCAD.Vector(profile["axis_v"])
+        origin = FreeCAD.Vector(profile["origin"])
+        host_vertices = tuple(
+            FreeCAD.Vector(vertex.Point) for face in host_faces for vertex in face.Vertexes
+        )
+        if not host_vertices:
+            return state
+        host_u = [point.sub(origin).dot(axis_u) for point in host_vertices]
+        host_v = [point.sub(origin).dot(axis_v) for point in host_vertices]
+        target_offset = getattr(context, "target_offset", None)
+        base_z = origin.z if target_offset is None else float(target_offset)
+
+        def frame_point(u, v):
+            point = origin.add(axis_u * u).add(axis_v * v)
+            point.z = base_z
+            return point
+
+        envelope_points = (
+            frame_point(min(host_u), min(host_v)),
+            frame_point(max(host_u), min(host_v)),
+            frame_point(max(host_u), max(host_v)),
+            frame_point(min(host_u), max(host_v)),
+        )
+        host_envelope = Part.Face(Part.makePolygon((*envelope_points, envelope_points[0])))
+
+        def clipped_voids(voids):
+            return tuple(face for void in voids for face in void.common(host_envelope).Faces)
+
+        current_voids = clipped_voids(current_voids)
+        proposed_voids = clipped_voids(proposed_voids)
+        if not current_voids or not proposed_voids:
+            return state
+        result = host_faces[0]
+        for face in host_faces[1:]:
+            result = result.fuse(face)
+        for void in current_voids:
+            result = result.fuse(void)
+        for void in proposed_voids:
+            result = result.cut(void)
+        result_faces = result.Faces
         for index, face in enumerate(result_faces, start=1):
             preview_host.add_geometry(
                 "cut_geometry", face, "PlanCutFace", subelement=f"PlanFace{index}"
@@ -2544,7 +2582,11 @@ class _HostedOpeningRepresentationGeometry:
                         subelement=f"PlanFace{index}.Wire{wire_index}",
                     )
         if preview_host.cut_geometry:
-            state.add_representation(preview_host, replace_committed=True)
+            state.add_representation(
+                preview_host,
+                replace_committed=True,
+                affects_spatial_boundary=False,
+            )
         return state
 
     def get_plan_edit_preview_label(self, role, value, context):

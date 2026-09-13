@@ -75,6 +75,7 @@ class RepresentationSource:
 class BIMPreviewEntry:
     representation: object
     replace_committed: bool = False
+    affects_spatial_boundary: bool = True
 
 
 class BIMPreviewState:
@@ -89,10 +90,22 @@ class BIMPreviewState:
         self.primary_source = primary_source
         self._entries = []
 
-    def add_representation(self, representation, *, replace_committed=False):
+    def add_representation(
+        self,
+        representation,
+        *,
+        replace_committed=False,
+        affects_spatial_boundary=True,
+    ):
         if not isinstance(representation, BIMRepresentation):
             raise TypeError("preview entries must be BIMRepresentation instances")
-        self._entries.append(BIMPreviewEntry(representation, bool(replace_committed)))
+        self._entries.append(
+            BIMPreviewEntry(
+                representation,
+                bool(replace_committed),
+                bool(affects_spatial_boundary),
+            )
+        )
         return representation
 
     @property
@@ -110,6 +123,12 @@ class BIMPreviewState:
                 for entry in reversed(self._entries)
                 if entry.representation.source is source
             ),
+            None,
+        )
+
+    def entry_for(self, source):
+        return next(
+            (entry for entry in reversed(self._entries) if entry.representation.source is source),
             None,
         )
 
