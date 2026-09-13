@@ -605,28 +605,25 @@ def cancel_space_region_pick(session, refresh=True):
 
 
 def create_space_from_region_candidate(session, candidate, boundaries=None, keep_boundaries=True):
-    import Arch
-    import ArchSpace
-
     if not isinstance(candidate, dict):
         return None
-
-    def create_space():
-        base = create_space_region_base_object(session, candidate)
-        if not base:
-            return None
-        space = Arch.makeSpace(base)
-        sample_point = candidate.get("sample_point")
-        if space is not None and sample_point is not None:
-            ArchSpace.setBoundaryRegionReferencePoint(space, sample_point)
-        return space
-
-    return _create_space_in_transaction(
-        session,
-        create_space=create_space,
-        boundaries=boundaries,
-        keep_boundaries=keep_boundaries,
-    )
+    import ArchSpaceConstruction
+    shape = plan_space_geometry.copy_shape_without_element_map(candidate.get("shape"))
+    try:
+        return ArchSpaceConstruction.construct_space(
+            session.doc,
+            shape,
+            sample_point=candidate.get("sample_point"),
+            boundaries=boundaries if keep_boundaries else (),
+            transaction_name=translate("BIM_PlanEdit", "Create Space"),
+            add_to_container=session.visibility.add_object_to_active_storey,
+            validate=session.spaces.space_has_valid_geometry,
+        )
+    except Exception:
+        FreeCAD.Console.PrintError(
+            translate("BIM_PlanEdit", "Failed to create the selected space.\n")
+        )
+        return None
 
 
 def reassign_space_from_region_candidate(session, space, candidate, boundaries=None):
