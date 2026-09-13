@@ -6,10 +6,6 @@ from .runtime.embedded_commands import (
     _PlanEditCommandHost,
     _PlanEditWallHost,
 )
-from .tools.hosted_openings import (
-    create_hosted_opening,
-    has_built_opening_shape,
-)
 from .providers import (
     PlanActionSpec,
     PlanContextDetailSpec,
@@ -59,8 +55,6 @@ __all__ = [
     "PlanEditProvider",
     "PlanEditRegistry",
     "PlanEditTransaction",
-    "create_hosted_opening",
-    "has_built_opening_shape",
     "_PlanEditCommandHost",
     "_PlanEditWallHost",
     "PlanInspectorSection",

@@ -2,8 +2,6 @@
 
 """Hosting and hosted opening helpers for BIM Plan Edit."""
 
-from bimplan.transactions import PlanEditTransaction
-
 
 def can_rehost_object(obj, host=None):
     """Return whether an object's host link can be reassigned safely."""
@@ -65,18 +63,6 @@ def rehost_object(obj, host, *, preserve_world_position=False):
     except Exception:
         return False
     return True
-
-
-def has_built_opening_shape(opening):
-    """Return True when an opening has a usable shape before it is hosted."""
-
-    shape = getattr(opening, "Shape", None)
-    if not shape:
-        return False
-    try:
-        return not shape.isNull()
-    except Exception:
-        return False
 
 
 def is_hosted_opening_object(session, obj):
@@ -211,50 +197,3 @@ def get_wall_hosted_openings(session, wall):
     else:
         session.performance.plan_perf_count("wall_hosted_openings_cache_hits")
     return list(cache_record[1].get(wall_key, ()))
-
-
-def _host_opening(opening, host):
-    import Arch
-
-    Arch.addComponents(opening, host)
-    return opening
-
-
-def create_hosted_opening(
-    session,
-    host,
-    build_opening,
-    transaction_label,
-    add_to_active_storey=True,
-):
-    """Create, build, host, and recompute an opening in the safe Plan Edit order.
-
-    Hosted Arch windows touch their hosts when their shape changes. Build the
-    opening before assigning its host so creation does not schedule a second
-    host/opening recompute pass.
-    """
-
-    doc = getattr(session, "doc", None)
-    if doc is None:
-        return None
-
-    opening = None
-    with session.document_visuals.defer_document_visual_updates():
-        with PlanEditTransaction(doc, transaction_label):
-            opening = build_opening()
-            if opening is None:
-                raise RuntimeError("Unable to create opening")
-
-            doc.recompute()
-            if not has_built_opening_shape(opening):
-                raise RuntimeError("Opening did not build before hosting")
-
-            _host_opening(opening, host)
-            if add_to_active_storey:
-                session.visibility.add_object_to_active_storey(opening)
-            doc.recompute()
-
-            if host not in (getattr(opening, "Hosts", None) or ()):
-                raise RuntimeError("Opening was not hosted")
-
-    return opening

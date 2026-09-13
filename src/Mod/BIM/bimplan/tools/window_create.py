@@ -14,10 +14,6 @@ from bimplan.selection import target_kinds as plan_target_kinds
 translate = FreeCAD.Qt.translate
 
 DEFAULT_WINDOW_WIDTH = 900.0
-DEFAULT_WINDOW_HEIGHT = 1200.0
-DEFAULT_WINDOW_SILL_HEIGHT = 900.0
-DEFAULT_WINDOW_FRAME_THICKNESS = 60.0
-DEFAULT_WINDOW_GLASS_THICKNESS = 10.0
 
 
 class PlanHostedOpeningsAPI:
@@ -725,93 +721,6 @@ def update_window_tool_preview(session, point=None, info=None):
     creation_preview_state.opening_preview_source = source
     creation_preview_state.opening_preview_key = state.primary_source
     session.contextual_rendering.set_preview_state(state)
-
-
-def _add_rectangle(sketch, x_min, y_min, x_max, y_max):
-    import Part
-    import Sketcher
-
-    start_index = sketch.GeometryCount
-    sketch.addGeometry(
-        Part.LineSegment(FreeCAD.Vector(x_min, y_min, 0), FreeCAD.Vector(x_max, y_min, 0))
-    )
-    sketch.addGeometry(
-        Part.LineSegment(FreeCAD.Vector(x_max, y_min, 0), FreeCAD.Vector(x_max, y_max, 0))
-    )
-    sketch.addGeometry(
-        Part.LineSegment(FreeCAD.Vector(x_max, y_max, 0), FreeCAD.Vector(x_min, y_max, 0))
-    )
-    sketch.addGeometry(
-        Part.LineSegment(FreeCAD.Vector(x_min, y_max, 0), FreeCAD.Vector(x_min, y_min, 0))
-    )
-    sketch.addConstraint(Sketcher.Constraint("Coincident", start_index, 2, start_index + 1, 1))
-    sketch.addConstraint(Sketcher.Constraint("Coincident", start_index + 1, 2, start_index + 2, 1))
-    sketch.addConstraint(Sketcher.Constraint("Coincident", start_index + 2, 2, start_index + 3, 1))
-    sketch.addConstraint(Sketcher.Constraint("Coincident", start_index + 3, 2, start_index, 1))
-    sketch.addConstraint(Sketcher.Constraint("Horizontal", start_index))
-    sketch.addConstraint(Sketcher.Constraint("Vertical", start_index + 1))
-    sketch.addConstraint(Sketcher.Constraint("Horizontal", start_index + 2))
-    sketch.addConstraint(Sketcher.Constraint("Vertical", start_index + 3))
-    return start_index
-
-
-def _add_outer_rectangle_size_constraints(sketch, start_index, width, height):
-    import Sketcher
-
-    sketch.addConstraint(Sketcher.Constraint("DistanceX", start_index, 1, start_index, 2, width))
-    sketch.renameConstraint(sketch.ConstraintCount - 1, "Width")
-    sketch.addConstraint(
-        Sketcher.Constraint("DistanceY", start_index + 1, 1, start_index + 1, 2, height)
-    )
-    sketch.renameConstraint(sketch.ConstraintCount - 1, "Height")
-
-
-def _link_inner_rectangle_to_outer_rectangle(sketch, outer_start, inner_start, inset):
-    import Sketcher
-
-    sketch.addConstraint(
-        Sketcher.Constraint("DistanceX", outer_start + 3, 2, inner_start + 3, 2, inset)
-    )
-    sketch.addConstraint(
-        Sketcher.Constraint("DistanceX", inner_start + 1, 1, outer_start + 1, 1, inset)
-    )
-    sketch.addConstraint(Sketcher.Constraint("DistanceY", outer_start, 1, inner_start, 1, inset))
-    sketch.addConstraint(
-        Sketcher.Constraint("DistanceY", inner_start + 2, 2, outer_start + 2, 2, inset)
-    )
-
-
-def _make_window_base_sketch(session, wall, center):
-    context = _get_wall_axis_context(wall)
-    if not context:
-        return None
-
-    sketch = session.doc.addObject("Sketcher::SketchObject", "PlanWindowSketch")
-    axis = context["axis"]
-    vertical = context["vertical"]
-    normal = context["normal"]
-    rotation = FreeCAD.Rotation(axis, vertical, normal, "XYZ")
-    placement_base = FreeCAD.Vector(center).add(
-        FreeCAD.Vector(vertical).multiply(DEFAULT_WINDOW_SILL_HEIGHT)
-    )
-    sketch.Placement = FreeCAD.Placement(placement_base, rotation)
-
-    half_width = DEFAULT_WINDOW_WIDTH * 0.5
-    y_min = 0.0
-    y_max = DEFAULT_WINDOW_HEIGHT
-    inset = DEFAULT_WINDOW_FRAME_THICKNESS
-    outer_start = _add_rectangle(sketch, -half_width, y_min, half_width, y_max)
-    _add_outer_rectangle_size_constraints(sketch, outer_start, DEFAULT_WINDOW_WIDTH, y_max - y_min)
-    if DEFAULT_WINDOW_WIDTH > inset * 2.0 and DEFAULT_WINDOW_HEIGHT > inset * 2.0:
-        inner_start = _add_rectangle(
-            sketch,
-            -half_width + inset,
-            y_min + inset,
-            half_width - inset,
-            y_max - inset,
-        )
-        _link_inner_rectangle_to_outer_rectangle(sketch, outer_start, inner_start, inset)
-    return sketch
 
 
 def create_window(session, wall, point):
