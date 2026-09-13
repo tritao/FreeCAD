@@ -241,6 +241,37 @@ class TestBimPlanEditSessionGui(TestArchBaseGui):
         finally:
             session.shutdown(close_dialog=False)
 
+    def test_plan_door_creation_uses_atomic_preset_construction(self):
+        from bimcommands import BimWall
+        from bimplan.tools.window_create import create_window
+
+        wall = BimWall.create_baseless_wall_from_endpoints(
+            FreeCAD.Vector(0, 0, 0),
+            FreeCAD.Vector(2400, 0, 0),
+            width=200,
+            height=2500,
+            auto_group=False,
+        )
+        self.document.recompute()
+        session = PlanEditSession()
+        self.assertTrue(session.enter())
+        try:
+            session.creation_preview_state.opening_kind = "Door"
+            door = create_window(session, wall, FreeCAD.Vector(1200, 0, 0))
+            self.assertIn(wall, tuple(door.Hosts))
+            self.assertEqual("Door", door.IfcType)
+            self.assertAlmostEqual(900.0, door.Width.Value)
+            self.assertAlmostEqual(2100.0, door.Height.Value)
+            self.assertFalse(door.Shape.isNull())
+
+            door_name = door.Name
+            self.document.undo()
+            self.document.recompute()
+            self.assertIsNone(self.document.getObject(door_name))
+            self.assertIsNotNone(self.document.getObject(wall.Name))
+        finally:
+            session.shutdown(close_dialog=False)
+
     def test_space_creation_previews_use_semantic_geometry(self):
         from bimplan.tools.space_interaction import (
             _build_plan_region_preview_representation,

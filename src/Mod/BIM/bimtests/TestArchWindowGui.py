@@ -79,6 +79,51 @@ class TestArchWindowGui(TestArchBaseGui.TestArchBaseGui):
             )
         self.assertEqual(initial_names, {obj.Name for obj in self.document.Objects})
 
+    def test_window_and_door_presets_use_the_same_atomic_construction(self):
+        """Built-in Window and Door presets share validation and transactions."""
+
+        window = ArchOpeningConstruction.construct_preset_opening(
+            self.document,
+            ArchOpeningConstruction.OpeningPresetSpec(
+                "Fixed", 900, 1200, 50, 50, 50, 50, 50, 0, 0
+            ),
+            placement=App.Placement(App.Vector(0, 0, 0), App.Rotation()),
+            transaction_name="Create Window Preset",
+        )
+        door = ArchOpeningConstruction.construct_preset_opening(
+            self.document,
+            ArchOpeningConstruction.OpeningPresetSpec(
+                "Simple door", 900, 2100, 50, 50, 50, 50, 50, 0, 0
+            ),
+            placement=App.Placement(App.Vector(1500, 0, 0), App.Rotation()),
+            transaction_name="Create Door Preset",
+        )
+
+        self.assertEqual("Window", window.IfcType)
+        self.assertEqual("Door", door.IfcType)
+        self.assertAlmostEqual(900.0, window.Width.Value)
+        self.assertAlmostEqual(900.0, door.Width.Value)
+        self.assertFalse(window.Shape.isNull())
+        self.assertFalse(door.Shape.isNull())
+
+        door_name = door.Name
+        self.document.undo()
+        self.document.recompute()
+        self.assertIsNone(self.document.getObject(door_name))
+        self.assertIsNotNone(self.document.getObject(window.Name))
+
+    def test_preset_validation_happens_before_document_mutation(self):
+        initial_names = {obj.Name for obj in self.document.Objects}
+        with self.assertRaises(ArchOpeningConstruction.OpeningConstructionError):
+            ArchOpeningConstruction.construct_preset_opening(
+                self.document,
+                ArchOpeningConstruction.OpeningPresetSpec(
+                    "Simple door", 0, 2100, 50, 50, 50, 50, 50, 0, 0
+                ),
+                transaction_name="Reject Door Preset",
+            )
+        self.assertEqual(initial_names, {obj.Name for obj in self.document.Objects})
+
     def test_change_window_opening(self):
         """Tests if changes to a window opening touches the window's chain of hosts"""
 
