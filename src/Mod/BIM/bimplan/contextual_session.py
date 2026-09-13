@@ -193,7 +193,7 @@ class BIMContextualEditingSession:
             self._wall_start,
             FreeCAD.Rotation(FreeCAD.Vector(1, 0, 0), vector),
         )
-        self.renderer.set_preview_shape(self._creation_preview_source, shape)
+        self._show_creation_shape(shape, "WallPreview")
         self._wall_direction = FreeCAD.Vector(vector).normalize()
         self.host.set_value_input(
             label="Wall length",
@@ -219,7 +219,19 @@ class BIMContextualEditingSession:
         shape.Placement = ArchOpeningConstruction.hosted_opening_placement(
             wall, point, value
         )
-        self.renderer.set_preview_shape(self._creation_preview_source, shape)
+        self._show_creation_shape(shape, "OpeningPreview")
+
+    def _show_creation_shape(self, shape, role):
+        representation = ArchRepresentation.BIMRepresentation(
+            source=self._creation_preview_source, context=self.context
+        )
+        for index, face in enumerate(shape.Faces, start=1):
+            representation.add_geometry(
+                "cut_geometry", face, role, "Face{}".format(index)
+            )
+        self.renderer.set_preview_representation(
+            self._creation_preview_source, representation
+        )
 
     def _finish_hosted_opening_creation(self, wall, point, spec):
         if self._closed:

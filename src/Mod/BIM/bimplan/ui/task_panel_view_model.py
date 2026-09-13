@@ -268,7 +268,7 @@ _TASK_PANEL_CONTEXT_READERS = (
     ("spaces", _TaskPanelSpaceReads),
     ("symbols", _TaskPanelSymbolReads),
     ("wall_edit", _TaskPanelWallEditReads),
-    ("windows", _TaskPanelWindowReads),
+    ("hosted_openings", _TaskPanelWindowReads),
 )
 
 
