@@ -285,6 +285,9 @@ class TestBimPlanEditExamplesGui(TestArchBaseGui):
 
             preview_handle = next(handle for handle in handles if handle.role == "OpeningRightJamb")
             preview_width = ArchWindow.getWindowWidthMm(door)
+            renderer = session.contextual_rendering.renderer
+            self.assertTrue(renderer.set_edit_label(door, "Width: 900 mm", preview_handle.point))
+            renderer.clear_edit_label(door)
             session.contextual_editing.begin(preview_handle)
             preview = session.contextual_editing.preview(
                 preview_handle.point + preview_handle.direction * 25.0
@@ -293,6 +296,13 @@ class TestBimPlanEditExamplesGui(TestArchBaseGui):
             self.assertTrue(preview.validation.allowed)
             self.assertEqual(preview_width, ArchWindow.getWindowWidthMm(door))
             self.assertIn(door, session.contextual_rendering.renderer._preview_nodes)
+            label_node = session.contextual_rendering.renderer._preview_label_nodes[door]
+            search = coin.SoSearchAction()
+            search.setType(coin.SoType.fromName("SoFrameLabel"))
+            search.apply(label_node)
+            self.assertIsNotNone(search.getPath())
+            frame_label = search.getPath().getTail()
+            self.assertIn("Width", frame_label.string.getValues()[0])
             self.assertGreater(
                 session.contextual_rendering.renderer._preview_nodes[door].getNumChildren(),
                 0,
@@ -300,6 +310,7 @@ class TestBimPlanEditExamplesGui(TestArchBaseGui):
             session.contextual_editing.cancel()
             session.viewport.flush_scene_graph_mutations()
             self.assertNotIn(door, session.contextual_rendering.renderer._preview_nodes)
+            self.assertNotIn(door, session.contextual_rendering.renderer._preview_label_nodes)
 
             session.contextual_editing.begin(preview_handle)
             invalid_distance = (

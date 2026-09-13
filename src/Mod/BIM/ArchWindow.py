@@ -694,6 +694,9 @@ def _opening_position_edit_operation(helper):
         preview_representation=lambda _source, value, context: (
             helper.get_plan_edit_preview_representation("OpeningPosition", value, context)
         ),
+        preview_label=lambda _source, value, context: helper.get_plan_edit_preview_label(
+            "OpeningPosition", value, context
+        ),
     )
 
 
@@ -761,6 +764,9 @@ def _opening_width_edit_operation(helper, side):
             helper.get_plan_edit_preview_representation(
                 "Opening{}Jamb".format(side), value, context
             )
+        ),
+        preview_label=lambda _source, value, context: helper.get_plan_edit_preview_label(
+            "Opening{}Jamb".format(side), value, context
         ),
     )
 
@@ -2441,6 +2447,34 @@ class _HostedOpeningRepresentationGeometry:
                     subelement="Preview.{}{}".format(geometry_role, index),
                 )
         return representation
+
+    def get_plan_edit_preview_label(self, role, value, context):
+        """Format the architectural measurement represented by an opening edit."""
+
+        source = self.Object
+        cut_z = getattr(context, "cut_offset", None)
+        base_z = getattr(context, "target_offset", None)
+        if cut_z is None or base_z is None:
+            default_context = self._get_default_opening_plan_context(source)
+            cut_z = default_context.cut_offset if cut_z is None else cut_z
+            base_z = default_context.target_offset if base_z is None else base_z
+        profile = self._get_hosted_opening_plan_frame(source.Shape, cut_z, base_z)
+        if not profile:
+            return ""
+        value = float(value)
+        if role == "OpeningPosition":
+            label = "Offset"
+            measurement = value
+        elif role == "OpeningLeftJamb":
+            label = "Width"
+            measurement = profile["umax"] - value
+        elif role == "OpeningRightJamb":
+            label = "Width"
+            measurement = value - profile["umin"]
+        else:
+            return ""
+        quantity = FreeCAD.Units.Quantity(measurement, FreeCAD.Units.Length)
+        return "{}: {}".format(label, quantity.UserString)
 
     def get_plan_overlay_geometry(self, context=None):
         """Return horizontal plan symbols for the supplied representation context."""

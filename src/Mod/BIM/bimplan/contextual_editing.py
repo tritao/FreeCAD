@@ -216,6 +216,19 @@ class ContextualEditController:
             self._call_renderer("clear_preview", source)
         else:
             self._call_renderer("set_preview_shape", source, shape)
+        label = preview.handle.operation.get_preview_label(
+            source,
+            preview.value,
+            self.editor.context,
+        )
+        if label:
+            self._call_renderer(
+                "set_edit_label",
+                source,
+                label,
+                preview.point,
+                preview.validation.allowed,
+            )
         return preview
 
     def commit(self, pointer):
@@ -329,7 +342,9 @@ class ContextualEditController:
             finally:
                 self.input_adapter.clear()
 
-        if not self.input_adapter.defer(("finish-contextual-handle", id(editor)), finish_after_event):
+        if not self.input_adapter.defer(
+            ("finish-contextual-handle", id(editor)), finish_after_event
+        ):
             self.cancel()
             self.input_adapter.clear()
 

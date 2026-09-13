@@ -85,6 +85,8 @@ class ContextualRepresentationRenderer:
         self._handle_color_fields = {}
         self._handle_switches = {}
         self._preview_nodes = {}
+        self._preview_label_nodes = {}
+        self._preview_label_parts = {}
         self._visible_handle_sources = set()
         self._hidden_sources = set()
 
@@ -116,7 +118,7 @@ class ContextualRepresentationRenderer:
         return root
 
     def remove_representation(self, source, restore_visibility=True):
-        self.clear_preview(source)
+        self._clear_preview_geometry(source)
         node = self._object_nodes.pop(source, None)
         self._representations.pop(source, None)
         if node is not None:
@@ -142,11 +144,7 @@ class ContextualRepresentationRenderer:
     def pick_mapping(self, mouse_pos, project_point, radius_px=4):
         """Pick rendered semantic geometry through the neutral representation contract."""
 
-        if (
-            not self.render_representation
-            or mouse_pos is None
-            or not callable(project_point)
-        ):
+        if not self.render_representation or mouse_pos is None or not callable(project_point):
             return None
         result = ArchRepresentation.query_representation_pick(
             tuple(self._representations.values()),
@@ -240,6 +238,8 @@ class ContextualRepresentationRenderer:
         self._handle_position_fields.clear()
         self._handle_color_fields.clear()
         self._handle_switches.clear()
+        self._preview_label_nodes.clear()
+        self._preview_label_parts.clear()
         self._visible_handle_sources.clear()
         self._hidden_sources.clear()
         self.root.unref()
@@ -248,7 +248,7 @@ class ContextualRepresentationRenderer:
     def set_preview_shape(self, source, shape):
         """Realize one transient shape with Part's preview renderer."""
 
-        self.clear_preview(source)
+        self._clear_preview_geometry(source)
         if source is None or shape is None or shape.isNull():
             return False
         preview_type = coin.SoType.fromName("SoPreviewShape")
@@ -298,8 +298,64 @@ class ContextualRepresentationRenderer:
         self._preview_nodes[source] = node
         return True
 
+    def set_edit_label(self, source, text, point, valid=True):
+        """Show one viewer-local constant-pixel measurement label."""
+
+        if source is None or not text:
+            self.clear_edit_label(source)
+            return False
+        parts = self._preview_label_parts.get(source)
+        if parts is None:
+            label_type = coin.SoType.fromName("SoFrameLabel")
+            if label_type.isBad():
+                raise RuntimeError("SoFrameLabel is not registered")
+            node = coin.SoAnnotation()
+            node.ref()
+            pick_style = coin.SoPickStyle()
+            pick_style.style = coin.SoPickStyle.UNPICKABLE
+            translation = coin.SoTranslation()
+            label = label_type.createInstance()
+            label.horAlignment = coin.SoImage.CENTER
+            label.vertAlignment = coin.SoImage.HALF
+            label.justification = 2
+            label.pixelOffset.setValue(0, -18)
+            label.backgroundOpacity = 0.9
+            node.addChild(pick_style)
+            node.addChild(translation)
+            node.addChild(label)
+            self.root.addChild(node)
+            self._preview_label_nodes[source] = node
+            self._preview_label_parts[source] = (translation, label)
+            parts = (translation, label)
+        translation, label = parts
+        translation.translation = _xyz(point)
+        label.string.setValue(str(text))
+        label.borderColor = (0.95, 0.35, 0.05) if valid else (0.9, 0.05, 0.05)
+        label.backgroundColor = (0.12, 0.12, 0.12) if valid else (0.28, 0.02, 0.02)
+        return True
+
+    def clear_edit_label(self, source=None):
+        targets = (
+            tuple(self._preview_label_nodes)
+            if source is None
+            else ((source,) if source in self._preview_label_nodes else ())
+        )
+        for target in targets:
+            node = self._preview_label_nodes.pop(target, None)
+            self._preview_label_parts.pop(target, None)
+            if node is not None:
+                if self.root is not None:
+                    self.root.removeChild(node)
+                node.unref()
+
     def clear_preview(self, source=None):
         """Remove viewer-local preview nodes without touching document state."""
+
+        self.clear_edit_label(source)
+        return self._clear_preview_geometry(source)
+
+    def _clear_preview_geometry(self, source=None):
+        """Remove preview geometry while retaining any live edit label."""
 
         sources = tuple(self._preview_nodes) if source is None else (source,)
         changed = False

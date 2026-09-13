@@ -132,6 +132,12 @@ class PlanContextualRenderingAPI:
             lambda: (renderer.clear_preview(source) if self._renderer is renderer else False),
         )
 
+    def set_edit_label(self, source, text, point, valid=True):
+        return self._queue_renderer_mutation(
+            ("edit-label", source),
+            lambda renderer: renderer.set_edit_label(source, text, point, valid),
+        )
+
     def sync_visible_handles(self):
         """Keep semantic handles scoped to the primary Plan Edit selection."""
 

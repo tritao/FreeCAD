@@ -554,6 +554,13 @@ class TestArchRepresentation(unittest.TestCase):
             {"OpeningJambLine", "OpeningSymbol", "OpeningGuide"},
             {mapping.role for mapping in preview.source_mappings} - {"OpeningPreviewCut"},
         )
+        self.assertTrue(
+            position.operation.get_preview_label(
+                opening,
+                position.operation.get_value(opening) + 100.0,
+                representation.context,
+            ).startswith("Offset: ")
+        )
         self.assertEqual(before, base.Placement)
 
     def test_wall_representation_supports_a_rotated_section_frame(self):

@@ -101,9 +101,7 @@ class AxisConstraint:
                 return None
             ray_offset = pointer.direction.dot(offset)
             axis_offset = self.direction.dot(offset)
-            ray_parameter = (
-                ray_axis_dot * axis_offset - ray_offset
-            ) / denominator
+            ray_parameter = (ray_axis_dot * axis_offset - ray_offset) / denominator
             ray_parameter = max(0.0, ray_parameter)
             axis_parameter = axis_offset + ray_axis_dot * ray_parameter
             return self.origin + self.direction * axis_parameter
@@ -219,6 +217,7 @@ class BIMEditOperation:
         interaction_intent="",
         preview_shape=None,
         preview_representation=None,
+        preview_label=None,
     ):
         self.key = str(key)
         self.label = str(label)
@@ -234,6 +233,7 @@ class BIMEditOperation:
         self.interaction_intent = str(interaction_intent)
         self._preview_shape = preview_shape
         self._preview_representation = preview_representation
+        self._preview_label = preview_label
 
     def get_preview_shape(self, source, value, context):
         if not callable(self._preview_shape):
@@ -244,6 +244,11 @@ class BIMEditOperation:
         if not callable(self._preview_representation):
             return None
         return self._preview_representation(source, value, context)
+
+    def get_preview_label(self, source, value, context):
+        if not callable(self._preview_label):
+            return ""
+        return str(self._preview_label(source, value, context) or "")
 
     def is_available(self, source):
         return True if self._available is None else bool(self._available(source))
@@ -725,9 +730,7 @@ def edit_capabilities_for(obj, context):
         )
     capabilities = provider(obj, context)
     if not isinstance(capabilities, BIMEditCapabilities):
-        raise TypeError(
-            "getEditCapabilities(obj, context) must return BIMEditCapabilities"
-        )
+        raise TypeError("getEditCapabilities(obj, context) must return BIMEditCapabilities")
     if capabilities.source is None:
         capabilities.source = obj
     if capabilities.context is None:
