@@ -6,17 +6,6 @@ import ArchComponent
 import ArchRepresentation
 import FreeCAD
 
-_PLAN_ONLY_CAPABILITIES = {
-    "wall_axis_edit",
-    "wall_create",
-    "wall_join",
-    "opening_host_move",
-    "opening_create",
-    "space_edit",
-    "symbol_edit",
-}
-
-
 def _quantity_value(value, default=0.0):
     try:
         return float(value.Value)
@@ -131,19 +120,6 @@ class PlanRepresentationContextAPI:
 
     def is_plan(self):
         return self.purpose == ArchRepresentation.RepresentationPurpose.PLAN
-
-    def supports(self, capability):
-        return self.is_plan() or capability not in _PLAN_ONLY_CAPABILITIES
-
-    def require(self, capability):
-        if self.supports(capability):
-            return True
-        FreeCAD.Console.PrintWarning(
-            "BIM Plan Edit: '{}' is not available in {} context.\n".format(
-                str(capability).replace("_", " "), self.purpose.value
-            )
-        )
-        return False
 
     def to_local(self, point):
         frame = getattr(self.context, "reference_frame", None)
