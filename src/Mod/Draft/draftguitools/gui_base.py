@@ -33,6 +33,7 @@
 ## \addtogroup draftguitools
 # @{
 from PySide import QtCore
+from pivy import coin
 
 import FreeCAD as App
 import FreeCADGui as Gui
@@ -59,8 +60,12 @@ class DraftInteractionHost:
       a temporary escape from that ortho policy
     """
 
-    def __init__(self, command=None):
+    def __init__(self, command=None, view=None):
         self.command = command
+        self.view = view
+        self._drag_callbacks = []
+        self._drag_request_serial = 0
+        self._dragging = False
 
     def activate_command(self, command=None):
         if command is not None:
@@ -133,6 +138,122 @@ class DraftInteractionHost:
         if interaction_plane is not None:
             kwargs["interaction_plane"] = interaction_plane
         Gui.Snapper.getPoint(**kwargs)
+
+    def request_drag(self, start, on_begin, on_move, on_finish, on_cancel):
+        """Acquire one mouse drag from a 3D view.
+
+        ``start`` may be a screen position or a callable receiving a screen
+        position. A callable can return a payload which is forwarded to
+        ``on_begin``; returning ``None`` leaves the request waiting. The other
+        callbacks receive screen positions. Coin callbacks are removed only
+        after traversal has returned to the Qt event loop.
+        """
+
+        self.stop_request()
+        view = self.view or gui_utils.get_3d_view()
+        if view is None:
+            return False
+        self.view = view
+        self._drag_request_serial += 1
+        serial = self._drag_request_serial
+        self._dragging = False
+
+        def current():
+            return serial == self._drag_request_serial
+
+        def position(event_callback):
+            value = event_callback.getEvent().getPosition().getValue()
+            return int(value[0]), int(value[1])
+
+        def defer(callback, *args):
+            QtCore.QTimer.singleShot(
+                0, lambda: callback(*args) if current() else None
+            )
+
+        def mouse_button(event_callback):
+            if not current():
+                return
+            event = event_callback.getEvent()
+            if event.getButton() != coin.SoMouseButtonEvent.BUTTON1:
+                return
+            point = position(event_callback)
+            if event.getState() == coin.SoMouseButtonEvent.DOWN:
+                if self._dragging:
+                    event_callback.setHandled()
+                    return
+                payload = start(point) if callable(start) else point
+                if callable(start) and payload is None:
+                    return
+                if not callable(start):
+                    try:
+                        if tuple(start) != point:
+                            return
+                    except TypeError:
+                        pass
+                self._dragging = True
+                event_callback.setHandled()
+                defer(on_begin, payload)
+                return
+            if event.getState() == coin.SoMouseButtonEvent.UP and self._dragging:
+                event_callback.setHandled()
+                self._dragging = False
+                defer(on_finish, point)
+
+        def mouse_move(event_callback):
+            if not current() or not self._dragging:
+                return
+            event_callback.setHandled()
+            defer(on_move, position(event_callback))
+
+        def key(event_callback):
+            if not current():
+                return
+            event = event_callback.getEvent()
+            if (
+                event.getState() == coin.SoKeyboardEvent.DOWN
+                and event.getKey() == coin.SoKeyboardEvent.ESCAPE
+            ):
+                event_callback.setHandled()
+                self._dragging = False
+                defer(on_cancel)
+
+        callback_types = (
+            (coin.SoMouseButtonEvent.getClassTypeId(), mouse_button),
+            (coin.SoLocation2Event.getClassTypeId(), mouse_move),
+            (coin.SoKeyboardEvent.getClassTypeId(), key),
+        )
+        try:
+            for event_type, callback in callback_types:
+                registered = view.addEventCallbackPivy(event_type, callback)
+                self._drag_callbacks.append((view, event_type, registered, serial))
+        except Exception:
+            self._stop_drag_request(serial)
+            raise
+        return True
+
+    def _stop_drag_request(self, serial=None):
+        if serial is not None and serial != self._drag_request_serial:
+            return
+        callbacks = tuple(self._drag_callbacks)
+        self._drag_callbacks.clear()
+        self._drag_request_serial += 1
+        self._dragging = False
+
+        def remove_callbacks():
+            for view, event_type, callback, _serial in callbacks:
+                try:
+                    view.removeEventCallbackPivy(event_type, callback)
+                except (RuntimeError, ReferenceError):
+                    pass
+
+        if callbacks:
+            QtCore.QTimer.singleShot(0, remove_callbacks)
+
+    def stop_request(self):
+        """Stop point and drag acquisition and invalidate queued callbacks."""
+
+        self.stop_point_request()
+        self._stop_drag_request()
 
     def supports_extra_widget(self):
         """Return True when point requests may attach an extra task widget."""

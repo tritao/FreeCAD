@@ -27,6 +27,7 @@
 import FreeCAD as App
 import FreeCADGui as Gui
 import DraftGui
+from PySide import QtCore
 from draftguitools import gui_base
 from draftguitools import gui_snapper
 from draftguitools import gui_trackers
@@ -248,6 +249,38 @@ class DraftSnapper(test_base.DraftTestCaseDoc):
         self.assertIs(received["callback"], callback)
         self.assertIs(received["modifier_resolver"], resolver)
         self.assertIs(received["hints"], hints)
+
+    def test_interaction_host_drag_request_owns_coin_callbacks(self):
+        """Drag acquisition should dispatch once and tear down safely."""
+
+        callbacks = []
+        removed = []
+
+        class View:
+            def addEventCallbackPivy(self, event_type, callback):
+                callbacks.append((event_type, callback))
+                return callback
+
+            def removeEventCallbackPivy(self, event_type, callback):
+                removed.append((event_type, callback))
+
+        calls = []
+        host = gui_base.DraftInteractionHost(view=View())
+        self.assertTrue(
+            host.request_drag(
+                lambda point: "handle" if point == (10, 20) else None,
+                lambda payload: calls.append(("begin", payload)),
+                lambda point: calls.append(("move", point)),
+                lambda point: calls.append(("finish", point)),
+                lambda: calls.append(("cancel",)),
+            )
+        )
+        self.assertEqual(3, len(callbacks))
+
+        host.stop_request()
+        QtCore.QCoreApplication.processEvents()
+        self.assertEqual(3, len(removed))
+        self.assertFalse(host._dragging)
 
     def test_point_request_uses_host_modifier_resolution(self):
         """The Snapper applies a host's modifier policy before snapping."""
