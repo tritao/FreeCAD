@@ -10,6 +10,7 @@ from .actions import (
 from .editing import (
     BIMContextualHandleEditor, BIMEditPreview, BIMEditResult, ContextualEditController,
 )
+from .editable_points import ContextualEditPoint, get_contextual_edit_points
 from .interaction import ContextualInteractionHost
 from .profiles import (
     ContextualProfile, ElevationProfile, ModelProfile, PlanProfile, SectionProfile,

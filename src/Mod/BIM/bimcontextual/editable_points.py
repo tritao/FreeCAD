@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: LGPL-2.1-or-later
 
-"""Object-owned point adapters for contextual BIM editing."""
+"""Object-owned point adapters for shared contextual BIM editing."""
 
 from dataclasses import dataclass
 

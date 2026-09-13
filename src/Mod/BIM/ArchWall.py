@@ -1520,7 +1520,7 @@ class _Wall(ArchComponent.Component):
         )
 
     def _add_owned_path_edit_handles(self, representation, wall, context):
-        from bimplan.editable_points import get_contextual_edit_points
+        from bimcontextual.editable_points import get_contextual_edit_points
 
         owner = getattr(wall, "Base", None)
         points = get_contextual_edit_points(owner, context)

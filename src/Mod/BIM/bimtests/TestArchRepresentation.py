@@ -50,7 +50,7 @@ from bimcontextual.editing import (
     BIMContextualHandleEditor,
     ContextualEditController,
 )
-from bimplan.editable_points import get_contextual_edit_points
+from bimcontextual.editable_points import get_contextual_edit_points
 from ArchWallSemantic import evaluate_wall_candidate, evaluate_wall_length
 from bimcontextual.profiles import profile_for
 

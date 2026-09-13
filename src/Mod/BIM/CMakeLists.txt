@@ -94,7 +94,6 @@ SET(bimplan_SRCS
     bimplan/contextual_rendering.py
     bimplan/contextual_editing.py
     bimplan/document_visuals.py
-    bimplan/editable_points.py
     bimplan/object_visibility.py
     bimplan/overlays/__init__.py
     bimplan/overlays/geometry.py
@@ -184,6 +183,7 @@ SET(bimcontextual_SRCS
     bimcontextual/__init__.py
     bimcontextual/actions.py
     bimcontextual/editing.py
+    bimcontextual/editable_points.py
     bimcontextual/interaction.py
     bimcontextual/profiles.py
     bimcontextual/session.py
