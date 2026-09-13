@@ -21,13 +21,63 @@
 ################################################################################
 
 import FreeCAD as App
+import FreeCADGui as Gui
 import Arch
+import ArchOpeningConstruction
 import ArchSectionPlane
 import Draft
 from bimtests import TestArchBaseGui
+from bimcommands.BimWindow import Arch_Window
 
 
 class TestArchWindowGui(TestArchBaseGui.TestArchBaseGui):
+
+    def test_standard_and_hosted_opening_creation_have_semantic_parity(self):
+        """Equivalent bases produce equivalent openings through both consumers."""
+
+        first_base = Draft.make_rectangle(900, 1200)
+        second_base = Draft.make_rectangle(900, 1200)
+        second_base.Placement.Base = App.Vector(1500, 0, 0)
+        self.document.recompute()
+
+        Gui.Selection.clearSelection()
+        Gui.Selection.addSelection(first_base)
+        command = Arch_Window()
+        command.Activated()
+        standard = next(
+            obj
+            for obj in self.document.Objects
+            if Draft.getType(obj) == "Window" and obj.Base is first_base
+        )
+
+        hosted = ArchOpeningConstruction.construct_opening_from_base(
+            self.document,
+            second_base,
+            ArchOpeningConstruction.OpeningConstructionSpec(),
+            transaction_name="Create Hosted Opening",
+        )
+
+        self.assertEqual(standard.IfcType, hosted.IfcType)
+        self.assertEqual(standard.WindowParts, hosted.WindowParts)
+        self.assertAlmostEqual(standard.Shape.Volume, hosted.Shape.Volume, delta=1e-6)
+        self.assertEqual(len(standard.Shape.Solids), len(hosted.Shape.Solids))
+
+        hosted_name = hosted.Name
+        self.document.undo()
+        self.document.recompute()
+        self.assertIsNone(self.document.getObject(hosted_name))
+        self.assertIsNotNone(self.document.getObject(standard.Name))
+
+    def test_opening_construction_rejects_invalid_dimensions_before_mutation(self):
+        initial_names = {obj.Name for obj in self.document.Objects}
+        with self.assertRaises(ArchOpeningConstruction.OpeningConstructionError):
+            ArchOpeningConstruction.construct_opening_from_base(
+                self.document,
+                None,
+                ArchOpeningConstruction.OpeningConstructionSpec(width=0, height=1200),
+                transaction_name="Reject Opening",
+            )
+        self.assertEqual(initial_names, {obj.Name for obj in self.document.Objects})
 
     def test_change_window_opening(self):
         """Tests if changes to a window opening touches the window's chain of hosts"""
