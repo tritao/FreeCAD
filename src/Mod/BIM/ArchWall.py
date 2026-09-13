@@ -1629,11 +1629,13 @@ class _Wall(ArchComponent.Component):
         relation_controlled_ends = self._relation_controlled_native_ends(wall)
 
         def apply_endpoint(source, index, value):
-            current = self.calc_endpoints(source)
-            if len(current) != 2:
-                raise ValueError("Wall no longer has an editable straight path")
-            current[index] = FreeCAD.Vector(value)
-            source.Proxy.set_from_endpoints(source, current)
+            from bimplan.wall_semantic import evaluate_wall_candidate
+
+            mode = "Start" if index == 0 else "End"
+            result = evaluate_wall_candidate(self.calc_endpoints(source), mode, value)
+            if not result.allowed:
+                raise ValueError(result.reason)
+            source.Proxy.set_from_endpoints(source, result.endpoints)
 
         for index, role in enumerate(("Start", "End")):
             if role in relation_controlled_ends:
@@ -1671,14 +1673,12 @@ class _Wall(ArchComponent.Component):
         midpoint = (endpoints[0] + endpoints[1]) * 0.5
 
         def move_wall(source, value):
-            current = self.calc_endpoints(source)
-            if len(current) != 2:
-                raise ValueError("Wall no longer has an editable straight path")
-            delta = FreeCAD.Vector(value).sub((current[0] + current[1]) * 0.5)
-            source.Proxy.set_from_endpoints(
-                source,
-                [current[0].add(delta), current[1].add(delta)],
-            )
+            from bimplan.wall_semantic import evaluate_wall_candidate
+
+            result = evaluate_wall_candidate(self.calc_endpoints(source), "Move", value)
+            if not result.allowed:
+                raise ValueError(result.reason)
+            source.Proxy.set_from_endpoints(source, result.endpoints)
 
         move_operation = ArchRepresentation.BIMEditOperation(
             "WallMove",
@@ -1689,6 +1689,9 @@ class _Wall(ArchComponent.Component):
             value_kind="Point",
             available=lambda source: self._can_edit_native_path(source),
             interaction_intent="WallMove",
+            preview_state=lambda source, value, preview_context: (
+                self._get_wall_path_preview_state(source, "Move", value, preview_context)
+            ),
         )
         handle_point = _edit_handle_point(midpoint, context)
         representation.add_edit_handle(
@@ -1711,14 +1714,19 @@ class _Wall(ArchComponent.Component):
     def _get_endpoint_preview_state(self, wall, endpoint_index, value, context):
         """Return joined wall representations for one hypothetical endpoint."""
 
-        import Part
+        mode = "Start" if endpoint_index == 0 else "End"
+        return self._get_wall_path_preview_state(wall, mode, value, context)
 
-        endpoints = self.calc_endpoints(wall)
-        if len(endpoints) != 2:
+    def _get_wall_path_preview_state(self, wall, mode, value, context):
+        """Return joined wall representations for a hypothetical path edit."""
+
+        import Part
+        from bimplan.wall_semantic import evaluate_wall_candidate
+
+        evaluation = evaluate_wall_candidate(self.calc_endpoints(wall), mode, value)
+        if not evaluation.allowed:
             return None
-        endpoints[endpoint_index] = FreeCAD.Vector(value)
-        if endpoints[0].distanceToPoint(endpoints[1]) <= 1e-9:
-            return None
+        endpoints = evaluation.endpoints
         normal = self.get_global_baseline(wall).normal
         proposed_path = ArchWallGeometry.WallPath(Part.makeLine(*endpoints), normal)
         paths = {wall: proposed_path}
