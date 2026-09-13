@@ -27,13 +27,14 @@ class BIM_ContextualEdit3D:
         )
 
     def Activated(self):
+        from ArchContextualCreation import architectural_contextual_providers
         from bimcontextual.session import active_session, start_session
 
         session = active_session()
         if session is not None:
             session.close()
             return
-        start_session()
+        start_session(providers=architectural_contextual_providers())
 
 
 FreeCADGui.addCommand("BIM_ContextualEdit3D", BIM_ContextualEdit3D())

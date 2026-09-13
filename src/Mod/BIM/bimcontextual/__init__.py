@@ -4,8 +4,7 @@
 
 from .actions import (
     ContextualActionSpec, ContextualInspectorSection, ContextualProvider,
-    ContextualProviderContext, ContextualToolSpec, HostedOpeningCreationProvider,
-    SemanticEditProvider, WallCreationProvider,
+    ContextualProviderContext, ContextualToolSpec, SemanticEditProvider,
 )
 from .editing import (
     BIMContextualHandleEditor, BIMEditPreview, BIMEditResult, ContextualEditController,

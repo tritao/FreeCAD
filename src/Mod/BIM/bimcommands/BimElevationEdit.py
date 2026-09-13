@@ -32,6 +32,7 @@ class BIM_ElevationEdit:
         )
 
     def Activated(self):
+        from ArchContextualCreation import architectural_contextual_providers
         from bimcontextual.session import active_session, start_session
 
         session = active_session()
@@ -47,6 +48,7 @@ class BIM_ElevationEdit:
             context=source.Proxy.getRepresentationContext(source),
             sources=tuple(getattr(source, "Objects", ()) or ()),
             orient_to_context=True,
+            providers=architectural_contextual_providers(),
         )
 
 

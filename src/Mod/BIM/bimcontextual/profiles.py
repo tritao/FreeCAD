@@ -47,14 +47,9 @@ class ContextualProfile:
 
     def providers(self, context):
         del context
-        from .actions import (
-            HostedOpeningCreationProvider,
-            SemanticEditProvider,
-            WallCreationProvider,
-        )
-        return (
-            SemanticEditProvider(), HostedOpeningCreationProvider(), WallCreationProvider()
-        )
+        from .actions import SemanticEditProvider
+
+        return (SemanticEditProvider(),)
 
     def supports(self, capability):
         return str(capability) in _CAPABILITIES.get(self.purpose, ())

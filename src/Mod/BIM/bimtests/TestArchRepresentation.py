@@ -136,6 +136,24 @@ class TestArchRepresentation(unittest.TestCase):
             )
         )
 
+    def test_contextual_package_has_no_object_specific_construction_imports(self):
+        package = Path(__file__).resolve().parents[1] / "bimcontextual"
+        forbidden = {"ArchOpeningConstruction", "ArchWallConstruction"}
+        offenders = []
+        for source_path in package.glob("*.py"):
+            tree = ast.parse(
+                source_path.read_text(encoding="utf-8"), filename=str(source_path)
+            )
+            imported_modules = set()
+            for node in ast.walk(tree):
+                if isinstance(node, ast.Import):
+                    imported_modules.update(alias.name for alias in node.names)
+                elif isinstance(node, ast.ImportFrom) and node.module:
+                    imported_modules.add(node.module)
+            if not imported_modules.isdisjoint(forbidden):
+                offenders.append(source_path.name)
+        self.assertEqual([], offenders)
+
     def test_context_profiles_declare_purpose_and_capabilities(self):
         for purpose in RepresentationPurpose:
             profile = profile_for(RepresentationContext(purpose=purpose))

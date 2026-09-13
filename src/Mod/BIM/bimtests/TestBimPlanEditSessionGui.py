@@ -6,6 +6,7 @@ from unittest.mock import patch
 from types import SimpleNamespace
 
 import Arch
+from ArchContextualCreation import architectural_contextual_providers
 import ArchWallRelation
 import FreeCAD
 import FreeCADGui
@@ -882,7 +883,10 @@ class TestBimPlanEditSessionGui(TestArchBaseGui):
             ):
                 context = RepresentationContext(purpose=purpose)
                 session = ContextualSession(
-                    view, context=context, sources=(wall,)
+                    view,
+                    context=context,
+                    sources=(wall,),
+                    providers=architectural_contextual_providers(),
                 )
                 try:
                     self.pump_gui_events(20)
@@ -936,7 +940,12 @@ class TestBimPlanEditSessionGui(TestArchBaseGui):
         view = FreeCADGui.ActiveDocument.ActiveView
         results = []
         for purpose in RepresentationPurpose.MODEL, RepresentationPurpose.PLAN:
-            session = ContextualSession(view, context=RepresentationContext(purpose=purpose), sources=())
+            session = ContextualSession(
+                view,
+                context=RepresentationContext(purpose=purpose),
+                sources=(),
+                providers=architectural_contextual_providers(),
+            )
             callbacks = []
             try:
                 self.pump_gui_events(20)
@@ -955,7 +964,10 @@ class TestBimPlanEditSessionGui(TestArchBaseGui):
         self.assertEqual(results[0], results[1])
         for purpose in RepresentationPurpose.SECTION, RepresentationPurpose.ELEVATION:
             session = ContextualSession(
-                view, context=RepresentationContext(purpose=purpose), sources=()
+                view,
+                context=RepresentationContext(purpose=purpose),
+                sources=(),
+                providers=architectural_contextual_providers(),
             )
             try:
                 self.pump_gui_events(20)
@@ -967,7 +979,9 @@ class TestBimPlanEditSessionGui(TestArchBaseGui):
 
     def test_contextual_wall_creation_preview_and_cancel_are_reversible(self):
         view = FreeCADGui.ActiveDocument.ActiveView
-        session = ContextualSession(view, sources=())
+        session = ContextualSession(
+            view, sources=(), providers=architectural_contextual_providers()
+        )
         requests = []
         try:
             self.pump_gui_events(20)

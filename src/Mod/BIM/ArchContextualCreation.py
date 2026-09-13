@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: LGPL-2.1-or-later
 
-"""Provider-owned construction interactions for contextual BIM views."""
+"""Architectural creation providers for the generic contextual editor."""
 
 import FreeCAD
 import Part
@@ -8,6 +8,11 @@ import Part
 import ArchOpeningConstruction
 import ArchRepresentation
 import ArchWallConstruction
+from bimcontextual.actions import (
+    ContextualActionSpec,
+    ContextualProvider,
+    SemanticEditProvider,
+)
 
 
 class _CreationInteraction:
@@ -161,3 +166,88 @@ class HostedOpeningCreationInteraction(_CreationInteraction):
             return None
         finally:
             self.finish()
+
+
+class HostedOpeningCreationProvider(ContextualProvider):
+    provider_id = "hosted-opening-creation"
+    display_name = "Hosted Openings"
+
+    def __init__(self):
+        self._interaction = None
+
+    @staticmethod
+    def _selected_wall(context):
+        for source in context.get_selected_sources():
+            proxy = getattr(source, "Proxy", None)
+            if callable(getattr(proxy, "calc_endpoints", None)):
+                return source
+        return None
+
+    def get_actions(self, context):
+        if not context.supports("insert-opening"):
+            return ()
+        wall = self._selected_wall(context)
+        if wall is None:
+            return ()
+        purpose = context.representation_context.purpose.value
+        return tuple(
+            ContextualActionSpec(
+                key="create-{}".format(kind.lower()),
+                label="Create {}".format(kind),
+                tooltip="Place a hosted {} in the current {} context".format(
+                    kind.lower(), purpose
+                ),
+                provider_id=self.provider_id,
+                source=wall,
+            )
+            for kind in ("Window", "Door")
+        )
+
+    def execute_action(self, action_key, context, commands=None, payload=None):
+        del payload
+        kinds = {"create-window": "Window", "create-door": "Door"}
+        kind = kinds.get(str(action_key))
+        wall = self._selected_wall(context)
+        if kind is None or wall is None or commands is None:
+            return False
+        self._interaction = HostedOpeningCreationInteraction(commands, wall, kind)
+        return self._interaction.start()
+
+
+class WallCreationProvider(ContextualProvider):
+    provider_id = "wall-creation"
+    display_name = "Walls"
+
+    def __init__(self):
+        self._interaction = None
+
+    def get_actions(self, context):
+        if not context.supports("create-wall"):
+            return ()
+        return (
+            ContextualActionSpec(
+                key="create-wall",
+                label="Create Wall",
+                tooltip="Draw a wall in the current {} context".format(
+                    context.representation_context.purpose.value
+                ),
+                provider_id=self.provider_id,
+            ),
+        )
+
+    def execute_action(self, action_key, context, commands=None, payload=None):
+        del context, payload
+        if action_key != "create-wall" or commands is None:
+            return False
+        self._interaction = WallCreationInteraction(commands)
+        return self._interaction.start()
+
+
+def architectural_contextual_providers():
+    """Return fresh semantic and creation providers for an architectural session."""
+
+    return (
+        SemanticEditProvider(),
+        HostedOpeningCreationProvider(),
+        WallCreationProvider(),
+    )

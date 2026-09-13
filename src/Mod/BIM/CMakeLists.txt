@@ -27,6 +27,7 @@ SET(Arch_SRCS
     ArchWall.py
     ArchWallConstruction.py
     ArchOpeningConstruction.py
+    ArchContextualCreation.py
     ArchWallEndpoint.py
     ArchWallEndCondition.py
     ArchWallTrimming.py
@@ -182,7 +183,6 @@ SET(bimplan_SRCS
 SET(bimcontextual_SRCS
     bimcontextual/__init__.py
     bimcontextual/actions.py
-    bimcontextual/creation.py
     bimcontextual/editing.py
     bimcontextual/editable_points.py
     bimcontextual/interaction.py
