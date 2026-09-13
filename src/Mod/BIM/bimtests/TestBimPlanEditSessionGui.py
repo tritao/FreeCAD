@@ -209,6 +209,92 @@ class TestBimPlanEditSessionGui(TestArchBaseGui):
         finally:
             session.shutdown(close_dialog=False)
 
+    def test_space_creation_previews_use_semantic_geometry(self):
+        from bimplan.tools.space_interaction import (
+            _build_plan_region_preview_representation,
+            _build_space_separator_preview_representation,
+        )
+
+        session = SimpleNamespace(
+            representation_context=SimpleNamespace(context=RepresentationContext("Plan")),
+        )
+        points = (
+            FreeCAD.Vector(0, 0, 0),
+            FreeCAD.Vector(1000, 0, 0),
+            FreeCAD.Vector(500, 800, 0),
+        )
+        region_source = object()
+        region = _build_plan_region_preview_representation(
+            session,
+            region_source,
+            (
+                (points[0], points[1], False),
+                (points[1], points[2], False),
+                (points[2], points[0], True),
+            ),
+        )
+        self.assertIs(region_source, region.source)
+        self.assertEqual(3, len(region.projected_geometry))
+        self.assertEqual(1, len(region.cut_geometry))
+        self.assertEqual(
+            ["ProposedRegionEdge", "ProposedRegionEdge", "ProposedRegionClosure"],
+            [
+                mapping.role
+                for mapping in region.source_mappings
+                if mapping.geometry in region.projected_geometry
+            ],
+        )
+
+        separator_source = object()
+        separator = _build_space_separator_preview_representation(
+            session,
+            separator_source,
+            points[0],
+            points[1],
+        )
+        self.assertIs(separator_source, separator.source)
+        self.assertEqual(1, len(separator.projected_geometry))
+        self.assertEqual("ProposedSpaceSeparator", separator.source_mappings[0].role)
+
+    def test_space_creation_preview_realizes_and_clears_in_coin(self):
+        from bimplan.tools.space_interaction import (
+            _build_plan_region_preview_representation,
+        )
+
+        session = PlanEditSession()
+        self.assertTrue(session.enter())
+        try:
+            source = object()
+            points = (
+                FreeCAD.Vector(0, 0, 0),
+                FreeCAD.Vector(1000, 0, 0),
+                FreeCAD.Vector(500, 800, 0),
+            )
+            representation = _build_plan_region_preview_representation(
+                session,
+                source,
+                (
+                    (points[0], points[1], False),
+                    (points[1], points[2], False),
+                    (points[2], points[0], True),
+                ),
+            )
+            self.assertTrue(
+                session.contextual_rendering.set_preview_representation(
+                    source,
+                    representation,
+                )
+            )
+            session.viewport.flush_scene_graph_mutations()
+            renderer = session.contextual_rendering.renderer
+            self.assertIn(source, renderer._preview_nodes)
+
+            self.assertTrue(session.contextual_rendering.clear_preview(source))
+            session.viewport.flush_scene_graph_mutations()
+            self.assertNotIn(source, renderer._preview_nodes)
+        finally:
+            session.shutdown(close_dialog=False)
+
     def test_storey_entry_helper_selects_source_and_runs_shared_command(self):
         from bimcommands.BimPlanEdit import start_plan_edit_for
 

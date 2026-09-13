@@ -2,8 +2,10 @@
 
 """Interactive space editing tools for BIM Plan Edit."""
 
+import ArchRepresentation
 import FreeCAD
 import FreeCADGui
+import Part
 
 from bimplan.runtime import tools as plan_runtime_tools
 from bimplan.selection import target_dispatch as plan_target_dispatch
@@ -43,8 +45,9 @@ def has_active_plan_region_tool(session):
 
 def clear_plan_region_preview(session):
     state = _plan_region_tool_state(session)
-    session.overlays.manager.finalize_trackers(state.preview_trackers)
-    state.preview_trackers = []
+    if state.preview_source is not None:
+        session.contextual_rendering.clear_preview(state.preview_source)
+    state.preview_source = None
 
 
 def set_plan_region_tool_state(session, points=None, parent_space=None):
@@ -262,26 +265,40 @@ def update_plan_region_preview(session, point, info):
     clear_plan_region_preview(session)
     if not segments:
         return
-    try:
-        import draftguitools.gui_trackers as DraftTrackers
-    except Exception:
+    source = object()
+    representation = _build_plan_region_preview_representation(session, source, segments)
+    if not representation.projected_geometry:
         return
+    _plan_region_tool_state(session).preview_source = source
+    session.contextual_rendering.set_preview_representation(source, representation)
 
-    color = (0.86, 0.48, 0.12)
-    width = session.viewport.scaled_line_width(2)
-    for index, (start, end, dotted) in enumerate(segments):
-        tracker = session.overlays.manager.make_plan_line_tracker(
-            DraftTrackers,
-            "plan_region_preview:{}".format(index),
-            dotted=dotted,
-            scolor=color,
-            swidth=width,
-            ontop=True,
+
+def _build_plan_region_preview_representation(session, source, segments):
+    """Build renderer-neutral boundary and fill geometry for a proposed region."""
+
+    context = session.representation_context.context
+    representation = ArchRepresentation.BIMRepresentation(source=source, context=context)
+    for index, (start, end, closure) in enumerate(segments, start=1):
+        representation.add_geometry(
+            "projected_geometry",
+            (FreeCAD.Vector(start), FreeCAD.Vector(end)),
+            "ProposedRegionClosure" if closure else "ProposedRegionEdge",
+            subelement=f"Edge{index}",
         )
-        tracker.p1(start)
-        tracker.p2(end)
-        tracker.on()
-        _plan_region_tool_state(session).preview_trackers.append(tracker)
+    if len(segments) >= 3 and segments[-1][2]:
+        points = tuple(FreeCAD.Vector(segment[0]) for segment in segments)
+        try:
+            face = Part.Face(Part.makePolygon((*points, points[0])))
+        except Part.OCCError:
+            face = None
+        if face is not None and not face.isNull():
+            representation.add_geometry(
+                "cut_geometry",
+                face,
+                "ProposedRegionFill",
+                subelement="Region",
+            )
+    return representation
 
 
 def create_plan_region(session, points):
@@ -361,8 +378,10 @@ def handle_plan_region_point(session, point=None, obj=None):
 
 def clear_space_separator_preview(session):
     preview_state = session.creation_preview_state
-    session.overlays.manager.finalize_trackers(preview_state.space_separator_preview_trackers)
-    preview_state.space_separator_preview_trackers = []
+    source = preview_state.space_separator_preview_source
+    if source is not None:
+        session.contextual_rendering.clear_preview(source)
+    preview_state.space_separator_preview_source = None
 
 
 def set_space_separator_tool_state(session, start=None, height=None):
@@ -398,16 +417,18 @@ def update_space_separator_preview(session, point, info):
     start = _get_space_separator_start(session)
     end = _coerce_space_separator_point(session, point)
     if start is None or end is None or not _is_valid_space_separator_length(start, end):
+        clear_space_separator_preview(session)
         return
-    try:
-        import draftguitools.gui_trackers as DraftTrackers
-    except Exception:
-        return
-
-    tracker = _get_or_create_space_separator_preview_tracker(session, DraftTrackers)
-    tracker.p1(start)
-    tracker.p2(end)
-    tracker.on()
+    clear_space_separator_preview(session)
+    source = object()
+    representation = _build_space_separator_preview_representation(
+        session,
+        source,
+        start,
+        end,
+    )
+    session.creation_preview_state.space_separator_preview_source = source
+    session.contextual_rendering.set_preview_representation(source, representation)
 
 
 def _get_space_separator_start(session):
@@ -424,17 +445,20 @@ def _is_valid_space_separator_length(start, end):
     return end.sub(start).Length >= _MIN_WALL_LENGTH
 
 
-def _get_or_create_space_separator_preview_tracker(session, DraftTrackers):
-    preview_state = session.creation_preview_state
-    if not preview_state.space_separator_preview_trackers:
-        tracker = session.overlays.manager.make_plan_line_tracker(
-            DraftTrackers,
-            "space_separator_preview",
-            dotted=True,
-            ontop=True,
-        )
-        preview_state.space_separator_preview_trackers.append(tracker)
-    return preview_state.space_separator_preview_trackers[0]
+def _build_space_separator_preview_representation(session, source, start, end):
+    """Build renderer-neutral geometry for a proposed spatial separator."""
+
+    representation = ArchRepresentation.BIMRepresentation(
+        source=source,
+        context=session.representation_context.context,
+    )
+    representation.add_geometry(
+        "projected_geometry",
+        (FreeCAD.Vector(start), FreeCAD.Vector(end)),
+        "ProposedSpaceSeparator",
+        subelement="Separator",
+    )
+    return representation
 
 
 def _request_space_separator_end_point(session, start):

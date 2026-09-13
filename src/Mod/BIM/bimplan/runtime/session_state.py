@@ -170,7 +170,7 @@ class SpaceRegionPickState:
 @dataclass
 class PlanRegionToolState:
     points: list = field(default_factory=list)
-    preview_trackers: list = field(default_factory=list)
+    preview_source: object = None
     parent_space: object = None
 
 
@@ -360,7 +360,7 @@ class PlanCreationPreviewState:
     rect_wall_preview_source: object = None
     space_separator_start: object = None
     space_separator_height: object = None
-    space_separator_preview_trackers: list = field(default_factory=list)
+    space_separator_preview_source: object = None
     window_host_wall: object = None
     window_preview_source: object = None
     window_preview_key: object = None
