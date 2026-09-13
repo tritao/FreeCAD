@@ -38,7 +38,7 @@ class BIMWindowPlanEditProvider(PlanEditProvider):
         if window is None:
             return ()
 
-        host = _get_window_host_wall(context, window)
+        host = _get_opening_host_wall(context, window)
         issues = []
         if host is None:
             issues.append(
@@ -107,7 +107,7 @@ class BIMWindowPlanEditProvider(PlanEditProvider):
     def get_inspector_sections(self, context):
         window = _resolve_selected_window(context)
         if window is not None:
-            host = _get_window_host_wall(context, window)
+            host = _get_opening_host_wall(context, window)
             return (
                 PlanInspectorSection(
                     key=_object_key(window, "window-summary"),
@@ -179,7 +179,7 @@ class BIMWindowPlanEditProvider(PlanEditProvider):
         window = _resolve_selected_window(context)
         if window is None:
             return False
-        host = _get_window_host_wall(context, window)
+        host = _get_opening_host_wall(context, window)
 
         if normalized_key == _RECOMPUTE_HOST_ACTION_KEY:
             return _recompute_window_host(commands, window)
@@ -406,7 +406,7 @@ def _is_space_object(obj):
         return False
 
 
-def _get_window_host_wall(context, window):
+def _get_opening_host_wall(context, window):
     for host in tuple(getattr(window, "Hosts", None) or ()):
         if getattr(context, "is_selectable_wall", lambda _obj: False)(host):
             return host

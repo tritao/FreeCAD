@@ -101,7 +101,7 @@ def _cancel_current_tool_for_finish(session):
         or session.openings.cancel_active_tool_for_finish()
         or session.symbols.cancel_active_tool_for_finish()
         or session.spaces.cancel_active_tool_for_finish()
-        or session.windows.cancel_active_tool_for_finish()
+        or session.hosted_openings.cancel_active_tool_for_finish()
     )
 
 
@@ -139,7 +139,7 @@ def _cleanup_begin_teardown(session):
     session.status_text.clear_input_hints()
     session.embedded_tools.cancel()
     session.wall_create.cancel_rect_wall_tool(refresh=False)
-    session.windows.cancel_window_tool(refresh=False)
+    session.hosted_openings.cancel_window_tool(refresh=False)
     session.spaces.cancel_plan_region_tool(refresh=False)
     session.providers.cancel_provider_point_tool(refresh=False)
     session.wall_edit.cancel_wall_edit(restore=False, refresh=False)
@@ -232,7 +232,7 @@ def activate_select_tool(session):
         return
     session.embedded_tools.cancel_for_select()
     session.wall_create.cancel_for_select()
-    session.windows.cancel_for_select()
+    session.hosted_openings.cancel_for_select()
     session.spaces.cancel_secondary_tools_for_select()
     session.wall_edit.cancel_for_select()
     session.wall_relations.cancel_for_select()

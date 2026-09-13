@@ -62,7 +62,7 @@ _ESCAPE_ACTIVE_TOOL_FALLBACKS = (
         ProviderPointTool,
     ),
     (
-        lambda session: session.windows.has_active_window_tool(),
+        lambda session: session.hosted_openings.has_active_window_tool(),
         WindowTool,
     ),
     (

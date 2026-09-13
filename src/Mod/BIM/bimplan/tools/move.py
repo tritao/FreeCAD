@@ -37,7 +37,7 @@ def activate_move_tool(session):
     session.spaces.cancel_space_region_pick(refresh=False)
     session.spaces.cancel_plan_region_tool(refresh=False)
     session.wall_create.cancel_rect_wall_tool(refresh=False)
-    session.windows.cancel_window_tool(refresh=False)
+    session.hosted_openings.cancel_window_tool(refresh=False)
     session.spaces.cancel_space_separator_tool(refresh=False)
     session.providers.cancel_provider_point_tool(refresh=False)
     session.wall_edit.cancel_wall_edit()

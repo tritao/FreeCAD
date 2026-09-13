@@ -341,9 +341,9 @@ class PlanCreationPreviewState:
     space_separator_start: object = None
     space_separator_height: object = None
     space_separator_preview_source: object = None
-    window_host_wall: object = None
-    window_preview_source: object = None
-    window_preview_key: object = None
+    opening_host_wall: object = None
+    opening_preview_source: object = None
+    opening_preview_key: object = None
     opening_kind: str = "Window"
 
 

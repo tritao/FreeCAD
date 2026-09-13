@@ -696,17 +696,17 @@ class PlanEditControlsShellMixin:
         can_edit_window_width = (
             selected_kind == "opening"
             and selected_obj is not None
-            and self.session.windows.can_edit_window_width(selected_obj)
+            and self.session.hosted_openings.can_edit_window_width(selected_obj)
         )
         can_edit_window_height = (
             selected_kind == "opening"
             and selected_obj is not None
-            and self.session.windows.can_edit_window_height(selected_obj)
+            and self.session.hosted_openings.can_edit_window_height(selected_obj)
         )
         can_apply_window_style = (
             selected_kind == "opening"
             and selected_obj is not None
-            and self.session.windows.can_apply_window_style_preset(selected_obj)
+            and self.session.hosted_openings.can_apply_window_style_preset(selected_obj)
         )
         for widget in (self.window_width_edit,):
             if widget is None:
@@ -746,10 +746,10 @@ class PlanEditControlsShellMixin:
         self.session.wall_create.activate_rect_wall_tool()
 
     def on_window_clicked(self):
-        self.session.windows.activate_window_tool()
+        self.session.hosted_openings.activate_window_tool()
 
     def on_door_clicked(self):
-        self.session.windows.activate_door_tool()
+        self.session.hosted_openings.activate_door_tool()
 
     def on_space_clicked(self):
         self.session.spaces.activate_space_tool()

@@ -231,32 +231,32 @@ class _TaskPanelWindowReads(_TaskPanelReadsBase):
     __slots__ = ()
 
     @property
-    def windows(self):
-        return self.session.windows
+    def hosted_openings(self):
+        return self.session.hosted_openings
 
     def can_place_plan_window(self):
-        return bool(self.windows.can_place_window())
+        return bool(self.hosted_openings.can_place_window())
 
     def get_window_style_preset_options(self):
-        return tuple(self.windows.get_window_style_preset_options() or ())
+        return tuple(self.hosted_openings.get_window_style_preset_options() or ())
 
     def can_edit_window_width(self, obj):
-        return bool(self.windows.can_edit_window_width(obj))
+        return bool(self.hosted_openings.can_edit_window_width(obj))
 
     def can_edit_window_height(self, obj):
-        return bool(self.windows.can_edit_window_height(obj))
+        return bool(self.hosted_openings.can_edit_window_height(obj))
 
     def can_apply_window_style_preset(self, obj):
-        return bool(self.windows.can_apply_window_style_preset(obj))
+        return bool(self.hosted_openings.can_apply_window_style_preset(obj))
 
     def get_selected_window_style_preset(self):
-        return str(self.windows.get_selected_window_style_preset() or "")
+        return str(self.hosted_openings.get_selected_window_style_preset() or "")
 
     def get_selected_window_width_text(self):
-        return str(self.windows.get_selected_window_width_text() or "")
+        return str(self.hosted_openings.get_selected_window_width_text() or "")
 
     def get_selected_window_height_text(self):
-        return str(self.windows.get_selected_window_height_text() or "")
+        return str(self.hosted_openings.get_selected_window_height_text() or "")
 
 
 _TASK_PANEL_CONTEXT_READERS = (
@@ -716,7 +716,7 @@ def build_action_context_view_model(session_or_context, modal_active=None):
     selected_kind, selected_obj = context.selection.get_selected_plan_target()
     current_tool = context.selection.get_current_tool()
     has_wall = selected_kind == "wall" and selected_obj is not None
-    can_place_window = context.windows.can_place_plan_window()
+    can_place_window = context.hosted_openings.can_place_plan_window()
     in_join_mode = current_tool == "Join"
     join_candidate = context.wall_relations.has_plan_candidate_joint() if in_join_mode else False
     enabled = not bool(modal_active)
@@ -1057,7 +1057,7 @@ def get_window_preset_combo_items(session_or_context, current_style):
     current_style = str(current_style or "").strip()
     if not current_style:
         items.append(("", translate("BIM_PlanEdit", "Custom / Current")))
-    for preset in context.windows.get_window_style_preset_options():
+    for preset in context.hosted_openings.get_window_style_preset_options():
         items.append((str(preset or ""), str(preset or "")))
     return tuple(items)
 
@@ -1143,9 +1143,9 @@ def get_window_editor_target(session_or_context):
     ):
         return None
     if (
-        context.windows.can_edit_window_width(selected_obj)
-        or context.windows.can_edit_window_height(selected_obj)
-        or context.windows.can_apply_window_style_preset(selected_obj)
+        context.hosted_openings.can_edit_window_width(selected_obj)
+        or context.hosted_openings.can_edit_window_height(selected_obj)
+        or context.hosted_openings.can_apply_window_style_preset(selected_obj)
     ):
         return selected_obj
     return None
@@ -1157,12 +1157,12 @@ def build_window_editor_view_model(session_or_context):
     if window is None:
         return PlanWindowEditorViewModel()
 
-    can_edit_width = context.windows.can_edit_window_width(window)
-    can_edit_height = context.windows.can_edit_window_height(window)
-    can_apply_style = context.windows.can_apply_window_style_preset(window)
-    current_style = context.windows.get_selected_window_style_preset()
-    current_width_text = context.windows.get_selected_window_width_text()
-    current_height_text = context.windows.get_selected_window_height_text()
+    can_edit_width = context.hosted_openings.can_edit_window_width(window)
+    can_edit_height = context.hosted_openings.can_edit_window_height(window)
+    can_apply_style = context.hosted_openings.can_apply_window_style_preset(window)
+    current_style = context.hosted_openings.get_selected_window_style_preset()
+    current_width_text = context.hosted_openings.get_selected_window_width_text()
+    current_height_text = context.hosted_openings.get_selected_window_height_text()
     combo_items = get_window_preset_combo_items(context, current_style)
     return PlanWindowEditorViewModel(
         show_editor=True,

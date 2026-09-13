@@ -191,7 +191,6 @@ class PlanEditSession:
         self.lifecycle = plan_lifecycle.PlanLifecycleAPI(self)
         self.symbols = PlanSymbolsAPI(self)
         self.hosted_openings = PlanHostedOpeningsAPI(self)
-        self.windows = self.hosted_openings
         self.viewport = PlanViewportAPI(self)
         self.overlays = PlanOverlaysAPI(self)
         self.wall_edit = PlanWallEditAPI(self)

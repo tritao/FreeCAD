@@ -156,7 +156,7 @@ class WindowTool(plan_runtime_tools.PlanToolHandler):
         return self.cancel()
 
     def cancel(self):
-        self.session.windows.cancel_window_tool()
+        self.session.hosted_openings.cancel_window_tool()
         return True
 
 
@@ -313,10 +313,10 @@ def set_selected_window_size(session, width_value=None, height_value=None):
 
 
 def can_place_window(session):
-    return get_window_host_wall(session) is not None
+    return get_opening_host_wall(session) is not None
 
 
-def get_window_host_wall(session):
+def get_opening_host_wall(session):
     wall = session.selection.state.get_selected_plan_target_object("wall")
     if session.selection.targets.is_plan_selectable_wall(wall):
         return wall
@@ -333,9 +333,6 @@ _WINDOW_TOOL_SELECTION_KINDS = (
     plan_target_kinds.PLAN_TARGET_SPACE,
     plan_target_kinds.PLAN_TARGET_REGION,
 )
-
-# Compatibility for external Plan providers while they adopt the neutral name.
-PlanWindowsAPI = PlanHostedOpeningsAPI
 
 
 def activate_window_tool(session):
@@ -366,7 +363,7 @@ def activate_opening_tool(session, opening_kind):
     clear_window_preview(session)
 
     creation_preview_state = session.creation_preview_state
-    wall = get_window_host_wall(session)
+    wall = get_opening_host_wall(session)
     if not wall:
         FreeCAD.Console.PrintWarning(
             translate("BIM_PlanEdit", "Select or hover a wall before placing a window.\n")
@@ -375,7 +372,7 @@ def activate_opening_tool(session, opening_kind):
 
     session.selection.state.set_selected_plan_target("wall", wall)
     session.selection.sync.set_gui_selection_object(wall)
-    creation_preview_state.window_host_wall = wall
+    creation_preview_state.opening_host_wall = wall
     creation_preview_state.opening_kind = str(opening_kind)
     session.current_tool = creation_preview_state.opening_kind
     session.overlays.openings.clear_selected_wall_opening_context_overlay()
@@ -409,17 +406,17 @@ def activate_opening_tool(session, opening_kind):
 def has_active_window_tool(session):
     return (
         session.current_tool in {"Window", "Door"}
-        or session.creation_preview_state.window_host_wall is not None
+        or session.creation_preview_state.opening_host_wall is not None
     )
 
 
 def clear_window_preview(session):
     creation_preview_state = session.creation_preview_state
-    key = creation_preview_state.window_preview_key
+    key = creation_preview_state.opening_preview_key
     if key is not None:
         session.contextual_rendering.clear_preview(key)
-    creation_preview_state.window_preview_source = None
-    creation_preview_state.window_preview_key = None
+    creation_preview_state.opening_preview_source = None
+    creation_preview_state.opening_preview_key = None
 
 
 def cancel_window_tool(session, refresh=True):
@@ -427,7 +424,7 @@ def cancel_window_tool(session, refresh=True):
         return False
     session.snap.stop_snapper()
     clear_window_preview(session)
-    session.creation_preview_state.window_host_wall = None
+    session.creation_preview_state.opening_host_wall = None
     session.creation_preview_state.opening_kind = "Window"
     session.snap.clear_active_draft_command()
     session.current_tool = "Select"
@@ -565,7 +562,7 @@ def _get_wall_from_snap_object(session, snap_object):
     return None
 
 
-def resolve_window_host_wall(session, snap_object=None, snap_info=None):
+def resolve_opening_host_wall(session, snap_object=None, snap_info=None):
     snap_info = _get_window_snap_info(snap_info)
     resolved_snap_object = _resolve_window_snap_object(
         session,
@@ -575,14 +572,14 @@ def resolve_window_host_wall(session, snap_object=None, snap_info=None):
     wall = _get_wall_from_snap_object(session, resolved_snap_object)
     if wall is not None:
         return wall
-    wall = session.creation_preview_state.window_host_wall
+    wall = session.creation_preview_state.opening_host_wall
     if session.selection.targets.is_plan_selectable_wall(wall):
         return wall
-    return get_window_host_wall(session)
+    return get_opening_host_wall(session)
 
 
 def project_window_point_to_host(session, point, wall=None):
-    wall = wall or resolve_window_host_wall(session)
+    wall = wall or resolve_opening_host_wall(session)
     if point is None or wall is None:
         return None
     context = _get_wall_axis_context(wall)
@@ -606,7 +603,7 @@ def project_window_point_to_host(session, point, wall=None):
 
 
 def _get_window_preview_points(session, point, wall=None):
-    wall = wall or resolve_window_host_wall(session)
+    wall = wall or resolve_opening_host_wall(session)
     center = project_window_point_to_host(session, point, wall)
     context = _get_wall_axis_context(wall)
     if center is None or not context:
@@ -714,19 +711,19 @@ def _build_window_creation_preview_state(session, wall, points, source):
 
 def update_window_tool_preview(session, point=None, info=None):
     creation_preview_state = session.creation_preview_state
-    wall = resolve_window_host_wall(session, snap_object=info, snap_info=info)
+    wall = resolve_opening_host_wall(session, snap_object=info, snap_info=info)
     points = _get_window_preview_points(session, point, wall=wall)
     clear_window_preview(session)
     if wall is not None:
-        creation_preview_state.window_host_wall = wall
+        creation_preview_state.opening_host_wall = wall
     if len(points) != 4:
         return
     source = object()
     state = _build_window_creation_preview_state(session, wall, points, source)
     if state is None:
         return
-    creation_preview_state.window_preview_source = source
-    creation_preview_state.window_preview_key = state.primary_source
+    creation_preview_state.opening_preview_source = source
+    creation_preview_state.opening_preview_key = state.primary_source
     session.contextual_rendering.set_preview_state(state)
 
 
@@ -849,7 +846,7 @@ def handle_window_tool_point(session, point=None, obj=None):
     if point is None:
         cancel_window_tool(session)
         return
-    wall = resolve_window_host_wall(session, snap_object=obj)
+    wall = resolve_opening_host_wall(session, snap_object=obj)
     if not session.selection.targets.is_plan_selectable_wall(wall):
         cancel_window_tool(session)
         FreeCAD.Console.PrintWarning(
