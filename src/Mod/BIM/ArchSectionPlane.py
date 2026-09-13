@@ -1755,6 +1755,29 @@ class _ViewProviderSectionPlane:
         QtCore.QObject.connect(actionEdit, QtCore.SIGNAL("triggered()"), self.edit)
         menu.addAction(actionEdit)
 
+        purpose = self.Object.Proxy.getRepresentationContext(self.Object).purpose
+        contextual_command = (
+            "BIM_ElevationEdit"
+            if purpose == ArchRepresentation.RepresentationPurpose.ELEVATION
+            else "BIM_SectionEdit"
+        )
+        contextual_label = (
+            translate("Arch", "Elevation Edit")
+            if purpose == ArchRepresentation.RepresentationPurpose.ELEVATION
+            else translate("Arch", "Section Edit")
+        )
+        actionContextualEdit = QtGui.QAction(
+            QtGui.QIcon(":/icons/Arch_SectionPlane.svg"),
+            contextual_label,
+            menu,
+        )
+        actionContextualEdit.triggered.connect(
+            lambda _checked=False, command=contextual_command: self.startContextualEdit(
+                command
+            )
+        )
+        menu.addAction(actionContextualEdit)
+
         actionToggleCutview = QtGui.QAction(
             QtGui.QIcon(":/icons/Arch_CutPlane.svg"), translate("Arch", "Toggle Cut View"), menu
         )
@@ -1763,6 +1786,11 @@ class _ViewProviderSectionPlane:
 
     def edit(self):
         FreeCADGui.ActiveDocument.setEdit(self.Object, 0)
+
+    def startContextualEdit(self, command):
+        FreeCADGui.Selection.clearSelection()
+        FreeCADGui.Selection.addSelection(self.Object)
+        FreeCADGui.runCommand(command)
 
     def toggleCutview(self, vobj):
         vobj.CutView = not vobj.CutView

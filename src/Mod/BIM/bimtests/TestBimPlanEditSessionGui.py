@@ -898,6 +898,17 @@ class TestBimPlanEditSessionGui(TestArchBaseGui):
         finally:
             session.close()
 
+    def test_section_plane_exposes_its_contextual_edit_command(self):
+        section = Arch.makeSectionPlane(name="ContextualSection")
+        self.document.recompute()
+        FreeCADGui.Selection.clearSelection()
+
+        with patch.object(FreeCADGui, "runCommand") as run_command:
+            section.ViewObject.Proxy.startContextualEdit("BIM_SectionEdit")
+
+        self.assertEqual([section], FreeCADGui.Selection.getSelection())
+        run_command.assert_called_once_with("BIM_SectionEdit")
+
     def test_standard_3d_pointer_drag_commits_a_semantic_width_edit(self):
         wall = Arch.makeWall(length=3000, width=200, height=2500, align="Center")
         self.document.recompute()
