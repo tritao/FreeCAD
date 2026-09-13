@@ -38,32 +38,6 @@ def restore_snap_profile():
         pass
 
 
-def push_opening_move_snap_profile(session, snap_modes):
-    if session.opening_transient_state.opening_move_snap_profile_pushed:
-        return
-    push_snap_modes = _get_snapper_method("push_snap_modes")
-    if push_snap_modes is None:
-        return
-    try:
-        push_snap_modes(snap_modes)
-        session.opening_transient_state.opening_move_snap_profile_pushed = True
-    except Exception:
-        pass
-
-
-def pop_opening_move_snap_profile(session):
-    if not session.opening_transient_state.opening_move_snap_profile_pushed:
-        return
-    pop_snap_modes = _get_snapper_method("pop_snap_modes")
-    if pop_snap_modes is None:
-        return
-    try:
-        pop_snap_modes()
-    except Exception:
-        pass
-    session.opening_transient_state.opening_move_snap_profile_pushed = False
-
-
 def set_active_draft_command(command):
     FreeCAD.activeDraftCommand = command
 
@@ -115,15 +89,13 @@ class PlanSnapAPI:
     __slots__ = (
         "_session",
         "_plan_snap_modes",
-        "_opening_move_snap_modes",
         "_semantic_provider",
         "_semantic_provider_active",
     )
 
-    def __init__(self, session, plan_snap_modes, opening_move_snap_modes):
+    def __init__(self, session, plan_snap_modes):
         self._session = session
         self._plan_snap_modes = tuple(plan_snap_modes or ())
-        self._opening_move_snap_modes = tuple(opening_move_snap_modes or ())
         self._semantic_provider = self._query_semantic_snap
         self._semantic_provider_active = False
 
@@ -162,12 +134,6 @@ class PlanSnapAPI:
             tolerance,
             context=self.session.representation_context.context,
         )
-
-    def push_opening_move_snap_profile(self):
-        return push_opening_move_snap_profile(self.session, self._opening_move_snap_modes)
-
-    def pop_opening_move_snap_profile(self):
-        return pop_opening_move_snap_profile(self.session)
 
     def set_active_draft_command(self):
         return set_active_draft_command(self.session)

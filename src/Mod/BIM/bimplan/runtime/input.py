@@ -7,7 +7,6 @@ import FreeCAD
 from bimplan.providers.edit import ProviderMoveTool
 from bimplan.providers.point import ProviderPointTool
 from bimplan.runtime.tools import PlanTool, coerce_plan_tool
-from bimplan.tools.opening_edit import OpeningMoveTool
 from bimplan.tools.select import SelectTool
 from bimplan.tools.space_regions import PickSpaceRegionTool
 from bimplan.tools.spaces import RegionTool, SpaceSeparatorTool, SpaceTextTool
@@ -18,7 +17,6 @@ from bimplan.tools.window_create import WindowTool
 
 _TOOL_HANDLERS = {
     PlanTool.JOIN: JoinTool,
-    PlanTool.MOVE_OPENING: OpeningMoveTool,
     PlanTool.MOVE_PROVIDER: ProviderMoveTool,
     PlanTool.MOVE_SYMBOL: SymbolEditTool,
     PlanTool.PICK_SPACE_REGION: PickSpaceRegionTool,

@@ -276,7 +276,6 @@ def cancel_rect_wall_tool(session, refresh=True):
     if refresh:
         session.task_panels.refresh_task_panel_status()
     session.overlays.openings.sync_selected_opening_overlay()
-    session.overlays.openings.sync_selected_opening_handles()
     session.overlays.spaces.sync_selected_space_overlay()
     session.overlays.providers.sync_selected_provider_overlay()
     session.overlays.providers.sync_selected_provider_handles()

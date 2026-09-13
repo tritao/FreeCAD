@@ -2,9 +2,6 @@
 
 """Opening overlay and handle tracker helpers for BIM Plan Edit."""
 
-import FreeCAD
-import FreeCADGui
-
 from . import geometry as overlay_geometry
 from . import manager as overlay_manager
 
@@ -19,10 +16,6 @@ def _perf_trace_span(session, name, **fields):
 
 def _opening_tracker_state(session):
     return session.overlay_tracker_state
-
-
-def _opening_transient_state(session):
-    return session.opening_transient_state
 
 
 def _opening_overlay_state(session):
@@ -40,21 +33,6 @@ class PlanOpeningOverlayService:
     @property
     def session(self):
         return self._session
-
-    def get_opening_handle_markers(self, *args, **kwargs):
-        return get_opening_handle_markers(self.session, *args, **kwargs)
-
-    def set_opening_handle_tracker_marker(self, *args, **kwargs):
-        return set_opening_handle_tracker_marker(*args, **kwargs)
-
-    def discard_opening_handle_tracker_pool(self, *args, **kwargs):
-        return discard_opening_handle_tracker_pool(self.session, *args, **kwargs)
-
-    def queue_prime_opening_handle_tracker_pool(self, *args, **kwargs):
-        return queue_prime_opening_handle_tracker_pool(self.session, *args, **kwargs)
-
-    def prime_opening_handle_tracker_pool(self, *args, **kwargs):
-        return prime_opening_handle_tracker_pool(self.session, *args, **kwargs)
 
     def sync_hovered_opening_overlay(self, *args, **kwargs):
         return sync_hovered_opening_overlay(self.session, *args, **kwargs)
@@ -82,107 +60,6 @@ class PlanOpeningOverlayService:
 
     def clear_selected_wall_opening_context_overlay(self, *args, **kwargs):
         return clear_selected_wall_opening_context_overlay(self.session, *args, **kwargs)
-
-    def sync_selected_opening_handles(self, *args, **kwargs):
-        return sync_selected_opening_handles(self.session, *args, **kwargs)
-
-    def clear_selected_opening_handles(self, *args, **kwargs):
-        return clear_selected_opening_handles(self.session, *args, **kwargs)
-
-
-def get_opening_handle_markers(session, marker_size=None):
-    from draftutils import params
-
-    if marker_size is None:
-        marker_size = session.viewport.scaled_marker_size(params.get_param_view("MarkerSize"))
-    return {
-        "move": FreeCADGui.getMarkerIndex("DIAMOND_FILLED", marker_size),
-        "flip_hinge": FreeCADGui.getMarkerIndex("CIRCLE_FILLED", marker_size),
-        "flip_opening": FreeCADGui.getMarkerIndex("CROSS", marker_size),
-    }
-
-
-def set_opening_handle_tracker_marker(tracker, marker):
-    if tracker is None or marker is None:
-        return
-    marker_node = getattr(tracker, "marker", None)
-    if marker_node is None:
-        return
-    try:
-        marker_node.markerIndex = marker
-    except Exception:
-        return
-
-
-def discard_opening_handle_tracker_pool(session):
-    transient_state = _opening_transient_state(session)
-    if transient_state.opening_handle_tracker_pool:
-        overlay_manager.finalize_trackers(transient_state.opening_handle_tracker_pool)
-    transient_state.opening_handle_tracker_pool = []
-    transient_state.opening_handle_tracker_pool_queued = False
-
-
-def queue_prime_opening_handle_tracker_pool(session):
-    transient_state = _opening_transient_state(session)
-    if (
-        session.lifecycle_state.tearing_down
-        or session.current_tool != "Select"
-        or transient_state.opening_handle_tracker_pool
-        or transient_state.opening_handle_trackers
-        or transient_state.opening_handle_tracker_pool_queued
-        or not session.doc
-    ):
-        return
-    try:
-        from PySide import QtCore
-    except ImportError:
-        return
-    transient_state.opening_handle_tracker_pool_queued = True
-    QtCore.QTimer.singleShot(0, lambda: prime_opening_handle_tracker_pool(session))
-
-
-def prime_opening_handle_tracker_pool(session):
-    transient_state = _opening_transient_state(session)
-    transient_state.opening_handle_tracker_pool_queued = False
-    if (
-        session.lifecycle_state.tearing_down
-        or session.current_tool != "Select"
-        or transient_state.opening_handle_tracker_pool
-        or transient_state.opening_handle_trackers
-        or not session.doc
-    ):
-        return
-    try:
-        has_hosted_opening = any(
-            session.openings.is_hosted_opening_object(obj)
-            for obj in getattr(session.doc, "Objects", ())
-        )
-    except Exception:
-        has_hosted_opening = False
-    if not has_hosted_opening:
-        return
-    try:
-        import draftguitools.gui_trackers as DraftTrackers
-    except ImportError:
-        return
-    markers = get_opening_handle_markers(session)
-    pooled_trackers = []
-    try:
-        for idx, role in enumerate(("move", "flip_hinge", "flip_opening")):
-            tracker = DraftTrackers.editTracker(
-                pos=FreeCAD.Vector(),
-                idx=idx,
-                marker=markers[role],
-                inactive=True,
-            )
-            tracker.off()
-            pooled_trackers.append(tracker)
-    except Exception:
-        overlay_manager.finalize_trackers(pooled_trackers)
-        return
-    transient_state.opening_handle_tracker_pool = pooled_trackers
-    _perf_count(session, "opening_handle_pool_primes")
-
 
 def sync_hovered_opening_overlay(session):
     with _perf_trace_span(session, "sync_hovered_opening_overlay"):
@@ -387,23 +264,3 @@ def clear_selected_wall_opening_context_overlay(session):
     tracker_state = _opening_tracker_state(session)
     overlay_manager.finalize_trackers(tracker_state.selected_wall_opening_context_trackers)
     tracker_state.selected_wall_opening_context_trackers = []
-
-
-def sync_selected_opening_handles(session):
-    """Opening handles are realized by the canonical contextual renderer."""
-
-    clear_selected_opening_handles(session)
-
-
-def clear_selected_opening_handles(session):
-    transient_state = _opening_transient_state(session)
-    if transient_state.opening_handle_trackers:
-        discard_opening_handle_tracker_pool(session)
-        for tracker in transient_state.opening_handle_trackers:
-            try:
-                tracker.off()
-            except Exception:
-                pass
-        transient_state.opening_handle_tracker_pool = transient_state.opening_handle_trackers
-    transient_state.opening_handle_trackers = []
-    transient_state.selected_opening_handle_render_state = None

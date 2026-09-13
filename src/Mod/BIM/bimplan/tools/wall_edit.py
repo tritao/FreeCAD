@@ -97,25 +97,6 @@ def get_preview_footprint(session, points, width=None, align=None):
             end + perpendicular * high, start + perpendicular * high]
 
 
-def get_readout_base_gap(session):
-    from draftutils import params
-    units = session.viewport.get_plan_view_units_per_pixel() or 0.0
-    marker = float(params.get_param_view("MarkerSize") or 0.0)
-    return max(100.0, marker * 2.0 * 96.0 / 72.0 * units * 1.25)
-
-
-def get_aligned_readout_offset_for_wall(session, wall):
-    width = float(getattr(getattr(wall, "Width", None), "Value", 0.0) or 0.0)
-    gap = max(width * 0.25, get_readout_base_gap(session))
-    align = str(getattr(wall, "Align", "Center")) if wall else "Center"
-    return -gap if align == "Right" else gap if align == "Left" or width <= 0 else width * 0.5 + gap
-
-
-def get_opening_move_readout_offset(session, opening):
-    host = next(iter(getattr(opening, "Hosts", ()) or ()), None) if opening else None
-    return get_aligned_readout_offset_for_wall(session, host)
-
-
 def refresh_wall_hosted_opening_footprints(session, wall):
     for opening in session.openings.get_wall_hosted_openings(wall):
         session.openings.refresh_opening_footprint_display(opening)
@@ -166,9 +147,6 @@ class PlanWallEditAPI:
 
     def get_preview_footprint(self, *args, **kwargs):
         return get_preview_footprint(self.session, *args, **kwargs)
-
-    def get_opening_move_readout_offset(self, *args, **kwargs):
-        return get_opening_move_readout_offset(self.session, *args, **kwargs)
 
     def refresh_wall_hosted_opening_footprints(self, *args, **kwargs):
         return refresh_wall_hosted_opening_footprints(self.session, *args, **kwargs)

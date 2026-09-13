@@ -403,7 +403,6 @@ def cancel_symbol_handle_point_pick(session):
     if symbol:
         session.selection.state.set_selected_plan_target("symbol", symbol, pending_restore=True)
     session.overlays.openings.sync_selected_opening_overlay()
-    session.overlays.openings.sync_selected_opening_handles()
     session.overlays.symbols.sync_selected_symbol_overlay()
     session.overlays.symbols.sync_selected_symbol_handles()
     session.task_panels.refresh_task_panel_status()
@@ -417,14 +416,12 @@ def restore_selected_symbol(session, symbol):
         session.selection.state.set_selected_plan_target()
     if not symbol:
         session.overlays.openings.sync_selected_opening_overlay()
-        session.overlays.openings.sync_selected_opening_handles()
         session.overlays.symbols.sync_selected_symbol_overlay()
         session.overlays.symbols.sync_selected_symbol_handles()
         session.task_panels.refresh_task_panel_status()
         return
     session.selection.sync.set_gui_selection_object(symbol)
     session.overlays.openings.sync_selected_opening_overlay()
-    session.overlays.openings.sync_selected_opening_handles()
     session.overlays.symbols.sync_selected_symbol_overlay()
     session.overlays.symbols.sync_selected_symbol_handles()
     session.task_panels.refresh_task_panel_status()

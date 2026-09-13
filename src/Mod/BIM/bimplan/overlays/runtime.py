@@ -47,8 +47,6 @@ def clear_begin_teardown_visuals(session):
     session.overlays.providers.clear_provider_overlays()
     session.overlays.providers.clear_provider_point_preview()
     session.overlays.spaces.clear_space_region_pick_overlays()
-    session.overlays.openings.discard_opening_handle_tracker_pool()
-    session.openings.clear_opening_move_preview()
     session.symbols.clear_symbol_edit_preview()
     session.spaces.clear_plan_region_preview()
 
@@ -75,8 +73,6 @@ def clear_shutdown_visuals(session):
     session.overlays.openings.clear_selected_wall_opening_context_overlay()
     session.overlays.providers.clear_provider_overlays()
     session.overlays.providers.clear_provider_point_preview()
-    session.overlays.openings.discard_opening_handle_tracker_pool()
-    session.openings.clear_opening_move_preview()
     session.symbols.clear_symbol_edit_preview()
 
 

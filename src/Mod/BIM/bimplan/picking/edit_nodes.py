@@ -30,11 +30,6 @@ def get_plan_target_from_edit_node(session, node):
         return plan_target_kinds.make_plan_target_ref(
             fallback_target_ref.kind, fallback_target_ref.obj
         )
-    if node_kind == "opening_handle":
-        opening, _index = plan_edit_nodes.get_edit_node_payload(node)
-        if session.openings.is_hosted_opening_object(opening):
-            return plan_target_kinds.make_plan_target_ref("opening", opening)
-        return plan_target_kinds.make_plan_target_ref()
     if node_kind == "symbol_handle":
         symbol, _role = plan_edit_nodes.get_edit_node_payload(node)
         if session.visibility.is_plan_symbol_instance(symbol):

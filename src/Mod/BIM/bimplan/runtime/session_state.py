@@ -39,7 +39,6 @@ class PlanInteractionAPI:
 
     _MODAL_TOOLS = frozenset(
         (
-            plan_runtime_tools.PlanTool.MOVE_OPENING,
             plan_runtime_tools.PlanTool.MOVE_SYMBOL,
             plan_runtime_tools.PlanTool.ROTATE_SYMBOL,
             plan_runtime_tools.PlanTool.SET_SPACE_TEXT,
@@ -82,8 +81,6 @@ class PlanInteractionState:
     embedded_host: object = None
     embedded_tool: object = None
     embedded_tool_name: str | None = None
-    edit_opening: object = None
-    edit_opening_handle_index: object = None
     symbol_edit_generation: int = 0
     edit_symbol: object = None
     edit_symbol_handle_role: object = None
@@ -258,19 +255,10 @@ class PlanProviderTransientState:
 
 @dataclass
 class PlanOpeningTransientState:
-    opening_edit_generation: int = 0
-    opening_handle_trackers: list = field(default_factory=list)
-    opening_handle_tracker_pool: list = field(default_factory=list)
-    opening_handle_tracker_pool_queued: bool = False
-    selected_opening_handle_render_state: object = None
     selected_opening_hard_refresh_queued: bool = False
     opening_host_recompute_queued: bool = False
     opening_host_recompute_running: bool = False
-    opening_move_preview_trackers: list = field(default_factory=list)
     symbol_edit_preview_trackers: list = field(default_factory=list)
-    opening_move_snap_profile_pushed: bool = False
-    edit_opening_move_anchor: str = "center"
-    edit_opening_move_raw_point: object = None
 
 
 @dataclass

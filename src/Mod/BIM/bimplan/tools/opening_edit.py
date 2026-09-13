@@ -1,16 +1,8 @@
 # SPDX-License-Identifier: LGPL-2.1-or-later
 
-"""Opening edit interaction helpers for BIM Plan Edit."""
+"""Opening selection, host-cache, and visual helpers for BIM Plan Edit."""
 
-import FreeCAD
-import FreeCADGui
 from bimplan.runtime import capabilities as runtime_capabilities
-from bimplan.runtime import tools as plan_runtime_tools
-from bimplan.transactions import PlanEditTransaction
-
-translate = FreeCAD.Qt.translate
-
-OPENING_MOVE_ANCHORS = ("center", "left", "right")
 
 
 def _get_callable_attr(obj, attr_name):
@@ -19,13 +11,6 @@ def _get_callable_attr(obj, attr_name):
 
 def _proxy_supports(proxy, attrs):
     return proxy is not None and all(_get_callable_attr(proxy, attr) is not None for attr in attrs)
-
-
-def get_selected_opening_edit_handles(session, opening):
-    proxy = session.openings.get_opening_view_proxy(opening, "get_plan_edit_handles")
-    if not proxy:
-        return []
-    return list(proxy.get_plan_edit_handles() or [])
 
 
 def get_opening_plan_proxy(session, opening, *attrs):
@@ -45,359 +30,6 @@ def get_opening_view_proxy(session, opening, *attrs):
     return proxy if _proxy_supports(proxy, attrs) else None
 
 
-def project_opening_handle_point(session, opening, handle, point):
-    if point is None or not opening or getattr(handle, "role", None) != "move":
-        return point
-    proxy = session.openings.get_opening_plan_proxy(opening, "project_point_to_host_axis")
-    if not proxy:
-        return point
-    return proxy.project_point_to_host_axis(
-        point,
-        anchor=session.opening_transient_state.edit_opening_move_anchor,
-    )
-
-
-def get_opening_move_anchor_modes(session, opening):
-    proxy = session.openings.get_opening_plan_proxy(opening, "get_plan_move_anchor_modes")
-    if not proxy:
-        return OPENING_MOVE_ANCHORS
-    modes = tuple(proxy.get_plan_move_anchor_modes() or ())
-    return modes or OPENING_MOVE_ANCHORS
-
-
-def execute_opening_handle(session, opening, handle_index, point=None):
-    proxy = session.openings.get_opening_view_proxy(opening, "execute_plan_edit_handle")
-    if not proxy:
-        return False
-    return bool(
-        proxy.execute_plan_edit_handle(
-            handle_index,
-            point,
-            anchor=session.opening_transient_state.edit_opening_move_anchor,
-        )
-    )
-
-
-def get_opening_move_preview_state(session, opening, point):
-    if not opening or point is None:
-        return None
-    proxy = session.openings.get_opening_view_proxy(opening, "get_plan_move_preview_state")
-    if not proxy:
-        return None
-    return proxy.get_plan_move_preview_state(
-        point,
-        anchor=session.opening_transient_state.edit_opening_move_anchor,
-    )
-
-
-def sync_opening_move_preview(session, opening, point):
-    session.openings.clear_opening_move_preview()
-    if session.current_tool != "Move Opening" or not opening or point is None:
-        return
-    try:
-        import draftguitools.gui_trackers as DraftTrackers
-    except ImportError:
-        return
-
-    preview_state = session.openings.get_opening_move_preview_state(opening, point)
-    if not preview_state:
-        return
-
-    preview_color = (0.12, 0.38, 0.95)
-    for polyline in preview_state.get("polylines", []):
-        if len(polyline) < 2:
-            continue
-        for start, end in zip(polyline, polyline[1:]):
-            tracker = session.overlays.manager.make_plan_line_tracker(
-                DraftTrackers,
-                "opening-move-preview:{}".format(getattr(opening, "Name", "unknown")),
-                scolor=preview_color,
-                swidth=session.viewport.scaled_line_width(3),
-                ontop=True,
-            )
-            tracker.p1(start)
-            tracker.p2(end)
-            tracker.on()
-            session.opening_transient_state.opening_move_preview_trackers.append(tracker)
-
-    guide_start = preview_state.get("guide_start")
-    guide_end = preview_state.get("guide_end")
-    if guide_start is None or guide_end is None:
-        return
-
-    guide = session.overlays.manager.make_plan_line_tracker(
-        DraftTrackers,
-        "opening-move-guide:{}".format(getattr(opening, "Name", "unknown")),
-        dotted=True,
-        scolor=preview_color,
-        swidth=session.viewport.scaled_line_width(1),
-        ontop=True,
-    )
-    guide.p1(guide_start)
-    guide.p2(guide_end)
-    guide.on()
-    session.opening_transient_state.opening_move_preview_trackers.append(guide)
-
-    try:
-        dim = DraftTrackers.archDimTracker(mode=1)
-    except Exception:
-        return
-    dim.dimnode.textColor.setValue(preview_color)
-    dim.offset = session.wall_edit.get_opening_move_readout_offset(opening)
-    dim.p1(guide_start)
-    dim.p2(guide_end)
-    dim.on()
-    session.opening_transient_state.opening_move_preview_trackers.append(dim)
-
-
-def clear_opening_move_preview(session):
-    opening_transient_state = session.opening_transient_state
-    session.overlays.manager.finalize_trackers(
-        opening_transient_state.opening_move_preview_trackers
-    )
-    opening_transient_state.opening_move_preview_trackers = []
-
-
-def cycle_opening_move_anchor(session):
-    if session.current_tool != "Move Opening":
-        return False
-    interaction_state = session.interaction_state
-    opening_transient_state = session.opening_transient_state
-    anchor_modes = session.openings.get_opening_move_anchor_modes(interaction_state.edit_opening)
-    try:
-        current_index = anchor_modes.index(opening_transient_state.edit_opening_move_anchor)
-    except ValueError:
-        current_index = 0
-    opening_transient_state.edit_opening_move_anchor = anchor_modes[
-        (current_index + 1) % len(anchor_modes)
-    ]
-    return True
-
-
-def refresh_opening_move_preview_from_raw_point(session):
-    interaction_state = session.interaction_state
-    opening_transient_state = session.opening_transient_state
-    opening = interaction_state.edit_opening
-    handle_index = interaction_state.edit_opening_handle_index
-    if not opening or handle_index is None:
-        return
-    handles = session.openings.get_selected_opening_edit_handles(opening)
-    if handle_index < 0 or handle_index >= len(handles):
-        return
-    handle = handles[handle_index]
-    raw_point = opening_transient_state.edit_opening_move_raw_point
-    if raw_point is None:
-        raw_point = handle.point
-    point = session.openings.project_opening_handle_point(opening, handle, raw_point)
-    session.openings.sync_opening_move_preview(opening, point)
-
-
-def _run_queued_opening_move_initial_preview(session, opening, point, preview_generation):
-    if session.lifecycle_state.tearing_down or session.lifecycle_state.finishing:
-        return
-    if session.opening_transient_state.opening_edit_generation != preview_generation:
-        return
-    if session.current_tool != "Move Opening":
-        return
-    if session.interaction_state.edit_opening is not opening:
-        return
-    with session.performance.plan_perf_trace_event("queued_opening_move_initial_preview"):
-        session.openings.sync_opening_move_preview(opening, point)
-
-
-def queue_opening_move_initial_preview(session, opening, point):
-    preview_generation = session.opening_transient_state.opening_edit_generation
-
-    try:
-        from PySide import QtCore
-    except ImportError:
-        _run_queued_opening_move_initial_preview(
-            session, opening, point, preview_generation
-        )
-        return
-    QtCore.QTimer.singleShot(
-        0,
-        lambda: _run_queued_opening_move_initial_preview(
-            session, opening, point, preview_generation
-        ),
-    )
-
-
-def activate_opening_handle(session, opening, handle_index):
-    try:
-        from PySide import QtCore
-    except ImportError:
-        session.openings.activate_opening_handle_now(opening, handle_index)
-        return
-
-    QtCore.QTimer.singleShot(
-        0,
-        lambda: session.openings.activate_opening_handle_now(opening, handle_index),
-    )
-
-
-def activate_opening_handle_now(session, opening, handle_index):
-    with session.performance.plan_perf_trace_span("activate_opening_handle_now"):
-        if session.lifecycle_state.tearing_down or not opening:
-            return
-        with session.performance.plan_perf_trace_span("activate_opening_handle_set_target"):
-            session.selection.state.set_selected_plan_target("opening", opening)
-        with session.performance.plan_perf_trace_span("activate_opening_handle_get_handles"):
-            handles = session.openings.get_selected_opening_edit_handles(opening)
-        if handle_index < 0 or handle_index >= len(handles):
-            return
-        handle = handles[handle_index]
-        if handle.interaction == "point_pick":
-            with session.performance.plan_perf_trace_span(
-                "activate_opening_handle_start_point_pick"
-            ):
-                session.openings.start_opening_handle_point_pick(opening, handle_index, handle)
-        else:
-            with session.performance.plan_perf_trace_span("activate_opening_handle_execute"):
-                session.openings.execute_selected_opening_handle(opening, handle_index, handle)
-
-
-def start_opening_handle_point_pick(session, opening, handle_index, handle):
-    with session.performance.plan_perf_trace_span("start_opening_handle_point_pick"):
-        if not opening:
-            return
-        with session.performance.plan_perf_trace_span("start_opening_handle_state"):
-            session.current_tool = "Move Opening"
-            session.selection.hover.set_hovered_wall(None)
-            session.selection.hover.set_hovered_opening(None)
-            session.overlays.spaces.sync_secondary_selected_overlays()
-            interaction_state = session.interaction_state
-            opening_transient_state = session.opening_transient_state
-            opening_transient_state.opening_edit_generation += 1
-            interaction_state.edit_opening = opening
-            interaction_state.edit_opening_handle_index = handle_index
-            opening_transient_state.edit_opening_move_anchor = "center"
-            opening_transient_state.edit_opening_move_raw_point = FreeCAD.Vector(handle.point)
-            session.overlays.openings.clear_selected_opening_overlay()
-            session.overlays.openings.clear_selected_opening_handles()
-        with session.performance.plan_perf_trace_span("start_opening_handle_preview"):
-            queue_opening_move_initial_preview(session, opening, handle.point)
-        session.task_panels.refresh_task_panel_status(reason="selection")
-        session.snap.set_active_draft_command()
-        with session.performance.plan_perf_trace_span("opening_handle_push_snap_profile"):
-            session.snap.push_opening_move_snap_profile()
-        with session.performance.plan_perf_trace_span("opening_handle_focus_suppression"):
-            session.snap.set_point_focus_suppressed(True)
-        with session.performance.plan_perf_trace_span("opening_handle_snapper_get_point"):
-            FreeCADGui.Snapper.getPoint(
-                last=handle.point,
-                callback=session.openings.finish_opening_handle_point_pick,
-                movecallback=session.openings.update_opening_handle_point_pick,
-                title=handle.title or translate("BIM_PlanEdit", "Pick new opening position"),
-                noTracker=True,
-            )
-        with session.performance.plan_perf_trace_span("opening_handle_queue_focus_plan_view"):
-            session.viewport.queue_focus_plan_view()
-
-
-def update_opening_handle_point_pick(session, point=None, snap_info=None):
-    del snap_info
-    interaction_state = session.interaction_state
-    opening_transient_state = session.opening_transient_state
-    opening = interaction_state.edit_opening
-    handle_index = interaction_state.edit_opening_handle_index
-    if not opening or handle_index is None:
-        session.openings.clear_opening_move_preview()
-        return
-    handles = session.openings.get_selected_opening_edit_handles(opening)
-    if handle_index < 0 or handle_index >= len(handles):
-        session.openings.clear_opening_move_preview()
-        return
-    handle = handles[handle_index]
-    opening_transient_state.edit_opening_move_raw_point = (
-        FreeCAD.Vector(point) if point is not None else None
-    )
-    point = session.openings.project_opening_handle_point(opening, handle, point)
-    session.openings.sync_opening_move_preview(opening, point)
-
-
-def finish_opening_handle_point_pick(session, point=None, obj=None):
-    del obj
-    interaction_state = session.interaction_state
-    opening_transient_state = session.opening_transient_state
-    opening = interaction_state.edit_opening
-    handle_index = interaction_state.edit_opening_handle_index
-    interaction_state.edit_opening = None
-    interaction_state.edit_opening_handle_index = None
-    session.snap.pop_opening_move_snap_profile()
-    session.snap.clear_active_draft_command()
-    session.openings.clear_opening_move_preview()
-    opening_transient_state.edit_opening_move_raw_point = None
-
-    if point is None or not opening:
-        session.current_tool = "Select"
-        opening_transient_state.edit_opening_move_anchor = "center"
-        session.overlays.openings.sync_selected_opening_overlay()
-        session.overlays.openings.sync_selected_opening_handles()
-        session.task_panels.refresh_task_panel_status()
-        return
-
-    handles = session.openings.get_selected_opening_edit_handles(opening)
-    if handle_index is None or handle_index < 0 or handle_index >= len(handles):
-        session.current_tool = "Select"
-        opening_transient_state.edit_opening_move_anchor = "center"
-        session.task_panels.refresh_task_panel_status()
-        return
-    handle = handles[handle_index]
-    point = session.openings.project_opening_handle_point(opening, handle, point)
-
-    transaction_name = handle.transaction or translate("BIM_PlanEdit", "Edit Opening")
-    if not _run_opening_handle_transaction(
-        session,
-        transaction_name,
-        lambda: _execute_opening_move_handle(session, opening, handle_index, point),
-    ):
-        opening_transient_state.edit_opening_move_anchor = "center"
-        session.openings.restore_selected_opening(opening)
-        return
-
-    opening_transient_state.edit_opening_move_anchor = "center"
-    session.current_tool = "Select"
-    session.task_panels.refresh_task_panel_status()
-    session.openings.queue_restore_selected_opening(opening)
-
-
-def cancel_opening_handle_point_pick(session):
-    interaction_state = session.interaction_state
-    opening_transient_state = session.opening_transient_state
-    opening_transient_state.opening_edit_generation += 1
-    opening = interaction_state.edit_opening
-    interaction_state.edit_opening = None
-    interaction_state.edit_opening_handle_index = None
-    session.snap.stop_snapper()
-    session.snap.pop_opening_move_snap_profile()
-    session.snap.clear_active_draft_command()
-    session.openings.clear_opening_move_preview()
-    opening_transient_state.edit_opening_move_anchor = "center"
-    opening_transient_state.edit_opening_move_raw_point = None
-    session.current_tool = "Select"
-    if opening:
-        session.selection.state.set_selected_plan_target("opening", opening, pending_restore=True)
-    session.overlays.openings.sync_selected_opening_overlay()
-    session.overlays.openings.sync_selected_opening_handles()
-    session.task_panels.refresh_task_panel_status()
-
-
-def reset_pending_edit_state(session, *, clear_edit=False):
-    interaction_state = session.interaction_state
-    opening_transient_state = session.opening_transient_state
-    opening_transient_state.opening_edit_generation += 1
-    opening_transient_state.edit_opening_move_anchor = "center"
-    opening_transient_state.edit_opening_move_raw_point = None
-    if clear_edit:
-        interaction_state.edit_opening = None
-        interaction_state.edit_opening_handle_index = None
-
-
-def discard_runtime_references(session):
-    reset_pending_edit_state(session, clear_edit=True)
-
-
 def restore_selected_opening(session, opening):
     session.current_tool = "Select"
     if opening:
@@ -406,85 +38,29 @@ def restore_selected_opening(session, opening):
         session.selection.state.set_selected_plan_target()
     if not opening:
         session.overlays.openings.sync_selected_opening_overlay()
-        session.overlays.openings.sync_selected_opening_handles()
         session.task_panels.refresh_task_panel_status()
         return
     session.selection.sync.set_gui_selection_object(opening)
     session.overlays.openings.sync_selected_opening_overlay()
-    session.overlays.openings.sync_selected_opening_handles()
     session.task_panels.refresh_task_panel_status()
 
 
 def queue_restore_selected_opening(session, opening):
-    restore_generation = session.opening_transient_state.opening_edit_generation
     try:
         from PySide import QtCore
     except ImportError:
-        _run_queued_restore_selected_opening(session, opening, restore_generation)
+        restore_selected_opening(session, opening)
         return
     QtCore.QTimer.singleShot(
         0,
-        lambda: _run_queued_restore_selected_opening(
-            session, opening, restore_generation
-        ),
+        lambda: _run_queued_restore_selected_opening(session, opening),
     )
 
 
-def _run_queued_restore_selected_opening(session, opening, restore_generation):
-    opening_transient_state = session.opening_transient_state
+def _run_queued_restore_selected_opening(session, opening):
     if session.lifecycle_state.tearing_down or session.lifecycle_state.finishing:
         return
-    if opening_transient_state.opening_edit_generation != restore_generation:
-        return
     session.openings.restore_selected_opening(opening)
-
-
-def _warn_post_commit_recompute_failure(action_label, exc):
-    message = str(exc or "").strip() or type(exc).__name__
-    FreeCAD.Console.PrintWarning(
-        translate(
-            "BIM_PlanEdit",
-            "Completed {action}, but follow-up recompute failed: {error}\n",
-        ).format(action=action_label, error=message)
-    )
-
-
-def _run_opening_handle_transaction(session, transaction_name, callback):
-    try:
-        with PlanEditTransaction(session.doc, transaction_name):
-            callback()
-    except Exception:
-        return False
-    try:
-        session.doc.recompute()
-    except Exception as exc:
-        _warn_post_commit_recompute_failure(transaction_name, exc)
-    return True
-
-
-def _execute_opening_move_handle(session, opening, handle_index, point):
-    moved = session.openings.execute_opening_handle(opening, handle_index, point)
-    if not moved:
-        raise RuntimeError("Unable to execute opening handle")
-
-
-def _execute_opening_action_handle(session, opening, handle_index):
-    executed = session.openings.execute_opening_handle(opening, handle_index)
-    if not executed:
-        raise RuntimeError("Unable to execute opening handle")
-
-
-def execute_selected_opening_handle(session, opening, handle_index, handle):
-    transaction_name = handle.transaction or translate("BIM_PlanEdit", "Edit Opening")
-    if not _run_opening_handle_transaction(
-        session,
-        transaction_name,
-        lambda: _execute_opening_action_handle(session, opening, handle_index),
-    ):
-        return
-    session.selection.state.set_selected_plan_target("opening", opening, pending_restore=True)
-    session.overlays.openings.sync_selected_opening_overlay()
-    session.overlays.openings.sync_selected_opening_handles()
 
 
 def invalidate_wall_hosted_openings_cache(session):
@@ -623,32 +199,10 @@ class _SessionAPI:
         return self._session
 
 
-class OpeningMoveTool(plan_runtime_tools.PlanToolHandler):
-    """Keyboard behavior for active opening move point-pick edits."""
-
-    tool_id = plan_runtime_tools.PlanTool.MOVE_OPENING
-
-    def on_key(self, key, event_callback, coin):
-        del event_callback
-        session = self.session
-        if key == coin.SoKeyboardEvent.A:
-            if session.openings.cycle_opening_move_anchor():
-                session.openings.refresh_opening_move_preview_from_raw_point()
-                session.task_panels.refresh_task_panel_status()
-            return True
-        if key == coin.SoKeyboardEvent.ESCAPE:
-            session.openings.cancel_opening_handle_point_pick()
-            return True
-        return False
-
-
 class PlanOpeningsAPI(_SessionAPI):
     """Owned session surface for Plan Edit opening behavior."""
 
     __slots__ = ("__dict__",)
-
-    def get_selected_opening_edit_handles(self, *args, **kwargs):
-        return get_selected_opening_edit_handles(self.session, *args, **kwargs)
 
     def get_opening_plan_proxy(self, *args, **kwargs):
         return get_opening_plan_proxy(self.session, *args, **kwargs)
@@ -656,77 +210,11 @@ class PlanOpeningsAPI(_SessionAPI):
     def get_opening_view_proxy(self, *args, **kwargs):
         return get_opening_view_proxy(self.session, *args, **kwargs)
 
-    def project_opening_handle_point(self, *args, **kwargs):
-        return project_opening_handle_point(self.session, *args, **kwargs)
-
-    def get_opening_move_anchor_modes(self, *args, **kwargs):
-        return get_opening_move_anchor_modes(self.session, *args, **kwargs)
-
-    def execute_opening_handle(self, *args, **kwargs):
-        return execute_opening_handle(self.session, *args, **kwargs)
-
-    def get_opening_move_preview_state(self, *args, **kwargs):
-        return get_opening_move_preview_state(self.session, *args, **kwargs)
-
-    def sync_opening_move_preview(self, *args, **kwargs):
-        return sync_opening_move_preview(self.session, *args, **kwargs)
-
-    def clear_opening_move_preview(self, *args, **kwargs):
-        return clear_opening_move_preview(self.session, *args, **kwargs)
-
-    def cycle_opening_move_anchor(self, *args, **kwargs):
-        return cycle_opening_move_anchor(self.session, *args, **kwargs)
-
-    def refresh_opening_move_preview_from_raw_point(self, *args, **kwargs):
-        return refresh_opening_move_preview_from_raw_point(self.session, *args, **kwargs)
-
-    def activate_opening_handle(self, *args, **kwargs):
-        return activate_opening_handle(self.session, *args, **kwargs)
-
-    def activate_opening_handle_now(self, *args, **kwargs):
-        return activate_opening_handle_now(self.session, *args, **kwargs)
-
-    def start_opening_handle_point_pick(self, *args, **kwargs):
-        return start_opening_handle_point_pick(self.session, *args, **kwargs)
-
-    def update_opening_handle_point_pick(self, *args, **kwargs):
-        return update_opening_handle_point_pick(self.session, *args, **kwargs)
-
-    def finish_opening_handle_point_pick(self, *args, **kwargs):
-        return finish_opening_handle_point_pick(self.session, *args, **kwargs)
-
-    def cancel_opening_handle_point_pick(self, *args, **kwargs):
-        return cancel_opening_handle_point_pick(self.session, *args, **kwargs)
-
-    def cancel_active_tool_for_finish(self):
-        if self.session.current_tool != plan_runtime_tools.PlanTool.MOVE_OPENING:
-            return False
-        self.cancel_opening_handle_point_pick()
-        return True
-
-    def cancel_active_tool_for_teardown(self):
-        if self.session.current_tool != plan_runtime_tools.PlanTool.MOVE_OPENING:
-            return False
-        self.cancel_opening_handle_point_pick()
-        return True
-
-    def cancel_active_tool_for_shutdown(self):
-        return self.cancel_active_tool_for_teardown()
-
-    def reset_pending_edit_state(self, *args, **kwargs):
-        return reset_pending_edit_state(self.session, *args, **kwargs)
-
-    def discard_runtime_references(self):
-        return discard_runtime_references(self.session)
-
     def restore_selected_opening(self, *args, **kwargs):
         return restore_selected_opening(self.session, *args, **kwargs)
 
     def queue_restore_selected_opening(self, *args, **kwargs):
         return queue_restore_selected_opening(self.session, *args, **kwargs)
-
-    def execute_selected_opening_handle(self, *args, **kwargs):
-        return execute_selected_opening_handle(self.session, *args, **kwargs)
 
     def invalidate_wall_hosted_openings_cache(self, *args, **kwargs):
         return invalidate_wall_hosted_openings_cache(self.session, *args, **kwargs)
@@ -884,7 +372,6 @@ class PlanOpeningsAPI(_SessionAPI):
 
 def refresh_selected_opening_visuals(session):
     session.overlays.openings.sync_selected_opening_overlay()
-    session.overlays.openings.sync_selected_opening_handles()
     session.overlays.openings.sync_selected_wall_opening_context_overlay()
     session.viewport.request_view_redraw()
 
@@ -895,7 +382,6 @@ def queue_hard_refresh_selected_opening_visuals(session):
         return
     opening_state.selected_opening_hard_refresh_queued = True
     session.overlays.openings.clear_selected_opening_overlay()
-    session.overlays.openings.clear_selected_opening_handles()
     session.viewport.request_view_redraw()
     try:
         from PySide import QtCore

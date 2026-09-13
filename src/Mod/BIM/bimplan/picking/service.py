@@ -150,10 +150,3 @@ class PlanPickingAPI:
             self.session,
             mouse_pos,
         )
-
-    def pick_selected_opening_handle(self, mouse_pos, radius_px=10):
-        return plan_edit_node_picking.pick_selected_opening_handle(
-            self.session,
-            mouse_pos,
-            radius_px=radius_px,
-        )

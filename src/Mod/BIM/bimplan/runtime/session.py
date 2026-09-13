@@ -73,13 +73,6 @@ _PLAN_EDIT_SNAP_SET = {
     "Intersection",
     "WorkingPlane",
 }
-# Opening move is already constrained onto the host axis, so keep its snap
-# profile minimal. This avoids unrelated object snaps dragging the returned
-# point far away from the hovered location during Draft snap winner selection.
-_OPENING_MOVE_SNAP_SET = {
-    "Lock",
-    "WorkingPlane",
-}
 _PLAN_VIEW_LOCKED_ACTIONS = (
     "Std_ViewFront",
     "Std_ViewTop",
@@ -197,7 +190,7 @@ class PlanEditSession:
         self.visibility = PlanVisibilityAPI(self)
         self.providers = PlanProvidersAPI(self)
         self.storey = PlanStoreysAPI(self)
-        self.snap = plan_snap.PlanSnapAPI(self, _PLAN_EDIT_SNAP_SET, _OPENING_MOVE_SNAP_SET)
+        self.snap = plan_snap.PlanSnapAPI(self, _PLAN_EDIT_SNAP_SET)
         self.performance = PlanPerformanceAPI(self)
         self.document_visuals = PlanDocumentVisualsAPI(self)
         self.contextual_rendering = PlanContextualRenderingAPI(self)
@@ -345,8 +338,6 @@ class PlanEditSession:
                 self.task_panels.attach_task_panel(panel)
             with self.performance.plan_perf_trace_span("task_panel_initial_refresh"):
                 panel.refresh(refresh_integrations=False)
-            with self.performance.plan_perf_trace_span("queue_prime_opening_handle_tracker_pool"):
-                self.overlays.openings.queue_prime_opening_handle_tracker_pool()
             with self.performance.plan_perf_trace_span("queue_prime_wall_hosted_openings_cache"):
                 self.openings.queue_prime_wall_hosted_openings_cache()
             with self.performance.plan_perf_trace_span("queue_prime_hover_pick_caches"):

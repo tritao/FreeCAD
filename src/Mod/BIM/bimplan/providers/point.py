@@ -143,7 +143,6 @@ def start_plan_provider_point_tool(session, tool):
     session.selection.hover.set_hovered_region(None)
     session.overlays.walls.clear_selected_wall_overlay()
     session.overlays.openings.clear_selected_wall_opening_context_overlay()
-    session.overlays.openings.clear_selected_opening_handles()
     session.overlays.symbols.clear_selected_symbol_handles()
     session.overlays.providers.clear_provider_point_preview()
     host_target, host_source = get_provider_point_context_host_state(session)

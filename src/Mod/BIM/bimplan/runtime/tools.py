@@ -9,7 +9,6 @@ class PlanTool(str, Enum):
     SELECT = "Select"
     JOIN = "Join"
     MOVE = "Move"
-    MOVE_OPENING = "Move Opening"
     MOVE_SYMBOL = "Move Symbol"
     ROTATE_SYMBOL = "Rotate Symbol"
     MOVE_PROVIDER = "Move Provider"

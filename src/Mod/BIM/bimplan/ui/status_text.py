@@ -387,14 +387,6 @@ def _get_direct_tool_status_chip_text(
             session.providers.get_provider_point_tool_prompt(),
         )
 
-    if session.current_tool == plan_runtime_tools.PlanTool.MOVE_OPENING:
-        context = (
-            selected_context
-            if selected_kind == "opening" and selected_obj is not None
-            else (translate("BIM_PlanEdit", "Opening move"))
-        )
-        return _get_move_status_chip_text(title, context, translate("BIM_PlanEdit", "Opening move"))
-
     if session.current_tool == plan_runtime_tools.PlanTool.MOVE_SYMBOL:
         context = (
             selected_context
@@ -700,20 +692,6 @@ def _get_default_tool_input_hint_specs(ui):
             (
                 translate("BIM_PlanEdit", "%1 place window"),
                 ui.MouseLeft,
-            ),
-            (
-                translate("BIM_PlanEdit", "%1 cancel"),
-                ui.KeyEscape,
-            ),
-        ),
-        "Move Opening": (
-            (
-                translate("BIM_PlanEdit", "%1 place opening"),
-                ui.MouseLeft,
-            ),
-            (
-                translate("BIM_PlanEdit", "%1 cycle move anchor"),
-                ui.KeyA,
             ),
             (
                 translate("BIM_PlanEdit", "%1 cancel"),

@@ -190,7 +190,6 @@ def refresh_plan_overlay_view_scale(session):
             overlay_openings.sync_hovered_opening_overlay(session)
         if session.selection.state.is_selected_plan_target("opening"):
             overlay_openings.sync_selected_opening_overlay(session)
-            overlay_openings.sync_selected_opening_handles(session)
         if session.hovered_symbol:
             overlay_symbols.sync_hovered_symbol_overlay(session)
         overlay_providers.sync_provider_overlays(session)
@@ -254,7 +253,6 @@ def _clear_common_overlay_visuals(
     overlay_providers.clear_provider_point_preview(session)
     if clear_secondary_selection:
         overlay_spaces.clear_secondary_selected_overlays(session)
-    overlay_openings.clear_selected_opening_handles(session)
     overlay_symbols.clear_selected_symbol_handles(session)
     overlay_openings.clear_selected_wall_opening_context_overlay(session)
     overlay_walls.clear_selected_wall_overlay(session)
@@ -286,7 +284,6 @@ def _refresh_join_tool_overlays(session, dirty, refresh_all):
     overlay_providers.clear_provider_overlays(session)
     overlay_providers.clear_provider_point_preview(session)
     overlay_spaces.clear_secondary_selected_overlays(session)
-    overlay_openings.clear_selected_opening_handles(session)
     overlay_symbols.clear_selected_symbol_handles(session)
     overlay_openings.clear_selected_wall_opening_context_overlay(session)
     overlay_walls.clear_selected_wall_overlay(session)
@@ -384,7 +381,6 @@ def _refresh_select_tool_overlays(session, dirty, refresh_all):
         overlay_spaces.sync_hovered_region_overlay(session)
     if refresh_all or plan_document_visuals.PLAN_VISUAL_SELECTED_OPENING in dirty:
         overlay_openings.sync_selected_opening_overlay(session)
-        overlay_openings.sync_selected_opening_handles(session)
     if refresh_all or plan_document_visuals.PLAN_VISUAL_SELECTED_SYMBOL in dirty:
         overlay_symbols.sync_selected_symbol_overlay(session)
         overlay_symbols.sync_selected_symbol_handles(session)

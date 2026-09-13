@@ -48,12 +48,7 @@ def sync_selectable_hover(session, mouse_pos):
 
 def _activate_edit_node(session, node, event_callback):
     node_kind = plan_edit_nodes.get_edit_node_kind(node)
-    if node_kind == "opening_handle":
-        obj, index = plan_edit_nodes.get_edit_node_payload(node)
-        session.selection.activation.select_opening_for_plan_edit(obj)
-        session.selection.sync.set_gui_selection_object(obj)
-        session.openings.activate_opening_handle(obj, index)
-    elif node_kind == "provider_handle":
+    if node_kind == "provider_handle":
         obj, index = plan_edit_nodes.get_edit_node_payload(node)
         session.selection.state.set_selected_plan_target_state("provider", obj)
         session.overlays.walls.clear_selected_wall_overlay()

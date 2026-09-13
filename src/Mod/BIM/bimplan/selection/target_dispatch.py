@@ -165,18 +165,11 @@ _TARGET_KIND_POLICIES = {
         selected_visual_clearers=(
             lambda session: session.overlays.openings.clear_selected_opening_overlay(),
         ),
-        selected_handle_clearers=(
-            lambda session: session.overlays.openings.clear_selected_opening_handles(),
-        ),
         selected_visual_label="opening_overlay",
         selected_visual_sync=(
             SyncSpec(
                 "sync_selected_opening_overlay",
                 lambda session: session.overlays.openings.sync_selected_opening_overlay(),
-            ),
-            SyncSpec(
-                "sync_selected_opening_handles",
-                lambda session: session.overlays.openings.sync_selected_opening_handles(),
             ),
         ),
         hovered_visual_label="opening_overlay",

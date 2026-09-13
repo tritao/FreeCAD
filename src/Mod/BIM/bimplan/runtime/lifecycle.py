@@ -82,7 +82,6 @@ def discard_runtime_references(session):
     session.providers.discard_runtime_references()
     session.spaces.discard_runtime_references()
     session.wall_edit.discard_runtime_references()
-    session.openings.discard_runtime_references()
     session.symbols.discard_runtime_references()
     session.overlays.discard_runtime_references()
     session.wall_create.discard_runtime_references()
@@ -98,7 +97,6 @@ def detach_runtime_observers(session):
 def _cancel_current_tool_for_finish(session):
     return (
         session.providers.cancel_active_tool_for_finish()
-        or session.openings.cancel_active_tool_for_finish()
         or session.symbols.cancel_active_tool_for_finish()
         or session.spaces.cancel_active_tool_for_finish()
         or session.hosted_openings.cancel_active_tool_for_finish()
@@ -124,7 +122,6 @@ def _cancel_finish_fallback(session):
 def _cancel_current_tool_for_begin_teardown(session):
     return (
         session.providers.cancel_active_tool_for_teardown()
-        or session.openings.cancel_active_tool_for_teardown()
         or session.symbols.cancel_active_tool_for_teardown()
         or session.spaces.cancel_active_tool_for_teardown()
     )
@@ -238,13 +235,10 @@ def activate_select_tool(session):
     session.wall_relations.cancel_for_select()
 
 
-def _reset_pending_edit_state(
-    session, *, clear_opening_edit=False, restore_wall_visibility=True
-):
+def _reset_pending_edit_state(session, *, restore_wall_visibility=True):
     session.wall_edit.reset_pending_edit_state(
         restore_wall_visibility=restore_wall_visibility
     )
-    session.openings.reset_pending_edit_state(clear_edit=clear_opening_edit)
     session.embedded_tools.clear_state()
     session.lifecycle_state.ignore_selection_changes = False
 
@@ -257,11 +251,9 @@ def cancel_pending_edit(session, *, restore_wall_visibility=True):
         session.wall_relations.clear_plan_relation_status()
         return
     session.snap.stop_snapper()
-    session.snap.pop_opening_move_snap_profile()
     session.snap.clear_active_draft_command()
     _reset_pending_edit_state(
         session,
-        clear_opening_edit=True,
         restore_wall_visibility=restore_wall_visibility,
     )
     session.wall_relations.clear_plan_relation_status()

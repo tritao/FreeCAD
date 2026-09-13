@@ -16,14 +16,6 @@ class SymbolHandleEditNode:
 
 
 @dataclass(frozen=True, slots=True)
-class OpeningHandleEditNode:
-    opening: object
-    index: int
-
-    kind = "opening_handle"
-
-
-@dataclass(frozen=True, slots=True)
 class ProviderHandleEditNode:
     provider: object
     index: int
@@ -79,13 +71,6 @@ def get_edit_node_payload(node):
     if kind == "symbol_handle":
         if _has_dataclass_payload(node, "symbol"):
             return (_get_node_attr(node, "symbol"), _get_node_attr(node, "role"))
-        try:
-            return (node[1], node[2])
-        except Exception:
-            return ()
-    if kind == "opening_handle":
-        if _has_dataclass_payload(node, "opening"):
-            return (_get_node_attr(node, "opening"), _get_node_attr(node, "index"))
         try:
             return (node[1], node[2])
         except Exception:
