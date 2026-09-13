@@ -30,7 +30,7 @@ class BIM_SectionEdit:
         return FreeCAD.ActiveDocument is not None and _selected_section_plane() is not None
 
     def Activated(self):
-        from bimplan.contextual_edit_3d import active_session, start_session
+        from bimplan.contextual_session import active_session, start_session
 
         session = active_session()
         if session is not None:

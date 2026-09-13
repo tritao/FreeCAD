@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: LGPL-2.1-or-later
 
-"""Semantic contextual editing over the ordinary FreeCAD 3D model view."""
+"""Semantic contextual editing in architectural view contexts."""
 
 import FreeCAD
 import FreeCADGui
@@ -15,7 +15,7 @@ from draftguitools.gui_base import DraftInteractionHost
 _active_session = None
 
 
-class BIM3DContextualEditingSession:
+class BIMContextualEditingSession:
     """Show and edit semantic handles while leaving document geometry visible."""
 
     def __init__(self, view=None, context=None, sources=None, orient_to_context=False):
@@ -302,5 +302,5 @@ def start_session(view=None, **kwargs):
 
     if _active_session is not None:
         _active_session.close()
-    _active_session = BIM3DContextualEditingSession(view, **kwargs)
+    _active_session = BIMContextualEditingSession(view, **kwargs)
     return _active_session

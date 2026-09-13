@@ -14,7 +14,7 @@ from pivy import coin
 from ArchRepresentation import BIMEditRay, RepresentationContext, RepresentationPurpose
 from bimtests.TestArchBaseGui import TestArchBaseGui
 from bimplan.runtime.session import PlanEditSession
-from bimplan.contextual_edit_3d import BIM3DContextualEditingSession
+from bimplan.contextual_session import BIMContextualEditingSession
 from bimplan.providers import PlanEditProvider, PlanEditRegistry
 from BimContextualRendering import (
     ContextualInteractionRenderer,
@@ -668,7 +668,7 @@ class TestBimPlanEditSessionGui(TestArchBaseGui):
         camera_type = view.getCameraType()
         FreeCADGui.Selection.clearSelection()
         FreeCADGui.Selection.addSelection(wall)
-        session = BIM3DContextualEditingSession(view)
+        session = BIMContextualEditingSession(view)
         try:
             self.pump_gui_events(20)
             renderer = session.renderer
@@ -726,7 +726,7 @@ class TestBimPlanEditSessionGui(TestArchBaseGui):
         view = FreeCADGui.ActiveDocument.ActiveView
         FreeCADGui.Selection.clearSelection()
         FreeCADGui.Selection.addSelection(wall)
-        session = BIM3DContextualEditingSession(view)
+        session = BIMContextualEditingSession(view)
         try:
             self.pump_gui_events(20)
 
@@ -802,7 +802,7 @@ class TestBimPlanEditSessionGui(TestArchBaseGui):
 
     def test_standard_3d_contextual_editing_callbacks_toggle_with_command(self):
         from bimcommands.BimContextualEdit3D import BIM_ContextualEdit3D
-        from bimplan.contextual_edit_3d import active_session
+        from bimplan.contextual_session import active_session
 
         command = BIM_ContextualEdit3D()
         self.assertTrue(command.IsActive())
@@ -832,7 +832,7 @@ class TestBimPlanEditSessionGui(TestArchBaseGui):
             for line in view.getCamera().splitlines()
             if not line.strip().startswith(("nearDistance", "farDistance"))
         )
-        session = BIM3DContextualEditingSession(
+        session = BIMContextualEditingSession(
             view,
             context=section.Proxy.getRepresentationContext(section),
             sources=(wall,),
@@ -876,7 +876,7 @@ class TestBimPlanEditSessionGui(TestArchBaseGui):
             projection_range=(0.0, 5000.0),
         )
         self.document.recompute()
-        session = BIM3DContextualEditingSession(
+        session = BIMContextualEditingSession(
             FreeCADGui.ActiveDocument.ActiveView,
             context=context,
             sources=(wall,),
@@ -904,7 +904,7 @@ class TestBimPlanEditSessionGui(TestArchBaseGui):
         view = FreeCADGui.ActiveDocument.ActiveView
         FreeCADGui.Selection.clearSelection()
         FreeCADGui.Selection.addSelection(wall)
-        session = BIM3DContextualEditingSession(view)
+        session = BIMContextualEditingSession(view)
         try:
             view.viewAxonometric()
             view.fitAll()

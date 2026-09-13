@@ -86,7 +86,7 @@ SET(Arch_SRCS
 
 SET(bimplan_SRCS
     bimplan/__init__.py
-    bimplan/contextual_edit_3d.py
+    bimplan/contextual_session.py
     bimplan/contextual_rendering.py
     bimplan/contextual_editing.py
     bimplan/document_visuals.py
