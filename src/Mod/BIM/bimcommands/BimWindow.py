@@ -28,6 +28,7 @@ import os
 
 import FreeCAD
 import FreeCADGui
+import ArchOpeningConstruction
 
 QT_TRANSLATE_NOOP = FreeCAD.Qt.QT_TRANSLATE_NOOP
 translate = FreeCAD.Qt.translate
@@ -106,27 +107,20 @@ class Arch_Window:
                         if obj.Objects[0].Inlist:
                             host = obj.Objects[0].Inlist[0]
 
-                    self.doc.openTransaction(translate("Arch", "Create Window"))
-                    FreeCADGui.addModule("Arch")
-                    FreeCADGui.doCommand(
-                        "win = Arch.makeWindow(FreeCAD.ActiveDocument." + obj.Name + ")"
-                    )
+                    hosts = []
                     if self.Include and host is not None and Draft.getType(host) in ALLOWEDHOSTS:
-                        FreeCADGui.doCommand(
-                            "win.Hosts = [FreeCAD.ActiveDocument." + host.Name + "]"
-                        )
+                        hosts.append(host)
                         siblings = self._get_host_siblings(host)
-                        sibs = [host]
                         for sibling in siblings:
-                            if not sibling in sibs:
-                                sibs.append(sibling)
-                                FreeCADGui.doCommand(
-                                    "win.Hosts = win.Hosts + [FreeCAD.ActiveDocument."
-                                    + sibling.Name
-                                    + "]"
-                                )
-                    self.doc.commitTransaction()
-                    self.doc.recompute()
+                            if sibling not in hosts:
+                                hosts.append(sibling)
+                    ArchOpeningConstruction.construct_opening_from_base(
+                        self.doc,
+                        obj,
+                        ArchOpeningConstruction.OpeningConstructionSpec(),
+                        transaction_name=translate("Arch", "Create Window"),
+                        hosts=hosts,
+                    )
                     return
 
                 # Try to detect an object to use as a window type - TODO we must make this safer
