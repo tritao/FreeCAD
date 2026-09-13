@@ -29,7 +29,7 @@ import FreeCADGui
 import math
 from enum import Enum
 from draftguitools import gui_base
-import bimplan.wall_construction as wall_construction
+import ArchWallConstruction as wall_construction
 
 QT_TRANSLATE_NOOP = FreeCAD.Qt.QT_TRANSLATE_NOOP
 translate = FreeCAD.Qt.translate

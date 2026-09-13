@@ -34,7 +34,7 @@ import Part
 import WorkingPlane
 from bimtests import TestArchBaseGui
 from bimcommands.BimWall import Arch_Wall
-import bimplan.wall_construction as wall_construction
+import ArchWallConstruction as wall_construction
 from bimcommands.BimJoin import (
     BIM_EditWallJoint,
     BIM_Join_Butt,

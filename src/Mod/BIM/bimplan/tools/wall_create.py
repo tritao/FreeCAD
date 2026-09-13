@@ -10,7 +10,7 @@ import ArchRepresentation
 
 from bimplan.runtime import tools as plan_runtime_tools
 from bimplan.runtime.embedded_commands import _PlanEditWallHost
-import bimplan.wall_construction as wall_construction
+import ArchWallConstruction as wall_construction
 
 translate = FreeCAD.Qt.translate
 
