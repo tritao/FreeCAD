@@ -48,7 +48,7 @@ from bimplan.providers.runtime import PlanProvidersAPI
 from bimplan.tools.wall_create import PlanWallCreateAPI
 from bimplan.tools.wall_relations import PlanWallRelationsAPI
 from bimplan.tools.wall_edit import PlanWallEditAPI
-from bimplan.tools.window_create import PlanWindowsAPI
+from bimplan.tools.window_create import PlanHostedOpeningsAPI
 from bimplan.tools.spaces import PlanSpacesAPI
 from bimplan.runtime.view import PlanViewportAPI
 from bimplan.overlays.runtime import PlanOverlaysAPI
@@ -190,7 +190,8 @@ class PlanEditSession:
         self.input = plan_input.PlanInputAPI(self)
         self.lifecycle = plan_lifecycle.PlanLifecycleAPI(self)
         self.symbols = PlanSymbolsAPI(self)
-        self.windows = PlanWindowsAPI(self)
+        self.hosted_openings = PlanHostedOpeningsAPI(self)
+        self.windows = self.hosted_openings
         self.viewport = PlanViewportAPI(self)
         self.overlays = PlanOverlaysAPI(self)
         self.wall_edit = PlanWallEditAPI(self)

@@ -67,6 +67,94 @@ class OpeningPresetSpec:
         return OpeningPresetSpec(str(self.preset), *values)
 
 
+@dataclass(frozen=True)
+class HostedOpeningSpec:
+    """Semantic description of a standard hosted architectural opening."""
+
+    kind: str = "Window"
+    width: float = 900.0
+    height: float | None = None
+    sill_height: float | None = None
+
+    def validated(self):
+        kind = str(self.kind or "Window").title()
+        if kind not in ("Window", "Door"):
+            raise OpeningConstructionError("Hosted opening kind must be Window or Door.")
+        width = float(self.width)
+        default_height = 1200 if kind == "Window" else 2100
+        default_sill = 900 if kind == "Window" else 0
+        height = float(self.height if self.height is not None else default_height)
+        sill = float(self.sill_height if self.sill_height is not None else default_sill)
+        if width <= 0 or height <= 0 or sill < 0:
+            raise OpeningConstructionError("Hosted opening dimensions are invalid.")
+        return HostedOpeningSpec(kind, width, height, sill)
+
+    def preset_spec(self):
+        spec = self.validated()
+        return OpeningPresetSpec(
+            "Fixed" if spec.kind == "Window" else "Simple door",
+            spec.width, spec.height, 50, 50, 50, 50, 50, 0, 0,
+        )
+
+
+def hosted_opening_placement(host, point, spec):
+    """Resolve a context-independent placement along a straight wall host."""
+
+    import FreeCAD
+
+    spec = spec.validated()
+    proxy = getattr(host, "Proxy", None)
+    endpoints = getattr(proxy, "calc_endpoints", lambda _obj: ())(host)
+    if len(tuple(endpoints or ())) != 2:
+        raise OpeningConstructionError("A straight wall host is required.")
+    start, end = (FreeCAD.Vector(value) for value in endpoints)
+    axis = end.sub(start)
+    axis.z = 0.0
+    length = axis.Length
+    if length <= 1e-9:
+        raise OpeningConstructionError("The wall host has no usable length.")
+    axis.normalize()
+    requested = FreeCAD.Vector(point)
+    requested.z = start.z
+    distance = requested.sub(start).dot(axis)
+    half_width = spec.width * 0.5
+    distance = (
+        length * 0.5
+        if length < spec.width
+        else min(max(distance, half_width), length - half_width)
+    )
+    base = start.add(FreeCAD.Vector(axis).multiply(distance))
+    base.z = start.z + spec.sill_height
+    vertical = FreeCAD.Vector(0, 0, 1)
+    normal = axis.cross(vertical)
+    normal.normalize()
+    return FreeCAD.Placement(base, FreeCAD.Rotation(axis, vertical, normal, "XYZ"))
+
+
+def construct_hosted_opening(
+    document,
+    host,
+    point,
+    spec,
+    *,
+    transaction_name=None,
+    add_to_container=None,
+    defer_updates=None,
+):
+    """Construct a standard Window or Door on a wall in any view context."""
+
+    spec = spec.validated()
+    return construct_preset_opening(
+        document,
+        spec.preset_spec(),
+        placement=hosted_opening_placement(host, point, spec),
+        transaction_name=transaction_name or "Create {}".format(spec.kind),
+        hosts=(host,),
+        add_to_container=add_to_container,
+        defer_updates=defer_updates,
+    )
+
+
 def create_opening_from_base(base, spec):
     """Create and configure an opening before it is assigned to any host."""
 
@@ -124,6 +212,7 @@ def construct_preset_opening(
     hosts=(),
     add_to_container=None,
     defer_updates=None,
+    after_hosting=None,
 ):
     return construct_opening(
         document,
@@ -132,6 +221,7 @@ def construct_preset_opening(
         hosts=hosts,
         add_to_container=add_to_container,
         defer_updates=defer_updates,
+        after_hosting=after_hosting,
     )
 
 
@@ -168,6 +258,7 @@ def construct_opening(
     hosts=(),
     add_to_container=None,
     defer_updates=None,
+    after_hosting=None,
     require_built_shape=True,
 ):
     """Build, validate, host, and atomically commit an opening."""
@@ -185,6 +276,8 @@ def construct_opening(
             if require_built_shape and not has_built_shape(opening):
                 raise OpeningConstructionError("Opening did not build before hosting.")
             assign_hosts(opening, hosts)
+            if after_hosting is not None:
+                after_hosting(opening)
             if add_to_container is not None:
                 add_to_container(opening)
             document.recompute()

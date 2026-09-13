@@ -20,8 +20,8 @@ DEFAULT_WINDOW_FRAME_THICKNESS = 60.0
 DEFAULT_WINDOW_GLASS_THICKNESS = 10.0
 
 
-class PlanWindowsAPI:
-    """Owned session surface for Plan Edit window placement and editor reads."""
+class PlanHostedOpeningsAPI:
+    """Owned session surface for Plan Edit Window and Door placement."""
 
     __slots__ = ("_session",)
 
@@ -333,6 +333,9 @@ _WINDOW_TOOL_SELECTION_KINDS = (
     plan_target_kinds.PLAN_TARGET_SPACE,
     plan_target_kinds.PLAN_TARGET_REGION,
 )
+
+# Compatibility for external Plan providers while they adopt the neutral name.
+PlanWindowsAPI = PlanHostedOpeningsAPI
 
 
 def activate_window_tool(session):
@@ -815,67 +818,31 @@ def _make_window_base_sketch(session, wall, center):
 
 
 def create_window(session, wall, point):
+    return create_hosted_opening(session, wall, point)
+
+
+def create_hosted_opening(session, wall, point):
     center = project_window_point_to_host(session, point, wall)
     if center is None:
         return None
 
     opening_kind = str(session.creation_preview_state.opening_kind or "Window")
-    spec = ArchOpeningConstruction.OpeningConstructionSpec(
-        width=DEFAULT_WINDOW_WIDTH,
-        height=DEFAULT_WINDOW_HEIGHT,
-        ifc_type=opening_kind,
-        hole_depth=0,
-        parts=(
-            "Frame",
-            "Frame",
-            "Wire0,Wire1",
-            str(DEFAULT_WINDOW_FRAME_THICKNESS),
-            "0",
-            "Glass",
-            "Glass panel",
-            "Wire1",
-            str(DEFAULT_WINDOW_GLASS_THICKNESS),
-            str(DEFAULT_WINDOW_FRAME_THICKNESS * 0.5),
-        ),
-    )
-
-    def build_window():
-        if opening_kind == "Door":
-            context = _get_wall_axis_context(wall)
-            if not context:
-                raise RuntimeError("Unable to resolve the door host axis")
-            placement = FreeCAD.Placement(
-                center,
-                FreeCAD.Rotation(
-                    context["axis"], context["vertical"], context["normal"], "XYZ"
-                ),
-            )
-            return ArchOpeningConstruction.create_preset_opening(
-                ArchOpeningConstruction.OpeningPresetSpec(
-                    "Simple door", 900, 2100, 50, 50, 50, 50, 50, 0, 0
-                ),
-                placement=placement,
-            )
-        sketch = _make_window_base_sketch(session, wall, center)
-        if sketch is None:
-            raise RuntimeError("Unable to create window sketch")
-        return ArchOpeningConstruction.create_opening_from_base(sketch, spec)
-
-    window = ArchOpeningConstruction.construct_opening(
+    opening = ArchOpeningConstruction.construct_hosted_opening(
         session.doc,
-        build_window,
+        wall,
+        center,
+        ArchOpeningConstruction.HostedOpeningSpec(kind=opening_kind),
         transaction_name=(
             translate("BIM_PlanEdit", "Create Door")
             if opening_kind == "Door"
             else translate("BIM_PlanEdit", "Create Window")
         ),
-        hosts=(wall,),
         add_to_container=session.visibility.add_object_to_active_storey,
         defer_updates=session.document_visuals.defer_document_visual_updates,
     )
-    if not session.openings.is_hosted_opening_object(window):
-        raise RuntimeError("Created window is not hosted")
-    return window
+    if not session.openings.is_hosted_opening_object(opening):
+        raise RuntimeError("Created opening is not hosted")
+    return opening
 
 
 def handle_window_tool_point(session, point=None, obj=None):
