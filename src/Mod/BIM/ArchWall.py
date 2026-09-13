@@ -60,6 +60,17 @@ import DraftVecUtils
 from FreeCAD import Vector
 from draftutils import params
 
+
+def _representation_plane_normal(context):
+    frame = getattr(context, "reference_frame", None)
+    if frame is not None:
+        normal = frame.Rotation.multVec(Vector(0, 0, 1))
+        if normal.Length > 1e-9:
+            normal.normalize()
+            return normal
+    return Vector(0, 0, 1)
+
+
 if FreeCAD.GuiUp:
     from PySide import QtCore, QtGui
     from PySide.QtCore import QT_TRANSLATE_NOOP
@@ -1175,6 +1186,7 @@ class _Wall(ArchComponent.Component):
                     height_operation,
                     subelement="Height",
                     minimum=1.0,
+                    constraint=ArchRepresentation.AxisConstraint(high, direction),
                 )
             )
         if low is None or getattr(wall, "Base", None) is not None:
@@ -1205,6 +1217,7 @@ class _Wall(ArchComponent.Component):
                     base_operation,
                     subelement="Placement.Base.z",
                     minimum=None,
+                    constraint=ArchRepresentation.AxisConstraint(low, direction),
                 )
             )
     def _add_section_property_edit_handles(self, representation, wall, context):
@@ -1262,18 +1275,20 @@ class _Wall(ArchComponent.Component):
                     )
                 ),
             )
+            handle_point = ArchRepresentation.project_to_representation_plane(
+                midpoint + lateral * coordinate, context
+            )
             representation.add_edit_handle(
                 ArchRepresentation.BIMEditHandle(
                     wall,
                     "WallWidth",
-                    ArchRepresentation.project_to_representation_plane(
-                        midpoint + lateral * coordinate, context
-                    ),
+                    handle_point,
                     direction,
                     width_operation,
                     subelement="Width.{}Face".format(side),
                     minimum=1.0,
                     glyph="Plus",
+                    constraint=ArchRepresentation.AxisConstraint(handle_point, direction),
                 )
             )
         align = str(wall.Align)
@@ -1288,18 +1303,22 @@ class _Wall(ArchComponent.Component):
             property_name="Offset",
             available=lambda source: self._can_edit_uniform_section(source),
         )
+        handle_point = ArchRepresentation.project_to_representation_plane(
+            midpoint + lateral * ((section.y_min + section.y_max) * 0.5), context
+        )
         representation.add_edit_handle(
             ArchRepresentation.BIMEditHandle(
                 wall,
                 "WallOffset",
-                ArchRepresentation.project_to_representation_plane(
-                    midpoint + lateral * ((section.y_min + section.y_max) * 0.5), context
-                ),
+                handle_point,
                 offset_direction,
                 offset_operation,
                 subelement="Offset",
                 minimum=None,
                 glyph="Diamond",
+                constraint=ArchRepresentation.AxisConstraint(
+                    handle_point, offset_direction
+                ),
             )
         )
 
@@ -1374,6 +1393,11 @@ class _Wall(ArchComponent.Component):
         owner = getattr(wall, "Base", None)
         points = get_contextual_edit_points(owner, context)
         use_wall_controller = self._is_straight_owned_path(owner, points)
+        path_axis = None
+        if use_wall_controller:
+            path_axis = points[1].point.sub(points[0].point)
+            if path_axis.Length > 1e-9:
+                path_axis.normalize()
         for index, point in enumerate(points):
             role = point.semantic_id or "Vertex{}".format(index + 1)
             operation = ArchRepresentation.BIMEditOperation(
@@ -1392,17 +1416,28 @@ class _Wall(ArchComponent.Component):
                     else ""
                 ),
             )
+            handle_point = ArchRepresentation.project_to_representation_plane(
+                point.point, context
+            )
+            constraint = (
+                ArchRepresentation.AxisConstraint(handle_point, path_axis)
+                if path_axis is not None and path_axis.Length > 1e-9
+                else ArchRepresentation.WorkingPlaneConstraint(
+                    handle_point, _representation_plane_normal(context)
+                )
+            )
             representation.add_edit_handle(
                 ArchRepresentation.BIMEditHandle(
                     wall,
                     "WallPath{}".format(role),
-                    ArchRepresentation.project_to_representation_plane(point.point, context),
-                    FreeCAD.Vector(),
+                    handle_point,
+                    path_axis if path_axis is not None else FreeCAD.Vector(),
                     operation,
                     interaction="Planar",
                     subelement="Base.{}".format(point.subelement),
                     minimum=None,
                     glyph="Square",
+                    constraint=constraint,
                 )
             )
         if use_wall_controller:
@@ -1414,11 +1449,12 @@ class _Wall(ArchComponent.Component):
                 for point in points:
                     point.apply_value(point.get_value().add(delta))
 
+            handle_point = ArchRepresentation.project_to_representation_plane(midpoint, context)
             representation.add_edit_handle(
                 ArchRepresentation.BIMEditHandle(
                     wall,
                     "WallMove",
-                    ArchRepresentation.project_to_representation_plane(midpoint, context),
+                    handle_point,
                     FreeCAD.Vector(),
                     ArchRepresentation.BIMEditOperation(
                         "WallMove",
@@ -1439,6 +1475,9 @@ class _Wall(ArchComponent.Component):
                     subelement="Base.Path",
                     minimum=None,
                     glyph="Circle",
+                    constraint=ArchRepresentation.WorkingPlaneConstraint(
+                        handle_point, _representation_plane_normal(context)
+                    ),
                 )
             )
 
@@ -1456,6 +1495,10 @@ class _Wall(ArchComponent.Component):
         if getattr(wall, "Base", None) is not None or not self._can_edit_native_path(wall):
             return
         endpoints = self.calc_endpoints(wall)
+        axis = endpoints[1].sub(endpoints[0])
+        if axis.Length <= 1e-9:
+            return
+        axis.normalize()
         relation_controlled_ends = self._relation_controlled_native_ends(wall)
 
         def apply_endpoint(source, index, value):
@@ -1478,19 +1521,21 @@ class _Wall(ArchComponent.Component):
                 available=lambda source: self._can_edit_native_path(source),
                 interaction_intent="WallStretch{}".format(role),
             )
+            handle_point = ArchRepresentation.project_to_representation_plane(
+                endpoints[index], context
+            )
             representation.add_edit_handle(
                 ArchRepresentation.BIMEditHandle(
                     wall,
                     "WallPath{}".format(role),
-                    ArchRepresentation.project_to_representation_plane(
-                        endpoints[index], context
-                    ),
-                    FreeCAD.Vector(),
+                    handle_point,
+                    axis,
                     operation,
                     interaction="Planar",
                     subelement="Path.{}".format(role),
                     minimum=None,
                     glyph="Square",
+                    constraint=ArchRepresentation.AxisConstraint(handle_point, axis),
                 )
             )
 
@@ -1516,17 +1561,21 @@ class _Wall(ArchComponent.Component):
             available=lambda source: self._can_edit_native_path(source),
             interaction_intent="WallMove",
         )
+        handle_point = ArchRepresentation.project_to_representation_plane(midpoint, context)
         representation.add_edit_handle(
             ArchRepresentation.BIMEditHandle(
                 wall,
                 "WallMove",
-                ArchRepresentation.project_to_representation_plane(midpoint, context),
+                handle_point,
                 FreeCAD.Vector(),
                 move_operation,
                 interaction="Planar",
                 subelement="Path",
                 minimum=None,
                 glyph="Circle",
+                constraint=ArchRepresentation.WorkingPlaneConstraint(
+                    handle_point, _representation_plane_normal(context)
+                ),
             )
         )
 
@@ -1606,16 +1655,17 @@ class _Wall(ArchComponent.Component):
                     self._movable_wall_joint_data(joint) is not None
                 ),
             )
+            handle_point = ArchRepresentation.project_to_representation_plane(
+                self._wall_joint_handle_point(
+                    representation, wall, data["solution"].intersection
+                ),
+                context,
+            )
             representation.add_edit_handle(
                 ArchRepresentation.BIMEditHandle(
                     wall,
                     "WallJointMove",
-                    ArchRepresentation.project_to_representation_plane(
-                        self._wall_joint_handle_point(
-                            representation, wall, data["solution"].intersection
-                        ),
-                        context,
-                    ),
+                    handle_point,
                     FreeCAD.Vector(),
                     operation,
                     interaction="Planar",
@@ -1623,6 +1673,9 @@ class _Wall(ArchComponent.Component):
                     minimum=None,
                     glyph="Diamond",
                     glyph_size=13,
+                    constraint=ArchRepresentation.WorkingPlaneConstraint(
+                        handle_point, _representation_plane_normal(context)
+                    ),
                 )
             )
 

@@ -9,13 +9,17 @@ import Arch
 import Draft
 
 from ArchRepresentation import (
+    AxisConstraint,
+    BIMEditRay,
     BIMEditHandle,
     BIMEditOperation,
     BIMEditTransaction,
     BIMRepresentation,
+    PlaneConstraint,
     RepresentationUnavailable,
     RepresentationContext,
     RepresentationPurpose,
+    WorkingPlaneConstraint,
     query_representation_pick,
     query_representation_snap,
     query_representation_snap_candidates,
@@ -252,6 +256,80 @@ class TestArchRepresentation(unittest.TestCase):
         self.assertTrue(input_adapter.cleared)
         self.assertIn(("clear", source), renderer.events)
 
+    def test_axis_constraint_resolves_pointer_ray_for_scalar_edit(self):
+        source = {"height": 20.0}
+        operation = BIMEditOperation(
+            "set-height",
+            "Set height",
+            lambda value: value["height"],
+            lambda value, height: value.__setitem__("height", height),
+            minimum=1.0,
+            manages_transaction=True,
+        )
+        axis = AxisConstraint(FreeCAD.Vector(0, 0, 0), FreeCAD.Vector(0, 0, 1))
+        handle = BIMEditHandle(
+            source,
+            "height",
+            FreeCAD.Vector(0, 0, 10),
+            FreeCAD.Vector(),
+            operation,
+            constraint=axis,
+        )
+        editor = BIMContextualHandleEditor(RepresentationContext(purpose="Model"))
+        ray = BIMEditRay(FreeCAD.Vector(10, 0, 5), FreeCAD.Vector(-1, 0, 0))
+
+        editor.begin(handle)
+        preview = editor.preview(ray)
+        self.assertAlmostEqual(15.0, preview.value)
+        self.assertTrue(preview.point.isEqual(FreeCAD.Vector(0, 0, 5), 1e-7))
+        self.assertTrue(editor.commit(ray).success)
+        self.assertAlmostEqual(15.0, source["height"])
+
+    def test_plane_constraint_resolves_ray_and_working_plane_uses_frame(self):
+        source = {"point": FreeCAD.Vector(1, 2, 0)}
+        operation = BIMEditOperation(
+            "move-point",
+            "Move point",
+            lambda value: value["point"],
+            lambda value, point: value.__setitem__("point", point),
+            value_kind="Point",
+            manages_transaction=True,
+        )
+        plane = PlaneConstraint(FreeCAD.Vector(), FreeCAD.Vector(0, 0, 1))
+        handle = BIMEditHandle(
+            source,
+            "point",
+            source["point"],
+            FreeCAD.Vector(),
+            operation,
+            constraint=plane,
+        )
+        editor = BIMContextualHandleEditor(RepresentationContext(purpose="Model"))
+        ray = BIMEditRay(FreeCAD.Vector(10, 20, 10), FreeCAD.Vector(-1, -2, -1))
+
+        editor.begin(handle)
+        preview = editor.preview(ray)
+        self.assertTrue(preview.point.isEqual(FreeCAD.Vector(), 1e-7))
+        self.assertTrue(preview.value.isEqual(FreeCAD.Vector(), 1e-7))
+        self.assertTrue(editor.commit(ray).success)
+        self.assertTrue(source["point"].isEqual(FreeCAD.Vector(), 1e-7))
+
+        frame = FreeCAD.Placement(
+            FreeCAD.Vector(1, 2, 3),
+            FreeCAD.Rotation(FreeCAD.Vector(0, 1, 0), 90),
+        )
+        working_plane = WorkingPlaneConstraint(frame)
+        projected = working_plane.project(FreeCAD.Vector(8, 6, 5))
+        self.assertTrue(projected.isEqual(FreeCAD.Vector(1, 6, 5), 1e-7))
+
+    def test_constraints_report_ambiguous_parallel_pointer_rays(self):
+        axis = AxisConstraint(FreeCAD.Vector(), FreeCAD.Vector(0, 0, 1))
+        plane = PlaneConstraint(FreeCAD.Vector(), FreeCAD.Vector(0, 0, 1))
+        axis_ray = BIMEditRay(FreeCAD.Vector(0, 0, 10), FreeCAD.Vector(0, 0, -1))
+        plane_ray = BIMEditRay(FreeCAD.Vector(0, 0, 10), FreeCAD.Vector(1, 0, 0))
+        self.assertIsNone(axis.project(axis_ray))
+        self.assertIsNone(plane.project(plane_ray))
+
     def test_object_owned_contextual_points_preserve_global_coordinates(self):
         class Owner:
             Points = [FreeCAD.Vector(1, 2, 3), FreeCAD.Vector(4, 5, 6)]
@@ -321,6 +399,8 @@ class TestArchRepresentation(unittest.TestCase):
 
         handles = {handle.subelement: handle for handle in representation.edit_handles}
         self.assertTrue({"Path.Start", "Path.End"}.issubset(handles))
+        self.assertIsInstance(handles["Path.Start"].constraint, AxisConstraint)
+        self.assertIsInstance(handles["Path.End"].constraint, AxisConstraint)
         self.assertEqual("Square", handles["Path.Start"].glyph)
         self.assertEqual("Square", handles["Path.End"].glyph)
         self.assertEqual("Point", handles["Path.End"].operation.value_kind)
@@ -328,6 +408,7 @@ class TestArchRepresentation(unittest.TestCase):
         move_handle = next(
             handle for handle in representation.edit_handles if handle.role == "WallMove"
         )
+        self.assertIsInstance(move_handle.constraint, WorkingPlaneConstraint)
         self.assertEqual("Circle", move_handle.glyph)
         self.assertEqual("WallMove", move_handle.operation.interaction_intent)
         endpoints = wall.Proxy.calc_endpoints(wall)
@@ -495,6 +576,10 @@ class TestArchRepresentation(unittest.TestCase):
         self.assertTrue(representation.snap_geometry)
         roles = {handle.role for handle in representation.edit_handles}
         self.assertIn("WallHeight", roles)
+        height_handle = next(
+            handle for handle in representation.edit_handles if handle.role == "WallHeight"
+        )
+        self.assertIsInstance(height_handle.constraint, AxisConstraint)
         self.assertTrue(all(mapping.source is wall for mapping in representation.source_mappings))
 
     def test_snap_query_preserves_semantic_identity(self):

@@ -4,6 +4,7 @@
 
 from dataclasses import dataclass
 
+import FreeCAD
 from pivy import coin
 
 import ArchRepresentation
@@ -11,6 +12,23 @@ import ArchRepresentation
 
 def _xyz(point):
     return float(point.x), float(point.y), float(point.z)
+
+
+def ray_from_view(view, mouse_pos):
+    """Convert a viewer pixel into a normalized world-space BIM edit ray."""
+
+    viewer = view.getViewer()
+    render_manager = viewer.getSoRenderManager()
+    action = coin.SoRayPickAction(render_manager.getViewportRegion())
+    action.setPoint(coin.SbVec2s(int(mouse_pos[0]), int(mouse_pos[1])))
+    action.apply(render_manager.getSceneGraph())
+    line = action.getLine()
+    origin = line.getPosition()
+    direction = line.getDirection()
+    return ArchRepresentation.BIMEditRay(
+        FreeCAD.Vector(origin[0], origin[1], origin[2]),
+        FreeCAD.Vector(direction[0], direction[1], direction[2]),
+    )
 
 
 @dataclass(frozen=True)

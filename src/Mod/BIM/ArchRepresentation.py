@@ -71,8 +71,87 @@ class RepresentationSource:
         self.related_sources = tuple(related_sources or ())
 
 
+class BIMEditRay:
+    """World-space pointer ray supplied by a 3D viewer input adapter."""
+
+    def __init__(self, origin, direction):
+        self.origin = FreeCAD.Vector(origin)
+        self.direction = FreeCAD.Vector(direction)
+        if self.direction.Length <= 1e-9:
+            raise ValueError("BIM edit ray has no direction")
+        self.direction.normalize()
+
+
+class AxisConstraint:
+    """Constrain an edit to an infinite world-space axis."""
+
+    def __init__(self, origin, direction):
+        self.origin = FreeCAD.Vector(origin)
+        self.direction = FreeCAD.Vector(direction)
+        if self.direction.Length <= 1e-9:
+            raise ValueError("BIM edit axis has no direction")
+        self.direction.normalize()
+
+    def project(self, pointer):
+        if isinstance(pointer, BIMEditRay):
+            offset = pointer.origin - self.origin
+            ray_axis_dot = pointer.direction.dot(self.direction)
+            denominator = 1.0 - ray_axis_dot * ray_axis_dot
+            if abs(denominator) <= 1e-10:
+                return None
+            ray_offset = pointer.direction.dot(offset)
+            axis_offset = self.direction.dot(offset)
+            ray_parameter = (
+                ray_axis_dot * axis_offset - ray_offset
+            ) / denominator
+            ray_parameter = max(0.0, ray_parameter)
+            axis_parameter = axis_offset + ray_axis_dot * ray_parameter
+            return self.origin + self.direction * axis_parameter
+        point = FreeCAD.Vector(pointer)
+        return self.origin + self.direction * (point - self.origin).dot(self.direction)
+
+
+class PlaneConstraint:
+    """Constrain an edit to a plane in world space."""
+
+    def __init__(self, origin, normal):
+        self.origin = FreeCAD.Vector(origin)
+        self.normal = FreeCAD.Vector(normal)
+        if self.normal.Length <= 1e-9:
+            raise ValueError("BIM edit plane has no normal")
+        self.normal.normalize()
+
+    def project(self, pointer):
+        if isinstance(pointer, BIMEditRay):
+            denominator = pointer.direction.dot(self.normal)
+            if abs(denominator) <= 1e-10:
+                return None
+            ray_parameter = (self.origin - pointer.origin).dot(self.normal) / denominator
+            if ray_parameter < 0.0:
+                return None
+            return pointer.origin + pointer.direction * ray_parameter
+        point = FreeCAD.Vector(pointer)
+        return point - self.normal * (point - self.origin).dot(self.normal)
+
+
+class WorkingPlaneConstraint(PlaneConstraint):
+    """Plane constraint built from an origin/normal or a FreeCAD placement."""
+
+    def __init__(self, origin, normal=None):
+        if normal is None:
+            frame = origin
+            origin = frame.Base
+            normal = frame.Rotation.multVec(FreeCAD.Vector(0, 0, 1))
+        super().__init__(origin, normal)
+
+
 class BIMEditHandle:
-    """Renderer-independent semantic interaction offered by a BIM object."""
+    """Renderer-independent edit offered by a BIM object.
+
+    ``constraint`` defines the geometric manifold that pointer input must
+    follow.  ``interaction`` remains the compatibility mode for callers that
+    still project pointer positions through a representation context.
+    """
 
     def __init__(
         self,
@@ -88,6 +167,7 @@ class BIMEditHandle:
         glyph="Circle",
         glyph_size=9,
         icon_name="",
+        constraint=None,
     ):
         self.source = source
         self.role = str(role)
@@ -95,6 +175,9 @@ class BIMEditHandle:
         self.direction = FreeCAD.Vector(direction)
         if self.direction.Length:
             self.direction.normalize()
+        self.constraint = constraint
+        if not self.direction.Length and isinstance(constraint, AxisConstraint):
+            self.direction = FreeCAD.Vector(constraint.direction)
         self.operation = operation
         self.interaction = str(interaction)
         self.subelement = subelement

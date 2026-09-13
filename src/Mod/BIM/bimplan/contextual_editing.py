@@ -1,13 +1,16 @@
 # SPDX-License-Identifier: LGPL-2.1-or-later
 
-"""Context-projected editing of semantic handles from BIM representations."""
+"""Context- and constraint-projected editing of semantic BIM handles."""
 
 from contextlib import nullcontext
 from dataclasses import dataclass
 
 import FreeCAD
-from ArchRepresentation import BIMEditTransaction, project_to_representation_plane
-
+from ArchRepresentation import (
+    BIMEditTransaction,
+    BIMEditValidation,
+    project_to_representation_plane,
+)
 
 
 def _handle_value(handle):
@@ -51,13 +54,21 @@ class BIMContextualHandleEditor:
         self.start_value = None
 
     def begin(self, handle):
-        if handle is None or handle.interaction not in {"Linear", "Planar"}:
+        if handle is None or (
+            handle.constraint is None and handle.interaction not in {"Linear", "Planar"}
+        ):
             raise ValueError("Unsupported BIM edit handle")
         validation = handle.operation.validate(handle.source)
         if not validation.allowed:
             raise ValueError(validation.reason)
-        if handle.interaction == "Linear" and handle.direction.Length <= 1e-9:
+        if (
+            handle.constraint is None
+            and handle.interaction == "Linear"
+            and handle.direction.Length <= 1e-9
+        ):
             raise ValueError("BIM edit handle has no direction")
+        if handle.operation.value_kind != "Point" and handle.direction.Length <= 1e-9:
+            raise ValueError("BIM edit handle has no value direction")
         self.handle = handle
         self.start_value = _handle_value(handle)
         return self.preview(handle.point)
@@ -65,11 +76,29 @@ class BIMContextualHandleEditor:
     def preview(self, pointer):
         if self.handle is None:
             raise RuntimeError("No BIM edit handle is active")
-        projected = project_to_representation_plane(pointer, self.context)
-        if self.handle.interaction == "Planar":
-            value = self.start_value + projected - self.handle.point
-            validation = self.handle.operation.validate(self.handle.source, value)
-            return BIMEditPreview(self.handle, value, projected, validation)
+        if self.handle.constraint is not None:
+            projected = self.handle.constraint.project(pointer)
+            if projected is None:
+                validation = BIMEditValidation(
+                    False,
+                    "The pointer ray does not resolve on this edit constraint.",
+                )
+                return BIMEditPreview(
+                    self.handle,
+                    self.start_value,
+                    self.handle.point,
+                    validation,
+                )
+            if self.handle.operation.value_kind == "Point":
+                value = self.start_value + projected - self.handle.point
+                validation = self.handle.operation.validate(self.handle.source, value)
+                return BIMEditPreview(self.handle, value, projected, validation)
+        else:
+            projected = project_to_representation_plane(pointer, self.context)
+            if self.handle.interaction == "Planar":
+                value = self.start_value + projected - self.handle.point
+                validation = self.handle.operation.validate(self.handle.source, value)
+                return BIMEditPreview(self.handle, value, projected, validation)
         delta = (projected - self.handle.point).dot(self.handle.direction)
         value = self.start_value + delta * self.handle.operation.sensitivity
         point = self.handle.point + self.handle.direction * delta

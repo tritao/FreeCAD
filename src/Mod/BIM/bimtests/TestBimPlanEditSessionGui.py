@@ -17,6 +17,7 @@ from BimContextualRendering import (
     ContextualInteractionRenderer,
     ContextualNodeMapping,
     ContextualRepresentationRenderer,
+    ray_from_view,
 )
 
 
@@ -248,6 +249,8 @@ class TestBimPlanEditSessionGui(TestArchBaseGui):
             self.assertEqual("Inherit", view.getViewVisibility(wall))
             self.assertTrue(renderer._object_nodes[wall].getNumChildren())
             self.assertIsNone(renderer.pick_mapping((0, 0), lambda point: point))
+            ray = ray_from_view(view, view.getPointOnScreen(wall.Shape.BoundBox.Center))
+            self.assertAlmostEqual(1.0, ray.direction.Length)
 
             renderer.set_visible_handle_sources((wall,))
             self.assertEqual("Inherit", view.getViewVisibility(wall))
