@@ -71,6 +71,35 @@ class RepresentationSource:
         self.related_sources = tuple(related_sources or ())
 
 
+@dataclass(frozen=True)
+class BIMPreviewEntry:
+    representation: object
+    replace_committed: bool = False
+
+
+class BIMPreviewState:
+    """Renderer-neutral, coordinated representation state for one live edit.
+
+    Entries marked as replacements temporarily stand in for the committed
+    representation of their semantic source.  Other entries are overlays.
+    The document model is never mutated while this state is being evaluated.
+    """
+
+    def __init__(self, primary_source=None):
+        self.primary_source = primary_source
+        self._entries = []
+
+    def add_representation(self, representation, *, replace_committed=False):
+        if not isinstance(representation, BIMRepresentation):
+            raise TypeError("preview entries must be BIMRepresentation instances")
+        self._entries.append(BIMPreviewEntry(representation, bool(replace_committed)))
+        return representation
+
+    @property
+    def entries(self):
+        return tuple(self._entries)
+
+
 class BIMEditRay:
     """World-space pointer ray supplied by a 3D viewer input adapter."""
 
@@ -217,6 +246,7 @@ class BIMEditOperation:
         interaction_intent="",
         preview_shape=None,
         preview_representation=None,
+        preview_state=None,
         preview_label=None,
     ):
         self.key = str(key)
@@ -233,6 +263,7 @@ class BIMEditOperation:
         self.interaction_intent = str(interaction_intent)
         self._preview_shape = preview_shape
         self._preview_representation = preview_representation
+        self._preview_state = preview_state
         self._preview_label = preview_label
 
     def get_preview_shape(self, source, value, context):
@@ -244,6 +275,14 @@ class BIMEditOperation:
         if not callable(self._preview_representation):
             return None
         return self._preview_representation(source, value, context)
+
+    def get_preview_state(self, source, value, context):
+        if not callable(self._preview_state):
+            return None
+        state = self._preview_state(source, value, context)
+        if state is not None and not isinstance(state, BIMPreviewState):
+            raise TypeError("preview_state must return BIMPreviewState")
+        return state
 
     def get_preview_label(self, source, value, context):
         if not callable(self._preview_label):

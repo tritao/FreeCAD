@@ -85,6 +85,8 @@ class ContextualRepresentationRenderer:
         self._handle_color_fields = {}
         self._handle_switches = {}
         self._preview_nodes = {}
+        self._preview_replaced_sources = set()
+        self._preview_groups = {}
         self._preview_label_nodes = {}
         self._preview_label_parts = {}
         self._visible_handle_sources = set()
@@ -240,6 +242,8 @@ class ContextualRepresentationRenderer:
         self._handle_switches.clear()
         self._preview_label_nodes.clear()
         self._preview_label_parts.clear()
+        self._preview_replaced_sources.clear()
+        self._preview_groups.clear()
         self._visible_handle_sources.clear()
         self._hidden_sources.clear()
         self.root.unref()
@@ -297,6 +301,48 @@ class ContextualRepresentationRenderer:
         self.root.addChild(node)
         self._preview_nodes[source] = node
         return True
+
+    def set_preview_state(self, state, valid=True):
+        """Atomically realize all representations belonging to one edit state."""
+
+        self._clear_preview_geometry()
+        color = (0.12, 0.38, 0.95) if valid else (0.9, 0.05, 0.05)
+        pending = []
+        for entry in state.entries:
+            representation = entry.representation
+            replace_committed = entry.replace_committed
+            source = representation.source
+            node = coin.SoSeparator()
+            node.ref()
+            entry_color = (0.82, 0.82, 0.82) if replace_committed and valid else color
+            entry_transparency = 0.0 if replace_committed and valid else 0.65
+            self._append_faces(
+                node,
+                representation,
+                color=entry_color,
+                transparency=entry_transparency,
+                record_mappings=False,
+            )
+            self._append_lines(
+                node,
+                representation,
+                color=(0.08, 0.08, 0.08) if replace_committed and valid else color,
+                line_width=2.0,
+                record_mappings=False,
+            )
+            if node.getNumChildren() == 0:
+                node.unref()
+                continue
+            pending.append((source, node, replace_committed))
+        for source, node, replace_committed in pending:
+            if valid and replace_committed and source in self._object_nodes:
+                self._object_nodes[source].whichChild = coin.SO_SWITCH_NONE
+                self._preview_replaced_sources.add(source)
+            self.root.addChild(node)
+            self._preview_nodes[source] = node
+        if pending:
+            self._preview_groups[state.primary_source] = tuple(item[0] for item in pending)
+        return bool(pending)
 
     def set_edit_label(self, source, text, point, valid=True):
         """Show one viewer-local constant-pixel measurement label."""
@@ -357,7 +403,13 @@ class ContextualRepresentationRenderer:
     def _clear_preview_geometry(self, source=None):
         """Remove preview geometry while retaining any live edit label."""
 
-        sources = tuple(self._preview_nodes) if source is None else (source,)
+        sources = (
+            tuple(self._preview_nodes)
+            if source is None
+            else self._preview_groups.pop(source, (source,))
+        )
+        if source is None:
+            self._preview_groups.clear()
         changed = False
         for item in sources:
             node = self._preview_nodes.pop(item, None)
@@ -365,6 +417,12 @@ class ContextualRepresentationRenderer:
                 self.root.removeChild(node)
                 node.unref()
                 changed = True
+        restore = tuple(item for item in sources if item in self._preview_replaced_sources)
+        for item in restore:
+            node = self._object_nodes.get(item)
+            if node is not None:
+                node.whichChild = coin.SO_SWITCH_ALL
+            self._preview_replaced_sources.discard(item)
         return changed
 
     def _record_node(self, node, representation, geometry):

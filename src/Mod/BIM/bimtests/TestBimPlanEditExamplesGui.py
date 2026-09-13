@@ -296,6 +296,8 @@ class TestBimPlanEditExamplesGui(TestArchBaseGui):
             self.assertTrue(preview.validation.allowed)
             self.assertEqual(preview_width, ArchWindow.getWindowWidthMm(door))
             self.assertIn(door, session.contextual_rendering.renderer._preview_nodes)
+            self.assertIn(host, session.contextual_rendering.renderer._preview_nodes)
+            self.assertIn(host, session.contextual_rendering.renderer._preview_replaced_sources)
             label_node = session.contextual_rendering.renderer._preview_label_nodes[door]
             search = coin.SoSearchAction()
             search.setType(coin.SoType.fromName("SoFrameLabel"))
@@ -307,9 +309,25 @@ class TestBimPlanEditExamplesGui(TestArchBaseGui):
                 session.contextual_rendering.renderer._preview_nodes[door].getNumChildren(),
                 0,
             )
+            first_wall_preview = session.contextual_rendering.renderer._preview_nodes[host]
+            session.contextual_editing.preview(
+                preview_handle.point + preview_handle.direction * 50.0
+            )
+            session.viewport.flush_scene_graph_mutations()
+            self.assertIsNot(
+                first_wall_preview,
+                session.contextual_rendering.renderer._preview_nodes[host],
+            )
+            self.assertEqual(preview_width, ArchWindow.getWindowWidthMm(door))
             session.contextual_editing.cancel()
             session.viewport.flush_scene_graph_mutations()
             self.assertNotIn(door, session.contextual_rendering.renderer._preview_nodes)
+            self.assertNotIn(host, session.contextual_rendering.renderer._preview_nodes)
+            self.assertNotIn(host, session.contextual_rendering.renderer._preview_replaced_sources)
+            self.assertEqual(
+                coin.SO_SWITCH_ALL,
+                session.contextual_rendering.renderer._object_nodes[host].whichChild.getValue(),
+            )
             self.assertNotIn(door, session.contextual_rendering.renderer._preview_label_nodes)
 
             session.contextual_editing.begin(preview_handle)
@@ -322,8 +340,16 @@ class TestBimPlanEditExamplesGui(TestArchBaseGui):
             session.viewport.flush_scene_graph_mutations()
             self.assertFalse(invalid_preview.validation.allowed)
             self.assertIn(door, session.contextual_rendering.renderer._preview_nodes)
+            self.assertIn(host, session.contextual_rendering.renderer._preview_nodes)
+            self.assertNotIn(host, session.contextual_rendering.renderer._preview_replaced_sources)
+            self.assertEqual(
+                coin.SO_SWITCH_ALL,
+                session.contextual_rendering.renderer._object_nodes[host].whichChild.getValue(),
+            )
             session.contextual_editing.cancel()
             session.viewport.flush_scene_graph_mutations()
+            self.assertNotIn(door, session.contextual_rendering.renderer._preview_nodes)
+            self.assertNotIn(host, session.contextual_rendering.renderer._preview_nodes)
 
             for role, offset in (("OpeningPosition", 75.0), ("OpeningRightJamb", 50.0)):
                 handles = select_and_sync()

@@ -194,18 +194,31 @@ class ContextualEditController:
         self._call_renderer("preview_handle", preview.handle, preview.point)
         state = "active" if preview.validation.allowed else "invalid"
         self._call_renderer("set_handle_state", preview.handle, state)
-        representation = preview.handle.operation.get_preview_representation(
+        preview_state = preview.handle.operation.get_preview_state(
             preview.handle.source,
             preview.value,
             self.editor.context,
         )
+        representation = None
+        if preview_state is None:
+            representation = preview.handle.operation.get_preview_representation(
+                preview.handle.source,
+                preview.value,
+                self.editor.context,
+            )
         shape = preview.handle.operation.get_preview_shape(
             preview.handle.source,
             preview.value,
             self.editor.context,
         )
         source = preview.handle.source
-        if representation is not None:
+        if preview_state is not None:
+            self._call_renderer(
+                "set_preview_state",
+                preview_state,
+                preview.validation.allowed,
+            )
+        elif representation is not None:
             self._call_renderer(
                 "set_preview_representation",
                 source,

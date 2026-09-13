@@ -549,7 +549,25 @@ class TestArchRepresentation(unittest.TestCase):
             position.operation.get_value(opening) + 100.0,
             representation.context,
         )
+        preview_state = position.operation.get_preview_state(
+            opening,
+            position.operation.get_value(opening) + 100.0,
+            representation.context,
+        )
         self.assertTrue(preview.cut_geometry)
+        self.assertIs(preview_state.primary_source, opening)
+        self.assertEqual(
+            {opening, wall},
+            {item.representation.source for item in preview_state.entries},
+        )
+        self.assertEqual(
+            {wall},
+            {
+                item.representation.source
+                for item in preview_state.entries
+                if item.replace_committed
+            },
+        )
         self.assertEqual(
             {"OpeningJambLine", "OpeningSymbol", "OpeningGuide"},
             {mapping.role for mapping in preview.source_mappings} - {"OpeningPreviewCut"},
@@ -560,6 +578,33 @@ class TestArchRepresentation(unittest.TestCase):
                 position.operation.get_value(opening) + 100.0,
                 representation.context,
             ).startswith("Offset: ")
+        )
+
+        current_position = position.operation.get_value(opening)
+        current_opening = position.operation.get_preview_representation(
+            opening, current_position, representation.context
+        ).cut_geometry[0]
+        proposed_position = current_position + 1000.0
+        proposed_opening = position.operation.get_preview_representation(
+            opening, proposed_position, representation.context
+        ).cut_geometry[0]
+        moved_state = position.operation.get_preview_state(
+            opening, proposed_position, representation.context
+        )
+        preview_wall = next(
+            entry.representation
+            for entry in moved_state.entries
+            if entry.representation.source is wall
+        )
+        committed_wall = wall.Proxy.getRepresentation(wall, representation.context)
+        newly_open = proposed_opening.cut(current_opening)
+        self.assertGreater(newly_open.Area, 1.0)
+        newly_open_point = newly_open.CenterOfMass
+        self.assertTrue(
+            any(face.isInside(newly_open_point, 1e-7, True) for face in committed_wall.cut_geometry)
+        )
+        self.assertFalse(
+            any(face.isInside(newly_open_point, 1e-7, True) for face in preview_wall.cut_geometry)
         )
         self.assertEqual(before, base.Placement)
 

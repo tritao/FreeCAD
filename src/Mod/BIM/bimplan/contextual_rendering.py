@@ -123,6 +123,18 @@ class PlanContextualRenderingAPI:
             ),
         )
 
+    def set_preview_state(self, state, valid=True):
+        renderer = self._renderer
+        if renderer is None:
+            return False
+        source = state.primary_source
+        return self._session.viewport.queue_scene_graph_mutation(
+            ("contextual-preview-state", source),
+            lambda: (
+                renderer.set_preview_state(state, valid) if self._renderer is renderer else False
+            ),
+        )
+
     def clear_preview(self, source=None):
         renderer = self._renderer
         if renderer is None:

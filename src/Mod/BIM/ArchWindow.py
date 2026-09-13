@@ -694,6 +694,9 @@ def _opening_position_edit_operation(helper):
         preview_representation=lambda _source, value, context: (
             helper.get_plan_edit_preview_representation("OpeningPosition", value, context)
         ),
+        preview_state=lambda _source, value, context: helper.get_plan_edit_preview_state(
+            "OpeningPosition", value, context
+        ),
         preview_label=lambda _source, value, context: helper.get_plan_edit_preview_label(
             "OpeningPosition", value, context
         ),
@@ -764,6 +767,9 @@ def _opening_width_edit_operation(helper, side):
             helper.get_plan_edit_preview_representation(
                 "Opening{}Jamb".format(side), value, context
             )
+        ),
+        preview_state=lambda _source, value, context: helper.get_plan_edit_preview_state(
+            "Opening{}Jamb".format(side), value, context
         ),
         preview_label=lambda _source, value, context: helper.get_plan_edit_preview_label(
             "Opening{}Jamb".format(side), value, context
@@ -2447,6 +2453,66 @@ class _HostedOpeningRepresentationGeometry:
                     subelement="Preview.{}{}".format(geometry_role, index),
                 )
         return representation
+
+    def get_plan_edit_preview_state(self, role, value, context):
+        """Build one proposed opening state and its affected host wall cut."""
+
+        proposed = self.get_plan_edit_preview_representation(role, value, context)
+        if proposed is None:
+            return None
+        state = ArchRepresentation.BIMPreviewState(self.Object)
+        state.add_representation(proposed)
+        host = next(iter(getattr(self.Object, "Hosts", None) or ()), None)
+        if host is None:
+            return state
+        try:
+            host_representation = ArchRepresentation.representation_for(host, context)
+        except ArchRepresentation.RepresentationUnavailable:
+            return state
+
+        cut_z = getattr(context, "cut_offset", None)
+        base_z = getattr(context, "target_offset", None)
+        profile = self._get_hosted_opening_plan_frame(self.Object.Shape, cut_z, base_z)
+        if not profile:
+            return state
+        current_values = {
+            "OpeningPosition": (profile["umin"] + profile["umax"]) * 0.5,
+            "OpeningLeftJamb": profile["umin"],
+            "OpeningRightJamb": profile["umax"],
+        }
+        if role not in current_values:
+            return state
+        current = self.get_plan_edit_preview_representation(role, current_values[role], context)
+        current_voids = tuple(current.cut_geometry) if current is not None else ()
+        proposed_voids = tuple(proposed.cut_geometry)
+        if not current_voids or not proposed_voids:
+            return state
+
+        preview_host = ArchRepresentation.BIMRepresentation(source=host, context=context)
+        result_faces = []
+        for face in host_representation.cut_geometry:
+            result = face
+            for void in current_voids:
+                result = result.fuse(void)
+            for void in proposed_voids:
+                result = result.cut(void)
+            result_faces.extend(result.Faces)
+        for index, face in enumerate(result_faces, start=1):
+            preview_host.add_geometry(
+                "cut_geometry", face, "PlanCutFace", subelement=f"PlanFace{index}"
+            )
+            for wire_index, wire in enumerate(face.Wires, start=1):
+                points = tuple(FreeCAD.Vector(vertex.Point) for vertex in wire.Vertexes)
+                if len(points) > 1:
+                    preview_host.add_geometry(
+                        "projected_geometry",
+                        (*points, points[0]),
+                        "PlanCutBoundary",
+                        subelement=f"PlanFace{index}.Wire{wire_index}",
+                    )
+        if preview_host.cut_geometry:
+            state.add_representation(preview_host, replace_committed=True)
+        return state
 
     def get_plan_edit_preview_label(self, role, value, context):
         """Format the architectural measurement represented by an opening edit."""
