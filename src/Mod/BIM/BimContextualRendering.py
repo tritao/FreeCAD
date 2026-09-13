@@ -318,7 +318,12 @@ class ContextualRepresentationRenderer:
         """Atomically realize all representations belonging to one edit state."""
 
         self._clear_preview_geometry()
-        color = (0.12, 0.38, 0.95) if valid else (0.9, 0.05, 0.05)
+        styles = {
+            ArchRepresentation.BIMPreviewStyle.AVAILABLE: ((0.12, 0.38, 0.95), 0.65, 2.0),
+            ArchRepresentation.BIMPreviewStyle.EMPHASIZED: ((0.90, 0.42, 0.05), 0.42, 3.0),
+            ArchRepresentation.BIMPreviewStyle.MUTED: ((0.45, 0.45, 0.45), 0.78, 1.5),
+            ArchRepresentation.BIMPreviewStyle.INVALID: ((0.9, 0.05, 0.05), 0.65, 2.0),
+        }
         pending = []
         for entry in state.entries:
             representation = entry.representation
@@ -326,8 +331,14 @@ class ContextualRepresentationRenderer:
             source = representation.source
             node = coin.SoSeparator()
             node.ref()
+            color, transparency, line_width = styles.get(
+                entry.style,
+                styles[ArchRepresentation.BIMPreviewStyle.AVAILABLE],
+            )
+            if not valid:
+                color, transparency, line_width = styles[ArchRepresentation.BIMPreviewStyle.INVALID]
             entry_color = (0.82, 0.82, 0.82) if replace_committed and valid else color
-            entry_transparency = 0.0 if replace_committed and valid else 0.65
+            entry_transparency = 0.0 if replace_committed and valid else transparency
             self._append_faces(
                 node,
                 representation,
@@ -339,7 +350,7 @@ class ContextualRepresentationRenderer:
                 node,
                 representation,
                 color=(0.08, 0.08, 0.08) if replace_committed and valid else color,
-                line_width=2.0,
+                line_width=line_width,
                 record_mappings=False,
             )
             if node.getNumChildren() == 0:

@@ -71,8 +71,11 @@ def discard_runtime_references(session):
     space_region_pick_state.candidates = []
     space_region_pick_state.hovered_candidate = None
     space_region_pick_state.seed_space = None
+    space_region_pick_state.edit_space = None
+    space_region_pick_state.preview_key = None
+    space_region_pick_state.preview_sources = {}
     plan_region_tool_state.points = []
-    plan_region_tool_state.preview_trackers = []
+    plan_region_tool_state.preview_source = None
     plan_region_tool_state.parent_space = None
     session.interaction_state.edit_space = None
 

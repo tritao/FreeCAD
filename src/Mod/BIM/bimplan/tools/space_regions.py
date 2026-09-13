@@ -134,6 +134,8 @@ def set_space_region_pick_state(
     state.hovered_candidate = hovered_candidate
     state.seed_space = seed_space
     state.edit_space = edit_space
+    state.preview_key = None
+    state.preview_sources = {}
 
 
 def _get_space_region_pick_candidates(session):
@@ -170,9 +172,9 @@ def _get_space_region_pick_context(session):
 
 
 def reset_space_region_pick_state(session, clear_overlays=True):
-    set_space_region_pick_state(session)
     if clear_overlays:
         session.overlays.spaces.clear_space_region_pick_overlays()
+    set_space_region_pick_state(session)
 
 
 def _finish_created_space(session, space, event_callback=None, claim_click=False):

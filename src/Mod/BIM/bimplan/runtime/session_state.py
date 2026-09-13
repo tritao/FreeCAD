@@ -165,6 +165,8 @@ class SpaceRegionPickState:
     edit_space: object = None
     candidates: list = field(default_factory=list)
     hovered_candidate: object = None
+    preview_key: object = None
+    preview_sources: dict = field(default_factory=dict)
 
 
 @dataclass
@@ -310,7 +312,6 @@ class PlanOverlayTrackerState:
     region_overlay_trackers: list = field(default_factory=list)
     provider_overlay_trackers: list = field(default_factory=list)
     secondary_selection_trackers: list = field(default_factory=list)
-    space_region_pick_trackers: list = field(default_factory=list)
     selected_wall_opening_context_trackers: list = field(default_factory=list)
     symbol_handle_trackers: list = field(default_factory=list)
 

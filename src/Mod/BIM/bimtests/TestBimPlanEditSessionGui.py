@@ -9,6 +9,7 @@ import Arch
 import ArchWallRelation
 import FreeCAD
 import FreeCADGui
+import Part
 from pivy import coin
 from ArchRepresentation import BIMEditRay, RepresentationContext
 from bimtests.TestArchBaseGui import TestArchBaseGui
@@ -292,6 +293,77 @@ class TestBimPlanEditSessionGui(TestArchBaseGui):
             self.assertTrue(session.contextual_rendering.clear_preview(source))
             session.viewport.flush_scene_graph_mutations()
             self.assertNotIn(source, renderer._preview_nodes)
+        finally:
+            session.shutdown(close_dialog=False)
+
+    def test_space_candidate_preview_keeps_identity_across_hover_updates(self):
+        import ArchRepresentation
+        from bimplan.overlays import spaces as overlay_spaces
+        from bimplan.tools import space_regions
+
+        self.assertIs(
+            overlay_spaces._space_candidate_preview_style({"claimed": True}),
+            ArchRepresentation.BIMPreviewStyle.MUTED,
+        )
+        self.assertIs(
+            overlay_spaces._space_candidate_preview_style({"valid": False}, hovered=True),
+            ArchRepresentation.BIMPreviewStyle.INVALID,
+        )
+
+        session = PlanEditSession()
+        self.assertTrue(session.enter())
+        try:
+            face_a = Part.Face(
+                Part.makePolygon(
+                    [
+                        FreeCAD.Vector(0, 0, 0),
+                        FreeCAD.Vector(800, 0, 0),
+                        FreeCAD.Vector(800, 600, 0),
+                        FreeCAD.Vector(0, 600, 0),
+                        FreeCAD.Vector(0, 0, 0),
+                    ]
+                )
+            )
+            face_b = face_a.copy()
+            face_b.translate(FreeCAD.Vector(1000, 0, 0))
+            candidate_a = {"index": 1, "face": face_a}
+            candidate_b = {"index": 2, "face": face_b}
+            session.current_tool = "Pick Space Region"
+            session.space_region_pick_state.candidates = [candidate_a, candidate_b]
+
+            captured = []
+            original = session.contextual_rendering.set_preview_state
+
+            def capture(state, valid=True):
+                captured.append(state)
+                return original(state, valid=valid)
+
+            with patch.object(session.contextual_rendering, "set_preview_state", capture):
+                overlay_spaces.sync_space_region_pick_overlays(session)
+                initial_sources = dict(session.space_region_pick_state.preview_sources)
+                session.space_region_pick_state.hovered_candidate = candidate_b
+                overlay_spaces.sync_space_region_pick_overlays(session)
+
+            self.assertEqual(initial_sources, session.space_region_pick_state.preview_sources)
+            self.assertEqual(2, len(captured[-1].entries))
+            self.assertIs(
+                captured[-1].entry_for(initial_sources[1]).style,
+                ArchRepresentation.BIMPreviewStyle.AVAILABLE,
+            )
+            self.assertIs(
+                captured[-1].entry_for(initial_sources[2]).style,
+                ArchRepresentation.BIMPreviewStyle.EMPHASIZED,
+            )
+            session.viewport.flush_scene_graph_mutations()
+            renderer = session.contextual_rendering.renderer
+            self.assertEqual(set(initial_sources.values()), set(renderer._preview_nodes))
+
+            preview_key = session.space_region_pick_state.preview_key
+            space_regions.reset_space_region_pick_state(session)
+            session.viewport.flush_scene_graph_mutations()
+            self.assertFalse(renderer._preview_nodes)
+            self.assertIsNone(session.space_region_pick_state.preview_key)
+            self.assertIsNotNone(preview_key)
         finally:
             session.shutdown(close_dialog=False)
 

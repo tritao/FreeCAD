@@ -2,6 +2,9 @@
 
 """Space and region overlay helpers for BIM Plan Edit."""
 
+import ArchRepresentation
+import FreeCAD
+
 from bimplan.tools import space_regions as plan_space_regions
 
 from . import geometry as overlay_geometry
@@ -21,7 +24,9 @@ class PlanSpaceOverlayService:
         return self._session
 
     def discard_runtime_references(self):
-        self.session.overlay_tracker_state.space_region_pick_trackers = []
+        state = self.session.space_region_pick_state
+        state.preview_key = None
+        state.preview_sources = {}
 
     def sync_secondary_selected_overlays(self, *args, **kwargs):
         return sync_secondary_selected_overlays(self.session, *args, **kwargs)
@@ -151,46 +156,84 @@ def clear_secondary_selected_overlays(session):
 
 
 def sync_space_region_pick_overlays(session):
-    tracker_state = _space_tracker_state(session)
-    clear_space_region_pick_overlays(session)
     if session.current_tool != "Pick Space Region":
+        clear_space_region_pick_overlays(session)
         return
-    try:
-        import draftguitools.gui_trackers as DraftTrackers
-    except ImportError:
+    candidates = plan_space_regions.get_space_region_pick_candidates(session)
+    if not candidates:
+        clear_space_region_pick_overlays(session)
         return
 
+    state = session.space_region_pick_state
+    if state.preview_key is None:
+        state.preview_key = object()
+    preview = ArchRepresentation.BIMPreviewState(state.preview_key)
     hovered_candidate = plan_space_regions.get_hovered_space_region_candidate(session)
-    for candidate in plan_space_regions.get_space_region_pick_candidates(session):
+    live_keys = set()
+    for ordinal, candidate in enumerate(candidates):
+        candidate_key = candidate.get("index", ordinal)
+        try:
+            hash(candidate_key)
+        except TypeError:
+            candidate_key = ordinal
+        live_keys.add(candidate_key)
+        source = state.preview_sources.setdefault(candidate_key, object())
         hovered = candidate is hovered_candidate
-        color = (0.90, 0.52, 0.10) if hovered else (0.22, 0.44, 0.88)
-        width = session.viewport.scaled_line_width(3 if hovered else 2)
-        dotted = not hovered
+        representation = ArchRepresentation.BIMRepresentation(
+            source=source,
+            context=session.representation_context.context,
+        )
+        face = candidate.get("face") if isinstance(candidate, dict) else None
+        if face is not None and not face.isNull():
+            representation.add_geometry(
+                "cut_geometry",
+                face,
+                "SpaceCandidateFill",
+                subelement=f"Candidate{candidate_key}",
+            )
         for polyline in plan_space_regions.get_space_region_candidate_polylines(
             session,
             candidate,
         ):
             if len(polyline) < 2:
                 continue
-            for start, end in zip(polyline, polyline[1:]):
-                tracker = overlay_manager.make_plan_line_tracker(
-                    DraftTrackers,
-                    "space-region-pick:{}".format(candidate.get("index", "unknown")),
-                    dotted=dotted,
-                    scolor=color,
-                    swidth=width,
-                    ontop=True,
-                )
-                tracker.p1(start)
-                tracker.p2(end)
-                tracker.on()
-                tracker_state.space_region_pick_trackers.append(tracker)
+            representation.add_geometry(
+                "projected_geometry",
+                tuple(FreeCAD.Vector(point) for point in polyline),
+                "SpaceCandidateBoundary",
+                subelement=f"Candidate{candidate_key}",
+            )
+        if representation.cut_geometry or representation.projected_geometry:
+            preview.add_representation(
+                representation,
+                affects_spatial_boundary=False,
+                style=_space_candidate_preview_style(candidate, hovered=hovered),
+            )
+    state.preview_sources = {
+        key: source for key, source in state.preview_sources.items() if key in live_keys
+    }
+    session.contextual_rendering.set_preview_state(preview)
+
+
+def _space_candidate_preview_style(candidate, *, hovered=False):
+    """Translate candidate semantics into renderer-neutral presentation intent."""
+
+    if not isinstance(candidate, dict) or candidate.get("valid", True) is False:
+        return ArchRepresentation.BIMPreviewStyle.INVALID
+    state = str(candidate.get("state", "") or "").strip().lower()
+    if candidate.get("claimed", False) or state == "claimed":
+        return ArchRepresentation.BIMPreviewStyle.MUTED
+    if hovered:
+        return ArchRepresentation.BIMPreviewStyle.EMPHASIZED
+    return ArchRepresentation.BIMPreviewStyle.AVAILABLE
 
 
 def clear_space_region_pick_overlays(session):
-    tracker_state = _space_tracker_state(session)
-    overlay_manager.finalize_trackers(tracker_state.space_region_pick_trackers)
-    tracker_state.space_region_pick_trackers = []
+    state = session.space_region_pick_state
+    if state.preview_key is not None:
+        session.contextual_rendering.clear_preview(state.preview_key)
+    state.preview_key = None
+    state.preview_sources = {}
 
 
 def create_space_overlay_trackers(session, space, color, width, tracker_store):

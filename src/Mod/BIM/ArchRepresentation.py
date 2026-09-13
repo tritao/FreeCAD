@@ -27,6 +27,15 @@ class RepresentationPurpose(Enum):
     ELEVATION = "Elevation"
 
 
+class BIMPreviewStyle(Enum):
+    """Renderer-neutral presentation intent for transient semantic geometry."""
+
+    AVAILABLE = "Available"
+    EMPHASIZED = "Emphasized"
+    MUTED = "Muted"
+    INVALID = "Invalid"
+
+
 class RepresentationContext:
     """GUI-independent inputs used to derive a BIM representation.
 
@@ -76,6 +85,7 @@ class BIMPreviewEntry:
     representation: object
     replace_committed: bool = False
     affects_spatial_boundary: bool = True
+    style: BIMPreviewStyle = BIMPreviewStyle.AVAILABLE
 
 
 class BIMPreviewState:
@@ -96,14 +106,18 @@ class BIMPreviewState:
         *,
         replace_committed=False,
         affects_spatial_boundary=True,
+        style=BIMPreviewStyle.AVAILABLE,
     ):
         if not isinstance(representation, BIMRepresentation):
             raise TypeError("preview entries must be BIMRepresentation instances")
+        if not isinstance(style, BIMPreviewStyle):
+            style = BIMPreviewStyle(style)
         self._entries.append(
             BIMPreviewEntry(
                 representation,
                 bool(replace_committed),
                 bool(affects_spatial_boundary),
+                style,
             )
         )
         return representation

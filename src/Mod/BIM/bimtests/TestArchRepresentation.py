@@ -15,6 +15,7 @@ from ArchRepresentation import (
     BIMEditHandle,
     BIMEditOperation,
     BIMPreviewState,
+    BIMPreviewStyle,
     BIMEditTransaction,
     BIMEditCapabilities,
     BIMRepresentation,
@@ -100,6 +101,10 @@ class TestArchRepresentation(unittest.TestCase):
         self.assertIs(entry.representation, representation)
         self.assertTrue(entry.replace_committed)
         self.assertFalse(entry.affects_spatial_boundary)
+        self.assertIs(entry.style, BIMPreviewStyle.AVAILABLE)
+
+        state.add_representation(representation, style="Emphasized")
+        self.assertIs(state.entries[-1].style, BIMPreviewStyle.EMPHASIZED)
 
     def test_space_areas_use_semantic_footprint_without_generic_projection(self):
         document = FreeCAD.newDocument("SemanticSpaceArea")
