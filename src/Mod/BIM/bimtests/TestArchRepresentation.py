@@ -48,9 +48,25 @@ from bimplan.contextual_editing import (
     ContextualEditController,
 )
 from bimplan.editable_points import get_contextual_edit_points
+from bimplan.wall_semantic import evaluate_wall_candidate, evaluate_wall_length
 
 
 class TestArchRepresentation(unittest.TestCase):
+    def test_wall_move_and_stretch_share_viewer_independent_evaluation(self):
+        endpoints = (FreeCAD.Vector(0, 0, 0), FreeCAD.Vector(3000, 0, 0))
+
+        moved = evaluate_wall_candidate(endpoints, "Move", FreeCAD.Vector(1600, 400, 0))
+        self.assertTrue(moved.allowed)
+        self.assertTrue(moved.endpoints[0].isEqual(FreeCAD.Vector(100, 400, 0), 1e-7))
+        self.assertTrue(moved.endpoints[1].isEqual(FreeCAD.Vector(3100, 400, 0), 1e-7))
+
+        stretched = evaluate_wall_length(endpoints, "Start", 2500)
+        self.assertTrue(stretched.allowed)
+        self.assertTrue(stretched.endpoints[0].isEqual(FreeCAD.Vector(500, 0, 0), 1e-7))
+        rejected = evaluate_wall_candidate(endpoints, "End", FreeCAD.Vector(5, 0, 0))
+        self.assertFalse(rejected.allowed)
+        self.assertIn("10 mm", rejected.reason)
+
     def test_plan_action_contracts_extend_contextual_contracts(self):
         context = ContextualProviderContext(
             representation_context=RepresentationContext(purpose="Model"),

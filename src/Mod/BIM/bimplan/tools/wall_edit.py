@@ -9,10 +9,15 @@ import FreeCADGui
 from bimplan.runtime import capabilities as runtime_capabilities
 from bimplan.runtime import tools as plan_runtime_tools
 from bimplan.transactions import PlanEditTransaction
+from bimplan.wall_semantic import (
+    MINIMUM_WALL_LENGTH,
+    evaluate_wall_candidate,
+    evaluate_wall_length,
+)
 
 translate = FreeCAD.Qt.translate
 
-_MIN_WALL_LENGTH = 10.0
+_MIN_WALL_LENGTH = MINIMUM_WALL_LENGTH
 
 
 def _wall_edit_state(session):
@@ -527,31 +532,8 @@ def compute_wall_edit_points(session, point):
     if point is None or not endpoint or not original_endpoints:
         return None
 
-    point = FreeCAD.Vector(point)
-    if endpoint == "Start":
-        fixed = FreeCAD.Vector(original_endpoints[1])
-        axis = FreeCAD.Vector(original_endpoints[0]).sub(fixed)
-        if axis.Length < _MIN_WALL_LENGTH:
-            return None
-        axis.normalize()
-        length = point.sub(fixed).dot(axis)
-        if length < _MIN_WALL_LENGTH:
-            return None
-        return [fixed + axis * length, fixed]
-    elif endpoint == "End":
-        fixed = FreeCAD.Vector(original_endpoints[0])
-        axis = FreeCAD.Vector(original_endpoints[1]).sub(fixed)
-        if axis.Length < _MIN_WALL_LENGTH:
-            return None
-        axis.normalize()
-        length = point.sub(fixed).dot(axis)
-        if length < _MIN_WALL_LENGTH:
-            return None
-        return [fixed, fixed + axis * length]
-
-    original_midpoint = (original_endpoints[0] + original_endpoints[1]) * 0.5
-    delta = point.sub(original_midpoint)
-    return [original_endpoints[0].add(delta), original_endpoints[1].add(delta)]
+    evaluation = evaluate_wall_candidate(original_endpoints, endpoint, point)
+    return list(evaluation.endpoints) if evaluation.allowed else None
 
 
 def compute_wall_edit_points_from_length(session, length):
@@ -561,18 +543,8 @@ def compute_wall_edit_points_from_length(session, length):
     if endpoint not in ("Start", "End") or not original_endpoints:
         return None
 
-    length = max(float(length), _MIN_WALL_LENGTH)
-    axis = original_endpoints[1].sub(original_endpoints[0])
-    if axis.Length < _MIN_WALL_LENGTH:
-        return None
-    axis.normalize()
-
-    if endpoint == "Start":
-        end = original_endpoints[1]
-        return [end.sub(FreeCAD.Vector(axis).multiply(length)), end]
-
-    start = original_endpoints[0]
-    return [start, start.add(FreeCAD.Vector(axis).multiply(length))]
+    evaluation = evaluate_wall_length(original_endpoints, endpoint, length)
+    return list(evaluation.endpoints) if evaluation.allowed else None
 
 
 def get_preview_footprint(session, points, width=None, align=None):
