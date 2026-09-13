@@ -10,10 +10,11 @@ import ArchRepresentation
 
 from bimplan.runtime import tools as plan_runtime_tools
 from bimplan.runtime.embedded_commands import _PlanEditWallHost
+from bimplan import wall_construction
 
 translate = FreeCAD.Qt.translate
 
-_MIN_WALL_LENGTH = 10.0
+_MIN_WALL_LENGTH = wall_construction.MINIMUM_WALL_LENGTH
 
 
 def _creation_preview_state(session):
@@ -324,32 +325,26 @@ def update_rect_wall_preview(session, point, info):
 
 
 def create_rect_wall_run(session, corners):
-    from bimcommands import BimWall
-
     preview_state = _creation_preview_state(session)
-
-    walls = []
-    session.doc.openTransaction(translate("BIM_PlanEdit", "Create Rectangular Wall Run"))
-    try:
-        walls = BimWall.create_wall_run_from_points(
+    params = preview_state.rect_wall_params
+    spec = wall_construction.WallConstructionSpec(
+        width=params["width"],
+        height=params["height"],
+        align=params["align"],
+        offset=params["offset"],
+    )
+    return list(
+        wall_construction.construct_wall_run(
+            session.doc,
             corners,
-            width=preview_state.rect_wall_params["width"],
-            height=preview_state.rect_wall_params["height"],
-            align=preview_state.rect_wall_params["align"],
-            offset=preview_state.rect_wall_params["offset"],
+            spec,
+            transaction_name=translate(
+                "BIM_PlanEdit", "Create Rectangular Wall Run"
+            ),
             closed=True,
             on_created=session.visibility.register_plan_object,
         )
-        BimWall.autojoin_wall_run(walls, closed=True)
-        session.doc.commitTransaction()
-        session.doc.recompute()
-    except Exception:
-        try:
-            session.doc.abortTransaction()
-        except Exception:
-            pass
-        raise
-    return walls
+    )
 
 
 def handle_rect_wall_point(session, point=None, obj=None):
