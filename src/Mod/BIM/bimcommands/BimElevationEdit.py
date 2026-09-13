@@ -6,21 +6,7 @@ import FreeCAD
 import FreeCADGui
 
 import ArchRepresentation
-from bimcommands.BimSectionEdit import _selected_section_plane
-
-
-def _elevation_context(source):
-    supplied = source.Proxy.getRepresentationContext(source)
-    return ArchRepresentation.RepresentationContext(
-        purpose=ArchRepresentation.RepresentationPurpose.ELEVATION,
-        reference_frame=supplied.reference_frame,
-        cut_range=supplied.cut_range,
-        projection_range=supplied.projection_range,
-        profile=supplied.profile,
-        source=source,
-        cut_offset=supplied.cut_offset,
-        target_offset=supplied.target_offset,
-    )
+from bimcommands.BimSectionEdit import _selected_context_source
 
 
 class BIM_ElevationEdit:
@@ -39,7 +25,10 @@ class BIM_ElevationEdit:
     def IsActive(self):
         return (
             FreeCAD.ActiveDocument is not None
-            and _selected_section_plane() is not None
+            and _selected_context_source(
+                ArchRepresentation.RepresentationPurpose.ELEVATION
+            )
+            is not None
         )
 
     def Activated(self):
@@ -49,11 +38,13 @@ class BIM_ElevationEdit:
         if session is not None:
             session.close()
             return
-        source = _selected_section_plane()
+        source = _selected_context_source(
+            ArchRepresentation.RepresentationPurpose.ELEVATION
+        )
         if source is None:
             return
         start_session(
-            context=_elevation_context(source),
+            context=source.Proxy.getRepresentationContext(source),
             sources=tuple(getattr(source, "Objects", ()) or ()),
             orient_to_context=True,
         )

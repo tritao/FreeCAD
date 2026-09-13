@@ -1239,6 +1239,19 @@ class _SectionPlane:
                 ),
                 locked=True,
             )
+        if "Purpose" not in pl:
+            obj.addProperty(
+                "App::PropertyEnumeration",
+                "Purpose",
+                "SectionPlane",
+                QT_TRANSLATE_NOOP(
+                    "App::Property",
+                    "The semantic view context represented by this plane.",
+                ),
+                locked=True,
+            )
+            obj.Purpose = ["Section", "Elevation"]
+            obj.Purpose = "Section"
 
     def onDocumentRestored(self, obj):
 
@@ -1285,8 +1298,9 @@ class _SectionPlane:
 
         depth = float(getattr(getattr(obj, "Depth", 0.0), "Value", 0.0))
 
+        purpose = ArchRepresentation.RepresentationPurpose(str(obj.Purpose))
         return ArchRepresentation.RepresentationContext(
-            purpose=ArchRepresentation.RepresentationPurpose.SECTION,
+            purpose=purpose,
             reference_frame=obj.Placement,
             cut_offset=0.0,
             target_offset=0.0,

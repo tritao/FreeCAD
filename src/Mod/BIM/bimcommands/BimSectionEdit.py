@@ -5,6 +5,8 @@
 import FreeCAD
 import FreeCADGui
 
+import ArchRepresentation
+
 
 def _selected_section_plane():
     selected = tuple(FreeCADGui.Selection.getSelection() or ())
@@ -14,6 +16,14 @@ def _selected_section_plane():
     ):
         return None
     return selected[0]
+
+
+def _selected_context_source(purpose=None):
+    source = _selected_section_plane()
+    if source is None or purpose is None:
+        return source
+    context = source.Proxy.getRepresentationContext(source)
+    return source if context.purpose == purpose else None
 
 
 class BIM_SectionEdit:
@@ -27,7 +37,9 @@ class BIM_SectionEdit:
         }
 
     def IsActive(self):
-        return FreeCAD.ActiveDocument is not None and _selected_section_plane() is not None
+        return FreeCAD.ActiveDocument is not None and _selected_context_source(
+            ArchRepresentation.RepresentationPurpose.SECTION
+        ) is not None
 
     def Activated(self):
         from bimplan.contextual_session import active_session, start_session
@@ -36,7 +48,9 @@ class BIM_SectionEdit:
         if session is not None:
             session.close()
             return
-        section = _selected_section_plane()
+        section = _selected_context_source(
+            ArchRepresentation.RepresentationPurpose.SECTION
+        )
         if section is None:
             return
         context = section.Proxy.getRepresentationContext(section)

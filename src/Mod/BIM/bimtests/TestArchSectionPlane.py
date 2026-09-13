@@ -72,6 +72,13 @@ class TestArchSectionPlane(TestArchBase.TestArchBase):
         self.assertEqual(context.reference_frame, section_plane.Placement)
         self.assertEqual(context.projection_range, (0.0, 2500.0))
 
+        section_plane.Purpose = "Elevation"
+        elevation = section_plane.Proxy.getRepresentationContext(section_plane)
+        self.assertIs(
+            elevation.purpose,
+            ArchRepresentation.RepresentationPurpose.ELEVATION,
+        )
+
     def testTechDrawUsesSemanticRepresentationWithoutLegacyCutShapes(self):
         """The production section path consumes provider geometry directly."""
 
