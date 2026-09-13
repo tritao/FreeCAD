@@ -13,7 +13,6 @@ from bimplan.tools.space_regions import PickSpaceRegionTool
 from bimplan.tools.spaces import RegionTool, SpaceSeparatorTool, SpaceTextTool
 from bimplan.tools.symbol_edit import SymbolEditTool
 from bimplan.tools.wall_create import RectWallTool
-from bimplan.tools.wall_edit import WallEditTool
 from bimplan.tools.wall_relations import JoinTool
 from bimplan.tools.window_create import WindowTool
 
@@ -313,7 +312,8 @@ def _handle_direct_tool_key_press(session, key, event_callback, coin):
 
 
 def _handle_global_key_press(session, key, event_callback, coin):
-    return WallEditTool(session).on_key(key, event_callback, coin)
+    del session, key, event_callback, coin
+    return False
 
 
 def _handle_escape_cancels(session):
