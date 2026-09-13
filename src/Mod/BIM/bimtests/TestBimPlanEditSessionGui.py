@@ -213,7 +213,7 @@ class TestBimPlanEditSessionGui(TestArchBaseGui):
 
     def test_plan_window_creation_uses_atomic_opening_construction(self):
         from bimcommands import BimWall
-        from bimplan.tools.window_create import create_window
+        from bimplan.tools.window_create import create_hosted_opening
 
         wall = BimWall.create_baseless_wall_from_endpoints(
             FreeCAD.Vector(0, 0, 0),
@@ -226,7 +226,7 @@ class TestBimPlanEditSessionGui(TestArchBaseGui):
         session = PlanEditSession()
         self.assertTrue(session.enter())
         try:
-            window = create_window(session, wall, FreeCAD.Vector(1200, 0, 0))
+            window = create_hosted_opening(session, wall, FreeCAD.Vector(1200, 0, 0))
             self.assertIn(wall, tuple(window.Hosts))
             self.assertEqual("Window", window.IfcType)
             self.assertAlmostEqual(900.0, window.Width.Value)
@@ -243,7 +243,7 @@ class TestBimPlanEditSessionGui(TestArchBaseGui):
 
     def test_plan_door_creation_uses_atomic_preset_construction(self):
         from bimcommands import BimWall
-        from bimplan.tools.window_create import create_window
+        from bimplan.tools.window_create import create_hosted_opening
 
         wall = BimWall.create_baseless_wall_from_endpoints(
             FreeCAD.Vector(0, 0, 0),
@@ -257,7 +257,7 @@ class TestBimPlanEditSessionGui(TestArchBaseGui):
         self.assertTrue(session.enter())
         try:
             session.creation_preview_state.opening_kind = "Door"
-            door = create_window(session, wall, FreeCAD.Vector(1200, 0, 0))
+            door = create_hosted_opening(session, wall, FreeCAD.Vector(1200, 0, 0))
             self.assertIn(wall, tuple(door.Hosts))
             self.assertEqual("Door", door.IfcType)
             self.assertAlmostEqual(900.0, door.Width.Value)
@@ -808,6 +808,70 @@ class TestBimPlanEditSessionGui(TestArchBaseGui):
         finally:
             session.close()
             FreeCADGui.Selection.clearSelection()
+
+    def test_contextual_opening_creation_has_cross_context_parity(self):
+        wall = Arch.makeWall(length=3000, width=200, height=2500, align="Left")
+        self.document.recompute()
+        view = FreeCADGui.ActiveDocument.ActiveView
+        results = {}
+
+        for kind in ("Window", "Door"):
+            for purpose in (
+                RepresentationPurpose.MODEL,
+                RepresentationPurpose.SECTION,
+                RepresentationPurpose.ELEVATION,
+            ):
+                context = RepresentationContext(purpose=purpose)
+                session = BIMContextualEditingSession(
+                    view, context=context, sources=(wall,)
+                )
+                try:
+                    self.pump_gui_events(20)
+                    callbacks = []
+                    session.host.request_point = (
+                        lambda callback, **_kwargs: callbacks.append(callback)
+                    )
+                    action_key = "create-{}".format(kind.lower())
+                    actions_by_key = {
+                        item.key: item for item in session.contextual_actions
+                    }
+                    self.assertIn(
+                        action_key,
+                        actions_by_key,
+                        "{} action missing in {}".format(kind, purpose.value),
+                    )
+                    action = actions_by_key[action_key]
+                    self.assertTrue(session.activate_action(action))
+                    self.assertEqual(1, len(callbacks))
+                    opening = callbacks[0](FreeCAD.Vector(1500, 0, 0), wall)
+                    self.document.recompute()
+                    self.assertEqual(kind, opening.IfcType)
+                    self.assertIn(wall, tuple(opening.Hosts))
+                    self.assertFalse(opening.Shape.isNull())
+                    results[(kind, purpose)] = (
+                        opening.Width.Value,
+                        opening.Height.Value,
+                        opening.Placement.Base,
+                        opening.Shape.Volume,
+                    )
+                    opening_name = opening.Name
+                finally:
+                    session.close()
+                self.document.undo()
+                self.document.recompute()
+                self.assertIsNone(self.document.getObject(opening_name))
+
+        for kind in ("Window", "Door"):
+            model = results[(kind, RepresentationPurpose.MODEL)]
+            for purpose in (
+                RepresentationPurpose.SECTION,
+                RepresentationPurpose.ELEVATION,
+            ):
+                result = results[(kind, purpose)]
+                self.assertAlmostEqual(model[0], result[0])
+                self.assertAlmostEqual(model[1], result[1])
+                self.assertLess(model[2].distanceToPoint(result[2]), 1e-7)
+                self.assertAlmostEqual(model[3], result[3], delta=1e-6)
 
     def test_standard_3d_ray_constraints_commit_path_move_and_offset(self):
         wall = Arch.makeWall(length=3000, width=200, height=2500, align="Left")

@@ -7,9 +7,14 @@ import FreeCADGui
 from PySide import QtCore
 
 import ArchRepresentation
+import ArchOpeningConstruction
 import BimContextualRendering
 from bimplan.contextual_action_ui import ContextualActionPanel
-from bimplan.contextual_actions import ContextualProviderContext, SemanticEditProvider
+from bimplan.contextual_actions import (
+    ContextualProviderContext,
+    HostedOpeningCreationProvider,
+    SemanticEditProvider,
+)
 from bimplan.contextual_editing import ContextualEditController
 from draftguitools.gui_base import DraftInteractionHost
 
@@ -59,7 +64,10 @@ class BIMContextualEditingSession:
         self.contextual_actions = ()
         self.inspector_sections = ()
         self._pending_action_handle = None
-        self.providers = tuple(providers or (SemanticEditProvider(),))
+        self.providers = tuple(
+            providers or (SemanticEditProvider(), HostedOpeningCreationProvider())
+        )
+        self._provider_context = None
         self.action_panel = ContextualActionPanel()
         self.host = DraftInteractionHost(view=self.view)
 
@@ -116,6 +124,41 @@ class BIMContextualEditingSession:
         self.host.clear_value_input()
         self._clear_feedback()
         return True
+
+    def begin_hosted_opening_creation(self, kind, wall):
+        """Acquire one point and construct an opening using semantic BIM policy."""
+
+        if self._closed or wall is None:
+            return False
+        spec = ArchOpeningConstruction.HostedOpeningSpec(kind=kind)
+        self.host.request_point(
+            lambda point, _obj=None: self._finish_hosted_opening_creation(
+                wall, point, spec
+            ),
+            title="{} location".format(spec.validated().kind),
+        )
+        return True
+
+    def _finish_hosted_opening_creation(self, wall, point, spec):
+        if self._closed:
+            return None
+        try:
+            opening = ArchOpeningConstruction.construct_hosted_opening(
+                self.document,
+                wall,
+                point,
+                spec,
+                transaction_name="Create {}".format(spec.validated().kind),
+            )
+            FreeCADGui.Selection.clearSelection()
+            FreeCADGui.Selection.addSelection(opening)
+            return opening
+        except Exception as exc:
+            self._show_feedback(exc)
+            return None
+        finally:
+            if not self._closed:
+                self._request_interaction()
 
     def refresh_source(self, _source=None):
         """Refresh capabilities after commit or a failed semantic operation."""
@@ -263,9 +306,7 @@ class BIMContextualEditingSession:
         self._capabilities = tuple(current_capabilities)
         self._pending_action_handle = None
         self.renderer.set_visible_handle_sources(current_sources)
-        self._refresh_contextual_actions(
-            tuple(capability.source for capability in self._capabilities)
-        )
+        self._refresh_contextual_actions(tuple(selected))
         self.view.redraw()
 
     def _refresh_contextual_actions(self, selected):
@@ -275,6 +316,7 @@ class BIMContextualEditingSession:
             view=self.view,
             capabilities=self._capabilities,
         )
+        self._provider_context = context
         actions = []
         sections = []
         for provider in self.providers:
@@ -305,7 +347,21 @@ class BIMContextualEditingSession:
             None,
         )
         if handle is None:
-            return False
+            provider = next(
+                (
+                    item
+                    for item in self.providers
+                    if item.get_provider_id() == action.provider_id
+                ),
+                None,
+            )
+            if provider is None or self._provider_context is None:
+                return False
+            return bool(
+                provider.execute_action(
+                    action.key, self._provider_context, commands=self
+                )
+            )
         if handle.operation.value_kind == "Scalar":
             return self.begin_handle_edit(handle)
         if handle.interaction == "Immediate":

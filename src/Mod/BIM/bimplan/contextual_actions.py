@@ -157,3 +157,45 @@ class SemanticEditProvider(ContextualProvider):
             )
             for source in context.get_selected_sources()
         )
+
+
+class HostedOpeningCreationProvider(ContextualProvider):
+    """Offer the same hosted opening construction in every BIM view context."""
+
+    provider_id = "hosted-opening-creation"
+    display_name = "Hosted Openings"
+
+    @staticmethod
+    def _selected_wall(context):
+        for source in context.get_selected_sources():
+            proxy = getattr(source, "Proxy", None)
+            if callable(getattr(proxy, "calc_endpoints", None)):
+                return source
+        return None
+
+    def get_actions(self, context):
+        wall = self._selected_wall(context)
+        if wall is None:
+            return ()
+        purpose = context.representation_context.purpose.value
+        return tuple(
+            ContextualActionSpec(
+                key="create-{}".format(kind.lower()),
+                label="Create {}".format(kind),
+                tooltip="Place a hosted {} in the current {} context".format(
+                    kind.lower(), purpose
+                ),
+                provider_id=self.provider_id,
+                source=wall,
+            )
+            for kind in ("Window", "Door")
+        )
+
+    def execute_action(self, action_key, context, commands=None, payload=None):
+        del payload
+        kinds = {"create-window": "Window", "create-door": "Door"}
+        kind = kinds.get(str(action_key))
+        wall = self._selected_wall(context)
+        if kind is None or wall is None or commands is None:
+            return False
+        return commands.begin_hosted_opening_creation(kind, wall)
