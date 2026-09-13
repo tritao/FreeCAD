@@ -140,16 +140,41 @@ def resolve_wall_hosted_opening_layout(session, wall):
 
 
 class PlanWallEditAPI:
-    def __init__(self, session): self.session = session
-    def has_active_wall_edit(self): return has_active_wall_edit(self.session)
-    def is_wall_edit_modal_active(self): return is_wall_edit_modal_active(self.session)
-    def is_selected_wall_endpoint_editable(self): return is_selected_wall_endpoint_editable(self.session)
-    def cancel_wall_edit(self, *a, **kw): return cancel_wall_edit(self.session, *a, **kw)
-    def cancel_for_select(self): return self.cancel_wall_edit()
-    def reset_pending_edit_state(self, *a, **kw): return reset_pending_edit_state(self.session, *a, **kw)
-    def discard_runtime_references(self): return discard_runtime_references(self.session)
-    def get_preview_footprint(self, *a, **kw): return get_preview_footprint(self.session, *a, **kw)
-    def get_opening_move_readout_offset(self, *a, **kw): return get_opening_move_readout_offset(self.session, *a, **kw)
-    def refresh_wall_hosted_opening_footprints(self, *a, **kw): return refresh_wall_hosted_opening_footprints(self.session, *a, **kw)
-    def compute_wall_hosted_opening_layout(self, *a, **kw): return compute_wall_hosted_opening_layout(self.session, *a, **kw)
-    def resolve_wall_hosted_opening_layout(self, *a, **kw): return resolve_wall_hosted_opening_layout(self.session, *a, **kw)
+    def __init__(self, session):
+        self.session = session
+
+    def has_active_wall_edit(self):
+        return has_active_wall_edit(self.session)
+
+    def is_wall_edit_modal_active(self):
+        return is_wall_edit_modal_active(self.session)
+
+    def is_selected_wall_endpoint_editable(self):
+        return is_selected_wall_endpoint_editable(self.session)
+
+    def cancel_wall_edit(self, *args, **kwargs):
+        return cancel_wall_edit(self.session, *args, **kwargs)
+
+    def cancel_for_select(self):
+        return self.cancel_wall_edit()
+
+    def reset_pending_edit_state(self, *args, **kwargs):
+        return reset_pending_edit_state(self.session, *args, **kwargs)
+
+    def discard_runtime_references(self):
+        return discard_runtime_references(self.session)
+
+    def get_preview_footprint(self, *args, **kwargs):
+        return get_preview_footprint(self.session, *args, **kwargs)
+
+    def get_opening_move_readout_offset(self, *args, **kwargs):
+        return get_opening_move_readout_offset(self.session, *args, **kwargs)
+
+    def refresh_wall_hosted_opening_footprints(self, *args, **kwargs):
+        return refresh_wall_hosted_opening_footprints(self.session, *args, **kwargs)
+
+    def compute_wall_hosted_opening_layout(self, *args, **kwargs):
+        return compute_wall_hosted_opening_layout(self.session, *args, **kwargs)
+
+    def resolve_wall_hosted_opening_layout(self, *args, **kwargs):
+        return resolve_wall_hosted_opening_layout(self.session, *args, **kwargs)

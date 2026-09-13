@@ -118,14 +118,6 @@ class PlanSelectionState:
 
 
 @dataclass
-class WallEditState:
-    """Compatibility shell retained while the session API is narrowed."""
-
-    wall_edit_opening_clearances: dict = field(default_factory=dict)
-    wall_edit_opening_clearances_queued: bool = False
-
-
-@dataclass
 class PlanWallRelationState:
     join_type: str = "Miter"
 
@@ -353,16 +345,12 @@ class PlanCreationPreviewState:
     window_preview_key: object = None
 
 
-PlanWallEditState = WallEditState
-
-
 def initialize_session_read_state(session):
     session.task_panel_state = PlanTaskPanelState()
     session.provider_overlay_read_state = PlanProviderOverlayReadState()
     session.interaction_state = PlanInteractionState()
     session.lifecycle_state = PlanLifecycleState()
     session.selection_state = PlanSelectionState()
-    session.wall_edit_state = WallEditState()
     session.wall_relation_state = PlanWallRelationState()
     session.provider_point_state = ProviderPointState()
     session.space_region_pick_state = SpaceRegionPickState()
