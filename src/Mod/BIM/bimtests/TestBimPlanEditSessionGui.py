@@ -873,6 +873,29 @@ class TestBimPlanEditSessionGui(TestArchBaseGui):
                 self.assertLess(model[2].distanceToPoint(result[2]), 1e-7)
                 self.assertAlmostEqual(model[3], result[3], delta=1e-6)
 
+    def test_contextual_wall_creation_has_cross_context_parity(self):
+        view = FreeCADGui.ActiveDocument.ActiveView
+        results = []
+        for purpose in RepresentationPurpose.MODEL, RepresentationPurpose.SECTION, RepresentationPurpose.ELEVATION:
+            session = BIMContextualEditingSession(view, context=RepresentationContext(purpose=purpose), sources=())
+            callbacks = []
+            try:
+                self.pump_gui_events(20)
+                session.host.request_point = lambda callback, **_kwargs: callbacks.append(callback)
+                action = next(item for item in session.contextual_actions if item.key == "create-wall")
+                self.assertTrue(session.activate_action(action))
+                callbacks.pop(0)(FreeCAD.Vector(0, 0, 0))
+                wall = callbacks.pop(0)(FreeCAD.Vector(2000, 0, 0))
+                results.append((wall.Length.Value, wall.Width.Value, wall.Height.Value, wall.Align))
+                wall_name = wall.Name
+            finally:
+                session.close()
+            self.document.undo()
+            self.document.recompute()
+            self.assertIsNone(self.document.getObject(wall_name))
+        self.assertEqual(results[0], results[1])
+        self.assertEqual(results[0], results[2])
+
     def test_standard_3d_ray_constraints_commit_path_move_and_offset(self):
         wall = Arch.makeWall(length=3000, width=200, height=2500, align="Left")
         self.document.recompute()

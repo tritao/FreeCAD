@@ -5,6 +5,7 @@
 from .contextual_actions import (
     ContextualActionSpec,
     HostedOpeningCreationProvider,
+    WallCreationProvider,
     ContextualInspectorSection,
     ContextualProvider,
     ContextualProviderContext,
@@ -66,6 +67,7 @@ from .contextual_editing import (
 __all__ = [
     "ContextualActionSpec",
     "HostedOpeningCreationProvider",
+    "WallCreationProvider",
     "ContextualInspectorSection",
     "ContextualProvider",
     "ContextualProviderContext",

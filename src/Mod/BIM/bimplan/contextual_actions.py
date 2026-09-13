@@ -199,3 +199,20 @@ class HostedOpeningCreationProvider(ContextualProvider):
         if kind is None or wall is None or commands is None:
             return False
         return commands.begin_hosted_opening_creation(kind, wall)
+
+
+class WallCreationProvider(ContextualProvider):
+    provider_id = "wall-creation"
+    display_name = "Walls"
+
+    def get_actions(self, context):
+        return (ContextualActionSpec(
+            key="create-wall", label="Create Wall",
+            tooltip="Draw a wall in the current {} context".format(
+                context.representation_context.purpose.value
+            ), provider_id=self.provider_id,
+        ),)
+
+    def execute_action(self, action_key, context, commands=None, payload=None):
+        del context, payload
+        return bool(action_key == "create-wall" and commands and commands.begin_wall_creation())

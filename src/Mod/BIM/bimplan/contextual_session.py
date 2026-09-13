@@ -14,6 +14,7 @@ from bimplan.contextual_actions import (
     ContextualProviderContext,
     HostedOpeningCreationProvider,
     SemanticEditProvider,
+    WallCreationProvider,
 )
 from bimplan.contextual_editing import ContextualEditController
 from draftguitools.gui_base import DraftInteractionHost
@@ -65,7 +66,9 @@ class BIMContextualEditingSession:
         self.inspector_sections = ()
         self._pending_action_handle = None
         self.providers = tuple(
-            providers or (SemanticEditProvider(), HostedOpeningCreationProvider())
+            providers or (
+                SemanticEditProvider(), HostedOpeningCreationProvider(), WallCreationProvider()
+            )
         )
         self._provider_context = None
         self.action_panel = ContextualActionPanel()
@@ -138,6 +141,29 @@ class BIMContextualEditingSession:
             title="{} location".format(spec.validated().kind),
         )
         return True
+
+    def begin_wall_creation(self):
+        self._wall_start = None
+        self.host.request_point(self._accept_wall_point, title="Wall start")
+        return True
+
+    def _accept_wall_point(self, point, _obj=None):
+        if point is None:
+            self._request_interaction()
+            return None
+        if self._wall_start is None:
+            self._wall_start = FreeCAD.Vector(point)
+            self.host.request_point(self._accept_wall_point, title="Wall end")
+            return None
+        import ArchWallConstruction
+        walls = ArchWallConstruction.construct_wall_run(
+            self.document, (self._wall_start, point),
+            ArchWallConstruction.WallConstructionSpec(200, 2500),
+            transaction_name="Create Wall", auto_join=False,
+        )
+        self._wall_start = None
+        self._request_interaction()
+        return walls[0]
 
     def _finish_hosted_opening_creation(self, wall, point, spec):
         if self._closed:
