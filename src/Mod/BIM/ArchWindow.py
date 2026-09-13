@@ -2586,8 +2586,13 @@ class _HostedOpeningRepresentationGeometry:
                     interaction="Immediate",
                     subelement="WindowParts",
                     minimum=None,
-                    glyph="Cross" if role == "OpeningFlipHinge" else "Plus",
-                    glyph_size=13,
+                    glyph="Icon",
+                    glyph_size=18,
+                    icon_name=(
+                        "BIM_OpeningFlipHinge"
+                        if role == "OpeningFlipHinge"
+                        else "BIM_OpeningFlipDirection"
+                    ),
                 )
             )
 

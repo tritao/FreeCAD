@@ -258,6 +258,30 @@ class TestBimPlanEditExamplesGui(TestArchBaseGui):
                 },
                 {handle.role for handle in handles},
             )
+            action_icons = {
+                "OpeningFlipHinge": "BIM_OpeningFlipHinge",
+                "OpeningFlipDirection": "BIM_OpeningFlipDirection",
+            }
+            for handle in handles:
+                if handle.role in action_icons:
+                    self.assertEqual("Icon", handle.glyph)
+                    self.assertEqual(18, handle.glyph_size)
+                    self.assertEqual(action_icons[handle.role], handle.icon_name)
+            handle_switch = session.contextual_rendering.renderer._handle_switches[door]
+            icon_nodes = []
+            self.assertEqual(len(handles), handle_switch.getNumChildren())
+            for index, handle in enumerate(handles):
+                node = handle_switch.getChild(index)
+                if handle.role in action_icons:
+                    self.assertEqual(action_icons[handle.role], node.iconName.getValue())
+                    search = coin.SoSearchAction()
+                    search.setType(coin.SoImage.getClassTypeId())
+                    search.apply(node)
+                    self.assertIsNotNone(search.getPath())
+                    image = search.getPath().getTail()
+                    self.assertFalse(image.image.isDefault())
+                    icon_nodes.append(node)
+            self.assertEqual(2, len(icon_nodes))
 
             for role, offset in (("OpeningPosition", 75.0), ("OpeningRightJamb", 50.0)):
                 handles = select_and_sync()

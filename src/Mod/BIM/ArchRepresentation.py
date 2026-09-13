@@ -87,6 +87,7 @@ class BIMEditHandle:
         minimum=0.0,
         glyph="Circle",
         glyph_size=9,
+        icon_name="",
     ):
         self.source = source
         self.role = str(role)
@@ -100,6 +101,7 @@ class BIMEditHandle:
         self.minimum = minimum
         self.glyph = str(glyph)
         self.glyph_size = int(glyph_size)
+        self.icon_name = str(icon_name)
 
     @property
     def property_name(self):
@@ -301,9 +303,7 @@ class BIMRepresentation:
         self.source_mappings = []
         self.edit_handles = []
 
-    def add_geometry(
-        self, collection, geometry, role, subelement=None, *, related_sources=()
-    ):
+    def add_geometry(self, collection, geometry, role, subelement=None, *, related_sources=()):
         """Add geometry to a named collection and preserve semantic mapping."""
         if collection not in self._COLLECTIONS:
             raise ValueError("unknown representation collection: %s" % collection)
@@ -412,9 +412,7 @@ def query_representation_snap_candidates(representations, point, tolerance, cont
     """Return distance-ordered semantic targets, merging coincident identities."""
 
     query_point = (
-        project_to_representation_plane(FreeCAD.Vector(point), context)
-        if context
-        else point
+        project_to_representation_plane(FreeCAD.Vector(point), context) if context else point
     )
     candidates = []
     for representation in representations or ():
@@ -423,19 +421,13 @@ def query_representation_snap_candidates(representations, point, tolerance, cont
             if candidate is None or distance > tolerance:
                 continue
             duplicate = next(
-                (
-                    result
-                    for result in candidates
-                    if result.point.isEqual(candidate, 1e-7)
-                ),
+                (result for result in candidates if result.point.isEqual(candidate, 1e-7)),
                 None,
             )
             if duplicate is None:
                 candidates.append(BIMSnapResult(candidate, target, distance))
                 continue
-            merged_sources = tuple(
-                dict.fromkeys((*duplicate.target.sources, *target.sources))
-            )
+            merged_sources = tuple(dict.fromkeys((*duplicate.target.sources, *target.sources)))
             prefer_target = (
                 getattr(target.geometry, "ShapeType", "") == "Vertex"
                 and getattr(duplicate.target.geometry, "ShapeType", "") != "Vertex"
@@ -487,9 +479,13 @@ def _screen_segment_distance_squared(cursor, start, end):
     dx = end[0] - start[0]
     dy = end[1] - start[1]
     length_squared = dx * dx + dy * dy
-    parameter = 0.0 if length_squared <= 1e-12 else min(
-        max(((cursor[0] - start[0]) * dx + (cursor[1] - start[1]) * dy) / length_squared, 0.0),
-        1.0,
+    parameter = (
+        0.0
+        if length_squared <= 1e-12
+        else min(
+            max(((cursor[0] - start[0]) * dx + (cursor[1] - start[1]) * dy) / length_squared, 0.0),
+            1.0,
+        )
     )
     x = start[0] + parameter * dx
     y = start[1] + parameter * dy

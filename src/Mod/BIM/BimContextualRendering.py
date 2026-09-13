@@ -302,6 +302,7 @@ class ContextualRepresentationRenderer:
             glyph.color = (0.95, 0.35, 0.05)
             glyph.glyph = str(getattr(handle, "glyph", "Circle")).upper()
             glyph.size = int(getattr(handle, "glyph_size", 9))
+            glyph.iconName = str(getattr(handle, "icon_name", ""))
             key = (handle.source, id(handle))
             self._handle_position_fields[key] = glyph.position
             self._handle_color_fields[key] = glyph.color
