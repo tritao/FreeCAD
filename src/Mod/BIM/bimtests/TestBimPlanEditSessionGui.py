@@ -11,7 +11,7 @@ import FreeCAD
 import FreeCADGui
 import Part
 from pivy import coin
-from ArchRepresentation import BIMEditRay, RepresentationContext
+from ArchRepresentation import BIMEditRay, RepresentationContext, RepresentationPurpose
 from bimtests.TestArchBaseGui import TestArchBaseGui
 from bimplan.runtime.session import PlanEditSession
 from bimplan.contextual_edit_3d import BIM3DContextualEditingSession
@@ -817,6 +817,52 @@ class TestBimPlanEditSessionGui(TestArchBaseGui):
         finally:
             if active_session() is session:
                 session.close()
+
+    def test_section_contextual_edit_uses_section_frame_and_shared_host(self):
+        wall = Arch.makeWall(length=3000, width=200, height=2500, align="Center")
+        section = Arch.makeSectionPlane([wall])
+        section.Placement = FreeCAD.Placement(
+            FreeCAD.Vector(1500, 0, 0),
+            FreeCAD.Rotation(FreeCAD.Vector(0, 1, 0), 90),
+        )
+        self.document.recompute()
+        view = FreeCADGui.ActiveDocument.ActiveView
+        camera = tuple(
+            line.strip()
+            for line in view.getCamera().splitlines()
+            if not line.strip().startswith(("nearDistance", "farDistance"))
+        )
+        session = BIM3DContextualEditingSession(
+            view,
+            context=section.Proxy.getRepresentationContext(section),
+            sources=(wall,),
+            orient_to_context=True,
+        )
+        try:
+            self.pump_gui_events(20)
+            self.assertIs(
+                RepresentationPurpose.SECTION,
+                session.context.purpose,
+            )
+            height = next(
+                item
+                for item in session.renderer.edit_handles_for(wall)
+                if item.subelement == "Height"
+            )
+            self.assertTrue(session.begin_handle_edit(height))
+            result = session.controller.commit_value(2800.0)
+            self.assertTrue(result.success, result.reason)
+            self.assertAlmostEqual(2800.0, wall.Height.Value)
+            self.assertEqual(3, len(session.host._drag_callbacks))
+        finally:
+            session.close()
+            self.pump_gui_events(10)
+        restored_camera = tuple(
+            line.strip()
+            for line in view.getCamera().splitlines()
+            if not line.strip().startswith(("nearDistance", "farDistance"))
+        )
+        self.assertEqual(camera, restored_camera)
 
     def test_standard_3d_pointer_drag_commits_a_semantic_width_edit(self):
         wall = Arch.makeWall(length=3000, width=200, height=2500, align="Center")

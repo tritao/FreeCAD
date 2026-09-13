@@ -107,6 +107,7 @@ class BIMWorkbench(Workbench):
             "Arch_Level",
             "BIM_PlanEdit",
             "BIM_ContextualEdit3D",
+            "BIM_SectionEdit",
             "Arch_Space",
             "Separator",
             "Arch_Wall",

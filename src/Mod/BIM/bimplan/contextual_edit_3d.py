@@ -18,7 +18,7 @@ _active_session = None
 class BIM3DContextualEditingSession:
     """Show and edit semantic handles while leaving document geometry visible."""
 
-    def __init__(self, view=None):
+    def __init__(self, view=None, context=None, sources=None, orient_to_context=False):
         gui_document = FreeCADGui.ActiveDocument
         self.gui_document = gui_document
         self.document = FreeCAD.ActiveDocument
@@ -26,9 +26,13 @@ class BIM3DContextualEditingSession:
         if self.document is None or self.view is None:
             raise RuntimeError("A document and active 3D view are required")
 
-        self.context = ArchRepresentation.RepresentationContext(
+        self.context = context or ArchRepresentation.RepresentationContext(
             purpose=ArchRepresentation.RepresentationPurpose.MODEL
         )
+        self._context_sources = None if sources is None else tuple(sources)
+        self._restore_camera = None
+        if orient_to_context:
+            self._orient_view_to_context()
         self.renderer = BimContextualRendering.ContextualInteractionRenderer(self.view)
         self.controller = ContextualEditController(
             self.view,
@@ -132,6 +136,7 @@ class BIM3DContextualEditingSession:
                 self.renderer.close()
             except (RuntimeError, ReferenceError):
                 pass
+            self._restore_context_view()
             self._sources.clear()
         finally:
             if _active_session is self:
@@ -202,10 +207,12 @@ class BIM3DContextualEditingSession:
         self._selection_refresh_pending = False
         if self._closed:
             return
-        selected = tuple(FreeCADGui.Selection.getSelection() or ())
-        selected = tuple(
-            obj for obj in selected if getattr(obj, "Document", None) == self.document
-        )
+        selected = self._context_sources
+        if selected is None:
+            selected = tuple(FreeCADGui.Selection.getSelection() or ())
+            selected = tuple(
+                obj for obj in selected if getattr(obj, "Document", None) == self.document
+            )
         selected_sources = set(selected)
         if self.active_edit is not None and self.active_edit.source not in selected_sources:
             self.controller.cancel()
@@ -234,6 +241,36 @@ class BIM3DContextualEditingSession:
         self.renderer.set_visible_handle_sources(current_sources)
         self.view.redraw()
 
+    def _orient_view_to_context(self):
+        frame = getattr(self.context, "reference_frame", None)
+        if frame is None:
+            return
+        animation_enabled = self.view.isAnimationEnabled()
+        self._restore_camera = (
+            self.view.getCameraType(),
+            self.view.getCamera(),
+            animation_enabled,
+        )
+        self.view.stopAnimating()
+        self.view.setAnimationEnabled(False)
+        vx = frame.Rotation.multVec(FreeCAD.Vector(1, 0, 0))
+        vy = frame.Rotation.multVec(FreeCAD.Vector(0, 1, 0))
+        vz = frame.Rotation.multVec(FreeCAD.Vector(0, 0, 1))
+        rotation = FreeCAD.Rotation(vx, vy, vz, "ZXY")
+        self.view.setCameraType("Orthographic")
+        self.view.setCameraOrientation(rotation.Q)
+        self.view.fitAll()
+
+    def _restore_context_view(self):
+        if self._restore_camera is None:
+            return
+        camera_type, camera, animation_enabled = self._restore_camera
+        self._restore_camera = None
+        self.view.stopAnimating()
+        self.view.setCameraType(camera_type)
+        self.view.setCamera(camera)
+        self.view.setAnimationEnabled(animation_enabled)
+
     def _defer(self, callback):
         if self._closed:
             return
@@ -258,12 +295,12 @@ def active_session():
     return _active_session
 
 
-def start_session(view=None):
+def start_session(view=None, **kwargs):
     """Start the ordinary 3D contextual editing mode."""
 
     global _active_session
 
     if _active_session is not None:
         _active_session.close()
-    _active_session = BIM3DContextualEditingSession(view)
+    _active_session = BIM3DContextualEditingSession(view, **kwargs)
     return _active_session
