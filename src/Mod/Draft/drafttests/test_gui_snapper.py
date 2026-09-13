@@ -202,14 +202,21 @@ class DraftSnapper(test_base.DraftTestCaseDoc):
             snapper.getPoint(callback=lambda point: None)
             self.assertIsNotNone(view.click_callback)
             self.assertIsNotNone(view.move_callback)
+            stale_click = view.click_callback
 
             snapper.cancelPointRequest()
 
-        self.assertIsNone(view.click_callback)
-        self.assertIsNone(view.move_callback)
         self.assertIsNone(snapper.callbackClick)
         self.assertIsNone(snapper.callbackMove)
         self.assertEqual(toolbar.off_ui_calls, 1)
+
+        # The registered closure is inert immediately, while physical Coin
+        # callback removal waits until traversal has returned to Qt.
+        stale_click(self._FakeEventCallback(self._FakeMouseEvent()))
+        self.assertEqual(toolbar.off_ui_calls, 1)
+        QtCore.QCoreApplication.processEvents()
+        self.assertIsNone(view.click_callback)
+        self.assertIsNone(view.move_callback)
 
     def test_temporary_snap_profiles_restore_without_persisting(self):
         """Nested host profiles should restore prior snaps without writing preferences."""
