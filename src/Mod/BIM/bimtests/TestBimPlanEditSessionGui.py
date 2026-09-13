@@ -1395,7 +1395,7 @@ class TestBimPlanEditSessionGui(TestArchBaseGui):
 
             send_move(start)
             self.pump_gui_events(20)
-            edit_node = plan_edit_nodes.ContextualHandleEditNode(wall, handle)
+            edit_node = handle
             with patch.object(session.picking, "pick_edit_node", return_value=edit_node):
                 send_button(start, coin.SoButtonEvent.DOWN)
             self.assertIsNone(session.contextual_editing.editor)

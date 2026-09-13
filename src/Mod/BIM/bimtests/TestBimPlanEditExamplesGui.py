@@ -166,7 +166,7 @@ class TestBimPlanEditExamplesGui(TestArchBaseGui):
                 target = session.view.getPointOnScreen(handle.point + handle.direction * offset)
                 self.assertIs(handle, session.contextual_rendering.pick_edit_handle(start))
 
-                edit_node = plan_edit_nodes.ContextualHandleEditNode(wall, handle)
+                edit_node = handle
                 send_move(start)
                 self.pump_gui_events(20)
                 with patch.object(session.picking, "pick_edit_node", return_value=edit_node):
@@ -502,7 +502,7 @@ class TestBimPlanEditExamplesGui(TestArchBaseGui):
                 world_target = handle.point + handle.direction * offset
                 target = session.view.getPointOnScreen(world_target)
                 self.assertIs(handle, session.contextual_rendering.pick_edit_handle(start))
-                edit_node = plan_edit_nodes.ContextualHandleEditNode(door, handle)
+                edit_node = handle
                 send_move(start)
                 self.pump_gui_events(20)
                 with patch.object(session.picking, "pick_edit_node", return_value=edit_node):
@@ -542,7 +542,7 @@ class TestBimPlanEditExamplesGui(TestArchBaseGui):
             with patch.object(
                 session.picking,
                 "pick_edit_node",
-                return_value=plan_edit_nodes.ContextualHandleEditNode(door, flip_handle),
+                return_value=flip_handle,
             ):
                 send_button(flip_screen, coin.SoButtonEvent.DOWN)
             self.pump_gui_events(40)

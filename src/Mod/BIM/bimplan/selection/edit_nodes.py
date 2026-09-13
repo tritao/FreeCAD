@@ -40,14 +40,6 @@ class ProviderOverlayPointEditNode:
     kind = "provider_overlay_point"
 
 
-@dataclass(frozen=True, slots=True)
-class ContextualHandleEditNode:
-    source: object
-    handle: object
-
-    kind = "contextual_handle"
-
-
 def _get_node_attr(node, attr_name):
     return getattr(node, attr_name, None)
 
@@ -103,12 +95,7 @@ def get_edit_node_payload(node):
     if kind == "contextual_handle":
         if isinstance(node, BIMEditHandle):
             return (node.source, node)
-        if _has_dataclass_payload(node, "source"):
-            return (_get_node_attr(node, "source"), _get_node_attr(node, "handle"))
-        try:
-            return (node[1], node[2])
-        except Exception:
-            return ()
+        return ()
     try:
         return tuple(node[1:])
     except Exception:
