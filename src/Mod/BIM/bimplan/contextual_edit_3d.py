@@ -5,11 +5,11 @@
 import FreeCAD
 import FreeCADGui
 from PySide import QtCore
-from pivy import coin
 
 import ArchRepresentation
 import BimContextualRendering
 from bimplan.contextual_editing import ContextualEditController
+from draftguitools.gui_base import DraftInteractionHost
 
 
 _active_session = None
@@ -42,14 +42,11 @@ class BIM3DContextualEditingSession:
         self._sources = set()
         self._closed = False
         self._selection_refresh_pending = False
-        self._preview_pending = False
-        self._pending_mouse_position = None
-        self._numeric_input = ""
-        self._callbacks = []
+        self.host = DraftInteractionHost(view=self.view)
 
         try:
             FreeCADGui.Selection.addObserver(self)
-            self._register_event_callbacks()
+            self._request_interaction()
         except Exception:
             self.close()
             raise
@@ -68,10 +65,16 @@ class BIM3DContextualEditingSession:
             or handle not in self.renderer.edit_handles_for(handle.source)
         ):
             return False
-        self._numeric_input = ""
         result = self.controller.begin(handle)
         if getattr(result, "success", True) is False:
             return False
+        if handle.operation.value_kind == "Scalar":
+            self.host.set_value_input(
+                label=handle.operation.label,
+                unit="Length",
+                value=handle.operation.get_value(handle.source),
+                callback=self._commit_value,
+            )
         return True
 
     def preview_pointer(self, pointer):
@@ -82,13 +85,16 @@ class BIM3DContextualEditingSession:
     def commit_pointer(self, pointer):
         if self.active_edit is None:
             return None
-        return self.controller.commit(pointer)
+        result = self.controller.commit(pointer)
+        if getattr(result, "success", False):
+            self.host.clear_value_input()
+        return result
 
     def cancel_edit(self):
         if self.active_edit is None:
             return False
         self.controller.cancel()
-        self._numeric_input = ""
+        self.host.clear_value_input()
         self._clear_feedback()
         return True
 
@@ -121,12 +127,7 @@ class BIM3DContextualEditingSession:
             pass
         try:
             self.controller.cancel(refresh=False)
-            for event_type, callback in self._callbacks:
-                try:
-                    self.view.removeEventCallbackPivy(event_type, callback)
-                except (RuntimeError, ReferenceError):
-                    pass
-            self._callbacks.clear()
+            self.host.stop_request()
             try:
                 self.renderer.close()
             except (RuntimeError, ReferenceError):
@@ -137,100 +138,31 @@ class BIM3DContextualEditingSession:
                 _active_session = None
         return True
 
-    def _register_event_callbacks(self):
-        callback_types = (
-            (coin.SoMouseButtonEvent.getClassTypeId(), self._on_mouse_button),
-            (coin.SoLocation2Event.getClassTypeId(), self._on_mouse_move),
-            (coin.SoKeyboardEvent.getClassTypeId(), self._on_key),
+    def _request_interaction(self):
+        self.host.request_drag(
+            self._pick_handle,
+            self.begin_handle_edit,
+            self._preview_from_view,
+            self._commit_from_view,
+            self._cancel_interaction,
         )
-        for event_type, callback in callback_types:
-            registered = self.view.addEventCallbackPivy(event_type, callback)
-            self._callbacks.append((event_type, registered))
 
-    def _on_mouse_button(self, event_callback):
-        if self._closed:
-            return
-        event = event_callback.getEvent()
-        if event.getButton() != coin.SoMouseButtonEvent.BUTTON1:
-            return
-        position = event.getPosition().getValue()
-        position = int(position[0]), int(position[1])
-
-        if self.active_edit is not None:
-            if event.getState() == coin.SoMouseButtonEvent.UP:
-                event_callback.setHandled()
-                if self._numeric_input.strip():
-                    self._defer(self._commit_numeric_input)
-                else:
-                    self._defer(lambda p=position: self._commit_from_view(p))
-            else:
-                event_callback.setHandled()
-            return
-
-        if event.getState() != coin.SoMouseButtonEvent.DOWN:
-            return
-        handle = self.renderer.pick_edit_handle(
+    def _pick_handle(self, position):
+        if self._closed or self.active_edit is not None:
+            return None
+        return self.renderer.pick_edit_handle(
             position,
             self.view.getPointOnScreen,
             radius_px=8,
         )
-        if handle is None:
-            return
-        event_callback.setHandled()
-        self._defer(lambda target=handle: self.begin_handle_edit(target))
 
-    def _on_mouse_move(self, event_callback):
-        if self._closed or self.active_edit is None:
-            return
-        event_callback.setHandled()
-        position = event_callback.getEvent().getPosition().getValue()
-        self._pending_mouse_position = int(position[0]), int(position[1])
-        if self._preview_pending:
-            return
-        self._preview_pending = True
-        self._defer(self._preview_from_latest_position)
-
-    def _on_key(self, event_callback):
-        if self._closed:
-            return
-        event = event_callback.getEvent()
-        if event.getState() != coin.SoKeyboardEvent.DOWN:
-            return
-        if event.getKey() != coin.SoKeyboardEvent.ESCAPE:
-            if self.active_edit is None:
-                return
-            if event.getKey() == coin.SoKeyboardEvent.BACKSPACE:
-                event_callback.setHandled()
-                self._numeric_input = self._numeric_input[:-1]
-                self._show_numeric_feedback()
-                return
-            if event.getKey() in (coin.SoKeyboardEvent.RETURN, coin.SoKeyboardEvent.ENTER):
-                if self._numeric_input.strip():
-                    event_callback.setHandled()
-                    self._defer(self._commit_numeric_input)
-                return
-            handle = self.active_edit
-            if handle.operation.value_kind != "Scalar":
-                return
-            character = event.getPrintableCharacter()
-            if not character or not character.isprintable():
-                return
-            if not (character.isalnum() or character in " .,+-*/'\"()"):
-                return
-            event_callback.setHandled()
-            self._numeric_input += character
-            self._show_numeric_feedback()
-            return
-        event_callback.setHandled()
+    def _cancel_interaction(self):
         if self.active_edit is not None:
-            self._defer(self.cancel_edit)
+            self.cancel_edit()
         else:
-            self._defer(self.close)
+            self.close()
 
-    def _preview_from_latest_position(self):
-        self._preview_pending = False
-        position = self._pending_mouse_position
-        self._pending_mouse_position = None
+    def _preview_from_view(self, position):
         if self._closed or self.active_edit is None or position is None:
             return
         try:
@@ -246,14 +178,8 @@ class BIM3DContextualEditingSession:
         except Exception as exc:
             self._show_feedback(exc)
 
-    def _commit_numeric_input(self):
-        if self._closed or self.active_edit is None or not self._numeric_input.strip():
-            return
-        text = self._numeric_input.strip()
-        try:
-            value = float(FreeCAD.Units.Quantity(text).Value)
-        except Exception as exc:
-            self._show_feedback("Could not read value '{}': {}".format(text, exc))
+    def _commit_value(self, value):
+        if self._closed or self.active_edit is None:
             return
         try:
             result = self.controller.commit_value(value)
@@ -261,23 +187,10 @@ class BIM3DContextualEditingSession:
             self._show_feedback(exc)
             return
         if result.success:
-            self._numeric_input = ""
+            self.host.clear_value_input()
             self._clear_feedback()
             return
-        if self.active_edit is None:
-            self._numeric_input = ""
         self._show_feedback(result.reason)
-
-    def _show_numeric_feedback(self):
-        handle = self.active_edit
-        if handle is None:
-            return
-        entry = self._numeric_input or "value"
-        self._show_feedback(
-            "{}: {}  (Enter applies; Esc cancels; default unit mm)".format(
-                handle.operation.label, entry
-            )
-        )
 
     def _queue_selection_refresh(self):
         if self._closed or self._selection_refresh_pending:

@@ -810,7 +810,7 @@ class TestBimPlanEditSessionGui(TestArchBaseGui):
         session = active_session()
         self.assertIsNotNone(session)
         try:
-            self.assertEqual(3, len(session._callbacks))
+            self.assertEqual(3, len(session.host._drag_callbacks))
             command.Activated()
             self.assertIsNone(active_session())
             self.assertTrue(session._closed)
@@ -931,25 +931,9 @@ class TestBimPlanEditSessionGui(TestArchBaseGui):
             self.pump_gui_events(20)
             self.assertEqual("Height", session.active_edit.subelement)
 
-            keyboard_keys = {
-                "2": coin.SoKeyboardEvent.NUMBER_2,
-                "8": coin.SoKeyboardEvent.NUMBER_8,
-                ".": coin.SoKeyboardEvent.PERIOD,
-                " ": coin.SoKeyboardEvent.SPACE,
-                "m": coin.SoKeyboardEvent.M,
-            }
-
-            def send_key(key, character=""):
-                event = coin.SoKeyboardEvent()
-                event.setKey(key)
-                if character:
-                    event.setPrintableCharacter(character)
-                event.setState(coin.SoKeyboardEvent.DOWN)
-                event_manager.processEvent(event)
-
-            for character in "2.8 m":
-                send_key(keyboard_keys[character], character)
-            send_key(coin.SoKeyboardEvent.RETURN)
+            value_field = session.host._value_input[1]
+            value_field.setProperty("quantityString", "2.8 m")
+            value_field.returnPressed.emit()
             self.pump_gui_events(30)
 
             self.assertAlmostEqual(2800.0, wall.Height.Value)
