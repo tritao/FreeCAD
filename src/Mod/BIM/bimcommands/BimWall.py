@@ -713,32 +713,38 @@ class Arch_Wall:
         height = getattr(self, "Height", params.get_param_arch("WallHeight"))
         offset = getattr(self, "Offset", params.get_param_arch("WallOffset"))
         material = getattr(self, "MultiMat", None)
+        construction_spec = wall_construction.WallConstructionSpec(
+            width=width,
+            height=height,
+            align=align,
+            offset=offset,
+            material=material,
+        )
 
         # Create the wall object (either baseless or from a baseline)
         wall_obj = None
-        if self.baseline_mode == WallBaselineMode.NONE:
-            wall_obj = create_baseless_wall_from_endpoints(
-                self.points[0],
-                self.points[1],
-                width=width,
-                height=height,
-                align=align,
-                offset=offset,
-                material=material,
-                auto_group=True,
-                on_created=self._get_host().on_created_object,
-            )
-        else:
-            baseline_obj = self._create_baseline_object(p0, p1)
-            if baseline_obj:
-                wall_obj = self._create_wall_from_baseline(baseline_obj)
-                self._notify_wall_created(wall_obj)
+        try:
+            wall_construction.wall_segments(self.points)
+            if self.baseline_mode == WallBaselineMode.NONE:
+                wall_obj = wall_construction.create_wall_segment(
+                    self.points[0],
+                    self.points[1],
+                    construction_spec,
+                    auto_group=True,
+                    on_created=self._get_host().on_created_object,
+                )
+            else:
+                construction_spec.validated()
+                baseline_obj = self._create_baseline_object(p0, p1)
+                if baseline_obj:
+                    wall_obj = self._create_wall_from_baseline(baseline_obj)
+                    self._notify_wall_created(wall_obj)
 
-        # Delegate all joining logic to the helper function
-        self._handle_wall_joining(wall_obj)
-
-        # Finalization
-        self.doc.commitTransaction()
+            self._handle_wall_joining(wall_obj)
+            self.doc.commitTransaction()
+        except Exception:
+            self.doc.abortTransaction()
+            raise
         self.doc.recompute()
         self._finalize_tracker()
         self._reset_interactive_state()
