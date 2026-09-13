@@ -3507,6 +3507,80 @@ class _Space(ArchComponent.Component):
         except Part.OCCError:
             return []
 
+    def getDependentPreviewRepresentation(self, obj, state, context):
+        """Return a proposed room region when one of its walls is previewed."""
+
+        import ArchRepresentation
+        import Part
+
+        links = self._get_stable_boundary_links(obj)
+        boundary_walls = [boundary for boundary, _subnames in links if boundary is not None]
+        if not boundary_walls or not any(wall in state.sources for wall in boundary_walls):
+            return None
+        current_faces = tuple(self.getFootprint(obj) or ())
+        if not current_faces:
+            return None
+        seed = max(current_faces, key=lambda face: face.Area).CenterOfMass
+        boundary_faces = []
+        for wall in boundary_walls:
+            representation = state.representation_for(wall)
+            if representation is None:
+                try:
+                    representation = ArchRepresentation.representation_for(wall, context)
+                except ArchRepresentation.RepresentationUnavailable:
+                    return None
+            for face in representation.cut_geometry:
+                outer_wire = getattr(face, "OuterWire", None)
+                if outer_wire is not None:
+                    boundary_faces.append(Part.Face(outer_wire))
+        if not boundary_faces:
+            return None
+
+        bounds = [face.BoundBox for face in (*boundary_faces, *current_faces)]
+        x_min = min(bound.XMin for bound in bounds)
+        x_max = max(bound.XMax for bound in bounds)
+        y_min = min(bound.YMin for bound in bounds)
+        y_max = max(bound.YMax for bound in bounds)
+        span = max(x_max - x_min, y_max - y_min, 1.0)
+        margin = span + 1000.0
+        z = float(getattr(context, "target_offset", seed.z) or seed.z)
+        outer = Part.Face(
+            Part.makePolygon(
+                (
+                    FreeCAD.Vector(x_min - margin, y_min - margin, z),
+                    FreeCAD.Vector(x_max + margin, y_min - margin, z),
+                    FreeCAD.Vector(x_max + margin, y_max + margin, z),
+                    FreeCAD.Vector(x_min - margin, y_max + margin, z),
+                    FreeCAD.Vector(x_min - margin, y_min - margin, z),
+                )
+            )
+        )
+        regions = outer
+        for face in boundary_faces:
+            regions = regions.cut(face)
+        candidates = [
+            face
+            for face in regions.Faces
+            if face.isInside(FreeCAD.Vector(seed.x, seed.y, z), 0.001, True)
+        ]
+        if not candidates:
+            return None
+        room = min(candidates, key=lambda face: face.Area)
+        representation = ArchRepresentation.BIMRepresentation(source=obj, context=context)
+        representation.add_geometry(
+            "cut_geometry", room, "SpacePreviewRegion", subelement="Boundary"
+        )
+        for wire_index, wire in enumerate(room.Wires, start=1):
+            points = tuple(FreeCAD.Vector(vertex.Point) for vertex in wire.Vertexes)
+            if len(points) > 1:
+                representation.add_geometry(
+                    "projected_geometry",
+                    (*points, points[0]),
+                    "SpacePreviewBoundary",
+                    subelement=f"Boundary.Wire{wire_index}",
+                )
+        return representation
+
 
 class _SpaceBoundaryAnalyzer(_Space):
     """Reusable boundary analysis helper for Plan Edit and tests."""

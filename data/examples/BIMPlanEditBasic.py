@@ -11,6 +11,7 @@ Run with the GUI FreeCAD binary from the repository root:
 import os
 
 import Arch
+import ArchSpace
 import Draft
 import FreeCAD as App
 import FreeCADGui as Gui
@@ -123,6 +124,13 @@ def build_document():
     # Match the finished faces of the west, south, north, and interior walls.
     room_base.Shape = Part.makeBox(2825, 3700, 1, App.Vector(100, 200, 0))
     room = Arch.makeSpace(room_base, name="Sample Room")
+    room_seed = App.Vector(1512.5, 2050, 0)
+    room_boundaries = [
+        (wall, ArchSpace.getBoundaryFaceNamesForObject(wall, room_seed))
+        for wall in (walls[3], walls[2], walls[0], walls[4])
+    ]
+    ArchSpace.setBoundaryRegionReferencePoint(room, room_seed)
+    ArchSpace.setBoundaryLinks(room, room_boundaries)
     level.addObject(room)
 
     section = Arch.makeSectionPlane(walls + [door, window], name="Editable Section")

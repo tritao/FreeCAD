@@ -208,12 +208,14 @@ class TestBimPlanEditExamplesGui(TestArchBaseGui):
         """Move, resize and flip a hosted door through its semantic Coin handles."""
 
         import ArchWindow
+        import ArchRepresentation
         import DraftGui
         from bimplan.selection import edit_nodes as plan_edit_nodes
         from draftguitools import gui_snapper
 
         document = self._open_example("BIMPlanEditBasic.FCStd")
         door = self._objects_with_ifc_type(document, "Door")[0]
+        space = self._objects_with_ifc_type(document, "Space")[0]
         storey = self._objects_with_ifc_type(document, "Building Storey")[0]
         host = door.Hosts[0]
         created_toolbar = not hasattr(FreeCADGui, "draftToolBar")
@@ -292,6 +294,20 @@ class TestBimPlanEditExamplesGui(TestArchBaseGui):
                 if handle.subelement == "Width.PositiveFace"
             )
             original_host_width = host.Width.Value
+            semantic_state = wall_width_handle.operation.get_preview_state(
+                host,
+                original_host_width + 25.0,
+                session.representation_context.context,
+            )
+            ArchRepresentation.expand_preview_dependents(
+                semantic_state, session.representation_context.context
+            )
+            space_representation = semantic_state.representation_for(space)
+            self.assertIsNotNone(space_representation)
+            original_space_area = sum(face.Area for face in space.Proxy.getFootprint(space))
+            proposed_space_area = sum(face.Area for face in space_representation.cut_geometry)
+            self.assertGreater(abs(proposed_space_area - original_space_area), 1.0)
+            self.assertAlmostEqual(original_space_area, space.Area.Value)
             session.contextual_editing.begin(wall_width_handle)
             wall_preview = session.contextual_editing.preview(
                 wall_width_handle.point + wall_width_handle.direction * 25.0
@@ -301,11 +317,16 @@ class TestBimPlanEditExamplesGui(TestArchBaseGui):
             self.assertTrue(wall_preview.validation.allowed)
             self.assertTrue({host, door}.issubset(renderer._preview_nodes))
             self.assertTrue({host, door}.issubset(renderer._preview_replaced_sources))
+            self.assertIn(space, renderer._preview_nodes)
+            self.assertNotIn(space, renderer._preview_replaced_sources)
+            space_preview_node = renderer._preview_nodes[space]
+            self.assertGreater(space_preview_node.getNumChildren(), 0)
             self.assertAlmostEqual(original_host_width, host.Width.Value)
             session.contextual_editing.cancel()
             session.viewport.flush_scene_graph_mutations()
             self.assertNotIn(host, renderer._preview_nodes)
             self.assertNotIn(door, renderer._preview_nodes)
+            self.assertNotIn(space, renderer._preview_nodes)
             self.assertAlmostEqual(original_host_width, host.Width.Value)
 
             session.contextual_editing.begin(wall_width_handle)

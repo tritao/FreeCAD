@@ -99,6 +99,46 @@ class BIMPreviewState:
     def entries(self):
         return tuple(self._entries)
 
+    @property
+    def sources(self):
+        return tuple(entry.representation.source for entry in self._entries)
+
+    def representation_for(self, source):
+        return next(
+            (
+                entry.representation
+                for entry in reversed(self._entries)
+                if entry.representation.source is source
+            ),
+            None,
+        )
+
+
+def expand_preview_dependents(state, context):
+    """Ask document objects to contribute representations dependent on a state."""
+
+    if state is None or state.primary_source is None:
+        return state
+    document = getattr(state.primary_source, "Document", None)
+    if document is None:
+        return state
+    existing = set(state.sources)
+    for obj in getattr(document, "Objects", ()) or ():
+        if obj in existing:
+            continue
+        provider = getattr(
+            getattr(obj, "Proxy", None),
+            "getDependentPreviewRepresentation",
+            None,
+        )
+        if not callable(provider):
+            continue
+        representation = provider(obj, state, context)
+        if representation is not None:
+            state.add_representation(representation)
+            existing.add(obj)
+    return state
+
 
 class BIMEditRay:
     """World-space pointer ray supplied by a 3D viewer input adapter."""

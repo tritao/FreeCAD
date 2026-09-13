@@ -6,6 +6,7 @@ from contextlib import nullcontext
 from dataclasses import dataclass
 
 import FreeCAD
+import ArchRepresentation
 from ArchRepresentation import (
     BIMEditTransaction,
     BIMEditValidation,
@@ -198,6 +199,9 @@ class ContextualEditController:
             preview.handle.source,
             preview.value,
             self.editor.context,
+        )
+        preview_state = ArchRepresentation.expand_preview_dependents(
+            preview_state, self.editor.context
         )
         representation = None
         if preview_state is None:
