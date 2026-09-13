@@ -93,15 +93,16 @@ def _set_dim_color(dim, readout_color):
 
 
 def has_active_wall_edit(session):
-    return (
-        is_wall_edit_modal_active(session)
-        or _interaction_state(session).embedded_tool_name == "Wall"
+    return is_wall_edit_modal_active(session) or (
+        _interaction_state(session).embedded_tool_name == "Wall"
     )
 
 
 def is_wall_edit_modal_active(session):
-    state = _wall_edit_state(session)
-    return bool(state.wall_edit_modal_active and state.edit_wall)
+    editor = getattr(session.contextual_editing, "editor", None)
+    operation = getattr(getattr(editor, "handle", None), "operation", None)
+    intent = getattr(operation, "interaction_intent", "")
+    return intent in ("WallStretchStart", "WallStretchEnd", "WallMove")
 
 
 def is_selected_wall_endpoint_editable(session):
@@ -127,21 +128,18 @@ def is_selected_wall_endpoint_editable(session):
 
 
 def cancel_wall_edit(session, restore=True, refresh=True):
+    del restore
     if not has_active_wall_edit(session):
         if refresh:
             session.current_tool = "Select"
             session.task_panels.refresh_task_panel_status()
         return False
 
-    wall = _wall_edit_state(session).edit_wall
     cancel_wall_subtool(session)
-
+    session.contextual_editing.cancel(refresh=False)
     session.current_tool = "Select"
-    session.lifecycle.cancel_pending_edit(restore_wall_visibility=restore)
     session.wall_relations.restore_selected_wall_relation_status()
-    if wall is not None:
-        session.contextual_rendering.set_source_visible(wall, True)
-        session.contextual_rendering.sync_visible_handles()
+    session.contextual_rendering.sync_visible_handles()
     session.overlays.openings.sync_selected_wall_opening_context_overlay()
     if refresh:
         session.task_panels.refresh_task_panel_status()
@@ -1783,38 +1781,12 @@ def _set_key_event_handled(event_callback):
 
 
 def reset_pending_edit_state(session, *, restore_wall_visibility=True):
-    state = _wall_edit_state(session)
-    state.wall_edit_generation += 1
-    state.wall_edit_modal_active = False
-    if restore_wall_visibility:
-        session.wall_edit.restore_edit_wall_visibility()
-    else:
-        state.edit_wall_visibility = None
-    session.wall_edit.clear_wall_edit_preview()
-    state.edit_wall = None
-    state.edit_endpoint = None
-    state.edit_endpoints = None
-    state.wall_edit_opening_clearances = {}
-    state.wall_edit_opening_clearances_queued = False
-    state.wall_edit_task_panel_refresh_queued = False
-    state.preview_points = None
-    state.wall_edit_length_edit_queued = False
+    del restore_wall_visibility
+    session.contextual_editing.cancel(refresh=False)
 
 
 def discard_runtime_references(session):
-    state = _wall_edit_state(session)
-    state.edit_wall = None
-    state.edit_endpoint = None
-    state.edit_endpoints = None
-    state.preview_points = None
-    state.preview_line_tracker = None
-    state.preview_footprint_trackers = []
-    state.preview_grip_trackers = []
-    state.wall_edit_readout_trackers = []
-    state.wall_edit_opening_preview_trackers = []
-    state.wall_edit_active_readout_tracker = None
-    state.wall_edit_active_readout_mode = None
-    state.edit_wall_visibility = None
+    session.contextual_editing.cancel(refresh=False)
 
 
 class PlanWallEditAPI(_SessionAPI):

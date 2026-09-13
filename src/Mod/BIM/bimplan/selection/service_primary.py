@@ -464,11 +464,11 @@ class PlanSelectionRefreshService(_SessionAPI):
 
     def _resolve_direct_selection_refresh_result(self, previous_wall):
         if self.session.wall_edit.is_wall_edit_modal_active():
-            interaction_state = self.session.interaction_state
+            editor = self.session.contextual_editing.editor
             return SelectionRefreshResult(
                 primary_target_ref=plan_target_kinds.make_plan_target_ref(
                     plan_target_kinds.PLAN_TARGET_WALL,
-                    interaction_state.edit_wall,
+                    editor.handle.source,
                 ),
             )
         if self.session.current_tool == plan_runtime_tools.PlanTool.SET_SPACE_TEXT:
