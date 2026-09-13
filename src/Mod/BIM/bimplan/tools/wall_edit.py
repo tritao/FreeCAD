@@ -4,7 +4,7 @@
 import FreeCAD
 
 from bimplan.runtime import capabilities as runtime_capabilities
-from bimplan.wall_semantic import MINIMUM_WALL_LENGTH, evaluate_hosted_openings
+from ArchWallSemantic import MINIMUM_WALL_LENGTH, evaluate_hosted_openings
 
 
 def _get_wall_endpoint_proxy(wall):

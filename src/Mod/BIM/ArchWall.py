@@ -1629,7 +1629,7 @@ class _Wall(ArchComponent.Component):
         relation_controlled_ends = self._relation_controlled_native_ends(wall)
 
         def apply_endpoint(source, index, value):
-            from bimplan.wall_semantic import apply_wall_candidate
+            from ArchWallSemantic import apply_wall_candidate
 
             mode = "Start" if index == 0 else "End"
             apply_wall_candidate(source, mode, value)
@@ -1670,7 +1670,7 @@ class _Wall(ArchComponent.Component):
         midpoint = (endpoints[0] + endpoints[1]) * 0.5
 
         def move_wall(source, value):
-            from bimplan.wall_semantic import apply_wall_candidate
+            from ArchWallSemantic import apply_wall_candidate
 
             apply_wall_candidate(source, "Move", value)
 
@@ -1715,7 +1715,7 @@ class _Wall(ArchComponent.Component):
         """Return joined wall representations for a hypothetical path edit."""
 
         import Part
-        from bimplan.wall_semantic import evaluate_wall_candidate
+        from ArchWallSemantic import evaluate_wall_candidate
 
         evaluation = evaluate_wall_candidate(self.calc_endpoints(wall), mode, value)
         if not evaluation.allowed:

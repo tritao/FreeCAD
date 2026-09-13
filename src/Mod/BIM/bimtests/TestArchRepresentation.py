@@ -48,7 +48,7 @@ from bimplan.contextual_editing import (
     ContextualEditController,
 )
 from bimplan.editable_points import get_contextual_edit_points
-from bimplan.wall_semantic import evaluate_wall_candidate, evaluate_wall_length
+from ArchWallSemantic import evaluate_wall_candidate, evaluate_wall_length
 
 
 class TestArchRepresentation(unittest.TestCase):

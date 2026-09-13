@@ -84,6 +84,7 @@ SET(Arch_SRCS
     BimAssetSemantics.py
     BimLibrarySources.py
     BimContextualRendering.py
+    ArchWallSemantic.py
 )
 
 SET(bimplan_SRCS
@@ -93,7 +94,6 @@ SET(bimplan_SRCS
     bimplan/contextual_session.py
     bimplan/contextual_rendering.py
     bimplan/contextual_editing.py
-    bimplan/wall_semantic.py
     bimplan/document_visuals.py
     bimplan/editable_points.py
     bimplan/object_visibility.py

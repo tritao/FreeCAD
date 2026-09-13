@@ -15,7 +15,7 @@ from ArchRepresentation import BIMEditRay, RepresentationContext, Representation
 from bimtests.TestArchBaseGui import TestArchBaseGui
 from bimplan.runtime.session import PlanEditSession
 from bimplan.contextual_session import BIMContextualEditingSession
-from bimplan.wall_semantic import apply_wall_candidate
+from ArchWallSemantic import apply_wall_candidate
 from bimplan.providers import PlanEditProvider, PlanEditRegistry
 from BimContextualRendering import (
     ContextualInteractionRenderer,
