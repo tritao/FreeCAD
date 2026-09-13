@@ -1206,11 +1206,10 @@ class TestBimPlanEditSessionGui(TestArchBaseGui):
                     for index in range(handle_switch.getNumChildren())
                 )
             )
-            wall_edit_type = type(session.wall_edit)
-            with patch.object(wall_edit_type, "start_wall_edit") as start_wall_edit:
-                with patch.object(wall_edit_type, "has_active_wall_edit", return_value=True):
-                    self.assertTrue(session.contextual_editing.activate(handle))
-            start_wall_edit.assert_called_once_with("Move")
+            with patch.object(FreeCADGui, "Snapper", create=True) as snapper:
+                self.assertTrue(session.contextual_editing.activate(handle))
+            self.assertIs(handle, session.contextual_editing.editor.handle)
+            snapper.getPoint.assert_called_once()
         finally:
             session.shutdown(close_dialog=False)
 
@@ -1235,8 +1234,10 @@ class TestBimPlanEditSessionGui(TestArchBaseGui):
                 self.assertTrue(session.contextual_editing.activate(handle))
             callbacks = snapper.getPoint.call_args.kwargs
             callbacks["movecallback"](target, None)
-            self.assertTrue(session.wall_edit_state.preview_points[1].isEqual(expected_end, 1e-7))
+            preview = session.contextual_editing.preview(target)
+            self.assertTrue(preview.value.isEqual(expected_end, 1e-7))
             callbacks["callback"](target, None)
+            self.pump_gui_events(20)
 
             endpoints = wall.Proxy.calc_endpoints(wall)
             self.assertTrue(endpoints[1].isEqual(expected_end, 1e-7))
@@ -1294,10 +1295,10 @@ class TestBimPlanEditSessionGui(TestArchBaseGui):
                 self.assertTrue(session.contextual_editing.activate(handle))
                 callbacks = snapper.getPoint.call_args.kwargs
                 callbacks["movecallback"](target, None)
-                preview = session.wall_edit_state.preview_points
-                self.assertTrue(preview[0].isEqual(original[0] + delta, 1e-7))
-                self.assertTrue(preview[1].isEqual(original[1] + delta, 1e-7))
+                preview = session.contextual_editing.preview(target)
+                self.assertTrue(preview.value.isEqual(midpoint + delta, 1e-7))
                 callbacks["callback"](target, None)
+                self.pump_gui_events(20)
 
             moved = wall.Proxy.calc_endpoints(wall)
             self.assertTrue(moved[0].isEqual(original[0] + delta, 1e-7))

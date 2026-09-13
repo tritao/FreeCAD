@@ -471,17 +471,6 @@ class PlanContextualEditingAPI:
 
     def activate(self, handle):
         self.cancel()
-        intent = getattr(handle.operation, "interaction_intent", "")
-        wall_modes = {
-            "WallStretchStart": "Start",
-            "WallStretchEnd": "End",
-            "WallMove": "Move",
-        }
-        if intent in wall_modes:
-            self.session.selection.state.set_selected_plan_target("wall", handle.source)
-            self.session.wall_edit.start_wall_edit(wall_modes[intent])
-            self.session.contextual_rendering.sync_visible_handles()
-            return self.session.wall_edit.has_active_wall_edit()
         self.controller = self._new_controller()
         return self.controller.activate(handle)
 
