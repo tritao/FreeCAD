@@ -26,6 +26,7 @@ SET(Arch_SRCS
     ArchProject.py
     ArchWall.py
     ArchWallConstruction.py
+    ArchOpeningConstruction.py
     ArchWallEndpoint.py
     ArchWallEndCondition.py
     ArchWallTrimming.py
