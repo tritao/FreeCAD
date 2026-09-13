@@ -85,6 +85,7 @@ SET(Arch_SRCS
     BimLibrarySources.py
     BimContextualRendering.py
     ArchWallSemantic.py
+    ArchSpaceSemantic.py
     ArchSpaceConstruction.py
 )
 

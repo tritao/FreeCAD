@@ -8,6 +8,7 @@ from unittest.mock import patch
 import Arch
 import FreeCAD
 import Part
+import ArchSpaceSemantic
 
 from bimcontextual.actions import (
     ContextualActionSpec,
@@ -55,6 +56,31 @@ from bimcontextual.profiles import profile_for
 
 
 class TestArchRepresentation(unittest.TestCase):
+    def test_semantic_boundary_evaluation_preserves_solver_result(self):
+        report = {
+            "valid": True,
+            "code": "ok",
+            "details": ["resolved"],
+            "inner_void_count": 1,
+            "label": "Room A",
+            "candidates": [{"sample_point": FreeCAD.Vector(1, 2, 0)}],
+        }
+        evaluation = ArchSpaceSemantic.SpaceBoundaryEvaluation.from_report((), report)
+        self.assertTrue(evaluation.valid)
+        self.assertEqual("ok", evaluation.code)
+        self.assertEqual(("resolved",), evaluation.details)
+        self.assertEqual(1, evaluation.inner_void_count)
+        self.assertEqual(1, evaluation.to_report()["candidate_count"])
+        self.assertEqual("Room A", evaluation.to_report()["label"])
+
+    def test_semantic_space_geometry_validation_requires_a_solid(self):
+        solid = type("Space", (), {"Shape": Part.makeBox(100, 100, 100)})()
+        wire = type(
+            "Space", (), {"Shape": Part.makeLine(FreeCAD.Vector(), FreeCAD.Vector(100, 0, 0))}
+        )()
+        self.assertTrue(ArchSpaceSemantic.has_valid_geometry(solid))
+        self.assertFalse(ArchSpaceSemantic.has_valid_geometry(wire))
+
     def test_shared_contextual_package_has_no_plan_imports(self):
         package = Path(__file__).resolve().parents[1] / "bimcontextual"
         offenders = []
