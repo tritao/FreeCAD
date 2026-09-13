@@ -52,6 +52,21 @@ from ArchWallSemantic import evaluate_wall_candidate, evaluate_wall_length
 
 
 class TestArchRepresentation(unittest.TestCase):
+    def test_edit_operation_uses_semantic_candidate_validation(self):
+        operation = BIMEditOperation(
+            "Semantic",
+            "Semantic edit",
+            lambda _source: FreeCAD.Vector(),
+            lambda _source, _value: None,
+            value_kind="Point",
+            validator=lambda _source, _value: type(
+                "Evaluation", (), {"allowed": False, "reason": "Relation failed."}
+            )(),
+        )
+        validation = operation.validate(object(), FreeCAD.Vector(1, 0, 0))
+        self.assertFalse(validation.allowed)
+        self.assertEqual("Relation failed.", validation.reason)
+
     def test_wall_move_and_stretch_share_viewer_independent_evaluation(self):
         endpoints = (FreeCAD.Vector(0, 0, 0), FreeCAD.Vector(3000, 0, 0))
 

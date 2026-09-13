@@ -15,6 +15,9 @@ from ArchRepresentation import BIMEditRay, RepresentationContext, Representation
 from bimtests.TestArchBaseGui import TestArchBaseGui
 from bimplan.runtime.session import PlanEditSession
 from bimplan.contextual_session import BIMContextualEditingSession
+from bimplan.contextual_host import ContextualInteractionHost
+from bimplan import contextual_policy
+from bimplan.contextual_actions import ContextualProvider, ContextualToolSpec
 from ArchWallSemantic import apply_wall_candidate
 from bimplan.providers import PlanEditProvider, PlanEditRegistry
 from BimContextualRendering import (
@@ -31,6 +34,22 @@ class _TestProvider(PlanEditProvider):
 
     def get_provider_id(self):
         return self.provider_id
+
+
+class _ContextualToolProvider(ContextualProvider):
+    provider_id = "test-contextual-tools"
+
+    def __init__(self):
+        self.executed = []
+
+    def get_tools(self, context):
+        del context
+        return (ContextualToolSpec("inspect", "Inspect", provider_id=self.provider_id),)
+
+    def execute_tool(self, tool_key, context, commands=None, payload=None):
+        del context, commands, payload
+        self.executed.append(tool_key)
+        return True
 
 
 class _HostedOpeningProxy:
@@ -53,6 +72,46 @@ class _HostedOpeningProxy:
 
 
 class TestBimPlanEditSessionGui(TestArchBaseGui):
+    def test_contextual_task_panel_consumes_provider_tools(self):
+        provider = _ContextualToolProvider()
+        session = BIMContextualEditingSession(
+            FreeCADGui.ActiveDocument.ActiveView, sources=(), providers=(provider,)
+        )
+        try:
+            self.pump_gui_events(20)
+            self.assertTrue(session.action_panel._shown)
+            self.assertEqual(("inspect",), tuple(tool.key for tool in session.contextual_tools))
+            self.assertTrue(session.activate_tool(session.contextual_tools[0]))
+            self.assertEqual(["inspect"], provider.executed)
+        finally:
+            session.close()
+
+    def test_contextual_point_host_uses_the_representation_reference_plane(self):
+        frame = FreeCAD.Placement(
+            FreeCAD.Vector(100, 200, 300),
+            FreeCAD.Rotation(FreeCAD.Vector(1, 0, 0), 90),
+        )
+        context = RepresentationContext(
+            purpose=RepresentationPurpose.SECTION, reference_frame=frame
+        )
+        host = ContextualInteractionHost(context)
+        plane = host.get_interaction_plane()
+        projected = plane.project_point(FreeCAD.Vector(125, 900, 340))
+        local = frame.inverse().multVec(projected)
+        self.assertAlmostEqual(0.0, local.z, places=7)
+
+    def test_contextual_capability_matrix_is_explicit(self):
+        model = RepresentationContext(purpose=RepresentationPurpose.MODEL)
+        plan = RepresentationContext(purpose=RepresentationPurpose.PLAN)
+        section = RepresentationContext(purpose=RepresentationPurpose.SECTION)
+        elevation = RepresentationContext(purpose=RepresentationPurpose.ELEVATION)
+        self.assertTrue(contextual_policy.supports(model, "create-wall"))
+        self.assertTrue(contextual_policy.supports(plan, "create-wall"))
+        self.assertFalse(contextual_policy.supports(section, "create-wall"))
+        self.assertFalse(contextual_policy.supports(elevation, "create-wall"))
+        self.assertTrue(contextual_policy.supports(section, "insert-opening"))
+        self.assertFalse(contextual_policy.supports(section, "wall-path"))
+
     @staticmethod
     def _wall_preview_session(renderer):
         def footprint(path, width, align):
@@ -873,10 +932,10 @@ class TestBimPlanEditSessionGui(TestArchBaseGui):
                 self.assertLess(model[2].distanceToPoint(result[2]), 1e-7)
                 self.assertAlmostEqual(model[3], result[3], delta=1e-6)
 
-    def test_contextual_wall_creation_has_cross_context_parity(self):
+    def test_contextual_wall_creation_follows_context_capability_policy(self):
         view = FreeCADGui.ActiveDocument.ActiveView
         results = []
-        for purpose in RepresentationPurpose.MODEL, RepresentationPurpose.SECTION, RepresentationPurpose.ELEVATION:
+        for purpose in RepresentationPurpose.MODEL, RepresentationPurpose.PLAN:
             session = BIMContextualEditingSession(view, context=RepresentationContext(purpose=purpose), sources=())
             callbacks = []
             try:
@@ -894,7 +953,17 @@ class TestBimPlanEditSessionGui(TestArchBaseGui):
             self.document.recompute()
             self.assertIsNone(self.document.getObject(wall_name))
         self.assertEqual(results[0], results[1])
-        self.assertEqual(results[0], results[2])
+        for purpose in RepresentationPurpose.SECTION, RepresentationPurpose.ELEVATION:
+            session = BIMContextualEditingSession(
+                view, context=RepresentationContext(purpose=purpose), sources=()
+            )
+            try:
+                self.pump_gui_events(20)
+                self.assertNotIn(
+                    "create-wall", {item.key for item in session.contextual_actions}
+                )
+            finally:
+                session.close()
 
     def test_contextual_wall_creation_preview_and_cancel_are_reversible(self):
         view = FreeCADGui.ActiveDocument.ActiveView
@@ -1481,6 +1550,29 @@ class TestBimPlanEditSessionGui(TestArchBaseGui):
             self.assertTrue(opening.Placement.Base.isEqual(midpoint, 1e-7))
         finally:
             session.shutdown(close_dialog=False)
+
+    def test_wall_move_rejects_an_unsolved_relation_before_preview_or_commit(self):
+        wall = Arch.makeWall(length=3000, width=200, height=2500, align="Center")
+        joined = Arch.makeWall(length=1800, width=200, height=2500, align="Center")
+        joined.Placement.Base = FreeCAD.Vector(3000, 0, 0)
+        Arch.makeWallJoint(wall, joined, "Miter")
+        self.document.recompute()
+        capabilities = wall.Proxy.getEditCapabilities(
+            wall, RepresentationContext(purpose=RepresentationPurpose.MODEL)
+        )
+        operation = next(
+            handle.operation
+            for handle in capabilities.edit_handles
+            if handle.role == "WallMove"
+        )
+        failed = SimpleNamespace(
+            is_ok=lambda: False,
+            status_message="Joined walls cannot meet at this candidate.",
+        )
+        with patch.object(ArchWallRelation, "solve_wall_joint_inputs", return_value=failed):
+            validation = operation.validate(wall, FreeCAD.Vector(1600, 200, 0))
+        self.assertFalse(validation.allowed)
+        self.assertIn("cannot meet", validation.reason)
 
     def test_semantic_wall_move_repositions_hosted_opening(self):
         wall = Arch.makeWall(length=3000, width=200, height=2500, align="Center")
