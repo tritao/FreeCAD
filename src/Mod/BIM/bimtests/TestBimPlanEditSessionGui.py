@@ -720,6 +720,33 @@ class TestBimPlanEditSessionGui(TestArchBaseGui):
             FreeCADGui.Selection.clearSelection()
         self.assertEqual("Inherit", view.getViewVisibility(wall))
 
+    def test_model_context_exposes_provider_actions_for_the_selection(self):
+        wall = Arch.makeWall(length=3000, width=200, height=2500, align="Left")
+        self.document.recompute()
+        view = FreeCADGui.ActiveDocument.ActiveView
+        FreeCADGui.Selection.clearSelection()
+        FreeCADGui.Selection.addSelection(wall)
+        session = BIMContextualEditingSession(view)
+        try:
+            self.pump_gui_events(20)
+            labels = {action.label for action in session.contextual_actions}
+            self.assertIn("Move Wall", labels)
+            self.assertIn("Edit Wall Path Endpoint", labels)
+            self.assertIn("Edit Wall Height", labels)
+            self.assertEqual(1, len(session.inspector_sections))
+
+            height_action = next(
+                action
+                for action in session.contextual_actions
+                if action.handle_subelement == "Height"
+            )
+            self.assertTrue(session.activate_action(height_action))
+            self.assertEqual("Height", session.active_edit.subelement)
+            self.assertIsNotNone(session.host._value_input)
+        finally:
+            session.close()
+            FreeCADGui.Selection.clearSelection()
+
     def test_standard_3d_ray_constraints_commit_path_move_and_offset(self):
         wall = Arch.makeWall(length=3000, width=200, height=2500, align="Left")
         self.document.recompute()

@@ -8,6 +8,7 @@ from bimplan.contextual_actions import (
     ContextualProvider,
     ContextualProviderContext,
     ContextualToolSpec,
+    SemanticEditProvider,
 )
 
 from .contracts import (

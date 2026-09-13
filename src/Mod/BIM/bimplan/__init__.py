@@ -8,6 +8,7 @@ from .contextual_actions import (
     ContextualProvider,
     ContextualProviderContext,
     ContextualToolSpec,
+    SemanticEditProvider,
 )
 
 from .runtime.embedded_commands import (
@@ -67,6 +68,7 @@ __all__ = [
     "ContextualProvider",
     "ContextualProviderContext",
     "ContextualToolSpec",
+    "SemanticEditProvider",
     "PlanActionSpec",
     "PlanContextDetailSpec",
     "PlanContextPanelSpec",

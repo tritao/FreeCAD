@@ -8,6 +8,8 @@ from PySide import QtCore
 
 import ArchRepresentation
 import BimContextualRendering
+from bimplan.contextual_action_ui import ContextualActionPanel
+from bimplan.contextual_actions import ContextualProviderContext, SemanticEditProvider
 from bimplan.contextual_editing import ContextualEditController
 from draftguitools.gui_base import DraftInteractionHost
 
@@ -18,7 +20,14 @@ _active_session = None
 class BIMContextualEditingSession:
     """Show and edit semantic handles while leaving document geometry visible."""
 
-    def __init__(self, view=None, context=None, sources=None, orient_to_context=False):
+    def __init__(
+        self,
+        view=None,
+        context=None,
+        sources=None,
+        orient_to_context=False,
+        providers=None,
+    ):
         gui_document = FreeCADGui.ActiveDocument
         self.gui_document = gui_document
         self.document = FreeCAD.ActiveDocument
@@ -46,6 +55,12 @@ class BIMContextualEditingSession:
         self._sources = set()
         self._closed = False
         self._selection_refresh_pending = False
+        self._capabilities = ()
+        self.contextual_actions = ()
+        self.inspector_sections = ()
+        self._pending_action_handle = None
+        self.providers = tuple(providers or (SemanticEditProvider(),))
+        self.action_panel = ContextualActionPanel()
         self.host = DraftInteractionHost(view=self.view)
 
         try:
@@ -132,6 +147,7 @@ class BIMContextualEditingSession:
         try:
             self.controller.cancel(refresh=False)
             self.host.stop_request()
+            self.action_panel.close()
             try:
                 self.renderer.close()
             except (RuntimeError, ReferenceError):
@@ -155,6 +171,10 @@ class BIMContextualEditingSession:
     def _pick_handle(self, position):
         if self._closed or self.active_edit is not None:
             return None
+        if self._pending_action_handle is not None:
+            handle = self._pending_action_handle
+            self._pending_action_handle = None
+            return handle
         return self.renderer.pick_edit_handle(
             position,
             self.view.getPointOnScreen,
@@ -218,6 +238,7 @@ class BIMContextualEditingSession:
             self.controller.cancel()
 
         current_sources = set()
+        current_capabilities = []
         for obj in selected:
             try:
                 capabilities = ArchRepresentation.edit_capabilities_for(obj, self.context)
@@ -234,12 +255,64 @@ class BIMContextualEditingSession:
                 continue
             self.renderer.set_representation(capabilities)
             current_sources.add(obj)
+            current_capabilities.append(capabilities)
 
         for source in self._sources - current_sources:
             self.renderer.remove_representation(source)
         self._sources = current_sources
+        self._capabilities = tuple(current_capabilities)
+        self._pending_action_handle = None
         self.renderer.set_visible_handle_sources(current_sources)
+        self._refresh_contextual_actions(
+            tuple(capability.source for capability in self._capabilities)
+        )
         self.view.redraw()
+
+    def _refresh_contextual_actions(self, selected):
+        context = ContextualProviderContext(
+            representation_context=self.context,
+            selected_sources=tuple(selected),
+            view=self.view,
+            capabilities=self._capabilities,
+        )
+        actions = []
+        sections = []
+        for provider in self.providers:
+            actions.extend(provider.get_actions(context) or ())
+            sections.extend(provider.get_inspector_sections(context) or ())
+        self.contextual_actions = tuple(actions)
+        self.inspector_sections = tuple(sections)
+        self.action_panel.update(
+            self.contextual_actions,
+            self.inspector_sections,
+            self.activate_action,
+        )
+
+    def activate_action(self, action):
+        """Activate a provider action without embedding object-specific policy."""
+
+        if self._closed or not getattr(action, "enabled", False):
+            return False
+        handle = next(
+            (
+                candidate
+                for capability in self._capabilities
+                for candidate in tuple(capability.edit_handles or ())
+                if candidate.source is action.source
+                and candidate.operation.key == action.handle_key
+                and candidate.subelement == action.handle_subelement
+            ),
+            None,
+        )
+        if handle is None:
+            return False
+        if handle.operation.value_kind == "Scalar":
+            return self.begin_handle_edit(handle)
+        if handle.interaction == "Immediate":
+            return self.controller.activate(handle)
+        self._pending_action_handle = handle
+        self._show_feedback("Click and drag to {}".format(action.label.lower()))
+        return True
 
     def _orient_view_to_context(self):
         frame = getattr(self.context, "reference_frame", None)

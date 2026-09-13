@@ -18,6 +18,7 @@ class ContextualActionSpec:
     provider_id: str = ""
     handle_key: str = ""
     handle_subelement: str = ""
+    source: object = None
 
 
 @dataclass(frozen=True)
@@ -103,3 +104,56 @@ class ContextualProvider:
     def execute_action(self, action_key, context, commands=None, payload=None):
         del action_key, context, commands, payload
         return False
+
+
+class SemanticEditProvider(ContextualProvider):
+    """Expose semantic edit capabilities as contextual actions."""
+
+    provider_id = "semantic-edits"
+    display_name = "Semantic Edits"
+
+    def get_actions(self, context):
+        actions = []
+        for capability in context.get_capabilities():
+            source = getattr(capability, "source", None)
+            source_name = str(getattr(source, "Name", "") or "source")
+            for handle in tuple(getattr(capability, "edit_handles", ()) or ()):
+                operation = handle.operation
+                actions.append(
+                    ContextualActionSpec(
+                        key="{}.{}.{}".format(
+                            source_name,
+                            operation.key,
+                            handle.subelement or handle.role,
+                        ),
+                        label=operation.label,
+                        tooltip="Edit {} in the current {} context".format(
+                            operation.property_name or handle.role,
+                            context.representation_context.purpose.value,
+                        ),
+                        enabled=operation.is_available(source),
+                        provider_id=self.provider_id,
+                        handle_key=operation.key,
+                        handle_subelement=handle.subelement,
+                        source=source,
+                    )
+                )
+        return tuple(actions)
+
+    def get_inspector_sections(self, context):
+        purpose = context.representation_context.purpose.value
+        return tuple(
+            ContextualInspectorSection(
+                key=str(getattr(source, "Name", "") or id(source)),
+                title=str(getattr(source, "Label", "") or getattr(source, "Name", "Object")),
+                body="{} semantic editing · {} available action(s)".format(
+                    purpose,
+                    sum(
+                        len(getattr(capability, "edit_handles", ()) or ())
+                        for capability in context.get_capabilities(source)
+                    ),
+                ),
+                provider_id=self.provider_id,
+            )
+            for source in context.get_selected_sources()
+        )
