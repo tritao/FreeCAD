@@ -977,10 +977,10 @@ class TestBimPlanEditSessionGui(TestArchBaseGui):
             requests.pop(0)[0](FreeCAD.Vector())
             callback, options = requests.pop(0)
             options["move_callback"](FreeCAD.Vector(1200, 0, 0))
-            self.assertIn(session._creation_preview_source, session.renderer._preview_nodes)
+            self.assertTrue(session.renderer._preview_nodes)
             self.assertIsNotNone(session.host._value_input)
             callback(None)
-            self.assertNotIn(session._creation_preview_source, session.renderer._preview_nodes)
+            self.assertFalse(session.renderer._preview_nodes)
             self.assertIsNone(session.host._value_input)
         finally:
             session.close()

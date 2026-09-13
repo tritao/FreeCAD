@@ -176,6 +176,9 @@ class HostedOpeningCreationProvider(ContextualProvider):
     provider_id = "hosted-opening-creation"
     display_name = "Hosted Openings"
 
+    def __init__(self):
+        self._interaction = None
+
     @staticmethod
     def _selected_wall(context):
         for source in context.get_selected_sources():
@@ -211,12 +214,18 @@ class HostedOpeningCreationProvider(ContextualProvider):
         wall = self._selected_wall(context)
         if kind is None or wall is None or commands is None:
             return False
-        return commands.begin_hosted_opening_creation(kind, wall)
+        from .creation import HostedOpeningCreationInteraction
+
+        self._interaction = HostedOpeningCreationInteraction(commands, wall, kind)
+        return self._interaction.start()
 
 
 class WallCreationProvider(ContextualProvider):
     provider_id = "wall-creation"
     display_name = "Walls"
+
+    def __init__(self):
+        self._interaction = None
 
     def get_actions(self, context):
         if not context.supports("create-wall"):
@@ -230,4 +239,9 @@ class WallCreationProvider(ContextualProvider):
 
     def execute_action(self, action_key, context, commands=None, payload=None):
         del context, payload
-        return bool(action_key == "create-wall" and commands and commands.begin_wall_creation())
+        if action_key != "create-wall" or commands is None:
+            return False
+        from .creation import WallCreationInteraction
+
+        self._interaction = WallCreationInteraction(commands)
+        return self._interaction.start()

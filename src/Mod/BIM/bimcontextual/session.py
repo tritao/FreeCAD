@@ -7,7 +7,6 @@ import FreeCADGui
 from PySide import QtCore
 
 import ArchRepresentation
-import ArchOpeningConstruction
 import BimContextualRendering
 from .ui import ContextualActionPanel
 from .actions import (
@@ -68,9 +67,6 @@ class ContextualSession:
         self._pending_action_handle = None
         self.providers = tuple(providers or self.profile.providers(self.context))
         self._provider_context = None
-        self._creation_preview_source = object()
-        self._wall_start = None
-        self._wall_direction = None
         self.action_panel = ContextualActionPanel(close_callback=self.close)
         self.host = ContextualInteractionHost(
             self.context, profile=self.profile, view=self.view
@@ -130,129 +126,45 @@ class ContextualSession:
         self._clear_feedback()
         return True
 
-    def begin_hosted_opening_creation(self, kind, wall):
-        """Acquire one point and construct an opening using semantic BIM policy."""
+    def request_point(self, callback, **kwargs):
+        """Expose context-aware point acquisition to an active provider workflow."""
 
-        if self._closed or wall is None:
-            return False
-        spec = ArchOpeningConstruction.HostedOpeningSpec(kind=kind)
-        self.host.request_point(
-            lambda point, _obj=None: self._finish_hosted_opening_creation(
-                wall, point, spec
-            ),
-            title="{} location".format(spec.validated().kind),
-            move_callback=lambda point, _info=None: self._preview_hosted_opening(
-                wall, point, spec
-            ),
-        )
-        return True
-
-    def begin_wall_creation(self):
-        self._wall_start = None
-        self.host.request_point(self._accept_wall_point, title="Wall start")
-        return True
-
-    def _accept_wall_point(self, point, _obj=None):
-        if point is None:
-            self._wall_start = None
-            self._wall_direction = None
-            self.renderer.clear_preview(self._creation_preview_source)
-            self.host.clear_value_input()
-            self._request_interaction()
-            return None
-        if self._wall_start is None:
-            self._wall_start = FreeCAD.Vector(point)
-            self.host.request_point(
-                self._accept_wall_point,
-                move_callback=self._preview_wall,
-                title="Wall end",
-            )
-            return None
-        import ArchWallConstruction
-        walls = ArchWallConstruction.construct_wall_run(
-            self.document, (self._wall_start, point),
-            ArchWallConstruction.WallConstructionSpec(200, 2500),
-            transaction_name="Create Wall", auto_join=False,
-        )
-        self._wall_start = None
-        self.renderer.clear_preview(self._creation_preview_source)
-        self._request_interaction()
-        return walls[0]
-
-    def _preview_wall(self, point, _info=None):
-        if self._wall_start is None or point is None:
-            return
-        import Part
-        vector = FreeCAD.Vector(point).sub(self._wall_start)
-        if vector.Length < 10:
-            self.renderer.clear_preview(self._creation_preview_source)
-            return
-        shape = Part.makeBox(vector.Length, 200, 2500)
-        shape.Placement = FreeCAD.Placement(
-            self._wall_start,
-            FreeCAD.Rotation(FreeCAD.Vector(1, 0, 0), vector),
-        )
-        self._show_creation_shape(shape, "WallPreview")
-        self._wall_direction = FreeCAD.Vector(vector).normalize()
-        self.host.set_value_input(
-            label="Wall length",
-            unit="Length",
-            value=vector.Length,
-            callback=self._commit_wall_length,
-        )
-
-    def _commit_wall_length(self, value):
-        if self._wall_start is None or self._wall_direction is None:
-            return
-        end = self._wall_start.add(
-            FreeCAD.Vector(self._wall_direction).multiply(float(value))
-        )
-        self._accept_wall_point(end)
-
-    def _preview_hosted_opening(self, wall, point, spec):
-        if point is None:
-            return
-        import Part
-        value = spec.validated()
-        shape = Part.makeBox(value.width, 200, value.height)
-        shape.Placement = ArchOpeningConstruction.hosted_opening_placement(
-            wall, point, value
-        )
-        self._show_creation_shape(shape, "OpeningPreview")
-
-    def _show_creation_shape(self, shape, role):
-        representation = ArchRepresentation.BIMRepresentation(
-            source=self._creation_preview_source, context=self.context
-        )
-        for index, face in enumerate(shape.Faces, start=1):
-            representation.add_geometry(
-                "cut_geometry", face, role, "Face{}".format(index)
-            )
-        self.renderer.set_preview_representation(
-            self._creation_preview_source, representation
-        )
-
-    def _finish_hosted_opening_creation(self, wall, point, spec):
         if self._closed:
-            return None
-        try:
-            opening = ArchOpeningConstruction.construct_hosted_opening(
-                self.document,
-                wall,
-                point,
-                spec,
-                transaction_name="Create {}".format(spec.validated().kind),
-            )
-            FreeCADGui.Selection.clearSelection()
-            FreeCADGui.Selection.addSelection(opening)
-            return opening
-        except Exception as exc:
-            self._show_feedback(exc)
-            return None
-        finally:
-            self.renderer.clear_preview(self._creation_preview_source)
-            if not self._closed:
-                self._request_interaction()
+            return False
+        request_result = self.host.request_point(callback, **kwargs)
+        return True if request_result is None else request_result
+
+    def set_value_input(self, **kwargs):
+        if self._closed:
+            return False
+        return self.host.set_value_input(**kwargs)
+
+    def clear_value_input(self):
+        return self.host.clear_value_input()
+
+    def present_preview(self, source, representation):
+        if self._closed:
+            return False
+        return self.renderer.set_preview_representation(source, representation)
+
+    def clear_preview(self, source=None):
+        return self.renderer.clear_preview(source)
+
+    def select_source(self, source):
+        if self._closed or source is None:
+            return False
+        FreeCADGui.Selection.clearSelection()
+        FreeCADGui.Selection.addSelection(source)
+        return True
+
+    def resume_interaction(self):
+        if self._closed:
+            return False
+        self._request_interaction()
+        return True
+
+    def show_feedback(self, message):
+        self._show_feedback(message)
 
     def refresh_source(self, _source=None):
         """Refresh capabilities after commit or a failed semantic operation."""
@@ -285,7 +197,6 @@ class ContextualSession:
             self.controller.cancel(refresh=False)
             self.host.stop_request()
             self.host.clear_value_input()
-            self.renderer.clear_preview(self._creation_preview_source)
             self.action_panel.close()
             try:
                 self.renderer.close()
