@@ -207,6 +207,31 @@ class BIMEditOperation:
         return self._apply_value(source, float(value))
 
 
+class BIMEditTransaction:
+    """Document transaction used by semantic BIM edits outside Plan Edit."""
+
+    def __init__(self, document, label):
+        self.document = document
+        self.label = str(label or "").strip()
+        self._opened = False
+
+    def __enter__(self):
+        if self.document is not None and self.label:
+            self.document.openTransaction(self.label)
+            self._opened = True
+        return self
+
+    def __exit__(self, exception_type, exception, traceback):
+        del exception, traceback
+        if not self._opened:
+            return False
+        if exception_type is None:
+            self.document.commitTransaction()
+        else:
+            self.document.abortTransaction()
+        return False
+
+
 def is_property_expression_driven(obj, property_name):
     """Return whether a document property path is controlled by an expression."""
 

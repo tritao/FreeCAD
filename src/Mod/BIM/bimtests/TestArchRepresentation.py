@@ -11,6 +11,7 @@ import Draft
 from ArchRepresentation import (
     BIMEditHandle,
     BIMEditOperation,
+    BIMEditTransaction,
     BIMRepresentation,
     RepresentationUnavailable,
     RepresentationContext,
@@ -20,7 +21,7 @@ from ArchRepresentation import (
     query_representation_snap_candidates,
     representation_for,
 )
-from bimplan.contextual_editing import BIMContextualHandleEditor
+from bimplan.contextual_editing import BIMContextualHandleEditor, ContextualEditController
 from bimplan.editable_points import get_contextual_edit_points
 
 
@@ -126,6 +127,31 @@ class TestArchRepresentation(unittest.TestCase):
         self.assertEqual(250.0, source["width"])
         self.assertIs(handle.operation, operation)
 
+    def test_bim_edit_transaction_commits_and_aborts(self):
+        class Document:
+            def __init__(self):
+                self.events = []
+
+            def openTransaction(self, label):
+                self.events.append(("open", label))
+
+            def commitTransaction(self):
+                self.events.append(("commit",))
+
+            def abortTransaction(self):
+                self.events.append(("abort",))
+
+        document = Document()
+        with BIMEditTransaction(document, "Edit wall"):
+            document.events.append(("apply",))
+        self.assertEqual([("open", "Edit wall"), ("apply",), ("commit",)], document.events)
+
+        document.events.clear()
+        with self.assertRaisesRegex(RuntimeError, "failed"):
+            with BIMEditTransaction(document, "Edit wall"):
+                raise RuntimeError("failed")
+        self.assertEqual([("open", "Edit wall"), ("abort",)], document.events)
+
     def test_contextual_editor_projects_previews_and_commits(self):
         source = {"width": 100.0}
         operation = BIMEditOperation(
@@ -156,6 +182,75 @@ class TestArchRepresentation(unittest.TestCase):
         self.assertEqual(125.0, source["width"])
         self.assertEqual([source], refreshed)
         self.assertIsNone(editor.handle)
+
+    def test_contextual_edit_controller_uses_injected_view_render_and_input(self):
+        class Renderer:
+            def __init__(self):
+                self.events = []
+
+            def set_handle_state(self, handle, state):
+                self.events.append(("state", handle, state))
+
+            def preview_handle(self, handle, point):
+                self.events.append(("point", handle, FreeCAD.Vector(point)))
+
+            def clear_preview(self, source):
+                self.events.append(("clear", source))
+
+        class InputAdapter:
+            def start_point_pick(self, point, callback, move_callback, title):
+                self.point = point
+                self.callback = callback
+                self.move_callback = move_callback
+                self.title = title
+
+            def defer(self, _key, callback):
+                callback()
+                return True
+
+            def clear(self):
+                self.cleared = True
+
+        source = {"width": 100.0}
+        operation = BIMEditOperation(
+            "set-width",
+            "Set width",
+            lambda value: value["width"],
+            lambda value, width: value.__setitem__("width", width),
+            minimum=1.0,
+            manages_transaction=True,
+        )
+        handle = BIMEditHandle(
+            source,
+            "width",
+            FreeCAD.Vector(),
+            FreeCAD.Vector(1, 0, 0),
+            operation,
+        )
+        renderer = Renderer()
+        input_adapter = InputAdapter()
+        refreshed = []
+        view = object()
+        controller = ContextualEditController(
+            view,
+            RepresentationContext(purpose="Plan"),
+            renderer,
+            input_adapter,
+            refresh_callback=refreshed.append,
+        )
+
+        self.assertTrue(controller.activate(handle))
+        self.assertIs(controller.view, view)
+        self.assertIs(controller.active_edit, handle)
+        self.assertEqual("Edit width", input_adapter.title)
+        input_adapter.move_callback(FreeCAD.Vector(25, 10, 0))
+        input_adapter.callback(FreeCAD.Vector(25, 10, 0), None)
+
+        self.assertEqual(125.0, source["width"])
+        self.assertEqual([source], refreshed)
+        self.assertIsNone(controller.active_edit)
+        self.assertTrue(input_adapter.cleared)
+        self.assertIn(("clear", source), renderer.events)
 
     def test_object_owned_contextual_points_preserve_global_coordinates(self):
         class Owner:

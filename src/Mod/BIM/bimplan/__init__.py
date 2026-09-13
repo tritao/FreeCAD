@@ -46,7 +46,12 @@ from . import picking
 from .semantics import PlanSemanticRecord
 from .selection.targets import PlanTarget
 from .transactions import PlanEditTransaction
-from .contextual_editing import BIMContextualHandleEditor, BIMEditPreview, BIMEditResult
+from .contextual_editing import (
+    BIMContextualHandleEditor,
+    BIMEditPreview,
+    BIMEditResult,
+    ContextualEditController,
+)
 
 __all__ = [
     "PlanActionSpec",
@@ -63,6 +68,7 @@ __all__ = [
     "BIMContextualHandleEditor",
     "BIMEditPreview",
     "BIMEditResult",
+    "ContextualEditController",
     "create_hosted_opening",
     "has_built_opening_shape",
     "_PlanEditCommandHost",
