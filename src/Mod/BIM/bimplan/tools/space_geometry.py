@@ -16,18 +16,6 @@ def format_space_region_candidate_area(candidate):
         return "{:.3f} m^2".format(area / 1000000.0)
 
 
-def copy_shape_without_element_map(shape):
-    if shape is None:
-        return None
-    try:
-        return shape.copy(noElementMap=True)
-    except Exception:
-        try:
-            return shape.copy()
-        except Exception:
-            return None
-
-
 def get_existing_space_region_filter_spaces(session, exclude=None):
     if not session.doc:
         return []

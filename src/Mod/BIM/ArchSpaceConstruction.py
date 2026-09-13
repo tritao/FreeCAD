@@ -13,6 +13,18 @@ def _copy_shape(shape):
         return shape.copy()
 
 
+def create_region_base(document, shape):
+    if document is None or shape is None or shape.isNull():
+        raise SpaceConstructionError("A valid closed space region is required.")
+    base = document.addObject("Part::Feature", "SpaceRegionBase")
+    base.Shape = _copy_shape(shape)
+    view_object = getattr(base, "ViewObject", None)
+    for name, value in (("Visibility", False), ("ShowInTree", False), ("Selectable", False)):
+        if view_object is not None and hasattr(view_object, name):
+            setattr(view_object, name, value)
+    return base
+
+
 def construct_space(
     document,
     base_shape,
@@ -30,11 +42,7 @@ def construct_space(
         raise SpaceConstructionError("A valid closed space region is required.")
     document.openTransaction(transaction_name)
     try:
-        base = document.addObject("Part::Feature", "SpaceRegionBase")
-        base.Shape = _copy_shape(base_shape)
-        for name, value in (("Visibility", False), ("ShowInTree", False), ("Selectable", False)):
-            if hasattr(base.ViewObject, name):
-                setattr(base.ViewObject, name, value)
+        base = create_region_base(document, base_shape)
         space = Arch.makeSpace(base)
         if space is None:
             raise SpaceConstructionError("Unable to create space.")

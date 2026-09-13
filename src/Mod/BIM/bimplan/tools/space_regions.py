@@ -456,37 +456,12 @@ def create_space_region_base_object(session, candidate):
     shape = candidate.get("shape") if isinstance(candidate, dict) else None
     if not shape:
         return None
+    import ArchSpaceConstruction
+
     try:
-        base = session.doc.addObject("Part::Feature", "SpaceRegionBase")
+        return ArchSpaceConstruction.create_region_base(session.doc, shape)
     except Exception:
         return None
-    try:
-        shape_copy = plan_space_geometry.copy_shape_without_element_map(shape)
-        if shape_copy is None:
-            return None
-        base.Shape = shape_copy
-    except Exception:
-        return None
-
-    view_object = getattr(base, "ViewObject", None)
-    _set_view_object_region_base_state(view_object)
-    return base
-
-
-def _set_view_object_region_base_state(view_object):
-    if view_object is None:
-        return
-    for property_name, value in (
-        ("Visibility", False),
-        ("ShowInTree", False),
-        ("Selectable", False),
-    ):
-        if getattr(view_object, property_name, None) is None:
-            continue
-        try:
-            setattr(view_object, property_name, value)
-        except Exception:
-            pass
 
 
 def _get_proxy_last_boundary_error(proxy, space):
