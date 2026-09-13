@@ -22,7 +22,7 @@ from .contracts import (
     PlanContextPanelState,
     PlanContextRowSpec,
     PlanContextSubjectKind,
-    PlanEditHandleSpec,
+    PlanProviderEditHandleSpec,
     PlanInspectorSection,
     PlanIssueSpec,
     PlanIssueSeverity,
@@ -1239,7 +1239,7 @@ def _collect_plan_provider_edit_handle_replacements(provider_id, handle, key, po
 
 
 def normalize_plan_provider_edit_handle(provider_id, handle):
-    if not isinstance(handle, PlanEditHandleSpec):
+    if not isinstance(handle, PlanProviderEditHandleSpec):
         return None
     if not isinstance(handle.interaction, PlanToolInteraction):
         return None

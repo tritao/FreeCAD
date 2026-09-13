@@ -10,7 +10,7 @@ from .contracts import (
     PlanContextRowSpec,
     PlanContextSubjectKind,
     PlanEditContext,
-    PlanEditHandleSpec,
+    PlanProviderEditHandleSpec,
     PlanEditProvider,
     PlanEditRegistry,
     PlanInspectorSection,

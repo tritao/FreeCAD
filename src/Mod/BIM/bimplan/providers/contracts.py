@@ -96,7 +96,7 @@ class PlanToolSpec(ContextualToolSpec):
 
 
 @dataclass(frozen=True)
-class PlanEditHandleSpec:
+class PlanProviderEditHandleSpec:
     key: str
     point: tuple[float, float, float]
     label: str = ""
@@ -245,7 +245,7 @@ class PlanEditProvider(ContextualProvider):
         del context
         return ()
 
-    def get_edit_handles(self, context) -> Sequence[PlanEditHandleSpec]:
+    def get_edit_handles(self, context) -> Sequence[PlanProviderEditHandleSpec]:
         del context
         return ()
 

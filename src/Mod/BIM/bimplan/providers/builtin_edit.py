@@ -6,7 +6,7 @@ import FreeCAD
 
 from bimplan.providers import payloads as plan_provider_payloads
 from bimplan.providers.contracts import (
-    PlanEditHandleSpec,
+    PlanProviderEditHandleSpec,
     PlanOverlayMarkerKind,
     PlanToolInteraction,
 )
@@ -95,7 +95,7 @@ def _make_builtin_provider_move_handle(session, provider_obj, provider_target):
     point = get_provider_move_point(session, provider_obj)
     if point is None:
         return None
-    return PlanEditHandleSpec(
+    return PlanProviderEditHandleSpec(
         key="move",
         point=(point.x, point.y, point.z),
         label=translate("BIM_PlanEdit", "Move"),
@@ -114,7 +114,7 @@ def _make_builtin_provider_rehost_handle(session, provider_obj, provider_target)
     point = _get_provider_rehost_point(session, provider_obj)
     if point is None:
         return None
-    return PlanEditHandleSpec(
+    return PlanProviderEditHandleSpec(
         key="rehost",
         point=(point.x, point.y, point.z),
         label=translate("BIM_PlanEdit", "Rehost"),
