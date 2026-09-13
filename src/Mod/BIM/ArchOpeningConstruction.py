@@ -35,6 +35,38 @@ class OpeningConstructionSpec:
         )
 
 
+@dataclass(frozen=True)
+class OpeningPresetSpec:
+    preset: str
+    width: float
+    height: float
+    h1: float
+    h2: float
+    h3: float
+    w1: float
+    w2: float
+    o1: float
+    o2: float
+
+    def validated(self):
+        values = tuple(
+            float(value)
+            for value in (
+                self.width, self.height, self.h1, self.h2, self.h3,
+                self.w1, self.w2, self.o1, self.o2,
+            )
+        )
+        if any(value <= 0.0 for value in values[:2]):
+            raise OpeningConstructionError(
+                "Opening preset width and height must be greater than zero."
+            )
+        if any(value <= 0.0 for value in (values[2], values[3], values[5], values[6])):
+            raise OpeningConstructionError(
+                "Opening preset frame dimensions must be greater than zero."
+            )
+        return OpeningPresetSpec(str(self.preset), *values)
+
+
 def create_opening_from_base(base, spec):
     """Create and configure an opening before it is assigned to any host."""
 
@@ -60,6 +92,47 @@ def create_opening_from_base(base, spec):
     if spec.parts and hasattr(opening, "WindowParts"):
         opening.WindowParts = list(spec.parts)
     return opening
+
+
+def create_preset_opening(spec, placement=None):
+    """Create one validated built-in Window or Door preset."""
+
+    import Arch
+
+    spec = spec.validated()
+    return Arch.makeWindowPreset(
+        spec.preset,
+        width=spec.width,
+        height=spec.height,
+        h1=spec.h1,
+        h2=spec.h2,
+        h3=spec.h3,
+        w1=spec.w1,
+        w2=spec.w2,
+        o1=spec.o1,
+        o2=spec.o2,
+        placement=placement,
+    )
+
+
+def construct_preset_opening(
+    document,
+    spec,
+    *,
+    placement=None,
+    transaction_name,
+    hosts=(),
+    add_to_container=None,
+    defer_updates=None,
+):
+    return construct_opening(
+        document,
+        lambda: create_preset_opening(spec, placement=placement),
+        transaction_name=transaction_name,
+        hosts=hosts,
+        add_to_container=add_to_container,
+        defer_updates=defer_updates,
+    )
 
 
 def has_built_shape(opening):
