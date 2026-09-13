@@ -71,6 +71,14 @@ def _representation_plane_normal(context):
     return Vector(0, 0, 1)
 
 
+def _edit_handle_point(point, context):
+    """Keep model-view handles in world space; project contextual handles."""
+
+    if getattr(context, "purpose", None) == ArchRepresentation.RepresentationPurpose.MODEL:
+        return FreeCAD.Vector(point)
+    return ArchRepresentation.project_to_representation_plane(point, context)
+
+
 if FreeCAD.GuiUp:
     from PySide import QtCore, QtGui
     from PySide.QtCore import QT_TRANSLATE_NOOP
@@ -1106,18 +1114,44 @@ class _Wall(ArchComponent.Component):
                     subelement=f"PlanFace{index}.Vertex{vertex_index}",
                     related_sources=joints,
                 )
-        purpose = context.purpose
-        if purpose == ArchRepresentation.RepresentationPurpose.PLAN:
-            self._add_owned_path_edit_handles(representation, obj, context)
-            self._add_native_path_edit_handles(representation, obj, context)
-            self._add_wall_joint_edit_handles(representation, obj, context)
-            self._add_section_property_edit_handles(representation, obj, context)
-        elif purpose in (
+        self._add_edit_handles(representation, obj, context)
+        return representation
+
+    def getEditCapabilities(self, obj, context=None):
+        """Return semantic wall handles independently of rendered geometry."""
+
+        if context is None:
+            context = ArchRepresentation.RepresentationContext(
+                purpose=ArchRepresentation.RepresentationPurpose.MODEL
+            )
+        if context.purpose not in (
+            ArchRepresentation.RepresentationPurpose.MODEL,
+            ArchRepresentation.RepresentationPurpose.PLAN,
             ArchRepresentation.RepresentationPurpose.SECTION,
             ArchRepresentation.RepresentationPurpose.ELEVATION,
         ):
-            self._add_vertical_edit_handles(representation, obj, context)
-        return representation
+            raise ArchRepresentation.RepresentationUnavailable(
+                f"Wall does not provide edit capabilities for {context.purpose.value}"
+            )
+        capabilities = ArchRepresentation.BIMEditCapabilities(source=obj, context=context)
+        self._add_edit_handles(capabilities, obj, context)
+        return capabilities
+
+    def _add_edit_handles(self, target, wall, context):
+        purpose = context.purpose
+        if purpose == ArchRepresentation.RepresentationPurpose.MODEL:
+            self._add_owned_path_edit_handles(target, wall, context)
+            self._add_native_path_edit_handles(target, wall, context)
+            self._add_wall_joint_edit_handles(target, wall, context)
+            self._add_section_property_edit_handles(target, wall, context)
+            self._add_vertical_edit_handles(target, wall, context)
+        elif purpose == ArchRepresentation.RepresentationPurpose.PLAN:
+            self._add_owned_path_edit_handles(target, wall, context)
+            self._add_native_path_edit_handles(target, wall, context)
+            self._add_wall_joint_edit_handles(target, wall, context)
+            self._add_section_property_edit_handles(target, wall, context)
+        else:
+            self._add_vertical_edit_handles(target, wall, context)
 
     def _wall_joint_snap_edges(self, representation, wall):
         """Map each resolved relation to its physical wall-end boundary edge."""
@@ -1275,9 +1309,7 @@ class _Wall(ArchComponent.Component):
                     )
                 ),
             )
-            handle_point = ArchRepresentation.project_to_representation_plane(
-                midpoint + lateral * coordinate, context
-            )
+            handle_point = _edit_handle_point(midpoint + lateral * coordinate, context)
             representation.add_edit_handle(
                 ArchRepresentation.BIMEditHandle(
                     wall,
@@ -1303,7 +1335,7 @@ class _Wall(ArchComponent.Component):
             property_name="Offset",
             available=lambda source: self._can_edit_uniform_section(source),
         )
-        handle_point = ArchRepresentation.project_to_representation_plane(
+        handle_point = _edit_handle_point(
             midpoint + lateral * ((section.y_min + section.y_max) * 0.5), context
         )
         representation.add_edit_handle(
@@ -1326,6 +1358,9 @@ class _Wall(ArchComponent.Component):
         """Build a non-persistent plan face for one width-face edit."""
 
         import Part
+
+        if getattr(context, "purpose", None) == ArchRepresentation.RepresentationPurpose.MODEL:
+            return Part.Shape()
 
         baseline = self.get_global_baseline(wall)
         section = self.get_resolved_section(wall)
@@ -1416,9 +1451,7 @@ class _Wall(ArchComponent.Component):
                     else ""
                 ),
             )
-            handle_point = ArchRepresentation.project_to_representation_plane(
-                point.point, context
-            )
+            handle_point = _edit_handle_point(point.point, context)
             constraint = (
                 ArchRepresentation.AxisConstraint(handle_point, path_axis)
                 if path_axis is not None and path_axis.Length > 1e-9
@@ -1449,7 +1482,7 @@ class _Wall(ArchComponent.Component):
                 for point in points:
                     point.apply_value(point.get_value().add(delta))
 
-            handle_point = ArchRepresentation.project_to_representation_plane(midpoint, context)
+            handle_point = _edit_handle_point(midpoint, context)
             representation.add_edit_handle(
                 ArchRepresentation.BIMEditHandle(
                     wall,
@@ -1521,9 +1554,7 @@ class _Wall(ArchComponent.Component):
                 available=lambda source: self._can_edit_native_path(source),
                 interaction_intent="WallStretch{}".format(role),
             )
-            handle_point = ArchRepresentation.project_to_representation_plane(
-                endpoints[index], context
-            )
+            handle_point = _edit_handle_point(endpoints[index], context)
             representation.add_edit_handle(
                 ArchRepresentation.BIMEditHandle(
                     wall,
@@ -1561,7 +1592,7 @@ class _Wall(ArchComponent.Component):
             available=lambda source: self._can_edit_native_path(source),
             interaction_intent="WallMove",
         )
-        handle_point = ArchRepresentation.project_to_representation_plane(midpoint, context)
+        handle_point = _edit_handle_point(midpoint, context)
         representation.add_edit_handle(
             ArchRepresentation.BIMEditHandle(
                 wall,
@@ -1655,7 +1686,7 @@ class _Wall(ArchComponent.Component):
                     self._movable_wall_joint_data(joint) is not None
                 ),
             )
-            handle_point = ArchRepresentation.project_to_representation_plane(
+            handle_point = _edit_handle_point(
                 self._wall_joint_handle_point(
                     representation, wall, data["solution"].intersection
                 ),
@@ -1702,7 +1733,7 @@ class _Wall(ArchComponent.Component):
         lateral.normalize()
 
         candidates = []
-        for face in representation.cut_geometry:
+        for face in getattr(representation, "cut_geometry", ()):
             for edge in getattr(face, "Edges", ()) or ():
                 vertices = getattr(edge, "Vertexes", ()) or ()
                 if len(vertices) < 2:

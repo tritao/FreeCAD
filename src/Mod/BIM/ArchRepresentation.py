@@ -460,6 +460,26 @@ class BIMRepresentation:
                 )
 
 
+class BIMEditCapabilities:
+    """Semantic edits offered by one object in a representation context.
+
+    Unlike :class:`BIMRepresentation`, this value carries no replacement or
+    picking geometry. Viewers that already render the source object can use it
+    to display contextual handles without constructing a second representation.
+    """
+
+    def __init__(self, source=None, context=None):
+        self.source = source
+        self.context = context
+        self.edit_handles = []
+
+    def add_edit_handle(self, handle):
+        if handle.source is None:
+            handle.source = self.source
+        self.edit_handles.append(handle)
+        return handle
+
+
 def project_to_representation_plane(point, context):
     """Project *point* onto the target plane of a representation context."""
 
@@ -693,3 +713,23 @@ def representation_for(obj, context):
     if not isinstance(representation, BIMRepresentation):
         raise TypeError("getRepresentation(obj, context) must return BIMRepresentation")
     return representation
+
+
+def edit_capabilities_for(obj, context):
+    """Request semantic edit capabilities without requesting display geometry."""
+
+    provider = getattr(getattr(obj, "Proxy", None), "getEditCapabilities", None)
+    if not callable(provider):
+        raise RepresentationUnavailable(
+            "BIM object does not provide getEditCapabilities(obj, context)"
+        )
+    capabilities = provider(obj, context)
+    if not isinstance(capabilities, BIMEditCapabilities):
+        raise TypeError(
+            "getEditCapabilities(obj, context) must return BIMEditCapabilities"
+        )
+    if capabilities.source is None:
+        capabilities.source = obj
+    if capabilities.context is None:
+        capabilities.context = context
+    return capabilities

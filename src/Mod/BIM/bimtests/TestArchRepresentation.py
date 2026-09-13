@@ -14,6 +14,7 @@ from ArchRepresentation import (
     BIMEditHandle,
     BIMEditOperation,
     BIMEditTransaction,
+    BIMEditCapabilities,
     BIMRepresentation,
     PlaneConstraint,
     RepresentationUnavailable,
@@ -23,6 +24,7 @@ from ArchRepresentation import (
     query_representation_pick,
     query_representation_snap,
     query_representation_snap_candidates,
+    edit_capabilities_for,
     representation_for,
 )
 from bimplan.contextual_editing import BIMContextualHandleEditor, ContextualEditController
@@ -663,6 +665,56 @@ class TestArchRepresentation(unittest.TestCase):
         obj.Proxy = object()
         with self.assertRaises(RepresentationUnavailable):
             representation_for(obj, RepresentationContext())
+
+    def test_edit_capabilities_have_no_representation_geometry(self):
+        context = RepresentationContext(purpose=RepresentationPurpose.MODEL)
+
+        class Provider:
+            def getEditCapabilities(self, obj, requested_context):
+                self.args = (obj, requested_context)
+                return BIMEditCapabilities(source=obj, context=requested_context)
+
+        class BIMObject:
+            pass
+
+        obj = BIMObject()
+        obj.Proxy = Provider()
+        result = edit_capabilities_for(obj, context)
+        self.assertIs(result.source, obj)
+        self.assertIs(result.context, context)
+        self.assertEqual((obj, context), obj.Proxy.args)
+        self.assertFalse(hasattr(result, "cut_geometry"))
+        self.assertFalse(hasattr(result, "projected_geometry"))
+        self.assertFalse(hasattr(result, "snap_geometry"))
+
+    def test_wall_model_edit_capabilities_cover_path_section_and_height(self):
+        document = FreeCAD.newDocument("WallModelEditCapabilities")
+        try:
+            wall = Arch.makeWall(length=3000, width=200, height=2500, align="Left")
+            document.recompute()
+            context = RepresentationContext(purpose=RepresentationPurpose.MODEL)
+            capabilities = edit_capabilities_for(wall, context)
+            handles = {handle.subelement: handle for handle in capabilities.edit_handles}
+
+            self.assertIs(capabilities.source, wall)
+            self.assertIs(capabilities.context, context)
+            self.assertFalse(hasattr(capabilities, "cut_geometry"))
+            for subelement in (
+                "Path.Start",
+                "Path.End",
+                "Path",
+                "Width.NegativeFace",
+                "Width.PositiveFace",
+                "Offset",
+                "Height",
+            ):
+                self.assertIn(subelement, handles)
+            self.assertAlmostEqual(wall.Shape.BoundBox.ZMax, handles["Height"].point.z)
+            self.assertAlmostEqual(wall.Placement.Base.z, handles["Path.Start"].point.z)
+            self.assertIsInstance(handles["Height"].constraint, AxisConstraint)
+            self.assertIsInstance(handles["Path"].constraint, WorkingPlaneConstraint)
+        finally:
+            FreeCAD.closeDocument(document.Name)
 
 
 if __name__ == "__main__":

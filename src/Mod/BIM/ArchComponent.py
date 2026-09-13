@@ -155,6 +155,9 @@ def get_horizontal_slice_faces(shape, cut_z, translate_z=0.0):
 def representation_vertical_direction(context):
     """Return model Z projected into the active representation plane."""
 
+    if getattr(context, "purpose", None) == ArchRepresentation.RepresentationPurpose.MODEL:
+        return FreeCAD.Vector(0, 0, 1)
+
     return ArchRepresentation.project_direction_to_representation_plane(
         FreeCAD.Vector(0, 0, 1), context
     )
@@ -166,10 +169,13 @@ def representation_extent_points(shape, context, direction):
     vertices = tuple(getattr(shape, "Vertexes", ()) or ())
     if not vertices:
         return (None, None)
-    points = [
-        ArchRepresentation.project_to_representation_plane(vertex.Point, context)
-        for vertex in vertices
-    ]
+    if getattr(context, "purpose", None) == ArchRepresentation.RepresentationPurpose.MODEL:
+        points = [FreeCAD.Vector(vertex.Point) for vertex in vertices]
+    else:
+        points = [
+            ArchRepresentation.project_to_representation_plane(vertex.Point, context)
+            for vertex in vertices
+        ]
     return (
         min(points, key=lambda point: point.dot(direction)),
         max(points, key=lambda point: point.dot(direction)),
