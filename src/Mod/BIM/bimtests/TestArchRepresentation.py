@@ -27,7 +27,10 @@ from ArchRepresentation import (
     edit_capabilities_for,
     representation_for,
 )
-from bimplan.contextual_editing import BIMContextualHandleEditor, ContextualEditController
+from bimplan.contextual_editing import (
+    BIMContextualHandleEditor,
+    ContextualEditController,
+)
 from bimplan.editable_points import get_contextual_edit_points
 
 
@@ -442,6 +445,22 @@ class TestArchRepresentation(unittest.TestCase):
         editor.begin(handle)
         preview = editor.preview(handle.point + FreeCAD.Vector(200, 150, 0))
         self.assertTrue(preview.value.isEqual(semantic_point + FreeCAD.Vector(200, 150, 0), 1e-7))
+        before_horizontal = tuple(horizontal.Proxy.calc_endpoints(horizontal))
+        before_vertical = tuple(vertical.Proxy.calc_endpoints(vertical))
+        preview_state = handle.operation.get_preview_state(
+            horizontal,
+            preview.value,
+            context,
+        )
+        self.assertIs(preview_state.primary_source, horizontal)
+        preview_by_source = {entry.representation.source: entry for entry in preview_state.entries}
+        self.assertEqual({horizontal, vertical}, set(preview_by_source))
+        self.assertTrue(all(entry.replace_committed for entry in preview_by_source.values()))
+        horizontal_face = preview_by_source[horizontal].representation.cut_geometry[0]
+        vertical_face = preview_by_source[vertical].representation.cut_geometry[0]
+        self.assertAlmostEqual(horizontal_face.distToShape(vertical_face)[0], 0.0, delta=1e-7)
+        self.assertEqual(before_horizontal, tuple(horizontal.Proxy.calc_endpoints(horizontal)))
+        self.assertEqual(before_vertical, tuple(vertical.Proxy.calc_endpoints(vertical)))
 
         vertical_representation = vertical.Proxy.getRepresentation(vertical, context)
         joint_targets = tuple(

@@ -282,6 +282,11 @@ def solve_wall_joint_inputs(
     tee_stem="Auto",
     end_a="Auto",
     end_b="Auto",
+    *,
+    path_a=None,
+    path_b=None,
+    section_a=None,
+    section_b=None,
 ):
     """Solve a wall-joint configuration from walls and relation settings.
 
@@ -308,10 +313,10 @@ def solve_wall_joint_inputs(
             wall_b=wall_b,
         )
 
-    path_a = get_join_path(wall_a)
-    path_b = get_join_path(wall_b)
-    section_a = get_join_section(wall_a)
-    section_b = get_join_section(wall_b)
+    path_a = path_a or get_join_path(wall_a)
+    path_b = path_b or get_join_path(wall_b)
+    section_a = section_a or get_join_section(wall_a)
+    section_b = section_b or get_join_section(wall_b)
     if path_a is None:
         return _status_result(
             "UnsupportedBaseline",

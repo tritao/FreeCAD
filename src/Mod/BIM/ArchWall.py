@@ -1054,8 +1054,7 @@ class _Wall(ArchComponent.Component):
                 if len(points) < 2:
                     continue
                 is_outer = bool(
-                    outer_wire is not None
-                    and (wire is outer_wire or wire.isSame(outer_wire))
+                    outer_wire is not None and (wire is outer_wire or wire.isSame(outer_wire))
                 )
                 if is_outer:
                     role = "PlanCutOuterBoundary"
@@ -1097,10 +1096,7 @@ class _Wall(ArchComponent.Component):
                     dict.fromkeys(
                         joint
                         for edge in face.Edges
-                        if (
-                            joint := self._joint_for_snap_edge(joint_edges, edge)
-                        )
-                        is not None
+                        if (joint := self._joint_for_snap_edge(joint_edges, edge)) is not None
                         and any(
                             vertex.Point.isEqual(edge_vertex.Point, 1e-7)
                             for edge_vertex in edge.Vertexes
@@ -1164,15 +1160,14 @@ class _Wall(ArchComponent.Component):
             solution = ArchWallRelation.solve_wall_joint(joint)
             if not solution.is_ok() or solution.trim_for_wall(wall) is None:
                 continue
-            anchor = self._wall_joint_handle_point(
-                representation, wall, solution.intersection
-            )
+            anchor = self._wall_joint_handle_point(representation, wall, solution.intersection)
             candidates = []
             for face in representation.cut_geometry:
                 for edge in face.Edges:
-                    if any(
-                        edge.isSame(claimed) for claimed in claimed_edges
-                    ) or len(edge.Vertexes) < 2:
+                    if (
+                        any(edge.isSame(claimed) for claimed in claimed_edges)
+                        or len(edge.Vertexes) < 2
+                    ):
                         continue
                     midpoint = sum(
                         (FreeCAD.Vector(vertex.Point) for vertex in edge.Vertexes),
@@ -1192,13 +1187,12 @@ class _Wall(ArchComponent.Component):
             (joint for candidate, joint in joint_edges if edge.isSame(candidate)),
             None,
         )
+
     def _add_vertical_edit_handles(self, representation, wall, context):
         direction = ArchComponent.representation_vertical_direction(context)
         if direction is None:
             return
-        low, high = ArchComponent.representation_extent_points(
-            wall.Shape, context, direction
-        )
+        low, high = ArchComponent.representation_extent_points(wall.Shape, context, direction)
         height_operation = ArchRepresentation.BIMEditOperation(
             "WallHeight",
             "Edit Wall Height",
@@ -1254,6 +1248,7 @@ class _Wall(ArchComponent.Component):
                     constraint=ArchRepresentation.AxisConstraint(low, direction),
                 )
             )
+
     def _add_section_property_edit_handles(self, representation, wall, context):
         baseline = self.get_global_baseline(wall)
         section = self.get_resolved_section(wall)
@@ -1303,9 +1298,7 @@ class _Wall(ArchComponent.Component):
                 available=lambda source: self._can_edit_uniform_section(source),
                 preview_shape=(
                     lambda source, value, preview_context, side=side: (
-                        self._get_width_face_preview_shape(
-                            source, side, value, preview_context
-                        )
+                        self._get_width_face_preview_shape(source, side, value, preview_context)
                     )
                 ),
             )
@@ -1348,9 +1341,7 @@ class _Wall(ArchComponent.Component):
                 subelement="Offset",
                 minimum=None,
                 glyph="Diamond",
-                constraint=ArchRepresentation.AxisConstraint(
-                    handle_point, offset_direction
-                ),
+                constraint=ArchRepresentation.AxisConstraint(handle_point, offset_direction),
             )
         )
 
@@ -1377,9 +1368,7 @@ class _Wall(ArchComponent.Component):
             else:
                 align = "Right"
                 offset = section.y_min
-        elif (align == "Left" and side == "Positive") or (
-            align == "Right" and side == "Negative"
-        ):
+        elif (align == "Left" and side == "Positive") or (align == "Right" and side == "Negative"):
             offset -= delta
         if align == "Center":
             y_min, y_max = -width * 0.5, width * 0.5
@@ -1446,9 +1435,7 @@ class _Wall(ArchComponent.Component):
                 interaction_intent=(
                     "WallStretchStart"
                     if use_wall_controller and index == 0
-                    else "WallStretchEnd"
-                    if use_wall_controller and index == 1
-                    else ""
+                    else "WallStretchEnd" if use_wall_controller and index == 1 else ""
                 ),
             )
             handle_point = _edit_handle_point(point.point, context)
@@ -1492,9 +1479,7 @@ class _Wall(ArchComponent.Component):
                     ArchRepresentation.BIMEditOperation(
                         "WallMove",
                         "Move Wall",
-                        lambda _wall, points=points: (
-                            points[0].get_value() + points[1].get_value()
-                        )
+                        lambda _wall, points=points: (points[0].get_value() + points[1].get_value())
                         * 0.5,
                         move_owned_path,
                         property_name="Base.Points",
@@ -1532,6 +1517,7 @@ class _Wall(ArchComponent.Component):
         if axis.Length <= 1e-9:
             return
         axis.normalize()
+
         relation_controlled_ends = self._relation_controlled_native_ends(wall)
 
         def apply_endpoint(source, index, value):
@@ -1553,7 +1539,11 @@ class _Wall(ArchComponent.Component):
                 value_kind="Point",
                 available=lambda source: self._can_edit_native_path(source),
                 interaction_intent="WallStretch{}".format(role),
+                preview_state=lambda source, value, preview_context, index=index: (
+                    self._get_endpoint_preview_state(source, index, value, preview_context)
+                ),
             )
+
             handle_point = _edit_handle_point(endpoints[index], context)
             representation.add_edit_handle(
                 ArchRepresentation.BIMEditHandle(
@@ -1609,6 +1599,124 @@ class _Wall(ArchComponent.Component):
                 ),
             )
         )
+
+    def _get_endpoint_preview_state(self, wall, endpoint_index, value, context):
+        """Return joined wall representations for one hypothetical endpoint."""
+
+        import Part
+
+        endpoints = self.calc_endpoints(wall)
+        if len(endpoints) != 2:
+            return None
+        endpoints[endpoint_index] = FreeCAD.Vector(value)
+        if endpoints[0].distanceToPoint(endpoints[1]) <= 1e-9:
+            return None
+        normal = self.get_global_baseline(wall).normal
+        proposed_path = ArchWallGeometry.WallPath(Part.makeLine(*endpoints), normal)
+        paths = {wall: proposed_path}
+        affected = {wall}
+        claims = {}
+        for relation in ArchWallRelation.iter_wall_joints(wall):
+            if not getattr(relation, "Enabled", True):
+                continue
+            wall_a = relation.WallA
+            wall_b = relation.WallB
+            path_a = paths.get(wall_a) or ArchWallRelation.get_join_path(wall_a)
+            path_b = paths.get(wall_b) or ArchWallRelation.get_join_path(wall_b)
+            solution = ArchWallRelation.solve_wall_joint_inputs(
+                wall_a,
+                wall_b,
+                relation.JointType,
+                relation.ButtTrimmed,
+                relation.TeeStem,
+                relation.EndA,
+                relation.EndB,
+                path_a=path_a,
+                path_b=path_b,
+            )
+            if not solution.is_ok():
+                continue
+            affected.update((wall_a, wall_b))
+            paths.setdefault(wall_a, path_a)
+            paths.setdefault(wall_b, path_b)
+            for claim in solution.trim_claims:
+                claims.setdefault(claim.wall, {})[claim.end_name] = claim
+
+        state = ArchRepresentation.BIMPreviewState(wall)
+        for source in affected:
+            preview = self._preview_representation_from_path(
+                source, paths[source], claims.get(source, {}), context
+            )
+            if preview is not None:
+                state.add_representation(preview, replace_committed=True)
+        return state if state.entries else None
+
+    @staticmethod
+    def _preview_representation_from_path(wall, path, claims, context):
+        """Realize a planar wall preview from resolved path and trim claims."""
+
+        import Part
+
+        section = ArchWallRelation.get_join_section(wall)
+        if section is None or getattr(context, "reference_frame", None) is not None:
+            return None
+        start = FreeCAD.Vector(path.start_point)
+        end = FreeCAD.Vector(path.end_point)
+        axis = end.sub(start)
+        if axis.Length <= 1e-9:
+            return None
+        axis.normalize()
+        normal = FreeCAD.Vector(path.normal)
+        lateral = axis.cross(normal)
+        lateral.normalize()
+        for end_name, direction in (("Start", -axis), ("End", axis)):
+            claim = claims.get(end_name)
+            if claim is not None and claim.extension > 1e-9:
+                if end_name == "Start":
+                    start = start.add(direction.multiply(claim.extension))
+                else:
+                    end = end.add(direction.multiply(claim.extension))
+        target = getattr(context, "target_offset", None)
+        if target is not None:
+            start.z = target
+            end.z = target
+        points = [
+            start + lateral * section.y_min,
+            end + lateral * section.y_min,
+            end + lateral * section.y_max,
+            start + lateral * section.y_max,
+        ]
+        face = Part.Face(Part.makePolygon((*points, points[0])))
+        solid = face.extrude(normal * 10.0)
+        for end_name, ref_point in (("Start", end), ("End", start)):
+            claim = claims.get(end_name)
+            if claim is not None:
+                solid = ArchWallTrimming.apply_cutting_plane(
+                    wall,
+                    solid,
+                    FreeCAD.Placement(),
+                    claim.plane,
+                    ref_point,
+                    max(solid.BoundBox.DiagonalLength * 2.0, 1.0),
+                    is_global=True,
+                )
+        cut_z = (target if target is not None else face.BoundBox.ZMin) + 5.0
+        faces = ArchComponent.get_horizontal_slice_faces(solid, cut_z, translate_z=-5.0)
+        representation = ArchRepresentation.BIMRepresentation(source=wall, context=context)
+        for index, cut_face in enumerate(faces, start=1):
+            representation.add_geometry(
+                "cut_geometry", cut_face, "PlanCutFace", subelement=f"PlanFace{index}"
+            )
+            for wire_index, wire in enumerate(cut_face.Wires, start=1):
+                vertices = tuple(FreeCAD.Vector(vertex.Point) for vertex in wire.Vertexes)
+                if len(vertices) > 1:
+                    representation.add_geometry(
+                        "projected_geometry",
+                        (*vertices, vertices[0]),
+                        "PlanCutBoundary",
+                        subelement=f"PlanFace{index}.Wire{wire_index}",
+                    )
+        return representation if representation.cut_geometry else None
 
     def _relation_controlled_native_ends(self, wall):
         ends = set()
@@ -1671,9 +1779,7 @@ class _Wall(ArchComponent.Component):
                     document.recompute()
                 resolved = ArchWallRelation.solve_wall_joint(joint)
                 if not resolved.is_ok() or not resolved.intersection.isEqual(target, 1e-6):
-                    raise ValueError(
-                        "The target point cannot produce a valid finite wall joint"
-                    )
+                    raise ValueError("The target point cannot produce a valid finite wall joint")
 
             operation = ArchRepresentation.BIMEditOperation(
                 "WallJointMove.{}".format(joint.Name),
@@ -1685,11 +1791,12 @@ class _Wall(ArchComponent.Component):
                 available=lambda _source, joint=joint: (
                     self._movable_wall_joint_data(joint) is not None
                 ),
+                preview_state=lambda source, value, preview_context, joint=joint: (
+                    self._get_wall_joint_preview_state(joint, value, preview_context, source)
+                ),
             )
             handle_point = _edit_handle_point(
-                self._wall_joint_handle_point(
-                    representation, wall, data["solution"].intersection
-                ),
+                self._wall_joint_handle_point(representation, wall, data["solution"].intersection),
                 context,
             )
             representation.add_edit_handle(
@@ -1709,6 +1816,50 @@ class _Wall(ArchComponent.Component):
                     ),
                 )
             )
+
+    def _get_wall_joint_preview_state(self, joint, value, context, primary_source=None):
+        """Return both joined walls for one hypothetical joint position."""
+
+        import Part
+
+        data = self._movable_wall_joint_data(joint)
+        if data is None:
+            return None
+        target = FreeCAD.Vector(value)
+        paths = {}
+        for wall in data["walls"]:
+            endpoints = list(wall.Proxy.calc_endpoints(wall))
+            index = 0 if data["ends"][wall] == "Start" else 1
+            endpoints[index] = target
+            if endpoints[0].distanceToPoint(endpoints[1]) <= 1e-9:
+                return None
+            normal = wall.Proxy.get_global_baseline(wall).normal
+            paths[wall] = ArchWallGeometry.WallPath(Part.makeLine(*endpoints), normal)
+        wall_a, wall_b = data["walls"]
+        solution = ArchWallRelation.solve_wall_joint_inputs(
+            wall_a,
+            wall_b,
+            joint.JointType,
+            joint.ButtTrimmed,
+            joint.TeeStem,
+            joint.EndA,
+            joint.EndB,
+            path_a=paths[wall_a],
+            path_b=paths[wall_b],
+        )
+        if not solution.is_ok():
+            return None
+        claims = {wall_a: {}, wall_b: {}}
+        for claim in solution.trim_claims:
+            claims[claim.wall][claim.end_name] = claim
+        state = ArchRepresentation.BIMPreviewState(primary_source or wall_a)
+        for source in data["walls"]:
+            preview = self._preview_representation_from_path(
+                source, paths[source], claims[source], context
+            )
+            if preview is not None:
+                state.add_representation(preview, replace_committed=True)
+        return state if len(state.entries) == 2 else None
 
     @staticmethod
     def _wall_joint_handle_point(representation, wall, intersection):

@@ -88,9 +88,7 @@ class TestBimPlanEditSessionGui(TestArchBaseGui):
         opening.Placement.Base = FreeCAD.Vector(120, 80, 40)
         before = FreeCAD.Placement(opening.Placement)
 
-        self.assertTrue(
-            hosted_openings.rehost_object(opening, host, preserve_world_position=True)
-        )
+        self.assertTrue(hosted_openings.rehost_object(opening, host, preserve_world_position=True))
         self.assertEqual([host], list(opening.Hosts))
         self.assertTrue(opening.Placement.Base.isEqual(before.Base, 1e-7))
 
@@ -120,9 +118,7 @@ class TestBimPlanEditSessionGui(TestArchBaseGui):
         storey = Arch.makeBuildingPart(name=label)
         storey.Label = label
         storey.IfcType = "Building Storey"
-        storey.Placement = FreeCAD.Placement(
-            FreeCAD.Vector(0, 0, elevation), FreeCAD.Rotation()
-        )
+        storey.Placement = FreeCAD.Placement(FreeCAD.Vector(0, 0, elevation), FreeCAD.Rotation())
         contained = self.document.addObject("App::DocumentObjectGroup", "ContainedObject")
         storey.addObject(contained)
         self.document.recompute()
@@ -182,9 +178,7 @@ class TestBimPlanEditSessionGui(TestArchBaseGui):
         from PySide import QtGui
 
         main_window = FreeCADGui.getMainWindow()
-        self.assertIsNotNone(
-            main_window.findChild(QtGui.QWidget, "BIMPlanEditContextControls")
-        )
+        self.assertIsNotNone(main_window.findChild(QtGui.QWidget, "BIMPlanEditContextControls"))
         session.task_panel.exit_button.click()
 
         self.assertIsNone(session.task_panel)
@@ -462,12 +456,8 @@ class TestBimPlanEditSessionGui(TestArchBaseGui):
                     ),
                 ),
             )
-            target_ray = ray_from_view(
-                view, (round(target[0]), round(target[1]))
-            )
-            focal_point = view.getPointOnFocalPlane(
-                (round(target[0]), round(target[1]))
-            )
+            target_ray = ray_from_view(view, (round(target[0]), round(target[1])))
+            focal_point = view.getPointOnFocalPlane((round(target[0]), round(target[1])))
             projected_target = handle.constraint.project(target_ray)
             pointer_delta = (projected_target - handle.point).dot(handle.direction)
             self.assertAlmostEqual(
@@ -543,9 +533,7 @@ class TestBimPlanEditSessionGui(TestArchBaseGui):
                 for handle in session.renderer.edit_handles_for(wall)
                 if handle.subelement == "Height"
             )
-            send_button(
-                view.getPointOnScreen(height_handle.point), coin.SoButtonEvent.DOWN
-            )
+            send_button(view.getPointOnScreen(height_handle.point), coin.SoButtonEvent.DOWN)
             self.pump_gui_events(20)
             self.assertEqual("Height", session.active_edit.subelement)
 
@@ -588,16 +576,12 @@ class TestBimPlanEditSessionGui(TestArchBaseGui):
                 if item.subelement == "Width.PositiveFace"
             )
             session.contextual_editing.begin(handle)
-            invalid = session.contextual_editing.commit(
-                handle.point - handle.direction * 250
-            )
+            invalid = session.contextual_editing.commit(handle.point - handle.direction * 250)
             self.assertFalse(invalid.success)
             self.assertAlmostEqual(200.0, wall.Width.Value)
 
             session.contextual_editing.begin(handle)
-            preview = session.contextual_editing.preview(
-                handle.point + handle.direction * 50
-            )
+            preview = session.contextual_editing.preview(handle.point + handle.direction * 50)
             self.assertTrue(preview.validation.allowed)
             self.assertNotIn(wall, session.contextual_rendering.renderer._preview_nodes)
             self.assertIn(
@@ -606,9 +590,7 @@ class TestBimPlanEditSessionGui(TestArchBaseGui):
             )
             session.viewport.flush_scene_graph_mutations()
             preview_node = session.contextual_rendering.renderer._preview_nodes[wall]
-            self.assertTrue(
-                preview_node.isOfType(coin.SoType.fromName("SoPreviewShape"))
-            )
+            self.assertTrue(preview_node.isOfType(coin.SoType.fromName("SoPreviewShape")))
             self.assertNotEqual(
                 -1, session.contextual_rendering.renderer.root.findChild(preview_node)
             )
@@ -617,9 +599,7 @@ class TestBimPlanEditSessionGui(TestArchBaseGui):
             self.assertNotIn(wall, session.contextual_rendering.renderer._preview_nodes)
 
             session.contextual_editing.begin(handle)
-            result = session.contextual_editing.commit(
-                handle.point + handle.direction * 50
-            )
+            result = session.contextual_editing.commit(handle.point + handle.direction * 50)
             session.viewport.flush_scene_graph_mutations()
 
             self.assertTrue(result.success)
@@ -662,9 +642,7 @@ class TestBimPlanEditSessionGui(TestArchBaseGui):
             start = session.view.getPointOnScreen(handle.point)
             self.assertIs(
                 handle,
-                session.contextual_rendering.pick_edit_handle(
-                    start
-                ),
+                session.contextual_rendering.pick_edit_handle(start),
             )
 
             event_manager = session.viewer.getSoEventManager()
@@ -684,9 +662,7 @@ class TestBimPlanEditSessionGui(TestArchBaseGui):
             send_move(start)
             self.pump_gui_events(20)
             edit_node = plan_edit_nodes.ContextualHandleEditNode(wall, handle)
-            with patch.object(
-                session.picking, "pick_edit_node", return_value=edit_node
-            ):
+            with patch.object(session.picking, "pick_edit_node", return_value=edit_node):
                 send_button(start, coin.SoButtonEvent.DOWN)
             self.assertIsNone(session.contextual_editing.editor)
             self.pump_gui_events(20)
@@ -699,7 +675,9 @@ class TestBimPlanEditSessionGui(TestArchBaseGui):
             if created_toolbar:
                 del FreeCADGui.draftToolBar
 
-    def test_native_wall_semantic_handle_activates_wall_interaction_without_draft_grips(self):
+    def test_native_wall_semantic_handle_activates_wall_interaction_without_draft_grips(
+        self,
+    ):
         wall = Arch.makeWall(length=3000, width=200, height=2500, align="Center")
         self.document.recompute()
         session = PlanEditSession()
@@ -711,7 +689,9 @@ class TestBimPlanEditSessionGui(TestArchBaseGui):
             renderer = session.contextual_rendering.renderer
             self.assertTrue(session.contextual_rendering.set_source_visible(wall, False))
             session.viewport.flush_scene_graph_mutations()
-            self.assertEqual(coin.SO_SWITCH_NONE, renderer._object_nodes[wall].whichChild.getValue())
+            self.assertEqual(
+                coin.SO_SWITCH_NONE, renderer._object_nodes[wall].whichChild.getValue()
+            )
             self.assertTrue(session.contextual_rendering.set_source_visible(wall, True))
             session.viewport.flush_scene_graph_mutations()
             self.assertEqual(coin.SO_SWITCH_ALL, renderer._object_nodes[wall].whichChild.getValue())
@@ -758,9 +738,7 @@ class TestBimPlanEditSessionGui(TestArchBaseGui):
                 self.assertTrue(session.contextual_editing.activate(handle))
             callbacks = snapper.getPoint.call_args.kwargs
             callbacks["movecallback"](target, None)
-            self.assertTrue(
-                session.wall_edit_state.preview_points[1].isEqual(expected_end, 1e-7)
-            )
+            self.assertTrue(session.wall_edit_state.preview_points[1].isEqual(expected_end, 1e-7))
             callbacks["callback"](target, None)
 
             endpoints = wall.Proxy.calc_endpoints(wall)
@@ -870,9 +848,7 @@ class TestBimPlanEditSessionGui(TestArchBaseGui):
             self.assertTrue(joined.Proxy._can_edit_native_path(joined))
             self.assertIsNotNone(solution.trim_for_wall(wall))
             self.assertIsNotNone(solution.trim_for_wall(joined))
-            direct = wall.Proxy.getRepresentation(
-                wall, session.representation_context.context
-            )
+            direct = wall.Proxy.getRepresentation(wall, session.representation_context.context)
             self.assertIn("WallJointMove", [handle.role for handle in direct.edit_handles])
             session.selection.state.set_selected_plan_target("wall", wall)
             session.contextual_rendering.refresh_object(wall)
@@ -888,6 +864,24 @@ class TestBimPlanEditSessionGui(TestArchBaseGui):
             )
 
             target = original_corner + FreeCAD.Vector(250, 175, 0)
+            self.assertTrue(session.contextual_editing.begin(joint_handle))
+            preview = session.contextual_editing.preview(target)
+            session.viewport.flush_scene_graph_mutations()
+            renderer = session.contextual_rendering.renderer
+            self.assertTrue(preview.validation.allowed)
+            self.assertEqual({wall, joined}, set(renderer._preview_nodes))
+            self.assertEqual({wall, joined}, renderer._preview_replaced_sources)
+            self.assertTrue(
+                wall.Proxy.calc_endpoints(wall)[1].isEqual(original_wall_points[1], 1e-7)
+            )
+            self.assertTrue(
+                joined.Proxy.calc_endpoints(joined)[0].isEqual(original_joined_points[0], 1e-7)
+            )
+            session.contextual_editing.cancel()
+            session.viewport.flush_scene_graph_mutations()
+            self.assertFalse(renderer._preview_nodes)
+            self.assertFalse(renderer._preview_replaced_sources)
+
             self.assertTrue(session.contextual_editing.begin(joint_handle))
             result = session.contextual_editing.commit(target)
             session.viewport.flush_scene_graph_mutations()
@@ -945,9 +939,7 @@ class TestBimPlanEditSessionGui(TestArchBaseGui):
                 if item.role == "WallWidth"
             )
             handle_screen_point = session.view.getPointOnScreen(handle.point)
-            self.assertIsNone(
-                session.contextual_rendering.pick_edit_handle(handle_screen_point)
-            )
+            self.assertIsNone(session.contextual_rendering.pick_edit_handle(handle_screen_point))
             session.selection.state.set_selected_plan_target("wall", wall)
             session.viewport.flush_scene_graph_mutations()
             self.assertIs(
