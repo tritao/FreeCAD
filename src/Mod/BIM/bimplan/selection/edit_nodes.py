@@ -6,6 +6,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from ArchRepresentation import BIMEditHandle
+
 
 @dataclass(frozen=True, slots=True)
 class SymbolHandleEditNode:
@@ -57,6 +59,8 @@ def _has_dataclass_payload(node, attr_name):
 def get_edit_node_kind(node):
     if node is None:
         return None
+    if isinstance(node, BIMEditHandle):
+        return "contextual_handle"
     kind = getattr(node, "kind", None)
     if kind is not None:
         return kind
@@ -97,6 +101,8 @@ def get_edit_node_payload(node):
         except Exception:
             return ()
     if kind == "contextual_handle":
+        if isinstance(node, BIMEditHandle):
+            return (node.source, node)
         if _has_dataclass_payload(node, "source"):
             return (_get_node_attr(node, "source"), _get_node_attr(node, "handle"))
         try:

@@ -70,7 +70,7 @@ def _get_contextual_handle_edit_node(session, mouse_pos):
         session,
         mouse_pos,
         "contextual_representation_handle",
-        plan_edit_nodes.ContextualHandleEditNode(handle.source, handle),
+        handle,
     )
 
 
