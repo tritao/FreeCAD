@@ -92,6 +92,8 @@ SET(bimplan_SRCS
     bimplan/__init__.py
     bimplan/contextual_actions.py
     bimplan/contextual_action_ui.py
+    bimplan/contextual_host.py
+    bimplan/contextual_policy.py
     bimplan/contextual_session.py
     bimplan/contextual_rendering.py
     bimplan/contextual_editing.py

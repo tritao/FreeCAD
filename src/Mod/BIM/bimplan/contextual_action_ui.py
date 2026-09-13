@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: LGPL-2.1-or-later
 
-"""Compact action and inspector surface for contextual BIM editing."""
+"""Task-view action, tool, and inspector surface for contextual BIM editing."""
 
 from PySide import QtWidgets
 
@@ -8,49 +8,83 @@ import FreeCADGui
 
 
 class ContextualActionPanel:
-    def __init__(self):
-        self.actions = ()
-        self.sections = ()
-        self._container = None
+    """Generic TaskView panel populated entirely from contextual providers."""
 
-    def update(self, actions, sections, callback):
-        self.close()
+    def __init__(self, close_callback=None):
+        self.actions = ()
+        self.tools = ()
+        self.sections = ()
+        self.form = QtWidgets.QWidget()
+        self.form.setWindowTitle("Contextual Editing")
+        self._layout = QtWidgets.QVBoxLayout(self.form)
+        self._shown = False
+        self._closing = False
+        self._close_callback = close_callback
+
+    def update(self, actions, tools, sections, action_callback, tool_callback):
         self.actions = tuple(actions or ())
+        self.tools = tuple(tools or ())
         self.sections = tuple(sections or ())
-        if not self.actions and not self.sections:
-            return
-        status_bar = FreeCADGui.getMainWindow().statusBar()
-        container = QtWidgets.QWidget(status_bar)
-        layout = QtWidgets.QHBoxLayout(container)
-        layout.setContentsMargins(6, 0, 6, 0)
-        if self.sections:
-            section = self.sections[0]
-            label = QtWidgets.QLabel(
-                "{}: {}".format(section.title, section.body), container
-            )
-            label.setToolTip(section.body)
+        while self._layout.count():
+            item = self._layout.takeAt(0)
+            widget = item.widget()
+            if widget is not None:
+                widget.deleteLater()
+        for section in self.sections:
+            group = QtWidgets.QGroupBox(section.title, self.form)
+            layout = QtWidgets.QVBoxLayout(group)
+            label = QtWidgets.QLabel(section.body, group)
+            label.setWordWrap(True)
             layout.addWidget(label)
-        for action in self.actions:
-            button = QtWidgets.QToolButton(container)
-            button.setText(action.label)
-            button.setToolTip(action.tooltip)
-            button.setEnabled(action.enabled)
-            button.clicked.connect(
-                lambda _checked=False, selected=action: callback(selected)
-            )
-            layout.addWidget(button)
-        status_bar.addPermanentWidget(container)
-        container.show()
-        self._container = container
+            self._layout.addWidget(group)
+        for title, entries, callback in (
+            ("Actions", self.actions, action_callback),
+            ("Tools", self.tools, tool_callback),
+        ):
+            if not entries:
+                continue
+            group = QtWidgets.QGroupBox(title, self.form)
+            layout = QtWidgets.QVBoxLayout(group)
+            for entry in entries:
+                button = QtWidgets.QPushButton(entry.label, group)
+                button.setToolTip(entry.tooltip)
+                button.setEnabled(entry.enabled)
+                button.clicked.connect(
+                    lambda _checked=False, selected=entry, invoke=callback: invoke(selected)
+                )
+                layout.addWidget(button)
+            self._layout.addWidget(group)
+        self._layout.addStretch(1)
+        if not self._shown and (self.actions or self.tools or self.sections):
+            FreeCADGui.Control.showDialog(self, FreeCADGui.ActiveDocument)
+            self._shown = True
+
+    def getStandardButtons(self):
+        return 0
+
+    def accept(self):
+        self._finish_from_ui()
+        return True
+
+    def reject(self):
+        self._finish_from_ui()
+        return True
+
+    def _finish_from_ui(self):
+        if self._closing:
+            return
+        self._shown = False
+        if callable(self._close_callback):
+            self._close_callback()
 
     def close(self):
-        container = self._container
-        self._container = None
-        if container is None:
+        if not self._shown:
             return
+        self._closing = True
         try:
-            FreeCADGui.getMainWindow().statusBar().removeWidget(container)
-        except (RuntimeError, ReferenceError):
+            FreeCADGui.Control.closeDialog()
+        except RuntimeError:
             pass
-        container.hide()
-        container.deleteLater()
+        finally:
+            self._shown = False
+            self._closing = False

@@ -17,7 +17,7 @@ from bimplan.contextual_actions import (
     WallCreationProvider,
 )
 from bimplan.contextual_editing import ContextualEditController
-from draftguitools.gui_base import DraftInteractionHost
+from bimplan.contextual_host import ContextualInteractionHost
 
 
 _active_session = None
@@ -63,6 +63,7 @@ class BIMContextualEditingSession:
         self._selection_refresh_pending = False
         self._capabilities = ()
         self.contextual_actions = ()
+        self.contextual_tools = ()
         self.inspector_sections = ()
         self._pending_action_handle = None
         self.providers = tuple(
@@ -74,8 +75,8 @@ class BIMContextualEditingSession:
         self._creation_preview_source = object()
         self._wall_start = None
         self._wall_direction = None
-        self.action_panel = ContextualActionPanel()
-        self.host = DraftInteractionHost(view=self.view)
+        self.action_panel = ContextualActionPanel(close_callback=self.close)
+        self.host = ContextualInteractionHost(self.context, view=self.view)
 
         try:
             FreeCADGui.Selection.addObserver(self)
@@ -415,17 +416,35 @@ class BIMContextualEditingSession:
         )
         self._provider_context = context
         actions = []
+        tools = []
         sections = []
         for provider in self.providers:
             actions.extend(provider.get_actions(context) or ())
+            tools.extend(provider.get_tools(context) or ())
             sections.extend(provider.get_inspector_sections(context) or ())
         self.contextual_actions = tuple(actions)
+        self.contextual_tools = tuple(tools)
         self.inspector_sections = tuple(sections)
         self.action_panel.update(
             self.contextual_actions,
+            self.contextual_tools,
             self.inspector_sections,
             self.activate_action,
+            self.activate_tool,
         )
+
+    def activate_tool(self, tool):
+        if self._closed or tool is None or not tool.enabled:
+            return False
+        for provider in self.providers:
+            if provider.get_provider_id() != tool.provider_id:
+                continue
+            return bool(
+                provider.execute_tool(
+                    tool.key, self._provider_context, commands=self
+                )
+            )
+        return False
 
     def activate_action(self, action):
         """Activate a provider action without embedding object-specific policy."""

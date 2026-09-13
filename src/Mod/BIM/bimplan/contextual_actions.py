@@ -7,6 +7,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Sequence, Tuple
 
+from bimplan import contextual_policy
+
 
 @dataclass(frozen=True)
 class ContextualActionSpec:
@@ -105,6 +107,10 @@ class ContextualProvider:
         del action_key, context, commands, payload
         return False
 
+    def execute_tool(self, tool_key, context, commands=None, payload=None):
+        del tool_key, context, commands, payload
+        return False
+
 
 class SemanticEditProvider(ContextualProvider):
     """Expose semantic edit capabilities as contextual actions."""
@@ -174,6 +180,10 @@ class HostedOpeningCreationProvider(ContextualProvider):
         return None
 
     def get_actions(self, context):
+        if not contextual_policy.supports(
+            context.representation_context, "insert-opening"
+        ):
+            return ()
         wall = self._selected_wall(context)
         if wall is None:
             return ()
@@ -206,6 +216,10 @@ class WallCreationProvider(ContextualProvider):
     display_name = "Walls"
 
     def get_actions(self, context):
+        if not contextual_policy.supports(
+            context.representation_context, "create-wall"
+        ):
+            return ()
         return (ContextualActionSpec(
             key="create-wall", label="Create Wall",
             tooltip="Draw a wall in the current {} context".format(
