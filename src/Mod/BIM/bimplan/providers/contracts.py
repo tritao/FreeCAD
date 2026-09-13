@@ -11,7 +11,7 @@ from typing import Sequence, Tuple
 from .commands import PlanProviderActionContext
 from .context import PlanEditContext
 from .registry import PlanEditRegistry, get_plan_edit_registry
-from bimplan.contextual_actions import (
+from bimcontextual.actions import (
     ContextualActionSpec,
     ContextualInspectorSection,
     ContextualProvider,

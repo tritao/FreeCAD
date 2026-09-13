@@ -42,7 +42,7 @@ class BIM_SectionEdit:
         ) is not None
 
     def Activated(self):
-        from bimplan.contextual_session import active_session, start_session
+        from bimcontextual.session import active_session, start_session
 
         session = active_session()
         if session is not None:

@@ -2,17 +2,6 @@
 
 """BIM-owned Plan Edit integration primitives."""
 
-from .contextual_actions import (
-    ContextualActionSpec,
-    HostedOpeningCreationProvider,
-    WallCreationProvider,
-    ContextualInspectorSection,
-    ContextualProvider,
-    ContextualProviderContext,
-    ContextualToolSpec,
-    SemanticEditProvider,
-)
-
 from .runtime.embedded_commands import (
     _PlanEditCommandHost,
     _PlanEditWallHost,
@@ -57,22 +46,8 @@ from . import picking
 from .semantics import PlanSemanticRecord
 from .selection.targets import PlanTarget
 from .transactions import PlanEditTransaction
-from .contextual_editing import (
-    BIMContextualHandleEditor,
-    BIMEditPreview,
-    BIMEditResult,
-    ContextualEditController,
-)
 
 __all__ = [
-    "ContextualActionSpec",
-    "HostedOpeningCreationProvider",
-    "WallCreationProvider",
-    "ContextualInspectorSection",
-    "ContextualProvider",
-    "ContextualProviderContext",
-    "ContextualToolSpec",
-    "SemanticEditProvider",
     "PlanActionSpec",
     "PlanContextDetailSpec",
     "PlanContextPanelSpec",
@@ -84,10 +59,6 @@ __all__ = [
     "PlanEditProvider",
     "PlanEditRegistry",
     "PlanEditTransaction",
-    "BIMContextualHandleEditor",
-    "BIMEditPreview",
-    "BIMEditResult",
-    "ContextualEditController",
     "create_hosted_opening",
     "has_built_opening_shape",
     "_PlanEditCommandHost",

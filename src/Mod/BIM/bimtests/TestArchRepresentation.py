@@ -1,13 +1,15 @@
 # SPDX-License-Identifier: LGPL-2.1-or-later
 
 import unittest
+import ast
+from pathlib import Path
 from unittest.mock import patch
 
 import Arch
 import FreeCAD
 import Part
 
-from bimplan.contextual_actions import (
+from bimcontextual.actions import (
     ContextualActionSpec,
     ContextualInspectorSection,
     ContextualProvider,
@@ -43,15 +45,42 @@ from ArchRepresentation import (
     edit_capabilities_for,
     representation_for,
 )
-from bimplan.contextual_editing import (
+from bimcontextual.editing import (
     BIMContextualHandleEditor,
     ContextualEditController,
 )
 from bimplan.editable_points import get_contextual_edit_points
 from ArchWallSemantic import evaluate_wall_candidate, evaluate_wall_length
+from bimcontextual.profiles import profile_for
 
 
 class TestArchRepresentation(unittest.TestCase):
+    def test_shared_contextual_package_has_no_plan_imports(self):
+        package = Path(__file__).resolve().parents[1] / "bimcontextual"
+        offenders = []
+        for source in package.glob("*.py"):
+            tree = ast.parse(source.read_text(encoding="utf-8"), filename=str(source))
+            for node in ast.walk(tree):
+                names = []
+                if isinstance(node, ast.Import):
+                    names = [alias.name for alias in node.names]
+                elif isinstance(node, ast.ImportFrom) and node.module:
+                    names = [node.module]
+                if any(name == "bimplan" or name.startswith("bimplan.") for name in names):
+                    offenders.append(source.name)
+        self.assertEqual([], offenders)
+
+    def test_context_profiles_declare_purpose_and_capabilities(self):
+        for purpose in RepresentationPurpose:
+            profile = profile_for(RepresentationContext(purpose=purpose))
+            self.assertIs(purpose, profile.purpose)
+        self.assertTrue(
+            profile_for(RepresentationContext(purpose="Plan")).supports("create-space")
+        )
+        self.assertFalse(
+            profile_for(RepresentationContext(purpose="Elevation")).supports("create-wall")
+        )
+
     def test_edit_operation_uses_semantic_candidate_validation(self):
         operation = BIMEditOperation(
             "Semantic",

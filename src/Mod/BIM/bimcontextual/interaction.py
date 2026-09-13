@@ -2,22 +2,19 @@
 
 """Draft interaction adapter for architectural representation contexts."""
 
-import WorkingPlane
-
 from draftguitools.gui_base import DraftInteractionHost
 
 
 class ContextualInteractionHost(DraftInteractionHost):
     """Acquire Draft points on the plane declared by a BIM view context."""
 
-    def __init__(self, context, command=None, view=None):
+    def __init__(self, context, profile=None, command=None, view=None):
         super().__init__(command=command, view=view)
         self.context = context
+        if profile is None:
+            from .profiles import profile_for
+            profile = profile_for(context)
+        self.profile = profile
 
     def get_interaction_plane(self):
-        frame = getattr(self.context, "reference_frame", None)
-        if frame is None:
-            return super().get_interaction_plane()
-        plane = WorkingPlane.PlaneBase()
-        plane.align_to_placement(frame)
-        return plane
+        return self.profile.interaction_plane(self.context)

@@ -90,11 +90,6 @@ SET(Arch_SRCS
 
 SET(bimplan_SRCS
     bimplan/__init__.py
-    bimplan/contextual_actions.py
-    bimplan/contextual_action_ui.py
-    bimplan/contextual_host.py
-    bimplan/contextual_policy.py
-    bimplan/contextual_session.py
     bimplan/contextual_rendering.py
     bimplan/contextual_editing.py
     bimplan/document_visuals.py
@@ -182,6 +177,16 @@ SET(bimplan_SRCS
     bimplan/ui/status_text.py
     bimplan/ui/task_panel.py
     bimplan/ui/task_panel_view_model.py
+)
+
+SET(bimcontextual_SRCS
+    bimcontextual/__init__.py
+    bimcontextual/actions.py
+    bimcontextual/editing.py
+    bimcontextual/interaction.py
+    bimcontextual/profiles.py
+    bimcontextual/session.py
+    bimcontextual/ui.py
 )
 
 SET(importers_SRCS
@@ -474,7 +479,8 @@ add_custom_command(
 ADD_CUSTOM_TARGET(BIM ALL
     DEPENDS ${Arch_QRC_SRCS}
     SOURCES ${Arch_SRCS}
-            ${bimplan_SRCS}
+    ${bimplan_SRCS}
+    ${bimcontextual_SRCS}
             ${Dice3DS_SRCS}
             ${Arch_presets}
             ${ArchGuiIcon_SVG}
@@ -493,6 +499,7 @@ add_custom_target(ArchSqlParser ALL DEPENDS ${BIM_GENERATED_PARSER})
 # Populate the build tree with the BIM workbench sources and test data
 fc_copy_sources(BIM "${CMAKE_BINARY_DIR}/Mod/BIM" ${Arch_SRCS})
 fc_copy_sources(BIM "${CMAKE_BINARY_DIR}/Mod/BIM" ${bimplan_SRCS})
+fc_copy_sources(BIM "${CMAKE_BINARY_DIR}/Mod/BIM" ${bimcontextual_SRCS})
 fc_copy_sources(BIM "${CMAKE_BINARY_DIR}/Mod/BIM" ${Dice3DS_SRCS})
 fc_copy_sources(BIM "${CMAKE_BINARY_DIR}/Mod/BIM" ${importers_SRCS})
 fc_copy_sources(BIM "${CMAKE_BINARY_DIR}/Mod/BIM" ${bimcommands_SRCS})
@@ -532,6 +539,12 @@ INSTALL(
 
 INSTALL(
     DIRECTORY bimplan
+    DESTINATION Mod/BIM
+    FILES_MATCHING PATTERN "*.py"
+)
+
+INSTALL(
+    DIRECTORY bimcontextual
     DESTINATION Mod/BIM
     FILES_MATCHING PATTERN "*.py"
 )

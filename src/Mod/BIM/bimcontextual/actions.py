@@ -7,7 +7,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Sequence, Tuple
 
-from bimplan import contextual_policy
+from . import profiles
 
 
 @dataclass(frozen=True)
@@ -55,6 +55,11 @@ class ContextualProviderContext:
     selected_sources: tuple = ()
     view: object = None
     capabilities: tuple = ()
+    profile: object = None
+
+    def supports(self, capability):
+        policy = self.profile or profiles.profile_for(self.representation_context)
+        return policy.supports(capability)
 
     def get_selected_sources(self):
         return tuple(self.selected_sources or ())
@@ -180,9 +185,7 @@ class HostedOpeningCreationProvider(ContextualProvider):
         return None
 
     def get_actions(self, context):
-        if not contextual_policy.supports(
-            context.representation_context, "insert-opening"
-        ):
+        if not context.supports("insert-opening"):
             return ()
         wall = self._selected_wall(context)
         if wall is None:
@@ -216,9 +219,7 @@ class WallCreationProvider(ContextualProvider):
     display_name = "Walls"
 
     def get_actions(self, context):
-        if not contextual_policy.supports(
-            context.representation_context, "create-wall"
-        ):
+        if not context.supports("create-wall"):
             return ()
         return (ContextualActionSpec(
             key="create-wall", label="Create Wall",

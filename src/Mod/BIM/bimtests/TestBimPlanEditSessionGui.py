@@ -14,10 +14,10 @@ from pivy import coin
 from ArchRepresentation import BIMEditRay, RepresentationContext, RepresentationPurpose
 from bimtests.TestArchBaseGui import TestArchBaseGui
 from bimplan.runtime.session import PlanEditSession
-from bimplan.contextual_session import BIMContextualEditingSession
-from bimplan.contextual_host import ContextualInteractionHost
-from bimplan import contextual_policy
-from bimplan.contextual_actions import ContextualProvider, ContextualToolSpec
+from bimcontextual.session import ContextualSession
+from bimcontextual.interaction import ContextualInteractionHost
+from bimcontextual import profiles as contextual_policy
+from bimcontextual.actions import ContextualProvider, ContextualToolSpec
 from ArchWallSemantic import apply_wall_candidate
 from bimplan.providers import PlanEditProvider, PlanEditRegistry
 from BimContextualRendering import (
@@ -74,7 +74,7 @@ class _HostedOpeningProxy:
 class TestBimPlanEditSessionGui(TestArchBaseGui):
     def test_contextual_task_panel_consumes_provider_tools(self):
         provider = _ContextualToolProvider()
-        session = BIMContextualEditingSession(
+        session = ContextualSession(
             FreeCADGui.ActiveDocument.ActiveView, sources=(), providers=(provider,)
         )
         try:
@@ -789,7 +789,7 @@ class TestBimPlanEditSessionGui(TestArchBaseGui):
         camera_type = view.getCameraType()
         FreeCADGui.Selection.clearSelection()
         FreeCADGui.Selection.addSelection(wall)
-        session = BIMContextualEditingSession(view)
+        session = ContextualSession(view)
         try:
             self.pump_gui_events(20)
             renderer = session.renderer
@@ -847,7 +847,7 @@ class TestBimPlanEditSessionGui(TestArchBaseGui):
         view = FreeCADGui.ActiveDocument.ActiveView
         FreeCADGui.Selection.clearSelection()
         FreeCADGui.Selection.addSelection(wall)
-        session = BIMContextualEditingSession(view)
+        session = ContextualSession(view)
         try:
             self.pump_gui_events(20)
             labels = {action.label for action in session.contextual_actions}
@@ -881,7 +881,7 @@ class TestBimPlanEditSessionGui(TestArchBaseGui):
                 RepresentationPurpose.ELEVATION,
             ):
                 context = RepresentationContext(purpose=purpose)
-                session = BIMContextualEditingSession(
+                session = ContextualSession(
                     view, context=context, sources=(wall,)
                 )
                 try:
@@ -936,7 +936,7 @@ class TestBimPlanEditSessionGui(TestArchBaseGui):
         view = FreeCADGui.ActiveDocument.ActiveView
         results = []
         for purpose in RepresentationPurpose.MODEL, RepresentationPurpose.PLAN:
-            session = BIMContextualEditingSession(view, context=RepresentationContext(purpose=purpose), sources=())
+            session = ContextualSession(view, context=RepresentationContext(purpose=purpose), sources=())
             callbacks = []
             try:
                 self.pump_gui_events(20)
@@ -954,7 +954,7 @@ class TestBimPlanEditSessionGui(TestArchBaseGui):
             self.assertIsNone(self.document.getObject(wall_name))
         self.assertEqual(results[0], results[1])
         for purpose in RepresentationPurpose.SECTION, RepresentationPurpose.ELEVATION:
-            session = BIMContextualEditingSession(
+            session = ContextualSession(
                 view, context=RepresentationContext(purpose=purpose), sources=()
             )
             try:
@@ -967,7 +967,7 @@ class TestBimPlanEditSessionGui(TestArchBaseGui):
 
     def test_contextual_wall_creation_preview_and_cancel_are_reversible(self):
         view = FreeCADGui.ActiveDocument.ActiveView
-        session = BIMContextualEditingSession(view, sources=())
+        session = ContextualSession(view, sources=())
         requests = []
         try:
             self.pump_gui_events(20)
@@ -991,7 +991,7 @@ class TestBimPlanEditSessionGui(TestArchBaseGui):
         view = FreeCADGui.ActiveDocument.ActiveView
         FreeCADGui.Selection.clearSelection()
         FreeCADGui.Selection.addSelection(wall)
-        session = BIMContextualEditingSession(view)
+        session = ContextualSession(view)
         try:
             self.pump_gui_events(20)
 
@@ -1067,7 +1067,7 @@ class TestBimPlanEditSessionGui(TestArchBaseGui):
 
     def test_standard_3d_contextual_editing_callbacks_toggle_with_command(self):
         from bimcommands.BimContextualEdit3D import BIM_ContextualEdit3D
-        from bimplan.contextual_session import active_session
+        from bimcontextual.session import active_session
 
         command = BIM_ContextualEdit3D()
         self.assertTrue(command.IsActive())
@@ -1097,7 +1097,7 @@ class TestBimPlanEditSessionGui(TestArchBaseGui):
             for line in view.getCamera().splitlines()
             if not line.strip().startswith(("nearDistance", "farDistance"))
         )
-        session = BIMContextualEditingSession(
+        session = ContextualSession(
             view,
             context=section.Proxy.getRepresentationContext(section),
             sources=(wall,),
@@ -1141,7 +1141,7 @@ class TestBimPlanEditSessionGui(TestArchBaseGui):
             projection_range=(0.0, 5000.0),
         )
         self.document.recompute()
-        session = BIMContextualEditingSession(
+        session = ContextualSession(
             FreeCADGui.ActiveDocument.ActiveView,
             context=context,
             sources=(wall,),
@@ -1180,7 +1180,7 @@ class TestBimPlanEditSessionGui(TestArchBaseGui):
         view = FreeCADGui.ActiveDocument.ActiveView
         FreeCADGui.Selection.clearSelection()
         FreeCADGui.Selection.addSelection(wall)
-        session = BIMContextualEditingSession(view)
+        session = ContextualSession(view)
         try:
             view.viewAxonometric()
             view.fitAll()

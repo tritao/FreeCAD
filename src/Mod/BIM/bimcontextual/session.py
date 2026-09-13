@@ -9,21 +9,19 @@ from PySide import QtCore
 import ArchRepresentation
 import ArchOpeningConstruction
 import BimContextualRendering
-from bimplan.contextual_action_ui import ContextualActionPanel
-from bimplan.contextual_actions import (
+from .ui import ContextualActionPanel
+from .actions import (
     ContextualProviderContext,
-    HostedOpeningCreationProvider,
-    SemanticEditProvider,
-    WallCreationProvider,
 )
-from bimplan.contextual_editing import ContextualEditController
-from bimplan.contextual_host import ContextualInteractionHost
+from .editing import ContextualEditController
+from .interaction import ContextualInteractionHost
+from .profiles import profile_for
 
 
 _active_session = None
 
 
-class BIMContextualEditingSession:
+class ContextualSession:
     """Show and edit semantic handles while leaving document geometry visible."""
 
     def __init__(
@@ -33,6 +31,7 @@ class BIMContextualEditingSession:
         sources=None,
         orient_to_context=False,
         providers=None,
+        profile=None,
     ):
         gui_document = FreeCADGui.ActiveDocument
         self.gui_document = gui_document
@@ -44,6 +43,7 @@ class BIMContextualEditingSession:
         self.context = context or ArchRepresentation.RepresentationContext(
             purpose=ArchRepresentation.RepresentationPurpose.MODEL
         )
+        self.profile = profile or profile_for(self.context)
         self._context_sources = None if sources is None else tuple(sources)
         self._restore_camera = None
         if orient_to_context:
@@ -66,17 +66,15 @@ class BIMContextualEditingSession:
         self.contextual_tools = ()
         self.inspector_sections = ()
         self._pending_action_handle = None
-        self.providers = tuple(
-            providers or (
-                SemanticEditProvider(), HostedOpeningCreationProvider(), WallCreationProvider()
-            )
-        )
+        self.providers = tuple(providers or self.profile.providers(self.context))
         self._provider_context = None
         self._creation_preview_source = object()
         self._wall_start = None
         self._wall_direction = None
         self.action_panel = ContextualActionPanel(close_callback=self.close)
-        self.host = ContextualInteractionHost(self.context, view=self.view)
+        self.host = ContextualInteractionHost(
+            self.context, profile=self.profile, view=self.view
+        )
 
         try:
             FreeCADGui.Selection.addObserver(self)
@@ -413,6 +411,7 @@ class BIMContextualEditingSession:
             selected_sources=tuple(selected),
             view=self.view,
             capabilities=self._capabilities,
+            profile=self.profile,
         )
         self._provider_context = context
         actions = []
@@ -547,5 +546,5 @@ def start_session(view=None, **kwargs):
 
     if _active_session is not None:
         _active_session.close()
-    _active_session = BIMContextualEditingSession(view, **kwargs)
+    _active_session = ContextualSession(view, **kwargs)
     return _active_session
