@@ -4,6 +4,9 @@
 
 import FreeCAD
 import FreeCADGui
+import Part
+
+import ArchRepresentation
 
 from bimplan.runtime import tools as plan_runtime_tools
 from bimplan.runtime.embedded_commands import _PlanEditWallHost
@@ -15,6 +18,92 @@ _MIN_WALL_LENGTH = 10.0
 
 def _creation_preview_state(session):
     return session.creation_preview_state
+
+
+def _wall_preview_representation(session, source, segments, width, align="Center"):
+    """Build one renderer-neutral plan representation for proposed walls."""
+
+    context = session.representation_context.context
+    representation = ArchRepresentation.BIMRepresentation(source=source, context=context)
+    for index, (start, end) in enumerate(segments, start=1):
+        footprint = session.wall_edit.get_preview_footprint(
+            [start, end],
+            width=width,
+            align=align,
+        )
+        if not footprint:
+            continue
+        points = tuple(FreeCAD.Vector(point) for point in footprint)
+        if len(points) < 3:
+            continue
+        closed = (*points, points[0])
+        try:
+            face = Part.Face(Part.makePolygon(closed))
+        except Part.OCCError:
+            continue
+        representation.add_geometry(
+            "cut_geometry",
+            face,
+            "ProposedWallFootprint",
+            subelement=f"Segment{index}",
+        )
+        representation.add_geometry(
+            "projected_geometry",
+            closed,
+            "ProposedWallBoundary",
+            subelement=f"Segment{index}",
+        )
+    return representation
+
+
+class SemanticWallPreviewTracker:
+    """Draft wall-tracker contract backed by the semantic preview renderer."""
+
+    def __init__(self, session):
+        self._session = session
+        self._source = object()
+        self._width = 0.1
+        self._height = 1.0
+        self._active = False
+
+    def width(self, value=None):
+        if value is not None:
+            self._width = float(value)
+        return self._width
+
+    def height(self, value=None):
+        if value is not None:
+            self._height = float(value)
+        return self._height
+
+    def on(self):
+        self._active = True
+
+    def off(self):
+        self._active = False
+        self._session.contextual_rendering.clear_preview(self._source)
+
+    def finalize(self):
+        self.off()
+
+    def update(self, line=None, normal=None):
+        del normal
+        if not self._active or not isinstance(line, (list, tuple)) or len(line) != 2:
+            return
+        start, end = (FreeCAD.Vector(point) for point in line)
+        if end.sub(start).Length < _MIN_WALL_LENGTH:
+            self._session.contextual_rendering.clear_preview(self._source)
+            return
+        representation = _wall_preview_representation(
+            self._session,
+            self._source,
+            ((start, end),),
+            self._width,
+        )
+        self._session.contextual_rendering.set_preview_representation(
+            self._source,
+            representation,
+        )
 
 
 class PlanWallCreateAPI:
@@ -160,15 +249,17 @@ def has_active_rect_wall_tool(session):
 
 def clear_rect_wall_preview(session):
     preview_state = _creation_preview_state(session)
-    session.overlays.manager.finalize_trackers(preview_state.rect_wall_preview_trackers)
-    preview_state.rect_wall_preview_trackers = []
+    source = preview_state.rect_wall_preview_source
+    if source is not None:
+        session.contextual_rendering.clear_preview(source)
+    preview_state.rect_wall_preview_source = None
 
 
 def discard_runtime_references(session):
     preview_state = _creation_preview_state(session)
     preview_state.rect_wall_start = None
     preview_state.rect_wall_params = None
-    preview_state.rect_wall_preview_trackers = []
+    preview_state.rect_wall_preview_source = None
 
 
 def cancel_rect_wall_tool(session, refresh=True):
@@ -217,34 +308,19 @@ def update_rect_wall_preview(session, point, info):
     corners = session.wall_create.get_rect_wall_corners(point)
     if not corners:
         return
-    try:
-        import draftguitools.gui_trackers as DraftTrackers
-    except Exception:
-        return
-
     segments = list(zip(corners, corners[1:] + corners[:1]))
-    if not preview_state.rect_wall_preview_trackers:
-        for start, end in segments:
-            tracker = DraftTrackers.rectangleTracker(face=True)
-            preview_state.rect_wall_preview_trackers.append(tracker)
-    for tracker, (start, end) in zip(preview_state.rect_wall_preview_trackers, segments):
-        footprint = session.wall_edit.get_preview_footprint(
-            [start, end],
-            width=preview_state.rect_wall_params["width"],
-            align=preview_state.rect_wall_params["align"],
-        )
-        if not footprint:
-            continue
-        axis = end.sub(start)
-        if axis.Length < _MIN_WALL_LENGTH:
-            continue
-        axis.normalize()
-        rotation = FreeCAD.Rotation(FreeCAD.Vector(1, 0, 0), axis)
-        perp = rotation.multVec(FreeCAD.Vector(0, 1, 0))
-        tracker.setPlane(axis, perp)
-        tracker.setorigin(footprint[0])
-        tracker.update(footprint[2])
-        tracker.on()
+    source = preview_state.rect_wall_preview_source
+    if source is None:
+        source = object()
+        preview_state.rect_wall_preview_source = source
+    representation = _wall_preview_representation(
+        session,
+        source,
+        segments,
+        preview_state.rect_wall_params["width"],
+        preview_state.rect_wall_params["align"],
+    )
+    session.contextual_rendering.set_preview_representation(source, representation)
 
 
 def create_rect_wall_run(session, corners):

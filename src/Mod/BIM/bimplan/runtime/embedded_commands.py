@@ -69,6 +69,11 @@ class _PlanEditWallHost(gui_base.DraftInteractionHost):
     def get_interaction_plane(self):
         return self.session.viewport.get_interaction_plane()
 
+    def create_box_tracker(self):
+        from bimplan.tools.wall_create import SemanticWallPreviewTracker
+
+        return SemanticWallPreviewTracker(self.session)
+
     def request_point(
         self,
         callback,

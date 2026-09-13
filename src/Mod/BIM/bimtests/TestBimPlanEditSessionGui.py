@@ -3,6 +3,7 @@
 """GUI tests for the viewer-local BIM Plan Edit session."""
 
 from unittest.mock import patch
+from types import SimpleNamespace
 
 import Arch
 import ArchWallRelation
@@ -50,6 +51,81 @@ class _HostedOpeningProxy:
 
 
 class TestBimPlanEditSessionGui(TestArchBaseGui):
+    @staticmethod
+    def _wall_preview_session(renderer):
+        def footprint(path, width, align):
+            start, end = path
+            axis = end.sub(start)
+            axis.normalize()
+            lateral = axis.cross(FreeCAD.Vector(0, 0, 1))
+            half_width = float(width) * 0.5
+            if align == "Left":
+                low, high = -float(width), 0.0
+            elif align == "Right":
+                low, high = 0.0, float(width)
+            else:
+                low, high = -half_width, half_width
+            return [
+                start + lateral * low,
+                end + lateral * low,
+                end + lateral * high,
+                start + lateral * high,
+            ]
+
+        return SimpleNamespace(
+            contextual_rendering=renderer,
+            representation_context=SimpleNamespace(context=RepresentationContext()),
+            wall_edit=SimpleNamespace(get_preview_footprint=footprint),
+        )
+
+    def test_semantic_wall_creation_tracker_uses_contextual_preview(self):
+        from bimplan.tools.wall_create import SemanticWallPreviewTracker
+
+        renderer = SimpleNamespace(
+            previews=[],
+            cleared=[],
+            set_preview_representation=lambda source, representation: renderer.previews.append(
+                (source, representation)
+            ),
+            clear_preview=lambda source: renderer.cleared.append(source),
+        )
+        tracker = SemanticWallPreviewTracker(self._wall_preview_session(renderer))
+        tracker.width(200)
+        tracker.on()
+        tracker.update([FreeCAD.Vector(), FreeCAD.Vector(1000, 0, 0)])
+
+        self.assertEqual(1, len(renderer.previews))
+        source, representation = renderer.previews[0]
+        self.assertIs(source, representation.source)
+        self.assertEqual(1, len(representation.cut_geometry))
+        self.assertEqual(1, len(representation.projected_geometry))
+
+        tracker.finalize()
+        self.assertEqual([source], renderer.cleared)
+
+    def test_rectangular_wall_preview_is_one_semantic_representation(self):
+        from bimplan.tools.wall_create import _wall_preview_representation
+
+        renderer = SimpleNamespace()
+        session = self._wall_preview_session(renderer)
+        corners = [
+            FreeCAD.Vector(0, 0, 0),
+            FreeCAD.Vector(1000, 0, 0),
+            FreeCAD.Vector(1000, 800, 0),
+            FreeCAD.Vector(0, 800, 0),
+        ]
+        source = object()
+        representation = _wall_preview_representation(
+            session,
+            source,
+            tuple(zip(corners, corners[1:] + corners[:1])),
+            200,
+        )
+
+        self.assertIs(source, representation.source)
+        self.assertEqual(4, len(representation.cut_geometry))
+        self.assertEqual(4, len(representation.projected_geometry))
+
     def test_storey_entry_helper_selects_source_and_runs_shared_command(self):
         from bimcommands.BimPlanEdit import start_plan_edit_for
 

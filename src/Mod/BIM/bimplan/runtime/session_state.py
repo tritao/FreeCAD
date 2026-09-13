@@ -357,7 +357,7 @@ class PlanOverlayTransientState:
 class PlanCreationPreviewState:
     rect_wall_start: object = None
     rect_wall_params: object = None
-    rect_wall_preview_trackers: list = field(default_factory=list)
+    rect_wall_preview_source: object = None
     space_separator_start: object = None
     space_separator_height: object = None
     space_separator_preview_trackers: list = field(default_factory=list)
