@@ -24,8 +24,10 @@ class ContextualNodeMapping:
 class ContextualRepresentationRenderer:
     """Own contextual representation nodes in one viewer and context layer."""
 
-    def __init__(self, view):
+    def __init__(self, view, *, replace_source=True, render_representation=True):
         self.view = view
+        self.replace_source = bool(replace_source)
+        self.render_representation = bool(render_representation)
         self.layer = view.pushViewContextLayer()
         self.scene = view.getSceneGraph()
         self.root = coin.SoSeparator()
@@ -53,8 +55,9 @@ class ContextualRepresentationRenderer:
             self._visible_handle_sources.add(source)
         root = coin.SoSwitch()
         root.whichChild = coin.SO_SWITCH_ALL
-        self._append_faces(root, representation)
-        self._append_lines(root, representation)
+        if self.render_representation:
+            self._append_faces(root, representation)
+            self._append_lines(root, representation)
         handle_switch = self._append_edit_handles(root, representation)
         if handle_switch is not None:
             self._handle_switches[source] = handle_switch
@@ -63,7 +66,8 @@ class ContextualRepresentationRenderer:
         self._object_nodes[source] = root
         self._representations[source] = representation
         self._apply_source_visibility(source)
-        self.view.setViewVisibility(self.layer, source, "Hidden")
+        if self.replace_source:
+            self.view.setViewVisibility(self.layer, source, "Hidden")
         return root
 
     def remove_representation(self, source, restore_visibility=True):
@@ -84,7 +88,8 @@ class ContextualRepresentationRenderer:
                 self._visible_handle_sources.discard(source)
         if restore_visibility:
             self._hidden_sources.discard(source)
-            self.view.setViewVisibility(self.layer, source, "Inherit")
+            if self.replace_source:
+                self.view.setViewVisibility(self.layer, source, "Inherit")
 
     def mapping_for_node(self, node):
         return self._node_mappings.get(id(node))
@@ -92,7 +97,11 @@ class ContextualRepresentationRenderer:
     def pick_mapping(self, mouse_pos, project_point, radius_px=4):
         """Pick rendered semantic geometry through the neutral representation contract."""
 
-        if mouse_pos is None or not callable(project_point):
+        if (
+            not self.render_representation
+            or mouse_pos is None
+            or not callable(project_point)
+        ):
             return None
         result = ArchRepresentation.query_representation_pick(
             tuple(self._representations.values()),
@@ -406,3 +415,10 @@ class ContextualRepresentationRenderer:
 
     def __exit__(self, *_args):
         self.close()
+
+
+class ContextualInteractionRenderer(ContextualRepresentationRenderer):
+    """Render semantic interaction overlays without replacing source objects."""
+
+    def __init__(self, view):
+        super().__init__(view, replace_source=False, render_representation=False)

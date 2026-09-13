@@ -9,10 +9,15 @@ import ArchWallRelation
 import FreeCAD
 import FreeCADGui
 from pivy import coin
+from ArchRepresentation import RepresentationContext
 from bimtests.TestArchBaseGui import TestArchBaseGui
 from bimplan.runtime.session import PlanEditSession
 from bimplan.providers import PlanEditProvider, PlanEditRegistry
-from BimContextualRendering import ContextualNodeMapping
+from BimContextualRendering import (
+    ContextualInteractionRenderer,
+    ContextualNodeMapping,
+    ContextualRepresentationRenderer,
+)
 
 
 class _TestProvider(PlanEditProvider):
@@ -228,6 +233,36 @@ class TestBimPlanEditSessionGui(TestArchBaseGui):
             self.assertIsNone(renderer.root)
         finally:
             session.shutdown(close_dialog=False)
+
+    def test_contextual_interaction_renderer_preserves_source_visibility(self):
+        wall = Arch.makeWall(length=3000, width=200, height=2500, align="Center")
+        self.document.recompute()
+        view = FreeCADGui.ActiveDocument.ActiveView
+        representation = wall.Proxy.getRepresentation(
+            wall,
+            RepresentationContext(purpose="Plan", cut_offset=1000, target_offset=0),
+        )
+        renderer = ContextualInteractionRenderer(view)
+        try:
+            renderer.set_representation(representation)
+            self.assertEqual("Inherit", view.getViewVisibility(wall))
+            self.assertTrue(renderer._object_nodes[wall].getNumChildren())
+            self.assertIsNone(renderer.pick_mapping((0, 0), lambda point: point))
+
+            renderer.set_visible_handle_sources((wall,))
+            self.assertEqual("Inherit", view.getViewVisibility(wall))
+            renderer.remove_representation(wall)
+            self.assertEqual("Inherit", view.getViewVisibility(wall))
+        finally:
+            renderer.close()
+
+        renderer = ContextualRepresentationRenderer(view)
+        try:
+            renderer.set_representation(representation)
+            self.assertEqual("Hidden", view.getViewVisibility(wall))
+        finally:
+            renderer.close()
+        self.assertEqual("Inherit", view.getViewVisibility(wall))
 
     def test_contextual_wall_width_edit_is_transactional(self):
         wall = Arch.makeWall(length=3000, width=200, height=2500, align="Center")
