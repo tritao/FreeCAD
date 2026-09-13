@@ -864,6 +864,40 @@ class TestBimPlanEditSessionGui(TestArchBaseGui):
         )
         self.assertEqual(camera, restored_camera)
 
+    def test_elevation_contextual_edit_uses_shared_host(self):
+        wall = Arch.makeWall(length=3000, width=200, height=2500, align="Center")
+        frame = FreeCAD.Placement(
+            FreeCAD.Vector(1500, 0, 0),
+            FreeCAD.Rotation(FreeCAD.Vector(0, 1, 0), 90),
+        )
+        context = RepresentationContext(
+            purpose=RepresentationPurpose.ELEVATION,
+            reference_frame=frame,
+            projection_range=(0.0, 5000.0),
+        )
+        self.document.recompute()
+        session = BIM3DContextualEditingSession(
+            FreeCADGui.ActiveDocument.ActiveView,
+            context=context,
+            sources=(wall,),
+            orient_to_context=True,
+        )
+        try:
+            self.pump_gui_events(20)
+            self.assertIs(RepresentationPurpose.ELEVATION, session.context.purpose)
+            height = next(
+                item
+                for item in session.renderer.edit_handles_for(wall)
+                if item.subelement == "Height"
+            )
+            self.assertTrue(session.begin_handle_edit(height))
+            session.host._value_input[1].setProperty("quantityString", "2.9 m")
+            session.host._value_input[1].returnPressed.emit()
+            self.assertAlmostEqual(2900.0, wall.Height.Value)
+            self.assertIsNone(session.active_edit)
+        finally:
+            session.close()
+
     def test_standard_3d_pointer_drag_commits_a_semantic_width_edit(self):
         wall = Arch.makeWall(length=3000, width=200, height=2500, align="Center")
         self.document.recompute()

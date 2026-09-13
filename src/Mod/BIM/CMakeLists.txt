@@ -234,6 +234,7 @@ SET(bimcommands_SRCS
     bimcommands/BimColumn.py
     bimcommands/BimCommon.py
     bimcommands/BimContextualEdit3D.py
+    bimcommands/BimElevationEdit.py
     bimcommands/BimSectionEdit.py
     bimcommands/BimCompound.py
     bimcommands/BimConvert.py
