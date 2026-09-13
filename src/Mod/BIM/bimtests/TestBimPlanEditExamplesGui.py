@@ -476,6 +476,7 @@ class TestBimPlanEditExamplesGui(TestArchBaseGui):
             committed_space_area = sum(face.Area for face in space.Proxy.getFootprint(space))
             self.assertAlmostEqual(expected_host_area, committed_host_area, delta=1e-6)
             self.assertAlmostEqual(expected_space_area, committed_space_area, delta=1e-6)
+            self.assertAlmostEqual(original_space_area, space.Area.Value, delta=1e-6)
 
             document.undo()
             document.recompute()
@@ -490,6 +491,7 @@ class TestBimPlanEditExamplesGui(TestArchBaseGui):
             self.assertAlmostEqual(original_position, position_handle.operation.get_value(door))
             self.assertAlmostEqual(original_host_area, restored_host_area, delta=1e-6)
             self.assertAlmostEqual(original_space_area, restored_space_area, delta=1e-6)
+            self.assertAlmostEqual(original_space_area, space.Area.Value, delta=1e-6)
 
             for role, offset in (("OpeningPosition", 75.0), ("OpeningRightJamb", 50.0)):
                 handles = select_and_sync()

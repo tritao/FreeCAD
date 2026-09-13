@@ -3433,6 +3433,42 @@ class _Space(ArchComponent.Component):
         else:
             return 0
 
+    def computeAreas(self, obj):
+        """Compute Space quantities from its resolved semantic footprint.
+
+        The generic Component calculator projects every horizontal BRep face.
+        Space already owns a canonical footprint, which is both cheaper and
+        robust while linked boundaries are passing through recompute.
+        """
+
+        calculator = ArchComponent.AreaCalculator(obj)
+        if calculator.isShapeInvalid():
+            return
+
+        vertical_area = sum(
+            face.Area
+            for index, face in enumerate(obj.Shape.Faces, start=1)
+            if calculator.isFaceVertical(face, face_index=index)
+        )
+        if hasattr(obj, "VerticalArea") and abs(obj.VerticalArea.Value - vertical_area) > 0.000001:
+            obj.VerticalArea = vertical_area
+
+        footprint = tuple(self.getFootprint(obj) or ())
+        if not footprint:
+            return
+        horizontal_area = sum(face.Area for face in footprint)
+        perimeter = sum(wire.Length for face in footprint for wire in face.Wires)
+        if (
+            hasattr(obj, "HorizontalArea")
+            and abs(obj.HorizontalArea.Value - horizontal_area) > 0.000001
+        ):
+            obj.HorizontalArea = horizontal_area
+        if (
+            hasattr(obj, "PerimeterLength")
+            and abs(obj.PerimeterLength.Value - perimeter) > 0.000001
+        ):
+            obj.PerimeterLength = perimeter
+
     def _sync_area_properties(self, obj):
         """Keep the user-facing space area aligned with the available footprint."""
 

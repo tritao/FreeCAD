@@ -226,7 +226,7 @@ class TestArchSpace(TestArchBase.TestArchBase):
             obj.HorizontalArea = 0
             obj.PerimeterLength = 0
 
-        with patch("ArchComponent.Component.computeAreas", autospec=True) as compute_areas:
+        with patch("ArchSpace._Space.computeAreas", autospec=True) as compute_areas:
             compute_areas.side_effect = fake_compute_areas
             space = Arch.makeSpace(base)
             App.ActiveDocument.recompute()

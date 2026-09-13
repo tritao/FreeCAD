@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: LGPL-2.1-or-later
 
 import unittest
+from unittest.mock import patch
 
 import Arch
 import FreeCAD
@@ -99,6 +100,23 @@ class TestArchRepresentation(unittest.TestCase):
         self.assertIs(entry.representation, representation)
         self.assertTrue(entry.replace_committed)
         self.assertFalse(entry.affects_spatial_boundary)
+
+    def test_space_areas_use_semantic_footprint_without_generic_projection(self):
+        document = FreeCAD.newDocument("SemanticSpaceArea")
+        self.addCleanup(FreeCAD.closeDocument, document.Name)
+        base = document.addObject("Part::Feature", "SpaceBox")
+        base.Shape = Part.makeBox(4000, 3000, 2500)
+
+        with patch(
+            "ArchComponent.AreaCalculator._computeHorizontalAreaAndPerimeter",
+            side_effect=AssertionError("Space must not use generic area projection"),
+        ):
+            space = Arch.makeSpace(base)
+            document.recompute()
+
+        self.assertAlmostEqual(space.HorizontalArea.getValueAs("m^2").Value, 12.0, places=3)
+        self.assertAlmostEqual(space.Area.getValueAs("m^2").Value, 12.0, places=3)
+        self.assertAlmostEqual(space.PerimeterLength.getValueAs("m").Value, 14.0, places=3)
 
     def test_wall_provider_exposes_semantic_cut_boundary(self):
         document = FreeCAD.newDocument("SemanticWallBoundary")
