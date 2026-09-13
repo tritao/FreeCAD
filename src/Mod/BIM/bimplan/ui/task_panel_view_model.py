@@ -327,6 +327,9 @@ class PlanActionContextViewModel:
     show_window_button: bool = False
     window_button_enabled: bool = False
     window_button_tooltip: str = ""
+    show_door_button: bool = False
+    door_button_enabled: bool = False
+    door_button_tooltip: str = ""
 
 
 @dataclass(frozen=True)
@@ -753,6 +756,17 @@ def build_action_context_view_model(session_or_context, modal_active=None):
             "Select or hover a wall before placing a window.",
         )
     )
+    door_button_tooltip = (
+        translate(
+            "BIM_PlanEdit",
+            "Place a hosted door on the selected or hovered wall.",
+        )
+        if can_place_window
+        else translate(
+            "BIM_PlanEdit",
+            "Select or hover a wall before placing a door.",
+        )
+    )
     show_join_options = has_wall or in_join_mode
     return PlanActionContextViewModel(
         mode_label=mode_label,
@@ -769,6 +783,9 @@ def build_action_context_view_model(session_or_context, modal_active=None):
         show_window_button=can_place_window or current_tool == "Window",
         window_button_enabled=enabled and can_place_window,
         window_button_tooltip=window_button_tooltip,
+        show_door_button=can_place_window or current_tool == "Door",
+        door_button_enabled=enabled and can_place_window,
+        door_button_tooltip=door_button_tooltip,
     )
 
 
@@ -867,6 +884,15 @@ def _get_direct_tool_status_text_view(context, tool, selected_kind, selected_obj
             translate(
                 "BIM_PlanEdit",
                 "Click along the selected or hovered wall to place a hosted window.",
+            ),
+        )
+
+    if tool == "Door":
+        return (
+            translate("BIM_PlanEdit", "Door: place on wall"),
+            translate(
+                "BIM_PlanEdit",
+                "Click along the selected or hovered wall to place a hosted door.",
             ),
         )
 

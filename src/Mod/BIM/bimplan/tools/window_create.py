@@ -38,6 +38,9 @@ class PlanWindowsAPI:
     def activate_window_tool(self):
         return activate_window_tool(self.session)
 
+    def activate_door_tool(self):
+        return activate_door_tool(self.session)
+
     def has_active_window_tool(self):
         return has_active_window_tool(self.session)
 
@@ -48,13 +51,13 @@ class PlanWindowsAPI:
         return cancel_window_tool(self.session, refresh=refresh)
 
     def cancel_active_tool_for_finish(self):
-        if self.session.current_tool != plan_runtime_tools.PlanTool.WINDOW:
+        if self.session.current_tool not in {plan_runtime_tools.PlanTool.WINDOW, "Door"}:
             return False
         self.cancel_window_tool()
         return True
 
     def cancel_active_tool_for_shutdown(self):
-        if self.session.current_tool != plan_runtime_tools.PlanTool.WINDOW:
+        if self.session.current_tool not in {plan_runtime_tools.PlanTool.WINDOW, "Door"}:
             return False
         self.cancel_window_tool(refresh=False)
         return True
@@ -333,6 +336,14 @@ _WINDOW_TOOL_SELECTION_KINDS = (
 
 
 def activate_window_tool(session):
+    return activate_opening_tool(session, "Window")
+
+
+def activate_door_tool(session):
+    return activate_opening_tool(session, "Door")
+
+
+def activate_opening_tool(session, opening_kind):
     session.spaces.cancel_space_region_pick(refresh=False)
     session.spaces.cancel_plan_region_tool(refresh=False)
     session.wall_create.cancel_rect_wall_tool(refresh=False)
@@ -362,7 +373,8 @@ def activate_window_tool(session):
     session.selection.state.set_selected_plan_target("wall", wall)
     session.selection.sync.set_gui_selection_object(wall)
     creation_preview_state.window_host_wall = wall
-    session.current_tool = "Window"
+    creation_preview_state.opening_kind = str(opening_kind)
+    session.current_tool = creation_preview_state.opening_kind
     session.overlays.openings.clear_selected_wall_opening_context_overlay()
     session.snap.set_active_draft_command()
     try:
@@ -381,7 +393,9 @@ def activate_window_tool(session):
             point=point,
             info=info,
         ),
-        title=translate("BIM_PlanEdit", "Window location"),
+        title=translate("BIM_PlanEdit", "{} location").format(
+            creation_preview_state.opening_kind
+        ),
         noTracker=True,
     )
     session.viewport.queue_focus_plan_view()
@@ -391,7 +405,7 @@ def activate_window_tool(session):
 
 def has_active_window_tool(session):
     return (
-        session.current_tool == "Window"
+        session.current_tool in {"Window", "Door"}
         or session.creation_preview_state.window_host_wall is not None
     )
 
@@ -411,6 +425,7 @@ def cancel_window_tool(session, refresh=True):
     session.snap.stop_snapper()
     clear_window_preview(session)
     session.creation_preview_state.window_host_wall = None
+    session.creation_preview_state.opening_kind = "Window"
     session.snap.clear_active_draft_command()
     session.current_tool = "Select"
     if refresh:
@@ -804,10 +819,11 @@ def create_window(session, wall, point):
     if center is None:
         return None
 
+    opening_kind = str(session.creation_preview_state.opening_kind or "Window")
     spec = ArchOpeningConstruction.OpeningConstructionSpec(
         width=DEFAULT_WINDOW_WIDTH,
         height=DEFAULT_WINDOW_HEIGHT,
-        ifc_type="Window",
+        ifc_type=opening_kind,
         hole_depth=0,
         parts=(
             "Frame",
@@ -824,6 +840,22 @@ def create_window(session, wall, point):
     )
 
     def build_window():
+        if opening_kind == "Door":
+            context = _get_wall_axis_context(wall)
+            if not context:
+                raise RuntimeError("Unable to resolve the door host axis")
+            placement = FreeCAD.Placement(
+                center,
+                FreeCAD.Rotation(
+                    context["axis"], context["vertical"], context["normal"], "XYZ"
+                ),
+            )
+            return ArchOpeningConstruction.create_preset_opening(
+                ArchOpeningConstruction.OpeningPresetSpec(
+                    "Simple door", 900, 2100, 50, 50, 50, 50, 50, 0, 0
+                ),
+                placement=placement,
+            )
         sketch = _make_window_base_sketch(session, wall, center)
         if sketch is None:
             raise RuntimeError("Unable to create window sketch")
@@ -832,7 +864,11 @@ def create_window(session, wall, point):
     window = ArchOpeningConstruction.construct_opening(
         session.doc,
         build_window,
-        transaction_name=translate("BIM_PlanEdit", "Create Window"),
+        transaction_name=(
+            translate("BIM_PlanEdit", "Create Door")
+            if opening_kind == "Door"
+            else translate("BIM_PlanEdit", "Create Window")
+        ),
         hosts=(wall,),
         add_to_container=session.visibility.add_object_to_active_storey,
         defer_updates=session.document_visuals.defer_document_visual_updates,

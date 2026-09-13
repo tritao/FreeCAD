@@ -44,6 +44,7 @@ class PlanInteractionAPI:
             plan_runtime_tools.PlanTool.ROTATE_SYMBOL,
             plan_runtime_tools.PlanTool.SET_SPACE_TEXT,
             plan_runtime_tools.PlanTool.WINDOW,
+            "Door",
         )
     )
 
@@ -343,6 +344,7 @@ class PlanCreationPreviewState:
     window_host_wall: object = None
     window_preview_source: object = None
     window_preview_key: object = None
+    opening_kind: str = "Window"
 
 
 def initialize_session_read_state(session):

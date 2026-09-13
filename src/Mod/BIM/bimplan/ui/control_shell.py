@@ -62,6 +62,7 @@ class PlanEditControlsShellMixin:
                     ("wall_button", "Wall", self.on_wall_clicked),
                     ("rect_wall_button", "Rect Wall", self.on_rect_wall_clicked),
                     ("window_button", "Window", self.on_window_clicked),
+                    ("door_button", "Door", self.on_door_clicked),
                 ),
                 (
                     ("space_button", "Space", self.on_space_clicked),
@@ -109,6 +110,7 @@ class PlanEditControlsShellMixin:
             self.wall_button,
             self.rect_wall_button,
             self.window_button,
+            self.door_button,
             self.space_button,
             self.region_button,
             self.separator_button,
@@ -379,6 +381,7 @@ class PlanEditControlsShellMixin:
         self.wall_button = None
         self.rect_wall_button = None
         self.window_button = None
+        self.door_button = None
         self.space_button = None
         self.region_button = None
         self.separator_button = None
@@ -522,6 +525,9 @@ class PlanEditControlsShellMixin:
         self._set_widget_visible(self.window_button, action_context_vm.show_window_button)
         self._set_widget_enabled(self.window_button, action_context_vm.window_button_enabled)
         self._set_widget_tooltip(self.window_button, action_context_vm.window_button_tooltip)
+        self._set_widget_visible(self.door_button, action_context_vm.show_door_button)
+        self._set_widget_enabled(self.door_button, action_context_vm.door_button_enabled)
+        self._set_widget_tooltip(self.door_button, action_context_vm.door_button_tooltip)
 
     def refresh_from_session(self, defer_integrations=False, refresh_integrations=True):
         with self.session.performance.plan_perf_trace_span("refresh_task_panel_widget"):
@@ -607,6 +613,7 @@ class PlanEditControlsShellMixin:
                 self.wall_button,
                 self.rect_wall_button,
                 self.window_button,
+                self.door_button,
                 self.space_button,
                 self.region_button,
                 self.separator_button,
@@ -740,6 +747,9 @@ class PlanEditControlsShellMixin:
 
     def on_window_clicked(self):
         self.session.windows.activate_window_tool()
+
+    def on_door_clicked(self):
+        self.session.windows.activate_door_tool()
 
     def on_space_clicked(self):
         self.session.spaces.activate_space_tool()

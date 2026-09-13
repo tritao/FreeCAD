@@ -442,7 +442,7 @@ def refresh_plan_overlay_visuals(session, dirty=None):
     if session.current_tool == plan_runtime_tools.PlanTool.PROVIDER_POINT:
         _refresh_provider_point_overlays(session, dirty, refresh_all)
         return
-    if session.current_tool == plan_runtime_tools.PlanTool.WINDOW:
+    if session.current_tool in {plan_runtime_tools.PlanTool.WINDOW, "Door"}:
         _refresh_window_tool_overlays(session)
         return
     if session.current_tool == plan_runtime_tools.PlanTool.SELECT:
