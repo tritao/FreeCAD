@@ -86,6 +86,7 @@ SET(Arch_SRCS
 
 SET(bimplan_SRCS
     bimplan/__init__.py
+    bimplan/contextual_edit_3d.py
     bimplan/contextual_rendering.py
     bimplan/contextual_editing.py
     bimplan/document_visuals.py
@@ -232,6 +233,7 @@ SET(bimcommands_SRCS
     bimcommands/BimClone.py
     bimcommands/BimColumn.py
     bimcommands/BimCommon.py
+    bimcommands/BimContextualEdit3D.py
     bimcommands/BimCompound.py
     bimcommands/BimConvert.py
     bimcommands/BimCopy.py

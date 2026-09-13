@@ -17,18 +17,45 @@ def _xyz(point):
 def ray_from_view(view, mouse_pos):
     """Convert a viewer pixel into a normalized world-space BIM edit ray."""
 
-    viewer = view.getViewer()
-    render_manager = viewer.getSoRenderManager()
-    action = coin.SoRayPickAction(render_manager.getViewportRegion())
-    action.setPoint(coin.SbVec2s(int(mouse_pos[0]), int(mouse_pos[1])))
-    action.apply(render_manager.getSceneGraph())
-    line = action.getLine()
-    origin = line.getPosition()
-    direction = line.getDirection()
+    pixel = _screen_pixel_for_ray(view, mouse_pos)
+    near_point, far_point = view.projectPointToLine(pixel)
     return ArchRepresentation.BIMEditRay(
-        FreeCAD.Vector(origin[0], origin[1], origin[2]),
-        FreeCAD.Vector(direction[0], direction[1], direction[2]),
+        FreeCAD.Vector(near_point),
+        FreeCAD.Vector(far_point).sub(FreeCAD.Vector(near_point)),
     )
+
+
+def _screen_pixel_for_ray(view, mouse_pos):
+    """Map projected overlay pixels to the view-volume ray coordinate system.
+
+    FreeCAD's world-to-screen helper and camera ray helper can use slightly
+    different viewport mappings. Calibrate the affine transform through the
+    focal plane so an overlay point and the ray for its mouse pixel agree.
+    """
+
+    step = 1000.0
+
+    def project_focal_pixel(pixel):
+        focal_point = view.getPointOnFocalPlane(pixel)
+        return view.getPointOnScreen(focal_point)
+
+    origin = (0, 0)
+    screen_origin = project_focal_pixel(origin)
+    screen_x = project_focal_pixel((int(step), 0))
+    screen_y = project_focal_pixel((0, int(step)))
+    ax = (float(screen_x[0]) - screen_origin[0]) / step
+    ay = (float(screen_y[0]) - screen_origin[0]) / step
+    bx = (float(screen_x[1]) - screen_origin[1]) / step
+    by = (float(screen_y[1]) - screen_origin[1]) / step
+    determinant = ax * by - ay * bx
+    if abs(determinant) <= 1e-10:
+        return int(mouse_pos[0]), int(mouse_pos[1])
+
+    dx = float(mouse_pos[0]) - screen_origin[0]
+    dy = float(mouse_pos[1]) - screen_origin[1]
+    pixel_x = (dx * by - ay * dy) / determinant
+    pixel_y = (ax * dy - dx * bx) / determinant
+    return round(pixel_x), round(pixel_y)
 
 
 @dataclass(frozen=True)

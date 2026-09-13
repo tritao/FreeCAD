@@ -9,9 +9,10 @@ import ArchWallRelation
 import FreeCAD
 import FreeCADGui
 from pivy import coin
-from ArchRepresentation import RepresentationContext
+from ArchRepresentation import BIMEditRay, RepresentationContext
 from bimtests.TestArchBaseGui import TestArchBaseGui
 from bimplan.runtime.session import PlanEditSession
+from bimplan.contextual_edit_3d import BIM3DContextualEditingSession
 from bimplan.providers import PlanEditProvider, PlanEditRegistry
 from BimContextualRendering import (
     ContextualInteractionRenderer,
@@ -266,6 +267,175 @@ class TestBimPlanEditSessionGui(TestArchBaseGui):
         finally:
             renderer.close()
         self.assertEqual("Inherit", view.getViewVisibility(wall))
+
+    def test_standard_3d_contextual_editing_keeps_model_visible_and_commits(self):
+        wall = Arch.makeWall(length=3000, width=200, height=2500, align="Left")
+        self.document.recompute()
+        view = FreeCADGui.ActiveDocument.ActiveView
+        camera_pose = tuple(
+            line.strip()
+            for line in view.getCamera().splitlines()
+            if not line.strip().startswith(("nearDistance", "farDistance"))
+        )
+        camera_type = view.getCameraType()
+        FreeCADGui.Selection.clearSelection()
+        FreeCADGui.Selection.addSelection(wall)
+        session = BIM3DContextualEditingSession(view)
+        try:
+            self.pump_gui_events(20)
+            renderer = session.renderer
+            self.assertIn(wall, renderer.sources)
+            self.assertEqual("Inherit", view.getViewVisibility(wall))
+            self.assertIsNotNone(renderer._object_nodes[wall])
+
+            capabilities = renderer._representations[wall]
+            self.assertFalse(hasattr(capabilities, "cut_geometry"))
+            roles = {handle.subelement for handle in capabilities.edit_handles}
+            self.assertTrue(
+                {
+                    "Path.Start",
+                    "Path.End",
+                    "Path",
+                    "Width.PositiveFace",
+                    "Offset",
+                    "Height",
+                }.issubset(roles)
+            )
+
+            height_handle = next(
+                handle for handle in capabilities.edit_handles if handle.subelement == "Height"
+            )
+            self.assertTrue(session.begin_handle_edit(height_handle))
+            target = BIMEditRay(
+                height_handle.point + FreeCAD.Vector(1000, 0, 500),
+                FreeCAD.Vector(-1, 0, 0),
+            )
+            preview = session.preview_pointer(target)
+            self.assertTrue(preview.validation.allowed)
+            self.assertAlmostEqual(3000.0, preview.value)
+            result = session.commit_pointer(target)
+            self.assertTrue(result.success)
+            self.pump_gui_events(20)
+
+            self.assertAlmostEqual(3000.0, wall.Height.Value)
+            self.assertEqual("Inherit", view.getViewVisibility(wall))
+            self.assertEqual(camera_type, view.getCameraType())
+            current_camera_pose = tuple(
+                line.strip()
+                for line in view.getCamera().splitlines()
+                if not line.strip().startswith(("nearDistance", "farDistance"))
+            )
+            self.assertEqual(camera_pose, current_camera_pose)
+            self.assertIsNone(session.active_edit)
+        finally:
+            session.close()
+            FreeCADGui.Selection.clearSelection()
+        self.assertEqual("Inherit", view.getViewVisibility(wall))
+
+    def test_standard_3d_contextual_editing_callbacks_toggle_with_command(self):
+        from bimcommands.BimContextualEdit3D import BIM_ContextualEdit3D
+        from bimplan.contextual_edit_3d import active_session
+
+        command = BIM_ContextualEdit3D()
+        self.assertTrue(command.IsActive())
+        command.Activated()
+        session = active_session()
+        self.assertIsNotNone(session)
+        try:
+            self.assertEqual(3, len(session._callbacks))
+            command.Activated()
+            self.assertIsNone(active_session())
+            self.assertTrue(session._closed)
+        finally:
+            if active_session() is session:
+                session.close()
+
+    def test_standard_3d_pointer_drag_commits_a_semantic_width_edit(self):
+        wall = Arch.makeWall(length=3000, width=200, height=2500, align="Center")
+        self.document.recompute()
+        view = FreeCADGui.ActiveDocument.ActiveView
+        FreeCADGui.Selection.clearSelection()
+        FreeCADGui.Selection.addSelection(wall)
+        session = BIM3DContextualEditingSession(view)
+        try:
+            view.viewAxonometric()
+            view.fitAll()
+            for _ in range(4):
+                view.zoomIn()
+            self.pump_gui_events(20)
+            handle = next(
+                handle
+                for handle in session.renderer.edit_handles_for(wall)
+                if handle.subelement == "Width.PositiveFace"
+            )
+            start = view.getPointOnScreen(handle.point)
+            target = view.getPointOnScreen(handle.point + handle.direction * 50.0)
+            picked = session.renderer.pick_edit_handle(start, view.getPointOnScreen)
+            self.assertEqual(
+                handle.subelement,
+                getattr(picked, "subelement", None),
+                msg="screen start={!r}, handles={!r}".format(
+                    start,
+                    tuple(
+                        (item.subelement, view.getPointOnScreen(item.point))
+                        for item in session.renderer.edit_handles_for(wall)
+                    ),
+                ),
+            )
+            target_ray = ray_from_view(
+                view, (round(target[0]), round(target[1]))
+            )
+            focal_point = view.getPointOnFocalPlane(
+                (round(target[0]), round(target[1]))
+            )
+            projected_target = handle.constraint.project(target_ray)
+            pointer_delta = (projected_target - handle.point).dot(handle.direction)
+            self.assertAlmostEqual(
+                50.0,
+                pointer_delta,
+                delta=15.0,
+                msg=(
+                    "projected {} mm from screen {} for handle point {}; ray {}, {}; "
+                    "focal point {} projects to {}"
+                ).format(
+                    pointer_delta,
+                    target,
+                    handle.point,
+                    target_ray.origin,
+                    target_ray.direction,
+                    focal_point,
+                    view.getPointOnScreen(focal_point),
+                ),
+            )
+            event_manager = view.getViewer().getSoEventManager()
+
+            def send_button(point, state):
+                event = coin.SoMouseButtonEvent()
+                event.setPosition(coin.SbVec2s(round(point[0]), round(point[1])))
+                event.setButton(coin.SoMouseButtonEvent.BUTTON1)
+                event.setState(state)
+                event_manager.processEvent(event)
+
+            def send_move(point):
+                event = coin.SoLocation2Event()
+                event.setPosition(coin.SbVec2s(round(point[0]), round(point[1])))
+                event_manager.processEvent(event)
+
+            send_button(start, coin.SoButtonEvent.DOWN)
+            self.pump_gui_events(20)
+            self.assertIsNotNone(session.active_edit)
+            self.assertEqual(handle.subelement, session.active_edit.subelement)
+            send_move(target)
+            self.pump_gui_events(20)
+            send_button(target, coin.SoButtonEvent.UP)
+            self.pump_gui_events(40)
+
+            self.assertAlmostEqual(250.0, wall.Width.Value, delta=10.0)
+            self.assertIsNone(session.active_edit)
+            self.assertEqual("Inherit", view.getViewVisibility(wall))
+        finally:
+            session.close()
+            FreeCADGui.Selection.clearSelection()
 
     def test_contextual_wall_width_edit_is_transactional(self):
         wall = Arch.makeWall(length=3000, width=200, height=2500, align="Center")
