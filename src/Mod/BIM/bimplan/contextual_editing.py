@@ -6,6 +6,7 @@ from contextlib import nullcontext
 from dataclasses import dataclass
 
 import FreeCAD
+from draftguitools.gui_base import DraftInteractionHost
 import ArchRepresentation
 from ArchRepresentation import (
     BIMEditTransaction,
@@ -386,6 +387,7 @@ class _PlanContextualInputAdapter:
 
     def __init__(self, session):
         self.session = session
+        self.host = None
 
     def start_point_pick(self, point, callback, move_callback, title):
         import FreeCADGui
@@ -409,6 +411,16 @@ class _PlanContextualInputAdapter:
     def clear(self):
         self.session.snap.clear_active_draft_command()
 
+    def set_value_input(self, **kwargs):
+        if self.host is None:
+            self.host = DraftInteractionHost(view=self.session.view)
+        return self.host.set_value_input(**kwargs)
+
+    def clear_value_input(self):
+        if self.host is not None:
+            return self.host.clear_value_input()
+        return False
+
 
 class PlanContextualEditingAPI:
     """Plan Edit adapter around the viewer-independent contextual controller."""
@@ -416,6 +428,7 @@ class PlanContextualEditingAPI:
     def __init__(self, session):
         self.session = session
         self.controller = None
+        self.input_adapter = _PlanContextualInputAdapter(session)
 
     @property
     def editor(self):
@@ -426,7 +439,7 @@ class PlanContextualEditingAPI:
             self.session.view,
             self.session.representation_context,
             self.session.contextual_rendering,
-            _PlanContextualInputAdapter(self.session),
+            self.input_adapter,
             refresh_callback=self.session.contextual_rendering.refresh_edit_dependencies,
             refresh_failure_callback=self.session.contextual_rendering.refresh_object,
             feedback_callback=self._set_feedback,
@@ -468,11 +481,31 @@ class PlanContextualEditingAPI:
     def cancel(self, *, refresh=True):
         if self.controller is not None:
             self.controller.cancel(refresh=refresh)
+        self.input_adapter.clear_value_input()
 
     def activate(self, handle):
         self.cancel()
         self.controller = self._new_controller()
+        if handle.operation.value_kind == "Scalar":
+            result = self.controller.begin(handle)
+            if getattr(result, "success", True) is False:
+                return False
+            self.input_adapter.set_value_input(
+                label=handle.operation.label,
+                unit="Length",
+                value=handle.operation.get_value(handle.source),
+                callback=self.commit_value,
+            )
+            return True
         return self.controller.activate(handle)
+
+    def commit_value(self, value):
+        if self.controller is None or self.controller.editor is None:
+            return False
+        result = self.controller.commit_value(value)
+        if result.success:
+            self.input_adapter.clear_value_input()
+        return result.success
 
     def _set_feedback(self, message):
         self.session.status_text.set_integration_feedback_message(message)
