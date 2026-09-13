@@ -144,9 +144,7 @@ class TestArchRepresentation(unittest.TestCase):
             operation,
         )
         refreshed = []
-        editor = BIMContextualHandleEditor(
-            RepresentationContext(purpose="Plan"), refreshed.append
-        )
+        editor = BIMContextualHandleEditor(RepresentationContext(purpose="Plan"), refreshed.append)
 
         editor.begin(handle)
         preview = editor.preview(FreeCAD.Vector(25, 50, 10))
@@ -226,9 +224,7 @@ class TestArchRepresentation(unittest.TestCase):
             ),
         )
 
-        handles = {
-            handle.subelement: handle for handle in representation.edit_handles
-        }
+        handles = {handle.subelement: handle for handle in representation.edit_handles}
         self.assertTrue({"Path.Start", "Path.End"}.issubset(handles))
         self.assertEqual("Square", handles["Path.Start"].glyph)
         self.assertEqual("Square", handles["Path.End"].glyph)
@@ -240,9 +236,7 @@ class TestArchRepresentation(unittest.TestCase):
         self.assertEqual("Circle", move_handle.glyph)
         self.assertEqual("WallMove", move_handle.operation.interaction_intent)
         endpoints = wall.Proxy.calc_endpoints(wall)
-        self.assertTrue(
-            move_handle.point.isEqual((endpoints[0] + endpoints[1]) * 0.5, 1e-7)
-        )
+        self.assertTrue(move_handle.point.isEqual((endpoints[0] + endpoints[1]) * 0.5, 1e-7))
 
     def test_joint_handle_anchors_to_offset_miter_seam(self):
         document = FreeCAD.newDocument("OffsetMiterHandleTest")
@@ -261,9 +255,7 @@ class TestArchRepresentation(unittest.TestCase):
 
         context = RepresentationContext(purpose="Plan", cut_offset=1000, target_offset=0)
         representation = horizontal.Proxy.getRepresentation(horizontal, context)
-        handle = next(
-            item for item in representation.edit_handles if item.role == "WallJointMove"
-        )
+        handle = next(item for item in representation.edit_handles if item.role == "WallJointMove")
         semantic_point = handle.operation.get_value(handle.source)
 
         self.assertTrue(semantic_point.isEqual(FreeCAD.Vector(3000, 0, 0), 1e-7))
@@ -282,9 +274,7 @@ class TestArchRepresentation(unittest.TestCase):
         self.assertTrue(joint_targets)
         self.assertIn("WallJointBoundary", {target.role for target in joint_targets})
         self.assertIn("WallJointCutPoint", {target.role for target in joint_targets})
-        corner = next(
-            target for target in joint_targets if target.role == "WallJointCutPoint"
-        )
+        corner = next(target for target in joint_targets if target.role == "WallJointCutPoint")
         result = query_representation_snap(
             (representation, vertical_representation), corner.geometry.Point, 1.0
         )
@@ -295,9 +285,7 @@ class TestArchRepresentation(unittest.TestCase):
     def test_wall_width_face_handles_preserve_the_opposite_face(self):
         document = FreeCAD.newDocument("ContextualWallWidthTest")
         self.addCleanup(FreeCAD.closeDocument, document.Name)
-        context = RepresentationContext(
-            purpose="Plan", cut_offset=1000, target_offset=0
-        )
+        context = RepresentationContext(purpose="Plan", cut_offset=1000, target_offset=0)
         for align in ("Center", "Left", "Right"):
             for side in ("Negative", "Positive"):
                 with self.subTest(align=align, side=side):
@@ -317,9 +305,7 @@ class TestArchRepresentation(unittest.TestCase):
                         for item in representation.edit_handles
                         if item.role == "WallWidth"
                     }
-                    self.assertEqual(
-                        {"Width.NegativeFace", "Width.PositiveFace"}, set(handles)
-                    )
+                    self.assertEqual({"Width.NegativeFace", "Width.PositiveFace"}, set(handles))
                     handle = handles["Width.{}Face".format(side)]
                     self.assertEqual("Plus", handle.glyph)
                     self.assertEqual(1.0, handle.operation.sensitivity)
@@ -353,15 +339,26 @@ class TestArchRepresentation(unittest.TestCase):
 
         representation = opening.Proxy.getRepresentation(
             opening,
-            RepresentationContext(
-                purpose="Plan", cut_offset=1000, target_offset=0
-            ),
+            RepresentationContext(purpose="Plan", cut_offset=1000, target_offset=0),
         )
 
         self.assertIs(representation.source, opening)
         self.assertTrue(representation.projected_geometry)
         self.assertTrue(representation.snap_geometry)
         self.assertTrue(representation.edit_handles)
+        mappings_by_role = {}
+        for mapping in representation.source_mappings:
+            mappings_by_role.setdefault(mapping.role, []).append(mapping)
+        self.assertEqual(2, len(mappings_by_role["OpeningJambLine"]))
+        self.assertEqual(4, len(mappings_by_role["OpeningJambPoint"]))
+        self.assertIn("OpeningPosition", {handle.role for handle in representation.edit_handles})
+        self.assertTrue(
+            all(
+                target.source is opening and target.role == "OpeningJambPoint"
+                for target in representation.iter_snap_targets()
+                if target.role == "OpeningJambPoint"
+            )
+        )
         self.assertTrue(
             all(mapping.source is opening for mapping in representation.source_mappings)
         )
@@ -388,9 +385,7 @@ class TestArchRepresentation(unittest.TestCase):
         self.assertTrue(representation.snap_geometry)
         roles = {handle.role for handle in representation.edit_handles}
         self.assertIn("WallHeight", roles)
-        self.assertTrue(
-            all(mapping.source is wall for mapping in representation.source_mappings)
-        )
+        self.assertTrue(all(mapping.source is wall for mapping in representation.source_mappings))
 
     def test_snap_query_preserves_semantic_identity(self):
         source = object()
@@ -398,9 +393,7 @@ class TestArchRepresentation(unittest.TestCase):
         representation = BIMRepresentation(source=source)
         representation.add_geometry("snap_geometry", edge, "axis", "Edge1")
 
-        result = query_representation_snap(
-            (representation,), FreeCAD.Vector(4, 0.5, 0), 1.0
-        )
+        result = query_representation_snap((representation,), FreeCAD.Vector(4, 0.5, 0), 1.0)
 
         self.assertIs(result.source, source)
         self.assertEqual("Edge1", result.subelement)
@@ -427,14 +420,10 @@ class TestArchRepresentation(unittest.TestCase):
             related_sources=(relation,),
         )
 
-        candidates = query_representation_snap_candidates(
-            (first, second), point, 1.0
-        )
+        candidates = query_representation_snap_candidates((first, second), point, 1.0)
 
         self.assertEqual(1, len(candidates))
-        self.assertEqual(
-            {first_source, second_source, relation}, set(candidates[0].sources)
-        )
+        self.assertEqual({first_source, second_source, relation}, set(candidates[0].sources))
 
     def test_pick_query_preserves_cut_geometry_mapping(self):
         source = object()

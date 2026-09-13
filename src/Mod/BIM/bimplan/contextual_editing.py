@@ -182,6 +182,22 @@ class PlanContextualEditingAPI:
         import FreeCADGui
 
         self.cancel()
+        if handle.interaction == "Immediate":
+            validation = handle.operation.validate(handle.source)
+            if not validation.allowed:
+                self._set_feedback(validation.reason)
+                return False
+            try:
+                BIMContextualHandleEditor._commit_value(
+                    handle, handle.operation.get_value(handle.source)
+                )
+                self.session.contextual_rendering.refresh_edit_dependencies(handle.source)
+                self.session.contextual_rendering.sync_visible_handles()
+                self._clear_feedback()
+                return True
+            except Exception as exc:
+                self._set_feedback(exc)
+                return False
         intent = getattr(handle.operation, "interaction_intent", "")
         wall_modes = {
             "WallStretchStart": "Start",
@@ -218,12 +234,24 @@ class PlanContextualEditingAPI:
 
     def _finish_point_pick(self, point=None, obj=None):
         del obj
-        try:
-            if point is None:
-                self.cancel()
-                return
-            self.commit(point)
-        finally:
+        editor = self.editor
+        target = None if point is None else FreeCAD.Vector(point)
+
+        def finish_after_event():
+            try:
+                if self.editor is not editor:
+                    return
+                if target is None:
+                    self.cancel()
+                else:
+                    self.commit(target)
+            finally:
+                self.session.snap.clear_active_draft_command()
+
+        if not self.session.viewport.queue_scene_graph_mutation(
+            ("finish-contextual-handle", id(editor)), finish_after_event
+        ):
+            self.cancel()
             self.session.snap.clear_active_draft_command()
 
     def _set_feedback(self, error):

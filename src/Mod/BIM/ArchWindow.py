@@ -261,9 +261,7 @@ def _set_placement_if_changed(obj, placement):
     """Assign placement without dirtying the object when it is unchanged."""
 
     try:
-        delta = FreeCAD.Placement(obj.Placement).inverse().multiply(
-            FreeCAD.Placement(placement)
-        )
+        delta = FreeCAD.Placement(obj.Placement).inverse().multiply(FreeCAD.Placement(placement))
         unchanged = delta.Base.Length < 1e-6 and delta.Rotation.Angle < 1e-6
     except Exception:
         unchanged = False
@@ -524,6 +522,9 @@ def resizeWindow(
             placement = FreeCAD.Placement(target.Placement)
             placement.Base = placement.Base.add(FreeCAD.Vector(anchor_shift))
             target.Placement = placement
+        obj.touch()
+        for host in set(getattr(obj, "Hosts", None) or []):
+            host.touch()
         doc.recompute()
         doc.commitTransaction()
     except Exception:
@@ -609,7 +610,9 @@ def _opening_sill_property_edit_operation():
         lambda obj, value: setattr(obj, "SillHeight", value),
         property_name="SillHeight",
         minimum=0.0,
-        available=lambda obj: not ArchRepresentation.is_property_expression_driven(obj, "SillHeight"),
+        available=lambda obj: not ArchRepresentation.is_property_expression_driven(
+            obj, "SillHeight"
+        ),
     )
 
 
@@ -665,6 +668,12 @@ def _opening_position_edit_operation(helper):
     if target is not source:
         property_name = "Base.Placement.Base"
 
+    def current_position(_source):
+        current = helper.get_plan_move_context()
+        if not current:
+            return center_u
+        return FreeCAD.Vector(current["center_point"]).sub(current["origin"]).dot(current["axis_u"])
+
     def apply_position(_source, value):
         point = origin.add(FreeCAD.Vector(axis).multiply(value))
         point.z = center.z
@@ -674,7 +683,7 @@ def _opening_position_edit_operation(helper):
     return ArchRepresentation.BIMEditOperation(
         "OpeningPosition",
         translate("Arch", "Edit Opening Position"),
-        lambda _source: center_u,
+        current_position,
         apply_position,
         property_name=property_name,
         minimum=move_context.get("move_u_min"),
@@ -702,6 +711,21 @@ def _opening_width_edit_operation(helper, side):
     host_min = None if host_min is None else host_min - half_width
     host_max = None if host_max is None else host_max + half_width
 
+    def current_jamb(_source):
+        current = helper.get_plan_move_context()
+        current_width = getWindowWidthMm(source)
+        if not current or not current_width:
+            return left_u if side == "Left" else right_u
+        current_center_u = (
+            FreeCAD.Vector(current["center_point"]).sub(current["origin"]).dot(current["axis_u"])
+        )
+        current_half_width = current_width * 0.5
+        return (
+            current_center_u - current_half_width
+            if side == "Left"
+            else current_center_u + current_half_width
+        )
+
     def apply_jamb(_source, value):
         if side == "Left":
             new_width = right_u - value
@@ -723,13 +747,34 @@ def _opening_width_edit_operation(helper, side):
     return ArchRepresentation.BIMEditOperation(
         "Opening{}Jamb".format(side),
         translate("Arch", "Edit Opening Width"),
-        lambda _source: left_u if side == "Left" else right_u,
+        current_jamb,
         apply_jamb,
         property_name="Width",
         manages_transaction=True,
         minimum=minimum,
         maximum=maximum,
         available=lambda _source: canEditWindowWidth(source),
+    )
+
+
+def _opening_action_edit_operation(helper, role):
+    actions = {
+        "OpeningFlipHinge": (
+            translate("Arch", "Flip Opening Hinge"),
+            helper.invertHinge,
+        ),
+        "OpeningFlipDirection": (
+            translate("Arch", "Flip Opening Direction"),
+            helper.invertOpening,
+        ),
+    }
+    label, callback = actions[role]
+    return ArchRepresentation.BIMEditOperation(
+        role,
+        label,
+        lambda _source: 0.0,
+        lambda _source, _value: callback(),
+        property_name="WindowParts",
     )
 
 
@@ -1990,6 +2035,82 @@ class _HostedOpeningPlanGeometry:
 class _HostedOpeningRepresentationGeometry:
     """Renderer-independent hosted-opening symbols and semantic representation."""
 
+    def getHingeEdgeIndices(self):
+        """Return the zero-based hinge edges encoded by the semantic opening."""
+
+        result = []
+        for index in range(len(self.Object.WindowParts) // 5):
+            for token in self.Object.WindowParts[(index * 5) + 2].split(","):
+                if token.startswith("Edge") and token[4:].isdigit():
+                    result.append(int(token[4:]) - 1)
+        return result
+
+    def _get_plan_edit_capabilities(self):
+        parts = getattr(self.Object, "WindowParts", []) or []
+        has_opening_mode = any(
+            token.startswith("Mode") and token[4:].isdigit()
+            for part in parts
+            for token in part.split(",")
+        )
+        parts_str = "".join(parts)
+        can_flip_opening = self._get_effective_opening_kind() == "Door" and has_opening_mode
+        can_flip_hinge = (
+            can_flip_opening
+            and len(self.getHingeEdgeIndices()) == 1
+            and "Mode9" not in parts_str
+            and "Mode10" not in parts_str
+        )
+        return {
+            "can_move": True,
+            "can_flip_opening": can_flip_opening,
+            "can_flip_hinge": can_flip_hinge,
+        }
+
+    def _invert_pairs(self, pairs):
+        swap_map = {left: right for left, right in pairs}
+        swap_map.update({right: left for left, right in pairs})
+        parts = [
+            ",".join(swap_map.get(token, token) for token in part.split(","))
+            for part in self.Object.WindowParts
+        ]
+        if parts == self.Object.WindowParts:
+            return False
+        self.Object.WindowParts = parts
+        return True
+
+    def invertOpening(self):
+        """Invert the encoded opening direction without depending on a GUI provider."""
+
+        pairs = [
+            ("Mode{}".format(index), "Mode{}".format(index + 1))
+            for index in range(1, len(WindowOpeningModes), 2)
+        ]
+        return self._invert_pairs(pairs)
+
+    def invertHinge(self):
+        """Invert a rectangular opening's hinge and retain its opening side."""
+
+        indices = self.getHingeEdgeIndices()
+        if len(indices) != 1 or not getattr(self.Object, "Base", None):
+            return False
+        index = indices[0]
+        end = 0
+        replacement = None
+        for wire in self.Object.Base.Shape.Wires:
+            start = end
+            end += len(wire.Edges)
+            if start <= index < end:
+                replacement = index + 2
+                if not start <= replacement < end:
+                    replacement = index - 2
+                break
+        if replacement is None:
+            return False
+        changed = self._invert_pairs(
+            (("Edge{}".format(index + 1), "Edge{}".format(replacement + 1)),)
+        )
+        return self.invertOpening() or changed
+
     def _get_default_opening_plan_context(self, obj):
         proxy = getattr(obj, "Proxy", None)
         if proxy is not self and hasattr(proxy, "getDefaultPlanContext"):
@@ -2229,13 +2350,34 @@ class _HostedOpeningRepresentationGeometry:
             point.z = base_z
         return [points]
 
+    @staticmethod
+    def _get_plan_jamb_polylines(profile, base_z):
+        if not profile or profile["vmax"] <= profile["vmin"]:
+            return []
+        result = []
+        for u in (profile["umin"], profile["umax"]):
+            points = [
+                profile["origin"]
+                .add(FreeCAD.Vector(profile["axis_u"]).multiply(u))
+                .add(FreeCAD.Vector(profile["axis_v"]).multiply(v))
+                for v in (profile["vmin"], profile["vmax"])
+            ]
+            for point in points:
+                point.z = base_z
+            result.append(points)
+        return result
+
     def get_plan_overlay_geometry(self, context=None):
         """Return horizontal plan symbols for the supplied representation context."""
 
         if context is None:
             context = self._get_default_opening_plan_context(self.Object)
         if getattr(context, "reference_frame", None) is not None:
-            return {"symbol_polylines": (), "guide_polylines": ()}
+            return {
+                "jamb_polylines": (),
+                "symbol_polylines": (),
+                "guide_polylines": (),
+            }
 
         shape = getattr(self.Object, "Shape", None)
         cut_z = getattr(context, "cut_offset", None)
@@ -2247,11 +2389,22 @@ class _HostedOpeningRepresentationGeometry:
             if base_z is None:
                 base_z = default_context.target_offset
         if cut_z is None:
-            return {"symbol_polylines": (), "guide_polylines": ()}
+            return {
+                "jamb_polylines": (),
+                "symbol_polylines": (),
+                "guide_polylines": (),
+            }
         profile = self._get_hosted_opening_plan_frame(shape, cut_z, base_z)
         if not profile:
-            return {"symbol_polylines": (), "guide_polylines": ()}
+            return {
+                "jamb_polylines": (),
+                "symbol_polylines": (),
+                "guide_polylines": (),
+            }
         return {
+            "jamb_polylines": tuple(
+                tuple(polyline) for polyline in self._get_plan_jamb_polylines(profile, base_z)
+            ),
             "symbol_polylines": tuple(
                 tuple(polyline)
                 for polyline in self._get_symbol_footprint_polylines(profile, base_z)
@@ -2263,6 +2416,8 @@ class _HostedOpeningRepresentationGeometry:
         }
 
     def getRepresentation(self, obj=None, context=None):
+        import Part
+
         source = obj or self.Object
         if context is None:
             context = self._get_default_opening_plan_context(source)
@@ -2291,6 +2446,7 @@ class _HostedOpeningRepresentationGeometry:
 
         geometry = self.get_plan_overlay_geometry(context)
         for role, polylines in (
+            ("OpeningJambLine", geometry["jamb_polylines"]),
             ("OpeningSymbol", geometry["symbol_polylines"]),
             ("OpeningGuide", geometry["guide_polylines"]),
         ):
@@ -2303,6 +2459,15 @@ class _HostedOpeningRepresentationGeometry:
                     subelement=f"{role}{index}",
                 )
                 representation.snap_geometry.append(polyline)
+                if role == "OpeningJambLine":
+                    for point_index, point in enumerate(polyline, start=1):
+                        representation.add_geometry(
+                            "snap_geometry",
+                            Part.Vertex(point),
+                            "OpeningJambPoint",
+                            subelement=f"{role}{index}.Point{point_index}",
+                        )
+        self._add_plan_action_edit_handles(representation, source, context)
         return representation
 
     def _add_position_edit_handle(self, representation, source, context):
@@ -2334,6 +2499,7 @@ class _HostedOpeningRepresentationGeometry:
                 operation,
                 subelement=operation.property_name,
                 minimum=operation.minimum,
+                glyph="Circle",
             )
         )
         for side, jamb_u in (
@@ -2364,6 +2530,64 @@ class _HostedOpeningRepresentationGeometry:
                     jamb_operation,
                     subelement="Width.{}".format(side),
                     minimum=jamb_operation.minimum,
+                    glyph="Square",
+                )
+            )
+
+    def _add_plan_action_edit_handles(self, representation, source, context):
+        if getattr(context, "purpose", None) != ArchRepresentation.RepresentationPurpose.PLAN:
+            return
+        if self._get_effective_opening_kind() != "Door":
+            return
+        capabilities = self._get_plan_edit_capabilities()
+        if not capabilities.get("can_flip_opening"):
+            return
+        profile = self._get_hosted_opening_plan_frame(
+            source.Shape,
+            getattr(context, "cut_offset", None),
+            getattr(context, "target_offset", None),
+        )
+        if not profile:
+            return
+        origin = profile["origin"]
+        mid_u = (profile["umin"] + profile["umax"]) * 0.5
+        hinge_at_min, swing_sign = self._get_door_symbol_style()
+        hinge_u = profile["umin"] if hinge_at_min else profile["umax"]
+        wall_depth = max(profile["vmax"] - profile["vmin"], 0.0)
+        action_offset = max(40.0, wall_depth * 0.25)
+        action_v = (
+            profile["vmin"] - action_offset if swing_sign < 0 else profile["vmax"] + action_offset
+        )
+
+        def profile_point(u, v):
+            return origin.add(FreeCAD.Vector(profile["axis_u"]).multiply(u)).add(
+                FreeCAD.Vector(profile["axis_v"]).multiply(v)
+            )
+
+        positions = {
+            "OpeningFlipHinge": profile_point(hinge_u, action_v),
+            "OpeningFlipDirection": profile_point(mid_u, action_v),
+        }
+        roles = ["OpeningFlipDirection"]
+        if capabilities.get("can_flip_hinge"):
+            roles.insert(0, "OpeningFlipHinge")
+        for role in roles:
+            point = positions[role]
+            target_offset = getattr(context, "target_offset", None)
+            if target_offset is not None:
+                point.z = target_offset
+            representation.add_edit_handle(
+                ArchRepresentation.BIMEditHandle(
+                    source,
+                    role,
+                    point,
+                    FreeCAD.Vector(),
+                    _opening_action_edit_operation(self, role),
+                    interaction="Immediate",
+                    subelement="WindowParts",
+                    minimum=None,
+                    glyph="Cross" if role == "OpeningFlipHinge" else "Plus",
+                    glyph_size=13,
                 )
             )
 
@@ -3748,40 +3972,12 @@ class _ViewProviderWindow(ArchComponent.ViewProviderComponent):
     def getHingeEdgeIndices(self):
         """returns a list of hinge edge indices (0-based)"""
 
-        # WindowParts example:
-        # ["OuterFrame", "Frame",       "Wire0,Wire1",             "100.0+V", "0.00+V",
-        #  "InnerFrame", "Frame",       "Wire2,Wire3,Edge8,Mode1", "100.0",   "100.0+V",
-        #  "InnerGlass", "Glass panel", "Wire3",                   "10.0",    "150.0+V"]
-
-        idxs = []
-        parts = self.Object.WindowParts
-        for i in range(len(parts) // 5):
-            for s in parts[(i * 5) + 2].split(","):
-                if "Edge" in s:
-                    idxs.append(int(s[4:]) - 1)  # Edge indices in string are 1-based.
-        return idxs
+        helper = self._get_plan_geometry("getHingeEdgeIndices")
+        return helper.getHingeEdgeIndices() if helper else []
 
     def _get_plan_edit_capabilities(self):
-        parts = getattr(self.Object, "WindowParts", []) or []
-        has_opening_mode = any(
-            token.startswith("Mode") and token[4:].isdigit()
-            for part in parts
-            for token in part.split(",")
-        )
-        parts_str = "".join(getattr(self.Object, "WindowParts", []) or [])
-        is_door = self._get_effective_opening_kind() == "Door"
-        can_flip_opening = is_door and has_opening_mode
-        can_flip_hinge = (
-            can_flip_opening
-            and len(self.getHingeEdgeIndices()) == 1
-            and "Mode9" not in parts_str
-            and "Mode10" not in parts_str
-        )
-        return {
-            "can_move": True,
-            "can_flip_opening": can_flip_opening,
-            "can_flip_hinge": can_flip_hinge,
-        }
+        helper = self._get_plan_geometry("_get_plan_edit_capabilities")
+        return helper._get_plan_edit_capabilities() if helper else {}
 
     def setEdit(self, vobj, mode):
         if mode != 0:
@@ -3850,57 +4046,22 @@ class _ViewProviderWindow(ArchComponent.ViewProviderComponent):
     def invertOpening(self):
         """swaps the opening modes found in this window"""
 
-        pairs = [
-            ["Mode" + str(i), "Mode" + str(i + 1)] for i in range(1, len(WindowOpeningModes), 2)
-        ]
-        self.invertPairs(pairs)
+        helper = self._get_plan_geometry("invertOpening")
+        if helper and not helper.invertOpening():
+            FreeCAD.Console.PrintWarning(
+                translate("Arch", "This window has no defined opening") + "\n"
+            )
+        if getattr(self.Object, "Document", None):
+            self.Object.Document.recompute()
 
     def invertHinge(self):
         """swaps the hinge edge of a single hinge edge window"""
 
-        idxs = self.getHingeEdgeIndices()
-        if len(idxs) != 1:
-            return
-
-        idx = idxs[0]
-        end = 0
-        for wire in self.Object.Base.Shape.Wires:
-            sta = end
-            end += len(wire.Edges)
-            if sta <= idx < end:
-                new = idx + 2  # A rectangular wire is assumed.
-                if not (sta <= new < end):
-                    new = idx - 2
-                break
-
-        pairs = [["Edge" + str(idx + 1), "Edge" + str(new + 1)]]
-        self.invertPairs(pairs)
-        # Also invert opening direction, so the door still opens towards
-        # the same side of the wall
-        self.invertOpening()
-
-    def invertPairs(self, pairs):
-        """scans the WindowParts of this window and swaps the two elements of each pair, if found"""
-
-        if hasattr(self, "Object"):
-            windowparts = self.Object.WindowParts
-            nparts = []
-
-            # Build a bidirectional pair lookup map
-            swap_map = {p[0]: p[1] for p in pairs}
-            swap_map.update({p[1]: p[0] for p in pairs})
-
-            for part in windowparts:
-                # Split to tokens to ensure exact matching (e.g. avoid Mode1 matching inside Mode10)
-                new_tokens = [swap_map.get(t, t) for t in part.split(",")]
-                nparts.append(",".join(new_tokens))
-            if nparts != self.Object.WindowParts:
-                self.Object.WindowParts = nparts
-                FreeCAD.ActiveDocument.recompute()
-            else:
-                FreeCAD.Console.PrintWarning(
-                    translate("Arch", "This window has no defined opening") + "\n"
-                )
+        helper = self._get_plan_geometry("invertHinge")
+        if helper:
+            helper.invertHinge()
+        if getattr(self.Object, "Document", None):
+            self.Object.Document.recompute()
 
 
 class _ArchWindowTaskPanel:

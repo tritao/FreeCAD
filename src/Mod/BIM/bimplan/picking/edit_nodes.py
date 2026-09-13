@@ -102,17 +102,6 @@ def _get_selected_handle_edit_node(session, mouse_pos):
                 symbol_handle_role,
             ),
         )
-    opening_handle_index = pick_selected_opening_handle(session, mouse_pos)
-    if opening_handle_index is not None:
-        return _emit_get_edit_node_result(
-            session,
-            mouse_pos,
-            "selected_opening_handle",
-            plan_edit_nodes.OpeningHandleEditNode(
-                session.selection.state.get_selected_plan_target_object("opening"),
-                opening_handle_index,
-            ),
-        )
     provider_handle_index = session.overlays.providers.pick_selected_provider_handle(mouse_pos)
     if provider_handle_index is not None:
         return _emit_get_edit_node_result(
@@ -187,32 +176,3 @@ def _get_edit_node_from_picked_points(session, mouse_pos, picked_points):
                 plan_edit_nodes.ProviderOverlayPointEditNode(point),
             )
     return _emit_get_edit_node_result(session, mouse_pos, "no_edit_node", None)
-
-
-def pick_selected_opening_handle(session, mouse_pos, radius_px=10):
-    opening = session.selection.state.get_selected_plan_target_object("opening")
-    if not session.openings.is_hosted_opening_object(opening) or not session.view:
-        return None
-    try:
-        cursor_x = int(mouse_pos[0])
-        cursor_y = int(mouse_pos[1])
-    except Exception:
-        return None
-    best_index = None
-    best_distance_sq = None
-    for idx, _role, point, _marker in session.overlays.openings.get_selected_opening_handle_specs(
-        opening
-    ):
-        try:
-            screen_x, screen_y = session.view.getPointOnScreen(point)
-        except Exception:
-            continue
-        dx = float(screen_x) - float(cursor_x)
-        dy = float(screen_y) - float(cursor_y)
-        distance_sq = dx * dx + dy * dy
-        if distance_sq > radius_px * radius_px:
-            continue
-        if best_distance_sq is None or distance_sq < best_distance_sq:
-            best_index = idx
-            best_distance_sq = distance_sq
-    return best_index

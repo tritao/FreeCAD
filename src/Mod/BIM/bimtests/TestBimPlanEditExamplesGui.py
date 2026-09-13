@@ -94,7 +94,9 @@ class TestBimPlanEditExamplesGui(TestArchBaseGui):
         self.assertAlmostEqual(walls[0].Shape.BoundBox.YMin, space_bounds.YMax)
 
         session = self._enter_plan_edit(storeys[0])
-        self.assertTrue(all(wall in session.contextual_rendering.renderer.sources for wall in walls))
+        self.assertTrue(
+            all(wall in session.contextual_rendering.renderer.sources for wall in walls)
+        )
         self.assertGreater(session.contextual_rendering.renderer.root.getNumChildren(), 0)
 
     def test_basic_example_wall_edit_roundtrips(self):
@@ -161,27 +163,19 @@ class TestBimPlanEditExamplesGui(TestArchBaseGui):
                     if item.subelement == "Width.PositiveFace"
                 )
                 start = session.view.getPointOnScreen(handle.point)
-                target = session.view.getPointOnScreen(
-                    handle.point + handle.direction * offset
-                )
-                self.assertIs(
-                    handle, session.contextual_rendering.pick_edit_handle(start)
-                )
+                target = session.view.getPointOnScreen(handle.point + handle.direction * offset)
+                self.assertIs(handle, session.contextual_rendering.pick_edit_handle(start))
 
                 edit_node = plan_edit_nodes.ContextualHandleEditNode(wall, handle)
                 send_move(start)
                 self.pump_gui_events(20)
-                with patch.object(
-                    session.picking, "pick_edit_node", return_value=edit_node
-                ):
+                with patch.object(session.picking, "pick_edit_node", return_value=edit_node):
                     send_button(start, coin.SoButtonEvent.DOWN)
                 self.pump_gui_events(20)
                 self.assertIsNotNone(session.contextual_editing.editor)
 
                 world_target = handle.point + handle.direction * offset
-                with patch.object(
-                    FreeCADGui.Snapper, "snap", return_value=world_target
-                ):
+                with patch.object(FreeCADGui.Snapper, "snap", return_value=world_target):
                     send_move(target)
                 self.pump_gui_events(20)
                 send_button(target, coin.SoButtonEvent.DOWN)
@@ -203,6 +197,131 @@ class TestBimPlanEditExamplesGui(TestArchBaseGui):
             session.contextual_rendering.sync_visible_handles()
             session.viewport.flush_scene_graph_mutations()
             self.assertTrue(session.contextual_rendering.edit_handles_for(wall))
+        finally:
+            session.shutdown(close_dialog=False)
+            if created_snapper:
+                del FreeCADGui.Snapper
+            if created_toolbar:
+                del FreeCADGui.draftToolBar
+
+    def test_basic_example_opening_handles_drive_real_coin_edits(self):
+        """Move, resize and flip a hosted door through its semantic Coin handles."""
+
+        import ArchWindow
+        import DraftGui
+        from bimplan.selection import edit_nodes as plan_edit_nodes
+        from draftguitools import gui_snapper
+
+        document = self._open_example("BIMPlanEditBasic.FCStd")
+        door = self._objects_with_ifc_type(document, "Door")[0]
+        storey = self._objects_with_ifc_type(document, "Building Storey")[0]
+        host = door.Hosts[0]
+        created_toolbar = not hasattr(FreeCADGui, "draftToolBar")
+        if created_toolbar:
+            FreeCADGui.draftToolBar = DraftGui.DraftToolBar()
+        created_snapper = not hasattr(FreeCADGui, "Snapper")
+        if created_snapper:
+            FreeCADGui.Snapper = gui_snapper.Snapper()
+
+        session = self._enter_plan_edit(storey)
+        try:
+            event_manager = session.viewer.getSoEventManager()
+
+            def send_move(point):
+                event = coin.SoLocation2Event()
+                event.setPosition(coin.SbVec2s(round(point[0]), round(point[1])))
+                event_manager.processEvent(event)
+
+            def send_button(point, state):
+                event = coin.SoMouseButtonEvent()
+                event.setPosition(coin.SbVec2s(round(point[0]), round(point[1])))
+                event.setButton(coin.SoMouseButtonEvent.BUTTON1)
+                event.setState(state)
+                event_manager.processEvent(event)
+
+            def select_and_sync():
+                session.selection.state.set_selected_plan_target_state("opening", door)
+                session.contextual_rendering.sync_visible_handles()
+                session.viewport.flush_scene_graph_mutations()
+                session.view.fitAll()
+                self.pump_gui_events(30)
+                return session.contextual_rendering.edit_handles_for(door)
+
+            handles = select_and_sync()
+            self.assertEqual(
+                {
+                    "OpeningPosition",
+                    "OpeningLeftJamb",
+                    "OpeningRightJamb",
+                    "OpeningFlipHinge",
+                    "OpeningFlipDirection",
+                },
+                {handle.role for handle in handles},
+            )
+
+            for role, offset in (("OpeningPosition", 75.0), ("OpeningRightJamb", 50.0)):
+                handles = select_and_sync()
+                handle = next(item for item in handles if item.role == role)
+                original_value = handle.operation.get_value(door)
+                original_width = ArchWindow.getWindowWidthMm(door)
+                start = session.view.getPointOnScreen(handle.point)
+                world_target = handle.point + handle.direction * offset
+                target = session.view.getPointOnScreen(world_target)
+                self.assertIs(handle, session.contextual_rendering.pick_edit_handle(start))
+                edit_node = plan_edit_nodes.ContextualHandleEditNode(door, handle)
+                send_move(start)
+                self.pump_gui_events(20)
+                with patch.object(session.picking, "pick_edit_node", return_value=edit_node):
+                    send_button(start, coin.SoButtonEvent.DOWN)
+                self.pump_gui_events(20)
+                self.assertIsNotNone(session.contextual_editing.editor)
+                with patch.object(FreeCADGui.Snapper, "snap", return_value=world_target):
+                    send_move(target)
+                self.pump_gui_events(20)
+                send_button(target, coin.SoButtonEvent.DOWN)
+                send_button(target, coin.SoButtonEvent.UP)
+                self.pump_gui_events(50)
+                self.assertIsNone(session.contextual_editing.editor)
+                self.assertAlmostEqual(original_value + offset, handle.operation.get_value(door))
+                if role == "OpeningRightJamb":
+                    self.assertAlmostEqual(
+                        original_width + offset, ArchWindow.getWindowWidthMm(door)
+                    )
+                subvolume = door.Proxy.getSubVolume(door, host=host)
+                self.assertIsNotNone(subvolume)
+                self.assertAlmostEqual(host.Shape.common(subvolume).Volume, 0.0, delta=1e-6)
+
+                document.undo()
+                document.recompute()
+                self.pump_gui_events(30)
+                self.assertAlmostEqual(original_value, handle.operation.get_value(door))
+                self.assertAlmostEqual(original_width, ArchWindow.getWindowWidthMm(door))
+
+            handles = select_and_sync()
+            original_parts = tuple(door.WindowParts)
+            flip_handle = next(
+                handle for handle in handles if handle.role == "OpeningFlipDirection"
+            )
+            flip_screen = session.view.getPointOnScreen(flip_handle.point)
+            with patch.object(
+                session.picking,
+                "pick_edit_node",
+                return_value=plan_edit_nodes.ContextualHandleEditNode(door, flip_handle),
+            ):
+                send_button(flip_screen, coin.SoButtonEvent.DOWN)
+            self.pump_gui_events(40)
+            self.assertNotEqual(original_parts, tuple(door.WindowParts))
+            document.undo()
+            document.recompute()
+            self.pump_gui_events(30)
+            self.assertEqual(original_parts, tuple(door.WindowParts))
+
+            session.shutdown(close_dialog=False)
+            self.pump_gui_events(50)
+            session = self._enter_plan_edit(storey)
+            handles = select_and_sync()
+            self.assertIn("OpeningPosition", {handle.role for handle in handles})
+            self.assertIn(door, session.contextual_rendering.renderer.sources)
         finally:
             session.shutdown(close_dialog=False)
             if created_snapper:

@@ -83,9 +83,6 @@ class PlanOpeningOverlayService:
     def clear_selected_wall_opening_context_overlay(self, *args, **kwargs):
         return clear_selected_wall_opening_context_overlay(self.session, *args, **kwargs)
 
-    def get_selected_opening_handle_specs(self, *args, **kwargs):
-        return get_selected_opening_handle_specs(self.session, *args, **kwargs)
-
     def sync_selected_opening_handles(self, *args, **kwargs):
         return sync_selected_opening_handles(self.session, *args, **kwargs)
 
@@ -392,97 +389,10 @@ def clear_selected_wall_opening_context_overlay(session):
     tracker_state.selected_wall_opening_context_trackers = []
 
 
-def get_selected_opening_handle_specs(session, opening):
-    from draftutils import params
-
-    handle_specs = []
-    marker_size = session.viewport.scaled_marker_size(params.get_param_view("MarkerSize"))
-    markers = get_opening_handle_markers(session, marker_size)
-    for idx, handle in enumerate(session.openings.get_selected_opening_edit_handles(opening)):
-        if handle.role not in markers or handle.point is None:
-            continue
-        handle_specs.append((idx, handle.role, handle.point, markers[handle.role]))
-    return handle_specs
-
-
 def sync_selected_opening_handles(session):
-    with _perf_trace_span(session, "sync_selected_opening_handles"):
-        from draftutils import params
+    """Opening handles are realized by the canonical contextual renderer."""
 
-        transient_state = _opening_transient_state(session)
-        opening = session.selection.state.get_selected_plan_target_object("opening")
-        if session.current_tool != "Select":
-            clear_selected_opening_handles(session)
-            return
-        if not session.openings.is_hosted_opening_object(opening):
-            clear_selected_opening_handles(session)
-            return
-        specs = tuple(get_selected_opening_handle_specs(session, opening))
-        marker_size = session.viewport.scaled_marker_size(params.get_param_view("MarkerSize"))
-        handle_entries = tuple(
-            (
-                int(idx),
-                str(role),
-                round(float(point.x), 6),
-                round(float(point.y), 6),
-                round(float(point.z), 6),
-                int(marker_size),
-            )
-            for idx, role, point, _marker in specs
-        )
-        render_state = (
-            session.visibility.get_document_object_key(opening),
-            handle_entries,
-        )
-        if transient_state.selected_opening_handle_render_state == render_state and len(
-            transient_state.opening_handle_trackers
-        ) == len(specs):
-            _perf_count(session, "selected_opening_handle_cache_hits")
-            return
-        try:
-            import draftguitools.gui_trackers as DraftTrackers
-        except ImportError:
-            clear_selected_opening_handles(session)
-            return
-        if len(transient_state.opening_handle_trackers) == len(specs):
-            for tracker, (_idx, _role, point, marker) in zip(
-                transient_state.opening_handle_trackers, specs
-            ):
-                set_opening_handle_tracker_marker(tracker, marker)
-                tracker.set(point)
-                tracker.on()
-            _perf_count(session, "selected_opening_handle_tracker_reuses")
-        else:
-            if not transient_state.opening_handle_trackers and len(
-                transient_state.opening_handle_tracker_pool
-            ) == len(specs):
-                transient_state.opening_handle_trackers = (
-                    transient_state.opening_handle_tracker_pool
-                )
-                transient_state.opening_handle_tracker_pool = []
-                for tracker, (_idx, _role, point, marker) in zip(
-                    transient_state.opening_handle_trackers, specs
-                ):
-                    set_opening_handle_tracker_marker(tracker, marker)
-                    tracker.set(point)
-                    tracker.on()
-                _perf_count(session, "selected_opening_handle_pool_reuses")
-            else:
-                clear_selected_opening_handles(session)
-                if transient_state.opening_handle_tracker_pool and len(
-                    transient_state.opening_handle_tracker_pool
-                ) != len(specs):
-                    discard_opening_handle_tracker_pool(session)
-                for idx, _role, point, marker in specs:
-                    tracker = DraftTrackers.editTracker(
-                        pos=point,
-                        idx=idx,
-                        marker=marker,
-                        inactive=True,
-                    )
-                    tracker.on()
-                    transient_state.opening_handle_trackers.append(tracker)
-        transient_state.selected_opening_handle_render_state = render_state
+    clear_selected_opening_handles(session)
 
 
 def clear_selected_opening_handles(session):
