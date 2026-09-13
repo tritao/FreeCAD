@@ -513,6 +513,65 @@ class TestBimPlanEditSessionGui(TestArchBaseGui):
             self.assertAlmostEqual(250.0, wall.Width.Value, delta=10.0)
             self.assertIsNone(session.active_edit)
             self.assertEqual("Inherit", view.getViewVisibility(wall))
+
+            height_handle = next(
+                handle
+                for handle in session.renderer.edit_handles_for(wall)
+                if handle.subelement == "Height"
+            )
+            height_start = view.getPointOnScreen(height_handle.point)
+            height_target = view.getPointOnScreen(
+                height_handle.point + height_handle.direction * 50.0
+            )
+            height_before_cancel = wall.Height.Value
+            send_button(height_start, coin.SoButtonEvent.DOWN)
+            self.pump_gui_events(20)
+            self.assertEqual("Height", session.active_edit.subelement)
+            send_move(height_target)
+            self.pump_gui_events(20)
+            escape = coin.SoKeyboardEvent()
+            escape.setKey(coin.SoKeyboardEvent.ESCAPE)
+            escape.setState(coin.SoKeyboardEvent.DOWN)
+            event_manager.processEvent(escape)
+            self.pump_gui_events(20)
+
+            self.assertIsNone(session.active_edit)
+            self.assertAlmostEqual(height_before_cancel, wall.Height.Value)
+
+            height_handle = next(
+                handle
+                for handle in session.renderer.edit_handles_for(wall)
+                if handle.subelement == "Height"
+            )
+            send_button(
+                view.getPointOnScreen(height_handle.point), coin.SoButtonEvent.DOWN
+            )
+            self.pump_gui_events(20)
+            self.assertEqual("Height", session.active_edit.subelement)
+
+            keyboard_keys = {
+                "2": coin.SoKeyboardEvent.NUMBER_2,
+                "8": coin.SoKeyboardEvent.NUMBER_8,
+                ".": coin.SoKeyboardEvent.PERIOD,
+                " ": coin.SoKeyboardEvent.SPACE,
+                "m": coin.SoKeyboardEvent.M,
+            }
+
+            def send_key(key, character=""):
+                event = coin.SoKeyboardEvent()
+                event.setKey(key)
+                if character:
+                    event.setPrintableCharacter(character)
+                event.setState(coin.SoKeyboardEvent.DOWN)
+                event_manager.processEvent(event)
+
+            for character in "2.8 m":
+                send_key(keyboard_keys[character], character)
+            send_key(coin.SoKeyboardEvent.RETURN)
+            self.pump_gui_events(30)
+
+            self.assertAlmostEqual(2800.0, wall.Height.Value)
+            self.assertIsNone(session.active_edit)
         finally:
             session.close()
             FreeCADGui.Selection.clearSelection()
