@@ -34,6 +34,7 @@ import Part
 import WorkingPlane
 from bimtests import TestArchBaseGui
 from bimcommands.BimWall import Arch_Wall
+import bimplan.wall_construction as wall_construction
 from bimcommands.BimJoin import (
     BIM_EditWallJoint,
     BIM_Join_Butt,
@@ -76,6 +77,94 @@ class TestArchWallGui(TestArchBaseGui.TestArchBaseGui):
         """Restore original preferences after the test."""
         self.params.SetInt("WallBaseline", self.original_wall_base)
         super().tearDown()
+
+    def test_standard_and_hosted_wall_creation_have_semantic_parity(self):
+        """Wall results must not depend on which interaction host supplied the points."""
+
+        self.params.SetInt("WallBaseline", 0)
+        start = FreeCAD.Vector(250, 400, 0)
+        end = FreeCAD.Vector(2250, 1400, 0)
+        width = 240.0
+        height = 2800.0
+        offset = 35.0
+
+        command = Arch_Wall()
+        command.doc = self.document
+        command.wp = WorkingPlane.get_working_plane()
+        command.points = [start, end]
+        command.Align = "Left"
+        command.Width = width
+        command.Height = height
+        command.Offset = offset
+        command.MultiMat = None
+        command.existing = []
+        command.tracker = MockTracker()
+        command.create_wall()
+        standard_wall = self.document.Objects[-1]
+
+        delta = FreeCAD.Vector(0, 2000, 0)
+        spec = wall_construction.WallConstructionSpec(
+            width=width,
+            height=height,
+            align="Left",
+            offset=offset,
+        )
+        hosted_wall = wall_construction.construct_wall_run(
+            self.document,
+            (start + delta, end + delta),
+            spec,
+            transaction_name="Create Hosted Wall",
+            auto_group=False,
+            auto_join=False,
+        )[0]
+
+        self.assertAlmostEqual(standard_wall.Length.Value, hosted_wall.Length.Value)
+        self.assertAlmostEqual(standard_wall.Width.Value, hosted_wall.Width.Value)
+        self.assertAlmostEqual(standard_wall.Height.Value, hosted_wall.Height.Value)
+        self.assertAlmostEqual(standard_wall.Offset.Value, hosted_wall.Offset.Value)
+        self.assertEqual(standard_wall.Align, hosted_wall.Align)
+        self.assertTrue(
+            (standard_wall.Placement.Base + delta).isEqual(
+                hosted_wall.Placement.Base, 1e-7
+            )
+        )
+        self.assertTrue(
+            standard_wall.Placement.Rotation.isSame(
+                hosted_wall.Placement.Rotation, 1e-7
+            )
+        )
+
+    def test_hosted_wall_construction_validates_before_mutation_and_undoes(self):
+        spec = wall_construction.WallConstructionSpec(
+            width=200,
+            height=2500,
+            align="Center",
+        )
+        initial_names = {obj.Name for obj in self.document.Objects}
+
+        with self.assertRaises(wall_construction.WallConstructionError):
+            wall_construction.construct_wall_run(
+                self.document,
+                (FreeCAD.Vector(), FreeCAD.Vector(5, 0, 0)),
+                spec,
+                transaction_name="Reject Short Wall",
+            )
+        self.assertEqual(initial_names, {obj.Name for obj in self.document.Objects})
+
+        wall = wall_construction.construct_wall_run(
+            self.document,
+            (FreeCAD.Vector(), FreeCAD.Vector(1000, 0, 0)),
+            spec,
+            transaction_name="Create Hosted Wall",
+            auto_group=False,
+            auto_join=False,
+        )[0]
+        wall_name = wall.Name
+        self.assertIsNotNone(self.document.getObject(wall_name))
+
+        self.document.undo()
+        self.document.recompute()
+        self.assertIsNone(self.document.getObject(wall_name))
 
     def test_create_baseless_wall_interactive_mode(self):
         """
