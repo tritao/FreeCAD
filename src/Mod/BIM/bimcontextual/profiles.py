@@ -45,10 +45,6 @@ class ContextualProfile:
         plane.align_to_placement(frame)
         return plane
 
-    def sources(self, context):
-        source = getattr(context, "source", None)
-        return () if source is None else (source,)
-
     def providers(self, context):
         del context
         from .actions import (
