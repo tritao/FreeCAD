@@ -457,7 +457,21 @@ def _warn_post_commit_recompute_failure(session, transaction_name, exc):
     )
 
 
-def _apply_wall_edit_transaction(session, wall, proxy, new_points, transaction_name):
+def _semantic_wall_operation(session, wall, endpoint):
+    intent = "WallMove" if endpoint == "Move" else "WallStretch{}".format(endpoint)
+    return next(
+        (
+            handle.operation
+            for handle in session.contextual_rendering.edit_handles_for(wall)
+            if getattr(handle.operation, "interaction_intent", "") == intent
+        ),
+        None,
+    )
+
+
+def _apply_wall_edit_transaction(
+    session, wall, endpoint, proxy, new_points, transaction_name
+):
     openings_fit = True
     suppress_boundary_console = nullcontext()
     try:
@@ -468,10 +482,21 @@ def _apply_wall_edit_transaction(session, wall, proxy, new_points, transaction_n
         pass
     try:
         with PlanEditTransaction(session.doc, transaction_name):
-            proxy.set_from_endpoints(wall, new_points)
+            operation = _semantic_wall_operation(session, wall, endpoint)
+            if operation is None:
+                proxy.set_from_endpoints(wall, new_points)
+            else:
+                candidate = (
+                    (new_points[0] + new_points[1]) * 0.5
+                    if endpoint == "Move"
+                    else new_points[0] if endpoint == "Start" else new_points[1]
+                )
+                operation.apply(wall, candidate)
             with suppress_boundary_console:
                 session.doc.recompute()
-            openings_fit = session.openings.resolve_wall_hosted_opening_layout(wall)
+            openings_fit = operation is not None or (
+                session.openings.resolve_wall_hosted_opening_layout(wall)
+            )
             if not openings_fit:
                 raise RuntimeError("Hosted openings no longer fit within resized wall")
     except Exception:
@@ -507,7 +532,9 @@ def commit_wall_edit_points(session, wall, endpoint, proxy, new_points):
         if endpoint == "Move"
         else translate("BIM_PlanEdit", "Stretch Wall Endpoint")
     )
-    if not _apply_wall_edit_transaction(session, wall, proxy, new_points, transaction_name):
+    if not _apply_wall_edit_transaction(
+        session, wall, endpoint, proxy, new_points, transaction_name
+    ):
         return
     _finalize_wall_edit_commit(session, wall)
 
