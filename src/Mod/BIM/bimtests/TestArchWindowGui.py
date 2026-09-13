@@ -26,11 +26,48 @@ import Arch
 import ArchOpeningConstruction
 import ArchSectionPlane
 import Draft
+from types import SimpleNamespace
 from bimtests import TestArchBaseGui
 from bimcommands.BimWindow import Arch_Window
 
 
 class TestArchWindowGui(TestArchBaseGui.TestArchBaseGui):
+
+    def test_interactive_builtin_preset_uses_atomic_construction(self):
+        from ArchWindowPresets import WindowPresets
+
+        command = Arch_Window()
+        command.doc = self.document
+        command.sel = []
+        command.Preset = WindowPresets.index("Fixed")
+        command.librarypresets = []
+        command.Include = False
+        command.baseFace = None
+        command.SillHeight = 900
+        command.wparams = ["Width", "Height", "H1", "H2", "H3", "W1", "W2", "O1", "O2"]
+        command.Width = 900
+        command.Height = 1200
+        command.H1 = command.H2 = command.H3 = 50
+        command.W1 = command.W2 = 50
+        command.O1 = command.O2 = 0
+        command.wp = SimpleNamespace(
+            u=App.Vector(1, 0, 0),
+            v=App.Vector(0, 1, 0),
+            axis=App.Vector(0, 0, 1),
+            _restore=lambda: None,
+        )
+        command.tracker = SimpleNamespace(off=lambda: None, finalize=lambda: None)
+
+        command.getPoint(App.Vector(500, 0, 0))
+        opening = next(obj for obj in self.document.Objects if Draft.getType(obj) == "Window")
+        self.assertEqual("Window", opening.IfcType)
+        self.assertAlmostEqual(900.0, opening.Width.Value)
+        self.assertFalse(opening.Shape.isNull())
+
+        opening_name = opening.Name
+        self.document.undo()
+        self.document.recompute()
+        self.assertIsNone(self.document.getObject(opening_name))
 
     def test_standard_and_hosted_opening_creation_have_semantic_parity(self):
         """Equivalent bases produce equivalent openings through both consumers."""

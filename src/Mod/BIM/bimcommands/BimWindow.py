@@ -193,8 +193,6 @@ class Arch_Window:
         from draftutils.messages import _wrn
         from ArchWindowPresets import WindowPresets
 
-        SketchArch = False
-
         self.wp._restore()
         FreeCAD.activeDraftCommand = None
         FreeCADGui.Snapper.off()
@@ -205,8 +203,6 @@ class Arch_Window:
         if self.sel:
             obj = self.sel[0]
         point = point.add(FreeCAD.Vector(0, 0, self.SillHeight))
-        self.doc.openTransaction(translate("Arch", "Create Window"))
-
         FreeCADGui.doCommand("import FreeCAD, Arch, DraftGeomUtils, WorkingPlane")
         FreeCADGui.doCommand("wp = WorkingPlane.get_working_plane()")
 
@@ -243,6 +239,7 @@ class Arch_Window:
 
         if self.Preset >= len(WindowPresets):
             preset = False
+            self.doc.openTransaction(translate("Arch", "Create Window"))
             # library object
             col = self.doc.Objects
             path = self.librarypresets[self.Preset - len(WindowPresets)][1]
@@ -314,36 +311,53 @@ class Arch_Window:
                 else:
                     # Window base sketch's placement follow getPoint placement if addon exists but NOT self.Include
                     preset_placement = placement
-                win = ArchOpeningConstruction.create_preset_opening(
-                    preset_spec, placement=preset_placement
+                hosts = self._opening_hosts(host) if self.Include else ()
+
+                def after_hosting(opening):
+                    if not self.Include:
+                        opening.AttachToAxisOrSketch = "None"
+                    else:
+                        ArchSketchObject.attachToHost(opening, target=host, pl=placement)
+
+                win = ArchOpeningConstruction.construct_preset_opening(
+                    self.doc,
+                    preset_spec,
+                    placement=preset_placement,
+                    transaction_name=translate("Arch", "Create Window"),
+                    hosts=hosts,
+                    after_hosting=after_hosting,
                 )
-                if not self.Include:
-                    win.AttachToAxisOrSketch = "None"
                 FreeCADGui.Selection.addSelection(win)
-                w = win
-                wPl = placement
-                SketchArch = True
             else:
-                win = ArchOpeningConstruction.create_preset_opening(
-                    preset_spec, placement=placement
+                win = ArchOpeningConstruction.construct_preset_opening(
+                    self.doc,
+                    preset_spec,
+                    placement=placement,
+                    transaction_name=translate("Arch", "Create Window"),
+                    hosts=self._opening_hosts(host) if self.Include else (),
                 )
-                SketchArch = False
 
-        if self.Include and host is not None and Draft.getType(host) in ALLOWEDHOSTS:
-            hosts = [host]
-            siblings = self._get_host_siblings(host)
-            for sibling in siblings:
-                if sibling not in hosts:
-                    hosts.append(sibling)
-            ArchOpeningConstruction.assign_hosts(win, hosts)
-            if SketchArch:
-                ArchSketchObject.attachToHost(w, target=host, pl=wPl)
-
-        self.doc.commitTransaction()
+        if not preset:
+            if self.Include and host is not None and Draft.getType(host) in ALLOWEDHOSTS:
+                ArchOpeningConstruction.assign_hosts(win, self._opening_hosts(host))
+            self.doc.commitTransaction()
         self.doc.recompute()
         # gui_utils.end_all_events()  # Causes a crash on Linux.
         self.tracker.finalize()
         return
+
+    def _opening_hosts(self, host):
+        if host is None:
+            return ()
+        import Draft
+
+        if Draft.getType(host) not in ALLOWEDHOSTS:
+            return ()
+        hosts = [host]
+        for sibling in self._get_host_siblings(host):
+            if sibling not in hosts:
+                hosts.append(sibling)
+        return tuple(hosts)
 
     def update(self, point, info):
         "this function is called by the Snapper when the mouse is moved"
