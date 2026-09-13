@@ -187,6 +187,7 @@ class Arch_Window:
     def getPoint(self, point=None, obj=None):
         "this function is called by the snapper when it has a 3D point"
 
+        import __main__
         import Draft
         from draftutils import gui_utils
         from draftutils.messages import _wrn
@@ -231,6 +232,7 @@ class Arch_Window:
             + str(point.z)
             + ")"
         )
+        placement = FreeCAD.Placement(__main__.pl)
 
         if self.baseFace is not None:
             host = self.baseFace[0]
@@ -258,6 +260,7 @@ class Arch_Window:
                         self.Include = False
                         break
                     FreeCADGui.doCommand("win = FreeCAD.ActiveDocument.getObject('" + o.Name + "')")
+                    win = o
                     FreeCADGui.doCommand("win.Base.Placement = pl")
                     # Historically, this normal was deduced by the orientation of the Base Sketch and hardcoded in the Normal property.
                     # Now with the new AutoNormalReversed property/flag, set True as default, the auto Normal previously in opposite direction to is now consistent with that previously hardcoded.
@@ -282,10 +285,12 @@ class Arch_Window:
         else:
             # preset
             preset = True
-            wp = ""
-            for p in self.wparams:
-                wp += ", " + p.lower() + "=" + str(getattr(self, p))
             import ArchSketchObject
+
+            preset_spec = ArchOpeningConstruction.OpeningPresetSpec(
+                WindowPresets[self.Preset],
+                *(getattr(self, name) for name in self.wparams),
+            )
 
             if (
                 host
@@ -302,49 +307,35 @@ class Arch_Window:
                     # - see https://github.com/FreeCAD/FreeCAD/issues/24903#issuecomment-3475455946
                     # placement = FreeCAD.Placement(App.Vector(0,0,0),App.Rotation(App.Vector(1,0,0),90))
                     # TODO 2025.11.1 : To improve the algorithm to be more robust to allow the Base Sketch in any orientation but without problem
-                    FreeCADGui.doCommand(
-                        "pl90 = FreeCAD.Placement(App.Vector(0,0,0),App.Rotation(App.Vector(1,0,0),90))"
-                    )
-                    FreeCADGui.doCommand(
-                        "win = Arch.makeWindowPreset('"
-                        + WindowPresets[self.Preset]
-                        + "' "
-                        + wp
-                        + ", placement=pl90"
-                        + ")"
+                    preset_placement = FreeCAD.Placement(
+                        FreeCAD.Vector(),
+                        FreeCAD.Rotation(FreeCAD.Vector(1, 0, 0), 90),
                     )
                 else:
                     # Window base sketch's placement follow getPoint placement if addon exists but NOT self.Include
-                    FreeCADGui.doCommand(
-                        "win = Arch.makeWindowPreset('"
-                        + WindowPresets[self.Preset]
-                        + "' "
-                        + wp
-                        + ", placement=pl"
-                    )
-                    FreeCADGui.doCommand("win.AttachToAxisOrSketch = 'None'")
-                FreeCADGui.doCommand("FreeCADGui.Selection.addSelection(win)")
-                w = FreeCADGui.Selection.getSelection()[0]
-                FreeCADGui.doCommand("FreeCAD.SketchArchPl = pl")
-                wPl = FreeCAD.SketchArchPl
+                    preset_placement = placement
+                win = ArchOpeningConstruction.create_preset_opening(
+                    preset_spec, placement=preset_placement
+                )
+                if not self.Include:
+                    win.AttachToAxisOrSketch = "None"
+                FreeCADGui.Selection.addSelection(win)
+                w = win
+                wPl = placement
                 SketchArch = True
             else:
-                FreeCADGui.doCommand(
-                    "win = Arch.makeWindowPreset('"
-                    + WindowPresets[self.Preset]
-                    + "' "
-                    + wp
-                    + ", placement = pl)"
+                win = ArchOpeningConstruction.create_preset_opening(
+                    preset_spec, placement=placement
                 )
                 SketchArch = False
 
         if self.Include and host is not None and Draft.getType(host) in ALLOWEDHOSTS:
-            FreeCADGui.doCommand("win.Hosts = [FreeCAD.ActiveDocument." + host.Name + "]")
+            hosts = [host]
             siblings = self._get_host_siblings(host)
             for sibling in siblings:
-                FreeCADGui.doCommand(
-                    "win.Hosts = win.Hosts + [FreeCAD.ActiveDocument." + sibling.Name + "]"
-                )
+                if sibling not in hosts:
+                    hosts.append(sibling)
+            ArchOpeningConstruction.assign_hosts(win, hosts)
             if SketchArch:
                 ArchSketchObject.attachToHost(w, target=host, pl=wPl)
 
