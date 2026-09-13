@@ -214,6 +214,36 @@ class ContextualRepresentationRenderer:
         self._preview_nodes[source] = node
         return True
 
+    def set_preview_representation(self, source, representation, valid=True):
+        """Realize renderer-neutral preview geometry without making it pickable."""
+
+        self.clear_preview(source)
+        if source is None or representation is None:
+            return False
+        node = coin.SoSeparator()
+        node.ref()
+        color = (0.12, 0.38, 0.95) if valid else (0.9, 0.05, 0.05)
+        self._append_faces(
+            node,
+            representation,
+            color=color,
+            transparency=0.65,
+            record_mappings=False,
+        )
+        self._append_lines(
+            node,
+            representation,
+            color=color,
+            line_width=2.0,
+            record_mappings=False,
+        )
+        if node.getNumChildren() == 0:
+            node.unref()
+            return False
+        self.root.addChild(node)
+        self._preview_nodes[source] = node
+        return True
+
     def clear_preview(self, source=None):
         """Remove viewer-local preview nodes without touching document state."""
 
@@ -237,7 +267,15 @@ class ContextualRepresentationRenderer:
                 mapping.geometry,
             )
 
-    def _append_faces(self, root, representation):
+    def _append_faces(
+        self,
+        root,
+        representation,
+        *,
+        color=(0.82, 0.82, 0.82),
+        transparency=0.0,
+        record_mappings=True,
+    ):
         for face in representation.cut_geometry:
             try:
                 vertices, triangles = face.tessellate(0.25)
@@ -250,7 +288,8 @@ class ContextualRepresentationRenderer:
             light_model.model = coin.SoLightModel.BASE_COLOR
             group.addChild(light_model)
             material = coin.SoMaterial()
-            material.diffuseColor = (0.82, 0.82, 0.82)
+            material.diffuseColor = color
+            material.transparency = float(transparency)
             group.addChild(material)
             coordinates = coin.SoCoordinate3()
             coordinates.point.setValues(0, len(vertices), [_xyz(point) for point in vertices])
@@ -262,9 +301,18 @@ class ContextualRepresentationRenderer:
             faces.coordIndex.setValues(0, len(indices), indices)
             group.addChild(faces)
             root.addChild(group)
-            self._record_node(group, representation, face)
+            if record_mappings:
+                self._record_node(group, representation, face)
 
-    def _append_lines(self, root, representation):
+    def _append_lines(
+        self,
+        root,
+        representation,
+        *,
+        color=(0.1, 0.1, 0.1),
+        line_width=2.0,
+        record_mappings=True,
+    ):
         for geometry in representation.projected_geometry:
             try:
                 points = [_xyz(point) for point in geometry]
@@ -274,10 +322,10 @@ class ContextualRepresentationRenderer:
                 continue
             group = coin.SoSeparator()
             material = coin.SoMaterial()
-            material.diffuseColor = (0.1, 0.1, 0.1)
+            material.diffuseColor = color
             group.addChild(material)
             style = coin.SoDrawStyle()
-            style.lineWidth = 2.0
+            style.lineWidth = float(line_width)
             group.addChild(style)
             coordinates = coin.SoCoordinate3()
             coordinates.point.setValues(0, len(points), points)
@@ -286,7 +334,8 @@ class ContextualRepresentationRenderer:
             lines.numVertices.setValues(0, 1, [len(points)])
             group.addChild(lines)
             root.addChild(group)
-            self._record_node(group, representation, geometry)
+            if record_mappings:
+                self._record_node(group, representation, geometry)
 
     def _append_edit_handles(self, root, representation):
         if not representation.edit_handles:

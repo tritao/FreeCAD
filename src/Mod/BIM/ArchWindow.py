@@ -691,6 +691,9 @@ def _opening_position_edit_operation(helper):
         available=lambda _source: not ArchRepresentation.is_property_expression_driven(
             target, "Placement.Base"
         ),
+        preview_representation=lambda _source, value, context: (
+            helper.get_plan_edit_preview_representation("OpeningPosition", value, context)
+        ),
     )
 
 
@@ -754,6 +757,11 @@ def _opening_width_edit_operation(helper, side):
         minimum=minimum,
         maximum=maximum,
         available=lambda _source: canEditWindowWidth(source),
+        preview_representation=lambda _source, value, context: (
+            helper.get_plan_edit_preview_representation(
+                "Opening{}Jamb".format(side), value, context
+            )
+        ),
     )
 
 
@@ -2366,6 +2374,73 @@ class _HostedOpeningRepresentationGeometry:
                 point.z = base_z
             result.append(points)
         return result
+
+    def get_plan_edit_preview_representation(self, role, value, context):
+        """Return non-persistent geometry for one proposed Plan edit value."""
+
+        import Part
+
+        source = self.Object
+        cut_z = getattr(context, "cut_offset", None)
+        base_z = getattr(context, "target_offset", None)
+        if cut_z is None or base_z is None:
+            default_context = self._get_default_opening_plan_context(source)
+            if cut_z is None:
+                cut_z = default_context.cut_offset
+            if base_z is None:
+                base_z = default_context.target_offset
+        profile = self._get_hosted_opening_plan_frame(source.Shape, cut_z, base_z)
+        if not profile:
+            return None
+        profile = dict(profile)
+        value = float(value)
+        if role == "OpeningPosition":
+            current = (profile["umin"] + profile["umax"]) * 0.5
+            delta = value - current
+            profile["umin"] += delta
+            profile["umax"] += delta
+        elif role == "OpeningLeftJamb":
+            profile["umin"] = value
+        elif role == "OpeningRightJamb":
+            profile["umax"] = value
+        else:
+            return None
+
+        representation = ArchRepresentation.BIMRepresentation(source=source, context=context)
+        origin = profile["origin"]
+        axis_u = profile["axis_u"]
+        axis_v = profile["axis_v"]
+
+        def point(u, v):
+            result = origin.add(FreeCAD.Vector(axis_u).multiply(u)).add(
+                FreeCAD.Vector(axis_v).multiply(v)
+            )
+            result.z = base_z
+            return result
+
+        if profile["umax"] > profile["umin"] and profile["vmax"] > profile["vmin"]:
+            corners = [
+                point(profile["umin"], profile["vmin"]),
+                point(profile["umax"], profile["vmin"]),
+                point(profile["umax"], profile["vmax"]),
+                point(profile["umin"], profile["vmax"]),
+            ]
+            face = Part.Face(Part.makePolygon((*corners, corners[0])))
+            representation.add_geometry("cut_geometry", face, "OpeningPreviewCut", subelement=role)
+
+        for geometry_role, polylines in (
+            ("OpeningJambLine", self._get_plan_jamb_polylines(profile, base_z)),
+            ("OpeningSymbol", self._get_symbol_footprint_polylines(profile, base_z)),
+            ("OpeningGuide", self._get_plan_overlay_guide_polylines(profile, base_z)),
+        ):
+            for index, polyline in enumerate(polylines, start=1):
+                representation.add_geometry(
+                    "projected_geometry",
+                    tuple(polyline),
+                    geometry_role,
+                    subelement="Preview.{}{}".format(geometry_role, index),
+                )
+        return representation
 
     def get_plan_overlay_geometry(self, context=None):
         """Return horizontal plan symbols for the supplied representation context."""

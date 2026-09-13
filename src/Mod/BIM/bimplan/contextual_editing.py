@@ -134,12 +134,23 @@ class PlanContextualEditingAPI:
         self.session.contextual_rendering.preview_handle(preview.handle, preview.point)
         state = "active" if preview.validation.allowed else "invalid"
         self.session.contextual_rendering.set_handle_state(preview.handle, state)
+        representation = preview.handle.operation.get_preview_representation(
+            preview.handle.source,
+            preview.value,
+            self.editor.context,
+        )
         shape = preview.handle.operation.get_preview_shape(
             preview.handle.source,
             preview.value,
             self.editor.context,
         )
-        if shape is None or not preview.validation.allowed:
+        if representation is not None:
+            self.session.contextual_rendering.set_preview_representation(
+                preview.handle.source,
+                representation,
+                preview.validation.allowed,
+            )
+        elif shape is None or not preview.validation.allowed:
             self.session.contextual_rendering.clear_preview(preview.handle.source)
         else:
             self.session.contextual_rendering.set_preview_shape(preview.handle.source, shape)

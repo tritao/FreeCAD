@@ -362,6 +362,21 @@ class TestArchRepresentation(unittest.TestCase):
         self.assertTrue(
             all(mapping.source is opening for mapping in representation.source_mappings)
         )
+        position = next(
+            handle for handle in representation.edit_handles if handle.role == "OpeningPosition"
+        )
+        before = FreeCAD.Placement(base.Placement)
+        preview = position.operation.get_preview_representation(
+            opening,
+            position.operation.get_value(opening) + 100.0,
+            representation.context,
+        )
+        self.assertTrue(preview.cut_geometry)
+        self.assertEqual(
+            {"OpeningJambLine", "OpeningSymbol", "OpeningGuide"},
+            {mapping.role for mapping in preview.source_mappings} - {"OpeningPreviewCut"},
+        )
+        self.assertEqual(before, base.Placement)
 
     def test_wall_representation_supports_a_rotated_section_frame(self):
         document = FreeCAD.newDocument("ArbitraryWallRepresentationTest")

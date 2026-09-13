@@ -135,6 +135,7 @@ class BIMEditOperation:
         sensitivity=1.0,
         interaction_intent="",
         preview_shape=None,
+        preview_representation=None,
     ):
         self.key = str(key)
         self.label = str(label)
@@ -149,11 +150,17 @@ class BIMEditOperation:
         self.sensitivity = float(sensitivity)
         self.interaction_intent = str(interaction_intent)
         self._preview_shape = preview_shape
+        self._preview_representation = preview_representation
 
     def get_preview_shape(self, source, value, context):
         if not callable(self._preview_shape):
             return None
         return self._preview_shape(source, value, context)
+
+    def get_preview_representation(self, source, value, context):
+        if not callable(self._preview_representation):
+            return None
+        return self._preview_representation(source, value, context)
 
     def is_available(self, source):
         return True if self._available is None else bool(self._available(source))

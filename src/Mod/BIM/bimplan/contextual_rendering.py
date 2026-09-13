@@ -106,7 +106,18 @@ class PlanContextualRenderingAPI:
         return self._session.viewport.queue_scene_graph_mutation(
             ("contextual-preview", source),
             lambda: (
-                renderer.set_preview_shape(source, shape)
+                renderer.set_preview_shape(source, shape) if self._renderer is renderer else False
+            ),
+        )
+
+    def set_preview_representation(self, source, representation, valid=True):
+        renderer = self._renderer
+        if renderer is None:
+            return False
+        return self._session.viewport.queue_scene_graph_mutation(
+            ("contextual-preview", source),
+            lambda: (
+                renderer.set_preview_representation(source, representation, valid)
                 if self._renderer is renderer
                 else False
             ),
@@ -118,11 +129,7 @@ class PlanContextualRenderingAPI:
             return False
         return self._session.viewport.queue_scene_graph_mutation(
             ("contextual-preview", source),
-            lambda: (
-                renderer.clear_preview(source)
-                if self._renderer is renderer
-                else False
-            ),
+            lambda: (renderer.clear_preview(source) if self._renderer is renderer else False),
         )
 
     def sync_visible_handles(self):

@@ -283,6 +283,37 @@ class TestBimPlanEditExamplesGui(TestArchBaseGui):
                     icon_nodes.append(node)
             self.assertEqual(2, len(icon_nodes))
 
+            preview_handle = next(handle for handle in handles if handle.role == "OpeningRightJamb")
+            preview_width = ArchWindow.getWindowWidthMm(door)
+            session.contextual_editing.begin(preview_handle)
+            preview = session.contextual_editing.preview(
+                preview_handle.point + preview_handle.direction * 25.0
+            )
+            session.viewport.flush_scene_graph_mutations()
+            self.assertTrue(preview.validation.allowed)
+            self.assertEqual(preview_width, ArchWindow.getWindowWidthMm(door))
+            self.assertIn(door, session.contextual_rendering.renderer._preview_nodes)
+            self.assertGreater(
+                session.contextual_rendering.renderer._preview_nodes[door].getNumChildren(),
+                0,
+            )
+            session.contextual_editing.cancel()
+            session.viewport.flush_scene_graph_mutations()
+            self.assertNotIn(door, session.contextual_rendering.renderer._preview_nodes)
+
+            session.contextual_editing.begin(preview_handle)
+            invalid_distance = (
+                preview_handle.operation.maximum - preview_handle.operation.get_value(door) + 100.0
+            )
+            invalid_preview = session.contextual_editing.preview(
+                preview_handle.point + preview_handle.direction * invalid_distance
+            )
+            session.viewport.flush_scene_graph_mutations()
+            self.assertFalse(invalid_preview.validation.allowed)
+            self.assertIn(door, session.contextual_rendering.renderer._preview_nodes)
+            session.contextual_editing.cancel()
+            session.viewport.flush_scene_graph_mutations()
+
             for role, offset in (("OpeningPosition", 75.0), ("OpeningRightJamb", 50.0)):
                 handles = select_and_sync()
                 handle = next(item for item in handles if item.role == role)
@@ -302,6 +333,8 @@ class TestBimPlanEditExamplesGui(TestArchBaseGui):
                 with patch.object(FreeCADGui.Snapper, "snap", return_value=world_target):
                     send_move(target)
                 self.pump_gui_events(20)
+                self.assertAlmostEqual(original_value, handle.operation.get_value(door))
+                self.assertIn(door, session.contextual_rendering.renderer._preview_nodes)
                 send_button(target, coin.SoButtonEvent.DOWN)
                 send_button(target, coin.SoButtonEvent.UP)
                 self.pump_gui_events(50)
