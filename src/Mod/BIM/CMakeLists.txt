@@ -129,6 +129,8 @@ SET(bimcontextual_SRCS
 
 SET(bimplan_SRCS
     bimplan/__init__.py
+    bimplan/contextual_rendering.py
+    bimplan/object_visibility.py
     bimplan/representation_request.py
     bimplan/runtime/__init__.py
     bimplan/runtime/session.py
@@ -136,6 +138,8 @@ SET(bimplan_SRCS
     bimplan/runtime/command_gate.py
     bimplan/semantics.py
     bimplan/storeys.py
+    bimplan/document_visuals.py
+    bimplan/runtime/view.py
 )
 
 SET(Arch_presets

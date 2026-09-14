@@ -3,23 +3,48 @@
 """Initial session state for BIM Plan Edit."""
 
 from bimplan.representation_request import PlanRepresentationRequestAPI
+from bimplan.contextual_rendering import PlanContextualRenderingAPI
+from bimplan.object_visibility import PlanVisibilityAPI
 
 
 class PlanEditSession:
     """Hold Plan's storey-scoped representation request."""
 
-    def __init__(self, active_storey=None):
+    def __init__(self, active_storey=None, doc=None, view=None):
+        if doc is None:
+            try:
+                import FreeCAD
+
+                doc = FreeCAD.ActiveDocument
+            except Exception:
+                doc = None
+        if view is None:
+            try:
+                import FreeCADGui
+
+                gui_document = FreeCADGui.ActiveDocument
+                view = getattr(gui_document, "ActiveView", None)
+            except Exception:
+                view = None
+        self.doc = doc
+        self.view = view
         self.active_storey = None
         self.representation_request = PlanRepresentationRequestAPI(self)
+        self.visibility = PlanVisibilityAPI(self)
+        self.contextual_rendering = PlanContextualRenderingAPI(self)
         if active_storey is not None:
-            self.representation_request.set_source(active_storey, refresh=False)
+            self.set_source(active_storey, refresh=False)
 
     @property
     def request(self):
         return self.representation_request.request
 
-    def set_source(self, source):
-        return self.representation_request.set_source(source, refresh=False)
+    def set_source(self, source, *, refresh=True):
+        request = self.representation_request.set_source(source, refresh=False)
+        if refresh:
+            self.contextual_rendering.refresh_all()
+            self.visibility.apply_storey_visibility()
+        return request
 
     def includes_object(self, obj):
         return self.representation_request.includes_object(obj)
