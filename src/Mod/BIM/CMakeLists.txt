@@ -37,6 +37,7 @@ SET(Arch_SRCS
     ArchWallJunction.py
     ArchWallJunctionSolver.py
     ArchWallSemantic.py
+    ArchOpeningSemantic.py
     Arch.py
     ArchSite.py
     ArchStructure.py

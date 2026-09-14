@@ -612,3 +612,139 @@ if __name__ == "__main__":
             self.assertIsInstance(handles["Path"].constraint, WorkingPlaneConstraint)
         finally:
             FreeCAD.closeDocument(document.Name)
+
+
+    def test_hosted_opening_exposes_semantic_plan_geometry_and_handles(self):
+        document = FreeCAD.newDocument("ContextualOpeningRepresentationTest")
+        self.addCleanup(FreeCAD.closeDocument, document.Name)
+        wall = Arch.makeWall(length=3000, width=200, height=3000)
+        base = Draft.make_rectangle(900, 2100)
+        base.Placement.Rotation = FreeCAD.Rotation(FreeCAD.Vector(1, 0, 0), 90)
+        opening = Arch.makeWindow(baseobj=base, name="ContextualOpening")
+        opening.Width = 900
+        opening.Height = 2100
+        Arch.addComponents(opening, wall)
+        document.recompute()
+
+        representation = opening.Proxy.getRepresentation(
+            opening,
+            RepresentationRequest(purpose="Plan", cut_offset=1000, target_offset=0),
+        )
+
+        self.assertIs(representation.source, opening)
+        self.assertTrue(representation.projected_geometry)
+        self.assertTrue(representation.snap_geometry)
+        self.assertTrue(representation.edit_handles)
+        mappings_by_role = {}
+        for mapping in representation.source_mappings:
+            mappings_by_role.setdefault(mapping.role, []).append(mapping)
+        self.assertEqual(2, len(mappings_by_role["OpeningJambLine"]))
+        self.assertEqual(4, len(mappings_by_role["OpeningJambPoint"]))
+        self.assertIn("OpeningPosition", {handle.role for handle in representation.edit_handles})
+        self.assertTrue(
+            all(
+                target.source is opening and target.role == "OpeningJambPoint"
+                for target in representation.iter_snap_targets()
+                if target.role == "OpeningJambPoint"
+            )
+        )
+        self.assertTrue(
+            all(mapping.source is opening for mapping in representation.source_mappings)
+        )
+        position = next(
+            handle for handle in representation.edit_handles if handle.role == "OpeningPosition"
+        )
+        before = FreeCAD.Placement(base.Placement)
+        preview_state = position.operation.get_preview(
+            opening,
+            position.operation.get_value(opening) + 100.0,
+            representation.request,
+        )
+        preview = preview_state.representation_for(opening)
+        self.assertTrue(preview.cut_geometry)
+        self.assertIs(preview_state.primary_source, opening)
+        self.assertEqual(
+            {opening, wall},
+            {item.representation.source for item in preview_state.entries},
+        )
+        self.assertEqual(
+            {wall},
+            {
+                item.representation.source
+                for item in preview_state.entries
+                if item.replace_committed
+            },
+        )
+        self.assertEqual(
+            {"OpeningJambLine", "OpeningSymbol", "OpeningGuide"},
+            {mapping.role for mapping in preview.source_mappings} - {"OpeningPreviewCut"},
+        )
+        self.assertTrue(
+            position.operation.get_preview_label(
+                opening,
+                position.operation.get_value(opening) + 100.0,
+                representation.request,
+            ).startswith("Offset: ")
+        )
+
+        current_position = position.operation.get_value(opening)
+        current_opening = position.operation.get_preview(
+            opening, current_position, representation.request
+        ).representation_for(opening).cut_geometry[0]
+        proposed_position = current_position + 1000.0
+        moved_state = position.operation.get_preview(
+            opening, proposed_position, representation.request
+        )
+        proposed_opening = moved_state.representation_for(opening).cut_geometry[0]
+        preview_wall = next(
+            entry.representation
+            for entry in moved_state.entries
+            if entry.representation.source is wall
+        )
+        committed_wall = wall.Proxy.getRepresentation(wall, representation.request)
+        newly_open = proposed_opening.cut(current_opening)
+        self.assertGreater(newly_open.Area, 1.0)
+        newly_open_point = newly_open.CenterOfMass
+        self.assertTrue(
+            any(face.isInside(newly_open_point, 1e-7, True) for face in committed_wall.cut_geometry)
+        )
+        self.assertFalse(
+            any(face.isInside(newly_open_point, 1e-7, True) for face in preview_wall.cut_geometry)
+        )
+        wall_representation = wall.Proxy.getRepresentation(wall, representation.request)
+        width_handle = next(
+            handle
+            for handle in wall_representation.edit_handles
+            if handle.subelement == "Width.PositiveFace"
+        )
+        original_width = wall.Width.Value
+        width_state = width_handle.operation.get_preview(
+            wall, original_width + 50.0, representation.request
+        )
+        width_entries = {
+            entry.representation.source: entry.representation for entry in width_state.entries
+        }
+        self.assertEqual({wall, opening}, set(width_entries))
+        preview_wall = width_entries[wall]
+        preview_opening = width_entries[opening]
+        jamb_lengths = [
+            mapping.geometry[0].distanceToPoint(mapping.geometry[-1])
+            for mapping in preview_opening.source_mappings
+            if mapping.role == "OpeningJambLine"
+        ]
+        self.assertEqual(2, len(jamb_lengths))
+        self.assertTrue(all(abs(length - 250.0) < 1e-7 for length in jamb_lengths))
+        opening_cut = opening.Proxy.get_hosted_wall_preview_representation(
+            representation.request,
+            wall.Proxy._get_width_face_preview_shape(
+                wall, "Positive", original_width + 50.0, representation.request
+            ),
+        ).cut_geometry[0]
+        self.assertFalse(
+            any(
+                face.isInside(opening_cut.CenterOfMass, 1e-7, True)
+                for face in preview_wall.cut_geometry
+            )
+        )
+        self.assertAlmostEqual(original_width, wall.Width.Value)
+        self.assertEqual(before, base.Placement)
