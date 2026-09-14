@@ -412,6 +412,7 @@ SET(bimtests_SRCS
     bimtests/TestBimPlanEditLibraryGui.py
     bimtests/TestBimPlanEditSessionGui.py
     bimtests/TestBimTaskWatcherGui.py
+    bimtests/TestArchFootprintGui.py
 )
 
 set(bimtests_FIXTURES

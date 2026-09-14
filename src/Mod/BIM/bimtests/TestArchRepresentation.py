@@ -1008,3 +1008,35 @@ if __name__ == "__main__":
         self.assertIsInstance(PlanToolSpec("join", "Join"), ContextualToolSpec)
         self.assertIsInstance(provider, ContextualProvider)
         self.assertEqual(1, len(context.get_selected_sources()))
+
+
+    def test_wall_move_has_identical_plan_and_model_domain_results(self):
+        document = FreeCAD.newDocument("WallCrossContextParity")
+        try:
+            plan_wall = Arch.makeWall(length=3000, width=200, height=2500)
+            model_wall = Arch.makeWall(length=3000, width=200, height=2500)
+            model_wall.Placement.Base.y = 1000
+            document.recompute()
+            requests = (
+                RepresentationRequest(purpose=RepresentationPurpose.PLAN, cut_offset=1000),
+                RepresentationRequest(purpose=RepresentationPurpose.MODEL),
+            )
+            walls = (plan_wall, model_wall)
+            for wall, request in zip(walls, requests):
+                handle = next(
+                    item
+                    for item in edit_capabilities_for(wall, request).edit_handles
+                    if item.operation.interaction_intent == "WallMove"
+                )
+                handle.operation.apply(
+                    wall,
+                    handle.operation.get_value(wall) + FreeCAD.Vector(250, 400, 0),
+                )
+            plan_points = plan_wall.Proxy.calc_endpoints(plan_wall)
+            model_points = model_wall.Proxy.calc_endpoints(model_wall)
+            for plan_point, model_point in zip(plan_points, model_points):
+                self.assertTrue(
+                    plan_point.isEqual(model_point - FreeCAD.Vector(0, 1000, 0), 1e-7)
+                )
+        finally:
+            FreeCAD.closeDocument(document.Name)

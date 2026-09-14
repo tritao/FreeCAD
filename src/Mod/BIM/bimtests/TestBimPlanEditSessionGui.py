@@ -871,6 +871,73 @@ class TestBimPlanEditSessionGui(TestArchBaseGui):
             session.close()
             FreeCADGui.Selection.clearSelection()
 
+    def test_contextual_opening_creation_has_cross_context_parity(self):
+        wall = Arch.makeWall(length=3000, width=200, height=2500, align="Left")
+        self.document.recompute()
+        view = FreeCADGui.ActiveDocument.ActiveView
+        results = {}
+
+        for kind in ("Window", "Door"):
+            for purpose in (
+                RepresentationPurpose.MODEL,
+                RepresentationPurpose.SECTION,
+                RepresentationPurpose.ELEVATION,
+            ):
+                request = RepresentationRequest(purpose=purpose)
+                session = ContextualSession(
+                    view,
+                    request=request,
+                    sources=(wall,),
+                    providers=architectural_contextual_providers(),
+                )
+                try:
+                    self.pump_gui_events(20)
+                    callbacks = []
+                    session.host.request_point = (
+                        lambda callback, **_kwargs: callbacks.append(callback)
+                    )
+                    action_key = "create-{}".format(kind.lower())
+                    actions_by_key = {
+                        item.key: item for item in session.contextual_actions
+                    }
+                    self.assertIn(
+                        action_key,
+                        actions_by_key,
+                        "{} action missing in {}".format(kind, purpose.value),
+                    )
+                    action = actions_by_key[action_key]
+                    self.assertTrue(session.activate_action(action))
+                    self.assertEqual(1, len(callbacks))
+                    opening = callbacks[0](FreeCAD.Vector(1500, 0, 0), wall)
+                    self.document.recompute()
+                    self.assertEqual(kind, opening.IfcType)
+                    self.assertIn(wall, tuple(opening.Hosts))
+                    self.assertFalse(opening.Shape.isNull())
+                    results[(kind, purpose)] = (
+                        opening.Width.Value,
+                        opening.Height.Value,
+                        opening.Placement.Base,
+                        opening.Shape.Volume,
+                    )
+                    opening_name = opening.Name
+                finally:
+                    session.close()
+                self.document.undo()
+                self.document.recompute()
+                self.assertIsNone(self.document.getObject(opening_name))
+
+        for kind in ("Window", "Door"):
+            model = results[(kind, RepresentationPurpose.MODEL)]
+            for purpose in (
+                RepresentationPurpose.SECTION,
+                RepresentationPurpose.ELEVATION,
+            ):
+                result = results[(kind, purpose)]
+                self.assertAlmostEqual(model[0], result[0])
+                self.assertAlmostEqual(model[1], result[1])
+                self.assertLess(model[2].distanceToPoint(result[2]), 1e-7)
+                self.assertAlmostEqual(model[3], result[3], delta=1e-6)
+
     def test_contextual_wall_creation_follows_context_capability_policy(self):
         view = FreeCADGui.ActiveDocument.ActiveView
         results = []
