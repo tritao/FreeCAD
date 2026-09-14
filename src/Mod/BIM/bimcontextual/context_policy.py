@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: LGPL-2.1-or-later
 
-"""Profiles and capability policy for architectural editing contexts."""
+"""Capability and interaction-plane policy for architectural contexts."""
 
 import ArchRepresentation
 import WorkingPlane

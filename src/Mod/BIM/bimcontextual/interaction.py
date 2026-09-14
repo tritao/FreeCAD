@@ -12,7 +12,7 @@ class ContextualInteractionHost(DraftInteractionHost):
         super().__init__(command=command, view=view)
         self.context = context
         if plane_resolver is None:
-            from .profiles import interaction_plane_for
+            from .context_policy import interaction_plane_for
 
             plane_resolver = interaction_plane_for
         self._plane_resolver = plane_resolver

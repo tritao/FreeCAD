@@ -37,7 +37,7 @@ class _CreationInteraction:
             representation.add_geometry(
                 "cut_geometry", face, role, "Face{}".format(index)
             )
-        self.facilities.present_preview(self.preview_source, representation)
+        self.facilities.present_preview(representation)
 
 
 class WallCreationInteraction(_CreationInteraction):

@@ -22,7 +22,7 @@ from bimtests.TestArchBaseGui import TestArchBaseGui
 from bimplan.runtime.session import PlanEditSession
 from bimcontextual.session import ContextualSession
 from bimcontextual.interaction import ContextualInteractionHost
-from bimcontextual import profiles as contextual_policy
+from bimcontextual import context_policy
 from bimcontextual.actions import ContextualProvider, ContextualToolSpec
 from ArchWallSemantic import apply_wall_candidate
 from bimplan.providers import PlanEditProvider, PlanEditRegistry
@@ -111,12 +111,12 @@ class TestBimPlanEditSessionGui(TestArchBaseGui):
         plan = RepresentationContext(purpose=RepresentationPurpose.PLAN)
         section = RepresentationContext(purpose=RepresentationPurpose.SECTION)
         elevation = RepresentationContext(purpose=RepresentationPurpose.ELEVATION)
-        self.assertTrue(contextual_policy.supports(model, "create-wall"))
-        self.assertTrue(contextual_policy.supports(plan, "create-wall"))
-        self.assertFalse(contextual_policy.supports(section, "create-wall"))
-        self.assertFalse(contextual_policy.supports(elevation, "create-wall"))
-        self.assertTrue(contextual_policy.supports(section, "insert-opening"))
-        self.assertFalse(contextual_policy.supports(section, "wall-path"))
+        self.assertTrue(context_policy.supports(model, "create-wall"))
+        self.assertTrue(context_policy.supports(plan, "create-wall"))
+        self.assertFalse(context_policy.supports(section, "create-wall"))
+        self.assertFalse(context_policy.supports(elevation, "create-wall"))
+        self.assertTrue(context_policy.supports(section, "insert-opening"))
+        self.assertFalse(context_policy.supports(section, "wall-path"))
 
     @staticmethod
     def _wall_preview_session(renderer):

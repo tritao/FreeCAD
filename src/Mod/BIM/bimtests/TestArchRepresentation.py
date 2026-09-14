@@ -51,7 +51,7 @@ from bimcontextual.editing import (
 from bimcontextual.editable_points import get_contextual_edit_points
 from ArchWallSemantic import evaluate_wall_candidate, evaluate_wall_length
 from ArchContextualCreation import wall_construction_spec_from_preferences
-from bimcontextual.profiles import capabilities_for, supports
+from bimcontextual.context_policy import capabilities_for, supports
 
 
 class TestArchRepresentation(unittest.TestCase):
@@ -203,7 +203,7 @@ class TestArchRepresentation(unittest.TestCase):
                     offenders.append("{}:{}".format(source.name, node.lineno))
         self.assertEqual([], offenders)
 
-    def test_context_profiles_declare_purpose_and_capabilities(self):
+    def test_context_policy_declares_purpose_capabilities(self):
         for purpose in RepresentationPurpose:
             capabilities = capabilities_for(RepresentationContext(purpose=purpose))
             self.assertIsInstance(capabilities, frozenset)

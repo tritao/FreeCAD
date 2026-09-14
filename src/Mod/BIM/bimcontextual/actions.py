@@ -7,7 +7,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Sequence, Tuple
 
-from . import profiles
+from . import context_policy
 
 
 @dataclass(frozen=True)
@@ -57,7 +57,7 @@ class ContextualProviderContext:
     capabilities: tuple = ()
 
     def supports(self, capability):
-        return profiles.supports(self.representation_context, capability)
+        return context_policy.supports(self.representation_context, capability)
 
     def get_selected_sources(self):
         return tuple(self.selected_sources or ())

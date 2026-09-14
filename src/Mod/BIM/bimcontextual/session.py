@@ -141,10 +141,9 @@ class ContextualSession:
     def clear_value_input(self):
         return self.host.clear_value_input()
 
-    def present_preview(self, source, representation):
+    def present_preview(self, representation):
         if self._closed:
             return False
-        del source
         return self.renderer.set_preview_state(
             ArchRepresentation.preview_state_from_representation(representation)
         )
