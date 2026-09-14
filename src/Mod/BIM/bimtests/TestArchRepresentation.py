@@ -4,6 +4,7 @@ import unittest
 
 import FreeCAD
 import Part
+import Arch
 
 from ArchRepresentation import (
     AxisConstraint,
@@ -30,6 +31,32 @@ from ArchRepresentation import (
 
 
 class TestArchRepresentation(unittest.TestCase):
+    def test_wall_provider_exposes_semantic_cut_boundary(self):
+        document = FreeCAD.newDocument("SemanticWallBoundary")
+        try:
+            wall = Arch.makeWall(length=3000, width=200, height=3000)
+            document.recompute()
+            representation = wall.Proxy.getRepresentation(
+                wall,
+                RepresentationRequest(
+                    purpose=RepresentationPurpose.PLAN,
+                    cut_offset=1000,
+                    target_offset=0,
+                ),
+            )
+            boundaries = [
+                mapping
+                for mapping in representation.source_mappings
+                if mapping.role == "PlanCutOuterBoundary"
+            ]
+            self.assertEqual(len(boundaries), 1)
+            self.assertIn(boundaries[0].geometry, representation.projected_geometry)
+            self.assertEqual(boundaries[0].subelement, "PlanFace1.OuterWire")
+            self.assertGreaterEqual(len(boundaries[0].geometry), 2)
+            self.assertTrue(boundaries[0].geometry[0].isEqual(boundaries[0].geometry[-1], 1e-7))
+        finally:
+            FreeCAD.closeDocument(document.Name)
+
     def test_request_accepts_enum_or_serialized_purpose(self):
         plan = RepresentationRequest(purpose=RepresentationPurpose.PLAN)
         section = RepresentationRequest(purpose="Section")

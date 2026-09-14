@@ -52,6 +52,8 @@ import ArchComponent
 import ArchSketchObject
 import Draft
 import DraftVecUtils
+import ArchPlanGeometry
+import ArchRepresentation
 
 from FreeCAD import Vector
 from draftutils import params
@@ -800,20 +802,122 @@ class _Wall(ArchComponent.Component):
         ArchComponent.Component.onChanged(self, obj, prop)
 
     def getFootprint(self, obj):
-        """Get the faces that make up the base/foot of the wall.
+        """Get the faces that make up the plan representation of the wall."""
 
-        Returns
-        -------
-        list of <Part.Face>
-            The faces that make up the foot of the wall.
-        """
+        return self.getRepresentation(obj, self._default_plan_request(obj)).cut_geometry
+
+    def getPlanRepresentation(self, obj, request):
+        """Return wall plan faces for the supplied representation request."""
+
+        if request is None:
+            request = self._default_plan_request(obj)
+        return self.getRepresentation(obj, request).cut_geometry
+
+    def getRepresentation(self, obj, request):
+        """Return a renderer-neutral plan representation of this wall."""
+
+        if request is None:
+            request = self._default_plan_request(obj)
+        if request.purpose != ArchRepresentation.RepresentationPurpose.PLAN:
+            raise ArchRepresentation.RepresentationUnavailable(
+                "Wall plan provider only supports Plan requests"
+            )
+
+        representation = ArchRepresentation.BIMRepresentation(
+            source=obj,
+            request=request,
+        )
+        for index, face in enumerate(self._get_plan_cut_faces(obj, request), start=1):
+            representation.add_geometry(
+                "cut_geometry",
+                face,
+                "PlanCutFace",
+                subelement="PlanFace{}".format(index),
+            )
+            outer_wire = getattr(face, "OuterWire", None)
+            inner_index = 0
+            for wire in getattr(face, "Wires", ()) or ():
+                points = tuple(ArchPlanGeometry.get_wire_polyline(wire))
+                if len(points) < 2:
+                    continue
+                is_outer = bool(
+                    outer_wire is not None
+                    and (wire is outer_wire or wire.isSame(outer_wire))
+                )
+                if is_outer:
+                    role = "PlanCutOuterBoundary"
+                    subelement = "PlanFace{}.OuterWire".format(index)
+                else:
+                    inner_index += 1
+                    role = "PlanCutInnerBoundary"
+                    subelement = "PlanFace{}.InnerWire{}".format(index, inner_index)
+                representation.add_geometry(
+                    "projected_geometry",
+                    points,
+                    role,
+                    subelement=subelement,
+                )
+        return representation
+
+    @staticmethod
+    def _default_plan_request(obj):
+        shape = getattr(obj, "Shape", None)
+        bound_box = getattr(shape, "BoundBox", None)
+        target_offset = getattr(bound_box, "ZMin", 0.0)
+        top_offset = getattr(bound_box, "ZMax", target_offset)
+        cut_offset = min(
+            max(
+                target_offset + ArchComponent.DEFAULT_PLAN_CUT_HEIGHT,
+                target_offset + 0.001,
+            ),
+            top_offset - 0.001,
+        )
+        if cut_offset <= target_offset:
+            cut_offset = target_offset + ArchComponent.DEFAULT_PLAN_CUT_HEIGHT
+        return ArchRepresentation.RepresentationRequest(
+            purpose=ArchRepresentation.RepresentationPurpose.PLAN,
+            source=obj,
+            cut_offset=cut_offset,
+            target_offset=target_offset,
+        )
+
+    def _get_plan_cut_faces(self, obj, request):
+        """Build transient horizontal faces for the requested plan cut."""
+
+        shape = getattr(obj, "Shape", None)
+        if not shape or shape.isNull():
+            return []
+        if getattr(request, "reference_frame", None) is not None:
+            faces = ArchComponent.get_reference_slice_faces(shape, request)
+            if faces:
+                return faces
+        bound_box = shape.BoundBox
+        if bound_box.ZLength > 0.001 and request.cut_offset is not None:
+            cut_z = max(
+                bound_box.ZMin + 0.001,
+                min(bound_box.ZMax - 0.001, request.cut_offset),
+            )
+            target_z = request.target_offset if request.target_offset is not None else bound_box.ZMin
+            faces = ArchComponent.get_horizontal_slice_faces(
+                shape,
+                cut_z,
+                translate_z=target_z - cut_z,
+            )
+            if faces:
+                return faces
 
         faces = []
-        if obj.Shape:
-            for f in obj.Shape.Faces:
-                if f.normalAt(0, 0).getAngle(FreeCAD.Vector(0, 0, -1)) < 0.01:
-                    if abs(abs(f.CenterOfMass.z) - abs(obj.Shape.BoundBox.ZMin)) < 0.001:
-                        faces.append(f)
+        target_z = request.target_offset if request.target_offset is not None else bound_box.ZMin
+        for face in shape.Faces:
+            if face.normalAt(0, 0).getAngle(FreeCAD.Vector(0, 0, -1)) >= 0.01:
+                continue
+            if abs(face.CenterOfMass.z - bound_box.ZMin) >= 0.001:
+                continue
+            delta_z = target_z - bound_box.ZMin
+            if abs(delta_z) >= 0.001:
+                face = face.copy()
+                face.translate(FreeCAD.Vector(0, 0, delta_z))
+            faces.append(face)
         return faces
 
     def getExtrusionData(self, obj):
@@ -1500,39 +1604,35 @@ class _Wall(ArchComponent.Component):
         return [p1_global, p2_global]
 
     def set_from_endpoints(self, obj, pts):
-        """Sets the Length and Placement of a baseless wall from two global points."""
+        """Set a straight wall from two global points.
+
+        Endpoint editing is defined in global coordinates and updates the
+        wall's length, midpoint, and direction.  A straight based wall is
+        debased first when the normal Arch wall rules allow it; unsupported or
+        non-debasable bases are left unchanged.
+        """
         if len(pts) < 2:
             return
 
-        p1 = pts[0]
-        p2 = pts[1]
+        import ArchWallEndpoint
 
-        # Recalculate the wall's properties based on the new endpoints
-        new_length = p1.distanceToPoint(p2)
-        new_midpoint = (p1 + p2) * 0.5
-        new_direction = (p2 - p1).normalize()
-
-        # Calculate the rotation required to align the local X-axis with the new direction
-        new_rotation = FreeCAD.Rotation(FreeCAD.Vector(1, 0, 0), new_direction)
-
-        # Apply the new properties to the wall object
-        obj.Length = new_length
-        obj.Placement.Base = new_midpoint
-        obj.Placement.Rotation = new_rotation
+        edit = ArchWallEndpoint.resolve_endpoint_edit(obj, pts)
+        if edit is not None:
+            ArchWallEndpoint.apply_endpoint_edit(obj, edit)
 
     def handleComponentRemoval(self, obj, subobject):
         """
         Overrides the default component removal to implement smart debasing
         when the Base object is being removed.
         """
-        import Arch
         from PySide import QtGui
+        import ArchWallEndpoint
 
         # Check if the component being removed is this wall's Base
         if hasattr(obj, "Base") and obj.Base == subobject:
-            if Arch.is_debasable(obj):
+            if ArchWallEndpoint.is_debasable(obj):
                 # This is a valid, single-line wall. Perform a clean debase.
-                Arch.debaseWall(obj)
+                ArchWallEndpoint.debaseWall(obj)
             else:
                 # This is a complex wall. Behavior depends on GUI availability.
                 if FreeCAD.GuiUp:

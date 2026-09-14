@@ -47,9 +47,11 @@ import FreeCAD
 import ArchCommands
 import ArchIFC
 import Draft
+import ArchRepresentation
 
 from draftutils import params
 
+DEFAULT_PLAN_CUT_HEIGHT = 1000.0
 if FreeCAD.GuiUp:
     from PySide import QtGui, QtCore
     from PySide.QtCore import QT_TRANSLATE_NOOP
@@ -66,6 +68,25 @@ else:
     # \endcond
 
 
+def _copy_without_element_map(shape):
+    """Return a transient copy that does not retain element-map metadata."""
+
+    if shape is None:
+        return None
+    try:
+        return shape.copy(noElementMap=True)
+    except TypeError:
+        try:
+            plain_shape = shape.copy()
+            if getattr(plain_shape, "ElementMapSize", 0):
+                plain_shape.clearElementMap()
+            return plain_shape
+        except Exception:
+            return shape
+    except Exception:
+        return shape
+
+
 def _make_projected_horizontal_area_face(projected_faces):
     """Build one transient XY face from projected coplanar analysis faces."""
 
@@ -77,6 +98,230 @@ def _make_projected_horizontal_area_face(projected_faces):
         fused_face = fused_face.fuse(face, noElementMap=True)
     return fused_face.removeSplitter()
 
+
+def get_horizontal_slice_edges(shape, cut_z):
+    """Return transient section edges for a horizontal cut through ``shape``."""
+
+    if not shape or shape.isNull():
+        return []
+
+    try:
+        wires = shape.slice(FreeCAD.Vector(0, 0, 1), cut_z)
+    except TypeError:
+        try:
+            wires = shape.slice(FreeCAD.Vector(0, 0, 1), cut_z, 0.0)
+        except Exception:
+            return []
+    except Exception:
+        return []
+
+    edges = []
+    for wire in wires or []:
+        try:
+            edges.extend(list(wire.Edges))
+        except Exception:
+            continue
+    return edges
+
+
+def get_horizontal_slice_faces(shape, cut_z, translate_z=0.0):
+    """Return transient planar faces for a horizontal cut through ``shape``."""
+
+    import Part
+
+    section_edges = get_horizontal_slice_edges(shape, cut_z)
+    if not section_edges:
+        return []
+
+    try:
+        edge_groups = Part.sortEdges(section_edges)
+    except AttributeError:
+        edge_groups = Part.__sortEdges__(section_edges)
+
+    faces = []
+    for edges in edge_groups:
+        wire = Part.Wire(edges)
+        if not wire.isClosed():
+            continue
+        face = Part.Face(wire)
+        if face.Area <= 0:
+            continue
+        if translate_z:
+            face.translate(FreeCAD.Vector(0, 0, translate_z))
+        faces.append(face)
+    return faces
+
+
+def representation_vertical_direction(request):
+    """Return model Z projected into the active representation plane."""
+
+    if getattr(request, "purpose", None) == ArchRepresentation.RepresentationPurpose.MODEL:
+        return FreeCAD.Vector(0, 0, 1)
+
+    return ArchRepresentation.project_direction_to_representation_plane(
+        FreeCAD.Vector(0, 0, 1), request
+    )
+
+
+def representation_extent_points(shape, request, direction):
+    """Return low/high projected extent points along an in-plane direction."""
+
+    vertices = tuple(getattr(shape, "Vertexes", ()) or ())
+    if not vertices:
+        return (None, None)
+    if getattr(request, "purpose", None) == ArchRepresentation.RepresentationPurpose.MODEL:
+        points = [FreeCAD.Vector(vertex.Point) for vertex in vertices]
+    else:
+        points = [
+            ArchRepresentation.project_to_representation_plane(vertex.Point, request)
+            for vertex in vertices
+        ]
+    return (
+        min(points, key=lambda point: point.dot(direction)),
+        max(points, key=lambda point: point.dot(direction)),
+    )
+
+
+def get_reference_slice_faces(shape, request):
+    """Section *shape* on an arbitrary request frame without modifying it."""
+
+    frame = getattr(request, "reference_frame", None)
+    cut_offset = getattr(request, "cut_offset", None)
+    if frame is None or cut_offset is None or not shape or shape.isNull():
+        return []
+    try:
+        import Part
+
+        normal = frame.Rotation.multVec(FreeCAD.Vector(0, 0, 1))
+        x_axis = frame.Rotation.multVec(FreeCAD.Vector(1, 0, 0))
+        y_axis = frame.Rotation.multVec(FreeCAD.Vector(0, 1, 0))
+        origin = frame.multVec(FreeCAD.Vector(0, 0, cut_offset))
+        size = max(shape.BoundBox.DiagonalLength * 2.0, 1.0)
+        corner = origin - x_axis * (size * 0.5) - y_axis * (size * 0.5)
+        plane = Part.makePlane(size, size, corner, normal, x_axis)
+        section = shape.section(plane)
+        edges = list(section.Edges)
+        if not edges:
+            return []
+        try:
+            edge_groups = Part.sortEdges(edges)
+        except AttributeError:
+            edge_groups = Part.__sortEdges__(edges)
+        faces = []
+        for group in edge_groups:
+            wire = Part.Wire(group)
+            if wire.isClosed():
+                face = Part.Face(wire)
+                if face.Area > 0:
+                    faces.append(face)
+        target_offset = getattr(request, "target_offset", None)
+        if target_offset is None:
+            target_offset = cut_offset
+        delta = float(target_offset) - float(cut_offset)
+        if delta:
+            for face in faces:
+                face.translate(normal * delta)
+        return faces
+    except Exception:
+        return []
+
+def _iter_plan_footprint_local_points(view_provider):
+    collector = getattr(view_provider, "_collect_local_footprint_polylines", None)
+    if not callable(collector):
+        return
+
+    try:
+        polylines = collector() or ()
+    except Exception:
+        return
+
+    for polyline in polylines:
+        for point in polyline or ():
+            try:
+                yield FreeCAD.Vector(point)
+            except Exception:
+                try:
+                    yield FreeCAD.Vector(
+                        float(point[0]),
+                        float(point[1]),
+                        float(point[2] if len(point) > 2 else 0.0),
+                    )
+                except Exception:
+                    continue
+
+
+def _bounds_from_points(points):
+    points = list(points or ())
+    if not points:
+        return None
+
+    xs = [float(point.x) for point in points]
+    ys = [float(point.y) for point in points]
+    zs = [float(point.z) for point in points]
+    return (min(xs), min(ys), max(xs), max(ys), min(zs), max(zs))
+
+
+def _union_bounds(first, second):
+    if first is None:
+        return second
+    if second is None:
+        return first
+    return (
+        min(first[0], second[0]),
+        min(first[1], second[1]),
+        max(first[2], second[2]),
+        max(first[3], second[3]),
+        min(first[4], second[4]),
+        max(first[5], second[5]),
+    )
+
+
+def _get_plan_footprint_global_bounds(obj):
+    if (not FreeCAD.GuiUp) or (obj is None):
+        return None
+
+    vobj = getattr(obj, "ViewObject", None)
+    proxy = getattr(vobj, "Proxy", None) if vobj else None
+    if proxy is None:
+        return None
+
+    local_points = tuple(_iter_plan_footprint_local_points(proxy))
+    if not local_points:
+        return None
+
+    try:
+        placement = obj.getGlobalPlacement()
+    except Exception:
+        placement = getattr(obj, "Placement", None)
+    if placement is None:
+        return _bounds_from_points(local_points)
+
+    try:
+        global_points = [placement.multVec(point) for point in local_points]
+    except Exception:
+        global_points = local_points
+    return _bounds_from_points(global_points)
+
+
+def notify_plan_footprint_changed(view_provider):
+    """Notify BIM GUI consumers that a view provider's plan footprint has changed."""
+
+    if (not FreeCAD.GuiUp) or (view_provider is None):
+        return 0
+
+    obj = getattr(view_provider, "Object", None)
+    doc = getattr(obj, "Document", None)
+    current_bounds = _get_plan_footprint_global_bounds(obj)
+    previous_bounds = getattr(view_provider, "_last_plan_footprint_bounds", None)
+    view_provider._last_plan_footprint_bounds = current_bounds
+    changed_bounds = _union_bounds(previous_bounds, current_bounds)
+
+    if doc is None or changed_bounds is None:
+        return 0
+
+    import ArchSpace
+
+    return ArchSpace.schedule_auto_space_text_refresh(doc, changed_bounds=changed_bounds)
 
 def addToComponent(compobject, addobject, prop):
     """Add an object to a component's property.
@@ -568,6 +813,63 @@ class Component(ArchIFC.IfcProduct):
                 if obj in parent.Additions:
                     return self.getParentHeight(parent)
         return 0
+
+    def getParentBuildingPart(self, obj, ifc_type=None):
+        """Return the nearest containing BuildingPart, optionally filtered by IFC type."""
+
+        for parent in obj.InList:
+            if Draft.getType(parent) == "BuildingPart":
+                if obj in getattr(parent, "Group", []):
+                    if (ifc_type is None) or (getattr(parent, "IfcType", "") == ifc_type):
+                        return parent
+        for parent in obj.InList:
+            if hasattr(parent, "Group"):
+                if obj in parent.Group:
+                    building_part = self.getParentBuildingPart(parent, ifc_type)
+                    if building_part:
+                        return building_part
+        for parent in obj.InList:
+            if hasattr(parent, "Additions"):
+                if obj in parent.Additions:
+                    building_part = self.getParentBuildingPart(parent, ifc_type)
+                    if building_part:
+                        return building_part
+        return None
+
+    def getDefaultPlanRequest(self, obj, default_cut_height=DEFAULT_PLAN_CUT_HEIGHT):
+        """Return the default plan request for generic footprint previews.
+
+        Contained objects use their parent Building Storey's `PlanCutHeight`,
+        measured from the storey level. Standalone objects fall back to a simple
+        cut height above the object's base. `getFootprint()` wrappers use this
+        default request to preserve the existing display-mode API while
+        `getPlanRepresentation()` provides the view-aware extension point.
+        """
+
+        shape = getattr(obj, "Shape", None)
+        if shape and not shape.isNull():
+            target_z = shape.BoundBox.ZMin
+        else:
+            target_z = obj.Placement.Base.z
+
+        storey = self.getParentBuildingPart(obj, ifc_type="Building Storey")
+        if storey and hasattr(storey, "PlanCutHeight") and storey.PlanCutHeight.Value > 0:
+            level_offset = getattr(storey, "LevelOffset", 0)
+            if hasattr(level_offset, "Value"):
+                level_offset = level_offset.Value
+            cut_z = storey.Placement.Base.z + level_offset + storey.PlanCutHeight.Value
+            return ArchRepresentation.RepresentationRequest(
+                purpose=ArchRepresentation.RepresentationPurpose.PLAN,
+                cut_offset=cut_z,
+                target_offset=target_z,
+                source=storey,
+            )
+
+        return ArchRepresentation.RepresentationRequest(
+            purpose=ArchRepresentation.RepresentationPurpose.PLAN,
+            cut_offset=target_z + default_cut_height,
+            target_offset=target_z,
+        )
 
     def clone(self, obj):
         """If the object is a clone, copy the shape.
@@ -1689,7 +1991,120 @@ class ViewProviderComponent:
                         if len(obj.CloneOf.ViewObject.DiffuseColor) > 1:
                             obj.ViewObject.DiffuseColor = obj.CloneOf.ViewObject.DiffuseColor
                             obj.ViewObject.update()
+        if prop in ("Shape", "Placement"):
+            self.refreshFootprint(obj.ViewObject)
+            self._refreshHostedFootprints(obj)
         return
+
+    def updateFootprint(self):
+        self.fset.coordIndex.deleteValues(0)
+        self.fcoords.point.deleteValues(0)
+        faces = self.Object.Proxy.getFootprint(self.Object)
+        if faces:
+            inverse_placement = self.Object.Placement.inverse()
+            verts = []
+            fdata = []
+            idx = 0
+            for face in faces:
+                tri = face.tessellate(1)
+                for v in tri[0]:
+                    # getFootprint() returns placed geometry. Store the
+                    # cached footprint node in object-local coordinates so
+                    # Placement changes do not double-transform it.
+                    if inverse_placement is not None:
+                        v = inverse_placement.multVec(v)
+                    verts.append([v.x, v.y, v.z])
+                for f in tri[1]:
+                    fdata.extend([f[0] + idx, f[1] + idx, f[2] + idx, -1])
+                idx += len(tri[0])
+            self.fcoords.point.setValues(verts)
+            self.fset.coordIndex.setValues(0, len(fdata), fdata)
+
+    def _update_footprint_line_nodes(self, lcoords, lset, verts, counts):
+        """Replace cached footprint polylines without exposing invalid Coin state."""
+
+        vertices = list(verts or [])
+        line_counts = [int(count) for count in (counts or [])]
+
+        # Clear the index field first; Coin must not see old line counts paired
+        # with a newly emptied coordinate array.
+        lset.numVertices.deleteValues(0)
+        lcoords.point.deleteValues(0)
+
+        if not vertices and not line_counts:
+            return True
+        if not line_counts or any(count < 2 for count in line_counts):
+            return False
+        if sum(line_counts) != len(vertices):
+            return False
+
+        lcoords.point.setValues(vertices)
+        lset.numVertices.setValues(0, len(line_counts), line_counts)
+        return True
+
+    def buildFootprintFillSeparator(
+        self, fill_color, transparency, fcoords, fset, shape_hints=None
+    ):
+        """Build an unlit fill subtree shared by BIM footprint display modes."""
+
+        from pivy import coin
+
+        material = coin.SoMaterial()
+        material.diffuseColor.setValue(fill_color)
+        material.transparency.setValue(transparency)
+        light_model = coin.SoLightModel()
+        light_model.model = coin.SoLightModel.BASE_COLOR
+        if shape_hints is None:
+            shape_hints = coin.SoShapeHints()
+            shape_hints.faceType = coin.SoShapeHints.UNKNOWN_FACE_TYPE
+
+        fill_sep = coin.SoSeparator()
+        fill_sep.addChild(material)
+        fill_sep.addChild(light_model)
+        fill_sep.addChild(shape_hints)
+        fill_sep.addChild(fcoords)
+        fill_sep.addChild(fset)
+        return fill_sep
+
+    def ensureFootprintGroup(self, vobj=None):
+        """Ensure the generic Footprint display mode node exists.
+
+        This is idempotent and safe to call from attach, update, and display
+        mode transitions. Objects with footprint support only need to provide
+        `createFootprintGroup()` and `updateFootprint()`.
+        """
+
+        if hasattr(self, "footprintgroup") and self.footprintgroup is not None:
+            return self.footprintgroup
+        if not hasattr(self, "createFootprintGroup"):
+            return None
+        if vobj is None:
+            obj = getattr(self, "Object", None)
+            vobj = obj.ViewObject if obj else None
+        if not vobj:
+            return None
+        try:
+            self.footprintgroup = self.createFootprintGroup()
+            self.footprintgroup.setName("Footprint")
+            vobj.addDisplayMode(self.footprintgroup, "Footprint")
+            return self.footprintgroup
+        except Exception:
+            return None
+
+    def refreshFootprint(self, vobj=None):
+        """Refresh derived footprint display data when footprint mode is available.
+
+        Footprint geometry is a derived GUI cache. Failures here should not break
+        generic attach/update paths for the rest of the view provider.
+        """
+
+        if not self.ensureFootprintGroup(vobj):
+            return False
+        try:
+            self.updateFootprint()
+        except Exception:
+            return False
+        return True
 
     def getIcon(self):
         """Return the path to the appropriate icon.
@@ -1710,6 +2125,38 @@ class ViewProviderComponent:
                 if self.Object.CloneOf:
                     return ":/icons/Arch_Component_Clone.svg"
         return ":/icons/Arch_Component_Tree.svg"
+
+    @staticmethod
+    def _getHostedObjects(obj):
+        """Return unique objects hosted by ``obj`` or by its additions."""
+
+        hosted_objects = []
+        proxy = getattr(obj, "Proxy", None)
+        if proxy and hasattr(proxy, "getHosts"):
+            hosted_objects.extend(proxy.getHosts(obj) or [])
+        for addition in getattr(obj, "Additions", []):
+            addition_proxy = getattr(addition, "Proxy", None)
+            if addition_proxy and hasattr(addition_proxy, "getHosts"):
+                hosted_objects.extend(addition_proxy.getHosts(addition) or [])
+
+        unique_objects = []
+        seen = set()
+        for hosted_obj in hosted_objects:
+            key = getattr(hosted_obj, "Name", None) or id(hosted_obj)
+            if key in seen:
+                continue
+            seen.add(key)
+            unique_objects.append(hosted_obj)
+        return unique_objects
+
+    def _refreshHostedFootprints(self, obj):
+        """Refresh derived footprint caches for objects hosted by ``obj``."""
+
+        for hosted_obj in self._getHostedObjects(obj):
+            view_object = getattr(hosted_obj, "ViewObject", None)
+            proxy = getattr(view_object, "Proxy", None) if view_object else None
+            if proxy and hasattr(proxy, "refreshFootprint"):
+                proxy.refreshFootprint(view_object)
 
     def onChanged(self, vobj, prop):
         """Method called when the view provider has a property changed.
@@ -1747,14 +2194,9 @@ class ViewProviderComponent:
         elif prop == "Visibility":
             # do nothing if object is an addition
             if not [parent for parent in obj.InList if obj in getattr(parent, "Additions", [])]:
-                hostedObjs = obj.Proxy.getHosts(obj)
-                # add objects hosted by additions
-                for addition in getattr(obj, "Additions", []):
-                    if hasattr(addition, "Proxy") and hasattr(addition.Proxy, "getHosts"):
-                        hostedObjs.extend(addition.Proxy.getHosts(addition))
-                for hostedObj in hostedObjs:
-                    if hasattr(hostedObj, "ViewObject"):
-                        hostedObj.ViewObject.Visibility = vobj.Visibility
+                for hosted_obj in self._getHostedObjects(obj):
+                    if hasattr(hosted_obj, "ViewObject"):
+                        hosted_obj.ViewObject.Visibility = vobj.Visibility
         return
 
     def attach(self, vobj):
@@ -1768,7 +2210,7 @@ class ViewProviderComponent:
         lines. This data is stored as additional coin nodes which are children
         of the display mode node.
 
-        Add the HiRes display mode.
+        Add the HiRes and Footprint display modes (if provided by object).
 
         Parameters
         ----------
@@ -1784,6 +2226,7 @@ class ViewProviderComponent:
         self.hiresgroup.addChild(self.meshcolor)
         self.hiresgroup.setName("HiRes")
         vobj.addDisplayMode(self.hiresgroup, "HiRes")
+        self.refreshFootprint(vobj)
         return
 
     def getDisplayModes(self, vobj):
@@ -1804,6 +2247,8 @@ class ViewProviderComponent:
         """
 
         modes = ["HiRes"]
+        if hasattr(self, "footprintgroup") and self.footprintgroup is not None:
+            modes.append("Footprint")
         return modes
 
     def setDisplayMode(self, mode):
@@ -1831,6 +2276,11 @@ class ViewProviderComponent:
         str:
             The name of the display mode the view provider has switched to.
         """
+
+        if mode == "Footprint" and self.refreshFootprint():
+            # Footprint is a generic component display mode, so refresh its
+            # derived display data whenever the viewer switches into it.
+            return "Footprint"
 
         if hasattr(self, "meshnode"):
             if self.meshnode:
@@ -1949,9 +2399,9 @@ class ViewProviderComponent:
         return True
 
     def setupContextMenu(self, vobj, menu):
-        """Add the component specific options to the context menu.
+        """Add the component specific options to the request menu.
 
-        The context menu is the drop down menu that opens when the user right
+        The request menu is the drop down menu that opens when the user right
         clicks on the component in the tree view.
 
         Parameters
@@ -1959,7 +2409,7 @@ class ViewProviderComponent:
         vobj: <Gui.ViewProviderDocumentObject>
             The component's view provider object.
         menu: <PySide2.QtWidgets.QMenu>
-            The context menu already assembled prior to this method being
+            The request menu already assembled prior to this method being
             called.
         """
         if FreeCADGui.activeWorkbench().name() != "BIMWorkbench":
@@ -2153,7 +2603,7 @@ class ComponentTaskPanel:
 
     def __init__(self):
         """
-        Initializes the task panel. The transaction context is implicitly opened by the C++ layer
+        Initializes the task panel. The transaction request is implicitly opened by the C++ layer
         when entering edit mode.
         """
         # the panel has a tree widget that contains categories
@@ -2647,7 +3097,7 @@ class ComponentTaskPanel:
             ifcData["IfcUID"] = self.ifcEditor.labelUUID.text()
             ifcData["FlagForceBrep"] = str(self.ifcEditor.checkBrep.isChecked())
             ifcData["FlagParametric"] = str(self.ifcEditor.checkParametric.isChecked())
-            # The transaction context is implicitly opened by the C++ layer when entering edit mode.
+            # The transaction request is implicitly opened by the C++ layer when entering edit mode.
             if ifcdict != self.obj.IfcProperties:
                 self.obj.IfcProperties = ifcdict
             if ifcData != self.obj.IfcData:

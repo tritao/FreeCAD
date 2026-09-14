@@ -23,6 +23,9 @@ SET(Arch_SRCS
     ArchIFCSchema.py
     ArchProject.py
     ArchWall.py
+    ArchWallEndpoint.py
+    ArchWallGeometry.py
+    ArchPlanGeometry.py
     Arch.py
     ArchSite.py
     ArchStructure.py
@@ -240,6 +243,7 @@ SET(bimtests_SRCS
     bimtests/test_roof_subtraction.brep
     bimtests/TestArchSpace.py
     bimtests/TestArchWall.py
+    bimtests/TestArchWallGeometry.py
     bimtests/TestArchWallGui.py
     bimtests/TestArchMaterial.py
     bimtests/TestArchPanel.py
@@ -269,6 +273,8 @@ SET(bimtests_SRCS
     bimtests/TestArchStairsGui.py
     bimtests/TestArchReport.py
     bimtests/TestArchReportGui.py
+    bimtests/TestArchStructureGui.py
+    bimtests/TestArchPlanGeometry.py
 )
 
 set(bimtests_FIXTURES
