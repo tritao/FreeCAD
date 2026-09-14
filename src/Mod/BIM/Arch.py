@@ -1822,7 +1822,13 @@ def makeWall(
 
 
 def makeWallJoint(wall_a=None, wall_b=None, joint_type="Miter", name=None):
-    """Create a persistent two-wall relation in the active document."""
+    """Create a persistent two-wall relation in the active document.
+
+    The returned object stores links and settings only; its linked walls apply
+    the solved trim during recompute.  ``joint_type`` accepts ``Miter``,
+    ``Butt``, or ``Tee`` and defaults to ``Miter``.
+    """
+
     import ArchWallRelation
 
     if joint_type not in ArchWallRelation.JOINT_TYPES:
@@ -1857,7 +1863,14 @@ def makeWallJoint(wall_a=None, wall_b=None, joint_type="Miter", name=None):
 
 
 def makeWallJunction(walls=None, carrier_wall=None, name=None):
-    """Create a persistent relation for three or more intersecting walls."""
+    """Create a persistent three-or-more-wall relation in the active document.
+
+    With ``carrier_wall`` omitted, the junction solver selects a valid carrier
+    automatically.  Supplying it switches the new relation to explicit carrier
+    mode.  The returned object stores links and settings; it does not merge or
+    replace the linked wall objects.
+    """
+
     junction = _initializeArchObject(
         "App::FeaturePython",
         baseClassName="_WallJunction",

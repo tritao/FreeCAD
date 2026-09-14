@@ -250,6 +250,8 @@ SET(bimcommands_SRCS
     bimcommands/BimColumn.py
     bimcommands/BimCommon.py
     bimcommands/BimContextualEdit3D.py
+    bimcommands/BimElevationEdit.py
+    bimcommands/BimSectionEdit.py
     bimcommands/BimCompound.py
     bimcommands/BimConvert.py
     bimcommands/BimCopy.py
@@ -275,9 +277,11 @@ SET(bimcommands_SRCS
     bimcommands/BimIfcProperties.py
     bimcommands/BimIfcQuantities.py
     bimcommands/BimImagePlane.py
+    bimcommands/BimJoin.py
     bimcommands/BimLayers.py
     bimcommands/BimLeader.py
     bimcommands/BimLibrary.py
+    bimcommands/BimPlanEdit.py
     bimcommands/BimLink.py
     bimcommands/BimMaterial.py
     bimcommands/BimMoveView.py
@@ -298,8 +302,6 @@ SET(bimcommands_SRCS
     bimcommands/BimRoof.py
     bimcommands/BimSchedule.py
     bimcommands/BimSectionPlane.py
-    bimcommands/BimSectionEdit.py
-    bimcommands/BimElevationEdit.py
     bimcommands/BimSetup.py
     bimcommands/BimShape2DView.py
     bimcommands/BimSimpleCopy.py
@@ -324,7 +326,6 @@ SET(bimcommands_SRCS
     bimcommands/BimWPCommands.py
     bimcommands/BimReport.py
     bimcommands/__init__.py
-    bimcommands/BimPlanEdit.py
 )
 
 SET(BIM_templates
