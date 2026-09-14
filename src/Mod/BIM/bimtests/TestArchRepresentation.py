@@ -52,10 +52,28 @@ from bimcontextual.editing import (
 )
 from bimcontextual.editable_points import get_contextual_edit_points
 from ArchWallSemantic import evaluate_wall_candidate, evaluate_wall_length
+from ArchContextualCreation import wall_construction_spec_from_preferences
 from bimcontextual.profiles import profile_for
 
 
 class TestArchRepresentation(unittest.TestCase):
+    def test_contextual_wall_creation_uses_bim_wall_preferences(self):
+        preferences = {
+            "WallWidth": 345.0,
+            "WallHeight": 2780.0,
+            "WallAlignment": 2,
+            "WallOffset": 42.0,
+        }
+        with patch(
+            "draftutils.params.get_param_arch",
+            side_effect=lambda name: preferences[name],
+        ):
+            spec = wall_construction_spec_from_preferences()
+        self.assertEqual(345.0, spec.width)
+        self.assertEqual(2780.0, spec.height)
+        self.assertEqual("Right", spec.align)
+        self.assertEqual(42.0, spec.offset)
+
     def test_semantic_boundary_evaluation_preserves_solver_result(self):
         report = {
             "valid": True,

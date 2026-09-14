@@ -43,9 +43,9 @@ class _CreationInteraction:
 class WallCreationInteraction(_CreationInteraction):
     """Acquire a wall segment and construct it through the wall domain service."""
 
-    def __init__(self, facilities, spec=None):
+    def __init__(self, facilities, spec):
         super().__init__(facilities)
-        self.spec = spec or ArchWallConstruction.WallConstructionSpec(200, 2500)
+        self.spec = spec.validated()
         self.start_point = None
         self.direction = None
 
@@ -218,8 +218,9 @@ class WallCreationProvider(ContextualProvider):
     provider_id = "wall-creation"
     display_name = "Walls"
 
-    def __init__(self):
+    def __init__(self, spec_factory=None):
         self._interaction = None
+        self._spec_factory = spec_factory or wall_construction_spec_from_preferences
 
     def get_actions(self, context):
         if not context.supports("create-wall"):
@@ -239,8 +240,25 @@ class WallCreationProvider(ContextualProvider):
         del context, payload
         if action_key != "create-wall" or commands is None:
             return False
-        self._interaction = WallCreationInteraction(commands)
+        self._interaction = WallCreationInteraction(commands, self._spec_factory())
         return self._interaction.start()
+
+
+def wall_construction_spec_from_preferences():
+    """Return the Wall construction defaults shared with the classic command."""
+
+    from draftutils import params
+
+    alignment = params.get_param_arch("WallAlignment")
+    alignments = ("Center", "Left", "Right")
+    if alignment not in range(len(alignments)):
+        alignment = 0
+    return ArchWallConstruction.WallConstructionSpec(
+        width=params.get_param_arch("WallWidth"),
+        height=params.get_param_arch("WallHeight"),
+        align=alignments[alignment],
+        offset=params.get_param_arch("WallOffset"),
+    ).validated()
 
 
 def architectural_contextual_providers():
