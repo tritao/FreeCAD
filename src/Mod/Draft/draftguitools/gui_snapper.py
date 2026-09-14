@@ -130,8 +130,10 @@ class Snapper:
         self.running = False
         self.callbackClick = None
         self.callbackMove = None
+        self._point_request_generation = 0
         self.snapObjectIndex = 0
         self.pointConstraintProvider = None
+        self.semanticSnapProviders = []
 
         # snap keys, it's important that they are in this order for
         # saving in preferences and for properly restoring the toolbar
@@ -155,6 +157,7 @@ class Snapper:
         # fmt: on
 
         self.init_active_snaps()
+        self._snap_mode_stack = []
         self.set_snap_style()
 
         self.cursors = coll.OrderedDict(
@@ -179,7 +182,9 @@ class Snapper:
         # is too slow for this function which gets called repeatedly when moving
         # the mouse
         # See: https://github.com/FreeCAD/FreeCAD/issues/24013
-        return WorkingPlane.get_working_plane(update=False)
+        return getattr(self, "interaction_plane", None) or WorkingPlane.get_working_plane(
+            update=False
+        )
 
     def init_active_snaps(self):
         """
@@ -192,6 +197,51 @@ class Snapper:
             if bool(int(snap)):
                 self.active_snaps.append(self.snaps[i])
             i += 1
+
+    def get_snap_modes(self):
+        """Return the currently active snap names."""
+        return list(self.active_snaps)
+
+    def set_snap_modes(self, active_snaps):
+        """Replace the current active snaps with the provided snap names."""
+        requested = set(active_snaps)
+        valid_snaps = [snap for snap in self.snaps if snap in requested]
+        self.active_snaps = valid_snaps
+        self.save_snap_state()
+        return list(self.active_snaps)
+
+    def push_snap_modes(self, active_snaps):
+        """Save current snap state and apply a temporary snap profile."""
+        self._snap_mode_stack.append(self.get_snap_modes())
+        requested = set(active_snaps)
+        self.active_snaps = [snap for snap in self.snaps if snap in requested]
+        return self.get_snap_modes()
+
+    def pop_snap_modes(self):
+        """Restore the most recently pushed temporary snap profile."""
+        if not self._snap_mode_stack:
+            return self.get_snap_modes()
+        self.active_snaps = self._snap_mode_stack.pop()
+        return self.get_snap_modes()
+
+    def push_semantic_snap_provider(self, provider):
+        """Add a temporary renderer-independent snap source."""
+
+        if callable(provider):
+            self.semanticSnapProviders.append(provider)
+        return provider
+
+    def pop_semantic_snap_provider(self, provider=None):
+        """Remove the newest provider, or a specific registered provider."""
+
+        if not self.semanticSnapProviders:
+            return None
+        if provider is None:
+            return self.semanticSnapProviders.pop()
+        for index in range(len(self.semanticSnapProviders) - 1, -1, -1):
+            if self.semanticSnapProviders[index] is provider:
+                return self.semanticSnapProviders.pop(index)
+        return None
 
     def set_snap_style(self):
         self.snapStyle = params.get_param("snapStyle")
@@ -308,6 +358,30 @@ class Snapper:
 
         point = self.getApparentPoint(screenpos[0], screenpos[1])
 
+        semantic_snap = self._snap_to_semantic_provider(point) if active else None
+        if semantic_snap is not None:
+            snapped = self._apply_point_constraint(
+                App.Vector(semantic_snap.point), lastpoint, noTracker
+            )
+            marker = (
+                "endpoint"
+                if getattr(semantic_snap.target.geometry, "ShapeType", "") == "Vertex"
+                else "passive"
+            )
+            self.snapInfo = {
+                "SemanticSnap": semantic_snap,
+                "Object": getattr(semantic_snap.source, "Name", ""),
+                "Component": semantic_snap.subelement or "",
+            }
+            if self.tracker and not self.selectMode:
+                self.tracker.setCoords(snapped)
+                self.tracker.setMarker(self.mk[marker])
+                self.tracker.on()
+            self.setCursor(marker)
+            self.spoint = snapped
+            self.running = False
+            return snapped
+
         # Set up a track line if we got a last point
         if lastpoint and self.trackLine:
             self.trackLine.p1(lastpoint)
@@ -356,6 +430,18 @@ class Snapper:
         self.spoint = fp
         self.running = False
         return fp
+
+    def _snap_to_semantic_provider(self, point):
+        """Ask the newest active contextual provider for a semantic target."""
+
+        for provider in reversed(self.semanticSnapProviders):
+            try:
+                result = provider(App.Vector(point), float(self.radius))
+            except (AttributeError, ReferenceError, RuntimeError, TypeError, ValueError):
+                continue
+            if result is not None:
+                return result
+        return None
 
     def cycleSnapObject(self):
         """Increase the index of the snap object by one."""
@@ -1313,6 +1399,7 @@ class Snapper:
         self.mask = None
         self.selectMode = False
         self.running = False
+        self.interaction_plane = None
         self.holdPoints = []
         self.lastObj = []
         self.lastObjSubelements = []
@@ -1326,6 +1413,56 @@ class Snapper:
             toolbar = self.get_snap_toolbar()
             if toolbar:
                 toolbar.hide()
+
+    def _clear_point_callbacks(self):
+        """Remove the current point-picking callbacks, if any."""
+        self._point_request_generation += 1
+        callback_click = self.callbackClick
+        callback_move = self.callbackMove
+        had_callbacks = bool(callback_click or callback_move)
+        view = getattr(self, "view", None) or gui_utils.get_3d_view()
+
+        # Invalidate the Python closures immediately, but remove their Coin
+        # callbacks only after the current event traversal has returned. Coin
+        # callback lists must not be mutated by the callback being traversed.
+        self.callbackClick = None
+        self.callbackMove = None
+
+        def remove_callbacks():
+            try:
+                if view and callback_click:
+                    view.removeEventCallbackPivy(
+                        coin.SoMouseButtonEvent.getClassTypeId(), callback_click
+                    )
+                if view and callback_move:
+                    view.removeEventCallbackPivy(
+                        coin.SoLocation2Event.getClassTypeId(), callback_move
+                    )
+                if had_callbacks:
+                    # Next line fixes https://github.com/FreeCAD/FreeCAD/issues/10469:
+                    gui_utils.end_all_events()
+            except RuntimeError:
+                # the view has been deleted already
+                pass
+
+        if had_callbacks:
+            QtCore.QTimer.singleShot(0, remove_callbacks)
+
+    def _teardown_point_request(self, hide_hints=False):
+        """Finish the current point-picking request and restore the Draft UI."""
+        self._clear_point_callbacks()
+        self.off()
+        self.pt = None
+        self.interaction_plane = None
+        toolbar = getattr(Gui, "draftToolBar", None)
+        if toolbar:
+            toolbar.offUi()
+        if hide_hints:
+            QtCore.QTimer.singleShot(0, Gui.HintManager.hide)
+
+    def cancelPointRequest(self):
+        """Cancel the current point-picking request and restore the Draft UI."""
+        self._teardown_point_request()
 
     def setSelectMode(self, mode):
         """Set the snapper into select mode (hides snapping temporarily)."""
@@ -1436,6 +1573,9 @@ class Snapper:
         title=None,
         mode="point",
         hints=None,
+        modifier_resolver=None,
+        interaction_plane=None,
+        noTracker=False,
     ):
         """Get a 3D point from the screen.
 
@@ -1463,52 +1603,79 @@ class Snapper:
         can be passed as an extra taskbox.
         title is the title of the point task box mode is the dialog box
         you want (default is point, you can also use wire and line)
+        If noTracker is True, the default snap rubber-band line is suppressed.
 
-        If getPoint() is invoked without any argument, nothing is done
-        but the callbacks are removed, so it can be used as a cancel function.
+        If getPoint() is invoked without any argument, only the existing
+        callbacks are cleared for backward compatibility. Prefer
+        cancelPointRequest() for explicit teardown.
 
         ``hints`` is an optional list of ``Gui.InputHint`` instances to
         display in the status bar for the duration of the point pick. They are
         cleared automatically when the user picks a point or cancels.
+
+        ``modifier_resolver`` is an optional callable that can override the
+        Ctrl/Shift modifier state used for snapping and constraints.
         """
+        if (
+            last is None
+            and callback is None
+            and movecallback is None
+            and extradlg is None
+            and title is None
+            and mode == "point"
+            and hints is None
+            and modifier_resolver is None
+        ):
+            self._clear_point_callbacks()
+            self.interaction_plane = None
+            return
+
         self.pt = None
         self.holdPoints = []
+        self.interaction_plane = interaction_plane
+        # Point requests should start from a clean constraint state. Otherwise
+        # stale mask/affinity/basepoint values from a previous command can
+        # distort the first preview frame of the next interactive request.
+        self.unconstrain()
+        self.mask = None
+        self.constraintAxis = None
         self.ui = Gui.draftToolBar
         self.view = gui_utils.get_3d_view()
 
         # remove any previous leftover callbacks
-        try:
-            if self.callbackClick:
-                self.view.removeEventCallbackPivy(
-                    coin.SoMouseButtonEvent.getClassTypeId(), self.callbackClick
-                )
-            if self.callbackMove:
-                self.view.removeEventCallbackPivy(
-                    coin.SoLocation2Event.getClassTypeId(), self.callbackMove
-                )
-            if self.callbackClick or self.callbackMove:
-                # Next line fixes https://github.com/FreeCAD/FreeCAD/issues/10469:
-                gui_utils.end_all_events()
-        except RuntimeError:
-            # the view has been deleted already
-            pass
-        self.callbackClick = None
-        self.callbackMove = None
+        self._clear_point_callbacks()
+        request_generation = self._point_request_generation
 
         def move(event_cb):
+            if request_generation != self._point_request_generation:
+                return
             if not self.ui.mouse:
                 return
             event = event_cb.getEvent()
             mousepos = event.getPosition()
             ctrl = event.wasCtrlDown()
             shift = event.wasShiftDown()
-            self.pt = Gui.Snapper.snap(mousepos, lastpoint=last, active=ctrl, constrain=shift)
+            alt = event.wasAltDown()
+            if modifier_resolver:
+                try:
+                    ctrl, shift = modifier_resolver(ctrl, shift, alt)
+                except Exception:
+                    pass
+            self.pt = Gui.Snapper.snap(
+                mousepos,
+                lastpoint=last,
+                active=ctrl,
+                constrain=shift,
+                noTracker=noTracker,
+            )
             self.ui.displayPoint(self.pt, last, plane=self._get_wp(), mask=Gui.Snapper.affinity)
             if movecallback:
                 movecallback(self.pt, self.snapInfo)
 
         def getcoords(point, global_mode=True, relative_mode=False):
             """Get the global coordinates from a point."""
+            if request_generation != self._point_request_generation:
+                return
             # Same algorithm as in validatePoint in DraftGui.py.
             ref = App.Vector(0, 0, 0)
             if global_mode is False:
@@ -1521,6 +1688,8 @@ class Snapper:
             accept()
 
         def click(event_cb):
+            if request_generation != self._point_request_generation:
+                return
             if not self.ui.mouse:
                 return
 
@@ -1535,59 +1704,25 @@ class Snapper:
                 accept()
 
         def accept():
-            try:
-                if self.callbackClick:
-                    self.view.removeEventCallbackPivy(
-                        coin.SoMouseButtonEvent.getClassTypeId(), self.callbackClick
-                    )
-                if self.callbackMove:
-                    self.view.removeEventCallbackPivy(
-                        coin.SoLocation2Event.getClassTypeId(), self.callbackMove
-                    )
-                if self.callbackClick or self.callbackMove:
-                    # Next line fixes https://github.com/FreeCAD/FreeCAD/issues/10469:
-                    gui_utils.end_all_events()
-            except RuntimeError:
-                # the view has been deleted already
-                pass
-            self.callbackClick = None
-            self.callbackMove = None
-            Gui.Snapper.off()
-            self.ui.offUi()
-            if hints:
-                QtCore.QTimer.singleShot(0, Gui.HintManager.hide)
+            if request_generation != self._point_request_generation:
+                return
+            point = self.pt
+            snap_info = dict(self.snapInfo) if isinstance(self.snapInfo, dict) else self.snapInfo
+            self._teardown_point_request(hide_hints=bool(hints))
             if callback:
                 if len(inspect.getfullargspec(callback).args) > 1:
                     obj = None
-                    if self.snapInfo and ("Object" in self.snapInfo) and self.snapInfo["Object"]:
-                        obj = App.ActiveDocument.getObject(self.snapInfo["Object"])
-                    callback(self.pt, obj)
+                    if snap_info and ("Object" in snap_info) and snap_info["Object"]:
+                        obj = App.ActiveDocument.getObject(snap_info["Object"])
+                    callback(point, obj)
                 else:
-                    callback(self.pt)
+                    callback(point)
             self.pt = None
 
         def cancel():
-            try:
-                if self.callbackClick:
-                    self.view.removeEventCallbackPivy(
-                        coin.SoMouseButtonEvent.getClassTypeId(), self.callbackClick
-                    )
-                if self.callbackMove:
-                    self.view.removeEventCallbackPivy(
-                        coin.SoLocation2Event.getClassTypeId(), self.callbackMove
-                    )
-                if self.callbackClick or self.callbackMove:
-                    # Next line fixes https://github.com/FreeCAD/FreeCAD/issues/10469:
-                    gui_utils.end_all_events()
-            except RuntimeError:
-                # the view has been deleted already
-                pass
-            self.callbackClick = None
-            self.callbackMove = None
-            Gui.Snapper.off()
-            self.ui.offUi()
-            if hints:
-                QtCore.QTimer.singleShot(0, Gui.HintManager.hide)
+            if request_generation != self._point_request_generation:
+                return
+            self._teardown_point_request(hide_hints=bool(hints))
             if callback:
                 if len(inspect.getfullargspec(callback).args) > 1:
                     callback(None, None)

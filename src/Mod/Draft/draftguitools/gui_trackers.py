@@ -220,7 +220,7 @@ class Tracker:
             ]
 
     def _get_wp(self):
-        return FreeCAD.DraftWorkingPlane
+        return getattr(self, "working_plane", None) or FreeCAD.DraftWorkingPlane
 
 
 class snapTracker(Tracker):

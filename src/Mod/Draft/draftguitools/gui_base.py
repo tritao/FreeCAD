@@ -32,15 +32,373 @@
 
 ## \addtogroup draftguitools
 # @{
-from PySide import QtCore
+from PySide import QtCore, QtWidgets
+from pivy import coin
 
 import FreeCAD as App
 import FreeCADGui as Gui
+import WorkingPlane
 from draftguitools import gui_trackers as trackers
 from draftutils import gui_utils
 from draftutils import params
 from draftutils import todo
 from draftutils.messages import _toolmsg, _log
+
+
+class DraftInteractionHost:
+    """Shared host adapter for commands that use Draft interactive services.
+
+    This keeps point acquisition, task UI ownership, working-plane access and
+    command activation in one place so commands can later be embedded in other
+    hosts without having to rewrite their internal state machines.
+
+    Host policy hooks are intentionally small:
+    - `supports_extra_widget`: whether point requests may attach a task widget
+    - `resolve_point_request_modifiers`: map raw ctrl/shift/alt to Snapper flags
+    - `default_ortho_enabled`: whether wall-like tools prefer ortho by default
+    - `free_angle_override_active`: whether the host is currently requesting
+      a temporary escape from that ortho policy
+    """
+
+    def __init__(self, command=None, view=None):
+        self.command = command
+        self.view = view
+        self._drag_callbacks = []
+        self._drag_request_serial = 0
+        self._dragging = False
+        self._value_input = None
+
+    def activate_command(self, command=None):
+        if command is not None:
+            self.command = command
+        App.activeDraftCommand = self.command
+
+    def deactivate_command(self, command=None):
+        target = command or self.command
+        if App.activeDraftCommand is target:
+            App.activeDraftCommand = None
+
+    def get_working_plane(self):
+        return WorkingPlane.get_working_plane()
+
+    def get_interaction_plane(self):
+        """Return an explicit plane for this interactive request, if any."""
+        return self.get_working_plane()
+
+    def get_ui(self):
+        return getattr(Gui, "draftToolBar", None)
+
+    def project_point(self, point, working_plane=None):
+        if point is None:
+            return None
+        wp = working_plane or self.get_interaction_plane()
+        if not wp or not hasattr(wp, "project_point"):
+            return point
+        try:
+            return wp.project_point(point)
+        except Exception:
+            return point
+
+    def create_box_tracker(self):
+        tracker = trackers.boxTracker()
+        tracker.working_plane = self.get_interaction_plane()
+        return tracker
+
+    def request_point(
+        self,
+        callback,
+        move_callback=None,
+        last=None,
+        title=None,
+        mode=None,
+        extra_widget=None,
+        hints=None,
+        modifier_resolver=None,
+    ):
+        if not hasattr(Gui, "Snapper"):
+            return
+
+        kwargs = {
+            "callback": callback,
+        }
+        if move_callback is not None:
+            kwargs["movecallback"] = move_callback
+        if last is not None:
+            kwargs["last"] = last
+        if title is not None:
+            kwargs["title"] = title
+        if mode is not None:
+            kwargs["mode"] = mode
+        if extra_widget is not None:
+            kwargs["extradlg"] = extra_widget
+        if hints is not None:
+            kwargs["hints"] = hints
+        if modifier_resolver is not None:
+            kwargs["modifier_resolver"] = modifier_resolver
+        interaction_plane = self.get_interaction_plane()
+        if interaction_plane is not None:
+            kwargs["interaction_plane"] = interaction_plane
+        Gui.Snapper.getPoint(**kwargs)
+
+    def request_drag(self, start, on_begin, on_move, on_finish, on_cancel):
+        """Acquire one mouse drag from a 3D view.
+
+        ``start`` may be a screen position or a callable receiving a screen
+        position. A callable can return a payload which is forwarded to
+        ``on_begin``; returning ``None`` leaves the request waiting. The other
+        callbacks receive screen positions. Coin callbacks are removed only
+        after traversal has returned to the Qt event loop.
+        """
+
+        self.stop_request()
+        view = self.view or gui_utils.get_3d_view()
+        if view is None:
+            return False
+        self.view = view
+        self._drag_request_serial += 1
+        serial = self._drag_request_serial
+        self._dragging = False
+
+        def current():
+            return serial == self._drag_request_serial
+
+        def position(event_callback):
+            value = event_callback.getEvent().getPosition().getValue()
+            return int(value[0]), int(value[1])
+
+        def defer(callback, *args):
+            QtCore.QTimer.singleShot(
+                0, lambda: callback(*args) if current() else None
+            )
+
+        def mouse_button(event_callback):
+            if not current():
+                return
+            event = event_callback.getEvent()
+            if event.getButton() != coin.SoMouseButtonEvent.BUTTON1:
+                return
+            point = position(event_callback)
+            if event.getState() == coin.SoMouseButtonEvent.DOWN:
+                if self._dragging:
+                    event_callback.setHandled()
+                    return
+                payload = start(point) if callable(start) else point
+                if callable(start) and payload is None:
+                    return
+                if not callable(start):
+                    try:
+                        if tuple(start) != point:
+                            return
+                    except TypeError:
+                        pass
+                self._dragging = True
+                event_callback.setHandled()
+                defer(on_begin, payload)
+                return
+            if event.getState() == coin.SoMouseButtonEvent.UP and self._dragging:
+                event_callback.setHandled()
+                self._dragging = False
+                defer(on_finish, point)
+
+        def mouse_move(event_callback):
+            if not current() or not self._dragging:
+                return
+            event_callback.setHandled()
+            defer(on_move, position(event_callback))
+
+        def key(event_callback):
+            if not current():
+                return
+            event = event_callback.getEvent()
+            if (
+                event.getState() == coin.SoKeyboardEvent.DOWN
+                and event.getKey() == coin.SoKeyboardEvent.ESCAPE
+            ):
+                event_callback.setHandled()
+                self._dragging = False
+                defer(on_cancel)
+
+        callback_types = (
+            (coin.SoMouseButtonEvent.getClassTypeId(), mouse_button),
+            (coin.SoLocation2Event.getClassTypeId(), mouse_move),
+            (coin.SoKeyboardEvent.getClassTypeId(), key),
+        )
+        try:
+            for event_type, callback in callback_types:
+                registered = view.addEventCallbackPivy(event_type, callback)
+                self._drag_callbacks.append((view, event_type, registered, serial))
+        except Exception:
+            self._stop_drag_request(serial)
+            raise
+        return True
+
+    def _stop_drag_request(self, serial=None):
+        if serial is not None and serial != self._drag_request_serial:
+            return
+        callbacks = tuple(self._drag_callbacks)
+        self._drag_callbacks.clear()
+        self._drag_request_serial += 1
+        self._dragging = False
+
+        def remove_callbacks():
+            for view, event_type, callback, _serial in callbacks:
+                try:
+                    view.removeEventCallbackPivy(event_type, callback)
+                except (RuntimeError, ReferenceError):
+                    pass
+
+        if callbacks:
+            QtCore.QTimer.singleShot(0, remove_callbacks)
+
+    def stop_request(self):
+        """Stop point and drag acquisition and invalidate queued callbacks."""
+
+        self.stop_point_request()
+        self._stop_drag_request()
+        self.clear_value_input()
+
+    def set_value_input(self, label, unit, value, callback):
+        """Expose a dimensional value editor for the active interaction."""
+
+        self.clear_value_input()
+        main_window = Gui.getMainWindow()
+        status_bar = main_window.statusBar()
+        container = QtWidgets.QWidget(status_bar)
+        layout = QtWidgets.QHBoxLayout(container)
+        layout.setContentsMargins(4, 0, 4, 0)
+        layout.addWidget(QtWidgets.QLabel(str(label), container))
+        field = Gui.UiLoader().createWidget("Gui::InputField")
+        field.setParent(container)
+        field.setMinimumWidth(120)
+        unit_type = getattr(App.Units, str(unit), None)
+        unit_text = (
+            unit_type.getUserPreferred()[2]
+            if unit_type is not None and hasattr(unit_type, "getUserPreferred")
+            else str(unit)
+        )
+        field.setProperty("unit", unit_text)
+        field.setProperty("rawValue", float(value))
+        layout.addWidget(field)
+
+        def submit():
+            if self._value_input is None or self._value_input[1] is not field:
+                return
+            callback(float(field.property("rawValue")))
+
+        field.returnPressed.connect(submit)
+        status_bar.addPermanentWidget(container)
+        container.show()
+        field.selectAll()
+        field.setFocus()
+        self._value_input = (container, field, submit)
+        return field
+
+    def clear_value_input(self):
+        value_input = self._value_input
+        self._value_input = None
+        if value_input is None:
+            return
+        container, field, submit = value_input
+        try:
+            field.returnPressed.disconnect(submit)
+        except (RuntimeError, TypeError):
+            pass
+        try:
+            status_bar = Gui.getMainWindow().statusBar()
+            status_bar.removeWidget(container)
+        except (RuntimeError, ReferenceError):
+            pass
+        container.hide()
+        container.deleteLater()
+
+    def supports_extra_widget(self):
+        """Return True when point requests may attach an extra task widget."""
+        return True
+
+    def resolve_point_request_modifiers(self, ctrl, shift, alt):
+        """Map raw keyboard modifiers to Snapper's active/constrain flags."""
+        return ctrl, shift
+
+    def default_ortho_enabled(self):
+        """Return True when embedded wall creation should prefer ortho by default."""
+        return False
+
+    def free_angle_override_active(self):
+        """Return True when the current host wants to bypass default ortho."""
+        return False
+
+    def stop_point_request(self):
+        snapper = getattr(Gui, "Snapper", None)
+        if not snapper:
+            return
+        try:
+            if hasattr(snapper, "cancelPointRequest"):
+                snapper.cancelPointRequest()
+            else:
+                snapper.getPoint()
+                snapper.off()
+        except Exception:
+            pass
+
+    def clear_ui_state(self):
+        toolbar = getattr(Gui, "draftToolBar", None)
+        if not toolbar:
+            return
+
+        try:
+            toolbar.offUi()
+        except Exception:
+            pass
+
+        try:
+            toolbar.cancel = None
+            toolbar.sourceCmd = None
+            toolbar.pointcallback = None
+            toolbar.mask = None
+            toolbar.isTaskOn = False
+        except Exception:
+            pass
+
+    def show_continue(self):
+        toolbar = getattr(Gui, "draftToolBar", None)
+        if toolbar and hasattr(toolbar, "continueCmd"):
+            try:
+                toolbar.continueCmd.show()
+            except Exception:
+                pass
+
+    def continue_mode_enabled(self):
+        toolbar = getattr(Gui, "draftToolBar", None)
+        return bool(getattr(toolbar, "continueMode", False))
+
+    def continue_wall_chain_enabled(self):
+        """Return True when interactive wall creation should keep chaining segments."""
+        return False
+
+    def on_created_object(self, obj):
+        """Hook called after a command creates a new document object."""
+        del obj
+
+    def reset_edit(self):
+        if Gui.ActiveDocument:
+            try:
+                Gui.ActiveDocument.resetEdit()
+            except Exception:
+                pass
+
+    def restore_working_plane(self, working_plane):
+        if hasattr(working_plane, "_restore"):
+            try:
+                working_plane._restore()
+            except Exception:
+                pass
+
+    def restore_working_plane(self, working_plane):
+        if hasattr(working_plane, "_restore"):
+            try:
+                working_plane._restore()
+            except Exception:
+                pass
 
 
 class GuiCommandSimplest:
