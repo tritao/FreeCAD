@@ -23,6 +23,7 @@ SET(Arch_SRCS
     ArchIFCSchema.py
     ArchProject.py
     ArchWall.py
+    ArchWallConstruction.py
     ArchWallEndpoint.py
     ArchWallEndCondition.py
     ArchWallTrimming.py
