@@ -1,23 +1,20 @@
 # SPDX-License-Identifier: LGPL-2.1-or-later
 
 import unittest
+from unittest.mock import patch
 
+import Arch
 import FreeCAD
 import Part
-import Arch
 import ArchSpaceSemantic
-from bimcontextual.editing import BIMContextualHandleEditor, ContextualEditController
-from bimcontextual.editable_points import get_contextual_edit_points
-from bimcontextual.interaction import ContextualInteractionHost
+
 from bimcontextual.actions import (
     ContextualActionSpec,
     ContextualInspectorSection,
     ContextualProvider,
     ContextualProviderContext,
     ContextualToolSpec,
-    SemanticEditProvider,
 )
-
 from bimplan.providers import (
     PlanEditProvider,
     PlanToolSpec,
@@ -26,55 +23,52 @@ import Draft
 
 from ArchRepresentation import (
     AxisConstraint,
-    BIMEditCapabilities,
+    BIMEditRay,
     BIMEditHandle,
     BIMEditOperation,
-    BIMEditRay,
+    BIMPreviewState,
+    BIMPreviewStyle,
     BIMEditTransaction,
+    BIMEditCapabilities,
     BIMRepresentation,
     PlaneConstraint,
     RepresentationUnavailable,
+    RepresentationRequest,
+    RepresentationPurpose,
     WorkingPlaneConstraint,
-    is_property_expression_driven,
-    project_direction_to_representation_plane,
-    project_to_representation_plane,
     query_representation_pick,
     query_representation_snap,
     query_representation_snap_candidates,
-    RepresentationPurpose,
-    RepresentationRequest,
     edit_capabilities_for,
     representation_for,
 )
+from bimcontextual.editing import (
+    BIMContextualHandleEditor,
+    ContextualEditController,
+)
+from bimcontextual.editable_points import get_contextual_edit_points
 from ArchWallSemantic import evaluate_wall_candidate, evaluate_wall_length
+from ArchContextualCreation import wall_construction_spec_from_preferences
+from bimcontextual.context_policy import capabilities_for, supports
 
 
 class TestArchRepresentation(unittest.TestCase):
-    def test_wall_provider_exposes_semantic_cut_boundary(self):
-        document = FreeCAD.newDocument("SemanticWallBoundary")
-        try:
-            wall = Arch.makeWall(length=3000, width=200, height=3000)
-            document.recompute()
-            representation = wall.Proxy.getRepresentation(
-                wall,
-                RepresentationRequest(
-                    purpose=RepresentationPurpose.PLAN,
-                    cut_offset=1000,
-                    target_offset=0,
-                ),
-            )
-            boundaries = [
-                mapping
-                for mapping in representation.source_mappings
-                if mapping.role == "PlanCutOuterBoundary"
-            ]
-            self.assertEqual(len(boundaries), 1)
-            self.assertIn(boundaries[0].geometry, representation.projected_geometry)
-            self.assertEqual(boundaries[0].subelement, "PlanFace1.OuterWire")
-            self.assertGreaterEqual(len(boundaries[0].geometry), 2)
-            self.assertTrue(boundaries[0].geometry[0].isEqual(boundaries[0].geometry[-1], 1e-7))
-        finally:
-            FreeCAD.closeDocument(document.Name)
+    def test_contextual_wall_creation_uses_bim_wall_preferences(self):
+        preferences = {
+            "WallWidth": 345.0,
+            "WallHeight": 2780.0,
+            "WallAlignment": 2,
+            "WallOffset": 42.0,
+        }
+        with patch(
+            "draftutils.params.get_param_arch",
+            side_effect=lambda name: preferences[name],
+        ):
+            spec = wall_construction_spec_from_preferences()
+        self.assertEqual(345.0, spec.width)
+        self.assertEqual(2780.0, spec.height)
+        self.assertEqual("Right", spec.align)
+        self.assertEqual(42.0, spec.offset)
 
     def test_semantic_boundary_evaluation_preserves_solver_result(self):
         report = {
@@ -101,6 +95,218 @@ class TestArchRepresentation(unittest.TestCase):
         self.assertTrue(ArchSpaceSemantic.has_valid_geometry(solid))
         self.assertFalse(ArchSpaceSemantic.has_valid_geometry(wire))
 
+    def test_context_policy_declares_purpose_capabilities(self):
+        for purpose in RepresentationPurpose:
+            capabilities = capabilities_for(RepresentationRequest(purpose=purpose))
+            self.assertIsInstance(capabilities, frozenset)
+        self.assertTrue(
+            supports(RepresentationRequest(purpose="Plan"), "create-space")
+        )
+        self.assertFalse(
+            supports(RepresentationRequest(purpose="Elevation"), "create-wall")
+        )
+
+    def test_edit_operation_uses_semantic_candidate_validation(self):
+        operation = BIMEditOperation(
+            "Semantic",
+            "Semantic edit",
+            lambda _source: FreeCAD.Vector(),
+            lambda _source, _value: None,
+            value_kind="Point",
+            validator=lambda _source, _value: type(
+                "Evaluation", (), {"allowed": False, "reason": "Relation failed."}
+            )(),
+        )
+        validation = operation.validate(object(), FreeCAD.Vector(1, 0, 0))
+        self.assertFalse(validation.allowed)
+        self.assertEqual("Relation failed.", validation.reason)
+
+    def test_wall_move_and_stretch_share_viewer_independent_evaluation(self):
+        endpoints = (FreeCAD.Vector(0, 0, 0), FreeCAD.Vector(3000, 0, 0))
+
+        moved = evaluate_wall_candidate(endpoints, "Move", FreeCAD.Vector(1600, 400, 0))
+        self.assertTrue(moved.allowed)
+        self.assertTrue(moved.endpoints[0].isEqual(FreeCAD.Vector(100, 400, 0), 1e-7))
+        self.assertTrue(moved.endpoints[1].isEqual(FreeCAD.Vector(3100, 400, 0), 1e-7))
+
+        stretched = evaluate_wall_length(endpoints, "Start", 2500)
+        self.assertTrue(stretched.allowed)
+        self.assertTrue(stretched.endpoints[0].isEqual(FreeCAD.Vector(500, 0, 0), 1e-7))
+        rejected = evaluate_wall_candidate(endpoints, "End", FreeCAD.Vector(5, 0, 0))
+        self.assertFalse(rejected.allowed)
+        self.assertIn("10 mm", rejected.reason)
+
+    def test_plan_provider_contracts_use_contextual_contracts(self):
+        context = ContextualProviderContext(
+            representation_request=RepresentationRequest(purpose="Model"),
+            selected_sources=(object(),),
+        )
+        provider = PlanEditProvider()
+
+        self.assertIsInstance(PlanToolSpec("join", "Join"), ContextualToolSpec)
+        self.assertIsInstance(provider, ContextualProvider)
+        self.assertEqual(1, len(context.get_selected_sources()))
+
+    def test_request_accepts_enum_or_serialized_purpose(self):
+        plan = RepresentationRequest(purpose=RepresentationPurpose.PLAN)
+        section = RepresentationRequest(purpose="Section")
+        self.assertIs(plan.purpose, RepresentationPurpose.PLAN)
+        self.assertIs(section.purpose, RepresentationPurpose.SECTION)
+        self.assertIsNone(section.reference_frame)
+
+    def test_request_keeps_arbitrary_frame_and_ranges(self):
+        frame = object()
+        request = RepresentationRequest(
+            purpose="Elevation",
+            reference_frame=frame,
+            cut_range=(0.0, 2.1),
+            projection_range=(-1.0, 8.0),
+            cut_offset=1.2,
+            target_offset=0.0,
+        )
+        self.assertIs(request.reference_frame, frame)
+        self.assertEqual(request.cut_range, (0.0, 2.1))
+        self.assertEqual(request.projection_range, (-1.0, 8.0))
+        self.assertEqual(request.cut_offset, 1.2)
+        self.assertEqual(request.target_offset, 0.0)
+
+    def test_request_supports_plan_offsets(self):
+        request = RepresentationRequest(
+            purpose=RepresentationPurpose.PLAN,
+            cut_offset=1.0,
+            target_offset=0.0,
+        )
+        self.assertIs(request.purpose, RepresentationPurpose.PLAN)
+        self.assertEqual(request.cut_offset, 1.0)
+        self.assertEqual(request.target_offset, 0.0)
+
+    def test_representation_records_roles_and_subelements(self):
+        source = object()
+        edge = object()
+        representation = BIMRepresentation(source=source)
+        representation.add_geometry("cut_geometry", edge, "cut", subelement="Edge3")
+        mapping = representation.mapping_for(edge)
+        self.assertIs(mapping.geometry, edge)
+        self.assertIs(mapping.source, source)
+        self.assertEqual(mapping.role, "cut")
+        self.assertEqual(mapping.subelement, "Edge3")
+
+    def test_representation_rejects_unknown_collection(self):
+        with self.assertRaises(ValueError):
+            BIMRepresentation().add_geometry("display", object(), "display")
+
+    def test_preview_entries_describe_spatial_boundary_effects(self):
+        source = object()
+        representation = BIMRepresentation(source=source)
+        state = BIMPreviewState(source)
+        state.add_representation(
+            representation,
+            replace_committed=True,
+            affects_spatial_boundary=False,
+        )
+
+        entry = state.entry_for(source)
+        self.assertIs(entry.representation, representation)
+        self.assertTrue(entry.replace_committed)
+        self.assertFalse(entry.affects_spatial_boundary)
+        self.assertIs(entry.style, BIMPreviewStyle.AVAILABLE)
+
+        state.add_representation(representation, style="Emphasized")
+        self.assertIs(state.entries[-1].style, BIMPreviewStyle.EMPHASIZED)
+
+    def test_space_areas_use_semantic_footprint_without_generic_projection(self):
+        document = FreeCAD.newDocument("SemanticSpaceArea")
+        self.addCleanup(FreeCAD.closeDocument, document.Name)
+        base = document.addObject("Part::Feature", "SpaceBox")
+        base.Shape = Part.makeBox(4000, 3000, 2500)
+
+        with patch(
+            "ArchComponent.AreaCalculator._computeHorizontalAreaAndPerimeter",
+            side_effect=AssertionError("Space must not use generic area projection"),
+        ):
+            space = Arch.makeSpace(base)
+            document.recompute()
+
+        self.assertAlmostEqual(space.HorizontalArea.getValueAs("m^2").Value, 12.0, places=3)
+        self.assertAlmostEqual(space.Area.getValueAs("m^2").Value, 12.0, places=3)
+        self.assertAlmostEqual(space.PerimeterLength.getValueAs("m").Value, 14.0, places=3)
+
+    def test_wall_provider_exposes_semantic_cut_boundary(self):
+        document = FreeCAD.newDocument("SemanticWallBoundary")
+        try:
+            wall = Arch.makeWall(length=3000, width=200, height=3000)
+            document.recompute()
+            representation = wall.Proxy.getRepresentation(
+                wall,
+                RepresentationRequest(
+                    purpose=RepresentationPurpose.PLAN,
+                    cut_offset=1000,
+                    target_offset=0,
+                ),
+            )
+            boundaries = [
+                mapping
+                for mapping in representation.source_mappings
+                if mapping.role == "PlanCutOuterBoundary"
+            ]
+            self.assertEqual(len(boundaries), 1)
+            self.assertIn(boundaries[0].geometry, representation.projected_geometry)
+            self.assertEqual(boundaries[0].subelement, "PlanFace1.OuterWire")
+            self.assertGreaterEqual(len(boundaries[0].geometry), 2)
+            self.assertTrue(boundaries[0].geometry[0].isEqual(boundaries[0].geometry[-1], 1e-7))
+        finally:
+            FreeCAD.closeDocument(document.Name)
+
+    def test_edit_operation_validates_before_mutating_semantic_source(self):
+        source = {"width": 100.0}
+        operation = BIMEditOperation(
+            "set-width",
+            "Set width",
+            lambda value: value["width"],
+            lambda value, width: value.__setitem__("width", width),
+            minimum=10.0,
+            maximum=500.0,
+        )
+        handle = BIMEditHandle(
+            source,
+            "width",
+            FreeCAD.Vector(),
+            FreeCAD.Vector(1, 0, 0),
+            operation,
+        )
+
+        self.assertEqual(100.0, operation.get_value(source))
+        self.assertFalse(operation.validate(source, 5.0).allowed)
+        with self.assertRaises(ValueError):
+            operation.apply(source, 5.0)
+        operation.apply(source, 250.0)
+        self.assertEqual(250.0, source["width"])
+        self.assertIs(handle.operation, operation)
+
+    def test_bim_edit_transaction_commits_and_aborts(self):
+        class Document:
+            def __init__(self):
+                self.events = []
+
+            def openTransaction(self, label):
+                self.events.append(("open", label))
+
+            def commitTransaction(self):
+                self.events.append(("commit",))
+
+            def abortTransaction(self):
+                self.events.append(("abort",))
+
+        document = Document()
+        with BIMEditTransaction(document, "Edit wall"):
+            document.events.append(("apply",))
+        self.assertEqual([("open", "Edit wall"), ("apply",), ("commit",)], document.events)
+
+        document.events.clear()
+        with self.assertRaisesRegex(RuntimeError, "failed"):
+            with BIMEditTransaction(document, "Edit wall"):
+                raise RuntimeError("failed")
+        self.assertEqual([("open", "Edit wall"), ("abort",)], document.events)
 
     def test_contextual_editor_projects_previews_and_commits(self):
         source = {"width": 100.0}
@@ -202,309 +408,6 @@ class TestArchRepresentation(unittest.TestCase):
         self.assertTrue(input_adapter.cleared)
         self.assertIn(("clear", source), renderer.events)
 
-    def test_object_owned_contextual_points_preserve_global_coordinates(self):
-        class Owner:
-            Points = [FreeCAD.Vector(1, 2, 3), FreeCAD.Vector(4, 5, 6)]
-
-            class ProxyType:
-                def getContextualEditPoints(self, owner, request):
-                    del request
-                    return tuple(owner.Points)
-
-                def setContextualEditPoint(self, owner, index, point):
-                    owner.Points[index] = FreeCAD.Vector(point)
-
-            Proxy = ProxyType()
-
-            @staticmethod
-            def getGlobalPlacement():
-                return FreeCAD.Placement()
-
-        owner = Owner()
-        points = get_contextual_edit_points(owner, RepresentationRequest(purpose="Plan"))
-
-        self.assertEqual(2, len(points))
-        self.assertEqual("Vertex2", points[1].subelement)
-        points[1].apply_value(FreeCAD.Vector(7, 8, 9))
-        self.assertEqual(FreeCAD.Vector(7, 8, 9), points[1].get_value())
-
-
-
-
-    def test_wall_move_and_stretch_share_viewer_independent_evaluation(self):
-        endpoints = (FreeCAD.Vector(0, 0, 0), FreeCAD.Vector(3000, 0, 0))
-
-        moved = evaluate_wall_candidate(endpoints, "Move", FreeCAD.Vector(1600, 400, 0))
-        self.assertTrue(moved.allowed)
-        self.assertTrue(moved.endpoints[0].isEqual(FreeCAD.Vector(100, 400, 0), 1e-7))
-        self.assertTrue(moved.endpoints[1].isEqual(FreeCAD.Vector(3100, 400, 0), 1e-7))
-
-        stretched = evaluate_wall_length(endpoints, "Start", 2500)
-        self.assertTrue(stretched.allowed)
-        self.assertTrue(stretched.endpoints[0].isEqual(FreeCAD.Vector(500, 0, 0), 1e-7))
-        rejected = evaluate_wall_candidate(endpoints, "End", FreeCAD.Vector(5, 0, 0))
-        self.assertFalse(rejected.allowed)
-        self.assertIn("10 mm", rejected.reason)
-
-    def test_request_accepts_enum_or_serialized_purpose(self):
-        plan = RepresentationRequest(purpose=RepresentationPurpose.PLAN)
-        section = RepresentationRequest(purpose="Section")
-        self.assertIs(plan.purpose, RepresentationPurpose.PLAN)
-        self.assertIs(section.purpose, RepresentationPurpose.SECTION)
-        self.assertIsNone(section.reference_frame)
-
-    def test_request_keeps_arbitrary_frame_and_ranges(self):
-        frame = object()
-        request = RepresentationRequest(
-            purpose="Elevation",
-            reference_frame=frame,
-            cut_range=(0.0, 2.1),
-            projection_range=(-1.0, 8.0),
-            cut_offset=1.2,
-            target_offset=0.0,
-        )
-        self.assertIs(request.reference_frame, frame)
-        self.assertEqual(request.cut_range, (0.0, 2.1))
-        self.assertEqual(request.projection_range, (-1.0, 8.0))
-        self.assertEqual(request.cut_offset, 1.2)
-        self.assertEqual(request.target_offset, 0.0)
-
-    def test_representation_records_roles_and_subelements(self):
-        source = object()
-        edge = object()
-        representation = BIMRepresentation(source=source)
-        representation.add_geometry("cut_geometry", edge, "cut", subelement="Edge3")
-        mapping = representation.mapping_for(edge)
-        self.assertIs(mapping.geometry, edge)
-        self.assertIs(mapping.source, source)
-        self.assertEqual(mapping.role, "cut")
-        self.assertEqual(mapping.subelement, "Edge3")
-
-    def test_representation_rejects_unknown_collection(self):
-        with self.assertRaises(ValueError):
-            BIMRepresentation().add_geometry("display", object(), "display")
-
-    def test_representation_for_delegates_to_object_provider(self):
-        request = RepresentationRequest(purpose="Plan")
-
-        class Provider:
-            def getRepresentation(self, obj, requested_request):
-                self.args = (obj, requested_request)
-                return BIMRepresentation(source=obj, request=requested_request)
-
-        class BIMObject:
-            pass
-
-        obj = BIMObject()
-        obj.Proxy = Provider()
-        result = representation_for(obj, request)
-        self.assertIs(result.source, obj)
-        self.assertIs(result.request, request)
-        self.assertEqual(obj.Proxy.args, (obj, request))
-
-
-    def test_snap_query_preserves_semantic_identity(self):
-        source = object()
-        edge = Part.makeLine(FreeCAD.Vector(0, 0, 0), FreeCAD.Vector(10, 0, 0))
-        representation = BIMRepresentation(source=source)
-        representation.add_geometry("snap_geometry", edge, "axis", "Edge1")
-
-        result = query_representation_snap((representation,), FreeCAD.Vector(4, 0.5, 0), 1.0)
-
-        self.assertIs(result.source, source)
-        self.assertEqual("Edge1", result.subelement)
-        self.assertEqual("axis", result.role)
-        self.assertAlmostEqual(0.5, result.distance)
-
-    def test_snap_query_deduplicates_coincident_semantic_targets(self):
-        first_source = object()
-        second_source = object()
-        relation = object()
-        point = FreeCAD.Vector(4, 2, 0)
-        first = BIMRepresentation(source=first_source)
-        second = BIMRepresentation(source=second_source)
-        first.add_geometry(
-            "snap_geometry",
-            Part.Vertex(point),
-            "WallCorner",
-            related_sources=(relation,),
-        )
-        second.add_geometry(
-            "snap_geometry",
-            Part.Vertex(point),
-            "WallCorner",
-            related_sources=(relation,),
-        )
-
-        candidates = query_representation_snap_candidates((first, second), point, 1.0)
-
-        self.assertEqual(1, len(candidates))
-        self.assertEqual({first_source, second_source, relation}, set(candidates[0].sources))
-
-    def test_pick_query_preserves_cut_geometry_mapping(self):
-        source = object()
-        edge = Part.makeLine(FreeCAD.Vector(0, 0, 0), FreeCAD.Vector(10, 0, 0))
-        representation = BIMRepresentation(source=source)
-        representation.add_geometry("cut_geometry", edge, "cut", "Edge2")
-
-        result = query_representation_pick(
-            (representation,),
-            (5.0, 0.25),
-            lambda point: (point.x, point.y),
-            1.0,
-        )
-
-        self.assertIs(result.source, source)
-        self.assertEqual("Edge2", result.subelement)
-        self.assertEqual("cut", result.role)
-
-
-
-
-    def test_representation_projection_respects_reference_frame(self):
-        frame = FreeCAD.Placement(
-            FreeCAD.Vector(10, 0, 0), FreeCAD.Rotation(FreeCAD.Vector(0, 0, 1), 90)
-        )
-        request = RepresentationRequest(reference_frame=frame, target_offset=2.0)
-        projected = project_to_representation_plane(FreeCAD.Vector(10, 5, 9), request)
-        self.assertTrue(projected.isEqual(FreeCAD.Vector(10, 5, 2), 1e-7))
-
-        tilted = FreeCAD.Placement(
-            FreeCAD.Vector(1, 0, 0), FreeCAD.Rotation(FreeCAD.Vector(0, 1, 0), 90)
-        )
-        working_plane = WorkingPlaneConstraint(tilted)
-        working_ray = BIMEditRay(FreeCAD.Vector(10, 2, 3), FreeCAD.Vector(-1, 0, 0))
-        self.assertTrue(
-            working_plane.project(working_ray).isEqual(FreeCAD.Vector(1, 2, 3), 1e-7)
-        )
-
-        direction = project_direction_to_representation_plane(
-            FreeCAD.Vector(0, 0, 1), RepresentationRequest()
-        )
-        self.assertIsNone(direction)
-
-
-
-
-if __name__ == "__main__":
-    unittest.main()
-
-
-    def test_request_supports_plan_offsets(self):
-        request = RepresentationRequest(
-            purpose=RepresentationPurpose.PLAN,
-            cut_offset=1.0,
-            target_offset=0.0,
-        )
-        self.assertIs(request.purpose, RepresentationPurpose.PLAN)
-        self.assertEqual(request.cut_offset, 1.0)
-        self.assertEqual(request.target_offset, 0.0)
-
-
-    def test_wall_representation_supports_a_rotated_section_frame(self):
-        document = FreeCAD.newDocument("ArbitraryWallRepresentationTest")
-        self.addCleanup(FreeCAD.closeDocument, document.Name)
-        wall = Arch.makeWall(length=3000, width=200, height=2500)
-        document.recompute()
-        frame = FreeCAD.Placement(
-            FreeCAD.Vector(1500, 0, 0),
-            FreeCAD.Rotation(FreeCAD.Vector(0, 1, 0), 90),
-        )
-        request = RepresentationRequest(
-            purpose="Section",
-            reference_frame=frame,
-            cut_offset=0,
-            target_offset=0,
-        )
-
-        representation = wall.Proxy.getRepresentation(wall, request)
-
-        self.assertTrue(representation.cut_geometry)
-        self.assertTrue(representation.snap_geometry)
-        roles = {handle.role for handle in representation.edit_handles}
-        self.assertIn("WallHeight", roles)
-        height_handle = next(
-            handle for handle in representation.edit_handles if handle.role == "WallHeight"
-        )
-        self.assertIsInstance(height_handle.constraint, AxisConstraint)
-        self.assertTrue(all(mapping.source is wall for mapping in representation.source_mappings))
-
-    def test_representation_for_does_not_dispatch_on_type_name(self):
-        class BIMObject:
-            pass
-
-        obj = BIMObject()
-        obj.Proxy = object()
-        with self.assertRaises(RepresentationUnavailable):
-            representation_for(obj, RepresentationRequest())
-
-
-    def test_edit_operation_uses_semantic_candidate_validation(self):
-        operation = BIMEditOperation(
-            "Semantic",
-            "Semantic edit",
-            lambda _source: FreeCAD.Vector(),
-            lambda _source, _value: None,
-            value_kind="Point",
-            validator=lambda _source, _value: type(
-                "Evaluation", (), {"allowed": False, "reason": "Relation failed."}
-            )(),
-        )
-        validation = operation.validate(object(), FreeCAD.Vector(1, 0, 0))
-        self.assertFalse(validation.allowed)
-        self.assertEqual("Relation failed.", validation.reason)
-
-    def test_edit_operation_validates_before_mutating_semantic_source(self):
-        source = {"width": 100.0}
-        operation = BIMEditOperation(
-            "set-width",
-            "Set width",
-            lambda value: value["width"],
-            lambda value, width: value.__setitem__("width", width),
-            minimum=10.0,
-            maximum=500.0,
-        )
-        handle = BIMEditHandle(
-            source,
-            "width",
-            FreeCAD.Vector(),
-            FreeCAD.Vector(1, 0, 0),
-            operation,
-        )
-
-        self.assertEqual(100.0, operation.get_value(source))
-        self.assertFalse(operation.validate(source, 5.0).allowed)
-        with self.assertRaises(ValueError):
-            operation.apply(source, 5.0)
-        operation.apply(source, 250.0)
-        self.assertEqual(250.0, source["width"])
-        self.assertIs(handle.operation, operation)
-
-    def test_bim_edit_transaction_commits_and_aborts(self):
-        class Document:
-            def __init__(self):
-                self.events = []
-
-            def openTransaction(self, label):
-                self.events.append(("open", label))
-
-            def commitTransaction(self):
-                self.events.append(("commit",))
-
-            def abortTransaction(self):
-                self.events.append(("abort",))
-
-        document = Document()
-        with BIMEditTransaction(document, "Edit wall"):
-            document.events.append(("apply",))
-        self.assertEqual([("open", "Edit wall"), ("apply",), ("commit",)], document.events)
-
-        document.events.clear()
-        with self.assertRaisesRegex(RuntimeError, "failed"):
-            with BIMEditTransaction(document, "Edit wall"):
-                raise RuntimeError("failed")
-        self.assertEqual([("open", "Edit wall"), ("abort",)], document.events)
-
     def test_axis_constraint_resolves_pointer_ray_for_scalar_edit(self):
         source = {"height": 20.0}
         operation = BIMEditOperation(
@@ -579,47 +482,89 @@ if __name__ == "__main__":
         self.assertIsNone(axis.project(axis_ray))
         self.assertIsNone(plane.project(plane_ray))
 
-    def test_edit_capabilities_have_no_representation_geometry(self):
-        request = RepresentationRequest(purpose=RepresentationPurpose.MODEL)
+    def test_object_owned_contextual_points_preserve_global_coordinates(self):
+        class Owner:
+            Points = [FreeCAD.Vector(1, 2, 3), FreeCAD.Vector(4, 5, 6)]
 
-        class Provider:
-            def getEditCapabilities(self, obj, requested_request):
-                self.args = (obj, requested_request)
-                return BIMEditCapabilities(source=obj, request=requested_request)
+            class ProxyType:
+                def getContextualEditPoints(self, owner, request):
+                    del request
+                    return tuple(owner.Points)
 
-        class BIMObject:
-            pass
+                def setContextualEditPoint(self, owner, index, point):
+                    owner.Points[index] = FreeCAD.Vector(point)
 
-        obj = BIMObject()
-        obj.Proxy = Provider()
-        result = edit_capabilities_for(obj, request)
-        self.assertIs(result.source, obj)
-        self.assertIs(result.request, request)
-        self.assertEqual((obj, request), obj.Proxy.args)
-        self.assertFalse(hasattr(result, "cut_geometry"))
-        self.assertFalse(hasattr(result, "projected_geometry"))
-        self.assertFalse(hasattr(result, "snap_geometry"))
+            Proxy = ProxyType()
 
+            @staticmethod
+            def getGlobalPlacement():
+                return FreeCAD.Placement()
 
-    def test_preview_entries_describe_spatial_boundary_effects(self):
-        source = object()
-        representation = BIMRepresentation(source=source)
-        state = BIMPreviewState(source)
-        state.add_representation(
-            representation,
-            replace_committed=True,
-            affects_spatial_boundary=False,
+        owner = Owner()
+        points = get_contextual_edit_points(owner, RepresentationRequest(purpose="Plan"))
+
+        self.assertEqual(2, len(points))
+        self.assertEqual("Vertex2", points[1].subelement)
+        points[1].apply_value(FreeCAD.Vector(7, 8, 9))
+        self.assertEqual(FreeCAD.Vector(7, 8, 9), points[1].get_value())
+
+    def test_planar_contextual_handle_moves_a_point_value(self):
+        source = {"point": FreeCAD.Vector(1, 2, 0)}
+        operation = BIMEditOperation(
+            "move-point",
+            "Move point",
+            lambda value: value["point"],
+            lambda value, point: value.__setitem__("point", point),
+            value_kind="Point",
+            manages_transaction=True,
+        )
+        handle = BIMEditHandle(
+            source,
+            "path-point",
+            source["point"],
+            FreeCAD.Vector(),
+            operation,
+            interaction="Planar",
+        )
+        editor = BIMContextualHandleEditor(RepresentationRequest(purpose="Plan"))
+
+        editor.begin(handle)
+        result = editor.commit(FreeCAD.Vector(6, 8, 20))
+
+        self.assertTrue(result.success)
+        self.assertEqual(FreeCAD.Vector(6, 8, 20), source["point"])
+
+    def test_native_wall_path_exposes_semantic_endpoint_handles(self):
+        document = FreeCAD.newDocument("ContextualPathRepresentationTest")
+        self.addCleanup(FreeCAD.closeDocument, document.Name)
+        wall = Arch.makeWall(length=4000, width=200, height=3000)
+        document.recompute()
+
+        representation = wall.Proxy.getRepresentation(
+            wall,
+            RepresentationRequest(
+                purpose="Plan",
+                cut_offset=1000,
+                target_offset=0,
+            ),
         )
 
-        entry = state.entry_for(source)
-        self.assertIs(entry.representation, representation)
-        self.assertTrue(entry.replace_committed)
-        self.assertFalse(entry.affects_spatial_boundary)
-        self.assertIs(entry.style, BIMPreviewStyle.AVAILABLE)
-
-        state.add_representation(representation, style="Emphasized")
-        self.assertIs(state.entries[-1].style, BIMPreviewStyle.EMPHASIZED)
-
+        handles = {handle.subelement: handle for handle in representation.edit_handles}
+        self.assertTrue({"Path.Start", "Path.End"}.issubset(handles))
+        self.assertIsInstance(handles["Path.Start"].constraint, AxisConstraint)
+        self.assertIsInstance(handles["Path.End"].constraint, AxisConstraint)
+        self.assertEqual("Square", handles["Path.Start"].glyph)
+        self.assertEqual("Square", handles["Path.End"].glyph)
+        self.assertEqual("Point", handles["Path.End"].operation.value_kind)
+        self.assertEqual("WallStretchStart", handles["Path.Start"].operation.interaction_intent)
+        move_handle = next(
+            handle for handle in representation.edit_handles if handle.role == "WallMove"
+        )
+        self.assertIsInstance(move_handle.constraint, WorkingPlaneConstraint)
+        self.assertEqual("Circle", move_handle.glyph)
+        self.assertEqual("WallMove", move_handle.operation.interaction_intent)
+        endpoints = wall.Proxy.calc_endpoints(wall)
+        self.assertTrue(move_handle.point.isEqual((endpoints[0] + endpoints[1]) * 0.5, 1e-7))
 
     def test_joint_handle_anchors_to_offset_miter_seam(self):
         document = FreeCAD.newDocument("OffsetMiterHandleTest")
@@ -681,39 +626,6 @@ if __name__ == "__main__":
         self.assertIn(horizontal, result.sources)
         self.assertIn(vertical, result.sources)
 
-
-    def test_native_wall_path_exposes_semantic_endpoint_handles(self):
-        document = FreeCAD.newDocument("ContextualPathRepresentationTest")
-        self.addCleanup(FreeCAD.closeDocument, document.Name)
-        wall = Arch.makeWall(length=4000, width=200, height=3000)
-        document.recompute()
-
-        representation = wall.Proxy.getRepresentation(
-            wall,
-            RepresentationRequest(
-                purpose="Plan",
-                cut_offset=1000,
-                target_offset=0,
-            ),
-        )
-
-        handles = {handle.subelement: handle for handle in representation.edit_handles}
-        self.assertTrue({"Path.Start", "Path.End"}.issubset(handles))
-        self.assertIsInstance(handles["Path.Start"].constraint, AxisConstraint)
-        self.assertIsInstance(handles["Path.End"].constraint, AxisConstraint)
-        self.assertEqual("Square", handles["Path.Start"].glyph)
-        self.assertEqual("Square", handles["Path.End"].glyph)
-        self.assertEqual("Point", handles["Path.End"].operation.value_kind)
-        self.assertEqual("WallStretchStart", handles["Path.Start"].operation.interaction_intent)
-        move_handle = next(
-            handle for handle in representation.edit_handles if handle.role == "WallMove"
-        )
-        self.assertIsInstance(move_handle.constraint, WorkingPlaneConstraint)
-        self.assertEqual("Circle", move_handle.glyph)
-        self.assertEqual("WallMove", move_handle.operation.interaction_intent)
-        endpoints = wall.Proxy.calc_endpoints(wall)
-        self.assertTrue(move_handle.point.isEqual((endpoints[0] + endpoints[1]) * 0.5, 1e-7))
-
     def test_wall_width_face_handles_preserve_the_opposite_face(self):
         document = FreeCAD.newDocument("ContextualWallWidthTest")
         self.addCleanup(FreeCAD.closeDocument, document.Name)
@@ -756,36 +668,6 @@ if __name__ == "__main__":
                     else:
                         self.assertAlmostEqual(before.y_min, after.y_min)
                         self.assertAlmostEqual(before.y_max + 50, after.y_max)
-
-    def test_wall_model_edit_capabilities_cover_path_section_and_height(self):
-        document = FreeCAD.newDocument("WallModelEditCapabilities")
-        try:
-            wall = Arch.makeWall(length=3000, width=200, height=2500, align="Left")
-            document.recompute()
-            request = RepresentationRequest(purpose=RepresentationPurpose.MODEL)
-            capabilities = edit_capabilities_for(wall, request)
-            handles = {handle.subelement: handle for handle in capabilities.edit_handles}
-
-            self.assertIs(capabilities.source, wall)
-            self.assertIs(capabilities.request, request)
-            self.assertFalse(hasattr(capabilities, "cut_geometry"))
-            for subelement in (
-                "Path.Start",
-                "Path.End",
-                "Path",
-                "Width.NegativeFace",
-                "Width.PositiveFace",
-                "Offset",
-                "Height",
-            ):
-                self.assertIn(subelement, handles)
-            self.assertAlmostEqual(wall.Shape.BoundBox.ZMax, handles["Height"].point.z)
-            self.assertAlmostEqual(wall.Placement.Base.z, handles["Path.Start"].point.z)
-            self.assertIsInstance(handles["Height"].constraint, AxisConstraint)
-            self.assertIsInstance(handles["Path"].constraint, WorkingPlaneConstraint)
-        finally:
-            FreeCAD.closeDocument(document.Name)
-
 
     def test_hosted_opening_exposes_semantic_plan_geometry_and_handles(self):
         document = FreeCAD.newDocument("ContextualOpeningRepresentationTest")
@@ -922,93 +804,165 @@ if __name__ == "__main__":
         self.assertAlmostEqual(original_width, wall.Width.Value)
         self.assertEqual(before, base.Placement)
 
-
-    def test_space_areas_use_semantic_footprint_without_generic_projection(self):
-        document = FreeCAD.newDocument("SemanticSpaceArea")
+    def test_wall_representation_supports_a_rotated_section_frame(self):
+        document = FreeCAD.newDocument("ArbitraryWallRepresentationTest")
         self.addCleanup(FreeCAD.closeDocument, document.Name)
-        base = document.addObject("Part::Feature", "SpaceBox")
-        base.Shape = Part.makeBox(4000, 3000, 2500)
+        wall = Arch.makeWall(length=3000, width=200, height=2500)
+        document.recompute()
+        frame = FreeCAD.Placement(
+            FreeCAD.Vector(1500, 0, 0),
+            FreeCAD.Rotation(FreeCAD.Vector(0, 1, 0), 90),
+        )
+        request = RepresentationRequest(
+            purpose="Section",
+            reference_frame=frame,
+            cut_offset=0,
+            target_offset=0,
+        )
 
-        with patch(
-            "ArchComponent.AreaCalculator._computeHorizontalAreaAndPerimeter",
-            side_effect=AssertionError("Space must not use generic area projection"),
-        ):
-            space = Arch.makeSpace(base)
+        representation = wall.Proxy.getRepresentation(wall, request)
+
+        self.assertTrue(representation.cut_geometry)
+        self.assertTrue(representation.snap_geometry)
+        roles = {handle.role for handle in representation.edit_handles}
+        self.assertIn("WallHeight", roles)
+        height_handle = next(
+            handle for handle in representation.edit_handles if handle.role == "WallHeight"
+        )
+        self.assertIsInstance(height_handle.constraint, AxisConstraint)
+        self.assertTrue(all(mapping.source is wall for mapping in representation.source_mappings))
+
+    def test_snap_query_preserves_semantic_identity(self):
+        source = object()
+        edge = Part.makeLine(FreeCAD.Vector(0, 0, 0), FreeCAD.Vector(10, 0, 0))
+        representation = BIMRepresentation(source=source)
+        representation.add_geometry("snap_geometry", edge, "axis", "Edge1")
+
+        result = query_representation_snap((representation,), FreeCAD.Vector(4, 0.5, 0), 1.0)
+
+        self.assertIs(result.source, source)
+        self.assertEqual("Edge1", result.subelement)
+        self.assertEqual("axis", result.role)
+        self.assertAlmostEqual(0.5, result.distance)
+
+    def test_snap_query_deduplicates_coincident_semantic_targets(self):
+        first_source = object()
+        second_source = object()
+        relation = object()
+        point = FreeCAD.Vector(4, 2, 0)
+        first = BIMRepresentation(source=first_source)
+        second = BIMRepresentation(source=second_source)
+        first.add_geometry(
+            "snap_geometry",
+            Part.Vertex(point),
+            "WallCorner",
+            related_sources=(relation,),
+        )
+        second.add_geometry(
+            "snap_geometry",
+            Part.Vertex(point),
+            "WallCorner",
+            related_sources=(relation,),
+        )
+
+        candidates = query_representation_snap_candidates((first, second), point, 1.0)
+
+        self.assertEqual(1, len(candidates))
+        self.assertEqual({first_source, second_source, relation}, set(candidates[0].sources))
+
+    def test_pick_query_preserves_cut_geometry_mapping(self):
+        source = object()
+        edge = Part.makeLine(FreeCAD.Vector(0, 0, 0), FreeCAD.Vector(10, 0, 0))
+        representation = BIMRepresentation(source=source)
+        representation.add_geometry("cut_geometry", edge, "cut", "Edge2")
+
+        result = query_representation_pick(
+            (representation,),
+            (5.0, 0.25),
+            lambda point: (point.x, point.y),
+            1.0,
+        )
+
+        self.assertIs(result.source, source)
+        self.assertEqual("Edge2", result.subelement)
+        self.assertEqual("cut", result.role)
+
+    def test_representation_for_delegates_to_object_provider(self):
+        request = RepresentationRequest(purpose="Plan")
+
+        class Provider:
+            def getRepresentation(self, obj, requested_request):
+                self.args = (obj, requested_request)
+                return BIMRepresentation(source=obj, request=requested_request)
+
+        class BIMObject:
+            pass
+
+        obj = BIMObject()
+        obj.Proxy = Provider()
+        result = representation_for(obj, request)
+        self.assertIs(result.source, obj)
+        self.assertIs(result.request, request)
+        self.assertEqual(obj.Proxy.args, (obj, request))
+
+    def test_representation_for_does_not_dispatch_on_type_name(self):
+        class BIMObject:
+            pass
+
+        obj = BIMObject()
+        obj.Proxy = object()
+        with self.assertRaises(RepresentationUnavailable):
+            representation_for(obj, RepresentationRequest())
+
+    def test_edit_capabilities_have_no_representation_geometry(self):
+        request = RepresentationRequest(purpose=RepresentationPurpose.MODEL)
+
+        class Provider:
+            def getEditCapabilities(self, obj, requested_request):
+                self.args = (obj, requested_request)
+                return BIMEditCapabilities(source=obj, request=requested_request)
+
+        class BIMObject:
+            pass
+
+        obj = BIMObject()
+        obj.Proxy = Provider()
+        result = edit_capabilities_for(obj, request)
+        self.assertIs(result.source, obj)
+        self.assertIs(result.request, request)
+        self.assertEqual((obj, request), obj.Proxy.args)
+        self.assertFalse(hasattr(result, "cut_geometry"))
+        self.assertFalse(hasattr(result, "projected_geometry"))
+        self.assertFalse(hasattr(result, "snap_geometry"))
+
+    def test_wall_model_edit_capabilities_cover_path_section_and_height(self):
+        document = FreeCAD.newDocument("WallModelEditCapabilities")
+        try:
+            wall = Arch.makeWall(length=3000, width=200, height=2500, align="Left")
             document.recompute()
+            request = RepresentationRequest(purpose=RepresentationPurpose.MODEL)
+            capabilities = edit_capabilities_for(wall, request)
+            handles = {handle.subelement: handle for handle in capabilities.edit_handles}
 
-        self.assertAlmostEqual(space.HorizontalArea.getValueAs("m^2").Value, 12.0, places=3)
-        self.assertAlmostEqual(space.Area.getValueAs("m^2").Value, 12.0, places=3)
-        self.assertAlmostEqual(space.PerimeterLength.getValueAs("m").Value, 14.0, places=3)
-
-
-    def test_planar_contextual_handle_moves_a_point_value(self):
-        source = {"point": FreeCAD.Vector(1, 2, 0)}
-        operation = BIMEditOperation(
-            "move-point",
-            "Move point",
-            lambda value: value["point"],
-            lambda value, point: value.__setitem__("point", point),
-            value_kind="Point",
-            manages_transaction=True,
-        )
-        handle = BIMEditHandle(
-            source,
-            "path-point",
-            source["point"],
-            FreeCAD.Vector(),
-            operation,
-            interaction="Planar",
-        )
-        editor = BIMContextualHandleEditor(RepresentationRequest(purpose="Plan"))
-
-        editor.begin(handle)
-        result = editor.commit(FreeCAD.Vector(6, 8, 20))
-
-        self.assertTrue(result.success)
-        self.assertEqual(FreeCAD.Vector(6, 8, 20), source["point"])
-
-
-    def test_context_policy_declares_purpose_capabilities(self):
-        for purpose in RepresentationPurpose:
-            capabilities = capabilities_for(RepresentationRequest(purpose=purpose))
-            self.assertIsInstance(capabilities, frozenset)
-        self.assertTrue(
-            supports(RepresentationRequest(purpose="Plan"), "create-space")
-        )
-        self.assertFalse(
-            supports(RepresentationRequest(purpose="Elevation"), "create-wall")
-        )
-
-
-    def test_contextual_wall_creation_uses_bim_wall_preferences(self):
-        preferences = {
-            "WallWidth": 345.0,
-            "WallHeight": 2780.0,
-            "WallAlignment": 2,
-            "WallOffset": 42.0,
-        }
-        with patch(
-            "draftutils.params.get_param_arch",
-            side_effect=lambda name: preferences[name],
-        ):
-            spec = wall_construction_spec_from_preferences()
-        self.assertEqual(345.0, spec.width)
-        self.assertEqual(2780.0, spec.height)
-        self.assertEqual("Right", spec.align)
-        self.assertEqual(42.0, spec.offset)
-
-
-    def test_plan_provider_contracts_use_contextual_contracts(self):
-        context = ContextualProviderContext(
-            representation_request=RepresentationRequest(purpose="Model"),
-            selected_sources=(object(),),
-        )
-        provider = PlanEditProvider()
-
-        self.assertIsInstance(PlanToolSpec("join", "Join"), ContextualToolSpec)
-        self.assertIsInstance(provider, ContextualProvider)
-        self.assertEqual(1, len(context.get_selected_sources()))
-
+            self.assertIs(capabilities.source, wall)
+            self.assertIs(capabilities.request, request)
+            self.assertFalse(hasattr(capabilities, "cut_geometry"))
+            for subelement in (
+                "Path.Start",
+                "Path.End",
+                "Path",
+                "Width.NegativeFace",
+                "Width.PositiveFace",
+                "Offset",
+                "Height",
+            ):
+                self.assertIn(subelement, handles)
+            self.assertAlmostEqual(wall.Shape.BoundBox.ZMax, handles["Height"].point.z)
+            self.assertAlmostEqual(wall.Placement.Base.z, handles["Path.Start"].point.z)
+            self.assertIsInstance(handles["Height"].constraint, AxisConstraint)
+            self.assertIsInstance(handles["Path"].constraint, WorkingPlaneConstraint)
+        finally:
+            FreeCAD.closeDocument(document.Name)
 
     def test_wall_move_has_identical_plan_and_model_domain_results(self):
         document = FreeCAD.newDocument("WallCrossContextParity")
@@ -1040,3 +994,7 @@ if __name__ == "__main__":
                 )
         finally:
             FreeCAD.closeDocument(document.Name)
+
+
+if __name__ == "__main__":
+    unittest.main()

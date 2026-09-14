@@ -91,44 +91,6 @@ SET(Arch_SRCS
     ArchSpaceConstruction.py
 )
 
-SET(importers_SRCS
-    importers/__init__.py
-    importers/importIFC.py
-    importers/importIFClegacy.py
-    importers/importIFCHelper.py
-    importers/importIFCmulticore.py
-    importers/importDAE.py
-    importers/importOBJ.py
-    importers/importWebGL.py
-    importers/importJSON.py
-    importers/importSH3D.py
-    importers/importSH3DHelper.py
-    importers/import3DS.py
-    importers/importSHP.py
-    importers/importGBXML.py
-    importers/exportIFCStructuralTools.py
-    importers/exportIFC.py
-    importers/exportIFCHelper.py
-    importers/samples/Sample.sh3d
-)
-
-SET(Dice3DS_SRCS
-    Dice3DS/__init__.py
-    Dice3DS/util.py
-    Dice3DS/dom3ds.py
-)
-
-SET(bimcontextual_SRCS
-    bimcontextual/__init__.py
-    bimcontextual/actions.py
-    bimcontextual/editing.py
-    bimcontextual/editable_points.py
-    bimcontextual/interaction.py
-    bimcontextual/context_policy.py
-    bimcontextual/session.py
-    bimcontextual/ui.py
-)
-
 SET(bimplan_SRCS
     bimplan/__init__.py
     bimplan/contextual_rendering.py
@@ -217,6 +179,44 @@ SET(bimplan_SRCS
     bimplan/ui/status_text.py
     bimplan/ui/task_panel.py
     bimplan/ui/task_panel_view_model.py
+)
+
+SET(bimcontextual_SRCS
+    bimcontextual/__init__.py
+    bimcontextual/actions.py
+    bimcontextual/editing.py
+    bimcontextual/editable_points.py
+    bimcontextual/interaction.py
+    bimcontextual/context_policy.py
+    bimcontextual/session.py
+    bimcontextual/ui.py
+)
+
+SET(importers_SRCS
+    importers/__init__.py
+    importers/importIFC.py
+    importers/importIFClegacy.py
+    importers/importIFCHelper.py
+    importers/importIFCmulticore.py
+    importers/importDAE.py
+    importers/importOBJ.py
+    importers/importWebGL.py
+    importers/importJSON.py
+    importers/importSH3D.py
+    importers/importSH3DHelper.py
+    importers/import3DS.py
+    importers/importSHP.py
+    importers/importGBXML.py
+    importers/exportIFCStructuralTools.py
+    importers/exportIFC.py
+    importers/exportIFCHelper.py
+    importers/samples/Sample.sh3d
+)
+
+SET(Dice3DS_SRCS
+    Dice3DS/__init__.py
+    Dice3DS/util.py
+    Dice3DS/dom3ds.py
 )
 
 SET(Arch_presets
@@ -362,12 +362,20 @@ SET(bimtests_SRCS
     bimtests/TestArchBase.py
     bimtests/TestArchBaseGui.py
     bimtests/TestArchComponent.py
+    bimtests/TestArchPlanGeometry.py
+    bimtests/TestArchRepresentation.py
+    bimtests/TestBimAssetSemantics.py
+    bimtests/TestBimLibrarySources.py
+    bimtests/TestBimTaskWatcherGui.py
+    bimtests/TestBimPlanEditLibraryGui.py
+    bimtests/TestBimPlanEditExamplesGui.py
     bimtests/TestArchCovering.py
     bimtests/TestArchCoveringGui.py
     bimtests/TestArchBuildingPart.py
     bimtests/TestArchRoof.py
     bimtests/test_roof_subtraction.brep
     bimtests/TestArchSpace.py
+    bimtests/TestArchSpaceGui.py
     bimtests/TestArchWall.py
     bimtests/TestArchWallGeometry.py
     bimtests/TestArchWallJoint.py
@@ -392,27 +400,20 @@ SET(bimtests_SRCS
     bimtests/TestArchEquipment.py
     bimtests/TestArchFrame.py
     bimtests/TestArchReference.py
-    bimtests/TestArchRepresentation.py
     bimtests/TestArchSchedule.py
     bimtests/TestArchSiteGui.py
     bimtests/TestArchTruss.py
     bimtests/TestWebGLExport.py
     bimtests/TestWebGLExportGui.py
+    bimtests/TestArchFootprintGui.py
     bimtests/TestArchImportersGui.py
     bimtests/TestArchBuildingPartGui.py
+    bimtests/TestBimLibraryBrowserGui.py
+    bimtests/TestBimPlanEditSessionGui.py
     bimtests/TestArchStairsGui.py
     bimtests/TestArchReport.py
     bimtests/TestArchReportGui.py
     bimtests/TestArchStructureGui.py
-    bimtests/TestArchPlanGeometry.py
-    bimtests/TestArchSpaceGui.py
-    bimtests/TestBimAssetSemantics.py
-    bimtests/TestBimLibraryBrowserGui.py
-    bimtests/TestBimLibrarySources.py
-    bimtests/TestBimPlanEditLibraryGui.py
-    bimtests/TestBimPlanEditSessionGui.py
-    bimtests/TestBimTaskWatcherGui.py
-    bimtests/TestArchFootprintGui.py
 )
 
 set(bimtests_FIXTURES
@@ -481,10 +482,10 @@ add_custom_command(
 ADD_CUSTOM_TARGET(BIM ALL
     DEPENDS ${Arch_QRC_SRCS}
     SOURCES ${Arch_SRCS}
-            ${bimplan_SRCS}
+    ${bimplan_SRCS}
+    ${bimcontextual_SRCS}
             ${Dice3DS_SRCS}
             ${Arch_presets}
-            ${bimcontextual_SRCS}
             ${ArchGuiIcon_SVG}
             ${importers_SRCS}
             ${ImportersSample_Files}
@@ -540,6 +541,12 @@ INSTALL(
 )
 
 INSTALL(
+    DIRECTORY bimplan
+    DESTINATION Mod/BIM
+    FILES_MATCHING PATTERN "*.py"
+)
+
+INSTALL(
     DIRECTORY bimcontextual
     DESTINATION Mod/BIM
     FILES_MATCHING PATTERN "*.py"
@@ -586,13 +593,6 @@ INSTALL(
         Presets
     DESTINATION
         "${CMAKE_INSTALL_DATADIR}/Mod/BIM"
-)
-
-INSTALL(
-    DIRECTORY
-        bimplan
-    DESTINATION Mod/BIM
-    FILES_MATCHING PATTERN "*.py"
 )
 
 INSTALL(
