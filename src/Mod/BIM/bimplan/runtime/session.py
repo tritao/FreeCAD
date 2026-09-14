@@ -9,6 +9,9 @@ from bimplan.picking import PlanPickingAPI
 from bimplan.selection import PlanSelectionAPI
 from bimplan.snap import PlanSnapAPI
 from bimplan.contextual_editing import PlanContextualEditingAPI
+from bimplan.overlays.runtime import PlanOverlaysAPI
+from bimplan.runtime.session_state import initialize_plan_overlay_state
+from bimplan.ui.status_text import PlanStatusTextAPI
 
 
 _PLAN_EDIT_SNAP_SET = {
@@ -49,10 +52,13 @@ class PlanEditSession:
         self.representation_request = PlanRepresentationRequestAPI(self)
         self.visibility = PlanVisibilityAPI(self)
         self.contextual_rendering = PlanContextualRenderingAPI(self)
+        initialize_plan_overlay_state(self)
+        self.overlays = PlanOverlaysAPI(self)
         self.picking = PlanPickingAPI(self)
         self.selection = PlanSelectionAPI(self)
         self.snap = PlanSnapAPI(self, _PLAN_EDIT_SNAP_SET)
         self.contextual_editing = PlanContextualEditingAPI(self)
+        self.status_text = PlanStatusTextAPI(self)
         if active_storey is not None:
             self.set_source(active_storey, refresh=False)
 

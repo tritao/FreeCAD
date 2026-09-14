@@ -404,6 +404,59 @@ class TestBimPlanEditRuntime(unittest.TestCase):
         self.assertEqual(1, session.snap.clears)
         self.assertEqual(1, host.clears)
 
+    def test_plan_overlay_refreshes_coalesce_and_close_discards_pending_work(self):
+        from bimplan.overlays.manager import PlanOverlayManagerService
+        from bimplan.runtime.session_state import PlanOverlayRefreshState
+
+        scheduled = []
+        refreshed = []
+        session = SimpleNamespace(overlay_refresh_state=PlanOverlayRefreshState())
+        manager = PlanOverlayManagerService(
+            session,
+            scheduler=scheduled.append,
+            refresh_callback=refreshed.append,
+        )
+
+        self.assertTrue(manager.queue_plan_overlay_visual_refresh(("hovered",)))
+        self.assertTrue(manager.queue_plan_overlay_visual_refresh(("selected",)))
+        self.assertEqual(1, len(scheduled))
+        self.assertEqual({"hovered", "selected"}, session.overlay_refresh_state.dirty_plan_visuals)
+
+        scheduled.pop()()
+
+        self.assertEqual([{"hovered", "selected"}], refreshed)
+        self.assertFalse(session.overlay_refresh_state.overlay_refresh_queued)
+        self.assertEqual(set(), session.overlay_refresh_state.dirty_plan_visuals)
+
+        self.assertTrue(manager.queue_plan_overlay_visual_refresh(("hovered",)))
+        pending = scheduled.pop()
+        manager.close()
+        pending()
+        self.assertEqual([{"hovered", "selected"}], refreshed)
+        self.assertFalse(manager.queue_plan_overlay_visual_refresh(("selected",)))
+
+    def test_plan_status_feedback_is_invalidated_when_semantic_context_changes(self):
+        from bimplan.ui.status_text import PlanStatusTextAPI
+
+        session = SimpleNamespace(
+            current_tool="Select",
+            representation_request=SimpleNamespace(
+                request=SimpleNamespace(source=object())
+            ),
+            selection=SimpleNamespace(selected_handle=object()),
+        )
+        status = PlanStatusTextAPI(session)
+
+        self.assertEqual(
+            "Wall has no editable endpoint.",
+            status.set_integration_feedback_message(" Wall has no editable endpoint. "),
+        )
+        self.assertEqual("Wall has no editable endpoint.", status.get_integration_feedback_message())
+
+        session.selection.selected_handle = object()
+
+        self.assertEqual("", status.get_integration_feedback_message())
+
 
 if __name__ == "__main__":
     unittest.main()

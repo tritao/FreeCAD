@@ -168,6 +168,19 @@ SET(bimplan_SRCS
     bimplan/tools/symbol_edit.py
     bimplan/tools/wall_edit.py
     bimplan/transactions.py
+    bimplan/overlays/__init__.py
+    bimplan/overlays/geometry.py
+    bimplan/overlays/manager.py
+    bimplan/overlays/openings.py
+    bimplan/overlays/runtime.py
+    bimplan/overlays/spaces.py
+    bimplan/overlays/symbols.py
+    bimplan/overlays/walls.py
+    bimplan/performance.py
+    bimplan/runtime/session_state.py
+    bimplan/tools/space_regions.py
+    bimplan/ui/__init__.py
+    bimplan/ui/status_text.py
 )
 
 SET(Arch_presets
