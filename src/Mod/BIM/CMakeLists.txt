@@ -202,6 +202,12 @@ SET(bimplan_SRCS
     bimplan/tools/space_interaction.py
     bimplan/tools/spaces.py
     bimplan/tools/wall_relations.py
+    bimplan/runtime/embedded_commands.py
+    bimplan/runtime/tools.py
+    bimplan/selection/target_dispatch.py
+    bimplan/tools/hosted_openings.py
+    bimplan/tools/wall_create.py
+    bimplan/tools/window_create.py
 )
 
 SET(Arch_presets

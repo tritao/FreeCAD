@@ -354,6 +354,79 @@ class TestBimPlanEditRuntime(unittest.TestCase):
             self.assertFalse(space_editing.set_space_boundaries(session, space, boundaries))
         self.assertEqual([space], refreshed)
 
+    def test_plan_wall_and_opening_creation_delegate_to_domain_services(self):
+        from contextlib import nullcontext
+
+        import ArchOpeningConstruction
+        from bimplan.tools import wall_create, window_create
+
+        document = object()
+        wall = object()
+        point = FreeCAD.Vector(100, 200, 0)
+        created_walls = (object(), object())
+        session = SimpleNamespace(
+            doc=document,
+            creation_preview_state=SimpleNamespace(
+                rect_wall_params={
+                    "width": 200.0,
+                    "height": 3000.0,
+                    "align": "Center",
+                    "offset": 0.0,
+                },
+                opening_kind="Door",
+            ),
+            visibility=SimpleNamespace(
+                register_plan_object=lambda _obj: None,
+                add_object_to_active_storey=lambda _obj: None,
+            ),
+            document_visuals=SimpleNamespace(defer_document_visual_updates=nullcontext),
+            openings=SimpleNamespace(is_hosted_opening_object=lambda _obj: True),
+        )
+
+        with patch(
+            "bimplan.tools.wall_create.wall_construction.construct_wall_run",
+            return_value=created_walls,
+        ) as construct_wall:
+            result = wall_create.create_rect_wall_run(
+                session,
+                (
+                    FreeCAD.Vector(0, 0, 0),
+                    FreeCAD.Vector(1000, 0, 0),
+                    FreeCAD.Vector(1000, 1000, 0),
+                    FreeCAD.Vector(0, 1000, 0),
+                ),
+            )
+
+        self.assertEqual(list(created_walls), result)
+        wall_spec = construct_wall.call_args.args[2]
+        self.assertEqual(200.0, wall_spec.width)
+        self.assertEqual(3000.0, wall_spec.height)
+        self.assertTrue(construct_wall.call_args.kwargs["closed"])
+        self.assertIs(
+            construct_wall.call_args.kwargs["on_created"],
+            session.visibility.register_plan_object,
+        )
+
+        opening = object()
+        with (
+            patch(
+                "bimplan.tools.window_create.project_window_point_to_host",
+                return_value=point,
+            ),
+            patch(
+                "ArchOpeningConstruction.construct_hosted_opening",
+                return_value=opening,
+            ) as construct_opening,
+        ):
+            self.assertIs(window_create.create_hosted_opening(session, wall, point), opening)
+
+        opening_spec = construct_opening.call_args.args[3]
+        self.assertEqual("Door", opening_spec.kind)
+        self.assertIs(construct_opening.call_args.args[0], document)
+        self.assertIs(construct_opening.call_args.args[1], wall)
+        self.assertTrue(construct_opening.call_args.args[2].isEqual(point, 1e-7))
+        self.assertTrue(session.openings.is_hosted_opening_object(opening))
+
     def test_contextual_edit_activation_uses_controller_and_cleans_prior_input(self):
         from bimplan.contextual_editing import PlanContextualEditingAPI
 
