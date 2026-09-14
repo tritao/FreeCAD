@@ -5,6 +5,7 @@ import unittest
 import FreeCAD
 import Part
 import Arch
+import ArchSpaceSemantic
 
 from ArchRepresentation import (
     AxisConstraint,
@@ -57,6 +58,89 @@ class TestArchRepresentation(unittest.TestCase):
             self.assertTrue(boundaries[0].geometry[0].isEqual(boundaries[0].geometry[-1], 1e-7))
         finally:
             FreeCAD.closeDocument(document.Name)
+
+    def test_semantic_boundary_evaluation_preserves_solver_result(self):
+        report = {
+            "valid": True,
+            "code": "ok",
+            "details": ["resolved"],
+            "inner_void_count": 1,
+            "label": "Room A",
+            "candidates": [{"sample_point": FreeCAD.Vector(1, 2, 0)}],
+        }
+        evaluation = ArchSpaceSemantic.SpaceBoundaryEvaluation.from_report((), report)
+        self.assertTrue(evaluation.valid)
+        self.assertEqual("ok", evaluation.code)
+        self.assertEqual(("resolved",), evaluation.details)
+        self.assertEqual(1, evaluation.inner_void_count)
+        self.assertEqual(1, evaluation.to_report()["candidate_count"])
+        self.assertEqual("Room A", evaluation.to_report()["label"])
+
+    def test_semantic_space_geometry_validation_requires_a_solid(self):
+        solid = type("Space", (), {"Shape": Part.makeBox(100, 100, 100)})()
+        wire = type(
+            "Space", (), {"Shape": Part.makeLine(FreeCAD.Vector(), FreeCAD.Vector(100, 0, 0))}
+        )()
+        self.assertTrue(ArchSpaceSemantic.has_valid_geometry(solid))
+        self.assertFalse(ArchSpaceSemantic.has_valid_geometry(wire))
+
+    def test_semantic_space_updates_commit_or_abort_their_transactions(self):
+        events = []
+
+        class Proxy:
+            def setBoundaryLinks(self, _space, boundaries):
+                events.append(("boundaries", tuple(boundaries)))
+
+            def setBoundaryRegionReferencePoint(self, _space, point):
+                events.append(("reference", FreeCAD.Vector(point)))
+
+        class Space:
+            def __init__(self, shape):
+                self.Shape = shape
+                self.Proxy = Proxy()
+                self.BoundaryStatus = "OK"
+
+            def touch(self):
+                events.append(("touch",))
+
+        class Document:
+            def openTransaction(self, name):
+                events.append(("open", name))
+
+            def recompute(self):
+                events.append(("recompute",))
+
+            def commitTransaction(self):
+                events.append(("commit",))
+
+            def abortTransaction(self):
+                events.append(("abort",))
+
+        document = Document()
+        space = Space(Part.makeBox(100, 100, 100))
+        ArchSpaceSemantic.set_boundaries(document, space, ())
+        self.assertEqual(
+            events,
+            [
+                ("open", "Edit Space Boundaries"),
+                ("boundaries", ()),
+                ("recompute",),
+                ("commit",),
+            ],
+        )
+
+        events.clear()
+        point = FreeCAD.Vector(20, 30, 0)
+        ArchSpaceSemantic.reassign_region(document, space, point)
+        self.assertEqual(events[0], ("open", "Reassign Space Region"))
+        self.assertEqual(events[1], ("reference", point))
+        self.assertEqual(events[-2:], [("recompute",), ("commit",)])
+
+        events.clear()
+        invalid_space = Space(Part.makeLine(FreeCAD.Vector(), FreeCAD.Vector(100, 0, 0)))
+        with self.assertRaises(ArchSpaceSemantic.SpaceSemanticError):
+            ArchSpaceSemantic.set_boundaries(document, invalid_space, ())
+        self.assertEqual(events[-1], ("abort",))
 
     def test_wall_move_and_stretch_share_viewer_independent_evaluation(self):
         endpoints = (FreeCAD.Vector(0, 0, 0), FreeCAD.Vector(3000, 0, 0))
@@ -748,3 +832,21 @@ if __name__ == "__main__":
         )
         self.assertAlmostEqual(original_width, wall.Width.Value)
         self.assertEqual(before, base.Placement)
+
+
+    def test_space_areas_use_semantic_footprint_without_generic_projection(self):
+        document = FreeCAD.newDocument("SemanticSpaceArea")
+        self.addCleanup(FreeCAD.closeDocument, document.Name)
+        base = document.addObject("Part::Feature", "SpaceBox")
+        base.Shape = Part.makeBox(4000, 3000, 2500)
+
+        with patch(
+            "ArchComponent.AreaCalculator._computeHorizontalAreaAndPerimeter",
+            side_effect=AssertionError("Space must not use generic area projection"),
+        ):
+            space = Arch.makeSpace(base)
+            document.recompute()
+
+        self.assertAlmostEqual(space.HorizontalArea.getValueAs("m^2").Value, 12.0, places=3)
+        self.assertAlmostEqual(space.Area.getValueAs("m^2").Value, 12.0, places=3)
+        self.assertAlmostEqual(space.PerimeterLength.getValueAs("m").Value, 14.0, places=3)

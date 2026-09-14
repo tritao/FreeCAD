@@ -57,6 +57,7 @@ SET(Arch_SRCS
     ArchRoof.py
     ArchStairs.py
     ArchSpace.py
+    ArchSpaceSemantic.py
     ArchSpaceSeparator.py
     ArchPlanRegion.py
     ArchRebar.py
