@@ -6,13 +6,25 @@ import FreeCAD
 import Part
 
 from ArchRepresentation import (
+    AxisConstraint,
+    BIMEditCapabilities,
+    BIMEditHandle,
+    BIMEditOperation,
+    BIMEditRay,
+    BIMEditTransaction,
     BIMRepresentation,
+    PlaneConstraint,
     RepresentationUnavailable,
+    WorkingPlaneConstraint,
+    is_property_expression_driven,
+    project_direction_to_representation_plane,
+    project_to_representation_plane,
     query_representation_pick,
     query_representation_snap,
     query_representation_snap_candidates,
     RepresentationPurpose,
     RepresentationRequest,
+    edit_capabilities_for,
     representation_for,
 )
 
@@ -131,6 +143,33 @@ class TestArchRepresentation(unittest.TestCase):
         self.assertEqual("cut", result.role)
 
 
+
+
+    def test_representation_projection_respects_reference_frame(self):
+        frame = FreeCAD.Placement(
+            FreeCAD.Vector(10, 0, 0), FreeCAD.Rotation(FreeCAD.Vector(0, 0, 1), 90)
+        )
+        request = RepresentationRequest(reference_frame=frame, target_offset=2.0)
+        projected = project_to_representation_plane(FreeCAD.Vector(10, 5, 9), request)
+        self.assertTrue(projected.isEqual(FreeCAD.Vector(10, 5, 2), 1e-7))
+
+        tilted = FreeCAD.Placement(
+            FreeCAD.Vector(1, 0, 0), FreeCAD.Rotation(FreeCAD.Vector(0, 1, 0), 90)
+        )
+        working_plane = WorkingPlaneConstraint(tilted)
+        working_ray = BIMEditRay(FreeCAD.Vector(10, 2, 3), FreeCAD.Vector(-1, 0, 0))
+        self.assertTrue(
+            working_plane.project(working_ray).isEqual(FreeCAD.Vector(1, 2, 3), 1e-7)
+        )
+
+        direction = project_direction_to_representation_plane(
+            FreeCAD.Vector(0, 0, 1), RepresentationRequest()
+        )
+        self.assertIsNone(direction)
+
+
+
+
 if __name__ == "__main__":
     unittest.main()
 
@@ -182,3 +221,165 @@ if __name__ == "__main__":
         obj.Proxy = object()
         with self.assertRaises(RepresentationUnavailable):
             representation_for(obj, RepresentationRequest())
+
+
+    def test_edit_operation_uses_semantic_candidate_validation(self):
+        operation = BIMEditOperation(
+            "Semantic",
+            "Semantic edit",
+            lambda _source: FreeCAD.Vector(),
+            lambda _source, _value: None,
+            value_kind="Point",
+            validator=lambda _source, _value: type(
+                "Evaluation", (), {"allowed": False, "reason": "Relation failed."}
+            )(),
+        )
+        validation = operation.validate(object(), FreeCAD.Vector(1, 0, 0))
+        self.assertFalse(validation.allowed)
+        self.assertEqual("Relation failed.", validation.reason)
+
+    def test_edit_operation_validates_before_mutating_semantic_source(self):
+        source = {"width": 100.0}
+        operation = BIMEditOperation(
+            "set-width",
+            "Set width",
+            lambda value: value["width"],
+            lambda value, width: value.__setitem__("width", width),
+            minimum=10.0,
+            maximum=500.0,
+        )
+        handle = BIMEditHandle(
+            source,
+            "width",
+            FreeCAD.Vector(),
+            FreeCAD.Vector(1, 0, 0),
+            operation,
+        )
+
+        self.assertEqual(100.0, operation.get_value(source))
+        self.assertFalse(operation.validate(source, 5.0).allowed)
+        with self.assertRaises(ValueError):
+            operation.apply(source, 5.0)
+        operation.apply(source, 250.0)
+        self.assertEqual(250.0, source["width"])
+        self.assertIs(handle.operation, operation)
+
+    def test_bim_edit_transaction_commits_and_aborts(self):
+        class Document:
+            def __init__(self):
+                self.events = []
+
+            def openTransaction(self, label):
+                self.events.append(("open", label))
+
+            def commitTransaction(self):
+                self.events.append(("commit",))
+
+            def abortTransaction(self):
+                self.events.append(("abort",))
+
+        document = Document()
+        with BIMEditTransaction(document, "Edit wall"):
+            document.events.append(("apply",))
+        self.assertEqual([("open", "Edit wall"), ("apply",), ("commit",)], document.events)
+
+        document.events.clear()
+        with self.assertRaisesRegex(RuntimeError, "failed"):
+            with BIMEditTransaction(document, "Edit wall"):
+                raise RuntimeError("failed")
+        self.assertEqual([("open", "Edit wall"), ("abort",)], document.events)
+
+    def test_axis_constraint_resolves_pointer_ray_for_scalar_edit(self):
+        source = {"height": 20.0}
+        operation = BIMEditOperation(
+            "set-height",
+            "Set height",
+            lambda value: value["height"],
+            lambda value, height: value.__setitem__("height", height),
+            minimum=1.0,
+            manages_transaction=True,
+        )
+        axis = AxisConstraint(FreeCAD.Vector(0, 0, 0), FreeCAD.Vector(0, 0, 1))
+        handle = BIMEditHandle(
+            source,
+            "height",
+            FreeCAD.Vector(0, 0, 10),
+            FreeCAD.Vector(),
+            operation,
+            constraint=axis,
+        )
+        editor = BIMContextualHandleEditor(RepresentationRequest(purpose="Model"))
+        ray = BIMEditRay(FreeCAD.Vector(10, 0, 5), FreeCAD.Vector(-1, 0, 0))
+
+        editor.begin(handle)
+        preview = editor.preview(ray)
+        self.assertAlmostEqual(15.0, preview.value)
+        self.assertTrue(preview.point.isEqual(FreeCAD.Vector(0, 0, 5), 1e-7))
+        self.assertTrue(editor.commit(ray).success)
+        self.assertAlmostEqual(15.0, source["height"])
+
+    def test_plane_constraint_resolves_ray_and_working_plane_uses_frame(self):
+        source = {"point": FreeCAD.Vector(1, 2, 0)}
+        operation = BIMEditOperation(
+            "move-point",
+            "Move point",
+            lambda value: value["point"],
+            lambda value, point: value.__setitem__("point", point),
+            value_kind="Point",
+            manages_transaction=True,
+        )
+        plane = PlaneConstraint(FreeCAD.Vector(), FreeCAD.Vector(0, 0, 1))
+        handle = BIMEditHandle(
+            source,
+            "point",
+            source["point"],
+            FreeCAD.Vector(),
+            operation,
+            constraint=plane,
+        )
+        editor = BIMContextualHandleEditor(RepresentationRequest(purpose="Model"))
+        ray = BIMEditRay(FreeCAD.Vector(10, 20, 10), FreeCAD.Vector(-1, -2, -1))
+
+        editor.begin(handle)
+        preview = editor.preview(ray)
+        self.assertTrue(preview.point.isEqual(FreeCAD.Vector(), 1e-7))
+        self.assertTrue(preview.value.isEqual(FreeCAD.Vector(), 1e-7))
+        self.assertTrue(editor.commit(ray).success)
+        self.assertTrue(source["point"].isEqual(FreeCAD.Vector(), 1e-7))
+
+        frame = FreeCAD.Placement(
+            FreeCAD.Vector(1, 2, 3),
+            FreeCAD.Rotation(FreeCAD.Vector(0, 1, 0), 90),
+        )
+        working_plane = WorkingPlaneConstraint(frame)
+        projected = working_plane.project(FreeCAD.Vector(8, 6, 5))
+        self.assertTrue(projected.isEqual(FreeCAD.Vector(1, 6, 5), 1e-7))
+
+    def test_constraints_report_ambiguous_parallel_pointer_rays(self):
+        axis = AxisConstraint(FreeCAD.Vector(), FreeCAD.Vector(0, 0, 1))
+        plane = PlaneConstraint(FreeCAD.Vector(), FreeCAD.Vector(0, 0, 1))
+        axis_ray = BIMEditRay(FreeCAD.Vector(0, 0, 10), FreeCAD.Vector(0, 0, -1))
+        plane_ray = BIMEditRay(FreeCAD.Vector(0, 0, 10), FreeCAD.Vector(1, 0, 0))
+        self.assertIsNone(axis.project(axis_ray))
+        self.assertIsNone(plane.project(plane_ray))
+
+    def test_edit_capabilities_have_no_representation_geometry(self):
+        request = RepresentationRequest(purpose=RepresentationPurpose.MODEL)
+
+        class Provider:
+            def getEditCapabilities(self, obj, requested_request):
+                self.args = (obj, requested_request)
+                return BIMEditCapabilities(source=obj, request=requested_request)
+
+        class BIMObject:
+            pass
+
+        obj = BIMObject()
+        obj.Proxy = Provider()
+        result = edit_capabilities_for(obj, request)
+        self.assertIs(result.source, obj)
+        self.assertIs(result.request, request)
+        self.assertEqual((obj, request), obj.Proxy.args)
+        self.assertFalse(hasattr(result, "cut_geometry"))
+        self.assertFalse(hasattr(result, "projected_geometry"))
+        self.assertFalse(hasattr(result, "snap_geometry"))

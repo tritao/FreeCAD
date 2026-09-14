@@ -2,6 +2,7 @@
 
 """Renderer-neutral contracts for architectural representation providers."""
 
+from dataclasses import dataclass
 from enum import Enum
 
 import FreeCAD
@@ -133,6 +134,284 @@ class BIMPickResult:
         return self.target.role
 
 
+class BIMEditRay:
+    """World-space pointer ray supplied by a 3D viewer input adapter."""
+
+    def __init__(self, origin, direction):
+        self.origin = FreeCAD.Vector(origin)
+        self.direction = FreeCAD.Vector(direction)
+        if self.direction.Length <= 1e-9:
+            raise ValueError("BIM edit ray has no direction")
+        self.direction.normalize()
+
+
+class AxisConstraint:
+    """Constrain an edit to an infinite world-space axis."""
+
+    def __init__(self, origin, direction):
+        self.origin = FreeCAD.Vector(origin)
+        self.direction = FreeCAD.Vector(direction)
+        if self.direction.Length <= 1e-9:
+            raise ValueError("BIM edit axis has no direction")
+        self.direction.normalize()
+
+    def project(self, pointer):
+        if isinstance(pointer, BIMEditRay):
+            offset = pointer.origin - self.origin
+            ray_axis_dot = pointer.direction.dot(self.direction)
+            denominator = 1.0 - ray_axis_dot * ray_axis_dot
+            if abs(denominator) <= 1e-10:
+                return None
+            ray_offset = pointer.direction.dot(offset)
+            axis_offset = self.direction.dot(offset)
+            ray_parameter = (ray_axis_dot * axis_offset - ray_offset) / denominator
+            ray_parameter = max(0.0, ray_parameter)
+            axis_parameter = axis_offset + ray_axis_dot * ray_parameter
+            return self.origin + self.direction * axis_parameter
+        point = FreeCAD.Vector(pointer)
+        return self.origin + self.direction * (point - self.origin).dot(self.direction)
+
+
+class PlaneConstraint:
+    """Constrain an edit to a plane in world space."""
+
+    def __init__(self, origin, normal):
+        self.origin = FreeCAD.Vector(origin)
+        self.normal = FreeCAD.Vector(normal)
+        if self.normal.Length <= 1e-9:
+            raise ValueError("BIM edit plane has no normal")
+        self.normal.normalize()
+
+    def project(self, pointer):
+        if isinstance(pointer, BIMEditRay):
+            denominator = pointer.direction.dot(self.normal)
+            if abs(denominator) <= 1e-10:
+                return None
+            ray_parameter = (self.origin - pointer.origin).dot(self.normal) / denominator
+            if ray_parameter < 0.0:
+                return None
+            return pointer.origin + pointer.direction * ray_parameter
+        point = FreeCAD.Vector(pointer)
+        return point - self.normal * (point - self.origin).dot(self.normal)
+
+
+class WorkingPlaneConstraint(PlaneConstraint):
+    """Plane constraint built from an origin/normal or a FreeCAD placement."""
+
+    def __init__(self, origin, normal=None):
+        if normal is None:
+            frame = origin
+            origin = frame.Base
+            normal = frame.Rotation.multVec(FreeCAD.Vector(0, 0, 1))
+        super().__init__(origin, normal)
+
+
+class BIMEditHandle:
+    """Renderer-independent edit offered by a BIM object.
+
+    ``constraint`` defines the geometric manifold that pointer input must
+    follow. ``interaction`` identifies the input mode used by the adapter.
+    """
+
+    def __init__(
+        self,
+        source,
+        role,
+        point,
+        direction,
+        operation,
+        *,
+        interaction="Linear",
+        subelement=None,
+        minimum=0.0,
+        glyph="Circle",
+        glyph_size=9,
+        icon_name="",
+        constraint=None,
+    ):
+        self.source = source
+        self.role = str(role)
+        self.point = FreeCAD.Vector(point)
+        self.direction = FreeCAD.Vector(direction)
+        if self.direction.Length:
+            self.direction.normalize()
+        self.constraint = constraint
+        if not self.direction.Length and isinstance(constraint, AxisConstraint):
+            self.direction = FreeCAD.Vector(constraint.direction)
+        self.operation = operation
+        self.interaction = str(interaction)
+        self.subelement = subelement
+        self.minimum = minimum
+        self.glyph = str(glyph)
+        self.glyph_size = int(glyph_size)
+        self.icon_name = str(icon_name)
+
+    @property
+    def property_name(self):
+        return getattr(self.operation, "property_name", "")
+
+
+@dataclass(frozen=True)
+class BIMEditValidation:
+    allowed: bool
+    reason: str = ""
+    minimum: float | None = None
+    maximum: float | None = None
+
+
+class BIMEditOperation:
+    """Typed semantic mutation used by a renderer-independent edit handle."""
+
+    def __init__(
+        self,
+        key,
+        label,
+        get_value,
+        apply_value,
+        *,
+        property_name="",
+        manages_transaction=False,
+        available=None,
+        minimum=None,
+        maximum=None,
+        value_kind="Scalar",
+        sensitivity=1.0,
+        interaction_intent="",
+        validator=None,
+    ):
+        self.key = str(key)
+        self.label = str(label)
+        self._get_value = get_value
+        self._apply_value = apply_value
+        self.property_name = str(property_name)
+        self.manages_transaction = bool(manages_transaction)
+        self._available = available
+        self.minimum = minimum
+        self.maximum = maximum
+        self.value_kind = str(value_kind)
+        self.sensitivity = float(sensitivity)
+        self.interaction_intent = str(interaction_intent)
+        self._validator = validator
+
+    def is_available(self, source):
+        return True if self._available is None else bool(self._available(source))
+
+    def validate(self, source, value=None):
+        if not self.is_available(source):
+            return BIMEditValidation(False, "This value is controlled by a constraint.")
+        if (
+            value is not None
+            and self.value_kind == "Scalar"
+            and self.minimum is not None
+            and value < self.minimum
+        ):
+            return BIMEditValidation(
+                False,
+                "Value must be at least {:g} mm.".format(self.minimum),
+                minimum=self.minimum,
+                maximum=self.maximum,
+            )
+        if (
+            value is not None
+            and self.value_kind == "Scalar"
+            and self.maximum is not None
+            and value > self.maximum
+        ):
+            return BIMEditValidation(
+                False,
+                "Value must be at most {:g} mm.".format(self.maximum),
+                minimum=self.minimum,
+                maximum=self.maximum,
+            )
+        if value is not None and callable(self._validator):
+            result = self._validator(source, value)
+            if isinstance(result, BIMEditValidation):
+                return result
+            if not getattr(result, "allowed", bool(result)):
+                return BIMEditValidation(
+                    False,
+                    str(getattr(result, "reason", "") or "This value is not allowed."),
+                    minimum=self.minimum,
+                    maximum=self.maximum,
+                )
+        return BIMEditValidation(True, minimum=self.minimum, maximum=self.maximum)
+
+    def get_value(self, source):
+        value = self._get_value(source)
+        return FreeCAD.Vector(value) if self.value_kind == "Point" else float(value)
+
+    def apply(self, source, value):
+        validation = self.validate(source, value)
+        if not validation.allowed:
+            raise ValueError(validation.reason)
+        if self.value_kind == "Point":
+            return self._apply_value(source, FreeCAD.Vector(value))
+        return self._apply_value(source, float(value))
+
+
+class BIMEditTransaction:
+    """Document transaction used by semantic BIM edits outside Plan Edit."""
+
+    def __init__(self, document, label):
+        self.document = document
+        self.label = str(label or "").strip()
+        self._opened = False
+
+    def __enter__(self):
+        if self.document is not None and self.label:
+            self.document.openTransaction(self.label)
+            self._opened = True
+        return self
+
+    def __exit__(self, exception_type, exception, traceback):
+        del exception, traceback
+        if not self._opened:
+            return False
+        if exception_type is None:
+            self.document.commitTransaction()
+        else:
+            self.document.abortTransaction()
+        return False
+
+
+def is_property_expression_driven(obj, property_name):
+    """Return whether a document property path is controlled by an expression."""
+
+    getter = getattr(obj, "getExpression", None)
+    if callable(getter):
+        try:
+            return bool(getter(str(property_name)))
+        except Exception:
+            pass
+    try:
+        return any(
+            str(path) == str(property_name)
+            for path, _expression in (getattr(obj, "ExpressionEngine", ()) or ())
+        )
+    except Exception:
+        return False
+
+
+class BIMEditCapabilities:
+    """Semantic edits offered by one object in a representation request.
+
+    Unlike :class:`BIMRepresentation`, this value carries no replacement or
+    picking geometry. Viewers that already render the source object can use it
+    to display contextual handles without constructing a second representation.
+    """
+
+    def __init__(self, source=None, request=None):
+        self.source = source
+        self.request = request
+        self.edit_handles = []
+
+    def add_edit_handle(self, handle):
+        if handle.source is None:
+            handle.source = self.source
+        self.edit_handles.append(handle)
+        return handle
+
+
 class BIMRepresentation:
     """Renderer-neutral geometry and identity for one BIM object."""
 
@@ -145,6 +424,7 @@ class BIMRepresentation:
         self.projected_geometry = []
         self.snap_geometry = []
         self.source_mappings = []
+        self.edit_handles = []
 
     def add_geometry(self, collection, geometry, role, subelement=None, *, related_sources=()):
         """Add geometry to a named collection and preserve semantic mapping."""
@@ -167,6 +447,12 @@ class BIMRepresentation:
             (mapping for mapping in self.source_mappings if mapping.geometry is geometry),
             None,
         )
+
+    def add_edit_handle(self, handle):
+        if handle.source is None:
+            handle.source = self.source
+        self.edit_handles.append(handle)
+        return handle
 
     def iter_snap_targets(self):
         snap_ids = {id(geometry) for geometry in self.snap_geometry}
@@ -214,6 +500,22 @@ def project_to_representation_plane(point, request):
     if target_offset is not None:
         local_point.z = target_offset
     return frame.multVec(local_point)
+
+
+def project_direction_to_representation_plane(direction, request):
+    """Return a normalized global direction within the request output plane."""
+
+    direction = FreeCAD.Vector(direction)
+    frame = getattr(request, "reference_frame", None)
+    if frame is not None:
+        normal = frame.Rotation.multVec(FreeCAD.Vector(0, 0, 1))
+        direction = direction - normal * direction.dot(normal)
+    else:
+        direction.z = 0.0
+    if direction.Length <= 1e-9:
+        return None
+    direction.normalize()
+    return direction
 
 
 def _nearest_snap_point(geometry, point):
