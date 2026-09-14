@@ -18,6 +18,12 @@ from bimcontextual.actions import (
     SemanticEditProvider,
 )
 
+from bimplan.providers import (
+    PlanEditProvider,
+    PlanToolSpec,
+)
+import Draft
+
 from ArchRepresentation import (
     AxisConstraint,
     BIMEditCapabilities,
@@ -990,3 +996,15 @@ if __name__ == "__main__":
         self.assertEqual(2780.0, spec.height)
         self.assertEqual("Right", spec.align)
         self.assertEqual(42.0, spec.offset)
+
+
+    def test_plan_provider_contracts_use_contextual_contracts(self):
+        context = ContextualProviderContext(
+            representation_request=RepresentationRequest(purpose="Model"),
+            selected_sources=(object(),),
+        )
+        provider = PlanEditProvider()
+
+        self.assertIsInstance(PlanToolSpec("join", "Join"), ContextualToolSpec)
+        self.assertIsInstance(provider, ContextualProvider)
+        self.assertEqual(1, len(context.get_selected_sources()))

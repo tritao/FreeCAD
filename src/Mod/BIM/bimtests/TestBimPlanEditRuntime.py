@@ -265,6 +265,95 @@ class TestBimPlanEditRuntime(unittest.TestCase):
         session.selection.clear()
         self.assertEqual((), renderer.visible_sources)
 
+    def test_plan_selection_activates_only_rendered_domain_handles(self):
+        sources = tuple(
+            SimpleNamespace(IfcType=kind) for kind in ("Wall", "Window", "Space")
+        )
+        handles = tuple(
+            BIMEditHandle(
+                source,
+                "semantic-edit",
+                FreeCAD.Vector(),
+                FreeCAD.Vector(1, 0, 0),
+                BIMEditOperation(
+                    "semantic-edit", "Edit", lambda _source: 0.0, lambda *_args: None
+                ),
+            )
+            for source in sources
+        )
+
+        class Renderer:
+            def __init__(self):
+                self.visible_sources = ()
+
+            def edit_handles_for(self, source):
+                return tuple(handle for handle in handles if handle.source is source)
+
+            def set_visible_handle_sources(self, sources):
+                self.visible_sources = tuple(sources)
+                return True
+
+        activated = []
+        session = PlanEditSession()
+        renderer = Renderer()
+        session.contextual_rendering.renderer = renderer
+        session.contextual_editing = SimpleNamespace(
+            activate=lambda handle: activated.append(handle) or True
+        )
+
+        for source, handle in zip(sources, handles):
+            self.assertTrue(session.selection.activate_handle(handle))
+            self.assertIs(session.selection.selected_source, source)
+
+        unknown = BIMEditHandle(
+            object(), "unknown", FreeCAD.Vector(), FreeCAD.Vector(), handles[0].operation
+        )
+        self.assertFalse(session.selection.activate_handle(unknown))
+        self.assertEqual(list(handles), activated)
+        self.assertEqual((sources[-1],), renderer.visible_sources)
+
+    def test_plan_space_adapter_delegates_evaluation_and_boundary_mutation(self):
+        from bimplan.tools import space_editing
+
+        space = object()
+        document = object()
+        refreshed = []
+        session = SimpleNamespace(
+            doc=document,
+            contextual_rendering=SimpleNamespace(refresh_object=refreshed.append),
+        )
+        boundaries = ((object(), ("Face1",)),)
+        evaluation = object()
+
+        with (
+            patch("ArchSpaceSemantic.evaluate_boundaries", return_value=evaluation) as evaluate,
+            patch("ArchSpaceSemantic.set_boundaries", return_value=space) as set_boundaries,
+        ):
+            self.assertIs(
+                evaluation,
+                space_editing.evaluate_space_boundaries(
+                    boundaries, label="Office", seed_space=space, candidates=True
+                ),
+            )
+            self.assertTrue(space_editing.set_space_boundaries(session, space, boundaries))
+
+        evaluate.assert_called_once_with(
+            boundaries, label="Office", seed_space=space, candidates=True
+        )
+        set_boundaries.assert_called_once_with(
+            document,
+            space,
+            boundaries,
+            transaction_name="Edit Space Boundaries",
+        )
+        self.assertEqual([space], refreshed)
+
+        with patch(
+            "ArchSpaceSemantic.set_boundaries", side_effect=ValueError("invalid boundary")
+        ):
+            self.assertFalse(space_editing.set_space_boundaries(session, space, boundaries))
+        self.assertEqual([space], refreshed)
+
     def test_contextual_edit_activation_uses_controller_and_cleans_prior_input(self):
         from bimplan.contextual_editing import PlanContextualEditingAPI
 

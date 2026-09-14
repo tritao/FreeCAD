@@ -181,6 +181,27 @@ SET(bimplan_SRCS
     bimplan/tools/space_regions.py
     bimplan/ui/__init__.py
     bimplan/ui/status_text.py
+    bimplan/overlays/providers.py
+    bimplan/providers/__init__.py
+    bimplan/providers/action_payloads.py
+    bimplan/providers/builtin.py
+    bimplan/providers/builtin_edit.py
+    bimplan/providers/commands.py
+    bimplan/providers/context.py
+    bimplan/providers/contracts.py
+    bimplan/providers/edit.py
+    bimplan/providers/payloads.py
+    bimplan/providers/picking.py
+    bimplan/providers/point.py
+    bimplan/providers/registry.py
+    bimplan/providers/runtime.py
+    bimplan/tools/__init__.py
+    bimplan/tools/space_boundaries.py
+    bimplan/tools/space_editing.py
+    bimplan/tools/space_geometry.py
+    bimplan/tools/space_interaction.py
+    bimplan/tools/spaces.py
+    bimplan/tools/wall_relations.py
 )
 
 SET(Arch_presets
