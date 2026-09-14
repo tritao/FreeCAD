@@ -140,6 +140,25 @@ SET(bimplan_SRCS
     bimplan/storeys.py
     bimplan/document_visuals.py
     bimplan/runtime/view.py
+    bimplan/picking/__init__.py
+    bimplan/picking/area.py
+    bimplan/picking/coordinator.py
+    bimplan/picking/debug.py
+    bimplan/picking/edit_nodes.py
+    bimplan/picking/geometry.py
+    bimplan/picking/hover.py
+    bimplan/picking/overlays.py
+    bimplan/picking/service.py
+    bimplan/selection/__init__.py
+    bimplan/selection/edit_nodes.py
+    bimplan/selection/gui_sync.py
+    bimplan/selection/selection.py
+    bimplan/selection/service_common.py
+    bimplan/selection/service_interaction.py
+    bimplan/selection/service_primary.py
+    bimplan/selection/target_kinds.py
+    bimplan/selection/targets.py
+    bimplan/snap.py
 )
 
 SET(Arch_presets

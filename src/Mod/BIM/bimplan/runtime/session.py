@@ -5,6 +5,22 @@
 from bimplan.representation_request import PlanRepresentationRequestAPI
 from bimplan.contextual_rendering import PlanContextualRenderingAPI
 from bimplan.object_visibility import PlanVisibilityAPI
+from bimplan.picking import PlanPickingAPI
+from bimplan.selection import PlanSelectionAPI
+from bimplan.snap import PlanSnapAPI
+
+
+_PLAN_EDIT_SNAP_SET = {
+    "Lock",
+    "Near",
+    "Extension",
+    "Endpoint",
+    "Midpoint",
+    "Perpendicular",
+    "Ortho",
+    "Intersection",
+    "WorkingPlane",
+}
 
 
 class PlanEditSession:
@@ -32,6 +48,9 @@ class PlanEditSession:
         self.representation_request = PlanRepresentationRequestAPI(self)
         self.visibility = PlanVisibilityAPI(self)
         self.contextual_rendering = PlanContextualRenderingAPI(self)
+        self.picking = PlanPickingAPI(self)
+        self.selection = PlanSelectionAPI(self)
+        self.snap = PlanSnapAPI(self, _PLAN_EDIT_SNAP_SET)
         if active_storey is not None:
             self.set_source(active_storey, refresh=False)
 

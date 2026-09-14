@@ -7,7 +7,12 @@ from unittest.mock import patch
 import FreeCAD
 
 import ArchComponent
-from ArchRepresentation import RepresentationPurpose, RepresentationRequest
+from ArchRepresentation import (
+    BIMEditHandle,
+    BIMEditOperation,
+    RepresentationPurpose,
+    RepresentationRequest,
+)
 from bimplan.representation_request import (
     PlanRepresentationRequestAPI,
     representation_request_from_source,
@@ -199,6 +204,66 @@ class TestBimPlanEditRuntime(unittest.TestCase):
         )
         session.contextual_rendering.close()
         self.assertTrue(renderer.closed)
+
+    def test_plan_picking_selection_and_snap_use_canonical_semantic_handles(self):
+        source = object()
+        operation = BIMEditOperation(
+            "move", "Move", lambda _source: FreeCAD.Vector(), lambda *_args: None,
+            value_kind="Point",
+        )
+        handle = BIMEditHandle(
+            source,
+            "endpoint",
+            FreeCAD.Vector(1, 2, 3),
+            FreeCAD.Vector(1, 0, 0),
+            operation,
+            subelement="Vertex1",
+        )
+
+        class View:
+            def getPointOnScreen(self, point):
+                return point.x, point.y
+
+        class Renderer:
+            def __init__(self):
+                self.visible_sources = ()
+                self.snap_request = None
+
+            def pick_edit_handle(self, _position, _project, radius_px=8):
+                return handle
+
+            def edit_handles_for(self, candidate):
+                return (handle,) if candidate is source else ()
+
+            def set_visible_handle_sources(self, sources):
+                self.visible_sources = tuple(sources)
+                return True
+
+            def query_snap(self, point, tolerance, request=None):
+                self.snap_request = (point, tolerance, request)
+                return "semantic-snap"
+
+        session = PlanEditSession(view=View())
+        renderer = Renderer()
+        session.contextual_rendering.renderer = renderer
+
+        picked = session.picking.pick_edit_handle((12, 24))
+        self.assertIs(picked, handle)
+        self.assertIsInstance(picked, BIMEditHandle)
+        self.assertTrue(session.selection.select_handle(picked))
+        self.assertIs(session.selection.selected_handle, handle)
+        self.assertIs(session.selection.selected_source, source)
+        self.assertEqual((source,), renderer.visible_sources)
+
+        point = FreeCAD.Vector(4, 5, 6)
+        self.assertEqual(
+            "semantic-snap",
+            session.snap._query_semantic_snap(point, 0.5),
+        )
+        self.assertEqual((point, 0.5, session.request), renderer.snap_request)
+
+        session.selection.clear()
+        self.assertEqual((), renderer.visible_sources)
 
 
 if __name__ == "__main__":
