@@ -1086,6 +1086,7 @@ SET(Inventor_CPP_SRCS
     Inventor/SoFCBoundingBox.cpp
     Inventor/SoNaviCube.cpp
     Inventor/SoMouseWheelEvent.cpp
+    Inventor/SoFCOverlayGlyph.cpp
     Inventor/SoFCTransform.cpp
     Inventor/SoViewContextElement.cpp
     Inventor/SoToggleSwitch.cpp
@@ -1129,6 +1130,7 @@ SET(Inventor_SRCS
     Inventor/SoFCBoundingBox.h
     Inventor/SoNaviCube.h
     Inventor/SoMouseWheelEvent.h
+    Inventor/SoFCOverlayGlyph.h
     Inventor/SoFCTransform.h
     Inventor/SoToggleSwitch.h
     Inventor/Draggers/SoTransformDragger.h
