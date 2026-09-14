@@ -25,6 +25,7 @@ from bimcontextual.interaction import ContextualInteractionHost
 from bimcontextual import context_policy
 from bimcontextual.actions import ContextualProvider, ContextualToolSpec
 from ArchWallSemantic import apply_wall_candidate
+from bimplan.storeys import collect_storeys, find_initial_storey, get_storey_elevation
 from bimplan.providers import PlanEditProvider, PlanEditRegistry
 from BimContextualRendering import (
     ContextualInteractionRenderer,
@@ -564,6 +565,29 @@ class TestBimPlanEditSessionGui(TestArchBaseGui):
         storey.addObject(contained)
         self.document.recompute()
         return storey, contained
+
+    def test_storey_collection_uses_arch_semantics_and_keeps_legacy_floors(self):
+        low_storey, _ = self._make_storey("Low Storey", 0)
+        high_storey, _ = self._make_storey("High Storey", 3000)
+        high_storey.LevelOffset = 125
+        legacy_floor = self.document.addObject("App::FeaturePython", "LegacyStorey")
+        legacy_floor.addProperty("App::PropertyPlacement", "Placement", "Base")
+        legacy_floor.Proxy = type("LegacyFloorProxy", (), {"Type": "Floor"})()
+        legacy_floor.Placement = FreeCAD.Placement(
+            FreeCAD.Vector(0, 0, 1500), FreeCAD.Rotation()
+        )
+        session = SimpleNamespace(doc=self.document, storeys=[])
+
+        storeys = collect_storeys(session)
+
+        self.assertEqual(storeys, [low_storey, legacy_floor, high_storey])
+        self.assertEqual(get_storey_elevation(high_storey), 3000)
+        FreeCADGui.Selection.clearSelection()
+        try:
+            FreeCADGui.Selection.addSelection(high_storey)
+            self.assertIs(find_initial_storey(SimpleNamespace(storeys=storeys)), high_storey)
+        finally:
+            FreeCADGui.Selection.clearSelection()
 
     def test_session_visibility_and_camera_are_reversible(self):
         lower_storey, lower_wall = self._make_storey("Lower Storey", 0)

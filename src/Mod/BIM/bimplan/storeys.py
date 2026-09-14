@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import FreeCAD
 import FreeCADGui
+import ArchBuildingPart
 
 translate = FreeCAD.Qt.translate
 
@@ -39,28 +40,14 @@ class PlanStoreysAPI:
 
 
 def collect_storeys(session):
-    import Draft
-
-    storeys = []
-    for obj in session.doc.Objects:
-        obj_type = Draft.getType(obj)
-        if obj_type == "Floor":
-            storeys.append(obj)
-        elif obj_type == "BuildingPart" and getattr(obj, "IfcType", "") == "Building Storey":
-            storeys.append(obj)
-
+    storeys = list(ArchBuildingPart.iterBuildingStoreys(session.doc, includeLegacyFloors=True))
     storeys.sort(key=lambda obj: get_storey_elevation(obj))
     return storeys
 
 
 def find_initial_storey(session):
-    import Draft
-
     for obj in FreeCADGui.Selection.getSelection():
-        obj_type = Draft.getType(obj)
-        if obj_type == "Floor":
-            return obj
-        if obj_type == "BuildingPart" and getattr(obj, "IfcType", "") == "Building Storey":
+        if obj in session.storeys:
             return obj
     if session.storeys:
         return session.storeys[0]
@@ -68,16 +55,7 @@ def find_initial_storey(session):
 
 
 def get_storey_elevation(obj):
-    try:
-        placement = getattr(obj, "Placement", None)
-    except Exception:
-        return 0.0
-    if placement is not None:
-        try:
-            return placement.Base.z
-        except Exception:
-            return 0.0
-    return 0.0
+    return ArchBuildingPart.getStoreyElevation(obj)
 
 
 def get_storey_label(obj):

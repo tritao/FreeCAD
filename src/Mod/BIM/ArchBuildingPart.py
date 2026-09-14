@@ -63,6 +63,58 @@ else:
 unicode = str
 
 
+def isBuildingStorey(obj):
+    """Return whether *obj* is a BuildingPart used as a Building Storey.
+
+    Legacy ``ArchFloor`` objects are deliberately not included here. Callers
+    that need to keep supporting those objects should request them explicitly
+    from :func:`iterBuildingStoreys`.
+    """
+
+    try:
+        return (
+            Draft.getType(obj) == "BuildingPart"
+            and getattr(obj, "IfcType", "") == "Building Storey"
+        )
+    except Exception:
+        return False
+
+
+def getStoreyElevation(obj):
+    """Return the current canonical storey elevation in document coordinates.
+
+    ``LevelOffset`` is intentionally not applied here; storey elevation keeps
+    its historical meaning as ``Placement.Base.z``.
+    """
+
+    try:
+        placement = getattr(obj, "Placement", None)
+        if placement is not None:
+            return placement.Base.z
+    except Exception:
+        pass
+    return 0.0
+
+
+def iterBuildingStoreys(doc, includeLegacyFloors=False):
+    """Yield Building Storey objects in *doc*.
+
+    ``includeLegacyFloors`` is a compatibility escape hatch for Plan, which
+    still presents pre-BuildingPart ``ArchFloor`` objects as storeys. Those
+    objects are not considered BuildingPart storeys by :func:`isBuildingStorey`.
+    """
+
+    for obj in getattr(doc, "Objects", ()):
+        if isBuildingStorey(obj):
+            yield obj
+        elif includeLegacyFloors:
+            try:
+                if Draft.getType(obj) == "Floor":
+                    yield obj
+            except Exception:
+                continue
+
+
 # fmt: off
 BuildingTypes = ['Undefined',
 'Agricultural - Barn',

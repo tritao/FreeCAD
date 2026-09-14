@@ -1,6 +1,7 @@
 import FreeCAD as App
 import FreeCADGui
 import Arch
+import ArchBuildingPart
 import Draft
 import Part
 import Sketcher
@@ -8,6 +9,26 @@ from bimtests.TestArchBaseGui import TestArchBaseGui
 
 
 class TestArchBuildingPartGui(TestArchBaseGui):
+
+    def testBuildingStoreySemantics(self):
+        storey = Arch.makeBuildingPart(name="SemanticStorey")
+        storey.IfcType = "Building Storey"
+        storey.Placement = App.Placement(App.Vector(0, 0, 3000), App.Rotation())
+        storey.LevelOffset = 125
+        building = Arch.makeBuildingPart(name="NotAStorey")
+        legacy_floor = self.document.addObject("App::FeaturePython", "LegacyFloor")
+        legacy_floor.addProperty("App::PropertyPlacement", "Placement", "Base")
+        legacy_floor.Proxy = type("LegacyFloorProxy", (), {"Type": "Floor"})()
+
+        self.assertTrue(ArchBuildingPart.isBuildingStorey(storey))
+        self.assertFalse(ArchBuildingPart.isBuildingStorey(building))
+        self.assertFalse(ArchBuildingPart.isBuildingStorey(legacy_floor))
+        self.assertEqual(ArchBuildingPart.getStoreyElevation(storey), 3000)
+        self.assertEqual(list(ArchBuildingPart.iterBuildingStoreys(self.document)), [storey])
+        self.assertEqual(
+            list(ArchBuildingPart.iterBuildingStoreys(self.document, includeLegacyFloors=True)),
+            [storey, legacy_floor],
+        )
 
     def testBuildingPart(self):
         """Create a BuildingPart from a wall with a window and check its shape."""
