@@ -51,6 +51,12 @@ from draftutils.translate import translate
 from draftviewproviders.view_base import ViewProviderDraft
 
 
+def _remove_child_if_present(parent, child):
+    """Remove a Coin child only while it is still owned by the parent."""
+    if parent.findChild(child) >= 0:
+        parent.removeChild(child)
+
+
 class ViewProviderWire(ViewProviderDraft):
     """A base View Provider for the Wire object."""
 
@@ -160,17 +166,17 @@ class ViewProviderWire(ViewProviderDraft):
             and hasattr(self, "pt2")
         ):
             rn = vobj.RootNode
-            rn.removeChild(self.pt1)
-            rn.removeChild(self.pt2)
+            _remove_child_if_present(rn, self.pt1)
+            _remove_child_if_present(rn, self.pt2)
             if vobj.Visibility:
-                self.pt1.removeChild(self.startSymbol)
+                _remove_child_if_present(self.pt1, self.startSymbol)
                 self.startSymbol = gui_utils.dim_symbol(
                     utils.ARROW_TYPES.index(vobj.ArrowTypeStart)
                 )
                 self.pt1.addChild(self.startSymbol)
                 self.coords1.scaleFactor.setValue([vobj.ArrowSizeStart] * 3)
 
-                self.pt2.removeChild(self.endSymbol)
+                _remove_child_if_present(self.pt2, self.endSymbol)
                 self.endSymbol = gui_utils.dim_symbol(utils.ARROW_TYPES.index(vobj.ArrowTypeEnd))
                 self.pt2.addChild(self.endSymbol)
                 self.coords2.scaleFactor.setValue([vobj.ArrowSizeEnd] * 3)
