@@ -972,3 +972,21 @@ if __name__ == "__main__":
         self.assertFalse(
             supports(RepresentationRequest(purpose="Elevation"), "create-wall")
         )
+
+
+    def test_contextual_wall_creation_uses_bim_wall_preferences(self):
+        preferences = {
+            "WallWidth": 345.0,
+            "WallHeight": 2780.0,
+            "WallAlignment": 2,
+            "WallOffset": 42.0,
+        }
+        with patch(
+            "draftutils.params.get_param_arch",
+            side_effect=lambda name: preferences[name],
+        ):
+            spec = wall_construction_spec_from_preferences()
+        self.assertEqual(345.0, spec.width)
+        self.assertEqual(2780.0, spec.height)
+        self.assertEqual("Right", spec.align)
+        self.assertEqual(42.0, spec.offset)

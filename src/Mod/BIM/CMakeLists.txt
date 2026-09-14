@@ -39,6 +39,7 @@ SET(Arch_SRCS
     ArchWallSemantic.py
     ArchOpeningSemantic.py
     ArchOpeningConstruction.py
+    ArchContextualCreation.py
     Arch.py
     ArchSite.py
     ArchStructure.py
