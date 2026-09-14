@@ -154,6 +154,39 @@ class TestArchRepresentation(unittest.TestCase):
                 offenders.append(source_path.name)
         self.assertEqual([], offenders)
 
+    def test_legacy_creation_commands_delegate_domain_mutation(self):
+        bim_root = Path(__file__).resolve().parents[1]
+        command_sources = tuple(
+            bim_root / "bimcommands" / name
+            for name in ("BimWall.py", "BimWindow.py", "BimSpace.py")
+        )
+        forbidden_calls = {
+            "Arch.makeWall",
+            "Arch.makeWindow",
+            "Arch.makeSpace",
+            "Arch.joinWalls",
+            "Arch.addComponents",
+        }
+        forbidden_transactions = {
+            "openTransaction",
+            "commitTransaction",
+            "abortTransaction",
+        }
+        offenders = []
+        for source in command_sources:
+            tree = ast.parse(source.read_text(encoding="utf-8"), filename=str(source))
+            for node in ast.walk(tree):
+                if not isinstance(node, ast.Call):
+                    continue
+                call_name = ""
+                if isinstance(node.func, ast.Attribute):
+                    call_name = node.func.attr
+                    if isinstance(node.func.value, ast.Name):
+                        call_name = "{}.{}".format(node.func.value.id, call_name)
+                if call_name in forbidden_calls or call_name in forbidden_transactions:
+                    offenders.append("{}:{}".format(source.name, node.lineno))
+        self.assertEqual([], offenders)
+
     def test_context_profiles_declare_purpose_and_capabilities(self):
         for purpose in RepresentationPurpose:
             profile = profile_for(RepresentationContext(purpose=purpose))

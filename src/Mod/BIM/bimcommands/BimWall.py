@@ -404,30 +404,35 @@ class Arch_Wall:
         if sel:
             # automatic mode
             if Draft.getType(sel[0].Object) != "Wall":
-                self.doc.openTransaction(translate("Arch", "Create Wall"))
-                FreeCADGui.addModule("Arch")
+                requests = []
                 for selobj in sel:
+                    face = None
                     if (
                         Draft.getType(selobj.Object) == "Space"
                         and selobj.HasSubObjects
                         and "Face" in selobj.SubElementNames[0]
                     ):
-                        idx = int(selobj.SubElementNames[0][4:])
-                        FreeCADGui.doCommand(
-                            "obj = Arch.makeWall(FreeCAD.ActiveDocument."
-                            + selobj.Object.Name
-                            + ",face="
-                            + str(idx)
-                            + ")"
-                        )
-                    else:
-                        FreeCADGui.doCommand(
-                            "obj = Arch.makeWall(FreeCAD.ActiveDocument." + selobj.Object.Name + ")"
-                        )
-                FreeCADGui.addModule("Draft")
-                FreeCADGui.doCommand("Draft.autogroup(obj)")
-                self.doc.commitTransaction()
-                self.doc.recompute()
+                        face = int(selobj.SubElementNames[0][4:])
+                    requests.append((selobj.Object, face))
+                request_code = ", ".join(
+                    "(FreeCAD.ActiveDocument.{}, {})".format(obj.Name, face)
+                    for obj, face in requests
+                )
+                FreeCADGui.doCommand("import ArchWallConstruction")
+                FreeCADGui.doCommand(
+                    "walls = ArchWallConstruction.construct_walls_from_bases("
+                    "FreeCAD.ActiveDocument, [{}], "
+                    "ArchWallConstruction.WallConstructionSpec({}, {}, '{}', {}), "
+                    "transaction_name={})".format(
+                        request_code,
+                        self.Width,
+                        self.Height,
+                        self.Align,
+                        self.Offset,
+                        repr(translate("Arch", "Create Wall")),
+                    )
+                )
+                FreeCADGui.doCommand("obj = walls[-1]")
                 return
 
         # interactive mode
@@ -611,7 +616,6 @@ class Arch_Wall:
 
     def _handle_wall_joining(self, wall_obj):
         """Helper to handle wall joining/autogrouping logic after a new wall is created."""
-        import ArchWall
         from draftutils import params
 
         JOIN_WALLS_SKETCHES = params.get_param_arch("joinWallSketches")
@@ -619,35 +623,14 @@ class Arch_Wall:
 
         if wall_obj and self.existing:
             oldWall = self.existing[-1]
-            wallGrp = wall_obj.getParentGroup()
-            oldWallGrp = oldWall.getParentGroup()
-
-            if wallGrp == oldWallGrp:
-                joined = False
-                # Attempt destructive merge first if conditions allow
-                if (
-                    JOIN_WALLS_SKETCHES
-                    and wall_obj.Base
-                    and ArchWall.areSameWallTypes([wall_obj, oldWall])
-                ):
-                    FreeCADGui.doCommand("import Arch")
-                    FreeCADGui.doCommand(
-                        f"Arch.joinWalls([FreeCAD.ActiveDocument.{wall_obj.Name}, FreeCAD.ActiveDocument.{oldWall.Name}], delete=True, deletebase=True)"
-                    )
-                    joined = True
-
-                # If no destructive merge, attempt non-destructive autojoin
-                if not joined and AUTOJOIN:
-                    if wallGrp:
-                        # Remove the new wall from its default autogroup if one was assigned,
-                        # before adding it to the existing wall's additions.
-                        FreeCADGui.doCommand(
-                            f"FreeCAD.ActiveDocument.{wallGrp.Name}.removeObject(FreeCAD.ActiveDocument.{wall_obj.Name})"
-                        )
-                    FreeCADGui.doCommand("import Arch")
-                    FreeCADGui.doCommand(
-                        f"Arch.addComponents(FreeCAD.ActiveDocument.{wall_obj.Name}, FreeCAD.ActiveDocument.{oldWall.Name})"
-                    )
+            FreeCADGui.doCommand("import ArchWallSemantic")
+            FreeCADGui.doCommand(
+                "ArchWallSemantic.apply_post_creation_join("
+                f"FreeCAD.ActiveDocument.{wall_obj.Name}, "
+                f"FreeCAD.ActiveDocument.{oldWall.Name}, "
+                f"destructive_merge={JOIN_WALLS_SKETCHES!r}, "
+                f"auto_join={AUTOJOIN!r})"
+            )
 
     def _notify_wall_created(self, wall_obj):
         if wall_obj is None:
@@ -673,8 +656,6 @@ class Arch_Wall:
         self._get_host().deactivate_command(self)
         self._stop_snapper()
 
-        self.doc.openTransaction(translate("Arch", "Create Wall"))
-
         # Ensure baseline_mode is initialized (some tests call create_wall()
         # directly without going through Activated()).
         if not hasattr(self, "baseline_mode"):
@@ -694,11 +675,10 @@ class Arch_Wall:
         )
 
         # Create the wall object (either baseless or from a baseline)
-        wall_obj = None
-        try:
+        def build_wall():
             wall_construction.wall_segments(self.points)
             if self.baseline_mode == WallBaselineMode.NONE:
-                wall_obj = wall_construction.create_wall_segment(
+                return wall_construction.create_wall_segment(
                     self.points[0],
                     self.points[1],
                     construction_spec,
@@ -711,13 +691,15 @@ class Arch_Wall:
                 if baseline_obj:
                     wall_obj = self._create_wall_from_baseline(baseline_obj)
                     self._notify_wall_created(wall_obj)
+                    return wall_obj
+            return None
 
-            self._handle_wall_joining(wall_obj)
-            self.doc.commitTransaction()
-        except Exception:
-            self.doc.abortTransaction()
-            raise
-        self.doc.recompute()
+        wall_obj = wall_construction.construct_wall(
+            self.doc,
+            build_wall,
+            transaction_name=translate("Arch", "Create Wall"),
+            after_creation=self._handle_wall_joining,
+        )
         self._finalize_tracker()
         self._reset_interactive_state()
         if self._get_host().continue_wall_chain_enabled():
@@ -955,23 +937,33 @@ class Arch_Wall:
     def createFromGUI(self):
         """Callback to create wall by using the _CommandWall.taskbox()"""
 
-        self.doc.openTransaction(translate("Arch", "Create Wall"))
-        FreeCADGui.addModule("Arch")
-        FreeCADGui.doCommand(
-            "wall = Arch.makeWall(length="
-            + str(self.lengthValue)
-            + ",width="
-            + str(self.Width)
-            + ",height="
-            + str(self.Height)
-            + ',align="'
-            + str(self.Align)
-            + '")'
+        import __main__
+
+        def build_wall():
+            material = (
+                f"FreeCAD.ActiveDocument.{self.MultiMat.Name}"
+                if self.MultiMat
+                else "None"
+            )
+            FreeCADGui.doCommand("import ArchWallConstruction")
+            FreeCADGui.doCommand(
+                "wall = ArchWallConstruction.create_wall_from_dimensions({}, "
+                "ArchWallConstruction.WallConstructionSpec({}, {}, '{}', "
+                "material={}))".format(
+                    self.lengthValue,
+                    self.Width,
+                    self.Height,
+                    self.Align,
+                    material,
+                )
+            )
+            return __main__.wall
+
+        wall_construction.construct_wall(
+            self.doc,
+            build_wall,
+            transaction_name=translate("Arch", "Create Wall"),
         )
-        if self.MultiMat:
-            FreeCADGui.doCommand("wall.Material = FreeCAD.ActiveDocument." + self.MultiMat.Name)
-        self.doc.commitTransaction()
-        self.doc.recompute()
         if hasattr(FreeCADGui, "draftToolBar"):
             FreeCADGui.draftToolBar.escape()
 

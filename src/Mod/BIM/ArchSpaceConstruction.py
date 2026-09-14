@@ -101,3 +101,30 @@ def construct_space_from_boundaries(
     except Exception:
         document.abortTransaction()
         raise
+
+
+def construct_space_from_selection(
+    document,
+    selection,
+    *,
+    transaction_name="Create Space",
+    auto_group=True,
+    validate=None,
+):
+    """Construct a space from command-resolved SelectionEx entries."""
+
+    import FreeCAD
+
+    def add_to_container(space):
+        if auto_group and FreeCAD.GuiUp:
+            import Draft
+
+            Draft.autogroup(space)
+
+    return construct_space_from_boundaries(
+        document,
+        selection,
+        transaction_name=transaction_name,
+        add_to_container=add_to_container,
+        validate=validate,
+    )

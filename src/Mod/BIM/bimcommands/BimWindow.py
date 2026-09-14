@@ -127,11 +127,12 @@ class Arch_Window:
 
                 elif obj.Shape.Solids and (Draft.getType(obj) not in ["Wall", "Structure", "Roof"]):
                     # we consider the selected object as a type
-                    self.doc.openTransaction(translate("Arch", "Create Window"))
-                    FreeCADGui.addModule("Arch")
-                    FreeCADGui.doCommand("Arch.makeWindow(FreeCAD.ActiveDocument." + obj.Name + ")")
-                    self.doc.commitTransaction()
-                    self.doc.recompute()
+                    ArchOpeningConstruction.construct_opening_from_base(
+                        self.doc,
+                        obj,
+                        ArchOpeningConstruction.OpeningConstructionSpec(),
+                        transaction_name=translate("Arch", "Create Window"),
+                    )
                     return
 
         # interactive mode
@@ -238,50 +239,61 @@ class Arch_Window:
             host = None
 
         if self.Preset >= len(WindowPresets):
-            preset = False
-            self.doc.openTransaction(translate("Arch", "Create Window"))
             # library object
-            col = self.doc.Objects
             path = self.librarypresets[self.Preset - len(WindowPresets)][1]
-            FreeCADGui.doCommand("FreeCADGui.ActiveDocument.mergeProject(" + repr(path) + ")")
-            # find the latest added window
-            nol = self.doc.Objects
-            for o in nol[len(col) :]:
-                if Draft.getType(o) == "Window":
-                    if Draft.getType(o.Base) != "Sketcher::SketchObject":
+
+            def import_library_opening():
+                previous_count = len(self.doc.Objects)
+                FreeCADGui.doCommand(
+                    "FreeCADGui.ActiveDocument.mergeProject(" + repr(path) + ")"
+                )
+                for opening in self.doc.Objects[previous_count:]:
+                    if Draft.getType(opening) != "Window":
+                        continue
+                    FreeCADGui.doCommand(
+                        "win = FreeCAD.ActiveDocument.getObject('" + opening.Name + "')"
+                    )
+                    if Draft.getType(opening.Base) != "Sketcher::SketchObject":
                         _wrn(
                             translate(
-                                "Arch", "Window not based on sketch. Window not aligned or resized."
+                                "Arch",
+                                "Window not based on sketch. Window not aligned or resized.",
                             )
                         )
                         self.Include = False
-                        break
-                    FreeCADGui.doCommand("win = FreeCAD.ActiveDocument.getObject('" + o.Name + "')")
-                    win = o
+                        return opening
                     FreeCADGui.doCommand("win.Base.Placement = pl")
-                    # Historically, this normal was deduced by the orientation of the Base Sketch and hardcoded in the Normal property.
-                    # Now with the new AutoNormalReversed property/flag, set True as default, the auto Normal previously in opposite direction to is now consistent with that previously hardcoded.
-                    # With the normal set to 'auto', window object would not suffer weird shape if the Base Sketch is rotated by some reason.
-                    # Keep the property be 'auto' (0,0,0) here.
-                    # FreeCADGui.doCommand("win.Normal = pl.Rotation.multVec(FreeCAD.Vector(0, 0, -1))")
                     FreeCADGui.doCommand("win.Width = " + str(self.Width))
                     FreeCADGui.doCommand("win.Height = " + str(self.Height))
                     FreeCADGui.doCommand("win.Base.recompute()")
-                    if not self.has_width_and_height_constraint(o.Base):
+                    if not self.has_width_and_height_constraint(opening.Base):
                         _wrn(
                             translate(
                                 "Arch",
                                 "No Width and/or Height constraint in window sketch. Window not resized.",
                             )
                         )
-                    break
-            else:
-                _wrn(translate("Arch", "No window found. Cannot continue."))
+                    return opening
                 self.Include = False
+                raise ArchOpeningConstruction.OpeningConstructionError(
+                    translate("Arch", "No window found. Cannot continue.")
+                )
+
+            def host_library_opening(opening):
+                if self.Include and host is not None and Draft.getType(host) in ALLOWEDHOSTS:
+                    ArchOpeningConstruction.assign_hosts(
+                        opening, self._opening_hosts(host)
+                    )
+
+            win = ArchOpeningConstruction.construct_opening(
+                self.doc,
+                import_library_opening,
+                transaction_name=translate("Arch", "Create Window"),
+                after_hosting=host_library_opening,
+            )
 
         else:
             # preset
-            preset = True
             import ArchSketchObject
 
             preset_spec = ArchOpeningConstruction.OpeningPresetSpec(
@@ -337,10 +349,6 @@ class Arch_Window:
                     hosts=self._opening_hosts(host) if self.Include else (),
                 )
 
-        if not preset:
-            if self.Include and host is not None and Draft.getType(host) in ALLOWEDHOSTS:
-                ArchOpeningConstruction.assign_hosts(win, self._opening_hosts(host))
-            self.doc.commitTransaction()
         self.doc.recompute()
         # gui_utils.end_all_events()  # Causes a crash on Linux.
         self.tracker.finalize()

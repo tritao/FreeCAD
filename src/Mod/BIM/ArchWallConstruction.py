@@ -99,7 +99,38 @@ def create_wall_segment(
     return wall
 
 
-def create_wall_from_base(base, spec, *, normal=None, auto_group=True, on_created=None):
+def create_wall_from_dimensions(length, spec, *, auto_group=True, on_created=None):
+    """Create a validated wall with the traditional default placement."""
+
+    import Arch
+
+    spec = spec.validated()
+    length = float(length)
+    if length < MINIMUM_WALL_LENGTH:
+        raise WallConstructionError(
+            "Wall length must be at least {:g} mm.".format(MINIMUM_WALL_LENGTH)
+        )
+    wall = Arch.makeWall(
+        length=length,
+        width=spec.width,
+        height=spec.height,
+        align=spec.align,
+        offset=spec.offset,
+    )
+    if spec.material is not None:
+        wall.Material = spec.material
+    if auto_group and FreeCAD.GuiUp:
+        import Draft
+
+        Draft.autogroup(wall)
+    if on_created:
+        on_created(wall)
+    return wall
+
+
+def create_wall_from_base(
+    base, spec, *, face=None, normal=None, auto_group=True, on_created=None
+):
     """Create one wall from an existing path through the shared domain policy."""
 
     import Arch
@@ -107,13 +138,15 @@ def create_wall_from_base(base, spec, *, normal=None, auto_group=True, on_create
     if base is None:
         raise WallConstructionError("A wall path object is required.")
     spec = spec.validated()
-    wall = Arch.makeWall(
-        base,
-        width=spec.width,
-        height=spec.height,
-        align=spec.align,
-        offset=spec.offset,
-    )
+    kwargs = {
+        "width": spec.width,
+        "height": spec.height,
+        "align": spec.align,
+        "offset": spec.offset,
+    }
+    if face is not None:
+        kwargs["face"] = int(face)
+    wall = Arch.makeWall(base, **kwargs)
     if normal is not None:
         wall.Normal = FreeCAD.Vector(normal)
     if spec.material is not None:
@@ -128,6 +161,75 @@ def create_wall_from_base(base, spec, *, normal=None, auto_group=True, on_create
     if on_created:
         on_created(wall)
     return wall
+
+
+def construct_walls_from_bases(
+    document,
+    requests,
+    spec,
+    *,
+    transaction_name="Create Wall",
+    auto_group_last=True,
+):
+    """Construct walls atomically from command-interpreted base/face requests."""
+
+    requests = tuple(requests or ())
+    if document is None or not requests:
+        raise WallConstructionError("At least one wall base is required.")
+    spec = spec.validated()
+    document.openTransaction(transaction_name)
+    try:
+        walls = tuple(
+            create_wall_from_base(
+                base,
+                spec,
+                face=face,
+                auto_group=False,
+            )
+            for base, face in requests
+        )
+        if auto_group_last and walls and FreeCAD.GuiUp:
+            import Draft
+
+            Draft.autogroup(walls[-1])
+        document.recompute()
+        document.commitTransaction()
+        return walls
+    except Exception:
+        try:
+            document.abortTransaction()
+        except Exception:
+            pass
+        raise
+
+
+def construct_wall(
+    document,
+    build_wall,
+    *,
+    transaction_name="Create Wall",
+    after_creation=None,
+):
+    """Build and finalize one wall in an atomic document transaction."""
+
+    if document is None or not callable(build_wall):
+        raise WallConstructionError("A document and wall builder are required.")
+    document.openTransaction(transaction_name)
+    try:
+        wall = build_wall()
+        if wall is None:
+            raise WallConstructionError("Unable to create wall.")
+        if after_creation is not None:
+            after_creation(wall)
+        document.recompute()
+        document.commitTransaction()
+        return wall
+    except Exception:
+        try:
+            document.abortTransaction()
+        except Exception:
+            pass
+        raise
 
 
 def create_wall_run(

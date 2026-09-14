@@ -132,6 +132,39 @@ def apply_wall_candidate(wall, mode, candidate):
     return evaluation
 
 
+def apply_post_creation_join(
+    wall,
+    previous_wall,
+    *,
+    destructive_merge=False,
+    auto_join=False,
+):
+    """Apply the join policy chosen by a wall-creation frontend."""
+
+    if wall is None or previous_wall is None or wall is previous_wall:
+        return False
+    if wall.getParentGroup() != previous_wall.getParentGroup():
+        return False
+
+    import Arch
+    import ArchWall
+
+    if (
+        destructive_merge
+        and getattr(wall, "Base", None)
+        and ArchWall.areSameWallTypes([wall, previous_wall])
+    ):
+        Arch.joinWalls([wall, previous_wall], delete=True, deletebase=True)
+        return True
+    if not auto_join:
+        return False
+    wall_group = wall.getParentGroup()
+    if wall_group:
+        wall_group.removeObject(wall)
+    Arch.addComponents(wall, previous_wall)
+    return True
+
+
 def evaluate_wall_edit(wall, mode, candidate):
     """Evaluate geometry, relations, and hosted openings without document mutation."""
 
