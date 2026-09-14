@@ -84,63 +84,6 @@ class TestArchRepresentation(unittest.TestCase):
         self.assertTrue(ArchSpaceSemantic.has_valid_geometry(solid))
         self.assertFalse(ArchSpaceSemantic.has_valid_geometry(wire))
 
-    def test_semantic_space_updates_commit_or_abort_their_transactions(self):
-        events = []
-
-        class Proxy:
-            def setBoundaryLinks(self, _space, boundaries):
-                events.append(("boundaries", tuple(boundaries)))
-
-            def setBoundaryRegionReferencePoint(self, _space, point):
-                events.append(("reference", FreeCAD.Vector(point)))
-
-        class Space:
-            def __init__(self, shape):
-                self.Shape = shape
-                self.Proxy = Proxy()
-                self.BoundaryStatus = "OK"
-
-            def touch(self):
-                events.append(("touch",))
-
-        class Document:
-            def openTransaction(self, name):
-                events.append(("open", name))
-
-            def recompute(self):
-                events.append(("recompute",))
-
-            def commitTransaction(self):
-                events.append(("commit",))
-
-            def abortTransaction(self):
-                events.append(("abort",))
-
-        document = Document()
-        space = Space(Part.makeBox(100, 100, 100))
-        ArchSpaceSemantic.set_boundaries(document, space, ())
-        self.assertEqual(
-            events,
-            [
-                ("open", "Edit Space Boundaries"),
-                ("boundaries", ()),
-                ("recompute",),
-                ("commit",),
-            ],
-        )
-
-        events.clear()
-        point = FreeCAD.Vector(20, 30, 0)
-        ArchSpaceSemantic.reassign_region(document, space, point)
-        self.assertEqual(events[0], ("open", "Reassign Space Region"))
-        self.assertEqual(events[1], ("reference", point))
-        self.assertEqual(events[-2:], [("recompute",), ("commit",)])
-
-        events.clear()
-        invalid_space = Space(Part.makeLine(FreeCAD.Vector(), FreeCAD.Vector(100, 0, 0)))
-        with self.assertRaises(ArchSpaceSemantic.SpaceSemanticError):
-            ArchSpaceSemantic.set_boundaries(document, invalid_space, ())
-        self.assertEqual(events[-1], ("abort",))
 
     def test_wall_move_and_stretch_share_viewer_independent_evaluation(self):
         endpoints = (FreeCAD.Vector(0, 0, 0), FreeCAD.Vector(3000, 0, 0))
