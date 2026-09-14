@@ -25,6 +25,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <limits>
 
 #include <Inventor/SoFCPlacementIndicatorKit.h>
 
@@ -40,6 +41,8 @@
 #endif
 
 #include <fmt/format.h>
+
+#include <App/ClippingPlane.h>
 
 #include <algorithm>
 #include <array>
@@ -171,6 +174,27 @@ FC_LOG_LEVEL_INIT("3DViewer", true, true)
 // #define FC_LOGGING_CB
 
 using namespace Gui;
+
+namespace
+{
+QColor backgroundColorFromPreference(unsigned long color)
+{
+    return QColor::fromRgbF(
+        ((color >> 24) & 0xff) / 255.0,
+        ((color >> 16) & 0xff) / 255.0,
+        ((color >> 8) & 0xff) / 255.0
+    );
+}
+
+SbColor gradientColorFromPreference(unsigned long color)
+{
+    return SbColor(
+        ((color >> 24) & 0xff) / 255.0f,
+        ((color >> 16) & 0xff) / 255.0f,
+        ((color >> 8) & 0xff) / 255.0f
+    );
+}
+}  // namespace
 
 class View3DInventorViewer::ScopedRenderIntent
 {
@@ -993,6 +1017,8 @@ View3DInventorViewer::View3DInventorViewer(QWidget* parent, const QOpenGLWidget*
     , objectGroup(nullptr)
     , viewContext([this](const ViewProviderDocumentObject* provider) {
         updateContextVisibility(provider);
+    }, [this](const std::vector<const App::ClippingPlane*>& planes) {
+        updateContextClipping(planes);
     })
     , navigation(nullptr)
     , renderType(Native)
@@ -1020,6 +1046,8 @@ View3DInventorViewer::View3DInventorViewer(
     , objectGroup(nullptr)
     , viewContext([this](const ViewProviderDocumentObject* provider) {
         updateContextVisibility(provider);
+    }, [this](const std::vector<const App::ClippingPlane*>& planes) {
+        updateContextClipping(planes);
     })
     , navigation(nullptr)
     , renderType(Native)
@@ -1279,9 +1307,6 @@ void View3DInventorViewer::init()
     setSeekDistance(100);  // NOLINT
     setViewing(false);
 
-    setBackgroundColor(QColor(25, 25, 25));  // NOLINT
-    setGradientBackground(Background::LinearGradient);
-
     // set some callback functions for user interaction
     addStartCallback(interactionStartCB);
     addFinishCallback(interactionFinishCB);
@@ -1289,6 +1314,33 @@ void View3DInventorViewer::init()
     // filter a few qt events
     viewerEventFilter = new ViewerEventFilter;
     installEventFilter(viewerEventFilter);
+    ParameterGrp::handle hViewGrp = App::GetApplication().GetParameterGroupByPath(
+        "User parameter:BaseApp/Preferences/View"
+    );
+    Background preferredGradient = Background::NoGradient;
+    if (hViewGrp->GetBool("Gradient", true)) {
+        preferredGradient = Background::LinearGradient;
+    }
+    else if (hViewGrp->GetBool("RadialGradient", false)) {
+        preferredGradient = Background::RadialGradient;
+    }
+    if (!hViewGrp->GetBool("UseBackgroundColorMid", false)) {
+        setPreferredBackgroundAppearance(
+            preferredGradient,
+            backgroundColorFromPreference(hViewGrp->GetUnsigned("BackgroundColor", 3940932863UL)),
+            gradientColorFromPreference(hViewGrp->GetUnsigned("BackgroundColor2", 859006463UL)),
+            gradientColorFromPreference(hViewGrp->GetUnsigned("BackgroundColor3", 2880160255UL))
+        );
+    }
+    else {
+        setPreferredBackgroundAppearance(
+            preferredGradient,
+            backgroundColorFromPreference(hViewGrp->GetUnsigned("BackgroundColor", 3940932863UL)),
+            gradientColorFromPreference(hViewGrp->GetUnsigned("BackgroundColor2", 859006463UL)),
+            gradientColorFromPreference(hViewGrp->GetUnsigned("BackgroundColor3", 2880160255UL)),
+            gradientColorFromPreference(hViewGrp->GetUnsigned("BackgroundColor4", 1869583359UL))
+        );
+    }
 #if defined(USE_3DCONNEXION_NAVLIB)
     if (SpaceMouseParameter::instance()->getLegacySpaceMouseDevices()) {
         getEventFilter()->registerInputDevice(new SpaceNavigatorDevice);
@@ -1319,10 +1371,8 @@ void View3DInventorViewer::init()
     );
 
     naviCube = new NaviCube(this);
-    ParameterGrp::handle hViewGrp = App::GetApplication().GetParameterGroupByPath(
-        "User parameter:BaseApp/Preferences/View"
-    );
-    naviCubeEnabled = hViewGrp->GetBool("ShowNaviCube", true);
+    preferredNaviCubeEnabled = hViewGrp->GetBool("ShowNaviCube", true);
+    naviCubeEnabled = preferredNaviCubeEnabled;
     syncNaviCubeVisibility();
 
     updateColors();
@@ -1373,6 +1423,14 @@ View3DInventorViewer::~View3DInventorViewer()
     // the root node but isn't destroyed when closing this viewer so
     // that it prevents all children from being deleted. To reduce this
     // likelihood we explicitly remove all child nodes now.
+    for (auto* clip : contextClipPlanes) {
+        const auto index = pcViewProviderRoot->findChild(clip);
+        if (index >= 0) {
+            pcViewProviderRoot->removeChild(index);
+        }
+        clip->unref();
+    }
+    contextClipPlanes.clear();
     coinRemoveAllChildren(this->pcViewProviderRoot);
     this->pcViewProviderRoot->unref();
     this->pcViewProviderRoot = nullptr;
@@ -2000,7 +2058,7 @@ void View3DInventorViewer::handleEventCB(void* userdata, SoEventCallback* n)
     SoGLWidgetElement::set(action->getState(), qobject_cast<QOpenGLWidget*>(that->getGLWidget()));
 }
 
-void View3DInventorViewer::setGradientBackground(View3DInventorViewer::Background grad)
+void View3DInventorViewer::applyGradientBackgroundDirect(View3DInventorViewer::Background grad)
 {
     switch (grad) {
         case Background::NoGradient:
@@ -2023,6 +2081,16 @@ void View3DInventorViewer::setGradientBackground(View3DInventorViewer::Backgroun
     }
 }
 
+void View3DInventorViewer::setBackgroundColor(const QColor& color)
+{
+    inherited::setBackgroundColor(color);
+}
+
+void View3DInventorViewer::setGradientBackground(View3DInventorViewer::Background grad)
+{
+    applyGradientBackgroundDirect(grad);
+}
+
 View3DInventorViewer::Background View3DInventorViewer::getGradientBackground() const
 {
     if (backgroundroot->findChild(pcBackGround) == -1) {
@@ -2036,9 +2104,26 @@ View3DInventorViewer::Background View3DInventorViewer::getGradientBackground() c
     return Background::RadialGradient;
 }
 
-void View3DInventorViewer::setGradientBackgroundColor(const SbColor& fromColor, const SbColor& toColor)
+void View3DInventorViewer::applyGradientBackgroundColorDirect(
+    const SbColor& fromColor,
+    const SbColor& toColor
+)
 {
     pcBackGround->setColorGradient(fromColor, toColor);
+}
+
+void View3DInventorViewer::applyGradientBackgroundColorDirect(
+    const SbColor& fromColor,
+    const SbColor& toColor,
+    const SbColor& midColor
+)
+{
+    pcBackGround->setColorGradient(fromColor, toColor, midColor);
+}
+
+void View3DInventorViewer::setGradientBackgroundColor(const SbColor& fromColor, const SbColor& toColor)
+{
+    applyGradientBackgroundColorDirect(fromColor, toColor);
 }
 
 void View3DInventorViewer::setGradientBackgroundColor(
@@ -2047,7 +2132,92 @@ void View3DInventorViewer::setGradientBackgroundColor(
     const SbColor& midColor
 )
 {
-    pcBackGround->setColorGradient(fromColor, toColor, midColor);
+    applyGradientBackgroundColorDirect(fromColor, toColor, midColor);
+}
+
+void View3DInventorViewer::applyBackgroundAppearance(
+    const View3DInventorViewer::BackgroundAppearanceState& appearance
+)
+{
+    inherited::setBackgroundColor(appearance.backgroundColor);
+    applyGradientBackgroundDirect(appearance.gradient);
+    if (appearance.useMid) {
+        applyGradientBackgroundColorDirect(
+            appearance.gradientFrom,
+            appearance.gradientTo,
+            appearance.gradientMid
+        );
+    }
+    else {
+        applyGradientBackgroundColorDirect(appearance.gradientFrom, appearance.gradientTo);
+    }
+}
+
+void View3DInventorViewer::setPreferredBackgroundAppearance(
+    View3DInventorViewer::Background gradient,
+    const QColor& backgroundColor,
+    const SbColor& fromColor,
+    const SbColor& toColor
+)
+{
+    preferredBackgroundAppearance.backgroundColor = backgroundColor;
+    preferredBackgroundAppearance.gradient = gradient;
+    preferredBackgroundAppearance.gradientFrom = fromColor;
+    preferredBackgroundAppearance.gradientTo = toColor;
+    preferredBackgroundAppearance.useMid = false;
+    if (!backgroundAppearanceOverride) {
+        applyBackgroundAppearance(preferredBackgroundAppearance);
+    }
+}
+
+void View3DInventorViewer::setPreferredBackgroundAppearance(
+    View3DInventorViewer::Background gradient,
+    const QColor& backgroundColor,
+    const SbColor& fromColor,
+    const SbColor& toColor,
+    const SbColor& midColor
+)
+{
+    preferredBackgroundAppearance.backgroundColor = backgroundColor;
+    preferredBackgroundAppearance.gradient = gradient;
+    preferredBackgroundAppearance.gradientFrom = fromColor;
+    preferredBackgroundAppearance.gradientTo = toColor;
+    preferredBackgroundAppearance.gradientMid = midColor;
+    preferredBackgroundAppearance.useMid = true;
+    if (!backgroundAppearanceOverride) {
+        applyBackgroundAppearance(preferredBackgroundAppearance);
+    }
+}
+
+void View3DInventorViewer::setBackgroundAppearanceOverride(
+    View3DInventorViewer::Background gradient,
+    const QColor& backgroundColor,
+    const SbColor& fromColor,
+    const SbColor& toColor
+)
+{
+    backgroundAppearanceOverride
+        = BackgroundAppearanceState {backgroundColor, gradient, fromColor, toColor};
+    applyBackgroundAppearance(*backgroundAppearanceOverride);
+}
+
+void View3DInventorViewer::setBackgroundAppearanceOverride(
+    View3DInventorViewer::Background gradient,
+    const QColor& backgroundColor,
+    const SbColor& fromColor,
+    const SbColor& toColor,
+    const SbColor& midColor
+)
+{
+    backgroundAppearanceOverride
+        = BackgroundAppearanceState {backgroundColor, gradient, fromColor, toColor, midColor, true};
+    applyBackgroundAppearance(*backgroundAppearanceOverride);
+}
+
+void View3DInventorViewer::clearBackgroundAppearanceOverride()
+{
+    backgroundAppearanceOverride.reset();
+    applyBackgroundAppearance(preferredBackgroundAppearance);
 }
 
 void View3DInventorViewer::setEnabledFPSCounter(bool on)
@@ -2183,6 +2353,26 @@ void View3DInventorViewer::setEnabledNaviCube(bool on)
 bool View3DInventorViewer::isEnabledNaviCube() const
 {
     return naviCubeEnabled;
+}
+
+void View3DInventorViewer::setPreferredNaviCubeEnabled(bool on)
+{
+    preferredNaviCubeEnabled = on;
+    if (!naviCubeVisibilityOverride.has_value()) {
+        setEnabledNaviCube(on);
+    }
+}
+
+void View3DInventorViewer::setNaviCubeEnabledOverride(bool on)
+{
+    naviCubeVisibilityOverride = on;
+    setEnabledNaviCube(on);
+}
+
+void View3DInventorViewer::clearNaviCubeEnabledOverride()
+{
+    naviCubeVisibilityOverride.reset();
+    setEnabledNaviCube(preferredNaviCubeEnabled);
 }
 
 void View3DInventorViewer::pushRenderIntentOverride(RenderIntent intent) const
@@ -4102,6 +4292,45 @@ void View3DInventorViewer::toggleClippingPlane(
 bool View3DInventorViewer::hasClippingPlane() const
 {
     return pcClipPlane != nullptr;
+}
+
+void View3DInventorViewer::updateContextClipping(
+    const std::vector<const App::ClippingPlane*>& planes
+)
+{
+    if (!pcViewProviderRoot) {
+        return;
+    }
+
+    for (auto* clip : contextClipPlanes) {
+        const auto index = pcViewProviderRoot->findChild(clip);
+        if (index >= 0) {
+            pcViewProviderRoot->removeChild(index);
+        }
+        clip->unref();
+    }
+    contextClipPlanes.clear();
+
+    for (const auto* definition : planes) {
+        if (!definition || !definition->Enabled.getValue()) {
+            continue;
+        }
+        Base::Vector3d normal = definition->Normal.getValue();
+        if (normal.Length() <= std::numeric_limits<double>::epsilon()) {
+            continue;
+        }
+        normal.Normalize();
+        auto* clip = new SoClipPlane;
+        clip->plane.setValue(
+            SbPlane(
+                Base::convertTo<SbVec3f>(normal),
+                static_cast<float>(definition->Offset.getValue())
+            )
+        );
+        clip->ref();
+        pcViewProviderRoot->insertChild(clip, 0);
+        contextClipPlanes.push_back(clip);
+    }
 }
 
 /**

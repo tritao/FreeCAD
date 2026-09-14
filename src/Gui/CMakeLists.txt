@@ -368,6 +368,7 @@ SET(FreeCADGui_Pyi_SRCS
     AxisOrigin.pyi
     Command.pyi
     EditableDatumLabel.pyi
+    View3DInventorViewer.pyi
 )
 SOURCE_GROUP("Pyi" FILES ${FreeCADGui_Pyi_SRCS})
 

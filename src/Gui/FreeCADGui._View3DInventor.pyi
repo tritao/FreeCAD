@@ -179,10 +179,6 @@ class _View3DInventor:
         """Wait for the active camera animation to finish, returning false if interrupted."""
         ...
 
-    def setAnimationEnabled(self, enabled: bool, /) -> None:
-        """Enable or disable camera animation support."""
-        ...
-
     def pushViewContextLayer(self) -> int:
         """Create a transient presentation-context layer and return its handle."""
         ...
@@ -207,6 +203,10 @@ class _View3DInventor:
 
     def captureViewDefinition(self, definition: DocumentObject) -> bool:
         """Capture this viewer's transient context into an ``App::ViewDefinition``."""
+        ...
+
+    def setAnimationEnabled(self, enabled: bool, /) -> None:
+        """Enable or disable camera animation support."""
         ...
 
     def isAnimationEnabled(self) -> bool:
@@ -474,12 +474,12 @@ class _View3DInventor:
         """Request a redraw of the view."""
         ...
 
-    def setName(self, name: str, /) -> None:
-        """Set the internal view name."""
-        ...
-
     def scheduleRedraw(self) -> None:
         """Schedule a redraw after the current Coin traversal completes."""
+        ...
+
+    def setName(self, name: str, /) -> None:
+        """Set the internal view name."""
         ...
 
     def toggleClippingPlane(

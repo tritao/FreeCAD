@@ -36,9 +36,9 @@
 #include <App/Application.h>
 #include <App/Document.h>
 #include <App/DocumentObject.h>
+#include <App/ViewDefinition.h>
 #include <App/DocumentObjectPy.h>
 #include <App/GeoFeature.h>
-#include <App/ViewDefinition.h>
 #include <Base/Console.h>
 #include <Base/Exception.h>
 #include <Base/GeometryPyCXX.h>
@@ -121,11 +121,6 @@ void View3DInventorPy::init_type()
         &View3DInventorPy::waitForCameraAnimation,
         "waitForCameraAnimation(): wait for the active camera animation to finish"
     );
-    add_varargs_method(
-        "setAnimationEnabled",
-        &View3DInventorPy::setAnimationEnabled,
-        "setAnimationEnabled()"
-    );
     add_noargs_method(
         "pushViewContextLayer",
         &View3DInventorPy::pushViewContextLayer,
@@ -155,6 +150,11 @@ void View3DInventorPy::init_type()
         "captureViewDefinition",
         &View3DInventorPy::captureViewDefinition,
         "captureViewDefinition(definition): capture this viewer's context"
+    );
+    add_varargs_method(
+        "setAnimationEnabled",
+        &View3DInventorPy::setAnimationEnabled,
+        "setAnimationEnabled()"
     );
     add_noargs_method("isAnimationEnabled", &View3DInventorPy::isAnimationEnabled, "isAnimationEnabled()");
     add_varargs_method(
@@ -344,16 +344,16 @@ void View3DInventorPy::init_type()
         &View3DInventorPy::redraw,
         "redraw(): renders the scene on screen (useful for animations)"
     );
+    add_noargs_method(
+        "scheduleRedraw",
+        &View3DInventorPy::scheduleRedraw,
+        "scheduleRedraw(): schedules the scene to be rendered when it is safe"
+    );
     add_varargs_method(
         "setName",
         &View3DInventorPy::setName,
         "setName(str): sets a name to this viewer\nThe name sets the widget's windowTitle and "
         "appears on the viewer tab"
-    );
-    add_noargs_method(
-        "scheduleRedraw",
-        &View3DInventorPy::scheduleRedraw,
-        "scheduleRedraw(): schedules the scene to be rendered when it is safe"
     );
     add_keyword_method(
         "toggleClippingPlane",
@@ -1019,22 +1019,6 @@ Py::Object View3DInventorPy::waitForCameraAnimation()
     return Py::Boolean(finished);
 }
 
-Py::Object View3DInventorPy::setAnimationEnabled(const Py::Tuple& args)
-{
-    int ok;
-    if (!PyArg_ParseTuple(args.ptr(), "i", &ok)) {
-        throw Py::Exception();
-    }
-    getView3DInventorPtr()->getViewer()->setAnimationEnabled(ok != 0);
-    return Py::None();
-}
-
-Py::Object View3DInventorPy::isAnimationEnabled()
-{
-    SbBool ok = getView3DInventorPtr()->getViewer()->isAnimationEnabled();
-    return Py::Boolean(ok ? true : false);
-}
-
 Py::Object View3DInventorPy::pushViewContextLayer()
 {
     const auto layer = getView3DInventorPtr()->getViewer()->getViewContext().pushLayer();
@@ -1146,6 +1130,22 @@ Py::Object View3DInventorPy::captureViewDefinition(const Py::Tuple& args)
     auto& context = view->getViewer()->getViewContext();
     context.setCameraState(CoinCameraCodec::capture(*view));
     return Py::Boolean(context.captureDefinition(definition));
+}
+
+Py::Object View3DInventorPy::setAnimationEnabled(const Py::Tuple& args)
+{
+    int ok;
+    if (!PyArg_ParseTuple(args.ptr(), "i", &ok)) {
+        throw Py::Exception();
+    }
+    getView3DInventorPtr()->getViewer()->setAnimationEnabled(ok != 0);
+    return Py::None();
+}
+
+Py::Object View3DInventorPy::isAnimationEnabled()
+{
+    SbBool ok = getView3DInventorPtr()->getViewer()->isAnimationEnabled();
+    return Py::Boolean(ok ? true : false);
 }
 
 Py::Object View3DInventorPy::setPopupMenuEnabled(const Py::Tuple& args)
@@ -2753,6 +2753,12 @@ Py::Object View3DInventorPy::redraw()
     return Py::None();
 }
 
+Py::Object View3DInventorPy::scheduleRedraw()
+{
+    getView3DInventorPtr()->getViewer()->getSoRenderManager()->scheduleRedraw();
+    return Py::None();
+}
+
 Py::Object View3DInventorPy::setName(const Py::Tuple& args)
 {
     char* buffer;
@@ -2773,12 +2779,6 @@ Py::Object View3DInventorPy::setName(const Py::Tuple& args)
     catch (...) {
         throw Py::RuntimeError("Unknown C++ exception");
     }
-}
-
-Py::Object View3DInventorPy::scheduleRedraw()
-{
-    getView3DInventorPtr()->getViewer()->getSoRenderManager()->scheduleRedraw();
-    return Py::None();
 }
 
 Py::Object View3DInventorPy::toggleClippingPlane(const Py::Tuple& args, const Py::Dict& kwds)

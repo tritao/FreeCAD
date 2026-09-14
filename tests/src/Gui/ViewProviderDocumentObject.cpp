@@ -2,6 +2,8 @@
 
 #include <gtest/gtest.h>
 
+#include <vector>
+
 #include <Inventor/SoDB.h>
 #include <Inventor/SbViewportRegion.h>
 #include <Inventor/actions/SoGetBoundingBoxAction.h>
@@ -11,6 +13,7 @@
 #include <Inventor/nodes/SoSeparator.h>
 
 #include <App/Application.h>
+#include <App/ClippingPlane.h>
 #include <App/Document.h>
 #include <App/ViewDefinition.h>
 #include <Gui/Application.h>
@@ -25,6 +28,17 @@
 
 namespace
 {
+
+class DynamicDisplayModeProvider final: public Gui::ViewProviderDocumentObject
+{
+public:
+    std::vector<std::string> modes {"Flat Lines", "Shaded"};
+
+    std::vector<std::string> getDisplayModes() const override
+    {
+        return modes;
+    }
+};
 
 class ViewProviderDocumentObjectTest: public ::testing::Test
 {
@@ -63,6 +77,55 @@ protected:
 };
 
 }  // namespace
+
+TEST_F(ViewProviderDocumentObjectTest, refreshDisplayModesPreservesSupportedModeAndAddsNewModes)
+{
+    DynamicDisplayModeProvider viewProvider;
+    viewProvider.attach(_child);
+    viewProvider.DisplayMode.setValue("Shaded");
+
+    viewProvider.modes.emplace_back("Plan");
+    viewProvider.refreshDisplayModes(true);
+
+    EXPECT_STREQ(viewProvider.DisplayMode.getValueAsString(), "Shaded");
+    EXPECT_NO_THROW(viewProvider.DisplayMode.setValue("Plan"));
+    EXPECT_STREQ(viewProvider.DisplayMode.getValueAsString(), "Plan");
+}
+
+TEST_F(ViewProviderDocumentObjectTest, viewInstanceOwnsTransientRepresentationBehindContextGate)
+{
+    Gui::ViewProviderDocumentObject viewProvider;
+    viewProvider.attach(_child);
+
+    Gui::ViewContext context;
+    const auto layer = context.pushLayer();
+    ASSERT_TRUE(context.setVisibility(layer, _child, Gui::ViewContext::Visibility::Hidden));
+
+    Gui::ViewInstance instance(&viewProvider, &context);
+    instance.setRepresentation(new SoCube);
+    ASSERT_TRUE(instance.hasRepresentation());
+
+    auto* scene = new SoGroup;
+    scene->ref();
+    scene->addChild(instance.getRoot());
+
+    SoGetBoundingBoxAction hiddenAction(SbViewportRegion(100, 100));
+    hiddenAction.apply(scene);
+    EXPECT_TRUE(hiddenAction.getBoundingBox().isEmpty());
+
+    ASSERT_TRUE(context.setVisibility(layer, _child, Gui::ViewContext::Visibility::Visible));
+    SoGetBoundingBoxAction visibleAction(SbViewportRegion(100, 100));
+    visibleAction.apply(scene);
+    EXPECT_FALSE(visibleAction.getBoundingBox().isEmpty());
+
+    instance.clearRepresentation();
+    EXPECT_FALSE(instance.hasRepresentation());
+    SoGetBoundingBoxAction clearedAction(SbViewportRegion(100, 100));
+    clearedAction.apply(scene);
+    EXPECT_TRUE(clearedAction.getBoundingBox().isEmpty());
+
+    scene->unref();
+}
 
 TEST_F(ViewProviderDocumentObjectTest, viewContextTraversesHiddenProviderWithoutChangingModeSwitch)
 {
@@ -184,56 +247,21 @@ TEST_F(ViewProviderDocumentObjectTest, auxiliaryRootGateDoesNotRetainViewProvide
     gate->unref();
 }
 
-TEST_F(ViewProviderDocumentObjectTest, viewInstanceOwnsTransientRepresentationBehindContextGate)
-{
-    Gui::ViewProviderDocumentObject viewProvider;
-    viewProvider.attach(_child);
-
-    Gui::ViewContext context;
-    const auto layer = context.pushLayer();
-    ASSERT_TRUE(context.setVisibility(layer, _child, Gui::ViewContext::Visibility::Hidden));
-
-    Gui::ViewInstance instance(&viewProvider, &context);
-    instance.setRepresentation(new SoCube);
-    ASSERT_TRUE(instance.hasRepresentation());
-
-    auto* scene = new SoGroup;
-    scene->ref();
-    scene->addChild(instance.getRoot());
-
-    SoGetBoundingBoxAction hiddenAction(SbViewportRegion(100, 100));
-    hiddenAction.apply(scene);
-    EXPECT_TRUE(hiddenAction.getBoundingBox().isEmpty());
-
-    ASSERT_TRUE(context.setVisibility(layer, _child, Gui::ViewContext::Visibility::Visible));
-    SoGetBoundingBoxAction visibleAction(SbViewportRegion(100, 100));
-    visibleAction.apply(scene);
-    EXPECT_FALSE(visibleAction.getBoundingBox().isEmpty());
-
-    instance.clearRepresentation();
-    EXPECT_FALSE(instance.hasRepresentation());
-    SoGetBoundingBoxAction clearedAction(SbViewportRegion(100, 100));
-    clearedAction.apply(scene);
-    EXPECT_TRUE(clearedAction.getBoundingBox().isEmpty());
-
-    scene->unref();
-}
-
 TEST_F(ViewProviderDocumentObjectTest, viewDefinitionAppliesAndCapturesContextOverrides)
 {
-    auto* definition = static_cast<App::ViewDefinition*>(
-        _doc->addObject("App::ViewDefinition", "SavedView")
-    );
-    definition->ForcedHidden.setValues({_child});
+    auto* definition = _doc->addObject("App::ViewDefinition", "SavedView");
+    auto* viewDefinition = dynamic_cast<App::ViewDefinition*>(definition);
+    ASSERT_NE(viewDefinition, nullptr);
+    viewDefinition->ForcedHidden.setValues({_child});
 
     Gui::ViewContext context;
-    ASSERT_TRUE(context.applyDefinition(definition));
+    ASSERT_TRUE(context.applyDefinition(viewDefinition));
     EXPECT_EQ(context.visibility(_child), Gui::ViewContext::Visibility::Hidden);
 
-    definition->ForcedHidden.setValues({});
-    ASSERT_TRUE(context.captureDefinition(definition));
-    ASSERT_EQ(definition->ForcedHidden.getValues().size(), 1U);
-    EXPECT_EQ(definition->ForcedHidden.getValues().front(), _child);
+    viewDefinition->ForcedHidden.setValues({});
+    ASSERT_TRUE(context.captureDefinition(viewDefinition));
+    ASSERT_EQ(viewDefinition->ForcedHidden.getValues().size(), 1U);
+    EXPECT_EQ(viewDefinition->ForcedHidden.getValues().front(), _child);
 }
 
 TEST_F(ViewProviderDocumentObjectTest, viewDefinitionCaptureFlattensLayerOverrides)
@@ -244,9 +272,13 @@ TEST_F(ViewProviderDocumentObjectTest, viewDefinitionCaptureFlattensLayerOverrid
 
     Gui::ViewContext context;
     const auto olderLayer = context.pushLayer();
-    ASSERT_TRUE(context.setVisibility(olderLayer, _child, Gui::ViewContext::Visibility::Hidden));
+    ASSERT_TRUE(
+        context.setVisibility(olderLayer, _child, Gui::ViewContext::Visibility::Hidden)
+    );
     const auto newerLayer = context.pushLayer();
-    ASSERT_TRUE(context.setVisibility(newerLayer, _child, Gui::ViewContext::Visibility::Visible));
+    ASSERT_TRUE(
+        context.setVisibility(newerLayer, _child, Gui::ViewContext::Visibility::Visible)
+    );
     ASSERT_EQ(context.visibility(_child), Gui::ViewContext::Visibility::Visible);
 
     ASSERT_TRUE(context.captureDefinition(definition));
@@ -295,4 +327,39 @@ TEST_F(ViewProviderDocumentObjectTest, viewDefinitionRoundTripsTypedCameraState)
     EXPECT_EQ(restored.cameraState().codec, "CoinCamera");
     EXPECT_EQ(restored.cameraState().version, Gui::CoinCameraCodec::CurrentVersion);
     EXPECT_EQ(restored.cameraState().payload, "PerspectiveCamera { position 1 2 3 }");
+}
+
+TEST_F(ViewProviderDocumentObjectTest, clippingReferencesPersistAndRemainViewerLocal)
+{
+    auto* definition = static_cast<App::ViewDefinition*>(
+        _doc->addObject("App::ViewDefinition", "SavedView")
+    );
+    auto* clipping = static_cast<App::ClippingPlane*>(
+        _doc->addObject("App::ClippingPlane", "SectionClip")
+    );
+    clipping->Offset.setValue(125.0);
+    definition->ClippingPlanes.setValues({clipping});
+
+    std::vector<const App::ClippingPlane*> firstNotifications;
+    Gui::ViewContext first(
+        {},
+        [&firstNotifications](const auto& planes) { firstNotifications = planes; }
+    );
+    Gui::ViewContext second;
+    ASSERT_TRUE(first.applyDefinition(definition));
+    ASSERT_EQ(first.clippingPlanes().size(), 1U);
+    EXPECT_EQ(first.clippingPlanes().front(), clipping);
+    EXPECT_TRUE(second.clippingPlanes().empty());
+    ASSERT_EQ(firstNotifications.size(), 1U);
+    EXPECT_EQ(firstNotifications.front(), clipping);
+
+    definition->ClippingPlanes.setValues({});
+    ASSERT_TRUE(first.captureDefinition(definition));
+    ASSERT_EQ(definition->ClippingPlanes.getValues().size(), 1U);
+    EXPECT_EQ(definition->ClippingPlanes.getValues().front(), clipping);
+
+    first.removeObject(clipping);
+    EXPECT_TRUE(first.clippingPlanes().empty());
+    EXPECT_TRUE(second.clippingPlanes().empty());
+    EXPECT_TRUE(firstNotifications.empty());
 }

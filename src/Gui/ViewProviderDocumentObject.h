@@ -66,6 +66,7 @@ public:
 
     virtual void attach(App::DocumentObject* pcObject);
     virtual void reattach(App::DocumentObject*);
+    void refreshDisplayModes(bool preserveCurrent = false);
     void update(const App::Property*) override;
     /// Set the active mode, i.e. the first item of the 'Display' property.
     void setActiveMode();
