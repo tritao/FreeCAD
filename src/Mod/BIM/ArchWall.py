@@ -38,10 +38,6 @@ __url__ = "https://www.freecad.org"
 objects, usually vertical, typically obtained by giving a thickness to a base
 line, then extruding it vertically.
 
-Examples
---------
-TODO put examples here.
-
 """
 
 import math
@@ -49,20 +45,39 @@ import math
 import FreeCAD
 import ArchCommands
 import ArchComponent
-import ArchSketchObject
-import Draft
-import DraftVecUtils
 import ArchPlanGeometry
 import ArchRepresentation
-import ArchWallEndCondition
-import ArchWallEndpoint
+import ArchSketchObject
 import ArchWallGeometry
+import ArchWallEndpoint
+import ArchWallEndCondition
+import ArchWallTrimming
 import ArchWallRelation
 import ArchWallRelationResolver
-import ArchWallTrimming
+import Draft
+import DraftVecUtils
 
 from FreeCAD import Vector
 from draftutils import params
+
+
+def _representation_plane_normal(request):
+    frame = getattr(request, "reference_frame", None)
+    if frame is not None:
+        normal = frame.Rotation.multVec(Vector(0, 0, 1))
+        if normal.Length > 1e-9:
+            normal.normalize()
+            return normal
+    return Vector(0, 0, 1)
+
+
+def _edit_handle_point(point, request):
+    """Keep model-view handles in world space; project contextual handles."""
+
+    if getattr(request, "purpose", None) == ArchRepresentation.RepresentationPurpose.MODEL:
+        return FreeCAD.Vector(point)
+    return ArchRepresentation.project_to_representation_plane(point, request)
+
 
 if FreeCAD.GuiUp:
     from PySide import QtCore, QtGui
@@ -257,7 +272,8 @@ class _Wall(ArchComponent.Component):
                 "Area",
                 "Wall",
                 QT_TRANSLATE_NOOP(
-                    "App::Property", "The area of this wall as a simple Height * Length calculation"
+                    "App::Property",
+                    "The area of this wall as a simple Height * Length calculation",
                 ),
                 locked=True,
             )
@@ -291,7 +307,8 @@ class _Wall(ArchComponent.Component):
                 "Face",
                 "Wall",
                 QT_TRANSLATE_NOOP(
-                    "App::Property", "The face number of the base object used to build this wall"
+                    "App::Property",
+                    "The face number of the base object used to build this wall",
                 ),
                 locked=True,
             )
@@ -353,7 +370,8 @@ class _Wall(ArchComponent.Component):
                 "OffsetSecond",
                 "Blocks",
                 QT_TRANSLATE_NOOP(
-                    "App::Property", "The horizontal offset of the second line of blocks"
+                    "App::Property",
+                    "The horizontal offset of the second line of blocks",
                 ),
                 locked=True,
             )
@@ -422,35 +440,50 @@ class _Wall(ArchComponent.Component):
             self.ArchSkPropSetPickedUuid = ""
         if not hasattr(self, "ArchSkPropSetListPrev"):
             self.ArchSkPropSetListPrev = []
-        for end_name in ("Start", "End"):
-            placement_property = "Ending" + end_name
-            if placement_property not in lp:
-                obj.addProperty(
-                    "App::PropertyPlacement",
-                    placement_property,
-                    "Wall",
-                    QT_TRANSLATE_NOOP(
-                        "App::Property",
-                        "A placement, relative to the main wall placement, describing "
-                        "a plane that cuts the end of the wall.",
-                    ),
-                )
-            order_property = "EndConditionOrder" + end_name
-            if order_property not in lp:
-                obj.addProperty(
-                    "App::PropertyStringList",
-                    order_property,
-                    "Wall",
-                    QT_TRANSLATE_NOOP(
-                        "App::Property",
-                        "Ordered trim providers for this wall end. Valid entries are Relation and Manual.",
-                    ),
-                )
-                setattr(
-                    obj,
-                    order_property,
-                    list(ArchWallEndCondition.DEFAULT_END_CONDITION_ORDER),
-                )
+        if "EndingStart" not in obj.PropertiesList:
+            obj.addProperty(
+                "App::PropertyPlacement",
+                "EndingStart",
+                "Wall",
+                QT_TRANSLATE_NOOP(
+                    "App::Property",
+                    "A placement, relative to the main wall placement, describing "
+                    "a plane that cuts the end of the wall, at start position.",
+                ),
+            )
+        if "EndingEnd" not in obj.PropertiesList:
+            obj.addProperty(
+                "App::PropertyPlacement",
+                "EndingEnd",
+                "Wall",
+                QT_TRANSLATE_NOOP(
+                    "App::Property",
+                    "A placement, relative to the main wall placement, describing "
+                    "a plane that cuts the end of the wall, at end position.",
+                ),
+            )
+        if "EndConditionOrderStart" not in obj.PropertiesList:
+            obj.addProperty(
+                "App::PropertyStringList",
+                "EndConditionOrderStart",
+                "Wall",
+                QT_TRANSLATE_NOOP(
+                    "App::Property",
+                    "Ordered trim providers for the start end of the wall. Valid entries are Relation and Manual.",
+                ),
+            )
+            obj.EndConditionOrderStart = list(ArchWallEndCondition.DEFAULT_END_CONDITION_ORDER)
+        if "EndConditionOrderEnd" not in obj.PropertiesList:
+            obj.addProperty(
+                "App::PropertyStringList",
+                "EndConditionOrderEnd",
+                "Wall",
+                QT_TRANSLATE_NOOP(
+                    "App::Property",
+                    "Ordered trim providers for the end end of the wall. Valid entries are Relation and Manual.",
+                ),
+            )
+            obj.EndConditionOrderEnd = list(ArchWallEndCondition.DEFAULT_END_CONDITION_ORDER)
         self.connectEdges = []
 
     def dumps(self):
@@ -462,6 +495,7 @@ class _Wall(ArchComponent.Component):
 
     def loads(self, state):
         self.Type = "Wall"
+        self._normalizing_end_condition_order = False
         if state == None:
             return
         elif state[0] == "W":  # state[1] == 'a', behaviour before 2024.11.28
@@ -481,6 +515,7 @@ class _Wall(ArchComponent.Component):
 
         ArchComponent.Component.onDocumentRestored(self, obj)
         self._normalizing_end_condition_order = False
+        # Relation invalidation state is runtime-only and is not serialized.
         self._resolved_geometry_signatures = {}
         self._invalidating_wall_relations = False
         self.setProperties(obj)
@@ -675,6 +710,7 @@ class _Wall(ArchComponent.Component):
             # return
             # walls can be made of only a series of additions and have no base shape
             base = Part.Shape()
+
         relation_endings = ArchWallRelationResolver.collect_wall_relation_endings(obj)
         end_conditions = {
             end_name: self._resolve_end_condition(obj, end_name, relation_endings)
@@ -694,6 +730,9 @@ class _Wall(ArchComponent.Component):
         base = self.processSubShapes(obj, base, pl)
         trimmed_base = self.process_endings(obj, base, pl, end_conditions)
         if any(end_conditions.values()):
+            # End-condition booleans are transient clipping operations.  The
+            # resulting topology no longer has a complete correspondence with
+            # the construction shape, so do not publish a partial element map.
             trimmed_base = ArchComponent._copy_without_element_map(trimmed_base)
         base = trimmed_base
         self.applyShape(obj, base, pl)
@@ -955,39 +994,101 @@ class _Wall(ArchComponent.Component):
         """Return the wall base object safely for legacy or partially initialized walls."""
         return getattr(obj, "Base", None)
 
-
     def getFootprint(self, obj):
-        """Get the faces that make up the plan representation of the wall."""
+        """Get the plan faces that represent this wall in footprint mode.
 
-        return self.getRepresentation(obj, self._default_plan_request(obj)).cut_geometry
+        The preferred representation is a horizontal section through the wall
+        solid at a standard plan cut height. If the wall belongs to a Building
+        Storey, use that level's PlanCutHeight relative to the storey elevation.
+        Otherwise, fall back to the default 1000 mm plan cut above the wall
+        base. This makes hosted openings appear naturally in footprint mode
+        because the wall shape has already been cut by them. If that section
+        cannot be computed, fall back to the literal bottom faces of the wall.
+        This is the default-preview wrapper for `getPlanRepresentation()`.
 
-    def getPlanRepresentation(self, obj, request):
-        """Return wall plan faces for the supplied representation request."""
+        Returns
+        -------
+        list of <Part.Face>
+            The faces that make up the wall footprint.
+        """
 
-        if request is None:
-            request = self._default_plan_request(obj)
+        request = self.getDefaultPlanRequest(obj)
         return self.getRepresentation(obj, request).cut_geometry
 
-    def getRepresentation(self, obj, request):
-        """Return a renderer-neutral plan representation of this wall."""
+    def getPlanRepresentation(self, obj, request):
+        """Return wall plan faces for the supplied plan request.
+
+        The request defines both the absolute cut elevation and the elevation
+        where the resulting faces are placed. This lets callers ask for
+        different plan representations of the same wall without changing the
+        generic Footprint display mode contract.
+        """
 
         if request is None:
-            request = self._default_plan_request(obj)
-        if request.purpose != ArchRepresentation.RepresentationPurpose.PLAN:
-            raise ArchRepresentation.RepresentationUnavailable(
-                "Wall plan provider only supports Plan requests"
-            )
+            request = self.getDefaultPlanRequest(obj)
+        return self.getRepresentation(obj, request).cut_geometry
 
-        representation = ArchRepresentation.BIMRepresentation(
-            source=obj,
-            request=request,
+    def getSpaceBoundaryGeometry(self, obj, representation, request):
+        """Return continuous planar wall geometry suitable for room enclosure.
+
+        Wall display sections contain hosted opening voids.  Those voids must
+        not break the spatial boundary used to resolve an enclosed room.
+        """
+
+        import Part
+
+        baseline = self.get_global_baseline(obj)
+        faces = tuple(getattr(representation, "cut_geometry", ()) or ())
+        if baseline is None or not faces:
+            return faces
+        axis_u = baseline.end_point - baseline.start_point
+        if axis_u.Length <= 1e-9:
+            return faces
+        axis_u.normalize()
+        axis_v = axis_u.cross(baseline.normal)
+        if axis_v.Length <= 1e-9:
+            return faces
+        axis_v.normalize()
+        origin = FreeCAD.Vector(baseline.start_point)
+        vertices = tuple(FreeCAD.Vector(vertex.Point) for face in faces for vertex in face.Vertexes)
+        if not vertices:
+            return faces
+        values_u = [point.sub(origin).dot(axis_u) for point in vertices]
+        values_v = [point.sub(origin).dot(axis_v) for point in vertices]
+        target_offset = getattr(request, "target_offset", None)
+        z = vertices[0].z if target_offset is None else float(target_offset)
+
+        def frame_point(u, v):
+            point = origin.add(axis_u * u).add(axis_v * v)
+            point.z = z
+            return point
+
+        corners = (
+            frame_point(min(values_u), min(values_v)),
+            frame_point(max(values_u), min(values_v)),
+            frame_point(max(values_u), max(values_v)),
+            frame_point(min(values_u), max(values_v)),
         )
-        for index, face in enumerate(self._get_plan_cut_faces(obj, request), start=1):
+        return (Part.Face(Part.makePolygon((*corners, corners[0]))),)
+
+    def getRepresentation(self, obj, request):
+        """Return this wall's renderer-neutral plan representation."""
+
+        if request is None:
+            request = self.getDefaultPlanRequest(obj)
+        if request.purpose not in (
+            ArchRepresentation.RepresentationPurpose.PLAN,
+            ArchRepresentation.RepresentationPurpose.SECTION,
+            ArchRepresentation.RepresentationPurpose.ELEVATION,
+        ):
+            raise ArchRepresentation.RepresentationUnavailable(
+                f"Wall does not provide a {request.purpose.value} representation"
+            )
+        representation = ArchRepresentation.BIMRepresentation(source=obj, request=request)
+        cut_faces = tuple(self._getCutRepresentation(obj, request))
+        for index, face in enumerate(cut_faces, start=1):
             representation.add_geometry(
-                "cut_geometry",
-                face,
-                "PlanCutFace",
-                subelement="PlanFace{}".format(index),
+                "cut_geometry", face, "PlanCutFace", subelement=f"PlanFace{index}"
             )
             outer_wire = getattr(face, "OuterWire", None)
             inner_index = 0
@@ -996,87 +1097,935 @@ class _Wall(ArchComponent.Component):
                 if len(points) < 2:
                     continue
                 is_outer = bool(
-                    outer_wire is not None
-                    and (wire is outer_wire or wire.isSame(outer_wire))
+                    outer_wire is not None and (wire is outer_wire or wire.isSame(outer_wire))
                 )
                 if is_outer:
                     role = "PlanCutOuterBoundary"
-                    subelement = "PlanFace{}.OuterWire".format(index)
+                    subelement = f"PlanFace{index}.OuterWire"
                 else:
                     inner_index += 1
                     role = "PlanCutInnerBoundary"
-                    subelement = "PlanFace{}.InnerWire{}".format(index, inner_index)
+                    subelement = f"PlanFace{index}.InnerWire{inner_index}"
                 representation.add_geometry(
                     "projected_geometry",
                     points,
                     role,
                     subelement=subelement,
                 )
+        joint_edges = self._wall_joint_snap_edges(representation, obj)
+        for edge, joint in joint_edges:
+            points = tuple(FreeCAD.Vector(vertex.Point) for vertex in edge.Vertexes)
+            if len(points) < 2:
+                continue
+            representation.add_geometry(
+                "projected_geometry",
+                points,
+                "WallJointCutLine",
+                subelement="Relation.{}.CutLine".format(joint.Name),
+                related_sources=(joint,),
+            )
+        for index, face in enumerate(cut_faces, start=1):
+            for edge_index, edge in enumerate(face.Edges, start=1):
+                joint = self._joint_for_snap_edge(joint_edges, edge)
+                representation.add_geometry(
+                    "snap_geometry",
+                    edge,
+                    "WallJointBoundary" if joint is not None else "WallBoundaryEdge",
+                    subelement=f"PlanFace{index}.Edge{edge_index}",
+                    related_sources=(joint,) if joint is not None else (),
+                )
+            for vertex_index, vertex in enumerate(face.Vertexes, start=1):
+                joints = tuple(
+                    dict.fromkeys(
+                        joint
+                        for edge in face.Edges
+                        if (joint := self._joint_for_snap_edge(joint_edges, edge)) is not None
+                        and any(
+                            vertex.Point.isEqual(edge_vertex.Point, 1e-7)
+                            for edge_vertex in edge.Vertexes
+                        )
+                    )
+                )
+                representation.add_geometry(
+                    "snap_geometry",
+                    vertex,
+                    "WallJointCutPoint" if joints else "WallBoundaryVertex",
+                    subelement=f"PlanFace{index}.Vertex{vertex_index}",
+                    related_sources=joints,
+                )
+        self._add_edit_handles(representation, obj, request)
         return representation
 
+    def getEditCapabilities(self, obj, request=None):
+        """Return semantic wall handles independently of rendered geometry."""
+
+        if request is None:
+            request = ArchRepresentation.RepresentationRequest(
+                purpose=ArchRepresentation.RepresentationPurpose.MODEL
+            )
+        if request.purpose not in (
+            ArchRepresentation.RepresentationPurpose.MODEL,
+            ArchRepresentation.RepresentationPurpose.PLAN,
+            ArchRepresentation.RepresentationPurpose.SECTION,
+            ArchRepresentation.RepresentationPurpose.ELEVATION,
+        ):
+            raise ArchRepresentation.RepresentationUnavailable(
+                f"Wall does not provide edit capabilities for {request.purpose.value}"
+            )
+        capabilities = ArchRepresentation.BIMEditCapabilities(source=obj, request=request)
+        self._add_edit_handles(capabilities, obj, request)
+        return capabilities
+
+    def _add_edit_handles(self, target, wall, request):
+        purpose = request.purpose
+        if purpose == ArchRepresentation.RepresentationPurpose.MODEL:
+            self._add_owned_path_edit_handles(target, wall, request)
+            self._add_native_path_edit_handles(target, wall, request)
+            self._add_wall_joint_edit_handles(target, wall, request)
+            self._add_section_property_edit_handles(target, wall, request)
+            self._add_vertical_edit_handles(target, wall, request)
+        elif purpose == ArchRepresentation.RepresentationPurpose.PLAN:
+            self._add_owned_path_edit_handles(target, wall, request)
+            self._add_native_path_edit_handles(target, wall, request)
+            self._add_wall_joint_edit_handles(target, wall, request)
+            self._add_section_property_edit_handles(target, wall, request)
+        else:
+            self._add_vertical_edit_handles(target, wall, request)
+
+    def _wall_joint_snap_edges(self, representation, wall):
+        """Map each resolved relation to its physical wall-end boundary edge."""
+
+        result = []
+        claimed_edges = []
+        for joint in ArchWallRelation.iter_wall_joints(wall):
+            if not getattr(joint, "Enabled", True):
+                continue
+            solution = ArchWallRelation.solve_wall_joint(joint)
+            if not solution.is_ok() or solution.trim_for_wall(wall) is None:
+                continue
+            anchor = self._wall_joint_handle_point(representation, wall, solution.intersection)
+            candidates = []
+            for face in representation.cut_geometry:
+                for edge in face.Edges:
+                    if (
+                        any(edge.isSame(claimed) for claimed in claimed_edges)
+                        or len(edge.Vertexes) < 2
+                    ):
+                        continue
+                    midpoint = sum(
+                        (FreeCAD.Vector(vertex.Point) for vertex in edge.Vertexes),
+                        FreeCAD.Vector(),
+                    ).multiply(1.0 / len(edge.Vertexes))
+                    candidates.append((midpoint.distanceToPoint(anchor), edge))
+            if not candidates:
+                continue
+            _distance, edge = min(candidates, key=lambda item: item[0])
+            result.append((edge, joint))
+            claimed_edges.append(edge)
+        return result
+
     @staticmethod
-    def _default_plan_request(obj):
-        shape = getattr(obj, "Shape", None)
-        bound_box = getattr(shape, "BoundBox", None)
-        target_offset = getattr(bound_box, "ZMin", 0.0)
-        top_offset = getattr(bound_box, "ZMax", target_offset)
-        cut_offset = min(
-            max(
-                target_offset + ArchComponent.DEFAULT_PLAN_CUT_HEIGHT,
-                target_offset + 0.001,
+    def _joint_for_snap_edge(joint_edges, edge):
+        return next(
+            (joint for candidate, joint in joint_edges if edge.isSame(candidate)),
+            None,
+        )
+
+    def _add_vertical_edit_handles(self, representation, wall, request):
+        direction = ArchComponent.representation_vertical_direction(request)
+        if direction is None:
+            return
+        low, high = ArchComponent.representation_extent_points(wall.Shape, request, direction)
+        height_operation = ArchRepresentation.BIMEditOperation(
+            "WallHeight",
+            "Edit Wall Height",
+            lambda source: source.Height.Value,
+            lambda source, value: setattr(source, "Height", value),
+            property_name="Height",
+            minimum=1.0,
+            available=lambda source: not ArchRepresentation.is_property_expression_driven(
+                source, "Height"
             ),
-            top_offset - 0.001,
         )
-        if cut_offset <= target_offset:
-            cut_offset = target_offset + ArchComponent.DEFAULT_PLAN_CUT_HEIGHT
-        return ArchRepresentation.RepresentationRequest(
-            purpose=ArchRepresentation.RepresentationPurpose.PLAN,
-            source=obj,
-            cut_offset=cut_offset,
-            target_offset=target_offset,
+        if high is not None and height_operation.is_available(wall):
+            representation.add_edit_handle(
+                ArchRepresentation.BIMEditHandle(
+                    wall,
+                    "WallHeight",
+                    high,
+                    direction,
+                    height_operation,
+                    subelement="Height",
+                    minimum=1.0,
+                    constraint=ArchRepresentation.AxisConstraint(high, direction),
+                )
+            )
+        if low is None or getattr(wall, "Base", None) is not None:
+            return
+
+        def set_elevation(source, value):
+            placement = FreeCAD.Placement(source.Placement)
+            placement.Base.z = value
+            source.Placement = placement
+
+        base_operation = ArchRepresentation.BIMEditOperation(
+            "WallBaseElevation",
+            "Edit Wall Base Elevation",
+            lambda source: source.Placement.Base.z,
+            set_elevation,
+            property_name="Placement.Base.z",
+            available=lambda source: not ArchRepresentation.is_property_expression_driven(
+                source, "Placement.Base.z"
+            ),
+        )
+        if base_operation.is_available(wall):
+            representation.add_edit_handle(
+                ArchRepresentation.BIMEditHandle(
+                    wall,
+                    "WallBaseElevation",
+                    low,
+                    direction,
+                    base_operation,
+                    subelement="Placement.Base.z",
+                    minimum=None,
+                    constraint=ArchRepresentation.AxisConstraint(low, direction),
+                )
+            )
+
+    def _add_section_property_edit_handles(self, representation, wall, request):
+        baseline = self.get_global_baseline(wall)
+        section = self.get_resolved_section(wall)
+        if baseline is None or section is None or not self._can_edit_uniform_section(wall):
+            return
+        axis = baseline.end_point.sub(baseline.start_point)
+        if axis.Length <= 1e-9:
+            return
+        axis.normalize()
+        lateral = axis.cross(baseline.normal)
+        if lateral.Length <= 1e-9:
+            return
+        lateral.normalize()
+        midpoint = (baseline.start_point + baseline.end_point) * 0.5
+        for side, coordinate, direction in (
+            ("Negative", section.y_min, -lateral),
+            ("Positive", section.y_max, lateral),
+        ):
+
+            def set_width_from_face(source, value, side=side):
+                current_section = self.get_resolved_section(source)
+                if current_section is None:
+                    raise ValueError("Wall no longer has an editable uniform section")
+                old_width = float(source.Width.Value)
+                delta = float(value) - old_width
+                align = str(source.Align)
+                if align == "Center":
+                    if side == "Negative":
+                        source.Align = "Left"
+                        source.Offset = -current_section.y_max
+                    else:
+                        source.Align = "Right"
+                        source.Offset = current_section.y_min
+                elif (align == "Left" and side == "Positive") or (
+                    align == "Right" and side == "Negative"
+                ):
+                    source.Offset = source.Offset.Value - delta
+                source.Width = value
+
+            width_operation = ArchRepresentation.BIMEditOperation(
+                "WallWidth{}Face".format(side),
+                "Edit Wall Width",
+                lambda source: source.Width.Value,
+                set_width_from_face,
+                property_name="Width, Align, Offset",
+                minimum=1.0,
+                available=lambda source: self._can_edit_uniform_section(source),
+                preview=(
+                    lambda source, value, preview_context, side=side: (
+                        self._get_width_face_preview_state(source, side, value, preview_context)
+                    )
+                ),
+            )
+            handle_point = _edit_handle_point(midpoint + lateral * coordinate, request)
+            representation.add_edit_handle(
+                ArchRepresentation.BIMEditHandle(
+                    wall,
+                    "WallWidth",
+                    handle_point,
+                    direction,
+                    width_operation,
+                    subelement="Width.{}Face".format(side),
+                    minimum=1.0,
+                    glyph="Plus",
+                    constraint=ArchRepresentation.AxisConstraint(handle_point, direction),
+                )
+            )
+        align = str(wall.Align)
+        if align not in ("Left", "Right"):
+            return
+        offset_direction = -lateral if align == "Left" else lateral
+        offset_operation = ArchRepresentation.BIMEditOperation(
+            "WallOffset",
+            "Edit Wall Offset",
+            lambda source: source.Offset.Value,
+            lambda source, value: setattr(source, "Offset", value),
+            property_name="Offset",
+            available=lambda source: self._can_edit_uniform_section(source),
+        )
+        handle_point = _edit_handle_point(
+            midpoint + lateral * ((section.y_min + section.y_max) * 0.5), request
+        )
+        representation.add_edit_handle(
+            ArchRepresentation.BIMEditHandle(
+                wall,
+                "WallOffset",
+                handle_point,
+                offset_direction,
+                offset_operation,
+                subelement="Offset",
+                minimum=None,
+                glyph="Diamond",
+                constraint=ArchRepresentation.AxisConstraint(handle_point, offset_direction),
+            )
         )
 
-    def _get_plan_cut_faces(self, obj, request):
-        """Build transient horizontal faces for the requested plan cut."""
+    def _get_width_face_preview_shape(self, wall, side, value, request):
+        """Build a non-persistent plan face for one width-face edit."""
 
-        shape = getattr(obj, "Shape", None)
-        if not shape or shape.isNull():
-            return []
+        import Part
+
+        if getattr(request, "purpose", None) == ArchRepresentation.RepresentationPurpose.MODEL:
+            return Part.Shape()
+
+        baseline = self.get_global_baseline(wall)
+        section = self.get_resolved_section(wall)
+        if baseline is None or section is None or float(value) < 1.0:
+            return Part.Shape()
+        width = float(value)
+        delta = width - float(wall.Width.Value)
+        align = str(wall.Align)
+        offset = float(wall.Offset.Value)
+        if align == "Center":
+            if side == "Negative":
+                align = "Left"
+                offset = -section.y_max
+            else:
+                align = "Right"
+                offset = section.y_min
+        elif (align == "Left" and side == "Positive") or (align == "Right" and side == "Negative"):
+            offset -= delta
+        if align == "Center":
+            y_min, y_max = -width * 0.5, width * 0.5
+        elif align == "Left":
+            y_min, y_max = -width - offset, -offset
+        else:
+            y_min, y_max = offset, offset + width
+        axis = baseline.end_point - baseline.start_point
+        axis.normalize()
+        lateral = axis.cross(baseline.normal)
+        lateral.normalize()
+        points = [
+            baseline.start_point + lateral * y_min,
+            baseline.end_point + lateral * y_min,
+            baseline.end_point + lateral * y_max,
+            baseline.start_point + lateral * y_max,
+        ]
+        target = getattr(request, "target_offset", None)
+        if target is not None and getattr(request, "reference_frame", None) is None:
+            for point in points:
+                point.z = float(target)
+        return Part.Face(Part.makePolygon(points + [points[0]]))
+
+    def _get_width_face_preview_state(self, wall, side, value, request):
+        """Return a proposed wall section and its hosted opening geometry."""
+
+        proposed_face = self._get_width_face_preview_shape(wall, side, value, request)
+        if proposed_face is None or proposed_face.isNull():
+            return None
+        opening_representations = []
+        document = getattr(wall, "Document", None)
+        for opening in getattr(document, "Objects", ()) or ():
+            if wall not in (getattr(opening, "Hosts", None) or ()):
+                continue
+            provider = getattr(
+                getattr(opening, "Proxy", None),
+                "get_hosted_wall_preview_representation",
+                None,
+            )
+            if not callable(provider):
+                continue
+            opening_representation = provider(request, proposed_face)
+            if opening_representation is None:
+                continue
+            for void in opening_representation.cut_geometry:
+                proposed_face = proposed_face.cut(void)
+            opening_representations.append(opening_representation)
+
+        wall_representation = ArchRepresentation.BIMRepresentation(source=wall, request=request)
+        for index, face in enumerate(proposed_face.Faces, start=1):
+            wall_representation.add_geometry(
+                "cut_geometry", face, "PlanCutFace", subelement=f"PlanFace{index}"
+            )
+            for wire_index, wire in enumerate(face.Wires, start=1):
+                vertices = tuple(FreeCAD.Vector(vertex.Point) for vertex in wire.Vertexes)
+                if len(vertices) > 1:
+                    wall_representation.add_geometry(
+                        "projected_geometry",
+                        (*vertices, vertices[0]),
+                        "PlanCutBoundary",
+                        subelement=f"PlanFace{index}.Wire{wire_index}",
+                    )
+
+        state = ArchRepresentation.BIMPreviewState(wall)
+        state.add_representation(wall_representation, replace_committed=True)
+        for opening_representation in opening_representations:
+            display = ArchRepresentation.BIMRepresentation(
+                source=opening_representation.source,
+                request=request,
+            )
+            for mapping in opening_representation.source_mappings:
+                if mapping.geometry not in opening_representation.projected_geometry:
+                    continue
+                display.add_geometry(
+                    "projected_geometry",
+                    mapping.geometry,
+                    mapping.role,
+                    subelement=mapping.subelement,
+                    related_sources=mapping.related_sources,
+                )
+            state.add_representation(display, replace_committed=True)
+        return state
+
+    @staticmethod
+    def _can_edit_uniform_section(wall):
+        material = getattr(wall, "Material", None)
+        base = getattr(wall, "Base", None)
+        return bool(
+            hasattr(wall, "Width")
+            and not getattr(material, "Thicknesses", None)
+            and not (
+                getattr(wall, "ArchSketchData", False)
+                and base
+                and Draft.getType(base) == "ArchSketch"
+            )
+            and not list(getattr(wall, "OverrideWidth", ()) or ())
+            and not list(getattr(wall, "OverrideAlign", ()) or ())
+            and not list(getattr(wall, "OverrideOffset", ()) or ())
+            and not ArchRepresentation.is_property_expression_driven(wall, "Width")
+            and not ArchRepresentation.is_property_expression_driven(wall, "Offset")
+        )
+
+    def _add_owned_path_edit_handles(self, representation, wall, request):
+        from bimcontextual.editable_points import get_contextual_edit_points
+
+        owner = getattr(wall, "Base", None)
+        points = get_contextual_edit_points(owner, request)
+        use_wall_controller = self._is_straight_owned_path(owner, points)
+        path_axis = None
+        if use_wall_controller:
+            path_axis = points[1].point.sub(points[0].point)
+            if path_axis.Length > 1e-9:
+                path_axis.normalize()
+        for index, point in enumerate(points):
+            role = point.semantic_id or "Vertex{}".format(index + 1)
+            operation = ArchRepresentation.BIMEditOperation(
+                "WallPathVertex",
+                "Edit Wall Path Vertex",
+                lambda _wall, point=point: point.get_value(),
+                lambda _wall, value, point=point: point.apply_value(value),
+                property_name="Base.{}".format(point.property_name),
+                value_kind="Point",
+                available=lambda _wall, point=point: point.is_available(),
+                interaction_intent=(
+                    "WallStretchStart"
+                    if use_wall_controller and index == 0
+                    else "WallStretchEnd" if use_wall_controller and index == 1 else ""
+                ),
+            )
+            handle_point = _edit_handle_point(point.point, request)
+            constraint = (
+                ArchRepresentation.AxisConstraint(handle_point, path_axis)
+                if path_axis is not None and path_axis.Length > 1e-9
+                else ArchRepresentation.WorkingPlaneConstraint(
+                    handle_point, _representation_plane_normal(request)
+                )
+            )
+            representation.add_edit_handle(
+                ArchRepresentation.BIMEditHandle(
+                    wall,
+                    "WallPath{}".format(role),
+                    handle_point,
+                    path_axis if path_axis is not None else FreeCAD.Vector(),
+                    operation,
+                    interaction="Planar",
+                    subelement="Base.{}".format(point.subelement),
+                    minimum=None,
+                    glyph="Square",
+                    constraint=constraint,
+                )
+            )
+        if use_wall_controller:
+            midpoint = (points[0].point + points[1].point) * 0.5
+
+            def move_owned_path(_wall, value, points=points):
+                current = (points[0].get_value() + points[1].get_value()) * 0.5
+                delta = FreeCAD.Vector(value).sub(current)
+                for point in points:
+                    point.apply_value(point.get_value().add(delta))
+
+            handle_point = _edit_handle_point(midpoint, request)
+            representation.add_edit_handle(
+                ArchRepresentation.BIMEditHandle(
+                    wall,
+                    "WallMove",
+                    handle_point,
+                    FreeCAD.Vector(),
+                    ArchRepresentation.BIMEditOperation(
+                        "WallMove",
+                        "Move Wall",
+                        lambda _wall, points=points: (points[0].get_value() + points[1].get_value())
+                        * 0.5,
+                        move_owned_path,
+                        property_name="Base.Points",
+                        value_kind="Point",
+                        available=lambda _wall, points=points: all(
+                            point.is_available() for point in points
+                        ),
+                        interaction_intent="WallMove",
+                    ),
+                    interaction="Planar",
+                    subelement="Base.Path",
+                    minimum=None,
+                    glyph="Circle",
+                    constraint=ArchRepresentation.WorkingPlaneConstraint(
+                        handle_point, _representation_plane_normal(request)
+                    ),
+                )
+            )
+
+    @staticmethod
+    def _is_straight_owned_path(owner, points):
+        if owner is None or getattr(owner, "TypeId", "") == "Sketcher::SketchObject":
+            return False
+        try:
+            edges = tuple(owner.Shape.Edges)
+            return len(points) == 2 and len(edges) == 1 and not bool(edges[0].Closed)
+        except Exception:
+            return False
+
+    def _add_native_path_edit_handles(self, representation, wall, request):
+        if getattr(wall, "Base", None) is not None or not self._can_edit_native_path(wall):
+            return
+        endpoints = self.calc_endpoints(wall)
+        axis = endpoints[1].sub(endpoints[0])
+        if axis.Length <= 1e-9:
+            return
+        axis.normalize()
+
+        relation_controlled_ends = self._relation_controlled_native_ends(wall)
+
+        def apply_endpoint(source, index, value):
+            from ArchWallSemantic import apply_wall_candidate
+
+            mode = "Start" if index == 0 else "End"
+            apply_wall_candidate(source, mode, value)
+
+        for index, role in enumerate(("Start", "End")):
+            if role in relation_controlled_ends:
+                continue
+            operation = ArchRepresentation.BIMEditOperation(
+                "WallPathEndpoint",
+                "Edit Wall Path Endpoint",
+                lambda source, index=index: self.calc_endpoints(source)[index],
+                lambda source, value, index=index: apply_endpoint(source, index, value),
+                property_name="Path.{}".format(role),
+                value_kind="Point",
+                available=lambda source: self._can_edit_native_path(source),
+                interaction_intent="WallStretch{}".format(role),
+                preview=lambda source, value, preview_context, index=index: (
+                    self._get_endpoint_preview_state(source, index, value, preview_context)
+                ),
+                validator=lambda source, value, index=index: __import__(
+                    "ArchWallSemantic"
+                ).evaluate_wall_edit(source, "Start" if index == 0 else "End", value),
+            )
+
+            handle_point = _edit_handle_point(endpoints[index], request)
+            representation.add_edit_handle(
+                ArchRepresentation.BIMEditHandle(
+                    wall,
+                    "WallPath{}".format(role),
+                    handle_point,
+                    axis,
+                    operation,
+                    interaction="Planar",
+                    subelement="Path.{}".format(role),
+                    minimum=None,
+                    glyph="Square",
+                    constraint=ArchRepresentation.AxisConstraint(handle_point, axis),
+                )
+            )
+
+        midpoint = (endpoints[0] + endpoints[1]) * 0.5
+
+        def move_wall(source, value):
+            from ArchWallSemantic import apply_wall_candidate
+
+            apply_wall_candidate(source, "Move", value)
+
+        move_operation = ArchRepresentation.BIMEditOperation(
+            "WallMove",
+            "Move Wall",
+            lambda source: sum(self.calc_endpoints(source), FreeCAD.Vector()) * 0.5,
+            move_wall,
+            property_name="Path",
+            value_kind="Point",
+            available=lambda source: self._can_edit_native_path(source),
+            interaction_intent="WallMove",
+            preview=lambda source, value, preview_context: (
+                self._get_wall_path_preview_state(source, "Move", value, preview_context)
+            ),
+            validator=lambda source, value: __import__(
+                "ArchWallSemantic"
+            ).evaluate_wall_edit(source, "Move", value),
+        )
+        handle_point = _edit_handle_point(midpoint, request)
+        representation.add_edit_handle(
+            ArchRepresentation.BIMEditHandle(
+                wall,
+                "WallMove",
+                handle_point,
+                FreeCAD.Vector(),
+                move_operation,
+                interaction="Planar",
+                subelement="Path",
+                minimum=None,
+                glyph="Circle",
+                constraint=ArchRepresentation.WorkingPlaneConstraint(
+                    handle_point, _representation_plane_normal(request)
+                ),
+            )
+        )
+
+    def _get_endpoint_preview_state(self, wall, endpoint_index, value, request):
+        """Return joined wall representations for one hypothetical endpoint."""
+
+        mode = "Start" if endpoint_index == 0 else "End"
+        return self._get_wall_path_preview_state(wall, mode, value, request)
+
+    def _get_wall_path_preview_state(self, wall, mode, value, request):
+        """Return joined wall representations for a hypothetical path edit."""
+
+        from ArchWallSemantic import evaluate_wall_edit
+
+        evaluation = evaluate_wall_edit(wall, mode, value)
+        if not evaluation.allowed:
+            return None
+        paths = evaluation.relation_paths
+        affected = evaluation.affected_walls
+        claims = evaluation.relation_claims
+
+        state = ArchRepresentation.BIMPreviewState(wall)
+        for source in affected:
+            preview = self._preview_representation_from_path(
+                source, paths[source], claims.get(source, {}), request
+            )
+            if preview is not None:
+                state.add_representation(preview, replace_committed=True)
+        return state if state.entries else None
+
+    @staticmethod
+    def _preview_representation_from_path(wall, path, claims, request):
+        """Realize a planar wall preview from resolved path and trim claims."""
+
+        import Part
+
+        section = ArchWallRelation.get_join_section(wall)
+        if section is None or getattr(request, "reference_frame", None) is not None:
+            return None
+        start = FreeCAD.Vector(path.start_point)
+        end = FreeCAD.Vector(path.end_point)
+        axis = end.sub(start)
+        if axis.Length <= 1e-9:
+            return None
+        axis.normalize()
+        normal = FreeCAD.Vector(path.normal)
+        lateral = axis.cross(normal)
+        lateral.normalize()
+        for end_name, direction in (("Start", -axis), ("End", axis)):
+            claim = claims.get(end_name)
+            if claim is not None and claim.extension > 1e-9:
+                if end_name == "Start":
+                    start = start.add(direction.multiply(claim.extension))
+                else:
+                    end = end.add(direction.multiply(claim.extension))
+        target = getattr(request, "target_offset", None)
+        if target is not None:
+            start.z = target
+            end.z = target
+        points = [
+            start + lateral * section.y_min,
+            end + lateral * section.y_min,
+            end + lateral * section.y_max,
+            start + lateral * section.y_max,
+        ]
+        face = Part.Face(Part.makePolygon((*points, points[0])))
+        solid = face.extrude(normal * 10.0)
+        for end_name, ref_point in (("Start", end), ("End", start)):
+            claim = claims.get(end_name)
+            if claim is not None:
+                solid = ArchWallTrimming.apply_cutting_plane(
+                    wall,
+                    solid,
+                    FreeCAD.Placement(),
+                    claim.plane,
+                    ref_point,
+                    max(solid.BoundBox.DiagonalLength * 2.0, 1.0),
+                    is_global=True,
+                )
+        cut_z = (target if target is not None else face.BoundBox.ZMin) + 5.0
+        faces = ArchComponent.get_horizontal_slice_faces(solid, cut_z, translate_z=-5.0)
+        representation = ArchRepresentation.BIMRepresentation(source=wall, request=request)
+        for index, cut_face in enumerate(faces, start=1):
+            representation.add_geometry(
+                "cut_geometry", cut_face, "PlanCutFace", subelement=f"PlanFace{index}"
+            )
+            for wire_index, wire in enumerate(cut_face.Wires, start=1):
+                vertices = tuple(FreeCAD.Vector(vertex.Point) for vertex in wire.Vertexes)
+                if len(vertices) > 1:
+                    representation.add_geometry(
+                        "projected_geometry",
+                        (*vertices, vertices[0]),
+                        "PlanCutBoundary",
+                        subelement=f"PlanFace{index}.Wire{wire_index}",
+                    )
+        return representation if representation.cut_geometry else None
+
+    def _relation_controlled_native_ends(self, wall):
+        ends = set()
+        for joint in ArchWallRelation.iter_wall_joints(wall):
+            if not getattr(joint, "Enabled", True):
+                continue
+            solution = ArchWallRelation.solve_wall_joint(joint)
+            if not solution.is_ok():
+                continue
+            claim = solution.trim_for_wall(wall)
+            if claim is not None and claim.end_name in ("Start", "End"):
+                ends.add(claim.end_name)
+        return ends
+
+    def _movable_wall_joint_data(self, joint):
+        if not getattr(joint, "Enabled", True):
+            return None
+        solution = ArchWallRelation.solve_wall_joint(joint)
+        if not solution.is_ok():
+            return None
+        walls = tuple(ArchWallRelation.get_relation_walls(joint))
+        if len(walls) != 2 or any(not self._can_edit_native_path(wall) for wall in walls):
+            return None
+        ends = {}
+        for wall in walls:
+            claim = solution.trim_for_wall(wall)
+            if claim is None or claim.end_name not in ("Start", "End"):
+                return None
+            ends[wall] = claim.end_name
+        return {
+            "solution": solution,
+            "walls": walls,
+            "ends": ends,
+        }
+
+    def _add_wall_joint_edit_handles(self, representation, wall, request):
+        for joint in ArchWallRelation.iter_wall_joints(wall):
+            data = self._movable_wall_joint_data(joint)
+            if data is None:
+                continue
+
+            def get_joint_point(_source, joint=joint):
+                current = self._movable_wall_joint_data(joint)
+                if current is None:
+                    raise ValueError("Wall joint is no longer editable")
+                return current["solution"].intersection
+
+            def move_joint(_source, value, joint=joint):
+                current = self._movable_wall_joint_data(joint)
+                if current is None:
+                    raise ValueError("Wall joint is no longer editable")
+                target = FreeCAD.Vector(value)
+                for related_wall in current["walls"]:
+                    points = list(related_wall.Proxy.calc_endpoints(related_wall))
+                    index = 0 if current["ends"][related_wall] == "Start" else 1
+                    points[index] = FreeCAD.Vector(target)
+                    related_wall.Proxy.set_from_endpoints(related_wall, points)
+                document = getattr(joint, "Document", None)
+                if document is not None:
+                    document.recompute()
+                resolved = ArchWallRelation.solve_wall_joint(joint)
+                if not resolved.is_ok() or not resolved.intersection.isEqual(target, 1e-6):
+                    raise ValueError("The target point cannot produce a valid finite wall joint")
+
+            operation = ArchRepresentation.BIMEditOperation(
+                "WallJointMove.{}".format(joint.Name),
+                "Move Wall Joint",
+                get_joint_point,
+                move_joint,
+                property_name="Relation.{}".format(joint.Name),
+                value_kind="Point",
+                available=lambda _source, joint=joint: (
+                    self._movable_wall_joint_data(joint) is not None
+                ),
+                preview=lambda source, value, preview_context, joint=joint: (
+                    self._get_wall_joint_preview_state(joint, value, preview_context, source)
+                ),
+            )
+            handle_point = _edit_handle_point(
+                self._wall_joint_handle_point(representation, wall, data["solution"].intersection),
+                request,
+            )
+            representation.add_edit_handle(
+                ArchRepresentation.BIMEditHandle(
+                    wall,
+                    "WallJointMove",
+                    handle_point,
+                    FreeCAD.Vector(),
+                    operation,
+                    interaction="Planar",
+                    subelement="Relation.{}".format(joint.Name),
+                    minimum=None,
+                    glyph="Diamond",
+                    glyph_size=13,
+                    constraint=ArchRepresentation.WorkingPlaneConstraint(
+                        handle_point, _representation_plane_normal(request)
+                    ),
+                )
+            )
+
+    def _get_wall_joint_preview_state(self, joint, value, request, primary_source=None):
+        """Return both joined walls for one hypothetical joint position."""
+
+        import Part
+
+        data = self._movable_wall_joint_data(joint)
+        if data is None:
+            return None
+        target = FreeCAD.Vector(value)
+        paths = {}
+        for wall in data["walls"]:
+            endpoints = list(wall.Proxy.calc_endpoints(wall))
+            index = 0 if data["ends"][wall] == "Start" else 1
+            endpoints[index] = target
+            if endpoints[0].distanceToPoint(endpoints[1]) <= 1e-9:
+                return None
+            normal = wall.Proxy.get_global_baseline(wall).normal
+            paths[wall] = ArchWallGeometry.WallPath(Part.makeLine(*endpoints), normal)
+        wall_a, wall_b = data["walls"]
+        solution = ArchWallRelation.solve_wall_joint_inputs(
+            wall_a,
+            wall_b,
+            joint.JointType,
+            joint.ButtTrimmed,
+            joint.TeeStem,
+            joint.EndA,
+            joint.EndB,
+            path_a=paths[wall_a],
+            path_b=paths[wall_b],
+        )
+        if not solution.is_ok():
+            return None
+        claims = {wall_a: {}, wall_b: {}}
+        for claim in solution.trim_claims:
+            claims[claim.wall][claim.end_name] = claim
+        state = ArchRepresentation.BIMPreviewState(primary_source or wall_a)
+        for source in data["walls"]:
+            preview = self._preview_representation_from_path(
+                source, paths[source], claims[source], request
+            )
+            if preview is not None:
+                state.add_representation(preview, replace_committed=True)
+        return state if len(state.entries) == 2 else None
+
+    @staticmethod
+    def _wall_joint_handle_point(representation, wall, intersection):
+        """Return the visible center of the resolved wall end nearest a joint.
+
+        The editable value remains the baseline intersection.  Offset and
+        asymmetrically aligned walls can place the finished miter seam away
+        from that point, so the interaction glyph is anchored to the nearest
+        cut-boundary segment that crosses the wall section.
+        """
+
+        baseline = wall.Proxy.get_global_baseline(wall)
+        if baseline is None:
+            return FreeCAD.Vector(intersection)
+        axis = baseline.end_point.sub(baseline.start_point)
+        if axis.Length <= 1e-9:
+            return FreeCAD.Vector(intersection)
+        axis.normalize()
+        lateral = axis.cross(baseline.normal)
+        if lateral.Length <= 1e-9:
+            return FreeCAD.Vector(intersection)
+        lateral.normalize()
+
+        candidates = []
+        for face in getattr(representation, "cut_geometry", ()):
+            for edge in getattr(face, "Edges", ()) or ():
+                vertices = getattr(edge, "Vertexes", ()) or ()
+                if len(vertices) < 2:
+                    continue
+                start = FreeCAD.Vector(vertices[0].Point)
+                end = FreeCAD.Vector(vertices[-1].Point)
+                if abs(end.sub(start).dot(lateral)) <= 1e-7:
+                    continue
+                midpoint = start.add(end).multiply(0.5)
+                planar_delta = midpoint.sub(intersection)
+                planar_delta.z = 0
+                candidates.append((planar_delta.Length, midpoint))
+        if not candidates:
+            return FreeCAD.Vector(intersection)
+        return min(candidates, key=lambda item: item[0])[1]
+
+    def _can_edit_native_path(self, wall):
+        return bool(
+            getattr(wall, "Base", None) is None
+            and len(self.calc_endpoints(wall)) == 2
+            and not ArchRepresentation.is_property_expression_driven(wall, "Length")
+            and not ArchRepresentation.is_property_expression_driven(wall, "Placement")
+        )
+
+    def _getCutRepresentation(self, obj, request):
+        """Build cut faces on a horizontal or arbitrary representation frame."""
+
+        shape = obj.Shape
         if getattr(request, "reference_frame", None) is not None:
-            faces = ArchComponent.get_reference_slice_faces(shape, request)
-            if faces:
-                return faces
-        bound_box = shape.BoundBox
-        if bound_box.ZLength > 0.001 and request.cut_offset is not None:
-            cut_z = max(
-                bound_box.ZMin + 0.001,
-                min(bound_box.ZMax - 0.001, request.cut_offset),
-            )
-            target_z = request.target_offset if request.target_offset is not None else bound_box.ZMin
-            faces = ArchComponent.get_horizontal_slice_faces(
-                shape,
-                cut_z,
-                translate_z=target_z - cut_z,
-            )
-            if faces:
-                return faces
+            return ArchComponent.get_reference_slice_faces(shape, request)
+        if shape and (not shape.isNull()) and shape.Solids:
+            bb = shape.BoundBox
+            if bb.ZLength > 0.001 and request.cut_offset is not None:
+                cut_z = request.cut_offset
+                cut_z = max(bb.ZMin + 0.001, min(bb.ZMax - 0.001, cut_z))
+                target_z = request.target_offset if request.target_offset is not None else bb.ZMin
+                faces = ArchComponent.get_horizontal_slice_faces(
+                    shape, cut_z, translate_z=target_z - cut_z
+                )
+                if faces:
+                    return faces
 
         faces = []
-        target_z = request.target_offset if request.target_offset is not None else bound_box.ZMin
-        for face in shape.Faces:
-            if face.normalAt(0, 0).getAngle(FreeCAD.Vector(0, 0, -1)) >= 0.01:
-                continue
-            if abs(face.CenterOfMass.z - bound_box.ZMin) >= 0.001:
-                continue
-            delta_z = target_z - bound_box.ZMin
-            if abs(delta_z) >= 0.001:
-                face = face.copy()
-                face.translate(FreeCAD.Vector(0, 0, delta_z))
-            faces.append(face)
+        if shape:
+            bb = shape.BoundBox
+            target_z = request.target_offset if request.target_offset is not None else bb.ZMin
+            for f in shape.Faces:
+                if f.normalAt(0, 0).getAngle(FreeCAD.Vector(0, 0, -1)) < 0.01:
+                    if abs(f.CenterOfMass.z - bb.ZMin) < 0.001:
+                        face = f
+                        delta_z = target_z - bb.ZMin
+                        if abs(delta_z) >= 0.001:
+                            face = f.copy()
+                            face.translate(FreeCAD.Vector(0, 0, delta_z))
+                        faces.append(face)
         return faces
 
     def requires_brep_export(self, obj):
-        """Return whether IFC must use the processed wall shape."""
+        """Return whether IFC must use the wall's processed shape."""
         manual_endings = (
             getattr(obj, "EndingStart", FreeCAD.Placement()),
             getattr(obj, "EndingEnd", FreeCAD.Placement()),
@@ -1115,7 +2064,6 @@ class _Wall(ArchComponent.Component):
 
         import Part
         import DraftGeomUtils
-        import ArchSketchObject
 
         propSetUuid = self.ArchSkPropSetPickedUuid
 
@@ -1131,155 +2079,20 @@ class _Wall(ArchComponent.Component):
 
         self.noWidths = False
         self.noHeight = False
-        width = 0
-        # Get width of each edge segment from Base Objects if they store it
-        # (Adding support in SketchFeaturePython, DWire...)
-        widths = []  # [] or None are both False
-        if (
-            hasattr(obj, "ArchSketchData")
-            and obj.ArchSketchData
-            and Draft.getType(obj.Base) == "ArchSketch"
-        ):
-            if hasattr(obj.Base, "Proxy"):  # TODO Any need to test ?
-                if hasattr(obj.Base.Proxy, "getWidths"):
-                    # Return a list of Width corresponding to indexes of sorted
-                    # edges of Sketch.
-                    widths = obj.Base.Proxy.getWidths(obj.Base, propSetUuid=propSetUuid)
-        # Get width of each edge/wall segment from ArchWall.OverrideWidth if
-        # Base Object does not provide it
-        if not widths:
-            if obj.OverrideWidth:
-                if obj.Base and obj.Base.isDerivedFrom("Sketcher::SketchObject"):
-                    # If Base Object is ordinary Sketch (or when ArchSketch.getWidth() not implemented yet):-
-                    # sort the width list in OverrrideWidth to correspond to indexes of sorted edges of Sketch
-                    try:
-                        import ArchSketchObject
-                    except Exception:
-                        print("ArchSketchObject add-on module is not installed yet")
-                    try:
-                        widths = ArchSketchObject.sortSketchWidth(
-                            obj.Base, obj.OverrideWidth, obj.ArchSketchEdges
-                        )
-                    except Exception:
-                        widths = obj.OverrideWidth
-                else:
-                    # If Base Object is not Sketch, but e.g. DWire, the width
-                    # list in OverrrideWidth just correspond to sequential
-                    # order of edges
-                    widths = obj.OverrideWidth
-            elif obj.Width:
-                widths = [obj.Width.Value]
-            else:
-                ## having no width is valid for walls so the user doesn't need to be warned
-                ## it just disables extrusions and return none
-                ## print ("Width & OverrideWidth & base.getWidths() should not be all 0 or None or [] empty list ")
-                #
-                # Having no width is valid for walls for a few cases, e.g.-
-                # - it has Base with solid
-                # - it has Additions
-                # A message could be provided in the Report panel for users
-                # to note if this is intended, then ignore extrusion afterwards,
-                # i.e. return None.
-                # Also should check Height.
-                self.noWidths = True
-                # return None
+        widths, aligns, offsets = self._resolved_section_lists(obj)
+        default_width, default_align, default_offset = self._section_defaults(obj)
+        width, _align, _offset = self._resolve_section_value_at(obj, 0)
+        if not widths and not self._resolve_material_layers(obj):
+            self.noWidths = True
 
-        # Set 'default' width - for filling in any item in the list == 0 or None
-        if obj.Width.Value:
-            width = obj.Width.Value
-        else:
-            width = 200  # 'Default' width value
-
-        # Check height
+        # Check height.
         height = obj.Height.Value
         if not height:
             height = self.getParentHeight(obj)
         if not height:
             self.noHeight = True
-
-        # Check width and height is provided or not
         if self.noWidths or self.noHeight:
             return None
-
-        # Get align of each edge segment from Base Objects if they store it.
-        # (Adding support in SketchFeaturePython, DWire...)
-        aligns = []
-        if (
-            hasattr(obj, "ArchSketchData")
-            and obj.ArchSketchData
-            and Draft.getType(obj.Base) == "ArchSketch"
-        ):
-            if hasattr(obj.Base, "Proxy"):
-                if hasattr(obj.Base.Proxy, "getAligns"):
-                    # Return a list of Align corresponds to indexes of sorted
-                    # edges of Sketch.
-                    aligns = obj.Base.Proxy.getAligns(obj.Base, propSetUuid=propSetUuid)
-        # Get align of each edge/wall segment from ArchWall.OverrideAlign if
-        # Base Object does not provide it
-        if not aligns:
-            if obj.OverrideAlign:
-                if obj.Base and obj.Base.isDerivedFrom("Sketcher::SketchObject"):
-                    # If Base Object is ordinary Sketch (or when
-                    # ArchSketch.getAligns() not implemented yet):- sort the
-                    # align list in OverrideAlign to correspond to indexes of
-                    # sorted edges of Sketch
-                    try:
-                        import ArchSketchObject
-                    except Exception:
-                        print("ArchSketchObject add-on module is not installed yet")
-                    try:
-                        aligns = ArchSketchObject.sortSketchAlign(
-                            obj.Base, obj.OverrideAlign, obj.ArchSketchEdges
-                        )
-                    except Exception:
-                        aligns = obj.OverrideAlign
-                else:
-                    # If Base Object is not Sketch, but e.g. DWire, the align
-                    # list in OverrideAlign just correspond to sequential order
-                    # of edges
-                    aligns = obj.OverrideAlign
-            else:
-                aligns = [obj.Align]
-
-        # Set 'default' align - for filling in any item in the list == 0 or None
-        align = obj.Align  # or aligns[0]
-
-        # Get offset of each edge segment from Base Objects if they store it
-        # (Adding support in SketchFeaturePython, DWire...)
-        offsets = []  # [] or None are both False
-        if (
-            hasattr(obj, "ArchSketchData")
-            and obj.ArchSketchData
-            and Draft.getType(obj.Base) == "ArchSketch"
-        ):
-            if hasattr(obj.Base, "Proxy"):
-                if hasattr(obj.Base.Proxy, "getOffsets"):
-                    # Return a list of Offset corresponding to indexes of sorted
-                    # edges of Sketch.
-                    offsets = obj.Base.Proxy.getOffsets(obj.Base, propSetUuid=propSetUuid)
-        # Get offset of each edge/wall segment from ArchWall.OverrideOffset if
-        # Base Object does not provide it
-        if not offsets:
-            if obj.OverrideOffset:
-                if obj.Base and obj.Base.isDerivedFrom("Sketcher::SketchObject"):
-                    # If Base Object is ordinary Sketch (or when ArchSketch.getOffsets() not implemented yet):-
-                    # sort the offset list in OverrideOffset to correspond to indexes of sorted edges of Sketch
-                    if hasattr(ArchSketchObject, "sortSketchOffset"):
-                        offsets = ArchSketchObject.sortSketchOffset(
-                            obj.Base, obj.OverrideOffset, obj.ArchSketchEdges
-                        )
-                    else:
-                        offsets = obj.OverrideOffset
-                else:
-                    # If Base Object is not Sketch, but e.g. DWire, the width
-                    # list in OverrrideWidth just correspond to sequential
-                    # order of edges
-                    offsets = obj.OverrideOffset
-            elif obj.Offset:
-                offsets = [obj.Offset.Value]
-
-        # Set 'default' offset - for filling in any item in the list == 0 or None
-        offset = obj.Offset.Value  # could be 0
 
         if obj.Normal == Vector(0, 0, 0):
             if obj.Base and hasattr(obj.Base, "Shape"):
@@ -1294,12 +2107,14 @@ class _Wall(ArchComponent.Component):
         placement = None
         self.basewires = None
 
+        # Width, alignment, and offset have already been resolved above.
+
         # Check and build wall layers
         self.multimaterialsWidth = False
         layers = self.get_layers(obj)
         # check total width and update Wall's Width
         if layers:
-            total = sum(layers)
+            total = sum(abs(layer) for layer in layers)
             if obj.Width.Value != total:
                 obj.Width = total
             # If there is no 0 (zero) in any of the layers, the total thickness
@@ -1387,7 +2202,12 @@ class _Wall(ArchComponent.Component):
                                 # as Base at the moment
                                 if isinstance(
                                     geom.Geometry,
-                                    (Part.LineSegment, Part.Circle, Part.ArcOfCircle, Part.Ellipse),
+                                    (
+                                        Part.LineSegment,
+                                        Part.Circle,
+                                        Part.ArcOfCircle,
+                                        Part.Ellipse,
+                                    ),
                                 ):
                                     skGeomEdgesI = geom.Geometry.toShape()
                                     skGeomEdges.append(skGeomEdgesI)
@@ -1457,11 +2277,12 @@ class _Wall(ArchComponent.Component):
                         if (len(self.basewires) == 1) and layers:
                             self.basewires = [self.basewires[0] for l in layers]
                             self.layersNum = len(layers)
-                        else:
+                        if not ((len(self.basewires) == 1) and layers):
                             self.layersNum = 0
                         layeroffset = 0
                         baseface = None
                         self.connectEdges = []
+                        section_index = 0
                         for i, wire in enumerate(self.basewires):
 
                             # Check number of edges per 'wire' and get the 1st edge
@@ -1472,6 +2293,29 @@ class _Wall(ArchComponent.Component):
                                 edgeNum = len(wire)
                                 e = wire[0]
 
+                            if not layers:
+                                resolved_widths = []
+                                resolved_aligns = []
+                                resolved_offsets = []
+                                for segment in range(edgeNum):
+                                    section = self.get_resolved_section(
+                                        obj, section_index + segment
+                                    )
+                                    if section is None or not section.visible_layers:
+                                        continue
+                                    resolved_widths.append(section.y_max - section.y_min)
+                                    _, align, offset = self._resolve_section_value_at(
+                                        obj, section_index + segment
+                                    )
+                                    resolved_aligns.append(align)
+                                    resolved_offsets.append(offset)
+                                if resolved_widths:
+                                    widths = resolved_widths
+                                    aligns = resolved_aligns
+                                    offsets = resolved_offsets
+                                    width = widths[0]
+                                section_index += edgeNum
+
                             for n in range(
                                 0, edgeNum, 1
                             ):  # why these not work - range(edgeNum), range(0,edgeNum) ...
@@ -1480,27 +2324,27 @@ class _Wall(ArchComponent.Component):
                                 # align entry and with same number of items as
                                 # number of edges
                                 try:
-                                    if aligns[n] not in ["Left", "Right", "Center"]:
-                                        aligns[n] = align
+                                    if aligns[n] not in self._SECTION_ALIGNMENTS:
+                                        aligns[n] = default_align
                                 except Exception:
-                                    aligns.append(align)
+                                    aligns.append(default_align)
 
                                 # Fill the widths List with ArchWall's default
                                 # width entry and with same number of items as
                                 # number of edges
                                 try:
                                     if not widths[n]:
-                                        widths[n] = width
+                                        widths[n] = default_width
                                 except Exception:
-                                    widths.append(width)
+                                    widths.append(default_width)
                                 # Fill the offsets List with ArchWall's default
                                 # offset entry and with same number of items as
                                 # number of edges
                                 try:
                                     if not offsets[n]:
-                                        offsets[n] = offset
+                                        offsets[n] = default_offset
                                 except Exception:
-                                    offsets.append(offset)
+                                    offsets.append(default_offset)
 
                             # Get a direction vector orthogonal to both the
                             # normal of the face/sketch and the direction the
@@ -1743,14 +2587,14 @@ class _Wall(ArchComponent.Component):
                         if baseface:
                             base, placement = self.rebase(baseface)
 
-                    elif not (base and placement):
-                        FreeCAD.Console.PrintWarning(
-                            translate(
-                                "Arch",
-                                f"No supported edges in Base object of {obj.Label} (line, circle, arc, ellipse)",
-                            )
-                            + "\n"
+                else:  # if not self.basewires:
+                    FreeCAD.Console.PrintWarning(
+                        translate(
+                            "Arch",
+                            f"No supported edges in Base object of {obj.Label} (line, circle, arc, ellipse)",
                         )
+                        + "\n"
+                    )
 
         # Build Wall from scratch if there is no obj.Base or even obj.Base is not valid
         else:
@@ -1765,17 +2609,16 @@ class _Wall(ArchComponent.Component):
         return None
 
     def calc_endpoints(self, obj):
-        """Returns the global start and end points of a baseless wall's centerline."""
-        # The wall's shape is centered, so its endpoints in local coordinates
-        # are at (-Length/2, 0, 0) and (+Length/2, 0, 0).
-        p1_local = FreeCAD.Vector(-obj.Length.Value / 2, 0, 0)
-        p2_local = FreeCAD.Vector(obj.Length.Value / 2, 0, 0)
+        """Return the global endpoints of the canonical wall baseline.
 
-        # Transform these local points into global coordinates using the wall's placement.
-        p1_global = obj.Placement.multVec(p1_local)
-        p2_global = obj.Placement.multVec(p2_local)
-
-        return [p1_global, p2_global]
+        The baseline resolver handles both based and baseless straight walls.
+        Unsupported base topology produces an empty list rather than exposing
+        local coordinates or making callers interpret the wall placement.
+        """
+        baseline = self.get_global_baseline(obj)
+        if baseline:
+            return [baseline.start_point, baseline.end_point]
+        return []
 
     def set_from_endpoints(self, obj, pts):
         """Set a straight wall from two global points.
@@ -1788,8 +2631,6 @@ class _Wall(ArchComponent.Component):
         if len(pts) < 2:
             return
 
-        import ArchWallEndpoint
-
         edit = ArchWallEndpoint.resolve_endpoint_edit(obj, pts)
         if edit is not None:
             ArchWallEndpoint.apply_endpoint_edit(obj, edit)
@@ -1800,7 +2641,6 @@ class _Wall(ArchComponent.Component):
         when the Base object is being removed.
         """
         from PySide import QtGui
-        import ArchWallEndpoint
 
         # Check if the component being removed is this wall's Base
         if hasattr(obj, "Base") and obj.Base == subobject:
@@ -1817,7 +2657,8 @@ class _Wall(ArchComponent.Component):
                     msg_box.setWindowTitle(translate("ArchComponent", "Unsupported Base"))
                     msg_box.setText(
                         translate(
-                            "ArchComponent", "The base of this wall is not a single straight line."
+                            "ArchComponent",
+                            "The base of this wall is not a single straight line.",
                         )
                     )
                     msg_box.setInformativeText(
@@ -1844,67 +2685,27 @@ class _Wall(ArchComponent.Component):
             super(_Wall, self).handleComponentRemoval(obj, subobject)
 
     def get_width(self, obj, widths=True):
-        """Returns a width and a list of widths for this wall.
-        If widths is False, only the main width is returned"""
-        import ArchSketchObject
+        """Return the legacy wall width API while using resolved sources.
 
-        # Set 'default' width - for filling in any item in the list == 0 or None
-        if obj.Width.Value:
-            width = obj.Width.Value
-        else:
-            width = 200  # 'Default' width value
+        With ``widths=False`` this returns the scalar wall default.  With
+        ``widths=True`` it returns ``(default_width, override_widths)`` when
+        segment values exist, or ``None`` otherwise.  The return shape and
+        fallback behavior are retained for existing Arch callers.
+        """
+        default_width, _default_align, _default_offset = self._section_defaults(obj)
         if not widths:
-            return width
-
-        lwidths = []
-        if (
-            hasattr(obj, "ArchSketchData")
-            and obj.ArchSketchData
-            and Draft.getType(obj.Base) == "ArchSketch"
-        ):
-            if hasattr(obj.Base, "Proxy"):
-                if hasattr(obj.Base.Proxy, "getWidths"):
-                    lwidths = obj.Base.Proxy.getWidths(
-                        obj.Base, propSetUuid=self.ArchSkPropSetPickedUuid
-                    )
-        if not lwidths:
-            if obj.OverrideWidth:
-                if (
-                    obj.Base
-                    and obj.Base.isDerivedFrom("Sketcher::SketchObject")
-                    and hasattr(ArchSketchObject, "sortSketchWidth")
-                ):
-                    lwidths = ArchSketchObject.sortSketchWidth(
-                        obj.Base, obj.OverrideWidth, obj.ArchSketchEdges
-                    )
-                else:
-                    lwidths = obj.OverrideWidth
-            elif obj.Width:
-                lwidths = [obj.Width.Value]
-            else:
-                return None
-        return width, lwidths
+            return default_width
+        widths_list = self._resolved_section_lists(obj)[0]
+        return None if not widths_list else (default_width, widths_list)
 
     def get_layers(self, obj):
-        """Returns a list of layers"""
-        layers = []
-        width = self.get_width(obj, widths=False)
-        if hasattr(obj, "Material"):
-            if obj.Material:
-                if hasattr(obj.Material, "Materials"):
-                    thicknesses = [abs(t) for t in obj.Material.Thicknesses]
-                    restwidth = width - sum(thicknesses)
-                    varwidth = 0
-                    if restwidth > 0:
-                        varwidth = [t for t in thicknesses if t == 0]
-                        if varwidth:
-                            varwidth = restwidth / len(varwidth)
-                    for t in obj.Material.Thicknesses:
-                        if t:
-                            layers.append(t)
-                        elif varwidth:
-                            layers.append(varwidth)
-        return layers
+        """Return the wall-global material stack used by shape generation.
+
+        The legacy based-wall builder obtains one material stack for the wall
+        and reuses it for every baseline segment.  Section resolution follows
+        that same rule so its geometry cannot describe a different shape.
+        """
+        return self._resolve_material_layers(obj)
 
     def _resolve_section_values(self, obj):
         """Resolve the effective width, alignment, and offset sources.
@@ -2062,120 +2863,6 @@ class _Wall(ArchComponent.Component):
             variable_width if value == 0 and variable_width else value for value in raw_thicknesses
         ]
 
-    def get_global_baseline(self, obj):
-        """Resolve one supported wall baseline into global coordinates.
-
-        Based walls must expose exactly one straight edge.  Its semantic
-        provider orientation is resolved before the wall placement is applied
-        and copied into a fresh ``Part.Edge`` so relation code never has to
-        interpret wall placement.
-        A baseless wall is derived directly from its local length and
-        placement.  Unsupported topology returns ``None``.
-        """
-        import Part
-        import DraftGeomUtils
-
-        base = obj.Base
-        placement = obj.Placement
-        if base:
-            if not hasattr(base, "Shape") or len(base.Shape.Edges) != 1:
-                return None
-            source_edge = base.Shape.Edges[0]
-            if source_edge.Curve.TypeId != "Part::GeomLine":
-                return None
-            points = [
-                placement.multVec(point)
-                for point in ArchWallEndpoint.get_oriented_base_points(base)
-            ]
-            if len(points) != 2 or points[0].distanceToPoint(points[1]) <= 1e-9:
-                return None
-            edge = Part.makeLine(points[0], points[1])
-        else:
-            half_length = obj.Length.Value / 2.0
-            points = [
-                placement.multVec(FreeCAD.Vector(-half_length, 0, 0)),
-                placement.multVec(FreeCAD.Vector(half_length, 0, 0)),
-            ]
-            if points[0].distanceToPoint(points[1]) <= 1e-9:
-                return None
-            edge = Part.makeLine(points[0], points[1])
-
-        if obj.Normal == Vector(0, 0, 0):
-            local_normal = None
-            if base and hasattr(base, "Shape"):
-                local_normal = DraftGeomUtils.get_shape_normal(base.Shape)
-            local_normal = local_normal or Vector(0, 0, 1)
-        else:
-            local_normal = Vector(obj.Normal)
-        normal = placement.Rotation.multVec(local_normal)
-        if normal.Length <= 1e-9:
-            return None
-        normal.normalize()
-        if edge.Vertexes[0].Point.sub(edge.Vertexes[-1].Point).cross(normal).Length <= 1e-9:
-            return None
-        return ArchWallGeometry.WallBaseline(edge, normal, points[0], points[1])
-
-    def process_endings(self, obj, base_solid, wall_placement, end_conditions=None):
-        """Trim a wall solid using the winning end-condition providers.
-
-        Each end is resolved independently from its normalized provider list.
-        Relation extensions are applied to the construction solid before
-        subshape processing.  This stage applies only the selected cutting
-        planes to the already processed solid.
-        """
-        if base_solid.isNull():
-            return base_solid
-
-        solid_to_trim = base_solid
-        min_tool_size = base_solid.BoundBox.DiagonalLength * 2
-        if end_conditions is None:
-            relation_endings = ArchWallRelationResolver.collect_wall_relation_endings(obj)
-            end_conditions = {
-                end_name: self._resolve_end_condition(obj, end_name, relation_endings)
-                for end_name in ("Start", "End")
-            }
-        baseline = self.get_global_baseline(obj)
-        if baseline is None:
-            return solid_to_trim
-        endpoints = [baseline.start_point, baseline.end_point]
-        start_condition = end_conditions["Start"]
-        if start_condition:
-            solid_to_trim = ArchWallTrimming.apply_cutting_plane(
-                obj,
-                solid_to_trim,
-                wall_placement,
-                start_condition.placement,
-                endpoints[1],
-                min_tool_size,
-                is_global=start_condition.is_global,
-            )
-
-        end_condition = end_conditions["End"]
-        if end_condition:
-            solid_to_trim = ArchWallTrimming.apply_cutting_plane(
-                obj,
-                solid_to_trim,
-                wall_placement,
-                end_condition.placement,
-                endpoints[0],
-                min_tool_size,
-                is_global=end_condition.is_global,
-            )
-        return solid_to_trim
-
-    def _resolve_end_condition(self, obj, end_name, relation_endings):
-        conditions = [
-            ArchWallEndCondition.WallEndCondition(
-                source="Manual", placement=getattr(obj, "Ending" + end_name)
-            )
-        ]
-        relation_condition = relation_endings.get(end_name)
-        if relation_condition is not None:
-            conditions.append(relation_condition)
-        return ArchWallEndCondition.select_end_condition(
-            conditions, getattr(obj, "EndConditionOrder" + end_name)
-        )
-
     def _make_blocks(self, obj, base_face, extv):
         """Cut a wall's base face into block-sized pieces and stack them.
 
@@ -2331,46 +3018,22 @@ class _Wall(ArchComponent.Component):
                 Part.makePolygon([bottom_left, bottom_right, top_right, top_left, bottom_left])
             )
 
-        layers = self.get_layers(obj)
-        width = self.get_width(obj, widths=False)
-        align = obj.Align
-        wall_offset = obj.Offset.Value
-
         # Use a small default for zero dimensions to ensure a valid shape can be created.
         safe_length = obj.Length.Value or 0.5
-
-        if not layers:
-            safe_width = width or 0.5
-            layers = [safe_width]  # Treat a single-layer wall as a multi-layer wall with one layer.
+        section = self.get_resolved_section(obj)
+        if section is None:
+            return [], FreeCAD.Placement()
 
         # --- Calculate and Create Geometry ---
         base_faces = []
 
-        # The total width is needed to calculate the starting offset for alignment.
-        totalwidth = sum([abs(layer) for layer in layers])
-
-        # The offset acts as a cursor, tracking the current position along the Y-axis.
-        offset = 0
-        if align == "Center":
-            offset = -totalwidth / 2
-        elif align == "Left":
-            # Per convention, 'Left' is on the geometric right (-Y direction).
-            offset = -totalwidth - wall_offset
-        elif align == "Right":
-            offset = wall_offset
-
-        # Loop through all layers and create a face for each.
-        for layer in layers:
-            # A negative layer value is not drawn, so its geometry is skipped.
-            if layer > 0:
+        # Loop through the already-resolved layers.  Invisible layers retain
+        # their cursor position but never become faces.
+        for layer in section.layers:
+            if layer.visible:
                 half_length = safe_length / 2
-                layer_y_min = offset
-                layer_y_max = offset + layer
-                face = _create_face_from_coords(half_length, layer_y_min, layer_y_max)
+                face = _create_face_from_coords(half_length, layer.y_min, layer.y_max)
                 base_faces.append(face)
-
-            # The offset is always increased by the absolute thickness of the layer.
-            offset += abs(layer)
 
         placement = FreeCAD.Placement()
 
@@ -2380,6 +3043,120 @@ class _Wall(ArchComponent.Component):
         self.basewires = [[Part.LineSegment(p1, p2).toShape()]]
 
         return base_faces, placement
+
+    def get_global_baseline(self, obj):
+        """Resolve one supported wall baseline into global coordinates.
+
+        Based walls must expose exactly one straight edge.  Its semantic
+        provider orientation is resolved before the wall placement is applied
+        and copied into a fresh ``Part.Edge`` so relation code never has to
+        interpret wall placement.
+        A baseless wall is derived directly from its local length and
+        placement.  Unsupported topology returns ``None``.
+        """
+        import Part
+        import DraftGeomUtils
+
+        base = obj.Base
+        placement = obj.Placement
+        if base:
+            if not hasattr(base, "Shape") or len(base.Shape.Edges) != 1:
+                return None
+            source_edge = base.Shape.Edges[0]
+            if source_edge.Curve.TypeId != "Part::GeomLine":
+                return None
+            points = [
+                placement.multVec(point)
+                for point in ArchWallEndpoint.get_oriented_base_points(base)
+            ]
+            if len(points) != 2 or points[0].distanceToPoint(points[1]) <= 1e-9:
+                return None
+            edge = Part.makeLine(points[0], points[1])
+        else:
+            half_length = obj.Length.Value / 2.0
+            points = [
+                placement.multVec(FreeCAD.Vector(-half_length, 0, 0)),
+                placement.multVec(FreeCAD.Vector(half_length, 0, 0)),
+            ]
+            if points[0].distanceToPoint(points[1]) <= 1e-9:
+                return None
+            edge = Part.makeLine(points[0], points[1])
+
+        if obj.Normal == Vector(0, 0, 0):
+            local_normal = None
+            if base and hasattr(base, "Shape"):
+                local_normal = DraftGeomUtils.get_shape_normal(base.Shape)
+            local_normal = local_normal or Vector(0, 0, 1)
+        else:
+            local_normal = Vector(obj.Normal)
+        normal = placement.Rotation.multVec(local_normal)
+        if normal.Length <= 1e-9:
+            return None
+        normal.normalize()
+        if edge.Vertexes[0].Point.sub(edge.Vertexes[-1].Point).cross(normal).Length <= 1e-9:
+            return None
+        return ArchWallGeometry.WallBaseline(edge, normal, points[0], points[1])
+
+    def process_endings(self, obj, base_solid, wall_placement, end_conditions=None):
+        """Trim a wall solid using the winning end-condition providers.
+
+        Each end is resolved independently from its normalized provider list.
+        Relation extensions are applied to the construction solid before
+        subshape processing.  This stage applies only the selected cutting
+        planes to the already processed solid.
+        """
+        if base_solid.isNull():
+            return base_solid
+
+        solid_to_trim = base_solid
+        min_tool_size = base_solid.BoundBox.DiagonalLength * 2
+        if end_conditions is None:
+            relation_endings = ArchWallRelationResolver.collect_wall_relation_endings(obj)
+            end_conditions = {
+                end_name: self._resolve_end_condition(obj, end_name, relation_endings)
+                for end_name in ("Start", "End")
+            }
+        baseline = self.get_global_baseline(obj)
+        if baseline is None:
+            return solid_to_trim
+        endpoints = [baseline.start_point, baseline.end_point]
+        start_condition = end_conditions["Start"]
+        if start_condition:
+            solid_to_trim = ArchWallTrimming.apply_cutting_plane(
+                obj,
+                solid_to_trim,
+                wall_placement,
+                start_condition.placement,
+                endpoints[1],
+                min_tool_size,
+                is_global=start_condition.is_global,
+            )
+
+        end_condition = end_conditions["End"]
+        if end_condition:
+            solid_to_trim = ArchWallTrimming.apply_cutting_plane(
+                obj,
+                solid_to_trim,
+                wall_placement,
+                end_condition.placement,
+                endpoints[0],
+                min_tool_size,
+                is_global=end_condition.is_global,
+            )
+        return solid_to_trim
+
+    def _resolve_end_condition(self, obj, end_name, relation_endings):
+        conditions = [
+            ArchWallEndCondition.WallEndCondition(
+                source="Manual", placement=getattr(obj, "Ending" + end_name)
+            )
+        ]
+        relation_condition = relation_endings.get(end_name)
+        if relation_condition is not None:
+            conditions.append(relation_condition)
+        return ArchWallEndCondition.select_end_condition(
+            conditions, getattr(obj, "EndConditionOrder" + end_name)
+        )
 
 
 if FreeCAD.GuiUp:
@@ -2491,21 +3268,9 @@ class _ViewProviderWall(ArchComponent.ViewProviderComponent):
                 return ":/icons/Arch_Wall_Tree_Assembly.svg"
         return ":/icons/Arch_Wall_Tree.svg"
 
-    def attach(self, vobj):
-        """Add display modes' data to the coin scenegraph.
+    def createFootprintGroup(self):
+        """Sets up the Coin group for footprint display mode"""
 
-        Add each display mode as a coin node, whose parent is this view
-        provider.
-
-        Each display mode's node includes the data needed to display the object
-        in that mode. This might include colors of faces, or the draw style of
-        lines. This data is stored as additional coin nodes which are children
-        of the display mode node.
-
-        Add the textures used in the Footprint display mode.
-        """
-
-        self.Object = vobj.Object
         from pivy import coin
 
         tex = coin.SoTexture2()
@@ -2516,14 +3281,33 @@ class _ViewProviderWall(ArchComponent.ViewProviderComponent):
         s = params.get_param_arch("patternScale")
         texcoords.directionS.setValue(s, 0, 0)
         texcoords.directionT.setValue(0, s, 0)
+
         self.fcoords = coin.SoCoordinate3()
         self.fset = coin.SoIndexedFaceSet()
+
         sep = coin.SoSeparator()
         sep.addChild(tex)
         sep.addChild(texcoords)
         sep.addChild(self.fcoords)
         sep.addChild(self.fset)
-        vobj.RootNode.addChild(sep)
+
+        return sep
+
+    def attach(self, vobj):
+        """Add display modes' data to the coin scenegraph.
+
+        Add each display mode as a coin node, whose parent is this view
+        provider.
+
+        Each display mode's node includes the data needed to display the object
+        in that mode. This might include colors of faces, or the draw style of
+        lines. This data is stored as additional coin nodes which are children
+        of the display mode node.
+        """
+
+        if not vobj.hasExtension("PartGui::ViewProviderPreviewExtensionPython"):
+            vobj.addExtension("PartGui::ViewProviderPreviewExtensionPython")
+        self.Object = vobj.Object
         ArchComponent.ViewProviderComponent.attach(self, vobj)
 
     def updateData(self, obj, prop):
@@ -2556,7 +3340,12 @@ class _ViewProviderWall(ArchComponent.ViewProviderComponent):
                             cols = []
                             for i, mat in enumerate(activematerials):
                                 c = obj.ViewObject.ShapeColor
-                                c = (c[0], c[1], c[2], 1.0 - obj.ViewObject.Transparency / 100.0)
+                                c = (
+                                    c[0],
+                                    c[1],
+                                    c[2],
+                                    1.0 - obj.ViewObject.Transparency / 100.0,
+                                )
                                 if "DiffuseColor" in mat.Material:
                                     if "(" in mat.Material["DiffuseColor"]:
                                         c = tuple(
@@ -2593,7 +3382,7 @@ class _ViewProviderWall(ArchComponent.ViewProviderComponent):
             List containing the names of the new display modes.
         """
 
-        modes = ArchComponent.ViewProviderComponent.getDisplayModes(self, vobj) + ["Footprint"]
+        modes = ArchComponent.ViewProviderComponent.getDisplayModes(self, vobj)
         return modes
 
     def setDisplayMode(self, mode):
@@ -2618,26 +3407,9 @@ class _ViewProviderWall(ArchComponent.ViewProviderComponent):
         str:
             The name of the display mode the view provider has switched to.
         """
-
-        self.fset.coordIndex.deleteValues(0)
-        self.fcoords.point.deleteValues(0)
         if mode == "Footprint":
-            if hasattr(self, "Object"):
-                faces = self.Object.Proxy.getFootprint(self.Object)
-                if faces:
-                    verts = []
-                    fdata = []
-                    idx = 0
-                    for face in faces:
-                        tri = face.tessellate(1)
-                        for v in tri[0]:
-                            verts.append([v.x, v.y, v.z])
-                        for f in tri[1]:
-                            fdata.extend([f[0] + idx, f[1] + idx, f[2] + idx, -1])
-                        idx += len(tri[0])
-                    self.fcoords.point.setValues(verts)
-                    self.fset.coordIndex.setValues(0, len(fdata), fdata)
-            return "Wireframe"
+            if self.refreshFootprint():
+                return "Footprint"
         return ArchComponent.ViewProviderComponent.setDisplayMode(self, mode)
 
     def setEdit(self, vobj, mode):
@@ -2656,7 +3428,9 @@ class _ViewProviderWall(ArchComponent.ViewProviderComponent):
         super().contextMenuAddEdit(menu)
 
         actionFlipDirection = QtGui.QAction(
-            QtGui.QIcon(":/icons/Arch_Wall_Tree.svg"), translate("Arch", "Flip Direction"), menu
+            QtGui.QIcon(":/icons/Arch_Wall_Tree.svg"),
+            translate("Arch", "Flip Direction"),
+            menu,
         )
         QtCore.QObject.connect(
             actionFlipDirection, QtCore.SIGNAL("triggered()"), self.flipDirection

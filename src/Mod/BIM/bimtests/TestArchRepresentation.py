@@ -28,6 +28,7 @@ from ArchRepresentation import (
     edit_capabilities_for,
     representation_for,
 )
+from ArchWallSemantic import evaluate_wall_candidate, evaluate_wall_length
 
 
 class TestArchRepresentation(unittest.TestCase):
@@ -56,6 +57,21 @@ class TestArchRepresentation(unittest.TestCase):
             self.assertTrue(boundaries[0].geometry[0].isEqual(boundaries[0].geometry[-1], 1e-7))
         finally:
             FreeCAD.closeDocument(document.Name)
+
+    def test_wall_move_and_stretch_share_viewer_independent_evaluation(self):
+        endpoints = (FreeCAD.Vector(0, 0, 0), FreeCAD.Vector(3000, 0, 0))
+
+        moved = evaluate_wall_candidate(endpoints, "Move", FreeCAD.Vector(1600, 400, 0))
+        self.assertTrue(moved.allowed)
+        self.assertTrue(moved.endpoints[0].isEqual(FreeCAD.Vector(100, 400, 0), 1e-7))
+        self.assertTrue(moved.endpoints[1].isEqual(FreeCAD.Vector(3100, 400, 0), 1e-7))
+
+        stretched = evaluate_wall_length(endpoints, "Start", 2500)
+        self.assertTrue(stretched.allowed)
+        self.assertTrue(stretched.endpoints[0].isEqual(FreeCAD.Vector(500, 0, 0), 1e-7))
+        rejected = evaluate_wall_candidate(endpoints, "End", FreeCAD.Vector(5, 0, 0))
+        self.assertFalse(rejected.allowed)
+        self.assertIn("10 mm", rejected.reason)
 
     def test_request_accepts_enum_or_serialized_purpose(self):
         plan = RepresentationRequest(purpose=RepresentationPurpose.PLAN)
@@ -491,3 +507,108 @@ if __name__ == "__main__":
         self.assertIn(joint, result.sources)
         self.assertIn(horizontal, result.sources)
         self.assertIn(vertical, result.sources)
+
+
+    def test_native_wall_path_exposes_semantic_endpoint_handles(self):
+        document = FreeCAD.newDocument("ContextualPathRepresentationTest")
+        self.addCleanup(FreeCAD.closeDocument, document.Name)
+        wall = Arch.makeWall(length=4000, width=200, height=3000)
+        document.recompute()
+
+        representation = wall.Proxy.getRepresentation(
+            wall,
+            RepresentationRequest(
+                purpose="Plan",
+                cut_offset=1000,
+                target_offset=0,
+            ),
+        )
+
+        handles = {handle.subelement: handle for handle in representation.edit_handles}
+        self.assertTrue({"Path.Start", "Path.End"}.issubset(handles))
+        self.assertIsInstance(handles["Path.Start"].constraint, AxisConstraint)
+        self.assertIsInstance(handles["Path.End"].constraint, AxisConstraint)
+        self.assertEqual("Square", handles["Path.Start"].glyph)
+        self.assertEqual("Square", handles["Path.End"].glyph)
+        self.assertEqual("Point", handles["Path.End"].operation.value_kind)
+        self.assertEqual("WallStretchStart", handles["Path.Start"].operation.interaction_intent)
+        move_handle = next(
+            handle for handle in representation.edit_handles if handle.role == "WallMove"
+        )
+        self.assertIsInstance(move_handle.constraint, WorkingPlaneConstraint)
+        self.assertEqual("Circle", move_handle.glyph)
+        self.assertEqual("WallMove", move_handle.operation.interaction_intent)
+        endpoints = wall.Proxy.calc_endpoints(wall)
+        self.assertTrue(move_handle.point.isEqual((endpoints[0] + endpoints[1]) * 0.5, 1e-7))
+
+    def test_wall_width_face_handles_preserve_the_opposite_face(self):
+        document = FreeCAD.newDocument("ContextualWallWidthTest")
+        self.addCleanup(FreeCAD.closeDocument, document.Name)
+        request = RepresentationRequest(purpose="Plan", cut_offset=1000, target_offset=0)
+        for align in ("Center", "Left", "Right"):
+            for side in ("Negative", "Positive"):
+                with self.subTest(align=align, side=side):
+                    wall = Arch.makeWall(
+                        length=3000,
+                        width=200,
+                        height=3000,
+                        align=align,
+                        name="{}{}WidthWall".format(align, side),
+                    )
+                    wall.Offset = 25
+                    document.recompute()
+                    before = wall.Proxy.get_resolved_section(wall)
+                    representation = wall.Proxy.getRepresentation(wall, request)
+                    handles = {
+                        item.subelement: item
+                        for item in representation.edit_handles
+                        if item.role == "WallWidth"
+                    }
+                    self.assertEqual({"Width.NegativeFace", "Width.PositiveFace"}, set(handles))
+                    handle = handles["Width.{}Face".format(side)]
+                    self.assertEqual("Plus", handle.glyph)
+                    self.assertEqual(1.0, handle.operation.sensitivity)
+
+                    editor = BIMContextualHandleEditor(request)
+                    editor.begin(handle)
+                    result = editor.commit(handle.point + handle.direction * 50)
+                    document.recompute()
+
+                    self.assertTrue(result.success)
+                    self.assertAlmostEqual(250.0, wall.Width.Value)
+                    after = wall.Proxy.get_resolved_section(wall)
+                    if side == "Negative":
+                        self.assertAlmostEqual(before.y_max, after.y_max)
+                        self.assertAlmostEqual(before.y_min - 50, after.y_min)
+                    else:
+                        self.assertAlmostEqual(before.y_min, after.y_min)
+                        self.assertAlmostEqual(before.y_max + 50, after.y_max)
+
+    def test_wall_model_edit_capabilities_cover_path_section_and_height(self):
+        document = FreeCAD.newDocument("WallModelEditCapabilities")
+        try:
+            wall = Arch.makeWall(length=3000, width=200, height=2500, align="Left")
+            document.recompute()
+            request = RepresentationRequest(purpose=RepresentationPurpose.MODEL)
+            capabilities = edit_capabilities_for(wall, request)
+            handles = {handle.subelement: handle for handle in capabilities.edit_handles}
+
+            self.assertIs(capabilities.source, wall)
+            self.assertIs(capabilities.request, request)
+            self.assertFalse(hasattr(capabilities, "cut_geometry"))
+            for subelement in (
+                "Path.Start",
+                "Path.End",
+                "Path",
+                "Width.NegativeFace",
+                "Width.PositiveFace",
+                "Offset",
+                "Height",
+            ):
+                self.assertIn(subelement, handles)
+            self.assertAlmostEqual(wall.Shape.BoundBox.ZMax, handles["Height"].point.z)
+            self.assertAlmostEqual(wall.Placement.Base.z, handles["Path.Start"].point.z)
+            self.assertIsInstance(handles["Height"].constraint, AxisConstraint)
+            self.assertIsInstance(handles["Path"].constraint, WorkingPlaneConstraint)
+        finally:
+            FreeCAD.closeDocument(document.Name)
