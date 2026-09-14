@@ -69,6 +69,7 @@ public:
     Py::Object zoomOut();
     Py::Object startAnimating(const Py::Tuple&);
     Py::Object stopAnimating();
+    Py::Object waitForCameraAnimation();
     Py::Object setAnimationEnabled(const Py::Tuple&);
     Py::Object pushViewContextLayer();
     Py::Object removeViewContextLayer(const Py::Tuple&);

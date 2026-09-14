@@ -206,6 +206,7 @@ public:
     ) const;
 
     void startAnimating(const std::shared_ptr<NavigationAnimation>& animation, bool wait = false) const;
+    bool waitForAnimation() const;
     void stopAnimating() const;
 
     void setSensitivity(float);

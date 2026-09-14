@@ -5,6 +5,7 @@
 #include <cstdint>
 #include <functional>
 #include <map>
+#include <string>
 #include <unordered_map>
 
 #include <FCGlobal.h>
@@ -24,6 +25,18 @@ class ViewProviderDocumentObject;
 class GuiExport ViewContext
 {
 public:
+    struct CameraState
+    {
+        std::string codec;
+        long version = 1;
+        std::string payload;
+
+        bool empty() const noexcept
+        {
+            return codec.empty() && payload.empty();
+        }
+    };
+
     enum class Visibility
     {
         Inherit,
@@ -43,6 +56,8 @@ public:
     bool effectiveVisibility(const ViewProviderDocumentObject* provider) const;
     bool applyDefinition(const App::ViewDefinition* definition);
     bool captureDefinition(App::ViewDefinition* definition) const;
+    void setCameraState(CameraState state);
+    const CameraState& cameraState() const;
     void setReferenceFrame(const Base::Placement& frame);
     const Base::Placement& referenceFrame() const;
     void removeObject(const App::DocumentObject* object);
@@ -56,6 +71,7 @@ private:
     std::map<LayerId, VisibilityMap> layers;
     LayerId nextLayerId = 1;
     ChangedCallback changed;
+    CameraState activeCameraState;
     Base::Placement activeReferenceFrame;
 };
 
