@@ -24,7 +24,6 @@
 
 # Unit test for the Arch module
 from bimtests.TestArchRoof import TestArchRoof
-from bimtests.TestArchRepresentation import TestArchRepresentation
 from bimtests.TestArchSpace import TestArchSpace
 from bimtests.TestArchWall import TestArchWall
 from bimtests.TestArchWallGeometry import TestArchWallGeometry
@@ -53,6 +52,55 @@ from bimtests.TestArchReference import TestArchReference
 from bimtests.TestArchSchedule import TestArchSchedule
 from bimtests.TestArchTruss import TestArchTruss
 from bimtests.TestArchComponent import TestArchComponent
+from bimtests.TestArchRepresentation import TestArchRepresentation
 from bimtests.TestWebGLExport import TestWebGLExport
 from bimtests.TestArchReport import TestArchReport
 from bimtests.TestArchCovering import TestArchCovering
+from bimtests.TestBimAssetSemantics import TestBimAssetSemantics
+from bimtests.TestBimLibrarySources import TestBimLibrarySources
+
+TEST_CLASSES = (
+    TestArchRoof,
+    TestArchSpace,
+    TestArchWall,
+    TestArchWallGeometry,
+    TestArchWallJoint,
+    TestArchWallJoinMatrix,
+    TestArchWallJunction,
+    TestArchWallJunctionMatrix,
+    TestArchBuildingPart,
+    TestArchAxis,
+    TestArchStructure,
+    TestArchMaterial,
+    TestArchPanel,
+    TestArchWindow,
+    TestArchStairs,
+    TestArchPipe,
+    TestArchCurtainWall,
+    TestArchProfile,
+    TestArchProject,
+    TestArchSectionPlane,
+    TestArchRebar,
+    TestArchGrid,
+    TestArchFence,
+    TestArchEquipment,
+    TestArchFrame,
+    TestArchReference,
+    TestArchSchedule,
+    TestArchTruss,
+    TestArchComponent,
+    TestArchRepresentation,
+    TestWebGLExport,
+    TestArchReport,
+    TestArchCovering,
+    TestBimAssetSemantics,
+    TestBimLibrarySources,
+)
+
+
+def load_tests(loader, _tests, _pattern):
+    """Return the complete Arch application test suite explicitly."""
+    suite = loader.suiteClass()
+    for test_class in TEST_CLASSES:
+        suite.addTests(loader.loadTestsFromTestCase(test_class))
+    return suite
