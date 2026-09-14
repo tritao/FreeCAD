@@ -8,6 +8,7 @@ from bimplan.object_visibility import PlanVisibilityAPI
 from bimplan.picking import PlanPickingAPI
 from bimplan.selection import PlanSelectionAPI
 from bimplan.snap import PlanSnapAPI
+from bimplan.contextual_editing import PlanContextualEditingAPI
 
 
 _PLAN_EDIT_SNAP_SET = {
@@ -51,6 +52,7 @@ class PlanEditSession:
         self.picking = PlanPickingAPI(self)
         self.selection = PlanSelectionAPI(self)
         self.snap = PlanSnapAPI(self, _PLAN_EDIT_SNAP_SET)
+        self.contextual_editing = PlanContextualEditingAPI(self)
         if active_storey is not None:
             self.set_source(active_storey, refresh=False)
 

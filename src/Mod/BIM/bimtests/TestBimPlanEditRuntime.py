@@ -265,6 +265,145 @@ class TestBimPlanEditRuntime(unittest.TestCase):
         session.selection.clear()
         self.assertEqual((), renderer.visible_sources)
 
+    def test_contextual_edit_activation_uses_controller_and_cleans_prior_input(self):
+        from bimplan.contextual_editing import PlanContextualEditingAPI
+
+        class Snap:
+            def __init__(self):
+                self.clears = 0
+
+            def clear_active_draft_command(self):
+                self.clears += 1
+
+        class Renderer:
+            def refresh_object(self, _source):
+                pass
+
+        class Host:
+            def __init__(self):
+                self.inputs = []
+                self.clears = 0
+
+            def set_value_input(self, **kwargs):
+                self.inputs.append(kwargs)
+
+            def clear_value_input(self):
+                self.clears += 1
+
+        outcomes = iter((True, False))
+
+        class Controller:
+            def __init__(self, *_args, **_kwargs):
+                self.editor = None
+                self.activations = []
+                self.begins = []
+                self.cancellations = 0
+                self.value_commits = []
+
+            def activate(self, handle):
+                self.activations.append(handle)
+                if next(outcomes):
+                    self.editor = SimpleNamespace(handle=handle)
+                    return True
+                return False
+
+            def begin(self, handle):
+                self.begins.append(handle)
+
+            def cancel(self, **_kwargs):
+                self.cancellations += 1
+
+            def commit_value(self, value):
+                self.value_commits.append(value)
+                return SimpleNamespace(success=True)
+
+        source = {"height": 2400.0}
+        operation = BIMEditOperation(
+            "height",
+            "Set height",
+            lambda obj: obj["height"],
+            lambda obj, value: obj.__setitem__("height", value),
+            value_kind="Scalar",
+        )
+        handle = BIMEditHandle(
+            source,
+            "height",
+            FreeCAD.Vector(),
+            FreeCAD.Vector(1, 0, 0),
+            operation,
+        )
+        session = PlanEditSession(view=object())
+        session.snap = Snap()
+        session.contextual_rendering = Renderer()
+        editing = PlanContextualEditingAPI(session)
+        host = Host()
+        editing.input_adapter.host = host
+
+        with patch(
+            "bimplan.contextual_editing.ContextualEditController", Controller
+        ):
+            self.assertTrue(editing.activate(handle))
+            first_controller = editing.controller
+            self.assertEqual([handle], first_controller.activations)
+            self.assertEqual([], first_controller.begins)
+            self.assertEqual("Set height", host.inputs[0]["label"])
+            self.assertEqual("Length", host.inputs[0]["unit"])
+            self.assertEqual(2400.0, host.inputs[0]["value"])
+            self.assertTrue(host.inputs[0]["callback"](2600.0))
+            self.assertEqual([2600.0], first_controller.value_commits)
+
+            self.assertFalse(editing.activate(handle))
+
+        self.assertEqual(1, first_controller.cancellations)
+        self.assertEqual(3, host.clears)
+        self.assertEqual(2, session.snap.clears)
+        self.assertEqual([], editing.controller.begins)
+        self.assertEqual(1, len(host.inputs))
+
+    def test_contextual_edit_cancel_clears_point_and_value_input(self):
+        from bimplan.contextual_editing import PlanContextualEditingAPI
+
+        class Snap:
+            def __init__(self):
+                self.clears = 0
+
+            def clear_active_draft_command(self):
+                self.clears += 1
+
+        class Renderer:
+            def refresh_object(self, _source):
+                pass
+
+        class Controller:
+            def __init__(self, *_args, **_kwargs):
+                self.editor = None
+                self.cancellations = []
+
+            def cancel(self, **kwargs):
+                self.cancellations.append(kwargs)
+
+        class Host:
+            def __init__(self):
+                self.clears = 0
+
+            def clear_value_input(self):
+                self.clears += 1
+
+        session = PlanEditSession(view=object())
+        session.snap = Snap()
+        session.contextual_rendering = Renderer()
+        editing = PlanContextualEditingAPI(session)
+        controller = Controller()
+        host = Host()
+        editing.controller = controller
+        editing.input_adapter.host = host
+
+        editing.cancel(refresh=False)
+
+        self.assertEqual([{"refresh": False}], controller.cancellations)
+        self.assertEqual(1, session.snap.clears)
+        self.assertEqual(1, host.clears)
+
 
 if __name__ == "__main__":
     unittest.main()

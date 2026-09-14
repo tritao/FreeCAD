@@ -129,6 +129,7 @@ SET(bimcontextual_SRCS
 
 SET(bimplan_SRCS
     bimplan/__init__.py
+    bimplan/contextual_editing.py
     bimplan/contextual_rendering.py
     bimplan/object_visibility.py
     bimplan/representation_request.py
@@ -159,6 +160,14 @@ SET(bimplan_SRCS
     bimplan/selection/target_kinds.py
     bimplan/selection/targets.py
     bimplan/snap.py
+    bimplan/runtime/input.py
+    bimplan/runtime/lifecycle.py
+    bimplan/tools/move.py
+    bimplan/tools/opening_edit.py
+    bimplan/tools/select.py
+    bimplan/tools/symbol_edit.py
+    bimplan/tools/wall_edit.py
+    bimplan/transactions.py
 )
 
 SET(Arch_presets
