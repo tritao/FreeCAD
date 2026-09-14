@@ -691,10 +691,7 @@ def _opening_position_edit_operation(helper):
         available=lambda _source: not ArchRepresentation.is_property_expression_driven(
             target, "Placement.Base"
         ),
-        preview_representation=lambda _source, value, context: (
-            helper.get_plan_edit_preview_representation("OpeningPosition", value, context)
-        ),
-        preview_state=lambda _source, value, context: helper.get_plan_edit_preview_state(
+        preview=lambda _source, value, context: helper.get_plan_edit_preview_state(
             "OpeningPosition", value, context
         ),
         preview_label=lambda _source, value, context: helper.get_plan_edit_preview_label(
@@ -763,12 +760,7 @@ def _opening_width_edit_operation(helper, side):
         minimum=minimum,
         maximum=maximum,
         available=lambda _source: canEditWindowWidth(source),
-        preview_representation=lambda _source, value, context: (
-            helper.get_plan_edit_preview_representation(
-                "Opening{}Jamb".format(side), value, context
-            )
-        ),
-        preview_state=lambda _source, value, context: helper.get_plan_edit_preview_state(
+        preview=lambda _source, value, context: helper.get_plan_edit_preview_state(
             "Opening{}Jamb".format(side), value, context
         ),
         preview_label=lambda _source, value, context: helper.get_plan_edit_preview_label(

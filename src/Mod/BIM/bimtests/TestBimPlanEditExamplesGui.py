@@ -294,7 +294,7 @@ class TestBimPlanEditExamplesGui(TestArchBaseGui):
                 if handle.subelement == "Width.PositiveFace"
             )
             original_host_width = host.Width.Value
-            semantic_state = wall_width_handle.operation.get_preview_state(
+            semantic_state = wall_width_handle.operation.get_preview(
                 host,
                 original_host_width + 25.0,
                 session.representation_context.context,
@@ -419,7 +419,7 @@ class TestBimPlanEditExamplesGui(TestArchBaseGui):
             position_handle = next(handle for handle in handles if handle.role == "OpeningPosition")
             original_position = position_handle.operation.get_value(door)
             proposed_position = original_position + 50.0
-            preview_state = position_handle.operation.get_preview_state(
+            preview_state = position_handle.operation.get_preview(
                 door,
                 proposed_position,
                 session.representation_context.context,

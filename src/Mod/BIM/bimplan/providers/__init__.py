@@ -2,8 +2,8 @@
 
 """Plan-specific provider models and integrations."""
 
+from bimcontextual.actions import ContextualActionSpec, ContextualInspectorSection
 from .contracts import (
-    PlanActionSpec,
     PlanContextDetailSpec,
     PlanContextPanelSpec,
     PlanContextPanelState,
@@ -13,7 +13,6 @@ from .contracts import (
     PlanProviderEditHandleSpec,
     PlanEditProvider,
     PlanEditRegistry,
-    PlanInspectorSection,
     PlanIssueSeverity,
     PlanIssueSpec,
     PlanOverlayMarkerKind,

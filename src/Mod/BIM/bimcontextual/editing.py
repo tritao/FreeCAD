@@ -195,25 +195,13 @@ class ContextualEditController:
         self._call_renderer("preview_handle", preview.handle, preview.point)
         state = "active" if preview.validation.allowed else "invalid"
         self._call_renderer("set_handle_state", preview.handle, state)
-        preview_state = preview.handle.operation.get_preview_state(
+        preview_state = preview.handle.operation.get_preview(
             preview.handle.source,
             preview.value,
             self.editor.context,
         )
         preview_state = ArchRepresentation.expand_preview_dependents(
             preview_state, self.editor.context
-        )
-        representation = None
-        if preview_state is None:
-            representation = preview.handle.operation.get_preview_representation(
-                preview.handle.source,
-                preview.value,
-                self.editor.context,
-            )
-        shape = preview.handle.operation.get_preview_shape(
-            preview.handle.source,
-            preview.value,
-            self.editor.context,
         )
         source = preview.handle.source
         if preview_state is not None:
@@ -222,17 +210,8 @@ class ContextualEditController:
                 preview_state,
                 preview.validation.allowed,
             )
-        elif representation is not None:
-            self._call_renderer(
-                "set_preview_representation",
-                source,
-                representation,
-                preview.validation.allowed,
-            )
-        elif shape is None or not preview.validation.allowed:
-            self._call_renderer("clear_preview", source)
         else:
-            self._call_renderer("set_preview_shape", source, shape)
+            self._call_renderer("clear_preview", source)
         label = preview.handle.operation.get_preview_label(
             source,
             preview.value,
@@ -379,4 +358,3 @@ class ContextualEditController:
     def _clear_feedback(self):
         if callable(self.clear_feedback_callback):
             self.clear_feedback_callback()
-

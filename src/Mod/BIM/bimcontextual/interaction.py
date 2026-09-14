@@ -8,13 +8,14 @@ from draftguitools.gui_base import DraftInteractionHost
 class ContextualInteractionHost(DraftInteractionHost):
     """Acquire Draft points on the plane declared by a BIM view context."""
 
-    def __init__(self, context, profile=None, command=None, view=None):
+    def __init__(self, context, plane_resolver=None, command=None, view=None):
         super().__init__(command=command, view=view)
         self.context = context
-        if profile is None:
-            from .profiles import profile_for
-            profile = profile_for(context)
-        self.profile = profile
+        if plane_resolver is None:
+            from .profiles import interaction_plane_for
+
+            plane_resolver = interaction_plane_for
+        self._plane_resolver = plane_resolver
 
     def get_interaction_plane(self):
-        return self.profile.interaction_plane(self.context)
+        return self._plane_resolver(self.context)

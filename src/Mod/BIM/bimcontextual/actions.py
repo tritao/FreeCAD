@@ -55,11 +55,9 @@ class ContextualProviderContext:
     selected_sources: tuple = ()
     view: object = None
     capabilities: tuple = ()
-    profile: object = None
 
     def supports(self, capability):
-        policy = self.profile or profiles.profile_for(self.representation_context)
-        return policy.supports(capability)
+        return profiles.supports(self.representation_context, capability)
 
     def get_selected_sources(self):
         return tuple(self.selected_sources or ())

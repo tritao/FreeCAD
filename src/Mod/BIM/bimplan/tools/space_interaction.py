@@ -270,7 +270,9 @@ def update_plan_region_preview(session, point, info):
     if not representation.projected_geometry:
         return
     _plan_region_tool_state(session).preview_source = source
-    session.contextual_rendering.set_preview_representation(source, representation)
+    session.contextual_rendering.set_preview_state(
+        ArchRepresentation.preview_state_from_representation(representation)
+    )
 
 
 def _build_plan_region_preview_representation(session, source, segments):
@@ -428,7 +430,9 @@ def update_space_separator_preview(session, point, info):
         end,
     )
     session.creation_preview_state.space_separator_preview_source = source
-    session.contextual_rendering.set_preview_representation(source, representation)
+    session.contextual_rendering.set_preview_state(
+        ArchRepresentation.preview_state_from_representation(representation)
+    )
 
 
 def _get_space_separator_start(session):

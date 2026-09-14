@@ -14,7 +14,6 @@ from .actions import (
 )
 from .editing import ContextualEditController
 from .interaction import ContextualInteractionHost
-from .profiles import profile_for
 
 
 _active_session = None
@@ -30,7 +29,6 @@ class ContextualSession:
         sources=None,
         orient_to_context=False,
         providers=None,
-        profile=None,
     ):
         gui_document = FreeCADGui.ActiveDocument
         self.gui_document = gui_document
@@ -42,7 +40,6 @@ class ContextualSession:
         self.context = context or ArchRepresentation.RepresentationContext(
             purpose=ArchRepresentation.RepresentationPurpose.MODEL
         )
-        self.profile = profile or profile_for(self.context)
         self._context_sources = None if sources is None else tuple(sources)
         self._restore_camera = None
         if orient_to_context:
@@ -65,12 +62,14 @@ class ContextualSession:
         self.contextual_tools = ()
         self.inspector_sections = ()
         self._pending_action_handle = None
-        self.providers = tuple(providers or self.profile.providers(self.context))
+        if providers is None:
+            from .actions import SemanticEditProvider
+
+            providers = (SemanticEditProvider(),)
+        self.providers = tuple(providers)
         self._provider_context = None
         self.action_panel = ContextualActionPanel(close_callback=self.close)
-        self.host = ContextualInteractionHost(
-            self.context, profile=self.profile, view=self.view
-        )
+        self.host = ContextualInteractionHost(self.context, view=self.view)
 
         try:
             FreeCADGui.Selection.addObserver(self)
@@ -145,7 +144,10 @@ class ContextualSession:
     def present_preview(self, source, representation):
         if self._closed:
             return False
-        return self.renderer.set_preview_representation(source, representation)
+        del source
+        return self.renderer.set_preview_state(
+            ArchRepresentation.preview_state_from_representation(representation)
+        )
 
     def clear_preview(self, source=None):
         return self.renderer.clear_preview(source)
@@ -322,7 +324,6 @@ class ContextualSession:
             selected_sources=tuple(selected),
             view=self.view,
             capabilities=self._capabilities,
-            profile=self.profile,
         )
         self._provider_context = context
         actions = []

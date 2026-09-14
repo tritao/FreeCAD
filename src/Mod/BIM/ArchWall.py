@@ -1339,12 +1339,7 @@ class _Wall(ArchComponent.Component):
                 property_name="Width, Align, Offset",
                 minimum=1.0,
                 available=lambda source: self._can_edit_uniform_section(source),
-                preview_shape=(
-                    lambda source, value, preview_context, side=side: (
-                        self._get_width_face_preview_shape(source, side, value, preview_context)
-                    )
-                ),
-                preview_state=(
+                preview=(
                     lambda source, value, preview_context, side=side: (
                         self._get_width_face_preview_state(source, side, value, preview_context)
                     )
@@ -1646,7 +1641,7 @@ class _Wall(ArchComponent.Component):
                 value_kind="Point",
                 available=lambda source: self._can_edit_native_path(source),
                 interaction_intent="WallStretch{}".format(role),
-                preview_state=lambda source, value, preview_context, index=index: (
+                preview=lambda source, value, preview_context, index=index: (
                     self._get_endpoint_preview_state(source, index, value, preview_context)
                 ),
                 validator=lambda source, value, index=index: __import__(
@@ -1686,7 +1681,7 @@ class _Wall(ArchComponent.Component):
             value_kind="Point",
             available=lambda source: self._can_edit_native_path(source),
             interaction_intent="WallMove",
-            preview_state=lambda source, value, preview_context: (
+            preview=lambda source, value, preview_context: (
                 self._get_wall_path_preview_state(source, "Move", value, preview_context)
             ),
             validator=lambda source, value: __import__(
@@ -1878,7 +1873,7 @@ class _Wall(ArchComponent.Component):
                 available=lambda _source, joint=joint: (
                     self._movable_wall_joint_data(joint) is not None
                 ),
-                preview_state=lambda source, value, preview_context, joint=joint: (
+                preview=lambda source, value, preview_context, joint=joint: (
                     self._get_wall_joint_preview_state(joint, value, preview_context, source)
                 ),
             )

@@ -84,11 +84,6 @@ class PlanOverlayMarkerKind(_PlanContractEnum):
 
 
 @dataclass(frozen=True)
-class PlanActionSpec(ContextualActionSpec):
-    """Plan extension point for a generic contextual action."""
-
-
-@dataclass(frozen=True)
 class PlanToolSpec(ContextualToolSpec):
     """Plan tool with Plan's point/immediate interaction vocabulary."""
 
@@ -118,7 +113,7 @@ class PlanIssueSpec:
     message: str = ""
     severity: PlanIssueSeverity = PlanIssueSeverity.INFO
     provider_id: str = ""
-    actions: Tuple[PlanActionSpec, ...] = ()
+    actions: Tuple[ContextualActionSpec, ...] = ()
     target_keys: Tuple[str, ...] = ()
     role: str = ""
     category: str = ""
@@ -134,7 +129,7 @@ class PlanSuggestionSpec:
     title: str
     message: str = ""
     provider_id: str = ""
-    actions: Tuple[PlanActionSpec, ...] = ()
+    actions: Tuple[ContextualActionSpec, ...] = ()
     target_keys: Tuple[str, ...] = ()
 
 
@@ -163,16 +158,9 @@ class PlanContextPanelSpec:
     provider_id: str = ""
     summary_rows: Tuple[PlanContextRowSpec, ...] = ()
     message: str = ""
-    primary_action: PlanActionSpec | None = None
-    secondary_actions: Tuple[PlanActionSpec, ...] = ()
+    primary_action: ContextualActionSpec | None = None
+    secondary_actions: Tuple[ContextualActionSpec, ...] = ()
     details: Tuple[PlanContextDetailSpec, ...] = ()
-
-
-@dataclass(frozen=True)
-class PlanInspectorSection(ContextualInspectorSection):
-    """Plan-compatible contextual inspector section."""
-
-    actions: Tuple[PlanActionSpec, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -229,7 +217,7 @@ class PlanEditProvider(ContextualProvider):
         del context
         return ()
 
-    def get_inspector_sections(self, context) -> Sequence[PlanInspectorSection]:
+    def get_inspector_sections(self, context) -> Sequence[ContextualInspectorSection]:
         del context
         return ()
 

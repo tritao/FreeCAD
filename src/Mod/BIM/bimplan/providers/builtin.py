@@ -5,12 +5,11 @@
 from __future__ import annotations
 
 import FreeCAD
+from bimcontextual.actions import ContextualActionSpec, ContextualInspectorSection
 
 from .contracts import (
-    PlanActionSpec,
     PlanContextPanelState,
     PlanEditProvider,
-    PlanInspectorSection,
     PlanIssueSeverity,
     PlanIssueSpec,
     PlanOverlaySpec,
@@ -109,7 +108,7 @@ class BIMWindowPlanEditProvider(PlanEditProvider):
         if window is not None:
             host = _get_opening_host_wall(context, window)
             return (
-                PlanInspectorSection(
+                ContextualInspectorSection(
                     key=_object_key(window, "window-summary"),
                     title="Window",
                     body=_format_window_body(context, window, host),
@@ -126,7 +125,7 @@ class BIMWindowPlanEditProvider(PlanEditProvider):
         if not windows:
             return ()
         return (
-            PlanInspectorSection(
+            ContextualInspectorSection(
                 key=_object_key(wall, "wall-window-summary"),
                 title="Windows on Wall",
                 body=_format_wall_windows_body(context, wall, windows),
@@ -654,7 +653,7 @@ def _window_actions(host):
 
 
 def _recompute_host_action():
-    return PlanActionSpec(
+    return ContextualActionSpec(
         key=_RECOMPUTE_HOST_ACTION_KEY,
         label="Recompute host",
         tooltip="Touch and recompute the host wall, then refresh this window footprint.",
@@ -663,7 +662,7 @@ def _recompute_host_action():
 
 
 def _select_host_action():
-    return PlanActionSpec(
+    return ContextualActionSpec(
         key=_SELECT_HOST_ACTION_KEY,
         label="Select host wall",
         tooltip="Select the wall hosting this window.",
@@ -671,7 +670,7 @@ def _select_host_action():
 
 
 def _center_on_host_action():
-    return PlanActionSpec(
+    return ContextualActionSpec(
         key=_CENTER_ON_HOST_ACTION_KEY,
         label="Center on host",
         tooltip="Move this window to the midpoint of its host wall.",
@@ -743,7 +742,7 @@ def _point_tuple(point):
 
 
 def _repick_space_region_action():
-    return PlanActionSpec(
+    return ContextualActionSpec(
         key=_REPICK_SPACE_REGION_ACTION_KEY,
         label="Re-pick room region",
         tooltip="Choose which enclosed room region this selected space should follow.",

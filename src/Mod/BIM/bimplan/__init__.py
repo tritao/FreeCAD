@@ -7,7 +7,7 @@ from .runtime.embedded_commands import (
     _PlanEditWallHost,
 )
 from .providers import (
-    PlanActionSpec,
+    ContextualActionSpec,
     PlanContextDetailSpec,
     PlanContextPanelSpec,
     PlanContextPanelState,
@@ -16,7 +16,7 @@ from .providers import (
     PlanEditContext,
     PlanProviderEditHandleSpec,
     PlanEditProvider,
-    PlanInspectorSection,
+    ContextualInspectorSection,
     PlanIssueSpec,
     PlanIssueSeverity,
     PlanOverlaySpec,
@@ -44,7 +44,7 @@ from .selection.targets import PlanTarget
 from .transactions import PlanEditTransaction
 
 __all__ = [
-    "PlanActionSpec",
+    "ContextualActionSpec",
     "PlanContextDetailSpec",
     "PlanContextPanelSpec",
     "PlanContextPanelState",
@@ -57,7 +57,7 @@ __all__ = [
     "PlanEditTransaction",
     "_PlanEditCommandHost",
     "_PlanEditWallHost",
-    "PlanInspectorSection",
+    "ContextualInspectorSection",
     "PlanIssueSpec",
     "PlanIssueSeverity",
     "PlanOverlaySpec",

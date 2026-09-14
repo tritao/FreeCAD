@@ -101,9 +101,8 @@ class SemanticWallPreviewTracker:
             ((start, end),),
             self._width,
         )
-        self._session.contextual_rendering.set_preview_representation(
-            self._source,
-            representation,
+        self._session.contextual_rendering.set_preview_state(
+            ArchRepresentation.preview_state_from_representation(representation)
         )
 
 
@@ -320,7 +319,9 @@ def update_rect_wall_preview(session, point, info):
         preview_state.rect_wall_params["width"],
         preview_state.rect_wall_params["align"],
     )
-    session.contextual_rendering.set_preview_representation(source, representation)
+    session.contextual_rendering.set_preview_state(
+        ArchRepresentation.preview_state_from_representation(representation)
+    )
 
 
 def create_rect_wall_run(session, corners):

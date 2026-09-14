@@ -18,9 +18,7 @@ from bimcontextual.actions import (
     ContextualToolSpec,
 )
 from bimplan.providers import (
-    PlanActionSpec,
     PlanEditProvider,
-    PlanInspectorSection,
     PlanToolSpec,
 )
 import Draft
@@ -53,7 +51,7 @@ from bimcontextual.editing import (
 from bimcontextual.editable_points import get_contextual_edit_points
 from ArchWallSemantic import evaluate_wall_candidate, evaluate_wall_length
 from ArchContextualCreation import wall_construction_spec_from_preferences
-from bimcontextual.profiles import profile_for
+from bimcontextual.profiles import capabilities_for, supports
 
 
 class TestArchRepresentation(unittest.TestCase):
@@ -207,13 +205,13 @@ class TestArchRepresentation(unittest.TestCase):
 
     def test_context_profiles_declare_purpose_and_capabilities(self):
         for purpose in RepresentationPurpose:
-            profile = profile_for(RepresentationContext(purpose=purpose))
-            self.assertIs(purpose, profile.purpose)
+            capabilities = capabilities_for(RepresentationContext(purpose=purpose))
+            self.assertIsInstance(capabilities, frozenset)
         self.assertTrue(
-            profile_for(RepresentationContext(purpose="Plan")).supports("create-space")
+            supports(RepresentationContext(purpose="Plan"), "create-space")
         )
         self.assertFalse(
-            profile_for(RepresentationContext(purpose="Elevation")).supports("create-wall")
+            supports(RepresentationContext(purpose="Elevation"), "create-wall")
         )
 
     def test_edit_operation_uses_semantic_candidate_validation(self):
@@ -246,18 +244,14 @@ class TestArchRepresentation(unittest.TestCase):
         self.assertFalse(rejected.allowed)
         self.assertIn("10 mm", rejected.reason)
 
-    def test_plan_action_contracts_extend_contextual_contracts(self):
+    def test_plan_provider_contracts_use_contextual_contracts(self):
         context = ContextualProviderContext(
             representation_context=RepresentationContext(purpose="Model"),
             selected_sources=(object(),),
         )
         provider = PlanEditProvider()
 
-        self.assertIsInstance(PlanActionSpec("move", "Move"), ContextualActionSpec)
         self.assertIsInstance(PlanToolSpec("join", "Join"), ContextualToolSpec)
-        self.assertIsInstance(
-            PlanInspectorSection("wall", "Wall"), ContextualInspectorSection
-        )
         self.assertIsInstance(provider, ContextualProvider)
         self.assertEqual(1, len(context.get_selected_sources()))
 
@@ -275,7 +269,6 @@ class TestArchRepresentation(unittest.TestCase):
             reference_frame=frame,
             cut_range=(0.0, 2.1),
             projection_range=(-1.0, 8.0),
-            profile="Architectural",
             cut_offset=1.2,
             target_offset=0.0,
         )
@@ -709,7 +702,7 @@ class TestArchRepresentation(unittest.TestCase):
         self.assertTrue(preview.value.isEqual(semantic_point + FreeCAD.Vector(200, 150, 0), 1e-7))
         before_horizontal = tuple(horizontal.Proxy.calc_endpoints(horizontal))
         before_vertical = tuple(vertical.Proxy.calc_endpoints(vertical))
-        preview_state = handle.operation.get_preview_state(
+        preview_state = handle.operation.get_preview(
             horizontal,
             preview.value,
             context,
@@ -825,16 +818,12 @@ class TestArchRepresentation(unittest.TestCase):
             handle for handle in representation.edit_handles if handle.role == "OpeningPosition"
         )
         before = FreeCAD.Placement(base.Placement)
-        preview = position.operation.get_preview_representation(
+        preview_state = position.operation.get_preview(
             opening,
             position.operation.get_value(opening) + 100.0,
             representation.context,
         )
-        preview_state = position.operation.get_preview_state(
-            opening,
-            position.operation.get_value(opening) + 100.0,
-            representation.context,
-        )
+        preview = preview_state.representation_for(opening)
         self.assertTrue(preview.cut_geometry)
         self.assertIs(preview_state.primary_source, opening)
         self.assertEqual(
@@ -862,16 +851,14 @@ class TestArchRepresentation(unittest.TestCase):
         )
 
         current_position = position.operation.get_value(opening)
-        current_opening = position.operation.get_preview_representation(
+        current_opening = position.operation.get_preview(
             opening, current_position, representation.context
-        ).cut_geometry[0]
+        ).representation_for(opening).cut_geometry[0]
         proposed_position = current_position + 1000.0
-        proposed_opening = position.operation.get_preview_representation(
-            opening, proposed_position, representation.context
-        ).cut_geometry[0]
-        moved_state = position.operation.get_preview_state(
+        moved_state = position.operation.get_preview(
             opening, proposed_position, representation.context
         )
+        proposed_opening = moved_state.representation_for(opening).cut_geometry[0]
         preview_wall = next(
             entry.representation
             for entry in moved_state.entries
@@ -894,7 +881,7 @@ class TestArchRepresentation(unittest.TestCase):
             if handle.subelement == "Width.PositiveFace"
         )
         original_width = wall.Width.Value
-        width_state = width_handle.operation.get_preview_state(
+        width_state = width_handle.operation.get_preview(
             wall, original_width + 50.0, representation.context
         )
         width_entries = {

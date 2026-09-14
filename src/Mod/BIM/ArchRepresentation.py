@@ -51,7 +51,6 @@ class RepresentationContext:
         reference_frame=None,
         cut_range=None,
         projection_range=None,
-        profile=None,
         source=None,
         *,
         cut_offset=None,
@@ -63,7 +62,6 @@ class RepresentationContext:
         self.reference_frame = reference_frame
         self.cut_range = cut_range
         self.projection_range = projection_range
-        self.profile = profile
         self.source = source
         self.cut_offset = cut_offset
         self.target_offset = target_offset
@@ -145,6 +143,25 @@ class BIMPreviewState:
             (entry for entry in reversed(self._entries) if entry.representation.source is source),
             None,
         )
+
+
+def preview_state_from_representation(
+    representation,
+    *,
+    replace_committed=False,
+    affects_spatial_boundary=True,
+    style=BIMPreviewStyle.AVAILABLE,
+):
+    """Wrap one representation in the canonical semantic preview contract."""
+
+    state = BIMPreviewState(primary_source=representation.source)
+    state.add_representation(
+        representation,
+        replace_committed=replace_committed,
+        affects_spatial_boundary=affects_spatial_boundary,
+        style=style,
+    )
+    return state
 
 
 def expand_preview_dependents(state, context):
@@ -317,9 +334,7 @@ class BIMEditOperation:
         value_kind="Scalar",
         sensitivity=1.0,
         interaction_intent="",
-        preview_shape=None,
-        preview_representation=None,
-        preview_state=None,
+        preview=None,
         preview_label=None,
         validator=None,
     ):
@@ -335,28 +350,16 @@ class BIMEditOperation:
         self.value_kind = str(value_kind)
         self.sensitivity = float(sensitivity)
         self.interaction_intent = str(interaction_intent)
-        self._preview_shape = preview_shape
-        self._preview_representation = preview_representation
-        self._preview_state = preview_state
+        self._preview = preview
         self._preview_label = preview_label
         self._validator = validator
 
-    def get_preview_shape(self, source, value, context):
-        if not callable(self._preview_shape):
+    def get_preview(self, source, value, context):
+        if not callable(self._preview):
             return None
-        return self._preview_shape(source, value, context)
-
-    def get_preview_representation(self, source, value, context):
-        if not callable(self._preview_representation):
-            return None
-        return self._preview_representation(source, value, context)
-
-    def get_preview_state(self, source, value, context):
-        if not callable(self._preview_state):
-            return None
-        state = self._preview_state(source, value, context)
+        state = self._preview(source, value, context)
         if state is not None and not isinstance(state, BIMPreviewState):
-            raise TypeError("preview_state must return BIMPreviewState")
+            raise TypeError("preview must return BIMPreviewState")
         return state
 
     def get_preview_label(self, source, value, context):

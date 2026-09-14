@@ -261,59 +261,6 @@ class ContextualRepresentationRenderer:
             root.unref()
             self.root = None
 
-    def set_preview_shape(self, source, shape):
-        """Realize one transient shape with Part's preview renderer."""
-
-        self._clear_preview_geometry(source)
-        if source is None or shape is None or shape.isNull():
-            return False
-        preview_type = coin.SoType.fromName("SoPreviewShape")
-        if preview_type.isBad():
-            raise RuntimeError("SoPreviewShape is not registered")
-        view_object = getattr(source, "ViewObject", None)
-        update_shape = getattr(view_object, "updatePreviewShape", None)
-        if not callable(update_shape):
-            raise RuntimeError("Source ViewProvider cannot tessellate preview shapes")
-        node = preview_type.createInstance()
-        node.ref()
-        node.color = (0.12, 0.38, 0.95)
-        node.transparency = 0.65
-        node.lineWidth = 2.0
-        update_shape(shape, node)
-        self.root.addChild(node)
-        self._preview_nodes[source] = node
-        return True
-
-    def set_preview_representation(self, source, representation, valid=True):
-        """Realize renderer-neutral preview geometry without making it pickable."""
-
-        self.clear_preview(source)
-        if source is None or representation is None:
-            return False
-        node = coin.SoSeparator()
-        node.ref()
-        color = (0.12, 0.38, 0.95) if valid else (0.9, 0.05, 0.05)
-        self._append_faces(
-            node,
-            representation,
-            color=color,
-            transparency=0.65,
-            record_mappings=False,
-        )
-        self._append_lines(
-            node,
-            representation,
-            color=color,
-            line_width=2.0,
-            record_mappings=False,
-        )
-        if node.getNumChildren() == 0:
-            node.unref()
-            return False
-        self.root.addChild(node)
-        self._preview_nodes[source] = node
-        return True
-
     def set_preview_state(self, state, valid=True):
         """Atomically realize all representations belonging to one edit state."""
 

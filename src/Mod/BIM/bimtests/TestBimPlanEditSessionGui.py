@@ -12,7 +12,12 @@ import FreeCAD
 import FreeCADGui
 import Part
 from pivy import coin
-from ArchRepresentation import BIMEditRay, RepresentationContext, RepresentationPurpose
+from ArchRepresentation import (
+    BIMEditRay,
+    RepresentationContext,
+    RepresentationPurpose,
+    preview_state_from_representation,
+)
 from bimtests.TestArchBaseGui import TestArchBaseGui
 from bimplan.runtime.session import PlanEditSession
 from bimcontextual.session import ContextualSession
@@ -146,9 +151,7 @@ class TestBimPlanEditSessionGui(TestArchBaseGui):
         renderer = SimpleNamespace(
             previews=[],
             cleared=[],
-            set_preview_representation=lambda source, representation: renderer.previews.append(
-                (source, representation)
-            ),
+            set_preview_state=lambda state: renderer.previews.append(state),
             clear_preview=lambda source: renderer.cleared.append(source),
         )
         tracker = SemanticWallPreviewTracker(self._wall_preview_session(renderer))
@@ -157,7 +160,9 @@ class TestBimPlanEditSessionGui(TestArchBaseGui):
         tracker.update([FreeCAD.Vector(), FreeCAD.Vector(1000, 0, 0)])
 
         self.assertEqual(1, len(renderer.previews))
-        source, representation = renderer.previews[0]
+        state = renderer.previews[0]
+        source = state.primary_source
+        representation = state.representation_for(source)
         self.assertIs(source, representation.source)
         self.assertEqual(1, len(representation.cut_geometry))
         self.assertEqual(1, len(representation.projected_geometry))
@@ -403,9 +408,8 @@ class TestBimPlanEditSessionGui(TestArchBaseGui):
                 ),
             )
             self.assertTrue(
-                session.contextual_rendering.set_preview_representation(
-                    source,
-                    representation,
+                session.contextual_rendering.set_preview_state(
+                    preview_state_from_representation(representation)
                 )
             )
             session.viewport.flush_scene_graph_mutations()

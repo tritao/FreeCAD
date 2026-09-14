@@ -12,8 +12,7 @@ from .editing import (
 from .editable_points import ContextualEditPoint, get_contextual_edit_points
 from .interaction import ContextualInteractionHost
 from .profiles import (
-    ContextualProfile, ElevationProfile, ModelProfile, PlanProfile, SectionProfile,
-    capabilities_for, profile_for, supports,
+    capabilities_for, interaction_plane_for, supports,
 )
 from .session import ContextualSession, active_session, start_session
 

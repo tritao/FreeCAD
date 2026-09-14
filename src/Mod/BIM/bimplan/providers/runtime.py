@@ -6,6 +6,7 @@ from contextlib import contextmanager, nullcontext
 from dataclasses import dataclass, replace
 
 import FreeCAD
+from bimcontextual.actions import ContextualActionSpec, ContextualInspectorSection
 
 from bimplan import document_visuals as plan_document_visuals
 from bimplan.providers import get_plan_edit_registry
@@ -16,14 +17,12 @@ from .contracts import (
     PLAN_PROVIDER_OVERLAY_MODE_ARCHITECTURE,
     PLAN_PROVIDER_OVERLAY_MODE_ELECTRICAL,
     PLAN_PROVIDER_OVERLAY_MODE_PLUMBING,
-    PlanActionSpec,
     PlanContextDetailSpec,
     PlanContextPanelSpec,
     PlanContextPanelState,
     PlanContextRowSpec,
     PlanContextSubjectKind,
     PlanProviderEditHandleSpec,
-    PlanInspectorSection,
     PlanIssueSpec,
     PlanIssueSeverity,
     PlanOverlaySpec,
@@ -329,7 +328,7 @@ class PlanProviderSnapshot:
     overlays: tuple[PlanOverlaySpec, ...] = ()
     issues: tuple[PlanIssueSpec, ...] = ()
     context_panels: tuple[PlanContextPanelSpec, ...] = ()
-    inspector_sections: tuple[PlanInspectorSection, ...] = ()
+    inspector_sections: tuple[ContextualInspectorSection, ...] = ()
 
     def is_empty(self) -> bool:
         return not (
@@ -1182,7 +1181,7 @@ def coerce_plan_provider_results(result):
 
 
 def normalize_plan_provider_action(provider_id, action):
-    if not isinstance(action, PlanActionSpec):
+    if not isinstance(action, ContextualActionSpec):
         return None
     if action.provider_id == provider_id:
         return action
@@ -1322,7 +1321,7 @@ def normalize_plan_provider_suggestion(session, provider_id, suggestion):
 
 
 def normalize_plan_provider_section(session, provider_id, section):
-    if not isinstance(section, PlanInspectorSection):
+    if not isinstance(section, ContextualInspectorSection):
         return None
     actions = _normalize_plan_provider_actions(session, provider_id, section.actions)
     replacements = {}
