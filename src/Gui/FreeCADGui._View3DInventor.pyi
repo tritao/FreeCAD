@@ -179,6 +179,24 @@ class _View3DInventor:
         """Enable or disable camera animation support."""
         ...
 
+    def pushViewContextLayer(self) -> int:
+        """Create a transient presentation-context layer and return its handle."""
+        ...
+
+    def removeViewContextLayer(self, layer: int) -> bool:
+        """Remove a context layer, returning whether the handle existed."""
+        ...
+
+    def setViewVisibility(
+        self, layer: int, obj: DocumentObject, state: Literal["Inherit", "Visible", "Hidden"]
+    ) -> bool:
+        """Set an object's visibility override in a context layer."""
+        ...
+
+    def getViewVisibility(self, obj: DocumentObject) -> Literal["Inherit", "Visible", "Hidden"]:
+        """Return the active context override, or ``Inherit`` when none exists."""
+        ...
+
     def isAnimationEnabled(self) -> bool:
         """Return whether camera animation support is enabled."""
         ...
@@ -446,6 +464,10 @@ class _View3DInventor:
 
     def setName(self, name: str, /) -> None:
         """Set the internal view name."""
+        ...
+
+    def scheduleRedraw(self) -> None:
+        """Schedule a redraw after the current Coin traversal completes."""
         ...
 
     def toggleClippingPlane(

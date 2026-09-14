@@ -47,6 +47,7 @@
 
 #include "Inventor/SoMouseWheelEvent.h"
 #include "Inventor/SoFCTransform.h"
+#include "Inventor/SoViewContextElement.h"
 #include "ViewProvider.h"
 #include "ActionFunction.h"
 #include "Application.h"
@@ -117,7 +118,7 @@ ViewProvider::ViewProvider()
     // pcRoot = new SoFCSeparator(true);
     pcRoot = new SoFCSelectionRoot(true, this);
     pcRoot->ref();
-    pcModeSwitch = new SoSwitch();
+    pcModeSwitch = new SoViewContextSwitch(this);
     pcModeSwitch->ref();
     pcModeSwitch->setName("ModeSwitch");
     pcTransform = new SoFCTransform();

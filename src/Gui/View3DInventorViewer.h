@@ -27,6 +27,7 @@
 #include <map>
 #include <memory>
 #include <set>
+#include <unordered_map>
 #include <vector>
 
 #include <QCursor>
@@ -59,6 +60,7 @@
 
 #include "CornerCrossLetters.h"
 #include "View3DInventorSelection.h"
+#include "ViewContext.h"
 #include "Quarter/SoQTQuarterAdaptor.h"
 
 class QOpenGLFramebufferObject;
@@ -275,6 +277,9 @@ public:
     /// remove a ViewProvider
     void removeViewProvider(ViewProvider*);
     /// get view provider by path
+    /// Return the transient presentation context owned by this viewer.
+    ViewContext& getViewContext();
+    const ViewContext& getViewContext() const;
     ViewProvider* getViewProviderByPath(SoPath*) const;
     ViewProvider* getViewProviderByPathFromTail(SoPath*) const;
     /// get all view providers of given type
@@ -672,6 +677,11 @@ private:
     SoGroup* objectGroup;
 
     std::unique_ptr<View3DInventorSelection> inventorSelection;
+    void updateContextVisibility(const ViewProviderDocumentObject* provider);
+    std::unordered_map<const ViewProvider*, SoSeparator*> contextFrontRoots;
+    std::unordered_map<const ViewProvider*, SoSeparator*> contextBackRoots;
+    ViewContext viewContext;
+
 
     SoSeparator* pcEditingRoot;
     SoTransform* pcEditingTransform;
@@ -704,7 +714,6 @@ private:
     unsigned long previousAxisLetterColor = 0;
     bool vboEnabled;
     bool naviCubeEnabled;
-
     // Screen-only viewer decorations such as the navicube are rendered only
     // when the active render intent allows them.
     mutable std::vector<RenderIntent> renderIntentOverrideStack;

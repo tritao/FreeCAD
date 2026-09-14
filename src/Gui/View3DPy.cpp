@@ -119,6 +119,26 @@ void View3DInventorPy::init_type()
         &View3DInventorPy::setAnimationEnabled,
         "setAnimationEnabled()"
     );
+    add_noargs_method(
+        "pushViewContextLayer",
+        &View3DInventorPy::pushViewContextLayer,
+        "pushViewContextLayer(): create a transient viewer-context layer"
+    );
+    add_varargs_method(
+        "removeViewContextLayer",
+        &View3DInventorPy::removeViewContextLayer,
+        "removeViewContextLayer(layer): remove a transient viewer-context layer"
+    );
+    add_varargs_method(
+        "setViewVisibility",
+        &View3DInventorPy::setViewVisibility,
+        "setViewVisibility(layer, object, state): set Inherit, Visible, or Hidden"
+    );
+    add_varargs_method(
+        "getViewVisibility",
+        &View3DInventorPy::getViewVisibility,
+        "getViewVisibility(object): return the active context override"
+    );
     add_noargs_method("isAnimationEnabled", &View3DInventorPy::isAnimationEnabled, "isAnimationEnabled()");
     add_varargs_method(
         "setPopupMenuEnabled",
@@ -312,6 +332,11 @@ void View3DInventorPy::init_type()
         &View3DInventorPy::setName,
         "setName(str): sets a name to this viewer\nThe name sets the widget's windowTitle and "
         "appears on the viewer tab"
+    );
+    add_noargs_method(
+        "scheduleRedraw",
+        &View3DInventorPy::scheduleRedraw,
+        "scheduleRedraw(): schedules the scene to be rendered when it is safe"
     );
     add_keyword_method(
         "toggleClippingPlane",
@@ -985,6 +1010,73 @@ Py::Object View3DInventorPy::isAnimationEnabled()
 {
     SbBool ok = getView3DInventorPtr()->getViewer()->isAnimationEnabled();
     return Py::Boolean(ok ? true : false);
+}
+
+Py::Object View3DInventorPy::pushViewContextLayer()
+{
+    const auto layer = getView3DInventorPtr()->getViewer()->getViewContext().pushLayer();
+    return Py::LongLong(static_cast<long long>(layer));
+}
+
+Py::Object View3DInventorPy::removeViewContextLayer(const Py::Tuple& args)
+{
+    unsigned long long layer;
+    if (!PyArg_ParseTuple(args.ptr(), "K", &layer)) {
+        throw Py::Exception();
+    }
+    const bool removed = getView3DInventorPtr()->getViewer()->getViewContext().removeLayer(layer);
+    return Py::Boolean(removed);
+}
+
+Py::Object View3DInventorPy::setViewVisibility(const Py::Tuple& args)
+{
+    unsigned long long layer;
+    PyObject* pyObject;
+    const char* state;
+    if (!PyArg_ParseTuple(args.ptr(), "KO!s", &layer, &App::DocumentObjectPy::Type, &pyObject, &state)) {
+        throw Py::Exception();
+    }
+
+    ViewContext::Visibility visibility;
+    const std::string value(state);
+    if (value == "Inherit") {
+        visibility = ViewContext::Visibility::Inherit;
+    }
+    else if (value == "Visible") {
+        visibility = ViewContext::Visibility::Visible;
+    }
+    else if (value == "Hidden") {
+        visibility = ViewContext::Visibility::Hidden;
+    }
+    else {
+        throw Py::ValueError("state must be 'Inherit', 'Visible', or 'Hidden'");
+    }
+
+    auto* object = static_cast<App::DocumentObjectPy*>(pyObject)->getDocumentObjectPtr();
+    const bool changed = getView3DInventorPtr()->getViewer()->getViewContext().setVisibility(
+        layer,
+        object,
+        visibility
+    );
+    return Py::Boolean(changed);
+}
+
+Py::Object View3DInventorPy::getViewVisibility(const Py::Tuple& args)
+{
+    PyObject* pyObject;
+    if (!PyArg_ParseTuple(args.ptr(), "O!", &App::DocumentObjectPy::Type, &pyObject)) {
+        throw Py::Exception();
+    }
+    auto* object = static_cast<App::DocumentObjectPy*>(pyObject)->getDocumentObjectPtr();
+    switch (getView3DInventorPtr()->getViewer()->getViewContext().visibility(object)) {
+        case ViewContext::Visibility::Visible:
+            return Py::String("Visible");
+        case ViewContext::Visibility::Hidden:
+            return Py::String("Hidden");
+        case ViewContext::Visibility::Inherit:
+            return Py::String("Inherit");
+    }
+    return Py::String("Inherit");
 }
 
 Py::Object View3DInventorPy::setPopupMenuEnabled(const Py::Tuple& args)
@@ -2612,6 +2704,12 @@ Py::Object View3DInventorPy::setName(const Py::Tuple& args)
     catch (...) {
         throw Py::RuntimeError("Unknown C++ exception");
     }
+}
+
+Py::Object View3DInventorPy::scheduleRedraw()
+{
+    getView3DInventorPtr()->getViewer()->getSoRenderManager()->scheduleRedraw();
+    return Py::None();
 }
 
 Py::Object View3DInventorPy::toggleClippingPlane(const Py::Tuple& args, const Py::Dict& kwds)
