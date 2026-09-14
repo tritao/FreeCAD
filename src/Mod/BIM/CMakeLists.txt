@@ -127,6 +127,17 @@ SET(bimcontextual_SRCS
     bimcontextual/ui.py
 )
 
+SET(bimplan_SRCS
+    bimplan/__init__.py
+    bimplan/representation_request.py
+    bimplan/runtime/__init__.py
+    bimplan/runtime/session.py
+    bimplan/runtime/capabilities.py
+    bimplan/runtime/command_gate.py
+    bimplan/semantics.py
+    bimplan/storeys.py
+)
+
 SET(Arch_presets
     Presets/profiles.csv
     Presets/pset_definitions.csv
@@ -299,6 +310,7 @@ SET(bimtests_SRCS
     bimtests/TestArchFrame.py
     bimtests/TestArchReference.py
     bimtests/TestArchRepresentation.py
+    bimtests/TestBimPlanEditRuntime.py
     bimtests/TestArchSchedule.py
     bimtests/TestArchSiteGui.py
     bimtests/TestArchTruss.py
@@ -380,6 +392,7 @@ add_custom_command(
 ADD_CUSTOM_TARGET(BIM ALL
     DEPENDS ${Arch_QRC_SRCS}
     SOURCES ${Arch_SRCS}
+            ${bimplan_SRCS}
             ${Dice3DS_SRCS}
             ${Arch_presets}
             ${bimcontextual_SRCS}
@@ -398,6 +411,7 @@ add_custom_target(ArchSqlParser ALL DEPENDS ${BIM_GENERATED_PARSER})
 
 # Populate the build tree with the BIM workbench sources and test data
 fc_copy_sources(BIM "${CMAKE_BINARY_DIR}/Mod/BIM" ${Arch_SRCS})
+fc_copy_sources(BIM "${CMAKE_BINARY_DIR}/Mod/BIM" ${bimplan_SRCS})
 fc_copy_sources(BIM "${CMAKE_BINARY_DIR}/Mod/BIM" ${bimcontextual_SRCS})
 fc_copy_sources(BIM "${CMAKE_BINARY_DIR}/Mod/BIM" ${Dice3DS_SRCS})
 fc_copy_sources(BIM "${CMAKE_BINARY_DIR}/Mod/BIM" ${importers_SRCS})
@@ -483,6 +497,13 @@ INSTALL(
         Presets
     DESTINATION
         "${CMAKE_INSTALL_DATADIR}/Mod/BIM"
+)
+
+INSTALL(
+    DIRECTORY
+        bimplan
+    DESTINATION Mod/BIM
+    FILES_MATCHING PATTERN "*.py"
 )
 
 INSTALL(
