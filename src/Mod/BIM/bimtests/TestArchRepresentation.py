@@ -430,3 +430,64 @@ if __name__ == "__main__":
 
         state.add_representation(representation, style="Emphasized")
         self.assertIs(state.entries[-1].style, BIMPreviewStyle.EMPHASIZED)
+
+
+    def test_joint_handle_anchors_to_offset_miter_seam(self):
+        document = FreeCAD.newDocument("OffsetMiterHandleTest")
+        self.addCleanup(FreeCAD.closeDocument, document.Name)
+        horizontal = Arch.makeWall(length=3000, width=200, height=2500, align="Center")
+        horizontal.Placement.Base = FreeCAD.Vector(1500, 0, 0)
+        vertical = Arch.makeWall(length=2000, width=200, height=2500, align="Right")
+        vertical.Placement = FreeCAD.Placement(
+            FreeCAD.Vector(3000, -1000, 0),
+            FreeCAD.Rotation(FreeCAD.Vector(0, 0, 1), -90),
+        )
+        document.recompute()
+        joint = Arch.makeWallJoint(horizontal, vertical, "Miter")
+        document.recompute()
+        self.assertEqual("OK", joint.Status, joint.StatusMessage)
+
+        request = RepresentationRequest(purpose="Plan", cut_offset=1000, target_offset=0)
+        representation = horizontal.Proxy.getRepresentation(horizontal, request)
+        handle = next(item for item in representation.edit_handles if item.role == "WallJointMove")
+        semantic_point = handle.operation.get_value(handle.source)
+
+        self.assertTrue(semantic_point.isEqual(FreeCAD.Vector(3000, 0, 0), 1e-7))
+        self.assertTrue(handle.point.isEqual(FreeCAD.Vector(3100, 0, 0), 1e-7))
+        editor = BIMContextualHandleEditor(request)
+        editor.begin(handle)
+        preview = editor.preview(handle.point + FreeCAD.Vector(200, 150, 0))
+        self.assertTrue(preview.value.isEqual(semantic_point + FreeCAD.Vector(200, 150, 0), 1e-7))
+        before_horizontal = tuple(horizontal.Proxy.calc_endpoints(horizontal))
+        before_vertical = tuple(vertical.Proxy.calc_endpoints(vertical))
+        preview_state = handle.operation.get_preview(
+            horizontal,
+            preview.value,
+            request,
+        )
+        self.assertIs(preview_state.primary_source, horizontal)
+        preview_by_source = {entry.representation.source: entry for entry in preview_state.entries}
+        self.assertEqual({horizontal, vertical}, set(preview_by_source))
+        self.assertTrue(all(entry.replace_committed for entry in preview_by_source.values()))
+        horizontal_face = preview_by_source[horizontal].representation.cut_geometry[0]
+        vertical_face = preview_by_source[vertical].representation.cut_geometry[0]
+        self.assertAlmostEqual(horizontal_face.distToShape(vertical_face)[0], 0.0, delta=1e-7)
+        self.assertEqual(before_horizontal, tuple(horizontal.Proxy.calc_endpoints(horizontal)))
+        self.assertEqual(before_vertical, tuple(vertical.Proxy.calc_endpoints(vertical)))
+
+        vertical_representation = vertical.Proxy.getRepresentation(vertical, request)
+        joint_targets = tuple(
+            target
+            for target in representation.iter_snap_targets()
+            if joint in target.related_sources
+        )
+        self.assertTrue(joint_targets)
+        self.assertIn("WallJointBoundary", {target.role for target in joint_targets})
+        self.assertIn("WallJointCutPoint", {target.role for target in joint_targets})
+        corner = next(target for target in joint_targets if target.role == "WallJointCutPoint")
+        result = query_representation_snap(
+            (representation, vertical_representation), corner.geometry.Point, 1.0
+        )
+        self.assertIn(joint, result.sources)
+        self.assertIn(horizontal, result.sources)
+        self.assertIn(vertical, result.sources)

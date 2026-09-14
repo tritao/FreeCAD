@@ -28,6 +28,10 @@ from bimtests.TestArchRepresentation import TestArchRepresentation
 from bimtests.TestArchSpace import TestArchSpace
 from bimtests.TestArchWall import TestArchWall
 from bimtests.TestArchWallGeometry import TestArchWallGeometry
+from bimtests.TestArchWallJoint import TestArchWallJoint
+from bimtests.TestArchWallJoinMatrix import TestArchWallJoinMatrix
+from bimtests.TestArchWallJunction import TestArchWallJunction
+from bimtests.TestArchWallJunctionMatrix import TestArchWallJunctionMatrix
 from bimtests.TestArchBuildingPart import TestArchBuildingPart
 from bimtests.TestArchAxis import TestArchAxis
 from bimtests.TestArchStructure import TestArchStructure

@@ -54,6 +54,12 @@ import Draft
 import DraftVecUtils
 import ArchPlanGeometry
 import ArchRepresentation
+import ArchWallEndCondition
+import ArchWallEndpoint
+import ArchWallGeometry
+import ArchWallRelation
+import ArchWallRelationResolver
+import ArchWallTrimming
 
 from FreeCAD import Vector
 from draftutils import params
@@ -153,9 +159,14 @@ class _Wall(ArchComponent.Component):
         forms the basis for the new wall's shape. That is given later.
     """
 
+    _SECTION_ALIGNMENTS = ("Left", "Right", "Center")
+
     def __init__(self, obj):
         ArchComponent.Component.__init__(self, obj)
         self.Type = "Wall"
+        self._normalizing_end_condition_order = False
+        self._resolved_geometry_signatures = {}
+        self._invalidating_wall_relations = False
         self.setProperties(obj)
         obj.IfcType = "Wall"
 
@@ -411,6 +422,35 @@ class _Wall(ArchComponent.Component):
             self.ArchSkPropSetPickedUuid = ""
         if not hasattr(self, "ArchSkPropSetListPrev"):
             self.ArchSkPropSetListPrev = []
+        for end_name in ("Start", "End"):
+            placement_property = "Ending" + end_name
+            if placement_property not in lp:
+                obj.addProperty(
+                    "App::PropertyPlacement",
+                    placement_property,
+                    "Wall",
+                    QT_TRANSLATE_NOOP(
+                        "App::Property",
+                        "A placement, relative to the main wall placement, describing "
+                        "a plane that cuts the end of the wall.",
+                    ),
+                )
+            order_property = "EndConditionOrder" + end_name
+            if order_property not in lp:
+                obj.addProperty(
+                    "App::PropertyStringList",
+                    order_property,
+                    "Wall",
+                    QT_TRANSLATE_NOOP(
+                        "App::Property",
+                        "Ordered trim providers for this wall end. Valid entries are Relation and Manual.",
+                    ),
+                )
+                setattr(
+                    obj,
+                    order_property,
+                    list(ArchWallEndCondition.DEFAULT_END_CONDITION_ORDER),
+                )
         self.connectEdges = []
 
     def dumps(self):
@@ -440,6 +480,9 @@ class _Wall(ArchComponent.Component):
         from draftutils.messages import _log
 
         ArchComponent.Component.onDocumentRestored(self, obj)
+        self._normalizing_end_condition_order = False
+        self._resolved_geometry_signatures = {}
+        self._invalidating_wall_relations = False
         self.setProperties(obj)
 
         # In V1.0 the handling of wall normals has changed. As a result existing
@@ -515,6 +558,8 @@ class _Wall(ArchComponent.Component):
 
         if self.clone(obj):
             return
+
+        self._invalidate_relations_if_geometry_changed(obj)
 
         # Wall can do without Base, validity to be tested in getExtrusionData()
         # Remarked out ensureBase() below
@@ -630,7 +675,27 @@ class _Wall(ArchComponent.Component):
             # return
             # walls can be made of only a series of additions and have no base shape
             base = Part.Shape()
+        relation_endings = ArchWallRelationResolver.collect_wall_relation_endings(obj)
+        end_conditions = {
+            end_name: self._resolve_end_condition(obj, end_name, relation_endings)
+            for end_name in ("Start", "End")
+        }
+        baseline = self.get_global_baseline(obj)
+        if baseline is not None:
+            for end_name, condition in end_conditions.items():
+                if condition and condition.source == "Relation":
+                    base = ArchWallTrimming.extend_solid_along_baseline(
+                        base,
+                        baseline,
+                        pl,
+                        end_name,
+                        condition.extension,
+                    )
         base = self.processSubShapes(obj, base, pl)
+        trimmed_base = self.process_endings(obj, base, pl, end_conditions)
+        if any(end_conditions.values()):
+            trimmed_base = ArchComponent._copy_without_element_map(trimmed_base)
+        base = trimmed_base
         self.applyShape(obj, base, pl)
 
         # Check if there is base, and if width and height is provided or not
@@ -711,6 +776,9 @@ class _Wall(ArchComponent.Component):
         prop: string
             The name of the property that has changed.
         """
+
+        if prop in ("EndConditionOrderStart", "EndConditionOrderEnd"):
+            self._normalize_end_condition_order_property(obj, prop)
 
         if prop == "Length":
             if (
@@ -800,6 +868,93 @@ class _Wall(ArchComponent.Component):
 
         self.hideSubobjects(obj, prop)
         ArchComponent.Component.onChanged(self, obj, prop)
+
+    def _invalidate_relations_if_geometry_changed(self, obj):
+        """Touch relation dependents when resolved wall geometry changes.
+
+        A wall can depend on a Draft line or sketch without receiving an
+        ``onChanged('Base')`` callback when that source moves.  Comparing the
+        resolved baseline and section at the wall execution boundary covers
+        both direct property edits and changes propagated from a linked base,
+        without maintaining a fragile list of property names.
+        """
+        signature = self._resolved_geometry_signature(obj)
+        previous = self._resolved_geometry_signatures.get(obj.Name)
+        self._resolved_geometry_signatures[obj.Name] = signature
+        if previous is None or previous == signature:
+            return
+        self._touch_wall_relations(obj)
+
+    def _touch_wall_relations(self, obj):
+        if self._invalidating_wall_relations:
+            return
+        self._invalidating_wall_relations = True
+        touched = set()
+        touched_walls = {obj.Name}
+        try:
+            for relation in ArchWallRelation.iter_wall_relations(obj):
+                if relation.Name in touched:
+                    continue
+                touched.add(relation.Name)
+                relation.touch()
+                for linked_wall in ArchWallRelation.get_relation_walls(relation):
+                    if not linked_wall or linked_wall.Name in touched_walls:
+                        continue
+                    touched_walls.add(linked_wall.Name)
+                    linked_wall.touch()
+        finally:
+            self._invalidating_wall_relations = False
+
+    def _resolved_geometry_signature(self, obj):
+        baseline = self.get_global_baseline(obj)
+        normal = baseline.normal if baseline is not None else None
+        section = self.get_resolved_section(obj)
+        return (
+            self._edge_signature(baseline),
+            self._vector_signature(normal),
+            (
+                tuple((layer.raw_thickness, layer.y_min, layer.y_max) for layer in section.layers)
+                if section is not None
+                else None
+            ),
+        )
+
+    @staticmethod
+    def _edge_signature(baseline):
+        if baseline is None:
+            return None
+        return (
+            _Wall._vector_signature(baseline.start_point),
+            _Wall._vector_signature(baseline.end_point),
+        )
+
+    @staticmethod
+    def _vector_signature(vector):
+        if vector is None:
+            return None
+        return tuple(round(value, 9) for value in (vector.x, vector.y, vector.z))
+
+    def _normalize_end_condition_order_property(self, obj, prop):
+        """Normalize wall end-condition order without recursively handling our own write."""
+        if self._normalizing_end_condition_order:
+            return
+
+        current = list(getattr(obj, prop))
+        normalized = ArchWallEndCondition.normalize_end_condition_order(current)
+        if current == normalized:
+            return
+
+        self._normalizing_end_condition_order = True
+        try:
+            setattr(obj, prop, normalized)
+        finally:
+            self._normalizing_end_condition_order = False
+
+    @staticmethod
+    def _base_object(obj):
+        """Return the wall base object safely for legacy or partially initialized walls."""
+        return getattr(obj, "Base", None)
+
 
     def getFootprint(self, obj):
         """Get the faces that make up the plan representation of the wall."""
@@ -919,6 +1074,25 @@ class _Wall(ArchComponent.Component):
                 face.translate(FreeCAD.Vector(0, 0, delta_z))
             faces.append(face)
         return faces
+
+    def requires_brep_export(self, obj):
+        """Return whether IFC must use the processed wall shape."""
+        manual_endings = (
+            getattr(obj, "EndingStart", FreeCAD.Placement()),
+            getattr(obj, "EndingEnd", FreeCAD.Placement()),
+        )
+        if any(
+            not ArchWallEndCondition.is_null_placement(placement) for placement in manual_endings
+        ):
+            return True
+        relation_endings = ArchWallRelationResolver.collect_wall_relation_endings(obj)
+        return any(relation_endings.get(end_name) for end_name in ("Start", "End"))
+
+    def isStandardCase(self, obj):
+        """Return whether this wall can use the IFC standard-case form."""
+        if self.requires_brep_export(obj):
+            return False
+        return super().isStandardCase(obj)
 
     def getExtrusionData(self, obj):
         """Get data needed to extrude the wall from a base object.
@@ -1731,6 +1905,276 @@ class _Wall(ArchComponent.Component):
                         elif varwidth:
                             layers.append(varwidth)
         return layers
+
+    def _resolve_section_values(self, obj):
+        """Resolve the effective width, alignment, and offset sources.
+
+        The returned lists are intentionally kept as the shape-builder input;
+        ``get_resolved_section`` turns one indexed entry into immutable section
+        geometry.  Base-provider data wins over wall overrides, matching the
+        existing ArchSketch contract.
+        """
+        default_width, default_align, default_offset = self._section_defaults(obj)
+
+        widths, aligns, offsets = self._resolved_section_lists(obj)
+
+        width = self._section_value(widths, 0, default_width)
+        align = self._section_value(aligns, 0, default_align, valid_values=self._SECTION_ALIGNMENTS)
+        offset = self._section_value(offsets, 0, default_offset)
+        return width, align, offset, widths
+
+    def _resolve_section_value_at(self, obj, segment_index, section_lists=None):
+        """Return width, alignment, and offset for one segment.
+
+        A segment entry is selected from the already chosen provider or
+        override lists.  Missing, zero, empty, or invalid entries fall back
+        to the wall properties, preserving the short-list behavior of the
+        legacy shape builder.
+        """
+        default_width, default_align, default_offset = self._section_defaults(obj)
+        widths, aligns, offsets = section_lists or self._resolved_section_lists(obj)
+        width = self._section_value(widths, segment_index, default_width)
+        align = self._section_value(
+            aligns, segment_index, default_align, valid_values=self._SECTION_ALIGNMENTS
+        )
+        offset = self._section_value(offsets, segment_index, default_offset)
+        return width, align, offset
+
+    def _resolved_section_lists(self, obj):
+        """Return per-segment width, alignment, and offset source lists.
+
+        Optional ArchSketch values take precedence over wall override
+        properties.  If no provider or override list is available, the wall's
+        Width, Align, and Offset properties become one-entry fallback lists.
+        These lists remain raw resolution inputs; scalar fallback and material
+        expansion happen in the section resolver.
+        """
+        provider_widths, provider_aligns, provider_offsets = self._base_section_values(obj)
+        widths = provider_widths or list(obj.OverrideWidth)
+        aligns = provider_aligns or list(obj.OverrideAlign)
+        offsets = provider_offsets or list(obj.OverrideOffset)
+        if not widths and obj.Width.Value:
+            widths = [obj.Width.Value]
+        if not aligns:
+            aligns = [obj.Align]
+        if not offsets:
+            offsets = [obj.Offset.Value]
+        return list(widths), list(aligns), list(offsets)
+
+    def get_resolved_section(self, obj, segment_index=0):
+        """Return the immutable section that the wall shape actually builds.
+
+        Width, alignment, and offset are resolved for the requested segment.
+        Material layers are resolved once from the wall's default width,
+        matching the legacy builder's wall-global layer stack even when a
+        segment has a width override.  Negative layers remain invisible
+        construction layers while moving the cursor for following layers.
+        """
+        section_lists = self._resolved_section_lists(obj)
+        widths, _aligns, _offsets = section_lists
+        width, align, offset = self._resolve_section_value_at(obj, segment_index, section_lists)
+        layers = self._resolve_material_layers(obj)
+        if not layers:
+            if not widths:
+                return None
+            layers = [width]
+
+        total = sum(abs(layer) for layer in layers)
+        if align == "Center":
+            cursor = -total / 2.0
+        elif align == "Left":
+            cursor = -total - offset
+        else:  # Right, and the legacy fallback for invalid values.
+            cursor = offset
+
+        resolved_layers = []
+        for raw_thickness in layers:
+            raw_thickness = float(raw_thickness)
+            thickness = abs(raw_thickness)
+            resolved_layers.append(
+                ArchWallGeometry.WallSectionLayer(
+                    raw_thickness=raw_thickness,
+                    y_min=cursor,
+                    y_max=cursor + thickness,
+                )
+            )
+            cursor += thickness
+        return ArchWallGeometry.WallSection(tuple(resolved_layers))
+
+    def _base_section_values(self, obj):
+        """Read optional section lists from an ArchSketch base provider.
+
+        ArchSketch is an optional object protocol: its proxy may provide any
+        of the three getters, and a missing getter contributes an empty list.
+        The provider is considered only when ArchSketch data is selected on a
+        wall with an ArchSketch base.
+        """
+        base = obj.Base
+        if not obj.ArchSketchData or not base or Draft.getType(base) != "ArchSketch":
+            return [], [], []
+        proxy = base.Proxy
+        kwargs = {"propSetUuid": self.ArchSkPropSetPickedUuid}
+        return (
+            proxy.getWidths(base, **kwargs) if hasattr(proxy, "getWidths") else [],
+            proxy.getAligns(base, **kwargs) if hasattr(proxy, "getAligns") else [],
+            proxy.getOffsets(base, **kwargs) if hasattr(proxy, "getOffsets") else [],
+        )
+
+    @staticmethod
+    def _section_value(values, index, fallback, valid_values=None):
+        """Select one list entry, applying the wall-level fallback rules."""
+        if not values or index >= len(values):
+            return fallback
+        value = values[index]
+        value = getattr(value, "Value", value)
+        if value in (None, 0, ""):
+            return fallback
+        if valid_values is not None and value not in valid_values:
+            return fallback
+        return value
+
+    @staticmethod
+    def _section_defaults(obj):
+        """Return the wall defaults used when no segment value is present."""
+        return obj.Width.Value or 200.0, obj.Align, obj.Offset.Value
+
+    @staticmethod
+    def _resolve_material_layers(obj):
+        """Resolve the material thickness stack used by every wall segment.
+
+        Positive thicknesses are preserved.  Zero-thickness layers divide the
+        remaining width equally, using the wall's default Width rather than a
+        segment override because the existing shape builder is wall-global.
+        Signed values are retained so negative layers can act as invisible
+        cursor steps in ``WallSection``.
+        """
+        material = obj.Material
+        if not material or not hasattr(material, "Materials"):
+            return []
+        raw_thicknesses = [float(value) for value in material.Thicknesses]
+        if not raw_thicknesses:
+            return []
+        width = obj.Width.Value or 200.0
+        rest_width = width - sum(abs(value) for value in raw_thicknesses)
+        zero_count = sum(value == 0 for value in raw_thicknesses)
+        variable_width = rest_width / zero_count if rest_width > 0 and zero_count else 0.0
+        return [
+            variable_width if value == 0 and variable_width else value for value in raw_thicknesses
+        ]
+
+    def get_global_baseline(self, obj):
+        """Resolve one supported wall baseline into global coordinates.
+
+        Based walls must expose exactly one straight edge.  Its semantic
+        provider orientation is resolved before the wall placement is applied
+        and copied into a fresh ``Part.Edge`` so relation code never has to
+        interpret wall placement.
+        A baseless wall is derived directly from its local length and
+        placement.  Unsupported topology returns ``None``.
+        """
+        import Part
+        import DraftGeomUtils
+
+        base = obj.Base
+        placement = obj.Placement
+        if base:
+            if not hasattr(base, "Shape") or len(base.Shape.Edges) != 1:
+                return None
+            source_edge = base.Shape.Edges[0]
+            if source_edge.Curve.TypeId != "Part::GeomLine":
+                return None
+            points = [
+                placement.multVec(point)
+                for point in ArchWallEndpoint.get_oriented_base_points(base)
+            ]
+            if len(points) != 2 or points[0].distanceToPoint(points[1]) <= 1e-9:
+                return None
+            edge = Part.makeLine(points[0], points[1])
+        else:
+            half_length = obj.Length.Value / 2.0
+            points = [
+                placement.multVec(FreeCAD.Vector(-half_length, 0, 0)),
+                placement.multVec(FreeCAD.Vector(half_length, 0, 0)),
+            ]
+            if points[0].distanceToPoint(points[1]) <= 1e-9:
+                return None
+            edge = Part.makeLine(points[0], points[1])
+
+        if obj.Normal == Vector(0, 0, 0):
+            local_normal = None
+            if base and hasattr(base, "Shape"):
+                local_normal = DraftGeomUtils.get_shape_normal(base.Shape)
+            local_normal = local_normal or Vector(0, 0, 1)
+        else:
+            local_normal = Vector(obj.Normal)
+        normal = placement.Rotation.multVec(local_normal)
+        if normal.Length <= 1e-9:
+            return None
+        normal.normalize()
+        if edge.Vertexes[0].Point.sub(edge.Vertexes[-1].Point).cross(normal).Length <= 1e-9:
+            return None
+        return ArchWallGeometry.WallBaseline(edge, normal, points[0], points[1])
+
+    def process_endings(self, obj, base_solid, wall_placement, end_conditions=None):
+        """Trim a wall solid using the winning end-condition providers.
+
+        Each end is resolved independently from its normalized provider list.
+        Relation extensions are applied to the construction solid before
+        subshape processing.  This stage applies only the selected cutting
+        planes to the already processed solid.
+        """
+        if base_solid.isNull():
+            return base_solid
+
+        solid_to_trim = base_solid
+        min_tool_size = base_solid.BoundBox.DiagonalLength * 2
+        if end_conditions is None:
+            relation_endings = ArchWallRelationResolver.collect_wall_relation_endings(obj)
+            end_conditions = {
+                end_name: self._resolve_end_condition(obj, end_name, relation_endings)
+                for end_name in ("Start", "End")
+            }
+        baseline = self.get_global_baseline(obj)
+        if baseline is None:
+            return solid_to_trim
+        endpoints = [baseline.start_point, baseline.end_point]
+        start_condition = end_conditions["Start"]
+        if start_condition:
+            solid_to_trim = ArchWallTrimming.apply_cutting_plane(
+                obj,
+                solid_to_trim,
+                wall_placement,
+                start_condition.placement,
+                endpoints[1],
+                min_tool_size,
+                is_global=start_condition.is_global,
+            )
+
+        end_condition = end_conditions["End"]
+        if end_condition:
+            solid_to_trim = ArchWallTrimming.apply_cutting_plane(
+                obj,
+                solid_to_trim,
+                wall_placement,
+                end_condition.placement,
+                endpoints[0],
+                min_tool_size,
+                is_global=end_condition.is_global,
+            )
+        return solid_to_trim
+
+    def _resolve_end_condition(self, obj, end_name, relation_endings):
+        conditions = [
+            ArchWallEndCondition.WallEndCondition(
+                source="Manual", placement=getattr(obj, "Ending" + end_name)
+            )
+        ]
+        relation_condition = relation_endings.get(end_name)
+        if relation_condition is not None:
+            conditions.append(relation_condition)
+        return ArchWallEndCondition.select_end_condition(
+            conditions, getattr(obj, "EndConditionOrder" + end_name)
+        )
 
     def _make_blocks(self, obj, base_face, extv):
         """Cut a wall's base face into block-sized pieces and stack them.

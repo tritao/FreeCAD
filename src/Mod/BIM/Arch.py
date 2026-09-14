@@ -1759,6 +1759,69 @@ def makeWall(
     return wall
 
 
+def makeWallJoint(wall_a=None, wall_b=None, joint_type="Miter", name=None):
+    """Create a persistent two-wall relation in the active document."""
+    import ArchWallRelation
+
+    if joint_type not in ArchWallRelation.JOINT_TYPES:
+        allowed = ", ".join(ArchWallRelation.JOINT_TYPES)
+        raise ValueError(f"Unsupported wall joint type {joint_type!r}; expected one of: {allowed}")
+
+    joint = _initializeArchObject(
+        "App::FeaturePython",
+        baseClassName="_WallJoint",
+        internalName="WallJoint",
+        defaultLabel=name if name else translate("Arch", "Wall Joint"),
+        moduleName="ArchWallJoint",
+        viewProviderName="_ViewProviderWallJoint",
+    )
+    if joint is None:
+        return None
+    if FreeCAD.GuiUp:
+        joint.ViewObject.Visibility = True
+
+    if wall_a is not None:
+        joint.WallA = wall_a
+    if wall_b is not None:
+        joint.WallB = wall_b
+    joint.JointType = joint_type
+    joint.touch()
+    if name:
+        joint.AutoLabel = False
+        joint.Label = name
+    else:
+        joint.Proxy.updatePresentation(joint, force_label=True)
+    return joint
+
+
+def makeWallJunction(walls=None, carrier_wall=None, name=None):
+    """Create a persistent relation for three or more intersecting walls."""
+    junction = _initializeArchObject(
+        "App::FeaturePython",
+        baseClassName="_WallJunction",
+        internalName="WallJunction",
+        defaultLabel=name if name else translate("Arch", "Wall Junction"),
+        moduleName="ArchWallJunction",
+        viewProviderName="_ViewProviderWallJunction",
+    )
+    if not junction:
+        return None
+    if FreeCAD.GuiUp:
+        junction.ViewObject.Visibility = True
+
+    if walls:
+        junction.Walls = list(walls)
+    if carrier_wall:
+        junction.CarrierMode = "Explicit"
+        junction.CarrierWall = carrier_wall
+    if name:
+        junction.AutoLabel = False
+        junction.Label = name
+    else:
+        junction.Proxy.updatePresentation(junction, force_label=True)
+    return junction
+
+
 def joinWalls(walls, delete=False, deletebase=False):
     """Join the given list of walls into one sketch-based wall.
 
