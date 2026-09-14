@@ -383,3 +383,23 @@ if __name__ == "__main__":
         self.assertFalse(hasattr(result, "cut_geometry"))
         self.assertFalse(hasattr(result, "projected_geometry"))
         self.assertFalse(hasattr(result, "snap_geometry"))
+
+
+    def test_preview_entries_describe_spatial_boundary_effects(self):
+        source = object()
+        representation = BIMRepresentation(source=source)
+        state = BIMPreviewState(source)
+        state.add_representation(
+            representation,
+            replace_committed=True,
+            affects_spatial_boundary=False,
+        )
+
+        entry = state.entry_for(source)
+        self.assertIs(entry.representation, representation)
+        self.assertTrue(entry.replace_committed)
+        self.assertFalse(entry.affects_spatial_boundary)
+        self.assertIs(entry.style, BIMPreviewStyle.AVAILABLE)
+
+        state.add_representation(representation, style="Emphasized")
+        self.assertIs(state.entries[-1].style, BIMPreviewStyle.EMPHASIZED)

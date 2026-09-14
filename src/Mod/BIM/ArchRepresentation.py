@@ -1,11 +1,21 @@
 # SPDX-License-Identifier: LGPL-2.1-or-later
 
-"""Renderer-neutral contracts for architectural representation providers."""
+"""Renderer-neutral contextual BIM representations.
+
+The classes in this module describe *what* an architectural object should
+provide for a request.  They intentionally do not know about Coin, Qt or a
+document view.  GUI and documentation consumers can therefore request the
+same semantic geometry without creating converted document objects.
+"""
 
 from dataclasses import dataclass
 from enum import Enum
 
 import FreeCAD
+
+
+class RepresentationUnavailable(LookupError):
+    """Raised when a provider cannot represent an object in a request."""
 
 
 class RepresentationPurpose(Enum):
@@ -17,17 +27,22 @@ class RepresentationPurpose(Enum):
     ELEVATION = "Elevation"
 
 
-class RepresentationUnavailable(LookupError):
-    """Raised when a provider cannot represent an object in a request."""
+class BIMPreviewStyle(Enum):
+    """Renderer-neutral presentation intent for transient semantic geometry."""
+
+    AVAILABLE = "Available"
+    EMPHASIZED = "Emphasized"
+    MUTED = "Muted"
+    INVALID = "Invalid"
 
 
 class RepresentationRequest:
     """GUI-independent inputs used to derive a BIM representation.
 
-    ``reference_frame`` is supplied by the caller (normally an
-    ``App.Placement``). Distances are measured along its local Z axis. A
-    request contains no renderer state and can be passed to headless
-    representation providers.
+    ``reference_frame`` is an arbitrary object supplied by the caller (in
+    FreeCAD this is normally an ``App.Placement``).  Distances are measured
+    on that frame's local Z axis.  The request contains no renderer state and
+    is safe to pass to headless representation providers.
     """
 
     def __init__(
@@ -63,75 +78,116 @@ class RepresentationSource:
         self.related_sources = tuple(related_sources or ())
 
 
-class BIMSnapTarget:
-    """One renderer-independent semantic snapping candidate."""
+@dataclass(frozen=True)
+class BIMPreviewEntry:
+    representation: object
+    replace_committed: bool = False
+    affects_spatial_boundary: bool = True
+    style: BIMPreviewStyle = BIMPreviewStyle.AVAILABLE
 
-    def __init__(
+
+class BIMPreviewState:
+    """Renderer-neutral, coordinated representation state for one live edit.
+
+    Entries marked as replacements temporarily stand in for the committed
+    representation of their semantic source.  Other entries are overlays.
+    The document model is never mutated while this state is being evaluated.
+    """
+
+    def __init__(self, primary_source=None):
+        self.primary_source = primary_source
+        self._entries = []
+
+    def add_representation(
         self,
-        geometry,
-        source,
-        subelement=None,
-        role=None,
-        request=None,
-        related_sources=(),
+        representation,
+        *,
+        replace_committed=False,
+        affects_spatial_boundary=True,
+        style=BIMPreviewStyle.AVAILABLE,
     ):
-        self.geometry = geometry
-        self.source = source
-        self.subelement = subelement
-        self.role = role
-        self.request = request
-        self.related_sources = tuple(related_sources or ())
+        if not isinstance(representation, BIMRepresentation):
+            raise TypeError("preview entries must be BIMRepresentation instances")
+        if not isinstance(style, BIMPreviewStyle):
+            style = BIMPreviewStyle(style)
+        self._entries.append(
+            BIMPreviewEntry(
+                representation,
+                bool(replace_committed),
+                bool(affects_spatial_boundary),
+                style,
+            )
+        )
+        return representation
+
+    @property
+    def entries(self):
+        return tuple(self._entries)
 
     @property
     def sources(self):
-        """Return every semantic object represented by this target."""
+        return tuple(entry.representation.source for entry in self._entries)
 
-        return tuple(dict.fromkeys((self.source, *self.related_sources)))
+    def representation_for(self, source):
+        return next(
+            (
+                entry.representation
+                for entry in reversed(self._entries)
+                if entry.representation.source is source
+            ),
+            None,
+        )
 
-
-class BIMSnapResult:
-    """Nearest point and semantic identity returned by a snap query."""
-
-    def __init__(self, point, target, distance):
-        self.point = point
-        self.target = target
-        self.distance = distance
-
-    @property
-    def source(self):
-        return self.target.source
-
-    @property
-    def subelement(self):
-        return self.target.subelement
-
-    @property
-    def role(self):
-        return self.target.role
-
-    @property
-    def sources(self):
-        return self.target.sources
+    def entry_for(self, source):
+        return next(
+            (entry for entry in reversed(self._entries) if entry.representation.source is source),
+            None,
+        )
 
 
-class BIMPickResult:
-    """Screen-space hit that retains semantic representation identity."""
+def preview_state_from_representation(
+    representation,
+    *,
+    replace_committed=False,
+    affects_spatial_boundary=True,
+    style=BIMPreviewStyle.AVAILABLE,
+):
+    """Wrap one representation in the canonical semantic preview contract."""
 
-    def __init__(self, target, distance_squared):
-        self.target = target
-        self.distance_squared = distance_squared
+    state = BIMPreviewState(primary_source=representation.source)
+    state.add_representation(
+        representation,
+        replace_committed=replace_committed,
+        affects_spatial_boundary=affects_spatial_boundary,
+        style=style,
+    )
+    return state
 
-    @property
-    def source(self):
-        return self.target.source
 
-    @property
-    def subelement(self):
-        return self.target.subelement
+def expand_preview_dependents(state, request):
+    """Ask document objects to contribute representations dependent on a state."""
 
-    @property
-    def role(self):
-        return self.target.role
+    if state is None or state.primary_source is None:
+        return state
+    document = getattr(state.primary_source, "Document", None)
+    if document is None:
+        return state
+    existing = set(state.sources)
+    for obj in getattr(document, "Objects", ()) or ():
+        if obj in existing:
+            continue
+        provider = getattr(
+            getattr(obj, "Proxy", None),
+            "getDependentPreviewRepresentation",
+            None,
+        )
+        if not callable(provider):
+            continue
+        representation = provider(obj, state, request)
+        if representation is not None:
+            state.add_representation(representation)
+            existing.add(obj)
+    return state
 
 
 class BIMEditRay:
@@ -210,7 +266,8 @@ class BIMEditHandle:
     """Renderer-independent edit offered by a BIM object.
 
     ``constraint`` defines the geometric manifold that pointer input must
-    follow. ``interaction`` identifies the input mode used by the adapter.
+    follow.  ``interaction`` remains the compatibility mode for callers that
+    still project pointer positions through a representation request.
     """
 
     def __init__(
@@ -277,6 +334,8 @@ class BIMEditOperation:
         value_kind="Scalar",
         sensitivity=1.0,
         interaction_intent="",
+        preview=None,
+        preview_label=None,
         validator=None,
     ):
         self.key = str(key)
@@ -291,7 +350,22 @@ class BIMEditOperation:
         self.value_kind = str(value_kind)
         self.sensitivity = float(sensitivity)
         self.interaction_intent = str(interaction_intent)
+        self._preview = preview
+        self._preview_label = preview_label
         self._validator = validator
+
+    def get_preview(self, source, value, request):
+        if not callable(self._preview):
+            return None
+        state = self._preview(source, value, request)
+        if state is not None and not isinstance(state, BIMPreviewState):
+            raise TypeError("preview must return BIMPreviewState")
+        return state
+
+    def get_preview_label(self, source, value, request):
+        if not callable(self._preview_label):
+            return ""
+        return str(self._preview_label(source, value, request) or "")
 
     def is_available(self, source):
         return True if self._available is None else bool(self._available(source))
@@ -392,24 +466,75 @@ def is_property_expression_driven(obj, property_name):
         return False
 
 
-class BIMEditCapabilities:
-    """Semantic edits offered by one object in a representation request.
+class BIMSnapTarget:
+    """One renderer-independent semantic snapping candidate."""
 
-    Unlike :class:`BIMRepresentation`, this value carries no replacement or
-    picking geometry. Viewers that already render the source object can use it
-    to display contextual handles without constructing a second representation.
-    """
-
-    def __init__(self, source=None, request=None):
+    def __init__(
+        self,
+        geometry,
+        source,
+        subelement=None,
+        role=None,
+        request=None,
+        related_sources=(),
+    ):
+        self.geometry = geometry
         self.source = source
+        self.subelement = subelement
+        self.role = role
         self.request = request
-        self.edit_handles = []
+        self.related_sources = tuple(related_sources or ())
 
-    def add_edit_handle(self, handle):
-        if handle.source is None:
-            handle.source = self.source
-        self.edit_handles.append(handle)
-        return handle
+    @property
+    def sources(self):
+        """Return every semantic object represented by this target."""
+
+        return tuple(dict.fromkeys((self.source, *self.related_sources)))
+
+
+class BIMSnapResult:
+    """Nearest point and semantic identity returned by a snap query."""
+
+    def __init__(self, point, target, distance):
+        self.point = point
+        self.target = target
+        self.distance = distance
+
+    @property
+    def source(self):
+        return self.target.source
+
+    @property
+    def subelement(self):
+        return self.target.subelement
+
+    @property
+    def role(self):
+        return self.target.role
+
+    @property
+    def sources(self):
+        return self.target.sources
+
+
+class BIMPickResult:
+    """Screen-space hit that retains semantic representation identity."""
+
+    def __init__(self, target, distance_squared):
+        self.target = target
+        self.distance_squared = distance_squared
+
+    @property
+    def source(self):
+        return self.target.source
+
+    @property
+    def subelement(self):
+        return self.target.subelement
+
+    @property
+    def role(self):
+        return self.target.role
 
 
 class BIMRepresentation:
@@ -468,22 +593,24 @@ class BIMRepresentation:
                 )
 
 
-def representation_for(obj, request):
-    """Request a representation from the object's semantic provider.
+class BIMEditCapabilities:
+    """Semantic edits offered by one object in a representation request.
 
-    Provider lookup is capability-based: no BIM type names are inspected
-    here. A Python proxy implementing ``getRepresentation(obj, request)``
-    owns the representation policy for that object.
+    Unlike :class:`BIMRepresentation`, this value carries no replacement or
+    picking geometry. Viewers that already render the source object can use it
+    to display contextual handles without constructing a second representation.
     """
-    provider = getattr(getattr(obj, "Proxy", None), "getRepresentation", None)
-    if not callable(provider):
-        raise RepresentationUnavailable(
-            "BIM object does not provide getRepresentation(obj, request)"
-        )
-    representation = provider(obj, request)
-    if not isinstance(representation, BIMRepresentation):
-        raise TypeError("getRepresentation(obj, request) must return BIMRepresentation")
-    return representation
+
+    def __init__(self, source=None, request=None):
+        self.source = source
+        self.request = request
+        self.edit_handles = []
+
+    def add_edit_handle(self, handle):
+        if handle.source is None:
+            handle.source = self.source
+        self.edit_handles.append(handle)
+        return handle
 
 
 def project_to_representation_plane(point, request):
@@ -540,9 +667,7 @@ def _nearest_snap_point(geometry, point):
             length_squared = direction.dot(direction)
             parameter = 0.0
             if length_squared > 1e-18:
-                parameter = min(
-                    max(point.sub(start).dot(direction) / length_squared, 0.0), 1.0
-                )
+                parameter = min(max(point.sub(start).dot(direction) / length_squared, 0.0), 1.0)
             candidate = start.add(direction.multiply(parameter))
             distance = candidate.distanceToPoint(point)
             if winner is None or distance < winner[1]:
@@ -626,11 +751,7 @@ def _screen_segment_distance_squared(cursor, start, end):
         0.0
         if length_squared <= 1e-12
         else min(
-            max(
-                ((cursor[0] - start[0]) * dx + (cursor[1] - start[1]) * dy)
-                / length_squared,
-                0.0,
-            ),
+            max(((cursor[0] - start[0]) * dx + (cursor[1] - start[1]) * dy) / length_squared, 0.0),
             1.0,
         )
     )
@@ -707,3 +828,39 @@ def query_representation_pick(representations, cursor, project_point, tolerance)
                 ):
                     winner = BIMPickResult(target, distance_squared)
     return winner
+
+
+def representation_for(obj, request):
+    """Request a representation from the object's semantic provider.
+
+    Provider lookup is deliberately capability-based: no BIM type names are
+    inspected here. A Python proxy implementing ``getRepresentation(obj,
+    request)`` owns the representation policy for that object.
+    """
+    provider = getattr(getattr(obj, "Proxy", None), "getRepresentation", None)
+    if not callable(provider):
+        raise RepresentationUnavailable(
+            "BIM object does not provide getRepresentation(obj, request)"
+        )
+    representation = provider(obj, request)
+    if not isinstance(representation, BIMRepresentation):
+        raise TypeError("getRepresentation(obj, request) must return BIMRepresentation")
+    return representation
+
+
+def edit_capabilities_for(obj, request):
+    """Request semantic edit capabilities without requesting display geometry."""
+
+    provider = getattr(getattr(obj, "Proxy", None), "getEditCapabilities", None)
+    if not callable(provider):
+        raise RepresentationUnavailable(
+            "BIM object does not provide getEditCapabilities(obj, request)"
+        )
+    capabilities = provider(obj, request)
+    if not isinstance(capabilities, BIMEditCapabilities):
+        raise TypeError("getEditCapabilities(obj, request) must return BIMEditCapabilities")
+    if capabilities.source is None:
+        capabilities.source = obj
+    if capabilities.request is None:
+        capabilities.request = request
+    return capabilities
