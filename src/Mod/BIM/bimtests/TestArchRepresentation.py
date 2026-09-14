@@ -2,9 +2,15 @@
 
 import unittest
 
+import FreeCAD
+import Part
+
 from ArchRepresentation import (
     BIMRepresentation,
     RepresentationUnavailable,
+    query_representation_pick,
+    query_representation_snap,
+    query_representation_snap_candidates,
     RepresentationPurpose,
     RepresentationRequest,
     representation_for,
@@ -68,6 +74,61 @@ class TestArchRepresentation(unittest.TestCase):
         self.assertIs(result.request, request)
         self.assertEqual(obj.Proxy.args, (obj, request))
 
+
+    def test_snap_query_preserves_semantic_identity(self):
+        source = object()
+        edge = Part.makeLine(FreeCAD.Vector(0, 0, 0), FreeCAD.Vector(10, 0, 0))
+        representation = BIMRepresentation(source=source)
+        representation.add_geometry("snap_geometry", edge, "axis", "Edge1")
+
+        result = query_representation_snap((representation,), FreeCAD.Vector(4, 0.5, 0), 1.0)
+
+        self.assertIs(result.source, source)
+        self.assertEqual("Edge1", result.subelement)
+        self.assertEqual("axis", result.role)
+        self.assertAlmostEqual(0.5, result.distance)
+
+    def test_snap_query_deduplicates_coincident_semantic_targets(self):
+        first_source = object()
+        second_source = object()
+        relation = object()
+        point = FreeCAD.Vector(4, 2, 0)
+        first = BIMRepresentation(source=first_source)
+        second = BIMRepresentation(source=second_source)
+        first.add_geometry(
+            "snap_geometry",
+            Part.Vertex(point),
+            "WallCorner",
+            related_sources=(relation,),
+        )
+        second.add_geometry(
+            "snap_geometry",
+            Part.Vertex(point),
+            "WallCorner",
+            related_sources=(relation,),
+        )
+
+        candidates = query_representation_snap_candidates((first, second), point, 1.0)
+
+        self.assertEqual(1, len(candidates))
+        self.assertEqual({first_source, second_source, relation}, set(candidates[0].sources))
+
+    def test_pick_query_preserves_cut_geometry_mapping(self):
+        source = object()
+        edge = Part.makeLine(FreeCAD.Vector(0, 0, 0), FreeCAD.Vector(10, 0, 0))
+        representation = BIMRepresentation(source=source)
+        representation.add_geometry("cut_geometry", edge, "cut", "Edge2")
+
+        result = query_representation_pick(
+            (representation,),
+            (5.0, 0.25),
+            lambda point: (point.x, point.y),
+            1.0,
+        )
+
+        self.assertIs(result.source, source)
+        self.assertEqual("Edge2", result.subelement)
+        self.assertEqual("cut", result.role)
 
 
 if __name__ == "__main__":
