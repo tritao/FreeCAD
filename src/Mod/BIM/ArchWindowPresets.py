@@ -41,6 +41,26 @@ WindowPresets = [
     "Opening only",
 ]
 
+WindowPresetKinds = {
+    "Fixed": "window",
+    "Open 1-pane": "window",
+    "Open 2-pane": "window",
+    "Sash 2-pane": "window",
+    "Sliding 2-pane": "window",
+    "Simple door": "door",
+    "Sliding door": "door",
+    "Glass door": "door",
+    "Sliding 4-pane": "window",
+    "Awning": "window",
+    "Opening only": "opening",
+}
+
+
+def getWindowPresetKind(windowtype):
+    """Return the semantic kind for a built-in preset name."""
+
+    return str(WindowPresetKinds.get(str(windowtype or "").strip(), "") or "")
+
 
 def makeWindowPreset(windowtype, width, height, h1, h2, h3, w1, w2, o1, o2, placement=None):
     """makeWindowPreset(windowtype,width,height,h1,h2,h3,w1,w2,o1,o2,[placement]): makes a
