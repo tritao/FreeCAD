@@ -118,6 +118,8 @@ SET(Dice3DS_SRCS
 SET(bimcontextual_SRCS
     bimcontextual/__init__.py
     bimcontextual/editing.py
+    bimcontextual/editable_points.py
+    bimcontextual/interaction.py
 )
 
 SET(Arch_presets

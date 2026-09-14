@@ -7,6 +7,8 @@ import Part
 import Arch
 import ArchSpaceSemantic
 from bimcontextual.editing import BIMContextualHandleEditor, ContextualEditController
+from bimcontextual.editable_points import get_contextual_edit_points
+from bimcontextual.interaction import ContextualInteractionHost
 
 from ArchRepresentation import (
     AxisConstraint,
@@ -185,6 +187,43 @@ class TestArchRepresentation(unittest.TestCase):
         self.assertIsNone(controller.active_edit)
         self.assertTrue(input_adapter.cleared)
         self.assertIn(("clear", source), renderer.events)
+
+    def test_object_owned_contextual_points_preserve_global_coordinates(self):
+        class Owner:
+            Points = [FreeCAD.Vector(1, 2, 3), FreeCAD.Vector(4, 5, 6)]
+
+            class ProxyType:
+                def getContextualEditPoints(self, owner, request):
+                    del request
+                    return tuple(owner.Points)
+
+                def setContextualEditPoint(self, owner, index, point):
+                    owner.Points[index] = FreeCAD.Vector(point)
+
+            Proxy = ProxyType()
+
+            @staticmethod
+            def getGlobalPlacement():
+                return FreeCAD.Placement()
+
+        owner = Owner()
+        points = get_contextual_edit_points(owner, RepresentationRequest(purpose="Plan"))
+
+        self.assertEqual(2, len(points))
+        self.assertEqual("Vertex2", points[1].subelement)
+        points[1].apply_value(FreeCAD.Vector(7, 8, 9))
+        self.assertEqual(FreeCAD.Vector(7, 8, 9), points[1].get_value())
+
+    def test_contextual_interaction_host_uses_injected_plane_policy(self):
+        request = RepresentationRequest(purpose="Section")
+        plane = object()
+        host = ContextualInteractionHost(
+            request,
+            plane_resolver=lambda value: plane if value is request else None,
+        )
+
+        self.assertIs(host.request, request)
+        self.assertIs(host.get_interaction_plane(), plane)
 
     def test_wall_move_and_stretch_share_viewer_independent_evaluation(self):
         endpoints = (FreeCAD.Vector(0, 0, 0), FreeCAD.Vector(3000, 0, 0))
@@ -894,3 +933,30 @@ if __name__ == "__main__":
         self.assertAlmostEqual(space.HorizontalArea.getValueAs("m^2").Value, 12.0, places=3)
         self.assertAlmostEqual(space.Area.getValueAs("m^2").Value, 12.0, places=3)
         self.assertAlmostEqual(space.PerimeterLength.getValueAs("m").Value, 14.0, places=3)
+
+
+    def test_planar_contextual_handle_moves_a_point_value(self):
+        source = {"point": FreeCAD.Vector(1, 2, 0)}
+        operation = BIMEditOperation(
+            "move-point",
+            "Move point",
+            lambda value: value["point"],
+            lambda value, point: value.__setitem__("point", point),
+            value_kind="Point",
+            manages_transaction=True,
+        )
+        handle = BIMEditHandle(
+            source,
+            "path-point",
+            source["point"],
+            FreeCAD.Vector(),
+            operation,
+            interaction="Planar",
+        )
+        editor = BIMContextualHandleEditor(RepresentationRequest(purpose="Plan"))
+
+        editor.begin(handle)
+        result = editor.commit(FreeCAD.Vector(6, 8, 20))
+
+        self.assertTrue(result.success)
+        self.assertEqual(FreeCAD.Vector(6, 8, 20), source["point"])
