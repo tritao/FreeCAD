@@ -118,6 +118,7 @@ SET(Dice3DS_SRCS
 SET(bimcontextual_SRCS
     bimcontextual/__init__.py
     bimcontextual/actions.py
+    bimcontextual/context_policy.py
     bimcontextual/editing.py
     bimcontextual/editable_points.py
     bimcontextual/interaction.py

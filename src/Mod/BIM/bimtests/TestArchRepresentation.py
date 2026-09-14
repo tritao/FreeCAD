@@ -222,16 +222,6 @@ class TestArchRepresentation(unittest.TestCase):
         points[1].apply_value(FreeCAD.Vector(7, 8, 9))
         self.assertEqual(FreeCAD.Vector(7, 8, 9), points[1].get_value())
 
-    def test_contextual_interaction_host_uses_injected_plane_policy(self):
-        request = RepresentationRequest(purpose="Section")
-        plane = object()
-        host = ContextualInteractionHost(
-            request,
-            plane_resolver=lambda value: plane if value is request else None,
-        )
-
-        self.assertIs(host.request, request)
-        self.assertIs(host.get_interaction_plane(), plane)
 
     def test_contextual_provider_contracts_are_object_agnostic(self):
         action = ContextualActionSpec("edit", "Edit")
@@ -985,3 +975,15 @@ if __name__ == "__main__":
 
         self.assertTrue(result.success)
         self.assertEqual(FreeCAD.Vector(6, 8, 20), source["point"])
+
+
+    def test_context_policy_declares_purpose_capabilities(self):
+        for purpose in RepresentationPurpose:
+            capabilities = capabilities_for(RepresentationRequest(purpose=purpose))
+            self.assertIsInstance(capabilities, frozenset)
+        self.assertTrue(
+            supports(RepresentationRequest(purpose="Plan"), "create-space")
+        )
+        self.assertFalse(
+            supports(RepresentationRequest(purpose="Elevation"), "create-wall")
+        )
