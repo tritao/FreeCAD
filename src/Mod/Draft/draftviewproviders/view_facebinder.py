@@ -52,7 +52,7 @@ class ViewProviderFacebinder(ViewProviderDraft):
         taskd = DraftGui.FacebinderTaskPanel()
         taskd.obj = vobj.Object
         taskd.update()
-        Gui.Control.showDialog(taskd)
+        Gui.Control.showDialog(taskd, Gui.ActiveDocument)
         return True
 
     def unsetEdit(self, vobj, mode):

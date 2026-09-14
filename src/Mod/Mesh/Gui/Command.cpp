@@ -1187,7 +1187,7 @@ void CmdMeshRemoveComponents::activated(int)
         dlg = new MeshGui::TaskRemoveComponents();
         dlg->setButtonPosition(Gui::TaskView::TaskDialog::South);
     }
-    Gui::Control().showDialog(dlg);
+    Gui::Control().showDialog(dlg, Gui::Application::Instance->activeDocument()->getDocument());
 }
 
 bool CmdMeshRemoveComponents::isActive()
@@ -1238,7 +1238,7 @@ void CmdMeshRemeshGmsh::activated(int)
         }
         dlg = new MeshGui::TaskRemeshGmsh(mesh.front());
     }
-    Gui::Control().showDialog(dlg);
+    Gui::Control().showDialog(dlg, Gui::Application::Instance->activeDocument()->getDocument());
 }
 
 bool CmdMeshRemeshGmsh::isActive()
@@ -1356,7 +1356,10 @@ CmdMeshSmoothing::CmdMeshSmoothing()
 
 void CmdMeshSmoothing::activated(int)
 {
-    Gui::Control().showDialog(new MeshGui::TaskSmoothing());
+    Gui::Control().showDialog(
+        new MeshGui::TaskSmoothing(),
+        Gui::Application::Instance->activeDocument()->getDocument()
+    );
 }
 
 bool CmdMeshSmoothing::isActive()
@@ -1385,7 +1388,10 @@ CmdMeshDecimating::CmdMeshDecimating()
 
 void CmdMeshDecimating::activated(int)
 {
-    Gui::Control().showDialog(new MeshGui::TaskDecimating());
+    Gui::Control().showDialog(
+        new MeshGui::TaskDecimating(),
+        Gui::Application::Instance->activeDocument()->getDocument()
+    );
 }
 
 bool CmdMeshDecimating::isActive()
@@ -1693,7 +1699,7 @@ void CmdMeshSegmentation::activated(int)
     if (!dlg) {
         dlg = new MeshGui::TaskSegmentation(mesh);
     }
-    Gui::Control().showDialog(dlg);
+    Gui::Control().showDialog(dlg, Gui::Application::Instance->activeDocument()->getDocument());
 }
 
 bool CmdMeshSegmentation::isActive()
@@ -1730,7 +1736,7 @@ void CmdMeshSegmentationBestFit::activated(int)
     if (!dlg) {
         dlg = new MeshGui::TaskSegmentationBestFit(mesh);
     }
-    Gui::Control().showDialog(dlg);
+    Gui::Control().showDialog(dlg, Gui::Application::Instance->activeDocument()->getDocument());
 }
 
 bool CmdMeshSegmentationBestFit::isActive()

@@ -244,7 +244,7 @@ void CmdTechDrawHatch::activated(int iMsg)
     }
 
     // dialog to fill in hatch values
-    Gui::Control().showDialog(new TaskDlgHatch(partFeat, subNames));
+    Gui::Control().showDialog(new TaskDlgHatch(partFeat, subNames), getDocument());
 
     // Touch the parent feature so the hatching in tree view appears as a child
     partFeat->touch();
@@ -313,7 +313,7 @@ void CmdTechDrawGeometricHatch::activated(int iMsg)
     }
 
     // dialog to fill in hatch values
-    Gui::Control().showDialog(new TaskDlgGeomHatch(geomhatch, hvp, true));
+    Gui::Control().showDialog(new TaskDlgGeomHatch(geomhatch, hvp, true), getDocument());
 
     commitCommand();
 

@@ -57,7 +57,7 @@ class ViewProviderClone:
             return None
 
         self.task = task_scale.ScaleTaskPanelEdit(self.Object)
-        Gui.Control.showDialog(self.task)
+        Gui.Control.showDialog(self.task, Gui.ActiveDocument)
         return True
 
     def unsetEdit(self, vobj, mode):

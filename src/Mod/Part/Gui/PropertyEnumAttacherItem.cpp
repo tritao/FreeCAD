@@ -25,6 +25,7 @@
 #include <cmath>
 
 #include <Gui/Application.h>
+#include <Gui/Document.h>
 #include <Gui/Control.h>
 #include <Gui/ViewProviderDocumentObject.h>
 
@@ -71,7 +72,7 @@ void PropertyEnumAttacherItem::openTask()
 
     if (dlg && !task) {
         // there is already another task dialog which must be closed first
-        Gui::Control().showDialog(dlg);
+        Gui::Control().showDialog(dlg, Gui::Application::Instance->activeDocument()->getDocument());
         return;
     }
     if (!task) {
@@ -93,7 +94,7 @@ void PropertyEnumAttacherItem::openTask()
         }
     }
 
-    Gui::Control().showDialog(task);
+    Gui::Control().showDialog(task, Gui::Application::Instance->activeDocument()->getDocument());
 }
 
 #include "moc_PropertyEnumAttacherItem.cpp"

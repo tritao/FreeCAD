@@ -98,7 +98,9 @@ class Arch_Roof:
                     FreeCADGui.UserInput.MouseLeft,
                 )
             )
-            FreeCADGui.Control.showDialog(ArchComponent.SelectionTaskPanel())
+            FreeCADGui.Control.showDialog(
+                ArchComponent.SelectionTaskPanel(), FreeCADGui.ActiveDocument
+            )
             FreeCAD.ArchObserver = ArchComponent.ArchSelectionObserver(nextCommand="Arch_Roof")
             FreeCADGui.Selection.addObserver(FreeCAD.ArchObserver)
 

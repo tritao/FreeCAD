@@ -46,7 +46,9 @@ class BIM_Reorder:
             obj = FreeCADGui.Selection.getSelection()[0]
             if hasattr(obj, "Group"):
                 if obj.getTypeIdOfProperty("Group") == "App::PropertyLinkList":
-                    FreeCADGui.Control.showDialog(BIM_Reorder_TaskPanel(obj))
+                    FreeCADGui.Control.showDialog(
+                        BIM_Reorder_TaskPanel(obj), FreeCADGui.ActiveDocument
+                    )
                     return
         FreeCAD.Console.PrintError(
             translate("BIM", "You must choose a group object before using this command") + "\n"

@@ -200,7 +200,7 @@ class ViewProviderSprocket:
         taskd = SprocketTaskPanel(self.Object, mode)
         taskd.obj = vobj.Object
         taskd.update()
-        FreeCADGui.Control.showDialog(taskd)
+        FreeCADGui.Control.showDialog(taskd, FreeCADGui.ActiveDocument)
         return True
 
     def unsetEdit(self, vobj, mode):

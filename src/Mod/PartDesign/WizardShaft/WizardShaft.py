@@ -217,7 +217,7 @@ class WizardShaftGui:
     def Activated(self):
         global WizardShaftDlg
         WizardShaftDlg = TaskWizardShaft(FreeCAD.ActiveDocument)
-        FreeCADGui.Control.showDialog(WizardShaftDlg)
+        FreeCADGui.Control.showDialog(WizardShaftDlg, FreeCADGui.ActiveDocument)
 
     def GetResources(self):
         IconPath = FreeCAD.ConfigGet("AppHomePath") + "Mod/PartDesign/WizardShaft/WizardShaft.svg"

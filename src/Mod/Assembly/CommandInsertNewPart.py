@@ -88,7 +88,7 @@ class CommandInsertNewPart:
                 return
 
         panel = TaskAssemblyNewPart()
-        dialog = Gui.Control.showDialog(panel)
+        dialog = Gui.Control.showDialog(panel, Gui.ActiveDocument)
         if dialog is not None:
             dialog.setAutoCloseOnDeletedDocument(True)
             dialog.setDocumentName(App.ActiveDocument.Name)

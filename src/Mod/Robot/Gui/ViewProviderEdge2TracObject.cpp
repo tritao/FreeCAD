@@ -24,6 +24,8 @@
 
 
 #include <Gui/Control.h>
+#include <Gui/Document.h>
+#include <Gui/Application.h>
 #include <Mod/Robot/Gui/TaskDlgEdge2Trac.h>
 
 #include "ViewProviderEdge2TracObject.h"
@@ -37,7 +39,7 @@ PROPERTY_SOURCE(RobotGui::ViewProviderEdge2TracObject, RobotGui::ViewProviderTra
 bool ViewProviderEdge2TracObject::doubleClicked()
 {
     Gui::TaskView::TaskDialog* dlg = new TaskDlgEdge2Trac(getObject<Robot::Edge2TracObject>());
-    Gui::Control().showDialog(dlg);
+    Gui::Control().showDialog(dlg, Gui::Application::Instance->activeDocument()->getDocument());
     return true;
 }
 
@@ -45,7 +47,7 @@ bool ViewProviderEdge2TracObject::doubleClicked()
 bool ViewProviderEdge2TracObject::setEdit(int)
 {
     Gui::TaskView::TaskDialog* dlg = new TaskDlgEdge2Trac(getObject<Robot::Edge2TracObject>());
-    Gui::Control().showDialog(dlg);
+    Gui::Control().showDialog(dlg, Gui::Application::Instance->activeDocument()->getDocument());
     return true;
 }
 

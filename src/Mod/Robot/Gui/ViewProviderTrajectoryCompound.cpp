@@ -24,6 +24,8 @@
 
 
 #include <Gui/Control.h>
+#include <Gui/Document.h>
+#include <Gui/Application.h>
 #include <Mod/Robot/App/TrajectoryCompound.h>
 #include <Mod/Robot/Gui/TaskDlgTrajectoryCompound.h>
 
@@ -49,7 +51,7 @@ bool ViewProviderTrajectoryCompound::setEdit(int)
     Gui::TaskView::TaskDialog* dlg = new TaskDlgTrajectoryCompound(
         getObject<Robot::TrajectoryCompound>()
     );
-    Gui::Control().showDialog(dlg);
+    Gui::Control().showDialog(dlg, Gui::Application::Instance->activeDocument()->getDocument());
     return true;
 }
 

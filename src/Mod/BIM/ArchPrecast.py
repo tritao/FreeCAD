@@ -971,7 +971,7 @@ class _ViewProviderPrecast(ArchComponent.ViewProviderComponent):
             self.dentd.form.show()
             self.dentd.fillDents(self.Object.Dents)
             taskd.form = [taskd.form, self.dentd.form]
-        FreeCADGui.Control.showDialog(taskd)
+        FreeCADGui.Control.showDialog(taskd, FreeCADGui.ActiveDocument)
         return True
 
     def unsetEdit(self, vobj, mode):

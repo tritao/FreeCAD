@@ -77,7 +77,7 @@ class ViewProvider(object):
         Path.Log.track()
         self.panel = TaskPanel(vobj, deleteOnReject)
         FreeCADGui.Control.closeDialog()
-        FreeCADGui.Control.showDialog(self.panel)
+        FreeCADGui.Control.showDialog(self.panel, FreeCADGui.ActiveDocument)
         self.panel.setupUi()
 
     def setCreate(self, vobj):

@@ -75,7 +75,9 @@ class Arch_Space:
                     FreeCADGui.UserInput.MouseLeft,
                 )
             )
-            FreeCADGui.Control.showDialog(ArchComponent.SelectionTaskPanel())
+            FreeCADGui.Control.showDialog(
+                ArchComponent.SelectionTaskPanel(), FreeCADGui.ActiveDocument
+            )
             FreeCAD.ArchObserver = ArchComponent.ArchSelectionObserver(nextCommand="Arch_Space")
             FreeCADGui.Selection.addObserver(FreeCAD.ArchObserver)
 

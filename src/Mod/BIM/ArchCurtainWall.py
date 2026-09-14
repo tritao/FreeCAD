@@ -830,5 +830,5 @@ class ViewProviderCurtainWall(ArchComponent.ViewProviderComponent):
             return None
 
         taskd = CurtainWallTaskPanel(vobj.Object)
-        FreeCADGui.Control.showDialog(taskd)
+        FreeCADGui.Control.showDialog(taskd, FreeCADGui.ActiveDocument)
         return True

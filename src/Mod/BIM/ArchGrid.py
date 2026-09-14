@@ -368,7 +368,7 @@ class ViewProviderArchGrid:
             return None
 
         taskd = ArchGridTaskPanel(vobj.Object)
-        FreeCADGui.Control.showDialog(taskd)
+        FreeCADGui.Control.showDialog(taskd, FreeCADGui.ActiveDocument)
         return True
 
     def unsetEdit(self, vobj, mode):

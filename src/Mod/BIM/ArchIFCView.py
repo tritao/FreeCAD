@@ -47,7 +47,7 @@ class IfcContextView:
         if mode == 1 or mode == 2:
             return None
 
-        FreeCADGui.Control.showDialog(IfcContextUI(vobj.Object))
+        FreeCADGui.Control.showDialog(IfcContextUI(vobj.Object), FreeCADGui.ActiveDocument)
         return True
 
     def unsetEdit(self, vobj, mode):

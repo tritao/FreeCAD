@@ -80,7 +80,7 @@ class OrthoArray(gui_base.GuiCommandBase):
         # The calling class (this one) is saved in the object
         # of the interface, to be able to call a function from within it.
         self.ui.source_command = self
-        task = Gui.Control.showDialog(self.ui)
+        task = Gui.Control.showDialog(self.ui, Gui.ActiveDocument)
         task.setDocumentName(Gui.ActiveDocument.Document.Name)
         task.setAutoCloseOnDeletedDocument(True)
 

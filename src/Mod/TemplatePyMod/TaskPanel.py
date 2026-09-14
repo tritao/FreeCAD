@@ -111,6 +111,6 @@ def createTask():
     Gui.Control.addTaskWatcher([TaskWatcher(), TaskLineEdit(), TaskWatcherFilter()])
     panel = TaskCalendar()
     #panel = TaskPanel()
-    Gui.Control.showDialog(panel)
+    Gui.Control.showDialog(panel, Gui.ActiveDocument)
     #panel.setupUi()
     return panel

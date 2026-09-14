@@ -172,7 +172,10 @@ bool ViewProvider::setEdit(int ModNum)
             }
         }
 
-        Gui::Control().showDialog(featureDlg);
+        Gui::Control().showDialog(
+            featureDlg,
+            Gui::Application::Instance->activeDocument()->getDocument()
+        );
         return true;
     }
     else {

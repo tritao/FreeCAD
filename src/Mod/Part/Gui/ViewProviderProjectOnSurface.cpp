@@ -30,6 +30,7 @@
 #include "DlgProjectionOnSurface.h"
 #include <Gui/Control.h>
 #include <Gui/Document.h>
+#include <Gui/Application.h>
 
 
 using namespace PartGui;
@@ -64,7 +65,10 @@ bool ViewProviderProjectOnSurface::setEdit(int ModNum)
         }
 
         if (auto feature = getObject<Part::ProjectOnSurface>()) {
-            Gui::Control().showDialog(new TaskProjectOnSurface(feature));
+            Gui::Control().showDialog(
+                new TaskProjectOnSurface(feature),
+                Gui::Application::Instance->activeDocument()->getDocument()
+            );
             return true;
         }
 
