@@ -56,17 +56,18 @@ class Arch_Space:
 
         import ArchComponent
 
-        FreeCAD.ActiveDocument.openTransaction(translate("Arch", "Create Space"))
-        FreeCADGui.addModule("Arch")
         sel = FreeCADGui.Selection.getSelection()
         if sel:
             FreeCADGui.HintManager.hide()
             FreeCADGui.Control.closeDialog()
-            FreeCADGui.doCommand("obj = Arch.makeSpace(FreeCADGui.Selection.getSelectionEx())")
-            FreeCADGui.addModule("Draft")
-            FreeCADGui.doCommand("Draft.autogroup(obj)")
-            FreeCAD.ActiveDocument.commitTransaction()
-            FreeCAD.ActiveDocument.recompute()
+            FreeCADGui.doCommand("import ArchSpaceConstruction")
+            FreeCADGui.doCommand(
+                "obj = ArchSpaceConstruction.construct_space_from_selection("
+                "FreeCAD.ActiveDocument, FreeCADGui.Selection.getSelectionEx(), "
+                "transaction_name={})".format(
+                    repr(translate("Arch", "Create Space"))
+                )
+            )
         else:
             FreeCAD.Console.PrintMessage(translate("Arch", "Select a base object") + "\n")
             FreeCADGui.HintManager.show(
