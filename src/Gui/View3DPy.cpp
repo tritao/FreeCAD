@@ -38,6 +38,7 @@
 #include <App/DocumentObject.h>
 #include <App/DocumentObjectPy.h>
 #include <App/GeoFeature.h>
+#include <App/ViewDefinition.h>
 #include <Base/Console.h>
 #include <Base/Exception.h>
 #include <Base/GeometryPyCXX.h>
@@ -138,6 +139,16 @@ void View3DInventorPy::init_type()
         "getViewVisibility",
         &View3DInventorPy::getViewVisibility,
         "getViewVisibility(object): return the active context override"
+    );
+    add_varargs_method(
+        "applyViewDefinition",
+        &View3DInventorPy::applyViewDefinition,
+        "applyViewDefinition(definition): apply a saved view to this viewer"
+    );
+    add_varargs_method(
+        "captureViewDefinition",
+        &View3DInventorPy::captureViewDefinition,
+        "captureViewDefinition(definition): capture this viewer's context"
     );
     add_noargs_method("isAnimationEnabled", &View3DInventorPy::isAnimationEnabled, "isAnimationEnabled()");
     add_varargs_method(
@@ -1077,6 +1088,34 @@ Py::Object View3DInventorPy::getViewVisibility(const Py::Tuple& args)
             return Py::String("Inherit");
     }
     return Py::String("Inherit");
+}
+
+Py::Object View3DInventorPy::applyViewDefinition(const Py::Tuple& args)
+{
+    PyObject* pyObject;
+    if (!PyArg_ParseTuple(args.ptr(), "O!", &App::DocumentObjectPy::Type, &pyObject)) {
+        throw Py::Exception();
+    }
+    auto* object = static_cast<App::DocumentObjectPy*>(pyObject)->getDocumentObjectPtr();
+    auto* definition = dynamic_cast<App::ViewDefinition*>(object);
+    if (!definition) {
+        throw Py::TypeError("definition must be an App::ViewDefinition");
+    }
+    return Py::Boolean(getView3DInventorPtr()->getViewer()->getViewContext().applyDefinition(definition));
+}
+
+Py::Object View3DInventorPy::captureViewDefinition(const Py::Tuple& args)
+{
+    PyObject* pyObject;
+    if (!PyArg_ParseTuple(args.ptr(), "O!", &App::DocumentObjectPy::Type, &pyObject)) {
+        throw Py::Exception();
+    }
+    auto* object = static_cast<App::DocumentObjectPy*>(pyObject)->getDocumentObjectPtr();
+    auto* definition = dynamic_cast<App::ViewDefinition*>(object);
+    if (!definition) {
+        throw Py::TypeError("definition must be an App::ViewDefinition");
+    }
+    return Py::Boolean(getView3DInventorPtr()->getViewer()->getViewContext().captureDefinition(definition));
 }
 
 Py::Object View3DInventorPy::setPopupMenuEnabled(const Py::Tuple& args)

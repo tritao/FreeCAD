@@ -197,6 +197,14 @@ class _View3DInventor:
         """Return the active context override, or ``Inherit`` when none exists."""
         ...
 
+    def applyViewDefinition(self, definition: DocumentObject) -> bool:
+        """Apply an ``App::ViewDefinition`` to this viewer."""
+        ...
+
+    def captureViewDefinition(self, definition: DocumentObject) -> bool:
+        """Capture this viewer's transient context into an ``App::ViewDefinition``."""
+        ...
+
     def isAnimationEnabled(self) -> bool:
         """Return whether camera animation support is enabled."""
         ...

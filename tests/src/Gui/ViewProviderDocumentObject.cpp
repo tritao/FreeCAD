@@ -12,10 +12,12 @@
 
 #include <App/Application.h>
 #include <App/Document.h>
+#include <App/ViewDefinition.h>
 #include <Gui/Application.h>
 #include <Gui/Inventor/SoViewContextElement.h>
 #include <Gui/Selection/SoFCUnifiedSelection.h>
 #include <Gui/ViewContext.h>
+#include <Gui/ViewInstance.h>
 #include <Gui/ViewProviderDocumentObject.h>
 
 #include <src/App/InitApplication.h>
@@ -179,4 +181,97 @@ TEST_F(ViewProviderDocumentObjectTest, auxiliaryRootGateDoesNotRetainViewProvide
     action.apply(gate);
     EXPECT_TRUE(action.getBoundingBox().isEmpty());
     gate->unref();
+}
+
+TEST_F(ViewProviderDocumentObjectTest, viewInstanceOwnsTransientRepresentationBehindContextGate)
+{
+    Gui::ViewProviderDocumentObject viewProvider;
+    viewProvider.attach(_child);
+
+    Gui::ViewContext context;
+    const auto layer = context.pushLayer();
+    ASSERT_TRUE(context.setVisibility(layer, _child, Gui::ViewContext::Visibility::Hidden));
+
+    Gui::ViewInstance instance(&viewProvider, &context);
+    instance.setRepresentation(new SoCube);
+    ASSERT_TRUE(instance.hasRepresentation());
+
+    auto* scene = new SoGroup;
+    scene->ref();
+    scene->addChild(instance.getRoot());
+
+    SoGetBoundingBoxAction hiddenAction(SbViewportRegion(100, 100));
+    hiddenAction.apply(scene);
+    EXPECT_TRUE(hiddenAction.getBoundingBox().isEmpty());
+
+    ASSERT_TRUE(context.setVisibility(layer, _child, Gui::ViewContext::Visibility::Visible));
+    SoGetBoundingBoxAction visibleAction(SbViewportRegion(100, 100));
+    visibleAction.apply(scene);
+    EXPECT_FALSE(visibleAction.getBoundingBox().isEmpty());
+
+    instance.clearRepresentation();
+    EXPECT_FALSE(instance.hasRepresentation());
+    SoGetBoundingBoxAction clearedAction(SbViewportRegion(100, 100));
+    clearedAction.apply(scene);
+    EXPECT_TRUE(clearedAction.getBoundingBox().isEmpty());
+
+    scene->unref();
+}
+
+TEST_F(ViewProviderDocumentObjectTest, viewDefinitionAppliesAndCapturesContextOverrides)
+{
+    auto* definition = static_cast<App::ViewDefinition*>(
+        _doc->addObject("App::ViewDefinition", "SavedView")
+    );
+    definition->ForcedHidden.setValues({_child});
+
+    Gui::ViewContext context;
+    ASSERT_TRUE(context.applyDefinition(definition));
+    EXPECT_EQ(context.visibility(_child), Gui::ViewContext::Visibility::Hidden);
+
+    definition->ForcedHidden.setValues({});
+    ASSERT_TRUE(context.captureDefinition(definition));
+    ASSERT_EQ(definition->ForcedHidden.getValues().size(), 1U);
+    EXPECT_EQ(definition->ForcedHidden.getValues().front(), _child);
+}
+
+TEST_F(ViewProviderDocumentObjectTest, viewDefinitionCaptureFlattensLayerOverrides)
+{
+    auto* definition = static_cast<App::ViewDefinition*>(
+        _doc->addObject("App::ViewDefinition", "SavedView")
+    );
+
+    Gui::ViewContext context;
+    const auto olderLayer = context.pushLayer();
+    ASSERT_TRUE(context.setVisibility(olderLayer, _child, Gui::ViewContext::Visibility::Hidden));
+    const auto newerLayer = context.pushLayer();
+    ASSERT_TRUE(context.setVisibility(newerLayer, _child, Gui::ViewContext::Visibility::Visible));
+    ASSERT_EQ(context.visibility(_child), Gui::ViewContext::Visibility::Visible);
+
+    ASSERT_TRUE(context.captureDefinition(definition));
+    ASSERT_EQ(definition->ForcedVisible.getValues().size(), 1U);
+    EXPECT_EQ(definition->ForcedVisible.getValues().front(), _child);
+    EXPECT_TRUE(definition->ForcedHidden.getValues().empty());
+
+    Gui::ViewContext restored;
+    ASSERT_TRUE(restored.applyDefinition(definition));
+    EXPECT_EQ(restored.visibility(_child), Gui::ViewContext::Visibility::Visible);
+}
+
+TEST_F(ViewProviderDocumentObjectTest, viewDefinitionAppliesAndCapturesReferenceFrame)
+{
+    auto* definition = static_cast<App::ViewDefinition*>(
+        _doc->addObject("App::ViewDefinition", "SavedView")
+    );
+    const Base::Placement savedFrame(Base::Vector3d(10.0, 20.0, 30.0), Base::Rotation());
+    definition->ReferenceFrame.setValue(savedFrame);
+
+    Gui::ViewContext context;
+    ASSERT_TRUE(context.applyDefinition(definition));
+    EXPECT_TRUE(context.referenceFrame() == savedFrame);
+
+    const Base::Placement capturedFrame(Base::Vector3d(-1.0, -2.0, -3.0), Base::Rotation());
+    context.setReferenceFrame(capturedFrame);
+    ASSERT_TRUE(context.captureDefinition(definition));
+    EXPECT_TRUE(definition->ReferenceFrame.getValue() == capturedFrame);
 }
