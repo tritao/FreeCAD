@@ -157,6 +157,7 @@ SET(bimcommands_SRCS
     bimcommands/BimClone.py
     bimcommands/BimColumn.py
     bimcommands/BimCommon.py
+    bimcommands/BimContextualEdit3D.py
     bimcommands/BimCompound.py
     bimcommands/BimConvert.py
     bimcommands/BimCopy.py
