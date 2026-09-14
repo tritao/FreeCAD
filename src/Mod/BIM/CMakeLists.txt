@@ -115,6 +115,11 @@ SET(Dice3DS_SRCS
     Dice3DS/dom3ds.py
 )
 
+SET(bimcontextual_SRCS
+    bimcontextual/__init__.py
+    bimcontextual/editing.py
+)
+
 SET(Arch_presets
     Presets/profiles.csv
     Presets/pset_definitions.csv
@@ -367,6 +372,7 @@ ADD_CUSTOM_TARGET(BIM ALL
     SOURCES ${Arch_SRCS}
             ${Dice3DS_SRCS}
             ${Arch_presets}
+            ${bimcontextual_SRCS}
             ${ArchGuiIcon_SVG}
             ${importers_SRCS}
             ${ImportersSample_Files}
@@ -382,6 +388,7 @@ add_custom_target(ArchSqlParser ALL DEPENDS ${BIM_GENERATED_PARSER})
 
 # Populate the build tree with the BIM workbench sources and test data
 fc_copy_sources(BIM "${CMAKE_BINARY_DIR}/Mod/BIM" ${Arch_SRCS})
+fc_copy_sources(BIM "${CMAKE_BINARY_DIR}/Mod/BIM" ${bimcontextual_SRCS})
 fc_copy_sources(BIM "${CMAKE_BINARY_DIR}/Mod/BIM" ${Dice3DS_SRCS})
 fc_copy_sources(BIM "${CMAKE_BINARY_DIR}/Mod/BIM" ${importers_SRCS})
 fc_copy_sources(BIM "${CMAKE_BINARY_DIR}/Mod/BIM" ${bimcommands_SRCS})
@@ -417,6 +424,12 @@ INSTALL(
         ${Arch_SRCS}
         ${Arch_QRC_SRCS}
     DESTINATION Mod/BIM
+)
+
+INSTALL(
+    DIRECTORY bimcontextual
+    DESTINATION Mod/BIM
+    FILES_MATCHING PATTERN "*.py"
 )
 
 INSTALL(

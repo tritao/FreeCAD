@@ -6,6 +6,7 @@ import FreeCAD
 import Part
 import Arch
 import ArchSpaceSemantic
+from bimcontextual.editing import BIMContextualHandleEditor, ContextualEditController
 
 from ArchRepresentation import (
     AxisConstraint,
@@ -84,6 +85,106 @@ class TestArchRepresentation(unittest.TestCase):
         self.assertTrue(ArchSpaceSemantic.has_valid_geometry(solid))
         self.assertFalse(ArchSpaceSemantic.has_valid_geometry(wire))
 
+
+    def test_contextual_editor_projects_previews_and_commits(self):
+        source = {"width": 100.0}
+        operation = BIMEditOperation(
+            "set-width",
+            "Set width",
+            lambda value: value["width"],
+            lambda value, width: value.__setitem__("width", width),
+            minimum=10.0,
+            manages_transaction=True,
+        )
+        handle = BIMEditHandle(
+            source,
+            "width",
+            FreeCAD.Vector(0, 0, 0),
+            FreeCAD.Vector(1, 0, 0),
+            operation,
+        )
+        refreshed = []
+        editor = BIMContextualHandleEditor(RepresentationRequest(purpose="Plan"), refreshed.append)
+
+        editor.begin(handle)
+        preview = editor.preview(FreeCAD.Vector(25, 50, 10))
+        self.assertEqual(125.0, preview.value)
+        self.assertEqual(FreeCAD.Vector(25, 0, 0), preview.point)
+        result = editor.commit(FreeCAD.Vector(25, 50, 10))
+
+        self.assertTrue(result.success)
+        self.assertEqual(125.0, source["width"])
+        self.assertEqual([source], refreshed)
+        self.assertIsNone(editor.handle)
+
+    def test_contextual_edit_controller_uses_injected_view_render_and_input(self):
+        class Renderer:
+            def __init__(self):
+                self.events = []
+
+            def set_handle_state(self, handle, state):
+                self.events.append(("state", handle, state))
+
+            def preview_handle(self, handle, point):
+                self.events.append(("point", handle, FreeCAD.Vector(point)))
+
+            def clear_preview(self, source):
+                self.events.append(("clear", source))
+
+        class InputAdapter:
+            def start_point_pick(self, point, callback, move_callback, title):
+                self.point = point
+                self.callback = callback
+                self.move_callback = move_callback
+                self.title = title
+
+            def defer(self, _key, callback):
+                callback()
+                return True
+
+            def clear(self):
+                self.cleared = True
+
+        source = {"width": 100.0}
+        operation = BIMEditOperation(
+            "set-width",
+            "Set width",
+            lambda value: value["width"],
+            lambda value, width: value.__setitem__("width", width),
+            minimum=1.0,
+            manages_transaction=True,
+        )
+        handle = BIMEditHandle(
+            source,
+            "width",
+            FreeCAD.Vector(),
+            FreeCAD.Vector(1, 0, 0),
+            operation,
+        )
+        renderer = Renderer()
+        input_adapter = InputAdapter()
+        refreshed = []
+        view = object()
+        controller = ContextualEditController(
+            view,
+            RepresentationRequest(purpose="Plan"),
+            renderer,
+            input_adapter,
+            refresh_callback=refreshed.append,
+        )
+
+        self.assertTrue(controller.activate(handle))
+        self.assertIs(controller.view, view)
+        self.assertIs(controller.active_edit, handle)
+        self.assertEqual("Edit width", input_adapter.title)
+        input_adapter.move_callback(FreeCAD.Vector(25, 10, 0))
+        input_adapter.callback(FreeCAD.Vector(25, 10, 0), None)
+
+        self.assertEqual(125.0, source["width"])
+        self.assertEqual([source], refreshed)
+        self.assertIsNone(controller.active_edit)
+        self.assertTrue(input_adapter.cleared)
+        self.assertIn(("clear", source), renderer.events)
 
     def test_wall_move_and_stretch_share_viewer_independent_evaluation(self):
         endpoints = (FreeCAD.Vector(0, 0, 0), FreeCAD.Vector(3000, 0, 0))
