@@ -297,10 +297,10 @@ class TestBimPlanEditExamplesGui(TestArchBaseGui):
             semantic_state = wall_width_handle.operation.get_preview(
                 host,
                 original_host_width + 25.0,
-                session.representation_context.context,
+                session.representation_request.request,
             )
             ArchRepresentation.expand_preview_dependents(
-                semantic_state, session.representation_context.context
+                semantic_state, session.representation_request.request
             )
             space_representation = semantic_state.representation_for(space)
             self.assertIsNotNone(space_representation)
@@ -422,10 +422,10 @@ class TestBimPlanEditExamplesGui(TestArchBaseGui):
             preview_state = position_handle.operation.get_preview(
                 door,
                 proposed_position,
-                session.representation_context.context,
+                session.representation_request.request,
             )
             ArchRepresentation.expand_preview_dependents(
-                preview_state, session.representation_context.context
+                preview_state, session.representation_request.request
             )
             expected_host_area = sum(
                 face.Area for face in preview_state.representation_for(host).cut_geometry
@@ -436,7 +436,7 @@ class TestBimPlanEditExamplesGui(TestArchBaseGui):
             original_host_area = sum(
                 face.Area
                 for face in host.Proxy.getRepresentation(
-                    host, session.representation_context.context
+                    host, session.representation_request.request
                 ).cut_geometry
             )
             original_space_area = sum(face.Area for face in space.Proxy.getFootprint(space))
@@ -470,7 +470,7 @@ class TestBimPlanEditExamplesGui(TestArchBaseGui):
             committed_host_area = sum(
                 face.Area
                 for face in host.Proxy.getRepresentation(
-                    host, session.representation_context.context
+                    host, session.representation_request.request
                 ).cut_geometry
             )
             committed_space_area = sum(face.Area for face in space.Proxy.getFootprint(space))
@@ -484,7 +484,7 @@ class TestBimPlanEditExamplesGui(TestArchBaseGui):
             restored_host_area = sum(
                 face.Area
                 for face in host.Proxy.getRepresentation(
-                    host, session.representation_context.context
+                    host, session.representation_request.request
                 ).cut_geometry
             )
             restored_space_area = sum(face.Area for face in space.Proxy.getFootprint(space))

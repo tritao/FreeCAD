@@ -96,9 +96,9 @@ def _perf_count(session, name, delta=1):
     return session.performance.plan_perf_count(name, delta=delta)
 
 
-def _active_representation_context(session):
-    contexts = getattr(session, "representation_context", None)
-    return getattr(contexts, "context", None)
+def _active_representation_request(session):
+    requests = getattr(session, "representation_request", None)
+    return getattr(requests, "request", None)
 
 
 def get_plan_overlay_geometry_kinds_for_object(session, obj):
@@ -262,15 +262,15 @@ def _get_proxy_footprint(proxy, obj):
         return ()
 
 
-def _get_proxy_representation(proxy, obj, context=None):
+def _get_proxy_representation(proxy, obj, request=None):
     get_representation = _get_proxy_method(proxy, "getRepresentation")
     if get_representation is None:
         return None
-    get_default_context = _get_proxy_method(proxy, "getDefaultPlanContext")
+    get_default_request = _get_proxy_method(proxy, "getDefaultPlanRequest")
     try:
-        if context is None:
-            context = get_default_context(obj) if get_default_context is not None else None
-        representation = get_representation(obj, context)
+        if request is None:
+            request = get_default_request(obj) if get_default_request is not None else None
+        representation = get_representation(obj, request)
     except Exception:
         return None
     if representation is None or not hasattr(representation, "cut_geometry"):
@@ -318,31 +318,31 @@ def get_wall_representation(session, wall):
         lambda wall_obj: _get_proxy_representation(
             getattr(wall_obj, "Proxy", None),
             wall_obj,
-            _active_representation_context(session),
+            _active_representation_request(session),
         ),
     )
 
 
 def get_contextual_representation(session, obj):
-    """Request an object-owned representation for the active BIM context.
+    """Request an object-owned representation for the active BIM request.
 
     Representation ownership is capability-based: the semantic object's
     provider (or its view provider for hosted objects) implements
-    ``getRepresentation(obj, context)``.  This keeps the rendering session
+    ``getRepresentation(obj, request)``.  This keeps the rendering session
     independent of BIM type names and lets SectionPlane/elevation providers
     participate without adding another dispatcher branch.
     """
     semantic_obj = session.visibility.get_plan_semantic_object(obj)
     if semantic_obj is None:
         return None
-    context = _active_representation_context(session)
+    request = _active_representation_request(session)
 
     def compute(source):
-        representation = _get_proxy_representation(getattr(source, "Proxy", None), source, context)
+        representation = _get_proxy_representation(getattr(source, "Proxy", None), source, request)
         if representation is not None:
             return representation
         view_object = getattr(source, "ViewObject", None)
-        return _get_proxy_representation(getattr(view_object, "Proxy", None), source, context)
+        return _get_proxy_representation(getattr(view_object, "Proxy", None), source, request)
 
     representation = get_cached_plan_overlay_geometry(
         session,
@@ -453,9 +453,9 @@ def get_region_overlay_polylines(session, region):
     )
 
 
-def _compute_opening_overlay_geometry(opening_obj, context=None):
+def _compute_opening_overlay_geometry(opening_obj, request=None):
     object_proxy = getattr(opening_obj, "Proxy", None)
-    representation = _get_proxy_representation(object_proxy, opening_obj, context)
+    representation = _get_proxy_representation(object_proxy, opening_obj, request)
     if representation is not None:
         symbol_polylines = []
         guide_polylines = []
@@ -477,7 +477,7 @@ def _compute_opening_overlay_geometry(opening_obj, context=None):
     proxy = getattr(view_object, "Proxy", None)
     if not proxy:
         return {"symbol_polylines": (), "guide_polylines": ()}
-    representation = _get_proxy_representation(proxy, opening_obj, context)
+    representation = _get_proxy_representation(proxy, opening_obj, request)
     if representation is not None:
         symbol_polylines = []
         guide_polylines = []
@@ -518,7 +518,7 @@ def get_opening_representation(session, opening):
         opening,
         "overlay_geometry",
         lambda opening_obj: _compute_opening_overlay_geometry(
-            opening_obj, _active_representation_context(session)
+            opening_obj, _active_representation_request(session)
         ),
     )
     return geometry.get("representation")
@@ -534,7 +534,7 @@ def get_opening_overlay_polylines(session, opening):
         opening,
         "overlay_geometry",
         lambda opening_obj: _compute_opening_overlay_geometry(
-            opening_obj, _active_representation_context(session)
+            opening_obj, _active_representation_request(session)
         ),
     )
     return tuple(geometry.get("symbol_polylines", ()))
@@ -555,7 +555,7 @@ def get_opening_guide_polylines(session, opening):
             opening_obj,
             "overlay_geometry",
             lambda candidate: _compute_opening_overlay_geometry(
-                candidate, _active_representation_context(session)
+                candidate, _active_representation_request(session)
             ),
         ).get("guide_polylines", ()),
     )

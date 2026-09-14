@@ -3543,7 +3543,7 @@ class _Space(ArchComponent.Component):
         except Part.OCCError:
             return []
 
-    def getDependentPreviewRepresentation(self, obj, state, context):
+    def getDependentPreviewRepresentation(self, obj, state, request):
         """Return a proposed room region when one of its walls is previewed."""
 
         import ArchRepresentation
@@ -3565,7 +3565,7 @@ class _Space(ArchComponent.Component):
         if boundary_entries and not any(
             entry.affects_spatial_boundary for entry in boundary_entries
         ):
-            representation = ArchRepresentation.BIMRepresentation(source=obj, context=context)
+            representation = ArchRepresentation.BIMRepresentation(source=obj, request=request)
             for face_index, face in enumerate(current_faces, start=1):
                 representation.add_geometry(
                     "cut_geometry",
@@ -3589,14 +3589,14 @@ class _Space(ArchComponent.Component):
             representation = state.representation_for(wall)
             if representation is None:
                 try:
-                    representation = ArchRepresentation.representation_for(wall, context)
+                    representation = ArchRepresentation.representation_for(wall, request)
                 except ArchRepresentation.RepresentationUnavailable:
                     return None
             boundary_provider = getattr(
                 getattr(wall, "Proxy", None), "getSpaceBoundaryGeometry", None
             )
             faces = (
-                boundary_provider(wall, representation, context)
+                boundary_provider(wall, representation, request)
                 if callable(boundary_provider)
                 else representation.cut_geometry
             )
@@ -3614,7 +3614,7 @@ class _Space(ArchComponent.Component):
         y_max = max(bound.YMax for bound in bounds)
         span = max(x_max - x_min, y_max - y_min, 1.0)
         margin = span + 1000.0
-        z = float(getattr(context, "target_offset", seed.z) or seed.z)
+        z = float(getattr(request, "target_offset", seed.z) or seed.z)
         outer = Part.Face(
             Part.makePolygon(
                 (
@@ -3637,7 +3637,7 @@ class _Space(ArchComponent.Component):
         if not candidates:
             return None
         room = min(candidates, key=lambda face: face.Area)
-        representation = ArchRepresentation.BIMRepresentation(source=obj, context=context)
+        representation = ArchRepresentation.BIMRepresentation(source=obj, request=request)
         representation.add_geometry(
             "cut_geometry", room, "SpacePreviewRegion", subelement="Boundary"
         )

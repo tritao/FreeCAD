@@ -28,7 +28,7 @@ import ArchWallGeometry
 import ArchWallRelation
 import ArchWallRelationResolver
 import ArchWallTrimming
-from ArchRepresentation import RepresentationContext, RepresentationPurpose
+from ArchRepresentation import RepresentationRequest, RepresentationPurpose
 import Draft
 import FreeCAD as App
 import Part
@@ -109,13 +109,13 @@ class TestArchWallJoint(TestArchBase.TestArchBase):
         joint = Arch.makeWallJoint(wall1, wall2, "Miter")
         self.document.recompute()
 
-        context = RepresentationContext(
+        request = RepresentationRequest(
             purpose=RepresentationPurpose.PLAN,
             cut_offset=1000,
             target_offset=0,
         )
         for wall in (wall1, wall2):
-            representation = wall.Proxy.getRepresentation(wall, context)
+            representation = wall.Proxy.getRepresentation(wall, request)
             boundaries = [
                 mapping.geometry
                 for mapping in representation.source_mappings
@@ -152,14 +152,14 @@ class TestArchWallJoint(TestArchBase.TestArchBase):
         rotated_frame = App.Placement(
             App.Vector(250, -125, 0), App.Rotation(App.Vector(0, 0, 1), 37)
         )
-        rotated_context = RepresentationContext(
+        rotated_request = RepresentationRequest(
             purpose=RepresentationPurpose.PLAN,
             reference_frame=rotated_frame,
             cut_offset=1000,
             target_offset=0,
         )
         for wall in (wall1, wall2):
-            representation = wall.Proxy.getRepresentation(wall, rotated_context)
+            representation = wall.Proxy.getRepresentation(wall, rotated_request)
             cut_line = next(
                 mapping.geometry
                 for mapping in representation.source_mappings
@@ -186,18 +186,18 @@ class TestArchWallJoint(TestArchBase.TestArchBase):
         self.document.recompute()
         self.assertEqual("OK", joint.Status, joint.StatusMessage)
 
-        context = RepresentationContext(
+        request = RepresentationRequest(
             purpose=RepresentationPurpose.PLAN,
             cut_offset=1000,
             target_offset=0,
         )
         stem_roles = {
             handle.role
-            for handle in stem.Proxy.getRepresentation(stem, context).edit_handles
+            for handle in stem.Proxy.getRepresentation(stem, request).edit_handles
         }
         support_roles = {
             handle.role
-            for handle in support.Proxy.getRepresentation(support, context).edit_handles
+            for handle in support.Proxy.getRepresentation(support, request).edit_handles
         }
 
         self.assertIn("WallPathStart", stem_roles)

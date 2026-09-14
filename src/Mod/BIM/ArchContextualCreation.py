@@ -31,7 +31,7 @@ class _CreationInteraction:
     def show_shape(self, shape, role):
         representation = ArchRepresentation.BIMRepresentation(
             source=self.preview_source,
-            context=self.facilities.context,
+            request=self.facilities.request,
         )
         for index, face in enumerate(shape.Faces, start=1):
             representation.add_geometry(
@@ -189,7 +189,7 @@ class HostedOpeningCreationProvider(ContextualProvider):
         wall = self._selected_wall(context)
         if wall is None:
             return ()
-        purpose = context.representation_context.purpose.value
+        purpose = context.representation_request.purpose.value
         return tuple(
             ContextualActionSpec(
                 key="create-{}".format(kind.lower()),
@@ -230,7 +230,7 @@ class WallCreationProvider(ContextualProvider):
                 key="create-wall",
                 label="Create Wall",
                 tooltip="Draw a wall in the current {} context".format(
-                    context.representation_context.purpose.value
+                    context.representation_request.purpose.value
                 ),
                 provider_id=self.provider_id,
             ),

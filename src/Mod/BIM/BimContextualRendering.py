@@ -194,11 +194,11 @@ class ContextualRepresentationRenderer:
     def sources(self):
         return tuple(self._representations)
 
-    def query_snap(self, point, tolerance, context=None):
+    def query_snap(self, point, tolerance, request=None):
         """Resolve a semantic snap against this viewer's live representations."""
 
         return ArchRepresentation.query_representation_snap(
-            tuple(self._representations.values()), point, tolerance, context=context
+            tuple(self._representations.values()), point, tolerance, request=request
         )
 
     def edit_handles_for(self, source):

@@ -51,13 +51,13 @@ class ContextualInspectorSection:
 
 @dataclass(frozen=True)
 class ContextualProviderContext:
-    representation_context: object
+    representation_request: object
     selected_sources: tuple = ()
     view: object = None
     capabilities: tuple = ()
 
     def supports(self, capability):
-        return context_policy.supports(self.representation_context, capability)
+        return context_policy.supports(self.representation_request, capability)
 
     def get_selected_sources(self):
         return tuple(self.selected_sources or ())
@@ -138,7 +138,7 @@ class SemanticEditProvider(ContextualProvider):
                         label=operation.label,
                         tooltip="Edit {} in the current {} context".format(
                             operation.property_name or handle.role,
-                            context.representation_context.purpose.value,
+                            context.representation_request.purpose.value,
                         ),
                         enabled=operation.is_available(source),
                         provider_id=self.provider_id,
@@ -150,7 +150,7 @@ class SemanticEditProvider(ContextualProvider):
         return tuple(actions)
 
     def get_inspector_sections(self, context):
-        purpose = context.representation_context.purpose.value
+        purpose = context.representation_request.purpose.value
         return tuple(
             ContextualInspectorSection(
                 key=str(getattr(source, "Name", "") or id(source)),

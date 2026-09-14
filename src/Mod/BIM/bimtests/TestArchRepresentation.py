@@ -35,7 +35,7 @@ from ArchRepresentation import (
     BIMRepresentation,
     PlaneConstraint,
     RepresentationUnavailable,
-    RepresentationContext,
+    RepresentationRequest,
     RepresentationPurpose,
     WorkingPlaneConstraint,
     query_representation_pick,
@@ -205,13 +205,13 @@ class TestArchRepresentation(unittest.TestCase):
 
     def test_context_policy_declares_purpose_capabilities(self):
         for purpose in RepresentationPurpose:
-            capabilities = capabilities_for(RepresentationContext(purpose=purpose))
+            capabilities = capabilities_for(RepresentationRequest(purpose=purpose))
             self.assertIsInstance(capabilities, frozenset)
         self.assertTrue(
-            supports(RepresentationContext(purpose="Plan"), "create-space")
+            supports(RepresentationRequest(purpose="Plan"), "create-space")
         )
         self.assertFalse(
-            supports(RepresentationContext(purpose="Elevation"), "create-wall")
+            supports(RepresentationRequest(purpose="Elevation"), "create-wall")
         )
 
     def test_edit_operation_uses_semantic_candidate_validation(self):
@@ -246,7 +246,7 @@ class TestArchRepresentation(unittest.TestCase):
 
     def test_plan_provider_contracts_use_contextual_contracts(self):
         context = ContextualProviderContext(
-            representation_context=RepresentationContext(purpose="Model"),
+            representation_request=RepresentationRequest(purpose="Model"),
             selected_sources=(object(),),
         )
         provider = PlanEditProvider()
@@ -255,16 +255,16 @@ class TestArchRepresentation(unittest.TestCase):
         self.assertIsInstance(provider, ContextualProvider)
         self.assertEqual(1, len(context.get_selected_sources()))
 
-    def test_context_accepts_enum_or_serialized_purpose(self):
-        plan = RepresentationContext(purpose=RepresentationPurpose.PLAN)
-        section = RepresentationContext(purpose="Section")
+    def test_request_accepts_enum_or_serialized_purpose(self):
+        plan = RepresentationRequest(purpose=RepresentationPurpose.PLAN)
+        section = RepresentationRequest(purpose="Section")
         self.assertIs(plan.purpose, RepresentationPurpose.PLAN)
         self.assertIs(section.purpose, RepresentationPurpose.SECTION)
         self.assertIsNone(section.reference_frame)
 
-    def test_context_keeps_arbitrary_frame_and_ranges(self):
+    def test_request_keeps_arbitrary_frame_and_ranges(self):
         frame = object()
-        context = RepresentationContext(
+        request = RepresentationRequest(
             purpose="Elevation",
             reference_frame=frame,
             cut_range=(0.0, 2.1),
@@ -272,21 +272,21 @@ class TestArchRepresentation(unittest.TestCase):
             cut_offset=1.2,
             target_offset=0.0,
         )
-        self.assertIs(context.reference_frame, frame)
-        self.assertEqual(context.cut_range, (0.0, 2.1))
-        self.assertEqual(context.projection_range, (-1.0, 8.0))
-        self.assertEqual(context.cut_offset, 1.2)
-        self.assertEqual(context.target_offset, 0.0)
+        self.assertIs(request.reference_frame, frame)
+        self.assertEqual(request.cut_range, (0.0, 2.1))
+        self.assertEqual(request.projection_range, (-1.0, 8.0))
+        self.assertEqual(request.cut_offset, 1.2)
+        self.assertEqual(request.target_offset, 0.0)
 
-    def test_context_supports_plan_offsets(self):
-        context = RepresentationContext(
+    def test_request_supports_plan_offsets(self):
+        request = RepresentationRequest(
             purpose=RepresentationPurpose.PLAN,
             cut_offset=1.0,
             target_offset=0.0,
         )
-        self.assertIs(context.purpose, RepresentationPurpose.PLAN)
-        self.assertEqual(context.cut_offset, 1.0)
-        self.assertEqual(context.target_offset, 0.0)
+        self.assertIs(request.purpose, RepresentationPurpose.PLAN)
+        self.assertEqual(request.cut_offset, 1.0)
+        self.assertEqual(request.target_offset, 0.0)
 
     def test_representation_records_roles_and_subelements(self):
         source = object()
@@ -346,7 +346,7 @@ class TestArchRepresentation(unittest.TestCase):
             document.recompute()
             representation = wall.Proxy.getRepresentation(
                 wall,
-                RepresentationContext(
+                RepresentationRequest(
                     purpose=RepresentationPurpose.PLAN,
                     cut_offset=1000,
                     target_offset=0,
@@ -434,7 +434,7 @@ class TestArchRepresentation(unittest.TestCase):
             operation,
         )
         refreshed = []
-        editor = BIMContextualHandleEditor(RepresentationContext(purpose="Plan"), refreshed.append)
+        editor = BIMContextualHandleEditor(RepresentationRequest(purpose="Plan"), refreshed.append)
 
         editor.begin(handle)
         preview = editor.preview(FreeCAD.Vector(25, 50, 10))
@@ -497,7 +497,7 @@ class TestArchRepresentation(unittest.TestCase):
         view = object()
         controller = ContextualEditController(
             view,
-            RepresentationContext(purpose="Plan"),
+            RepresentationRequest(purpose="Plan"),
             renderer,
             input_adapter,
             refresh_callback=refreshed.append,
@@ -535,7 +535,7 @@ class TestArchRepresentation(unittest.TestCase):
             operation,
             constraint=axis,
         )
-        editor = BIMContextualHandleEditor(RepresentationContext(purpose="Model"))
+        editor = BIMContextualHandleEditor(RepresentationRequest(purpose="Model"))
         ray = BIMEditRay(FreeCAD.Vector(10, 0, 5), FreeCAD.Vector(-1, 0, 0))
 
         editor.begin(handle)
@@ -564,7 +564,7 @@ class TestArchRepresentation(unittest.TestCase):
             operation,
             constraint=plane,
         )
-        editor = BIMContextualHandleEditor(RepresentationContext(purpose="Model"))
+        editor = BIMContextualHandleEditor(RepresentationRequest(purpose="Model"))
         ray = BIMEditRay(FreeCAD.Vector(10, 20, 10), FreeCAD.Vector(-1, -2, -1))
 
         editor.begin(handle)
@@ -595,8 +595,8 @@ class TestArchRepresentation(unittest.TestCase):
             Points = [FreeCAD.Vector(1, 2, 3), FreeCAD.Vector(4, 5, 6)]
 
             class ProxyType:
-                def getContextualEditPoints(self, owner, context):
-                    del context
+                def getContextualEditPoints(self, owner, request):
+                    del request
                     return tuple(owner.Points)
 
                 def setContextualEditPoint(self, owner, index, point):
@@ -609,7 +609,7 @@ class TestArchRepresentation(unittest.TestCase):
                 return FreeCAD.Placement()
 
         owner = Owner()
-        points = get_contextual_edit_points(owner, RepresentationContext(purpose="Plan"))
+        points = get_contextual_edit_points(owner, RepresentationRequest(purpose="Plan"))
 
         self.assertEqual(2, len(points))
         self.assertEqual("Vertex2", points[1].subelement)
@@ -634,7 +634,7 @@ class TestArchRepresentation(unittest.TestCase):
             operation,
             interaction="Planar",
         )
-        editor = BIMContextualHandleEditor(RepresentationContext(purpose="Plan"))
+        editor = BIMContextualHandleEditor(RepresentationRequest(purpose="Plan"))
 
         editor.begin(handle)
         result = editor.commit(FreeCAD.Vector(6, 8, 20))
@@ -650,7 +650,7 @@ class TestArchRepresentation(unittest.TestCase):
 
         representation = wall.Proxy.getRepresentation(
             wall,
-            RepresentationContext(
+            RepresentationRequest(
                 purpose="Plan",
                 cut_offset=1000,
                 target_offset=0,
@@ -689,14 +689,14 @@ class TestArchRepresentation(unittest.TestCase):
         document.recompute()
         self.assertEqual("OK", joint.Status, joint.StatusMessage)
 
-        context = RepresentationContext(purpose="Plan", cut_offset=1000, target_offset=0)
-        representation = horizontal.Proxy.getRepresentation(horizontal, context)
+        request = RepresentationRequest(purpose="Plan", cut_offset=1000, target_offset=0)
+        representation = horizontal.Proxy.getRepresentation(horizontal, request)
         handle = next(item for item in representation.edit_handles if item.role == "WallJointMove")
         semantic_point = handle.operation.get_value(handle.source)
 
         self.assertTrue(semantic_point.isEqual(FreeCAD.Vector(3000, 0, 0), 1e-7))
         self.assertTrue(handle.point.isEqual(FreeCAD.Vector(3100, 0, 0), 1e-7))
-        editor = BIMContextualHandleEditor(context)
+        editor = BIMContextualHandleEditor(request)
         editor.begin(handle)
         preview = editor.preview(handle.point + FreeCAD.Vector(200, 150, 0))
         self.assertTrue(preview.value.isEqual(semantic_point + FreeCAD.Vector(200, 150, 0), 1e-7))
@@ -705,7 +705,7 @@ class TestArchRepresentation(unittest.TestCase):
         preview_state = handle.operation.get_preview(
             horizontal,
             preview.value,
-            context,
+            request,
         )
         self.assertIs(preview_state.primary_source, horizontal)
         preview_by_source = {entry.representation.source: entry for entry in preview_state.entries}
@@ -717,7 +717,7 @@ class TestArchRepresentation(unittest.TestCase):
         self.assertEqual(before_horizontal, tuple(horizontal.Proxy.calc_endpoints(horizontal)))
         self.assertEqual(before_vertical, tuple(vertical.Proxy.calc_endpoints(vertical)))
 
-        vertical_representation = vertical.Proxy.getRepresentation(vertical, context)
+        vertical_representation = vertical.Proxy.getRepresentation(vertical, request)
         joint_targets = tuple(
             target
             for target in representation.iter_snap_targets()
@@ -737,7 +737,7 @@ class TestArchRepresentation(unittest.TestCase):
     def test_wall_width_face_handles_preserve_the_opposite_face(self):
         document = FreeCAD.newDocument("ContextualWallWidthTest")
         self.addCleanup(FreeCAD.closeDocument, document.Name)
-        context = RepresentationContext(purpose="Plan", cut_offset=1000, target_offset=0)
+        request = RepresentationRequest(purpose="Plan", cut_offset=1000, target_offset=0)
         for align in ("Center", "Left", "Right"):
             for side in ("Negative", "Positive"):
                 with self.subTest(align=align, side=side):
@@ -751,7 +751,7 @@ class TestArchRepresentation(unittest.TestCase):
                     wall.Offset = 25
                     document.recompute()
                     before = wall.Proxy.get_resolved_section(wall)
-                    representation = wall.Proxy.getRepresentation(wall, context)
+                    representation = wall.Proxy.getRepresentation(wall, request)
                     handles = {
                         item.subelement: item
                         for item in representation.edit_handles
@@ -762,7 +762,7 @@ class TestArchRepresentation(unittest.TestCase):
                     self.assertEqual("Plus", handle.glyph)
                     self.assertEqual(1.0, handle.operation.sensitivity)
 
-                    editor = BIMContextualHandleEditor(context)
+                    editor = BIMContextualHandleEditor(request)
                     editor.begin(handle)
                     result = editor.commit(handle.point + handle.direction * 50)
                     document.recompute()
@@ -791,7 +791,7 @@ class TestArchRepresentation(unittest.TestCase):
 
         representation = opening.Proxy.getRepresentation(
             opening,
-            RepresentationContext(purpose="Plan", cut_offset=1000, target_offset=0),
+            RepresentationRequest(purpose="Plan", cut_offset=1000, target_offset=0),
         )
 
         self.assertIs(representation.source, opening)
@@ -821,7 +821,7 @@ class TestArchRepresentation(unittest.TestCase):
         preview_state = position.operation.get_preview(
             opening,
             position.operation.get_value(opening) + 100.0,
-            representation.context,
+            representation.request,
         )
         preview = preview_state.representation_for(opening)
         self.assertTrue(preview.cut_geometry)
@@ -846,17 +846,17 @@ class TestArchRepresentation(unittest.TestCase):
             position.operation.get_preview_label(
                 opening,
                 position.operation.get_value(opening) + 100.0,
-                representation.context,
+                representation.request,
             ).startswith("Offset: ")
         )
 
         current_position = position.operation.get_value(opening)
         current_opening = position.operation.get_preview(
-            opening, current_position, representation.context
+            opening, current_position, representation.request
         ).representation_for(opening).cut_geometry[0]
         proposed_position = current_position + 1000.0
         moved_state = position.operation.get_preview(
-            opening, proposed_position, representation.context
+            opening, proposed_position, representation.request
         )
         proposed_opening = moved_state.representation_for(opening).cut_geometry[0]
         preview_wall = next(
@@ -864,7 +864,7 @@ class TestArchRepresentation(unittest.TestCase):
             for entry in moved_state.entries
             if entry.representation.source is wall
         )
-        committed_wall = wall.Proxy.getRepresentation(wall, representation.context)
+        committed_wall = wall.Proxy.getRepresentation(wall, representation.request)
         newly_open = proposed_opening.cut(current_opening)
         self.assertGreater(newly_open.Area, 1.0)
         newly_open_point = newly_open.CenterOfMass
@@ -874,7 +874,7 @@ class TestArchRepresentation(unittest.TestCase):
         self.assertFalse(
             any(face.isInside(newly_open_point, 1e-7, True) for face in preview_wall.cut_geometry)
         )
-        wall_representation = wall.Proxy.getRepresentation(wall, representation.context)
+        wall_representation = wall.Proxy.getRepresentation(wall, representation.request)
         width_handle = next(
             handle
             for handle in wall_representation.edit_handles
@@ -882,7 +882,7 @@ class TestArchRepresentation(unittest.TestCase):
         )
         original_width = wall.Width.Value
         width_state = width_handle.operation.get_preview(
-            wall, original_width + 50.0, representation.context
+            wall, original_width + 50.0, representation.request
         )
         width_entries = {
             entry.representation.source: entry.representation for entry in width_state.entries
@@ -898,9 +898,9 @@ class TestArchRepresentation(unittest.TestCase):
         self.assertEqual(2, len(jamb_lengths))
         self.assertTrue(all(abs(length - 250.0) < 1e-7 for length in jamb_lengths))
         opening_cut = opening.Proxy.get_hosted_wall_preview_representation(
-            representation.context,
+            representation.request,
             wall.Proxy._get_width_face_preview_shape(
-                wall, "Positive", original_width + 50.0, representation.context
+                wall, "Positive", original_width + 50.0, representation.request
             ),
         ).cut_geometry[0]
         self.assertFalse(
@@ -921,14 +921,14 @@ class TestArchRepresentation(unittest.TestCase):
             FreeCAD.Vector(1500, 0, 0),
             FreeCAD.Rotation(FreeCAD.Vector(0, 1, 0), 90),
         )
-        context = RepresentationContext(
+        request = RepresentationRequest(
             purpose="Section",
             reference_frame=frame,
             cut_offset=0,
             target_offset=0,
         )
 
-        representation = wall.Proxy.getRepresentation(wall, context)
+        representation = wall.Proxy.getRepresentation(wall, request)
 
         self.assertTrue(representation.cut_geometry)
         self.assertTrue(representation.snap_geometry)
@@ -996,22 +996,22 @@ class TestArchRepresentation(unittest.TestCase):
         self.assertEqual("cut", result.role)
 
     def test_representation_for_delegates_to_object_provider(self):
-        context = RepresentationContext(purpose="Plan")
+        request = RepresentationRequest(purpose="Plan")
 
         class Provider:
-            def getRepresentation(self, obj, requested_context):
-                self.args = (obj, requested_context)
-                return BIMRepresentation(source=obj, context=requested_context)
+            def getRepresentation(self, obj, requested_request):
+                self.args = (obj, requested_request)
+                return BIMRepresentation(source=obj, request=requested_request)
 
         class BIMObject:
             pass
 
         obj = BIMObject()
         obj.Proxy = Provider()
-        result = representation_for(obj, context)
+        result = representation_for(obj, request)
         self.assertIs(result.source, obj)
-        self.assertIs(result.context, context)
-        self.assertEqual(obj.Proxy.args, (obj, context))
+        self.assertIs(result.request, request)
+        self.assertEqual(obj.Proxy.args, (obj, request))
 
     def test_representation_for_does_not_dispatch_on_type_name(self):
         class BIMObject:
@@ -1020,25 +1020,25 @@ class TestArchRepresentation(unittest.TestCase):
         obj = BIMObject()
         obj.Proxy = object()
         with self.assertRaises(RepresentationUnavailable):
-            representation_for(obj, RepresentationContext())
+            representation_for(obj, RepresentationRequest())
 
     def test_edit_capabilities_have_no_representation_geometry(self):
-        context = RepresentationContext(purpose=RepresentationPurpose.MODEL)
+        request = RepresentationRequest(purpose=RepresentationPurpose.MODEL)
 
         class Provider:
-            def getEditCapabilities(self, obj, requested_context):
-                self.args = (obj, requested_context)
-                return BIMEditCapabilities(source=obj, context=requested_context)
+            def getEditCapabilities(self, obj, requested_request):
+                self.args = (obj, requested_request)
+                return BIMEditCapabilities(source=obj, request=requested_request)
 
         class BIMObject:
             pass
 
         obj = BIMObject()
         obj.Proxy = Provider()
-        result = edit_capabilities_for(obj, context)
+        result = edit_capabilities_for(obj, request)
         self.assertIs(result.source, obj)
-        self.assertIs(result.context, context)
-        self.assertEqual((obj, context), obj.Proxy.args)
+        self.assertIs(result.request, request)
+        self.assertEqual((obj, request), obj.Proxy.args)
         self.assertFalse(hasattr(result, "cut_geometry"))
         self.assertFalse(hasattr(result, "projected_geometry"))
         self.assertFalse(hasattr(result, "snap_geometry"))
@@ -1048,12 +1048,12 @@ class TestArchRepresentation(unittest.TestCase):
         try:
             wall = Arch.makeWall(length=3000, width=200, height=2500, align="Left")
             document.recompute()
-            context = RepresentationContext(purpose=RepresentationPurpose.MODEL)
-            capabilities = edit_capabilities_for(wall, context)
+            request = RepresentationRequest(purpose=RepresentationPurpose.MODEL)
+            capabilities = edit_capabilities_for(wall, request)
             handles = {handle.subelement: handle for handle in capabilities.edit_handles}
 
             self.assertIs(capabilities.source, wall)
-            self.assertIs(capabilities.context, context)
+            self.assertIs(capabilities.request, request)
             self.assertFalse(hasattr(capabilities, "cut_geometry"))
             for subelement in (
                 "Path.Start",
@@ -1079,15 +1079,15 @@ class TestArchRepresentation(unittest.TestCase):
             model_wall = Arch.makeWall(length=3000, width=200, height=2500)
             model_wall.Placement.Base.y = 1000
             document.recompute()
-            contexts = (
-                RepresentationContext(purpose=RepresentationPurpose.PLAN, cut_offset=1000),
-                RepresentationContext(purpose=RepresentationPurpose.MODEL),
+            requests = (
+                RepresentationRequest(purpose=RepresentationPurpose.PLAN, cut_offset=1000),
+                RepresentationRequest(purpose=RepresentationPurpose.MODEL),
             )
             walls = (plan_wall, model_wall)
-            for wall, context in zip(walls, contexts):
+            for wall, request in zip(walls, requests):
                 handle = next(
                     item
-                    for item in edit_capabilities_for(wall, context).edit_handles
+                    for item in edit_capabilities_for(wall, request).edit_handles
                     if item.operation.interaction_intent == "WallMove"
                 )
                 handle.operation.apply(

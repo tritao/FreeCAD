@@ -919,28 +919,28 @@ class _Structure(ArchComponent.Component):
         wrapper for `getPlanRepresentation()`.
         """
 
-        context = self.getDefaultPlanContext(obj)
-        return self.getRepresentation(obj, context).cut_geometry
+        request = self.getDefaultPlanRequest(obj)
+        return self.getRepresentation(obj, request).cut_geometry
 
-    def getPlanRepresentation(self, obj, context):
-        """Return slab plan faces for the supplied plan context.
+    def getPlanRepresentation(self, obj, request):
+        """Return slab plan faces for the supplied plan request.
 
-        The current slab implementation uses the context target elevation only:
+        The current slab implementation uses the request target elevation only:
         it flattens the highest horizontal slab faces to that Z coordinate.
-        Future projection or section behavior can use the same context object
+        Future projection or section behavior can use the same request object
         without changing the generic Footprint display mode contract.
         """
 
-        if context is None:
-            context = self.getDefaultPlanContext(obj)
-        return self.getRepresentation(obj, context).cut_geometry
+        if request is None:
+            request = self.getDefaultPlanRequest(obj)
+        return self.getRepresentation(obj, request).cut_geometry
 
-    def getRepresentation(self, obj, context):
+    def getRepresentation(self, obj, request):
         """Return a renderer-neutral plan representation for a slab."""
 
-        if context is None:
-            context = self.getDefaultPlanContext(obj)
-        if context.purpose != ArchRepresentation.RepresentationPurpose.PLAN:
+        if request is None:
+            request = self.getDefaultPlanRequest(obj)
+        if request.purpose != ArchRepresentation.RepresentationPurpose.PLAN:
             raise ArchRepresentation.RepresentationUnavailable(
                 "Slab provider only supports Plan contexts"
             )
@@ -951,11 +951,11 @@ class _Structure(ArchComponent.Component):
 
         shape = obj.Shape
         if not shape or shape.isNull():
-            return ArchRepresentation.BIMRepresentation(source=obj, context=context)
+            return ArchRepresentation.BIMRepresentation(source=obj, request=request)
 
         top_faces = []
         top_z = None
-        target_z = context.target_offset if context.target_offset is not None else shape.BoundBox.ZMin
+        target_z = request.target_offset if request.target_offset is not None else shape.BoundBox.ZMin
         for face in shape.Faces:
             normal = face.normalAt(0, 0)
             if normal.getAngle(FreeCAD.Vector(0, 0, 1)) >= 0.01:
@@ -967,7 +967,7 @@ class _Structure(ArchComponent.Component):
             elif abs(z_value - top_z) < 0.001:
                 top_faces.append(face)
 
-        representation = ArchRepresentation.BIMRepresentation(source=obj, context=context)
+        representation = ArchRepresentation.BIMRepresentation(source=obj, request=request)
         if not top_faces:
             return representation
 

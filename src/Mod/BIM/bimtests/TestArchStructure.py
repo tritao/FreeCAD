@@ -55,22 +55,22 @@ class TestArchStructure(TestArchBase.TestArchBase):
         self.assertAlmostEqual(bbox.ZMin, slab.Shape.BoundBox.ZMin, places=6)
         self.assertAlmostEqual(bbox.ZMax, slab.Shape.BoundBox.ZMin, places=6)
 
-        context = ArchRepresentation.RepresentationContext(
+        request = ArchRepresentation.RepresentationRequest(
             purpose=ArchRepresentation.RepresentationPurpose.PLAN,
             cut_offset=0.0,
             target_offset=42.0,
         )
-        context_faces = slab.Proxy.getPlanRepresentation(slab, context)
-        context_bbox = context_faces[0].BoundBox
-        self.assertAlmostEqual(context_bbox.ZMin, 42.0, places=6)
-        self.assertAlmostEqual(context_bbox.ZMax, 42.0, places=6)
+        request_faces = slab.Proxy.getPlanRepresentation(slab, request)
+        request_bbox = request_faces[0].BoundBox
+        self.assertAlmostEqual(request_bbox.ZMin, 42.0, places=6)
+        self.assertAlmostEqual(request_bbox.ZMax, 42.0, places=6)
 
-        representation = ArchRepresentation.representation_for(slab, context)
+        representation = ArchRepresentation.representation_for(slab, request)
         self.assertIs(representation.source, slab)
-        self.assertEqual(len(representation.cut_geometry), len(context_faces))
+        self.assertEqual(len(representation.cut_geometry), len(request_faces))
         self.assertAlmostEqual(
             representation.cut_geometry[0].BoundBox.ZMin,
-            context_faces[0].BoundBox.ZMin,
+            request_faces[0].BoundBox.ZMin,
             places=6,
         )
         mapping = representation.mapping_for(representation.cut_geometry[0])

@@ -818,11 +818,11 @@ def _get_contextual_representations(
     ):
         return []
 
-    context_provider = getattr(getattr(source, "Proxy", None), "getRepresentationContext", None)
-    if not callable(context_provider):
+    request_provider = getattr(getattr(source, "Proxy", None), "getRepresentationRequest", None)
+    if not callable(request_provider):
         return []
-    context = context_provider(source)
-    if context is None:
+    request = request_provider(source)
+    if request is None:
         return []
 
     from ArchRepresentation import RepresentationUnavailable, representation_for
@@ -830,7 +830,7 @@ def _get_contextual_representations(
     representations = []
     for obj in objects:
         try:
-            representation = representation_for(obj, context)
+            representation = representation_for(obj, request)
         except RepresentationUnavailable:
             return []
         if not (
@@ -1246,7 +1246,7 @@ class _SectionPlane:
                 "SectionPlane",
                 QT_TRANSLATE_NOOP(
                     "App::Property",
-                    "The semantic view context represented by this plane.",
+                    "The semantic view request represented by this plane.",
                 ),
                 locked=True,
             )
@@ -1293,13 +1293,13 @@ class _SectionPlane:
 
         return obj.Shape.Faces[0].normalAt(0, 0)
 
-    def getRepresentationContext(self, obj):
-        """Return the renderer-independent BIM context supplied by this plane."""
+    def getRepresentationRequest(self, obj):
+        """Return the renderer-independent BIM request supplied by this plane."""
 
         depth = float(getattr(getattr(obj, "Depth", 0.0), "Value", 0.0))
 
         purpose = ArchRepresentation.RepresentationPurpose(str(obj.Purpose))
-        return ArchRepresentation.RepresentationContext(
+        return ArchRepresentation.RepresentationRequest(
             purpose=purpose,
             reference_frame=obj.Placement,
             cut_offset=0.0,
@@ -1755,7 +1755,7 @@ class _ViewProviderSectionPlane:
         QtCore.QObject.connect(actionEdit, QtCore.SIGNAL("triggered()"), self.edit)
         menu.addAction(actionEdit)
 
-        purpose = self.Object.Proxy.getRepresentationContext(self.Object).purpose
+        purpose = self.Object.Proxy.getRepresentationRequest(self.Object).purpose
         contextual_command = (
             "BIM_ElevationEdit"
             if purpose == ArchRepresentation.RepresentationPurpose.ELEVATION

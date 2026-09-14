@@ -26,7 +26,7 @@ def _opening_proxy(opening):
         proxy = getattr(owner, "Proxy", None)
         if proxy is not None and all(
             callable(getattr(proxy, name, None))
-            for name in ("get_plan_move_context", "get_plan_center_point", "move_along_host")
+            for name in ("get_hosted_opening_move_context", "get_hosted_opening_center_point")
         ):
             return proxy
     return None
@@ -52,8 +52,8 @@ def hosted_opening_records(wall, original_endpoints, candidate_endpoints, mode):
         proxy = _opening_proxy(opening)
         if proxy is None:
             continue
-        context = proxy.get_plan_move_context() or {}
-        center_value = proxy.get_plan_center_point()
+        context = proxy.get_hosted_opening_move_context() or {}
+        center_value = proxy.get_hosted_opening_center_point()
         if center_value is None:
             continue
         center = FreeCAD.Vector(center_value)
@@ -67,7 +67,6 @@ def hosted_opening_records(wall, original_endpoints, candidate_endpoints, mode):
             desired = length - half - max(0.0, old_length - old_u - half)
         records.append({
             "opening": opening,
-            "proxy": proxy,
             "current": center,
             "desired_u": desired,
             "low": half,
@@ -126,8 +125,12 @@ def apply_wall_candidate(wall, mode, candidate):
     if not evaluation.allowed:
         raise ValueError(evaluation.reason)
     wall.Proxy.set_from_endpoints(wall, evaluation.endpoints)
+    import ArchOpeningSemantic
+
     for item in evaluation.opening_layout:
-        if not item["proxy"].move_along_host(item["target_point"]):
+        if not ArchOpeningSemantic.move_hosted_opening(
+            item["opening"], item["target_point"]
+        ):
             raise ValueError("A hosted opening could not be repositioned.")
     return evaluation
 

@@ -61,8 +61,8 @@ from FreeCAD import Vector
 from draftutils import params
 
 
-def _representation_plane_normal(context):
-    frame = getattr(context, "reference_frame", None)
+def _representation_plane_normal(request):
+    frame = getattr(request, "reference_frame", None)
     if frame is not None:
         normal = frame.Rotation.multVec(Vector(0, 0, 1))
         if normal.Length > 1e-9:
@@ -71,12 +71,12 @@ def _representation_plane_normal(context):
     return Vector(0, 0, 1)
 
 
-def _edit_handle_point(point, context):
+def _edit_handle_point(point, request):
     """Keep model-view handles in world space; project contextual handles."""
 
-    if getattr(context, "purpose", None) == ArchRepresentation.RepresentationPurpose.MODEL:
+    if getattr(request, "purpose", None) == ArchRepresentation.RepresentationPurpose.MODEL:
         return FreeCAD.Vector(point)
-    return ArchRepresentation.project_to_representation_plane(point, context)
+    return ArchRepresentation.project_to_representation_plane(point, request)
 
 
 if FreeCAD.GuiUp:
@@ -1012,23 +1012,23 @@ class _Wall(ArchComponent.Component):
             The faces that make up the wall footprint.
         """
 
-        context = self.getDefaultPlanContext(obj)
-        return self.getRepresentation(obj, context).cut_geometry
+        request = self.getDefaultPlanRequest(obj)
+        return self.getRepresentation(obj, request).cut_geometry
 
-    def getPlanRepresentation(self, obj, context):
-        """Return wall plan faces for the supplied plan context.
+    def getPlanRepresentation(self, obj, request):
+        """Return wall plan faces for the supplied plan request.
 
-        The context defines both the absolute cut elevation and the elevation
+        The request defines both the absolute cut elevation and the elevation
         where the resulting faces are placed. This lets callers ask for
         different plan representations of the same wall without changing the
         generic Footprint display mode contract.
         """
 
-        if context is None:
-            context = self.getDefaultPlanContext(obj)
-        return self.getRepresentation(obj, context).cut_geometry
+        if request is None:
+            request = self.getDefaultPlanRequest(obj)
+        return self.getRepresentation(obj, request).cut_geometry
 
-    def getSpaceBoundaryGeometry(self, obj, representation, context):
+    def getSpaceBoundaryGeometry(self, obj, representation, request):
         """Return continuous planar wall geometry suitable for room enclosure.
 
         Wall display sections contain hosted opening voids.  Those voids must
@@ -1055,7 +1055,7 @@ class _Wall(ArchComponent.Component):
             return faces
         values_u = [point.sub(origin).dot(axis_u) for point in vertices]
         values_v = [point.sub(origin).dot(axis_v) for point in vertices]
-        target_offset = getattr(context, "target_offset", None)
+        target_offset = getattr(request, "target_offset", None)
         z = vertices[0].z if target_offset is None else float(target_offset)
 
         def frame_point(u, v):
@@ -1071,21 +1071,21 @@ class _Wall(ArchComponent.Component):
         )
         return (Part.Face(Part.makePolygon((*corners, corners[0]))),)
 
-    def getRepresentation(self, obj, context):
+    def getRepresentation(self, obj, request):
         """Return this wall's renderer-neutral plan representation."""
 
-        if context is None:
-            context = self.getDefaultPlanContext(obj)
-        if context.purpose not in (
+        if request is None:
+            request = self.getDefaultPlanRequest(obj)
+        if request.purpose not in (
             ArchRepresentation.RepresentationPurpose.PLAN,
             ArchRepresentation.RepresentationPurpose.SECTION,
             ArchRepresentation.RepresentationPurpose.ELEVATION,
         ):
             raise ArchRepresentation.RepresentationUnavailable(
-                f"Wall does not provide a {context.purpose.value} representation"
+                f"Wall does not provide a {request.purpose.value} representation"
             )
-        representation = ArchRepresentation.BIMRepresentation(source=obj, context=context)
-        cut_faces = tuple(self._getCutRepresentation(obj, context))
+        representation = ArchRepresentation.BIMRepresentation(source=obj, request=request)
+        cut_faces = tuple(self._getCutRepresentation(obj, request))
         for index, face in enumerate(cut_faces, start=1):
             representation.add_geometry(
                 "cut_geometry", face, "PlanCutFace", subelement=f"PlanFace{index}"
@@ -1153,44 +1153,44 @@ class _Wall(ArchComponent.Component):
                     subelement=f"PlanFace{index}.Vertex{vertex_index}",
                     related_sources=joints,
                 )
-        self._add_edit_handles(representation, obj, context)
+        self._add_edit_handles(representation, obj, request)
         return representation
 
-    def getEditCapabilities(self, obj, context=None):
+    def getEditCapabilities(self, obj, request=None):
         """Return semantic wall handles independently of rendered geometry."""
 
-        if context is None:
-            context = ArchRepresentation.RepresentationContext(
+        if request is None:
+            request = ArchRepresentation.RepresentationRequest(
                 purpose=ArchRepresentation.RepresentationPurpose.MODEL
             )
-        if context.purpose not in (
+        if request.purpose not in (
             ArchRepresentation.RepresentationPurpose.MODEL,
             ArchRepresentation.RepresentationPurpose.PLAN,
             ArchRepresentation.RepresentationPurpose.SECTION,
             ArchRepresentation.RepresentationPurpose.ELEVATION,
         ):
             raise ArchRepresentation.RepresentationUnavailable(
-                f"Wall does not provide edit capabilities for {context.purpose.value}"
+                f"Wall does not provide edit capabilities for {request.purpose.value}"
             )
-        capabilities = ArchRepresentation.BIMEditCapabilities(source=obj, context=context)
-        self._add_edit_handles(capabilities, obj, context)
+        capabilities = ArchRepresentation.BIMEditCapabilities(source=obj, request=request)
+        self._add_edit_handles(capabilities, obj, request)
         return capabilities
 
-    def _add_edit_handles(self, target, wall, context):
-        purpose = context.purpose
+    def _add_edit_handles(self, target, wall, request):
+        purpose = request.purpose
         if purpose == ArchRepresentation.RepresentationPurpose.MODEL:
-            self._add_owned_path_edit_handles(target, wall, context)
-            self._add_native_path_edit_handles(target, wall, context)
-            self._add_wall_joint_edit_handles(target, wall, context)
-            self._add_section_property_edit_handles(target, wall, context)
-            self._add_vertical_edit_handles(target, wall, context)
+            self._add_owned_path_edit_handles(target, wall, request)
+            self._add_native_path_edit_handles(target, wall, request)
+            self._add_wall_joint_edit_handles(target, wall, request)
+            self._add_section_property_edit_handles(target, wall, request)
+            self._add_vertical_edit_handles(target, wall, request)
         elif purpose == ArchRepresentation.RepresentationPurpose.PLAN:
-            self._add_owned_path_edit_handles(target, wall, context)
-            self._add_native_path_edit_handles(target, wall, context)
-            self._add_wall_joint_edit_handles(target, wall, context)
-            self._add_section_property_edit_handles(target, wall, context)
+            self._add_owned_path_edit_handles(target, wall, request)
+            self._add_native_path_edit_handles(target, wall, request)
+            self._add_wall_joint_edit_handles(target, wall, request)
+            self._add_section_property_edit_handles(target, wall, request)
         else:
-            self._add_vertical_edit_handles(target, wall, context)
+            self._add_vertical_edit_handles(target, wall, request)
 
     def _wall_joint_snap_edges(self, representation, wall):
         """Map each resolved relation to its physical wall-end boundary edge."""
@@ -1231,11 +1231,11 @@ class _Wall(ArchComponent.Component):
             None,
         )
 
-    def _add_vertical_edit_handles(self, representation, wall, context):
-        direction = ArchComponent.representation_vertical_direction(context)
+    def _add_vertical_edit_handles(self, representation, wall, request):
+        direction = ArchComponent.representation_vertical_direction(request)
         if direction is None:
             return
-        low, high = ArchComponent.representation_extent_points(wall.Shape, context, direction)
+        low, high = ArchComponent.representation_extent_points(wall.Shape, request, direction)
         height_operation = ArchRepresentation.BIMEditOperation(
             "WallHeight",
             "Edit Wall Height",
@@ -1292,7 +1292,7 @@ class _Wall(ArchComponent.Component):
                 )
             )
 
-    def _add_section_property_edit_handles(self, representation, wall, context):
+    def _add_section_property_edit_handles(self, representation, wall, request):
         baseline = self.get_global_baseline(wall)
         section = self.get_resolved_section(wall)
         if baseline is None or section is None or not self._can_edit_uniform_section(wall):
@@ -1345,7 +1345,7 @@ class _Wall(ArchComponent.Component):
                     )
                 ),
             )
-            handle_point = _edit_handle_point(midpoint + lateral * coordinate, context)
+            handle_point = _edit_handle_point(midpoint + lateral * coordinate, request)
             representation.add_edit_handle(
                 ArchRepresentation.BIMEditHandle(
                     wall,
@@ -1372,7 +1372,7 @@ class _Wall(ArchComponent.Component):
             available=lambda source: self._can_edit_uniform_section(source),
         )
         handle_point = _edit_handle_point(
-            midpoint + lateral * ((section.y_min + section.y_max) * 0.5), context
+            midpoint + lateral * ((section.y_min + section.y_max) * 0.5), request
         )
         representation.add_edit_handle(
             ArchRepresentation.BIMEditHandle(
@@ -1388,12 +1388,12 @@ class _Wall(ArchComponent.Component):
             )
         )
 
-    def _get_width_face_preview_shape(self, wall, side, value, context):
+    def _get_width_face_preview_shape(self, wall, side, value, request):
         """Build a non-persistent plan face for one width-face edit."""
 
         import Part
 
-        if getattr(context, "purpose", None) == ArchRepresentation.RepresentationPurpose.MODEL:
+        if getattr(request, "purpose", None) == ArchRepresentation.RepresentationPurpose.MODEL:
             return Part.Shape()
 
         baseline = self.get_global_baseline(wall)
@@ -1429,16 +1429,16 @@ class _Wall(ArchComponent.Component):
             baseline.end_point + lateral * y_max,
             baseline.start_point + lateral * y_max,
         ]
-        target = getattr(context, "target_offset", None)
-        if target is not None and getattr(context, "reference_frame", None) is None:
+        target = getattr(request, "target_offset", None)
+        if target is not None and getattr(request, "reference_frame", None) is None:
             for point in points:
                 point.z = float(target)
         return Part.Face(Part.makePolygon(points + [points[0]]))
 
-    def _get_width_face_preview_state(self, wall, side, value, context):
+    def _get_width_face_preview_state(self, wall, side, value, request):
         """Return a proposed wall section and its hosted opening geometry."""
 
-        proposed_face = self._get_width_face_preview_shape(wall, side, value, context)
+        proposed_face = self._get_width_face_preview_shape(wall, side, value, request)
         if proposed_face is None or proposed_face.isNull():
             return None
         opening_representations = []
@@ -1453,14 +1453,14 @@ class _Wall(ArchComponent.Component):
             )
             if not callable(provider):
                 continue
-            opening_representation = provider(context, proposed_face)
+            opening_representation = provider(request, proposed_face)
             if opening_representation is None:
                 continue
             for void in opening_representation.cut_geometry:
                 proposed_face = proposed_face.cut(void)
             opening_representations.append(opening_representation)
 
-        wall_representation = ArchRepresentation.BIMRepresentation(source=wall, context=context)
+        wall_representation = ArchRepresentation.BIMRepresentation(source=wall, request=request)
         for index, face in enumerate(proposed_face.Faces, start=1):
             wall_representation.add_geometry(
                 "cut_geometry", face, "PlanCutFace", subelement=f"PlanFace{index}"
@@ -1480,7 +1480,7 @@ class _Wall(ArchComponent.Component):
         for opening_representation in opening_representations:
             display = ArchRepresentation.BIMRepresentation(
                 source=opening_representation.source,
-                context=context,
+                request=request,
             )
             for mapping in opening_representation.source_mappings:
                 if mapping.geometry not in opening_representation.projected_geometry:
@@ -1514,11 +1514,11 @@ class _Wall(ArchComponent.Component):
             and not ArchRepresentation.is_property_expression_driven(wall, "Offset")
         )
 
-    def _add_owned_path_edit_handles(self, representation, wall, context):
+    def _add_owned_path_edit_handles(self, representation, wall, request):
         from bimcontextual.editable_points import get_contextual_edit_points
 
         owner = getattr(wall, "Base", None)
-        points = get_contextual_edit_points(owner, context)
+        points = get_contextual_edit_points(owner, request)
         use_wall_controller = self._is_straight_owned_path(owner, points)
         path_axis = None
         if use_wall_controller:
@@ -1541,12 +1541,12 @@ class _Wall(ArchComponent.Component):
                     else "WallStretchEnd" if use_wall_controller and index == 1 else ""
                 ),
             )
-            handle_point = _edit_handle_point(point.point, context)
+            handle_point = _edit_handle_point(point.point, request)
             constraint = (
                 ArchRepresentation.AxisConstraint(handle_point, path_axis)
                 if path_axis is not None and path_axis.Length > 1e-9
                 else ArchRepresentation.WorkingPlaneConstraint(
-                    handle_point, _representation_plane_normal(context)
+                    handle_point, _representation_plane_normal(request)
                 )
             )
             representation.add_edit_handle(
@@ -1572,7 +1572,7 @@ class _Wall(ArchComponent.Component):
                 for point in points:
                     point.apply_value(point.get_value().add(delta))
 
-            handle_point = _edit_handle_point(midpoint, context)
+            handle_point = _edit_handle_point(midpoint, request)
             representation.add_edit_handle(
                 ArchRepresentation.BIMEditHandle(
                     wall,
@@ -1597,7 +1597,7 @@ class _Wall(ArchComponent.Component):
                     minimum=None,
                     glyph="Circle",
                     constraint=ArchRepresentation.WorkingPlaneConstraint(
-                        handle_point, _representation_plane_normal(context)
+                        handle_point, _representation_plane_normal(request)
                     ),
                 )
             )
@@ -1612,7 +1612,7 @@ class _Wall(ArchComponent.Component):
         except Exception:
             return False
 
-    def _add_native_path_edit_handles(self, representation, wall, context):
+    def _add_native_path_edit_handles(self, representation, wall, request):
         if getattr(wall, "Base", None) is not None or not self._can_edit_native_path(wall):
             return
         endpoints = self.calc_endpoints(wall)
@@ -1649,7 +1649,7 @@ class _Wall(ArchComponent.Component):
                 ).evaluate_wall_edit(source, "Start" if index == 0 else "End", value),
             )
 
-            handle_point = _edit_handle_point(endpoints[index], context)
+            handle_point = _edit_handle_point(endpoints[index], request)
             representation.add_edit_handle(
                 ArchRepresentation.BIMEditHandle(
                     wall,
@@ -1688,7 +1688,7 @@ class _Wall(ArchComponent.Component):
                 "ArchWallSemantic"
             ).evaluate_wall_edit(source, "Move", value),
         )
-        handle_point = _edit_handle_point(midpoint, context)
+        handle_point = _edit_handle_point(midpoint, request)
         representation.add_edit_handle(
             ArchRepresentation.BIMEditHandle(
                 wall,
@@ -1701,18 +1701,18 @@ class _Wall(ArchComponent.Component):
                 minimum=None,
                 glyph="Circle",
                 constraint=ArchRepresentation.WorkingPlaneConstraint(
-                    handle_point, _representation_plane_normal(context)
+                    handle_point, _representation_plane_normal(request)
                 ),
             )
         )
 
-    def _get_endpoint_preview_state(self, wall, endpoint_index, value, context):
+    def _get_endpoint_preview_state(self, wall, endpoint_index, value, request):
         """Return joined wall representations for one hypothetical endpoint."""
 
         mode = "Start" if endpoint_index == 0 else "End"
-        return self._get_wall_path_preview_state(wall, mode, value, context)
+        return self._get_wall_path_preview_state(wall, mode, value, request)
 
-    def _get_wall_path_preview_state(self, wall, mode, value, context):
+    def _get_wall_path_preview_state(self, wall, mode, value, request):
         """Return joined wall representations for a hypothetical path edit."""
 
         from ArchWallSemantic import evaluate_wall_edit
@@ -1727,20 +1727,20 @@ class _Wall(ArchComponent.Component):
         state = ArchRepresentation.BIMPreviewState(wall)
         for source in affected:
             preview = self._preview_representation_from_path(
-                source, paths[source], claims.get(source, {}), context
+                source, paths[source], claims.get(source, {}), request
             )
             if preview is not None:
                 state.add_representation(preview, replace_committed=True)
         return state if state.entries else None
 
     @staticmethod
-    def _preview_representation_from_path(wall, path, claims, context):
+    def _preview_representation_from_path(wall, path, claims, request):
         """Realize a planar wall preview from resolved path and trim claims."""
 
         import Part
 
         section = ArchWallRelation.get_join_section(wall)
-        if section is None or getattr(context, "reference_frame", None) is not None:
+        if section is None or getattr(request, "reference_frame", None) is not None:
             return None
         start = FreeCAD.Vector(path.start_point)
         end = FreeCAD.Vector(path.end_point)
@@ -1758,7 +1758,7 @@ class _Wall(ArchComponent.Component):
                     start = start.add(direction.multiply(claim.extension))
                 else:
                     end = end.add(direction.multiply(claim.extension))
-        target = getattr(context, "target_offset", None)
+        target = getattr(request, "target_offset", None)
         if target is not None:
             start.z = target
             end.z = target
@@ -1784,7 +1784,7 @@ class _Wall(ArchComponent.Component):
                 )
         cut_z = (target if target is not None else face.BoundBox.ZMin) + 5.0
         faces = ArchComponent.get_horizontal_slice_faces(solid, cut_z, translate_z=-5.0)
-        representation = ArchRepresentation.BIMRepresentation(source=wall, context=context)
+        representation = ArchRepresentation.BIMRepresentation(source=wall, request=request)
         for index, cut_face in enumerate(faces, start=1):
             representation.add_geometry(
                 "cut_geometry", cut_face, "PlanCutFace", subelement=f"PlanFace{index}"
@@ -1834,7 +1834,7 @@ class _Wall(ArchComponent.Component):
             "ends": ends,
         }
 
-    def _add_wall_joint_edit_handles(self, representation, wall, context):
+    def _add_wall_joint_edit_handles(self, representation, wall, request):
         for joint in ArchWallRelation.iter_wall_joints(wall):
             data = self._movable_wall_joint_data(joint)
             if data is None:
@@ -1879,7 +1879,7 @@ class _Wall(ArchComponent.Component):
             )
             handle_point = _edit_handle_point(
                 self._wall_joint_handle_point(representation, wall, data["solution"].intersection),
-                context,
+                request,
             )
             representation.add_edit_handle(
                 ArchRepresentation.BIMEditHandle(
@@ -1894,12 +1894,12 @@ class _Wall(ArchComponent.Component):
                     glyph="Diamond",
                     glyph_size=13,
                     constraint=ArchRepresentation.WorkingPlaneConstraint(
-                        handle_point, _representation_plane_normal(context)
+                        handle_point, _representation_plane_normal(request)
                     ),
                 )
             )
 
-    def _get_wall_joint_preview_state(self, joint, value, context, primary_source=None):
+    def _get_wall_joint_preview_state(self, joint, value, request, primary_source=None):
         """Return both joined walls for one hypothetical joint position."""
 
         import Part
@@ -1937,7 +1937,7 @@ class _Wall(ArchComponent.Component):
         state = ArchRepresentation.BIMPreviewState(primary_source or wall_a)
         for source in data["walls"]:
             preview = self._preview_representation_from_path(
-                source, paths[source], claims[source], context
+                source, paths[source], claims[source], request
             )
             if preview is not None:
                 state.add_representation(preview, replace_committed=True)
@@ -1991,18 +1991,18 @@ class _Wall(ArchComponent.Component):
             and not ArchRepresentation.is_property_expression_driven(wall, "Placement")
         )
 
-    def _getCutRepresentation(self, obj, context):
+    def _getCutRepresentation(self, obj, request):
         """Build cut faces on a horizontal or arbitrary representation frame."""
 
         shape = obj.Shape
-        if getattr(context, "reference_frame", None) is not None:
-            return ArchComponent.get_reference_slice_faces(shape, context)
+        if getattr(request, "reference_frame", None) is not None:
+            return ArchComponent.get_reference_slice_faces(shape, request)
         if shape and (not shape.isNull()) and shape.Solids:
             bb = shape.BoundBox
-            if bb.ZLength > 0.001 and context.cut_offset is not None:
-                cut_z = context.cut_offset
+            if bb.ZLength > 0.001 and request.cut_offset is not None:
+                cut_z = request.cut_offset
                 cut_z = max(bb.ZMin + 0.001, min(bb.ZMax - 0.001, cut_z))
-                target_z = context.target_offset if context.target_offset is not None else bb.ZMin
+                target_z = request.target_offset if request.target_offset is not None else bb.ZMin
                 faces = ArchComponent.get_horizontal_slice_faces(
                     shape, cut_z, translate_z=target_z - cut_z
                 )
@@ -2012,7 +2012,7 @@ class _Wall(ArchComponent.Component):
         faces = []
         if shape:
             bb = shape.BoundBox
-            target_z = context.target_offset if context.target_offset is not None else bb.ZMin
+            target_z = request.target_offset if request.target_offset is not None else bb.ZMin
             for f in shape.Faces:
                 if f.normalAt(0, 0).getAngle(FreeCAD.Vector(0, 0, -1)) < 0.01:
                     if abs(f.CenterOfMass.z - bb.ZMin) < 0.001:

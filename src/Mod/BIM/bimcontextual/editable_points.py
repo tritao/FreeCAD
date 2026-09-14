@@ -23,12 +23,12 @@ class ContextualEditPoint:
         return True if self.available is None else bool(self.available())
 
 
-def get_contextual_edit_points(owner, context=None):
+def get_contextual_edit_points(owner, request=None):
     """Return supported editable points without exposing owner details to BIM objects."""
 
     if owner is None:
         return ()
-    proxy_points = _get_proxy_points(owner, context)
+    proxy_points = _get_proxy_points(owner, request)
     if proxy_points is not None:
         return proxy_points
     if getattr(owner, "TypeId", "") == "Sketcher::SketchObject":
@@ -36,13 +36,13 @@ def get_contextual_edit_points(owner, context=None):
     return ()
 
 
-def _get_proxy_points(owner, context):
+def _get_proxy_points(owner, request):
     proxy = getattr(owner, "Proxy", None)
     get_points = getattr(proxy, "getContextualEditPoints", None)
     set_point = getattr(proxy, "setContextualEditPoint", None)
     if not callable(get_points) or not callable(set_point):
         return None
-    points = tuple(get_points(owner, context) or ())
+    points = tuple(get_points(owner, request) or ())
     return tuple(
         ContextualEditPoint(
             point=FreeCAD.Vector(point),

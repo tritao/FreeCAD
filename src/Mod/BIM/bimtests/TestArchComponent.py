@@ -38,19 +38,19 @@ from math import pi, cos, sin, radians
 
 class TestArchComponent(TestArchBase.TestArchBase):
 
-    def test_default_plan_context_uses_component_base(self):
+    def test_default_plan_request_uses_component_base(self):
         """Standalone components should derive the default plan cut from their base."""
 
         line = Draft.makeLine(App.Vector(0, 0, 0), App.Vector(3000, 0, 0))
         wall = Arch.makeWall(line, width=200, height=2500)
         self.document.recompute()
 
-        context = wall.Proxy.getDefaultPlanContext(wall)
+        request = wall.Proxy.getDefaultPlanRequest(wall)
 
-        self.assertEqual(context.purpose, ArchRepresentation.RepresentationPurpose.PLAN)
-        self.assertAlmostEqual(context.cut_offset, wall.Shape.BoundBox.ZMin + 1000.0, places=6)
-        self.assertAlmostEqual(context.target_offset, wall.Shape.BoundBox.ZMin, places=6)
-        self.assertIsNone(context.source)
+        self.assertEqual(request.purpose, ArchRepresentation.RepresentationPurpose.PLAN)
+        self.assertAlmostEqual(request.cut_offset, wall.Shape.BoundBox.ZMin + 1000.0, places=6)
+        self.assertAlmostEqual(request.target_offset, wall.Shape.BoundBox.ZMin, places=6)
+        self.assertIsNone(request.source)
 
     def test_horizontal_slice_faces(self):
         """Generic footprint slicing should return closed planar cut faces."""

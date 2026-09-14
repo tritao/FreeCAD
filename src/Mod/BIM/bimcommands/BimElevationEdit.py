@@ -6,7 +6,7 @@ import FreeCAD
 import FreeCADGui
 
 import ArchRepresentation
-from bimcommands.BimSectionEdit import _selected_context_source
+from bimcommands.BimSectionEdit import _selected_request_source
 
 
 class BIM_ElevationEdit:
@@ -25,7 +25,7 @@ class BIM_ElevationEdit:
     def IsActive(self):
         return (
             FreeCAD.ActiveDocument is not None
-            and _selected_context_source(
+            and _selected_request_source(
                 ArchRepresentation.RepresentationPurpose.ELEVATION
             )
             is not None
@@ -39,15 +39,15 @@ class BIM_ElevationEdit:
         if session is not None:
             session.close()
             return
-        source = _selected_context_source(
+        source = _selected_request_source(
             ArchRepresentation.RepresentationPurpose.ELEVATION
         )
         if source is None:
             return
         start_session(
-            context=source.Proxy.getRepresentationContext(source),
+            request=source.Proxy.getRepresentationRequest(source),
             sources=tuple(getattr(source, "Objects", ()) or ()),
-            orient_to_context=True,
+            orient_to_request=True,
             providers=architectural_contextual_providers(),
         )
 

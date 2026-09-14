@@ -278,8 +278,8 @@ def update_plan_region_preview(session, point, info):
 def _build_plan_region_preview_representation(session, source, segments):
     """Build renderer-neutral boundary and fill geometry for a proposed region."""
 
-    context = session.representation_context.context
-    representation = ArchRepresentation.BIMRepresentation(source=source, context=context)
+    request = session.representation_request.request
+    representation = ArchRepresentation.BIMRepresentation(source=source, request=request)
     for index, (start, end, closure) in enumerate(segments, start=1):
         representation.add_geometry(
             "projected_geometry",
@@ -454,7 +454,7 @@ def _build_space_separator_preview_representation(session, source, start, end):
 
     representation = ArchRepresentation.BIMRepresentation(
         source=source,
-        context=session.representation_context.context,
+        request=session.representation_request.request,
     )
     representation.add_geometry(
         "projected_geometry",

@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: LGPL-2.1-or-later
 
-"""Architectural representation-context providers for BIM Plan Edit."""
+"""Architectural representation-request providers for BIM Plan Edit."""
 
 import ArchComponent
 import ArchRepresentation
@@ -16,10 +16,10 @@ def _quantity_value(value, default=0.0):
             return float(default)
 
 
-def _proxy_context(source):
+def _proxy_representation_request(source):
     try:
         proxy = getattr(source, "Proxy", None)
-        provider = getattr(proxy, "getRepresentationContext", None)
+        provider = getattr(proxy, "getRepresentationRequest", None)
     except (AttributeError, ReferenceError, RuntimeError):
         return None
     if not callable(provider):
@@ -43,7 +43,7 @@ def _is_storey(source):
     return getattr(source, "IfcType", "") == "Building Storey"
 
 
-def context_from_storey(storey):
+def representation_request_from_storey(storey):
     elevation = 0.0
     cut_height = ArchComponent.DEFAULT_PLAN_CUT_HEIGHT
     if storey is not None:
@@ -53,7 +53,7 @@ def context_from_storey(storey):
         configured_height = _quantity_value(getattr(storey, "PlanCutHeight", 0.0))
         if configured_height > 0.0:
             cut_height = configured_height
-    return ArchRepresentation.RepresentationContext(
+    return ArchRepresentation.RepresentationRequest(
         purpose=ArchRepresentation.RepresentationPurpose.PLAN,
         cut_offset=elevation + cut_height,
         target_offset=elevation,
@@ -61,22 +61,22 @@ def context_from_storey(storey):
     )
 
 
-def context_from_source(source):
-    provided = _proxy_context(source)
+def representation_request_from_source(source):
+    provided = _proxy_representation_request(source)
     if provided is not None:
         return provided
     if _is_storey(source) or source is None:
-        return context_from_storey(source)
+        return representation_request_from_storey(source)
     return None
 
 
-class PlanRepresentationContextAPI:
-    """Resolve and activate one BIM representation context for the session."""
+class PlanRepresentationRequestAPI:
+    """Resolve and activate one BIM representation request for the session."""
 
     def __init__(self, session):
         self._session = session
         self.source = None
-        self.context = context_from_storey(None)
+        self.request = representation_request_from_storey(None)
 
     def find_initial_source(self):
         try:
@@ -86,25 +86,25 @@ class PlanRepresentationContextAPI:
         except Exception:
             selection = ()
         for obj in selection:
-            if context_from_source(obj) is not None and not _is_storey(obj):
+            if representation_request_from_source(obj) is not None and not _is_storey(obj):
                 return obj
         return self._session.active_storey
 
     def set_source(self, source, *, refresh=True, fit=False):
-        context = context_from_source(source)
-        if context is None:
-            raise ValueError("Object does not provide a BIM representation context")
+        request = representation_request_from_source(source)
+        if request is None:
+            raise ValueError("Object does not provide a BIM representation request")
         self.source = source
-        self.context = context
+        self.request = request
         if _is_storey(source):
             self._session.active_storey = source
         if not refresh:
-            return context
+            return request
         self._session.overlays.geometry.invalidate_plan_overlay_geometry_cache()
-        self._session.viewport.apply_representation_context(context, fit=fit)
+        self._session.viewport.apply_representation_request(request, fit=fit)
         self._session.visibility.apply_storey_visibility()
         self._session.contextual_rendering.refresh_all()
-        return context
+        return request
 
     def includes_object(self, obj):
         source_objects = getattr(self.source, "Objects", None)
@@ -116,19 +116,19 @@ class PlanRepresentationContextAPI:
 
     @property
     def purpose(self):
-        return self.context.purpose
+        return self.request.purpose
 
     def is_plan(self):
         return self.purpose == ArchRepresentation.RepresentationPurpose.PLAN
 
     def to_local(self, point):
-        frame = getattr(self.context, "reference_frame", None)
+        frame = getattr(self.request, "reference_frame", None)
         if frame is None:
             return FreeCAD.Vector(point)
         return frame.inverse().multVec(FreeCAD.Vector(point))
 
     def to_global(self, point):
-        frame = getattr(self.context, "reference_frame", None)
+        frame = getattr(self.request, "reference_frame", None)
         if frame is None:
             return FreeCAD.Vector(point)
         return frame.multVec(FreeCAD.Vector(point))
@@ -136,13 +136,13 @@ class PlanRepresentationContextAPI:
     def project_to_plane(self, point, offset=None):
         local = self.to_local(point)
         if offset is None:
-            offset = getattr(self.context, "target_offset", None)
+            offset = getattr(self.request, "target_offset", None)
         local.z = float(offset or 0.0)
         return self.to_global(local)
 
     def refresh(self):
         if self.source is not None:
-            updated = context_from_source(self.source)
+            updated = representation_request_from_source(self.source)
             if updated is not None:
-                self.context = updated
-        return self.context
+                self.request = updated
+        return self.request

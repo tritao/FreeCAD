@@ -57,7 +57,7 @@ class PlanContextualEditingAPI:
 
     def _new_controller(self):
         return ContextualEditController(
-            self.session.view, self.session.representation_context,
+            self.session.view, self.session.representation_request,
             self.session.contextual_rendering, self.input_adapter,
             refresh_callback=self.session.contextual_rendering.refresh_edit_dependencies,
             refresh_failure_callback=self.session.contextual_rendering.refresh_object,

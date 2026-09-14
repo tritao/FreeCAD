@@ -103,8 +103,8 @@ class PlanViewportAPI:
     def apply_plan_view(self, fit=True):
         return apply_plan_view(self.session, fit=fit)
 
-    def apply_representation_context(self, context, fit=True):
-        return apply_representation_context(self.session, context, fit=fit)
+    def apply_representation_request(self, request, fit=True):
+        return apply_representation_request(self.session, request, fit=fit)
 
     def restore_state(self):
         return restore_state(self.session)
@@ -529,8 +529,8 @@ def apply_plan_view(session, fit=True):
 
     with session.performance.plan_perf_trace_span("apply_plan_view_working_plane"):
         wp = WorkingPlane.get_working_plane(update=False)
-        active_context = getattr(getattr(session, "representation_context", None), "context", None)
-        target_offset = getattr(active_context, "target_offset", None)
+        active_request = getattr(getattr(session, "representation_request", None), "request", None)
+        target_offset = getattr(active_request, "target_offset", None)
         if target_offset is not None:
             offset = float(target_offset)
         elif session.active_storey:
@@ -558,10 +558,10 @@ def apply_plan_view(session, fit=True):
                 session.view = None
 
 
-def apply_representation_context(session, context, fit=True):
-    """Apply the camera and Draft plane described by a BIM context."""
+def apply_representation_request(session, request, fit=True):
+    """Apply the camera and Draft plane described by a BIM request."""
 
-    frame = getattr(context, "reference_frame", None)
+    frame = getattr(request, "reference_frame", None)
     if frame is None:
         return apply_plan_view(session, fit=fit)
 
@@ -589,7 +589,7 @@ def apply_representation_context(session, context, fit=True):
     _update_working_plane(wp)
     session.viewport_state.interaction_plane = WorkingPlane.PlaneBase()
     session.viewport_state.interaction_plane.align_to_placement(frame)
-    source = getattr(context, "source", None)
+    source = getattr(request, "source", None)
     if source is not None:
         session.viewport.set_active_object(source)
     apply_plan_navigation_profile(session, session.viewport_state.plan_view_locked_actions)

@@ -257,12 +257,12 @@ class TestArchWall(TestArchBase.TestArchBase):
         wall = Arch.makeWall(line, width=200, height=2500)
         self.document.recompute()
 
-        context = ArchRepresentation.RepresentationContext(
+        request = ArchRepresentation.RepresentationRequest(
             purpose=ArchRepresentation.RepresentationPurpose.PLAN,
             cut_offset=1000.0,
             target_offset=0.0,
         )
-        representation = ArchRepresentation.representation_for(wall, context)
+        representation = ArchRepresentation.representation_for(wall, request)
 
         self.assertIs(representation.source, wall)
         self.assertGreater(len(representation.cut_geometry), 0)
@@ -282,7 +282,7 @@ class TestArchWall(TestArchBase.TestArchBase):
         with self.assertRaises(ArchRepresentation.RepresentationUnavailable):
             ArchRepresentation.representation_for(
                 wall,
-                ArchRepresentation.RepresentationContext(
+                ArchRepresentation.RepresentationRequest(
                     purpose=ArchRepresentation.RepresentationPurpose.MODEL
                 ),
             )
@@ -328,19 +328,19 @@ class TestArchWall(TestArchBase.TestArchBase):
             places=3,
             msg="Openings above the cut height must not remove area from the wall footprint.",
         )
-        high_cut_context = ArchRepresentation.RepresentationContext(
+        high_cut_request = ArchRepresentation.RepresentationRequest(
             purpose=ArchRepresentation.RepresentationPurpose.PLAN,
             cut_offset=2200.0,
             target_offset=wall.Shape.BoundBox.ZMin,
         )
-        high_cut_faces = wall.Proxy.getPlanRepresentation(wall, high_cut_context)
+        high_cut_faces = wall.Proxy.getPlanRepresentation(wall, high_cut_request)
         high_cut_area = sum(face.Area for face in high_cut_faces)
         expected_high_cut_area = (wall.Length.Value - high_window_width) * wall.Width.Value
         self.assertAlmostEqual(
             high_cut_area,
             expected_high_cut_area,
             places=3,
-            msg="Explicit plan contexts should drive wall plan representation height.",
+            msg="Explicit plan requests should drive wall plan representation height.",
         )
 
     def test_wall_footprint_uses_parent_storey_plan_cut_height(self):
@@ -374,15 +374,15 @@ class TestArchWall(TestArchBase.TestArchBase):
             height=700.0,
         )
 
-        context = wall.Proxy.getDefaultPlanContext(wall)
+        request = wall.Proxy.getDefaultPlanRequest(wall)
         self.assertAlmostEqual(
-            context.cut_offset,
+            request.cut_offset,
             2700.0,
             places=6,
             msg="Contained walls should derive their plan cut from the parent storey level.",
         )
         self.assertIs(
-            context.source,
+            request.source,
             storey,
             "The default wall plan context should record the parent storey source.",
         )

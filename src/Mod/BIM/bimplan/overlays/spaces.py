@@ -181,7 +181,7 @@ def sync_space_region_pick_overlays(session):
         hovered = candidate is hovered_candidate
         representation = ArchRepresentation.BIMRepresentation(
             source=source,
-            context=session.representation_context.context,
+            request=session.representation_request.request,
         )
         face = candidate.get("face") if isinstance(candidate, dict) else None
         if face is not None and not face.isNull():

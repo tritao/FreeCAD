@@ -14,7 +14,7 @@ import Part
 from pivy import coin
 from ArchRepresentation import (
     BIMEditRay,
-    RepresentationContext,
+    RepresentationRequest,
     RepresentationPurpose,
     preview_state_from_representation,
 )
@@ -64,17 +64,15 @@ class _HostedOpeningProxy:
     def __init__(self, obj):
         self.Object = obj
 
-    def get_plan_move_context(self):
+    def get_hosted_opening_move_context(self):
         return {"opening_half_width_u": 50.0}
 
-    def get_plan_center_point(self):
+    def get_hosted_opening_center_point(self):
         return FreeCAD.Vector(self.Object.Placement.Base)
 
-    def move_along_host(self, point):
-        placement = FreeCAD.Placement(self.Object.Placement)
-        placement.Base = FreeCAD.Vector(point)
-        self.Object.Placement = placement
-        return True
+    def project_hosted_opening_move_point(self, point, anchor="center"):
+        del anchor
+        return FreeCAD.Vector(point)
 
 
 class TestBimPlanEditSessionGui(TestArchBaseGui):
@@ -97,20 +95,20 @@ class TestBimPlanEditSessionGui(TestArchBaseGui):
             FreeCAD.Vector(100, 200, 300),
             FreeCAD.Rotation(FreeCAD.Vector(1, 0, 0), 90),
         )
-        context = RepresentationContext(
+        request = RepresentationRequest(
             purpose=RepresentationPurpose.SECTION, reference_frame=frame
         )
-        host = ContextualInteractionHost(context)
+        host = ContextualInteractionHost(request)
         plane = host.get_interaction_plane()
         projected = plane.project_point(FreeCAD.Vector(125, 900, 340))
         local = frame.inverse().multVec(projected)
         self.assertAlmostEqual(0.0, local.z, places=7)
 
     def test_contextual_capability_matrix_is_explicit(self):
-        model = RepresentationContext(purpose=RepresentationPurpose.MODEL)
-        plan = RepresentationContext(purpose=RepresentationPurpose.PLAN)
-        section = RepresentationContext(purpose=RepresentationPurpose.SECTION)
-        elevation = RepresentationContext(purpose=RepresentationPurpose.ELEVATION)
+        model = RepresentationRequest(purpose=RepresentationPurpose.MODEL)
+        plan = RepresentationRequest(purpose=RepresentationPurpose.PLAN)
+        section = RepresentationRequest(purpose=RepresentationPurpose.SECTION)
+        elevation = RepresentationRequest(purpose=RepresentationPurpose.ELEVATION)
         self.assertTrue(context_policy.supports(model, "create-wall"))
         self.assertTrue(context_policy.supports(plan, "create-wall"))
         self.assertFalse(context_policy.supports(section, "create-wall"))
@@ -141,7 +139,7 @@ class TestBimPlanEditSessionGui(TestArchBaseGui):
 
         return SimpleNamespace(
             contextual_rendering=renderer,
-            representation_context=SimpleNamespace(context=RepresentationContext()),
+            representation_request=SimpleNamespace(request=RepresentationRequest()),
             wall_edit=SimpleNamespace(get_preview_footprint=footprint),
         )
 
@@ -208,9 +206,9 @@ class TestBimPlanEditSessionGui(TestArchBaseGui):
             auto_group=False,
         )
         self.document.recompute()
-        context = RepresentationContext("Plan", cut_offset=1000, target_offset=0)
+        request = RepresentationRequest("Plan", cut_offset=1000, target_offset=0)
         session = SimpleNamespace(
-            representation_context=SimpleNamespace(context=context),
+            representation_request=SimpleNamespace(request=request),
         )
         points = _get_window_preview_points(
             session,
@@ -344,7 +342,7 @@ class TestBimPlanEditSessionGui(TestArchBaseGui):
         )
 
         session = SimpleNamespace(
-            representation_context=SimpleNamespace(context=RepresentationContext("Plan")),
+            representation_request=SimpleNamespace(request=RepresentationRequest("Plan")),
         )
         points = (
             FreeCAD.Vector(0, 0, 0),
@@ -756,7 +754,7 @@ class TestBimPlanEditSessionGui(TestArchBaseGui):
         view = FreeCADGui.ActiveDocument.ActiveView
         representation = wall.Proxy.getRepresentation(
             wall,
-            RepresentationContext(purpose="Plan", cut_offset=1000, target_offset=0),
+            RepresentationRequest(purpose="Plan", cut_offset=1000, target_offset=0),
         )
         renderer = ContextualInteractionRenderer(view)
         try:
@@ -885,10 +883,10 @@ class TestBimPlanEditSessionGui(TestArchBaseGui):
                 RepresentationPurpose.SECTION,
                 RepresentationPurpose.ELEVATION,
             ):
-                context = RepresentationContext(purpose=purpose)
+                request = RepresentationRequest(purpose=purpose)
                 session = ContextualSession(
                     view,
-                    context=context,
+                    request=request,
                     sources=(wall,),
                     providers=architectural_contextual_providers(),
                 )
@@ -946,7 +944,7 @@ class TestBimPlanEditSessionGui(TestArchBaseGui):
         for purpose in RepresentationPurpose.MODEL, RepresentationPurpose.PLAN:
             session = ContextualSession(
                 view,
-                context=RepresentationContext(purpose=purpose),
+                request=RepresentationRequest(purpose=purpose),
                 sources=(),
                 providers=architectural_contextual_providers(),
             )
@@ -969,7 +967,7 @@ class TestBimPlanEditSessionGui(TestArchBaseGui):
         for purpose in RepresentationPurpose.SECTION, RepresentationPurpose.ELEVATION:
             session = ContextualSession(
                 view,
-                context=RepresentationContext(purpose=purpose),
+                request=RepresentationRequest(purpose=purpose),
                 sources=(),
                 providers=architectural_contextual_providers(),
             )
@@ -1117,15 +1115,15 @@ class TestBimPlanEditSessionGui(TestArchBaseGui):
         )
         session = ContextualSession(
             view,
-            context=section.Proxy.getRepresentationContext(section),
+            request=section.Proxy.getRepresentationRequest(section),
             sources=(wall,),
-            orient_to_context=True,
+            orient_to_request=True,
         )
         try:
             self.pump_gui_events(20)
             self.assertIs(
                 RepresentationPurpose.SECTION,
-                session.context.purpose,
+                session.request.purpose,
             )
             height = next(
                 item
@@ -1153,7 +1151,7 @@ class TestBimPlanEditSessionGui(TestArchBaseGui):
             FreeCAD.Vector(1500, 0, 0),
             FreeCAD.Rotation(FreeCAD.Vector(0, 1, 0), 90),
         )
-        context = RepresentationContext(
+        request = RepresentationRequest(
             purpose=RepresentationPurpose.ELEVATION,
             reference_frame=frame,
             projection_range=(0.0, 5000.0),
@@ -1161,13 +1159,13 @@ class TestBimPlanEditSessionGui(TestArchBaseGui):
         self.document.recompute()
         session = ContextualSession(
             FreeCADGui.ActiveDocument.ActiveView,
-            context=context,
+            request=request,
             sources=(wall,),
-            orient_to_context=True,
+            orient_to_request=True,
         )
         try:
             self.pump_gui_events(20)
-            self.assertIs(RepresentationPurpose.ELEVATION, session.context.purpose)
+            self.assertIs(RepresentationPurpose.ELEVATION, session.request.purpose)
             height = next(
                 item
                 for item in session.renderer.edit_handles_for(wall)
@@ -1576,7 +1574,7 @@ class TestBimPlanEditSessionGui(TestArchBaseGui):
         Arch.makeWallJoint(wall, joined, "Miter")
         self.document.recompute()
         capabilities = wall.Proxy.getEditCapabilities(
-            wall, RepresentationContext(purpose=RepresentationPurpose.MODEL)
+            wall, RepresentationRequest(purpose=RepresentationPurpose.MODEL)
         )
         operation = next(
             handle.operation
@@ -1643,7 +1641,7 @@ class TestBimPlanEditSessionGui(TestArchBaseGui):
             self.assertTrue(joined.Proxy._can_edit_native_path(joined))
             self.assertIsNotNone(solution.trim_for_wall(wall))
             self.assertIsNotNone(solution.trim_for_wall(joined))
-            direct = wall.Proxy.getRepresentation(wall, session.representation_context.context)
+            direct = wall.Proxy.getRepresentation(wall, session.representation_request.request)
             self.assertIn("WallJointMove", [handle.role for handle in direct.edit_handles])
             session.selection.state.set_selected_plan_target("wall", wall)
             session.contextual_rendering.refresh_object(wall)

@@ -55,7 +55,7 @@ from bimplan.overlays.runtime import PlanOverlaysAPI
 from bimplan.ui.status_text import PlanStatusTextAPI
 from bimplan.ui.controls import PlanEditControlsWidget
 from bimplan.contextual_rendering import PlanContextualRenderingAPI
-from bimplan.representation_context import PlanRepresentationContextAPI
+from bimplan.representation_request import PlanRepresentationRequestAPI
 from bimplan.contextual_editing import PlanContextualEditingAPI
 
 QT_TRANSLATE_NOOP = FreeCAD.Qt.QT_TRANSLATE_NOOP
@@ -194,7 +194,7 @@ class PlanEditSession:
         self.performance = PlanPerformanceAPI(self)
         self.document_visuals = PlanDocumentVisualsAPI(self)
         self.contextual_rendering = PlanContextualRenderingAPI(self)
-        self.representation_context = PlanRepresentationContextAPI(self)
+        self.representation_request = PlanRepresentationRequestAPI(self)
         self.contextual_editing = PlanContextualEditingAPI(self)
         self.status_text = PlanStatusTextAPI(self)
         self.task_panels = plan_task_panel.PlanTaskPanelsAPI(self)
@@ -306,15 +306,15 @@ class PlanEditSession:
                 self.performance.plan_perf_set_fields(
                     active_storey=self.performance.plan_perf_describe_object(self.active_storey)
                 )
-            self.representation_context.set_source(
-                self.representation_context.find_initial_source(), refresh=False
+            self.representation_request.set_source(
+                self.representation_request.find_initial_source(), refresh=False
             )
             with self.performance.plan_perf_trace_span("capture_object_view_state"):
                 self.visibility.capture_object_view_state()
             self.visibility.begin_view_context()
             with self.performance.plan_perf_trace_span("apply_plan_view"):
-                self.viewport.apply_representation_context(
-                    self.representation_context.context, fit=False
+                self.viewport.apply_representation_request(
+                    self.representation_request.request, fit=False
                 )
             with self.performance.plan_perf_trace_span("apply_plan_snap_profile"):
                 self.snap.apply_plan_snap_profile()

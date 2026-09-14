@@ -132,7 +132,7 @@ class PlanSnapAPI:
         return renderer.query_snap(
             point,
             tolerance,
-            context=self.session.representation_context.context,
+            request=self.session.representation_request.request,
         )
 
     def set_active_draft_command(self):

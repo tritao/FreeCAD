@@ -465,10 +465,10 @@ def _get_opening_plan_proxy(context, window, *attrs):
 
 
 def _get_window_center(context, window):
-    proxy = _get_opening_plan_proxy(context, window, "get_plan_center_point")
+    proxy = _get_opening_plan_proxy(context, window, "get_hosted_opening_center_point")
     if proxy is not None:
         try:
-            center = proxy.get_plan_center_point()
+            center = proxy.get_hosted_opening_center_point()
             if center is not None:
                 return FreeCAD.Vector(center)
         except Exception:
@@ -525,11 +525,11 @@ def _get_wall_axis_context(wall):
 
 
 def _get_window_move_context(context, window):
-    proxy = _get_opening_plan_proxy(context, window, "get_plan_move_context")
+    proxy = _get_opening_plan_proxy(context, window, "get_hosted_opening_move_context")
     if proxy is None:
         return {}
     try:
-        return dict(proxy.get_plan_move_context() or {})
+        return dict(proxy.get_hosted_opening_move_context() or {})
     except Exception:
         return {}
 
@@ -712,16 +712,15 @@ def _center_window_on_host(context, commands, window, host):
     wall_context = _get_wall_axis_context(host)
     if wall_context is None:
         return False
-    proxy = _get_opening_plan_proxy(context, window, "move_along_host")
-    if proxy is None:
-        return False
     current = _get_window_center(context, window)
     target = wall_context["start"].add(
         FreeCAD.Vector(wall_context["axis"]).multiply(wall_context["length"] * 0.5)
     )
     target.z = current.z if current is not None else wall_context["base_z"]
+    import ArchOpeningSemantic
+
     try:
-        moved = bool(proxy.move_along_host(target))
+        moved = bool(ArchOpeningSemantic.move_hosted_opening(window, target))
     except Exception:
         moved = False
     if not moved:

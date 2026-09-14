@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: LGPL-2.1-or-later
 
-"""Shared contextual editing architecture for BIM representation contexts."""
+"""Shared contextual editing architecture for BIM representation requests."""
 
 from .actions import (
     ContextualActionSpec, ContextualInspectorSection, ContextualProvider,

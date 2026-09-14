@@ -55,8 +55,8 @@ class TestArchSectionPlane(TestArchBase.TestArchBase):
             section_plane.Label, "TestSectionPlane", "Section plane label is incorrect."
         )
 
-    def testRepresentationContextUsesArbitrarySectionFrame(self):
-        """Section planes expose the canonical renderer-neutral context."""
+    def testRepresentationRequestUsesArbitrarySectionFrame(self):
+        """Section planes expose the canonical renderer-neutral request."""
 
         section_plane = Arch.makeSectionPlane(name="RepresentationSection")
         section_plane.Placement = App.Placement(
@@ -65,15 +65,15 @@ class TestArchSectionPlane(TestArchBase.TestArchBase):
         section_plane.Depth = 2500
         self.document.recompute()
 
-        context = section_plane.Proxy.getRepresentationContext(section_plane)
+        request = section_plane.Proxy.getRepresentationRequest(section_plane)
 
-        self.assertIsInstance(context, ArchRepresentation.RepresentationContext)
-        self.assertIs(context.purpose, ArchRepresentation.RepresentationPurpose.SECTION)
-        self.assertEqual(context.reference_frame, section_plane.Placement)
-        self.assertEqual(context.projection_range, (0.0, 2500.0))
+        self.assertIsInstance(request, ArchRepresentation.RepresentationRequest)
+        self.assertIs(request.purpose, ArchRepresentation.RepresentationPurpose.SECTION)
+        self.assertEqual(request.reference_frame, section_plane.Placement)
+        self.assertEqual(request.projection_range, (0.0, 2500.0))
 
         section_plane.Purpose = "Elevation"
-        elevation = section_plane.Proxy.getRepresentationContext(section_plane)
+        elevation = section_plane.Proxy.getRepresentationRequest(section_plane)
         self.assertIs(
             elevation.purpose,
             ArchRepresentation.RepresentationPurpose.ELEVATION,

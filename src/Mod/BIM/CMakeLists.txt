@@ -27,6 +27,7 @@ SET(Arch_SRCS
     ArchWall.py
     ArchWallConstruction.py
     ArchOpeningConstruction.py
+    ArchOpeningSemantic.py
     ArchContextualCreation.py
     ArchWallEndpoint.py
     ArchWallEndCondition.py
@@ -106,7 +107,7 @@ SET(bimplan_SRCS
     bimplan/overlays/symbols.py
     bimplan/overlays/walls.py
     bimplan/performance.py
-    bimplan/representation_context.py
+    bimplan/representation_request.py
     bimplan/picking/__init__.py
     bimplan/picking/area.py
     bimplan/picking/coordinator.py

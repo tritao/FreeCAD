@@ -18,12 +18,12 @@ def _selected_section_plane():
     return selected[0]
 
 
-def _selected_context_source(purpose=None):
+def _selected_request_source(purpose=None):
     source = _selected_section_plane()
     if source is None or purpose is None:
         return source
-    context = source.Proxy.getRepresentationContext(source)
-    return source if context.purpose == purpose else None
+    request = source.Proxy.getRepresentationRequest(source)
+    return source if request.purpose == purpose else None
 
 
 class BIM_SectionEdit:
@@ -37,7 +37,7 @@ class BIM_SectionEdit:
         }
 
     def IsActive(self):
-        return FreeCAD.ActiveDocument is not None and _selected_context_source(
+        return FreeCAD.ActiveDocument is not None and _selected_request_source(
             ArchRepresentation.RepresentationPurpose.SECTION
         ) is not None
 
@@ -49,16 +49,16 @@ class BIM_SectionEdit:
         if session is not None:
             session.close()
             return
-        section = _selected_context_source(
+        section = _selected_request_source(
             ArchRepresentation.RepresentationPurpose.SECTION
         )
         if section is None:
             return
-        context = section.Proxy.getRepresentationContext(section)
+        request = section.Proxy.getRepresentationRequest(section)
         start_session(
-            context=context,
+            request=request,
             sources=tuple(getattr(section, "Objects", ()) or ()),
-            orient_to_context=True,
+            orient_to_request=True,
             providers=architectural_contextual_providers(),
         )
 

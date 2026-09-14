@@ -3,7 +3,7 @@
 """Renderer-neutral contextual BIM representations.
 
 The classes in this module describe *what* an architectural object should
-provide for a context.  They intentionally do not know about Coin, Qt or a
+provide for a request.  They intentionally do not know about Coin, Qt or a
 document view.  GUI and documentation consumers can therefore request the
 same semantic geometry without creating converted document objects.
 """
@@ -15,7 +15,7 @@ import FreeCAD
 
 
 class RepresentationUnavailable(LookupError):
-    """Raised when a provider cannot represent an object in a context."""
+    """Raised when a provider cannot represent an object in a request."""
 
 
 class RepresentationPurpose(Enum):
@@ -36,12 +36,12 @@ class BIMPreviewStyle(Enum):
     INVALID = "Invalid"
 
 
-class RepresentationContext:
+class RepresentationRequest:
     """GUI-independent inputs used to derive a BIM representation.
 
     ``reference_frame`` is an arbitrary object supplied by the caller (in
     FreeCAD this is normally an ``App.Placement``).  Distances are measured
-    on that frame's local Z axis.  The context contains no renderer state and
+    on that frame's local Z axis.  The request contains no renderer state and
     is safe to pass to headless representation providers.
     """
 
@@ -164,7 +164,7 @@ def preview_state_from_representation(
     return state
 
 
-def expand_preview_dependents(state, context):
+def expand_preview_dependents(state, request):
     """Ask document objects to contribute representations dependent on a state."""
 
     if state is None or state.primary_source is None:
@@ -183,7 +183,7 @@ def expand_preview_dependents(state, context):
         )
         if not callable(provider):
             continue
-        representation = provider(obj, state, context)
+        representation = provider(obj, state, request)
         if representation is not None:
             state.add_representation(representation)
             existing.add(obj)
@@ -267,7 +267,7 @@ class BIMEditHandle:
 
     ``constraint`` defines the geometric manifold that pointer input must
     follow.  ``interaction`` remains the compatibility mode for callers that
-    still project pointer positions through a representation context.
+    still project pointer positions through a representation request.
     """
 
     def __init__(
@@ -354,18 +354,18 @@ class BIMEditOperation:
         self._preview_label = preview_label
         self._validator = validator
 
-    def get_preview(self, source, value, context):
+    def get_preview(self, source, value, request):
         if not callable(self._preview):
             return None
-        state = self._preview(source, value, context)
+        state = self._preview(source, value, request)
         if state is not None and not isinstance(state, BIMPreviewState):
             raise TypeError("preview must return BIMPreviewState")
         return state
 
-    def get_preview_label(self, source, value, context):
+    def get_preview_label(self, source, value, request):
         if not callable(self._preview_label):
             return ""
-        return str(self._preview_label(source, value, context) or "")
+        return str(self._preview_label(source, value, request) or "")
 
     def is_available(self, source):
         return True if self._available is None else bool(self._available(source))
@@ -475,14 +475,14 @@ class BIMSnapTarget:
         source,
         subelement=None,
         role=None,
-        context=None,
+        request=None,
         related_sources=(),
     ):
         self.geometry = geometry
         self.source = source
         self.subelement = subelement
         self.role = role
-        self.context = context
+        self.request = request
         self.related_sources = tuple(related_sources or ())
 
     @property
@@ -542,9 +542,9 @@ class BIMRepresentation:
 
     _COLLECTIONS = ("cut_geometry", "projected_geometry", "snap_geometry")
 
-    def __init__(self, source=None, context=None):
+    def __init__(self, source=None, request=None):
         self.source = source
-        self.context = context
+        self.request = request
         self.cut_geometry = []
         self.projected_geometry = []
         self.snap_geometry = []
@@ -588,22 +588,22 @@ class BIMRepresentation:
                     source=mapping.source,
                     subelement=mapping.subelement,
                     role=mapping.role,
-                    context=self.context,
+                    request=self.request,
                     related_sources=mapping.related_sources,
                 )
 
 
 class BIMEditCapabilities:
-    """Semantic edits offered by one object in a representation context.
+    """Semantic edits offered by one object in a representation request.
 
     Unlike :class:`BIMRepresentation`, this value carries no replacement or
     picking geometry. Viewers that already render the source object can use it
     to display contextual handles without constructing a second representation.
     """
 
-    def __init__(self, source=None, context=None):
+    def __init__(self, source=None, request=None):
         self.source = source
-        self.context = context
+        self.request = request
         self.edit_handles = []
 
     def add_edit_handle(self, handle):
@@ -613,27 +613,27 @@ class BIMEditCapabilities:
         return handle
 
 
-def project_to_representation_plane(point, context):
-    """Project *point* onto the target plane of a representation context."""
+def project_to_representation_plane(point, request):
+    """Project *point* onto the target plane of a representation request."""
 
-    frame = getattr(context, "reference_frame", None)
+    frame = getattr(request, "reference_frame", None)
     if frame is None:
-        target_offset = getattr(context, "target_offset", None)
+        target_offset = getattr(request, "target_offset", None)
         if target_offset is None:
             return FreeCAD.Vector(point)
         return FreeCAD.Vector(point.x, point.y, target_offset)
     local_point = frame.inverse().multVec(FreeCAD.Vector(point))
-    target_offset = getattr(context, "target_offset", None)
+    target_offset = getattr(request, "target_offset", None)
     if target_offset is not None:
         local_point.z = target_offset
     return frame.multVec(local_point)
 
 
-def project_direction_to_representation_plane(direction, context):
-    """Return a normalized global direction within the context output plane."""
+def project_direction_to_representation_plane(direction, request):
+    """Return a normalized global direction within the request output plane."""
 
     direction = FreeCAD.Vector(direction)
-    frame = getattr(context, "reference_frame", None)
+    frame = getattr(request, "reference_frame", None)
     if frame is not None:
         normal = frame.Rotation.multVec(FreeCAD.Vector(0, 0, 1))
         direction = direction - normal * direction.dot(normal)
@@ -676,11 +676,11 @@ def _nearest_snap_point(geometry, point):
     return None, None
 
 
-def query_representation_snap_candidates(representations, point, tolerance, context=None):
+def query_representation_snap_candidates(representations, point, tolerance, request=None):
     """Return distance-ordered semantic targets, merging coincident identities."""
 
     query_point = (
-        project_to_representation_plane(FreeCAD.Vector(point), context) if context else point
+        project_to_representation_plane(FreeCAD.Vector(point), request) if request else point
     )
     candidates = []
     for representation in representations or ():
@@ -718,11 +718,11 @@ def query_representation_snap_candidates(representations, point, tolerance, cont
     )
 
 
-def query_representation_snap(representations, point, tolerance, context=None):
+def query_representation_snap(representations, point, tolerance, request=None):
     """Return the nearest deduplicated semantic target within ``tolerance``."""
 
     candidates = query_representation_snap_candidates(
-        representations, point, tolerance, context=context
+        representations, point, tolerance, request=request
     )
     return candidates[0] if candidates else None
 
@@ -803,7 +803,7 @@ def query_representation_pick(representations, cursor, project_point, tolerance)
                 mapping.source,
                 mapping.subelement,
                 mapping.role,
-                representation.context,
+                representation.request,
             )
             if _screen_face_contains(mapping.geometry, cursor, project_point):
                 if winner is None:
@@ -830,37 +830,37 @@ def query_representation_pick(representations, cursor, project_point, tolerance)
     return winner
 
 
-def representation_for(obj, context):
+def representation_for(obj, request):
     """Request a representation from the object's semantic provider.
 
     Provider lookup is deliberately capability-based: no BIM type names are
     inspected here. A Python proxy implementing ``getRepresentation(obj,
-    context)`` owns the representation policy for that object.
+    request)`` owns the representation policy for that object.
     """
     provider = getattr(getattr(obj, "Proxy", None), "getRepresentation", None)
     if not callable(provider):
         raise RepresentationUnavailable(
-            "BIM object does not provide getRepresentation(obj, context)"
+            "BIM object does not provide getRepresentation(obj, request)"
         )
-    representation = provider(obj, context)
+    representation = provider(obj, request)
     if not isinstance(representation, BIMRepresentation):
-        raise TypeError("getRepresentation(obj, context) must return BIMRepresentation")
+        raise TypeError("getRepresentation(obj, request) must return BIMRepresentation")
     return representation
 
 
-def edit_capabilities_for(obj, context):
+def edit_capabilities_for(obj, request):
     """Request semantic edit capabilities without requesting display geometry."""
 
     provider = getattr(getattr(obj, "Proxy", None), "getEditCapabilities", None)
     if not callable(provider):
         raise RepresentationUnavailable(
-            "BIM object does not provide getEditCapabilities(obj, context)"
+            "BIM object does not provide getEditCapabilities(obj, request)"
         )
-    capabilities = provider(obj, context)
+    capabilities = provider(obj, request)
     if not isinstance(capabilities, BIMEditCapabilities):
-        raise TypeError("getEditCapabilities(obj, context) must return BIMEditCapabilities")
+        raise TypeError("getEditCapabilities(obj, request) must return BIMEditCapabilities")
     if capabilities.source is None:
         capabilities.source = obj
-    if capabilities.context is None:
-        capabilities.context = context
+    if capabilities.request is None:
+        capabilities.request = request
     return capabilities

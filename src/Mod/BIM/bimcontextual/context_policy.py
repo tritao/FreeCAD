@@ -22,20 +22,20 @@ _CAPABILITIES = {
 }
 
 
-def supports(context, capability):
-    purpose = getattr(context, "purpose", context)
+def supports(request, capability):
+    purpose = getattr(request, "purpose", request)
     return str(capability) in _CAPABILITIES.get(purpose, ())
 
 
-def capabilities_for(context):
-    purpose = getattr(context, "purpose", context)
+def capabilities_for(request):
+    purpose = getattr(request, "purpose", request)
     return _CAPABILITIES.get(purpose, frozenset())
 
 
-def interaction_plane_for(context):
-    """Return the Draft interaction plane declared by a representation context."""
+def interaction_plane_for(request):
+    """Return the Draft interaction plane declared by a representation request."""
 
-    frame = getattr(context, "reference_frame", None)
+    frame = getattr(request, "reference_frame", None)
     if frame is None:
         return WorkingPlane.get_working_plane()
     plane = WorkingPlane.PlaneBase()

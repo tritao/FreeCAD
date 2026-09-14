@@ -246,4 +246,4 @@ class PlanContextualRenderingAPI:
         return self._session.overlays.geometry.get_contextual_representation(obj)
 
     def _is_in_active_context(self, obj):
-        return self._session.representation_context.includes_object(obj)
+        return self._session.representation_request.includes_object(obj)

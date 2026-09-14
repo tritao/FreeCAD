@@ -89,6 +89,7 @@ TEST_CLASSES = (
     TestArchSchedule,
     TestArchTruss,
     TestArchComponent,
+    TestArchRepresentation,
     TestWebGLExport,
     TestArchReport,
     TestArchCovering,

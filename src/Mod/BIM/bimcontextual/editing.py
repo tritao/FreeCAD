@@ -48,8 +48,8 @@ class BIMEditResult:
 class BIMContextualHandleEditor:
     """One active semantic-handle drag, independent of Coin and Qt."""
 
-    def __init__(self, context, refresh=None):
-        self.context = context
+    def __init__(self, request, refresh=None):
+        self.request = request
         self.refresh = refresh
         self.handle = None
         self.start_value = None
@@ -95,7 +95,7 @@ class BIMContextualHandleEditor:
                 validation = self.handle.operation.validate(self.handle.source, value)
                 return BIMEditPreview(self.handle, value, projected, validation)
         else:
-            projected = project_to_representation_plane(pointer, self.context)
+            projected = project_to_representation_plane(pointer, self.request)
             if self.handle.interaction == "Planar":
                 value = self.start_value + projected - self.handle.point
                 validation = self.handle.operation.validate(self.handle.source, value)
@@ -148,7 +148,7 @@ class ContextualEditController:
     def __init__(
         self,
         view,
-        representation_context,
+        representation_request,
         renderer,
         input_adapter=None,
         *,
@@ -159,7 +159,7 @@ class ContextualEditController:
         commit_scope=None,
     ):
         self.view = view
-        self.context = getattr(representation_context, "context", representation_context)
+        self.request = getattr(representation_request, "request", representation_request)
         self.renderer = renderer
         self.input_adapter = input_adapter
         self.refresh_callback = refresh_callback
@@ -175,7 +175,7 @@ class ContextualEditController:
 
     def begin(self, handle):
         self.editor = BIMContextualHandleEditor(
-            self.context,
+            self.request,
             refresh=self.refresh_callback,
         )
         try:
@@ -198,10 +198,10 @@ class ContextualEditController:
         preview_state = preview.handle.operation.get_preview(
             preview.handle.source,
             preview.value,
-            self.editor.context,
+            self.editor.request,
         )
         preview_state = ArchRepresentation.expand_preview_dependents(
-            preview_state, self.editor.context
+            preview_state, self.editor.request
         )
         source = preview.handle.source
         if preview_state is not None:
@@ -215,7 +215,7 @@ class ContextualEditController:
         label = preview.handle.operation.get_preview_label(
             source,
             preview.value,
-            self.editor.context,
+            self.editor.request,
         )
         if label:
             self._call_renderer(

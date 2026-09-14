@@ -629,8 +629,8 @@ def _build_window_creation_preview_state(session, wall, points, source):
 
     if wall is None or len(points) != 4:
         return None
-    context = session.representation_context.context
-    target = getattr(context, "target_offset", None)
+    request = session.representation_request.request
+    target = getattr(request, "target_offset", None)
     corners = tuple(FreeCAD.Vector(point) for point in points)
     if target is not None:
         for point in corners:
@@ -641,7 +641,7 @@ def _build_window_creation_preview_state(session, wall, points, source):
     except Part.OCCError:
         return None
 
-    opening = ArchRepresentation.BIMRepresentation(source=source, context=context)
+    opening = ArchRepresentation.BIMRepresentation(source=source, request=request)
     opening.add_geometry(
         "cut_geometry",
         opening_face,
@@ -669,9 +669,9 @@ def _build_window_creation_preview_state(session, wall, points, source):
     state = ArchRepresentation.BIMPreviewState(wall)
     state.add_representation(opening, affects_spatial_boundary=False)
     try:
-        committed_host = ArchRepresentation.representation_for(wall, context)
+        committed_host = ArchRepresentation.representation_for(wall, request)
     except ArchRepresentation.RepresentationUnavailable:
-        return ArchRepresentation.expand_preview_dependents(state, context)
+        return ArchRepresentation.expand_preview_dependents(state, request)
 
     host_faces = tuple(committed_host.cut_geometry)
     if host_faces:
@@ -679,7 +679,7 @@ def _build_window_creation_preview_state(session, wall, points, source):
         for face in host_faces[1:]:
             host_shape = host_shape.fuse(face)
         host_shape = host_shape.cut(opening_face)
-        host_preview = ArchRepresentation.BIMRepresentation(source=wall, context=context)
+        host_preview = ArchRepresentation.BIMRepresentation(source=wall, request=request)
         for face_index, face in enumerate(host_shape.Faces, start=1):
             host_preview.add_geometry(
                 "cut_geometry",
@@ -702,7 +702,7 @@ def _build_window_creation_preview_state(session, wall, points, source):
                 replace_committed=True,
                 affects_spatial_boundary=False,
             )
-    return ArchRepresentation.expand_preview_dependents(state, context)
+    return ArchRepresentation.expand_preview_dependents(state, request)
 
 
 def update_window_tool_preview(session, point=None, info=None):

@@ -24,8 +24,8 @@ def _creation_preview_state(session):
 def _wall_preview_representation(session, source, segments, width, align="Center"):
     """Build one renderer-neutral plan representation for proposed walls."""
 
-    context = session.representation_context.context
-    representation = ArchRepresentation.BIMRepresentation(source=source, context=context)
+    request = session.representation_request.request
+    representation = ArchRepresentation.BIMRepresentation(source=source, request=request)
     for index, (start, end) in enumerate(segments, start=1):
         footprint = session.wall_edit.get_preview_footprint(
             [start, end],

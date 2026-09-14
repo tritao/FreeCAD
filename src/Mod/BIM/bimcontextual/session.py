@@ -25,9 +25,9 @@ class ContextualSession:
     def __init__(
         self,
         view=None,
-        context=None,
+        request=None,
         sources=None,
-        orient_to_context=False,
+        orient_to_request=False,
         providers=None,
     ):
         gui_document = FreeCADGui.ActiveDocument
@@ -37,17 +37,17 @@ class ContextualSession:
         if self.document is None or self.view is None:
             raise RuntimeError("A document and active 3D view are required")
 
-        self.context = context or ArchRepresentation.RepresentationContext(
+        self.request = request or ArchRepresentation.RepresentationRequest(
             purpose=ArchRepresentation.RepresentationPurpose.MODEL
         )
         self._context_sources = None if sources is None else tuple(sources)
         self._restore_camera = None
-        if orient_to_context:
-            self._orient_view_to_context()
+        if orient_to_request:
+            self._orient_view_to_request()
         self.renderer = BimContextualRendering.ContextualInteractionRenderer(self.view)
         self.controller = ContextualEditController(
             self.view,
-            self.context,
+            self.request,
             self.renderer,
             refresh_callback=self.refresh_source,
             refresh_failure_callback=self.refresh_source,
@@ -69,7 +69,7 @@ class ContextualSession:
         self.providers = tuple(providers)
         self._provider_context = None
         self.action_panel = ContextualActionPanel(close_callback=self.close)
-        self.host = ContextualInteractionHost(self.context, view=self.view)
+        self.host = ContextualInteractionHost(self.request, view=self.view)
 
         try:
             FreeCADGui.Selection.addObserver(self)
@@ -126,7 +126,7 @@ class ContextualSession:
         return True
 
     def request_point(self, callback, **kwargs):
-        """Expose context-aware point acquisition to an active provider workflow."""
+        """Expose request-aware point acquisition to an active provider workflow."""
 
         if self._closed:
             return False
@@ -292,7 +292,7 @@ class ContextualSession:
         current_capabilities = []
         for obj in selected:
             try:
-                capabilities = ArchRepresentation.edit_capabilities_for(obj, self.context)
+                capabilities = ArchRepresentation.edit_capabilities_for(obj, self.request)
             except ArchRepresentation.RepresentationUnavailable:
                 continue
             except Exception as exc:
@@ -319,7 +319,7 @@ class ContextualSession:
 
     def _refresh_contextual_actions(self, selected):
         context = ContextualProviderContext(
-            representation_context=self.context,
+            representation_request=self.request,
             selected_sources=tuple(selected),
             view=self.view,
             capabilities=self._capabilities,
@@ -396,8 +396,8 @@ class ContextualSession:
         self._show_feedback("Click and drag to {}".format(action.label.lower()))
         return True
 
-    def _orient_view_to_context(self):
-        frame = getattr(self.context, "reference_frame", None)
+    def _orient_view_to_request(self):
+        frame = getattr(self.request, "reference_frame", None)
         if frame is None:
             return
         animation_enabled = self.view.isAnimationEnabled()

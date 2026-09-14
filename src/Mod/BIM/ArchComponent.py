@@ -152,28 +152,28 @@ def get_horizontal_slice_faces(shape, cut_z, translate_z=0.0):
     return faces
 
 
-def representation_vertical_direction(context):
+def representation_vertical_direction(request):
     """Return model Z projected into the active representation plane."""
 
-    if getattr(context, "purpose", None) == ArchRepresentation.RepresentationPurpose.MODEL:
+    if getattr(request, "purpose", None) == ArchRepresentation.RepresentationPurpose.MODEL:
         return FreeCAD.Vector(0, 0, 1)
 
     return ArchRepresentation.project_direction_to_representation_plane(
-        FreeCAD.Vector(0, 0, 1), context
+        FreeCAD.Vector(0, 0, 1), request
     )
 
 
-def representation_extent_points(shape, context, direction):
+def representation_extent_points(shape, request, direction):
     """Return low/high projected extent points along an in-plane direction."""
 
     vertices = tuple(getattr(shape, "Vertexes", ()) or ())
     if not vertices:
         return (None, None)
-    if getattr(context, "purpose", None) == ArchRepresentation.RepresentationPurpose.MODEL:
+    if getattr(request, "purpose", None) == ArchRepresentation.RepresentationPurpose.MODEL:
         points = [FreeCAD.Vector(vertex.Point) for vertex in vertices]
     else:
         points = [
-            ArchRepresentation.project_to_representation_plane(vertex.Point, context)
+            ArchRepresentation.project_to_representation_plane(vertex.Point, request)
             for vertex in vertices
         ]
     return (
@@ -182,11 +182,11 @@ def representation_extent_points(shape, context, direction):
     )
 
 
-def get_reference_slice_faces(shape, context):
-    """Section *shape* on an arbitrary context frame without modifying it."""
+def get_reference_slice_faces(shape, request):
+    """Section *shape* on an arbitrary request frame without modifying it."""
 
-    frame = getattr(context, "reference_frame", None)
-    cut_offset = getattr(context, "cut_offset", None)
+    frame = getattr(request, "reference_frame", None)
+    cut_offset = getattr(request, "cut_offset", None)
     if frame is None or cut_offset is None or not shape or shape.isNull():
         return []
     try:
@@ -214,7 +214,7 @@ def get_reference_slice_faces(shape, context):
                 face = Part.Face(wire)
                 if face.Area > 0:
                     faces.append(face)
-        target_offset = getattr(context, "target_offset", None)
+        target_offset = getattr(request, "target_offset", None)
         if target_offset is None:
             target_offset = cut_offset
         delta = float(target_offset) - float(cut_offset)
@@ -836,13 +836,13 @@ class Component(ArchIFC.IfcProduct):
                         return building_part
         return None
 
-    def getDefaultPlanContext(self, obj, default_cut_height=DEFAULT_PLAN_CUT_HEIGHT):
-        """Return the default plan context for generic footprint previews.
+    def getDefaultPlanRequest(self, obj, default_cut_height=DEFAULT_PLAN_CUT_HEIGHT):
+        """Return the default plan request for generic footprint previews.
 
         Contained objects use their parent Building Storey's `PlanCutHeight`,
         measured from the storey level. Standalone objects fall back to a simple
         cut height above the object's base. `getFootprint()` wrappers use this
-        default context to preserve the existing display-mode API while
+        default request to preserve the existing display-mode API while
         `getPlanRepresentation()` provides the view-aware extension point.
         """
 
@@ -858,14 +858,14 @@ class Component(ArchIFC.IfcProduct):
             if hasattr(level_offset, "Value"):
                 level_offset = level_offset.Value
             cut_z = storey.Placement.Base.z + level_offset + storey.PlanCutHeight.Value
-            return ArchRepresentation.RepresentationContext(
+            return ArchRepresentation.RepresentationRequest(
                 purpose=ArchRepresentation.RepresentationPurpose.PLAN,
                 cut_offset=cut_z,
                 target_offset=target_z,
                 source=storey,
             )
 
-        return ArchRepresentation.RepresentationContext(
+        return ArchRepresentation.RepresentationRequest(
             purpose=ArchRepresentation.RepresentationPurpose.PLAN,
             cut_offset=target_z + default_cut_height,
             target_offset=target_z,
@@ -2399,9 +2399,9 @@ class ViewProviderComponent:
         return True
 
     def setupContextMenu(self, vobj, menu):
-        """Add the component specific options to the context menu.
+        """Add the component specific options to the request menu.
 
-        The context menu is the drop down menu that opens when the user right
+        The request menu is the drop down menu that opens when the user right
         clicks on the component in the tree view.
 
         Parameters
@@ -2409,7 +2409,7 @@ class ViewProviderComponent:
         vobj: <Gui.ViewProviderDocumentObject>
             The component's view provider object.
         menu: <PySide2.QtWidgets.QMenu>
-            The context menu already assembled prior to this method being
+            The request menu already assembled prior to this method being
             called.
         """
         if FreeCADGui.activeWorkbench().name() != "BIMWorkbench":
@@ -2603,7 +2603,7 @@ class ComponentTaskPanel:
 
     def __init__(self):
         """
-        Initializes the task panel. The transaction context is implicitly opened by the C++ layer
+        Initializes the task panel. The transaction request is implicitly opened by the C++ layer
         when entering edit mode.
         """
         # the panel has a tree widget that contains categories
@@ -3097,7 +3097,7 @@ class ComponentTaskPanel:
             ifcData["IfcUID"] = self.ifcEditor.labelUUID.text()
             ifcData["FlagForceBrep"] = str(self.ifcEditor.checkBrep.isChecked())
             ifcData["FlagParametric"] = str(self.ifcEditor.checkParametric.isChecked())
-            # The transaction context is implicitly opened by the C++ layer when entering edit mode.
+            # The transaction request is implicitly opened by the C++ layer when entering edit mode.
             if ifcdict != self.obj.IfcProperties:
                 self.obj.IfcProperties = ifcdict
             if ifcData != self.obj.IfcData:
