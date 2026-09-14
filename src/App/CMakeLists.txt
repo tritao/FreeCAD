@@ -160,6 +160,7 @@ SET(Document_CPP_SRCS
     Document.cpp
     RecoverySnapshot.cpp
     DocumentObject.cpp
+    ClippingPlane.cpp
     DepEdgePyImp.cpp
     Extension.cpp
     ExtensionPyImp.cpp
@@ -204,6 +205,7 @@ SET(Document_CPP_SRCS
     Transactions.cpp
     TransactionalObject.cpp
     VRMLObject.cpp
+    ViewDefinition.cpp
     MaterialObject.cpp
     MergeDocuments.cpp
     TextDocument.cpp
@@ -220,6 +222,7 @@ SET(Document_HPP_SRCS
     RecoverySnapshot.h
     DepEdge.h
     DocumentObject.h
+    ClippingPlane.h
     Extension.h
     ExtensionContainer.h
     GroupExtension.h
@@ -254,6 +257,7 @@ SET(Document_HPP_SRCS
     Transactions.h
     TransactionalObject.h
     VRMLObject.h
+    ViewDefinition.h
     MaterialObject.h
     MergeDocuments.h
     TextDocument.h
