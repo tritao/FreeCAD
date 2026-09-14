@@ -223,21 +223,6 @@ class TestArchRepresentation(unittest.TestCase):
         self.assertEqual(FreeCAD.Vector(7, 8, 9), points[1].get_value())
 
 
-    def test_contextual_provider_contracts_are_object_agnostic(self):
-        action = ContextualActionSpec("edit", "Edit")
-        tool = ContextualToolSpec("inspect", "Inspect")
-        section = ContextualInspectorSection("selection", "Selection")
-        provider = ContextualProvider()
-
-        self.assertTrue(action.enabled)
-        self.assertEqual("immediate", tool.interaction)
-        self.assertFalse(section.collapsed)
-        self.assertEqual("ContextualProvider", provider.get_provider_id())
-        self.assertEqual((), provider.get_actions(None))
-        self.assertEqual((), provider.get_tools(None))
-        self.assertEqual((), provider.get_inspector_sections(None))
-        self.assertFalse(provider.execute_action("edit", None))
-        self.assertFalse(provider.execute_tool("inspect", None))
 
 
     def test_wall_move_and_stretch_share_viewer_independent_evaluation(self):

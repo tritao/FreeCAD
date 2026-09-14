@@ -1,16 +1,19 @@
 # SPDX-License-Identifier: LGPL-2.1-or-later
-"""Shared, renderer-neutral contextual editing facilities."""
 
-from .editing import (
-    BIMContextualHandleEditor,
-    BIMEditPreview,
-    BIMEditResult,
-    ContextualEditController,
+"""Shared contextual editing architecture for BIM representation requests."""
+
+from .actions import (
+    ContextualActionSpec, ContextualInspectorSection, ContextualProvider,
+    ContextualProviderContext, ContextualToolSpec, SemanticEditProvider,
 )
+from .editing import (
+    BIMContextualHandleEditor, BIMEditPreview, BIMEditResult, ContextualEditController,
+)
+from .editable_points import ContextualEditPoint, get_contextual_edit_points
+from .interaction import ContextualInteractionHost
+from .context_policy import (
+    capabilities_for, interaction_plane_for, supports,
+)
+from .session import ContextualSession, active_session, start_session
 
-__all__ = [
-    "BIMContextualHandleEditor",
-    "BIMEditPreview",
-    "BIMEditResult",
-    "ContextualEditController",
-]
+__all__ = [name for name in globals() if not name.startswith("_")]

@@ -9,6 +9,7 @@ from typing import Sequence, Tuple
 
 from . import context_policy
 
+
 @dataclass(frozen=True)
 class ContextualActionSpec:
     key: str
