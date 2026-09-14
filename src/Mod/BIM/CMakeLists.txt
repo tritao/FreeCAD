@@ -31,6 +31,7 @@ SET(Arch_SRCS
     ArchCoveringGui.py
     ArchSectionPlane.py
     ArchRepresentation.py
+    BimContextualRendering.py
     ArchWindow.py
     ArchWindowPresets.py
     ArchAxis.py
