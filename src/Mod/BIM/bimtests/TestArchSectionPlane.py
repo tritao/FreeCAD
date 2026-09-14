@@ -23,7 +23,9 @@
 # ***************************************************************************
 
 import Arch
+import ArchRepresentation
 import ArchSectionPlane
+import TechDrawBIM
 import Draft
 import os
 import FreeCAD as App
@@ -52,6 +54,85 @@ class TestArchSectionPlane(TestArchBase.TestArchBase):
         self.assertEqual(
             section_plane.Label, "TestSectionPlane", "Section plane label is incorrect."
         )
+
+    def testRepresentationRequestUsesArbitrarySectionFrame(self):
+        """Section planes expose the canonical renderer-neutral request."""
+
+        section_plane = Arch.makeSectionPlane(name="RepresentationSection")
+        section_plane.Placement = App.Placement(
+            App.Vector(100, 200, 300), App.Rotation(App.Vector(0, 1, 0), 35)
+        )
+        section_plane.Depth = 2500
+        self.document.recompute()
+
+        request = section_plane.Proxy.getRepresentationRequest(section_plane)
+
+        self.assertIsInstance(request, ArchRepresentation.RepresentationRequest)
+        self.assertIs(request.purpose, ArchRepresentation.RepresentationPurpose.SECTION)
+        self.assertEqual(request.reference_frame, section_plane.Placement)
+        self.assertEqual(request.projection_range, (0.0, 2500.0))
+
+        section_plane.Purpose = "Elevation"
+        elevation = section_plane.Proxy.getRepresentationRequest(section_plane)
+        self.assertIs(
+            elevation.purpose,
+            ArchRepresentation.RepresentationPurpose.ELEVATION,
+        )
+
+    def testTechDrawUsesSemanticRepresentationWithoutLegacyCutShapes(self):
+        """The production section path consumes provider geometry directly."""
+
+        wall = Arch.makeWall(length=3000, width=200, height=3000)
+        section_plane = Arch.makeSectionPlane([wall])
+        section_plane.Placement = App.Placement(
+            App.Vector(1500, 0, 0), App.Rotation(App.Vector(0, 1, 0), 90)
+        )
+        self.document.recompute()
+        calls = []
+        original_project = TechDrawBIM.project_representation_to_svg
+        original_cut_shapes = ArchSectionPlane.getCutShapes
+
+        def capture_project(
+            representation, direction, collection="projected_geometry", **styles
+        ):
+            calls.append(collection)
+            return original_project(
+                representation, direction, collection=collection, **styles
+            )
+
+        def fail_legacy_cut_shapes(*args, **kwargs):
+            raise AssertionError("semantic TechDraw must not build legacy cut shapes")
+
+        TechDrawBIM.project_representation_to_svg = capture_project
+        ArchSectionPlane.getCutShapes = fail_legacy_cut_shapes
+        try:
+            svg = ArchSectionPlane.getSVG(
+                section_plane, techdraw=True, renderMode="Wireframe"
+            )
+        finally:
+            TechDrawBIM.project_representation_to_svg = original_project
+            ArchSectionPlane.getCutShapes = original_cut_shapes
+
+        self.assertTrue(svg)
+        self.assertIn("cut_geometry", calls)
+
+    def testTechDrawConvertsSemanticPolylinesToProjectionGeometry(self):
+        """Semantic cut lines remain directly consumable by TechDraw."""
+
+        representation = ArchRepresentation.BIMRepresentation()
+        cut_line = (
+            App.Vector(0, 0, 0),
+            App.Vector(100, 75, 0),
+        )
+        representation.add_geometry(
+            "projected_geometry", cut_line, "WallJointCutLine"
+        )
+
+        geometry = TechDrawBIM._geometry(representation, "projected_geometry")
+
+        self.assertFalse(geometry.isNull())
+        self.assertEqual(1, len(geometry.Edges))
+        self.assertEqual(2, len(geometry.Vertexes))
 
     def testSectionPlaneFitUsesLocalAxesAfterRotateY(self):
         """Resize-to-fit dimensions follow the rotated section plane axes."""

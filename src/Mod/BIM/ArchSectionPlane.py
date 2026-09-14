@@ -39,6 +39,7 @@ import uuid
 import FreeCAD
 import ArchCommands
 import ArchComponent
+import ArchRepresentation
 import Draft
 import DraftVecUtils
 
@@ -427,6 +428,26 @@ def getSVG(
             windows.append(o)
     objs = nonspaces
 
+    # TechDraw can consume the same semantic BIM representations used by
+    # interactive contextual views.  Keep the legacy cut-shape renderer as a
+    # compatibility fallback for modes that need hidden lines, fills, joined
+    # material geometry, or objects that have not adopted the provider
+    # contract yet.
+    contextual_representations = _get_contextual_representations(
+        source,
+        objs,
+        techdraw=techdraw,
+        showHidden=showHidden,
+        showFill=showFill,
+        fillSpaces=fillSpaces,
+        joinArch=joinArch,
+    )
+    if contextual_representations:
+        # Semantic providers already computed the section geometry.  Keep only
+        # the lightweight bounds needed by space/window filtering; do not
+        # populate the legacy cut-shape cache on this path.
+        cutface = _contextual_cut_face(contextual_representations)
+
     scaledLineWidth = linewidth / scale
     if renderMode in ["Coin", 2, "Coin mono", 3]:
         # don't scale linewidths in coin mode
@@ -454,7 +475,7 @@ def getSVG(
         source, renderMode, showHidden, showFill, fillSpaces, joinArch, allOn, objs
     )
     should_update_svg_cache = False
-    if showFill or not svgcache:
+    if contextual_representations or showFill or not svgcache:
         should_update_svg_cache = True
 
     # generating SVG
@@ -510,37 +531,38 @@ def getSVG(
     else:
         # Wireframe (0) mode
 
-        if (
-            hasattr(source, "Proxy")
-            and hasattr(source.Proxy, "shapecache")
-            and source.Proxy.shapecache
-        ):
-            vshapes = source.Proxy.shapecache[0]
-            hshapes = source.Proxy.shapecache[1]
-            sshapes = source.Proxy.shapecache[2]
-            cutface = source.Proxy.shapecache[3]
-            # cutvolume = source.Proxy.shapecache[4] # Unused
-            # invcutvolume = source.Proxy.shapecache[5] # Unused
-            objectSshapes = source.Proxy.shapecache[6]
-        else:
-            if showFill:
-                vshapes, hshapes, sshapes, cutface, cutvolume, invcutvolume, objectSshapes = (
-                    getCutShapes(objs, cutplane, onlySolids, clip, joinArch, showHidden, True)
-                )
+        if not contextual_representations:
+            if (
+                hasattr(source, "Proxy")
+                and hasattr(source.Proxy, "shapecache")
+                and source.Proxy.shapecache
+            ):
+                vshapes = source.Proxy.shapecache[0]
+                hshapes = source.Proxy.shapecache[1]
+                sshapes = source.Proxy.shapecache[2]
+                cutface = source.Proxy.shapecache[3]
+                # cutvolume = source.Proxy.shapecache[4] # Unused
+                # invcutvolume = source.Proxy.shapecache[5] # Unused
+                objectSshapes = source.Proxy.shapecache[6]
             else:
-                vshapes, hshapes, sshapes, cutface, cutvolume, invcutvolume = getCutShapes(
-                    objs, cutplane, onlySolids, clip, joinArch, showHidden
-                )
-                objectSshapes = []
-            source.Proxy.shapecache = [
-                vshapes,
-                hshapes,
-                sshapes,
-                cutface,
-                cutvolume,
-                invcutvolume,
-                objectSshapes,
-            ]
+                if showFill:
+                    vshapes, hshapes, sshapes, cutface, cutvolume, invcutvolume, objectSshapes = (
+                        getCutShapes(objs, cutplane, onlySolids, clip, joinArch, showHidden, True)
+                    )
+                else:
+                    vshapes, hshapes, sshapes, cutface, cutvolume, invcutvolume = getCutShapes(
+                        objs, cutplane, onlySolids, clip, joinArch, showHidden
+                    )
+                    objectSshapes = []
+                source.Proxy.shapecache = [
+                    vshapes,
+                    hshapes,
+                    sshapes,
+                    cutface,
+                    cutvolume,
+                    invcutvolume,
+                    objectSshapes,
+                ]
 
         if should_update_svg_cache:
             svgcache = ""
@@ -548,81 +570,120 @@ def getSVG(
             import TechDraw
             import Part
 
-            if vshapes:
-                baseshape = Part.makeCompound(vshapes)
+            if contextual_representations:
+                import TechDrawBIM
+
                 style = {
                     "stroke": "SVGLINECOLOR",
                     "stroke-linecap": "SVGLINECAP",
                     "stroke-width": "SVGLINEWIDTH",
                 }
-                svgcache += TechDraw.projectToSVG(
-                    baseshape,
-                    direction,
-                    hStyle=style,
-                    h0Style=style,
-                    h1Style=style,
-                    vStyle=style,
-                    v0Style=style,
-                    v1Style=style,
-                )
-            if hshapes:
-                hshapes = Part.makeCompound(hshapes)
-                style = {
-                    "stroke": "SVGLINECOLOR",
-                    "stroke-linecap": "SVGLINECAP",
-                    "stroke-width": "SVGLINEWIDTH",
-                    "stroke-dasharray": "SVGHIDDENPATTERN",
-                }
-                svgcache += '<g transform="scale(-1,1)">\n'
-                svgcache += TechDraw.projectToSVG(
-                    hshapes,
-                    -direction,
-                    hStyle=style,
-                    h0Style=style,
-                    h1Style=style,
-                    vStyle=style,
-                    v0Style=style,
-                    v1Style=style,
-                )
-                svgcache += "</g>\n"
-            if sshapes:
-                if showFill:
-                    # svgcache += fillpattern
-                    svgcache += '<g transform="rotate(180)">\n'
-                    for o, shapes in objectSshapes:
-                        for s in shapes:
-                            if s.Edges:
-                                objectFill = getFillForObject(o, fillColor, source)
-                                # svg += Draft.get_svg(s,
-                                #                      direction=direction.negative(),
-                                #                      linewidth=0,
-                                #                      fillstyle="sectionfill",
-                                #                      color=(0,0,0))
-                                # temporarily disabling fill patterns
-                                svgcache += Draft.get_svg(
-                                    s,
-                                    linewidth=0,
-                                    fillstyle=Draft.getrgb(objectFill, testbw=False),
-                                    direction=direction.negative(),
-                                    color=lineColor,
-                                )
-                    svgcache += "</g>\n"
-                sshapes = Part.makeCompound(sshapes)
-                style = {
+                cut_style = {
                     "stroke": "SVGLINECOLOR",
                     "stroke-linecap": "SVGLINECAP",
                     "stroke-width": "SVGCUTLINEWIDTH",
                 }
-                svgcache += TechDraw.projectToSVG(
-                    sshapes,
-                    direction,
-                    hStyle=style,
-                    h0Style=style,
-                    h1Style=style,
-                    vStyle=style,
-                    v0Style=style,
-                    v1Style=style,
-                )
+                for representation in contextual_representations:
+                    if representation.projected_geometry:
+                        svgcache += TechDrawBIM.project_representation_to_svg(
+                            representation,
+                            direction,
+                            collection="projected_geometry",
+                            hStyle=style,
+                            h0Style=style,
+                            h1Style=style,
+                            vStyle=style,
+                            v0Style=style,
+                            v1Style=style,
+                        )
+                    if representation.cut_geometry:
+                        svgcache += TechDrawBIM.project_representation_to_svg(
+                            representation,
+                            direction,
+                            collection="cut_geometry",
+                            hStyle=cut_style,
+                            h0Style=cut_style,
+                            h1Style=cut_style,
+                            vStyle=cut_style,
+                            v0Style=cut_style,
+                            v1Style=cut_style,
+                        )
+            else:
+                if vshapes:
+                    baseshape = Part.makeCompound(vshapes)
+                    style = {
+                        "stroke": "SVGLINECOLOR",
+                        "stroke-linecap": "SVGLINECAP",
+                        "stroke-width": "SVGLINEWIDTH",
+                    }
+                    svgcache += TechDraw.projectToSVG(
+                        baseshape,
+                        direction,
+                        hStyle=style,
+                        h0Style=style,
+                        h1Style=style,
+                        vStyle=style,
+                        v0Style=style,
+                        v1Style=style,
+                    )
+                if hshapes:
+                    hshapes = Part.makeCompound(hshapes)
+                    style = {
+                        "stroke": "SVGLINECOLOR",
+                        "stroke-linecap": "SVGLINECAP",
+                        "stroke-width": "SVGLINEWIDTH",
+                        "stroke-dasharray": "SVGHIDDENPATTERN",
+                    }
+                    svgcache += '<g transform="scale(-1,1)">\n'
+                    svgcache += TechDraw.projectToSVG(
+                        hshapes,
+                        -direction,
+                        hStyle=style,
+                        h0Style=style,
+                        h1Style=style,
+                        vStyle=style,
+                        v0Style=style,
+                        v1Style=style,
+                    )
+                    svgcache += "</g>\n"
+                if sshapes:
+                    if showFill:
+                        # svgcache += fillpattern
+                        svgcache += '<g transform="rotate(180)">\n'
+                        for o, shapes in objectSshapes:
+                            for s in shapes:
+                                if s.Edges:
+                                    objectFill = getFillForObject(o, fillColor, source)
+                                    # svg += Draft.get_svg(s,
+                                    #                      direction=direction.negative(),
+                                    #                      linewidth=0,
+                                    #                      fillstyle="sectionfill",
+                                    #                      color=(0,0,0))
+                                    # temporarily disabling fill patterns
+                                    svgcache += Draft.get_svg(
+                                        s,
+                                        linewidth=0,
+                                        fillstyle=Draft.getrgb(objectFill, testbw=False),
+                                        direction=direction.negative(),
+                                        color=lineColor,
+                                    )
+                        svgcache += "</g>\n"
+                    sshapes = Part.makeCompound(sshapes)
+                    style = {
+                        "stroke": "SVGLINECOLOR",
+                        "stroke-linecap": "SVGLINECAP",
+                        "stroke-width": "SVGCUTLINEWIDTH",
+                    }
+                    svgcache += TechDraw.projectToSVG(
+                        sshapes,
+                        direction,
+                        hStyle=style,
+                        h0Style=style,
+                        h1Style=style,
+                        vStyle=style,
+                        v0Style=style,
+                        v1Style=style,
+                    )
     if should_update_svg_cache:
         if hasattr(source, "Proxy"):
             source.Proxy.svgcache = [
@@ -728,6 +789,78 @@ def getSVG(
                 svg += "</g>"
 
     return svg
+
+
+def _get_contextual_representations(
+    source,
+    objects,
+    *,
+    techdraw,
+    showHidden,
+    showFill,
+    fillSpaces,
+    joinArch,
+):
+    """Return semantic representations when the simple TechDraw path applies.
+
+    This is intentionally an all-or-nothing path.  A section containing an
+    object that has not adopted ``getRepresentation`` continues through the
+    established cut-shape renderer, so existing Arch and TechDraw behavior is
+    preserved while providers migrate independently.
+    """
+    if (
+        not techdraw
+        or showHidden
+        or showFill
+        or fillSpaces
+        or joinArch
+        or not objects
+    ):
+        return []
+
+    request_provider = getattr(getattr(source, "Proxy", None), "getRepresentationRequest", None)
+    if not callable(request_provider):
+        return []
+    request = request_provider(source)
+    if request is None:
+        return []
+
+    from ArchRepresentation import RepresentationUnavailable, representation_for
+
+    representations = []
+    for obj in objects:
+        try:
+            representation = representation_for(obj, request)
+        except RepresentationUnavailable:
+            return []
+        if not (
+            getattr(representation, "cut_geometry", None)
+            or getattr(representation, "projected_geometry", None)
+        ):
+            return []
+        representations.append(representation)
+    return representations
+
+
+def _contextual_cut_face(representations):
+    """Return a cheap bound shape for semantic section filtering.
+
+    Providers may expose cut edges or symbolic polylines instead of faces.
+    Only actual faces can provide a useful section bound; when none are
+    available the caller falls back to the section plane itself.
+    """
+    import Part
+
+    faces = []
+    for representation in representations or ():
+        faces.extend(
+            geometry
+            for geometry in getattr(representation, "cut_geometry", ())
+            if getattr(geometry, "ShapeType", "") == "Face"
+        )
+    if not faces:
+        return None
+    return faces[0] if len(faces) == 1 else Part.makeCompound(faces)
 
 
 def BoundBoxValid(boundBox) -> bool:
@@ -1106,6 +1239,19 @@ class _SectionPlane:
                 ),
                 locked=True,
             )
+        if "Purpose" not in pl:
+            obj.addProperty(
+                "App::PropertyEnumeration",
+                "Purpose",
+                "SectionPlane",
+                QT_TRANSLATE_NOOP(
+                    "App::Property",
+                    "The semantic view request represented by this plane.",
+                ),
+                locked=True,
+            )
+            obj.Purpose = ["Section", "Elevation"]
+            obj.Purpose = "Section"
 
     def onDocumentRestored(self, obj):
 
@@ -1146,6 +1292,21 @@ class _SectionPlane:
     def getNormal(self, obj):
 
         return obj.Shape.Faces[0].normalAt(0, 0)
+
+    def getRepresentationRequest(self, obj):
+        """Return the renderer-independent BIM request supplied by this plane."""
+
+        depth = float(getattr(getattr(obj, "Depth", 0.0), "Value", 0.0))
+
+        purpose = ArchRepresentation.RepresentationPurpose(str(obj.Purpose))
+        return ArchRepresentation.RepresentationRequest(
+            purpose=purpose,
+            reference_frame=obj.Placement,
+            cut_offset=0.0,
+            target_offset=0.0,
+            projection_range=(0.0, depth),
+            source=obj,
+        )
 
     def dumps(self):
 
@@ -1594,6 +1755,29 @@ class _ViewProviderSectionPlane:
         QtCore.QObject.connect(actionEdit, QtCore.SIGNAL("triggered()"), self.edit)
         menu.addAction(actionEdit)
 
+        purpose = self.Object.Proxy.getRepresentationRequest(self.Object).purpose
+        contextual_command = (
+            "BIM_ElevationEdit"
+            if purpose == ArchRepresentation.RepresentationPurpose.ELEVATION
+            else "BIM_SectionEdit"
+        )
+        contextual_label = (
+            translate("Arch", "Elevation Edit")
+            if purpose == ArchRepresentation.RepresentationPurpose.ELEVATION
+            else translate("Arch", "Section Edit")
+        )
+        actionContextualEdit = QtGui.QAction(
+            QtGui.QIcon(":/icons/Arch_SectionPlane.svg"),
+            contextual_label,
+            menu,
+        )
+        actionContextualEdit.triggered.connect(
+            lambda _checked=False, command=contextual_command: self.startContextualEdit(
+                command
+            )
+        )
+        menu.addAction(actionContextualEdit)
+
         actionToggleCutview = QtGui.QAction(
             QtGui.QIcon(":/icons/Arch_CutPlane.svg"), translate("Arch", "Toggle Cut View"), menu
         )
@@ -1602,6 +1786,11 @@ class _ViewProviderSectionPlane:
 
     def edit(self):
         FreeCADGui.ActiveDocument.setEdit(self.Object, 0)
+
+    def startContextualEdit(self, command):
+        FreeCADGui.Selection.clearSelection()
+        FreeCADGui.Selection.addSelection(self.Object)
+        FreeCADGui.runCommand(command)
 
     def toggleCutview(self, vobj):
         vobj.CutView = not vobj.CutView

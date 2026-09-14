@@ -206,6 +206,7 @@ SET(bimcommands_SRCS
     bimcommands/BimRoof.py
     bimcommands/BimSchedule.py
     bimcommands/BimSectionPlane.py
+    bimcommands/BimSectionEdit.py
     bimcommands/BimSetup.py
     bimcommands/BimShape2DView.py
     bimcommands/BimSimpleCopy.py
