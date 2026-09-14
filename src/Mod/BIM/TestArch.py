@@ -24,6 +24,7 @@
 
 # Unit test for the Arch module
 from bimtests.TestArchRoof import TestArchRoof
+from bimtests.TestArchRepresentation import TestArchRepresentation
 from bimtests.TestArchSpace import TestArchSpace
 from bimtests.TestArchWall import TestArchWall
 from bimtests.TestArchBuildingPart import TestArchBuildingPart

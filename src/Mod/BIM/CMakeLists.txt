@@ -30,6 +30,7 @@ SET(Arch_SRCS
     ArchCovering.py
     ArchCoveringGui.py
     ArchSectionPlane.py
+    ArchRepresentation.py
     ArchWindow.py
     ArchWindowPresets.py
     ArchAxis.py
@@ -256,6 +257,7 @@ SET(bimtests_SRCS
     bimtests/TestArchEquipment.py
     bimtests/TestArchFrame.py
     bimtests/TestArchReference.py
+    bimtests/TestArchRepresentation.py
     bimtests/TestArchSchedule.py
     bimtests/TestArchSiteGui.py
     bimtests/TestArchTruss.py
