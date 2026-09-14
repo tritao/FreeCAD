@@ -1,6 +1,8 @@
 # SPDX-License-Identifier: LGPL-2.1-or-later
 
 import unittest
+import ast
+from pathlib import Path
 from unittest.mock import patch
 
 import Arch
@@ -94,6 +96,112 @@ class TestArchRepresentation(unittest.TestCase):
         )()
         self.assertTrue(ArchSpaceSemantic.has_valid_geometry(solid))
         self.assertFalse(ArchSpaceSemantic.has_valid_geometry(wire))
+
+    def test_shared_contextual_and_domain_modules_have_no_plan_imports(self):
+        bim_root = Path(__file__).resolve().parents[1]
+        package = bim_root / "bimcontextual"
+        domain_modules = (
+            "ArchRepresentation.py",
+            "ArchWall.py",
+            "ArchWallSemantic.py",
+            "ArchWallConstruction.py",
+            "ArchOpeningConstruction.py",
+            "ArchSpaceConstruction.py",
+            "ArchSpaceSemantic.py",
+        )
+        sources = tuple(package.glob("*.py")) + tuple(
+            bim_root / name for name in domain_modules
+        )
+        offenders = []
+        for source in sources:
+            tree = ast.parse(source.read_text(encoding="utf-8"), filename=str(source))
+            for node in ast.walk(tree):
+                names = []
+                if isinstance(node, ast.Import):
+                    names = [alias.name for alias in node.names]
+                elif isinstance(node, ast.ImportFrom) and node.module:
+                    names = [node.module]
+                if any(name == "bimplan" or name.startswith("bimplan.") for name in names):
+                    offenders.append("{}:{}".format(source.name, node.lineno))
+        self.assertEqual([], offenders)
+
+    def test_contextual_session_has_no_construction_domain_ownership(self):
+        session_source = (
+            Path(__file__).resolve().parents[1] / "bimcontextual" / "session.py"
+        )
+        tree = ast.parse(
+            session_source.read_text(encoding="utf-8"), filename=str(session_source)
+        )
+        imported_modules = set()
+        method_names = set()
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Import):
+                imported_modules.update(alias.name for alias in node.names)
+            elif isinstance(node, ast.ImportFrom) and node.module:
+                imported_modules.add(node.module)
+            elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                method_names.add(node.name)
+        self.assertTrue(
+            imported_modules.isdisjoint(
+                {"ArchOpeningConstruction", "ArchWallConstruction"}
+            )
+        )
+        self.assertTrue(
+            method_names.isdisjoint(
+                {"begin_wall_creation", "begin_hosted_opening_creation"}
+            )
+        )
+
+    def test_contextual_package_has_no_object_specific_construction_imports(self):
+        package = Path(__file__).resolve().parents[1] / "bimcontextual"
+        forbidden = {"ArchOpeningConstruction", "ArchWallConstruction"}
+        offenders = []
+        for source_path in package.glob("*.py"):
+            tree = ast.parse(
+                source_path.read_text(encoding="utf-8"), filename=str(source_path)
+            )
+            imported_modules = set()
+            for node in ast.walk(tree):
+                if isinstance(node, ast.Import):
+                    imported_modules.update(alias.name for alias in node.names)
+                elif isinstance(node, ast.ImportFrom) and node.module:
+                    imported_modules.add(node.module)
+            if not imported_modules.isdisjoint(forbidden):
+                offenders.append(source_path.name)
+        self.assertEqual([], offenders)
+
+    def test_legacy_creation_commands_delegate_domain_mutation(self):
+        bim_root = Path(__file__).resolve().parents[1]
+        command_sources = tuple(
+            bim_root / "bimcommands" / name
+            for name in ("BimWall.py", "BimWindow.py", "BimSpace.py")
+        )
+        forbidden_calls = {
+            "Arch.makeWall",
+            "Arch.makeWindow",
+            "Arch.makeSpace",
+            "Arch.joinWalls",
+            "Arch.addComponents",
+        }
+        forbidden_transactions = {
+            "openTransaction",
+            "commitTransaction",
+            "abortTransaction",
+        }
+        offenders = []
+        for source in command_sources:
+            tree = ast.parse(source.read_text(encoding="utf-8"), filename=str(source))
+            for node in ast.walk(tree):
+                if not isinstance(node, ast.Call):
+                    continue
+                call_name = ""
+                if isinstance(node.func, ast.Attribute):
+                    call_name = node.func.attr
+                    if isinstance(node.func.value, ast.Name):
+                        call_name = "{}.{}".format(node.func.value.id, call_name)
+                if call_name in forbidden_calls or call_name in forbidden_transactions:
+                    offenders.append("{}:{}".format(source.name, node.lineno))
+        self.assertEqual([], offenders)
 
     def test_context_policy_declares_purpose_capabilities(self):
         for purpose in RepresentationPurpose:
