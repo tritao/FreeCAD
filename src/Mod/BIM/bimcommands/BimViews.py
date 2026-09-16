@@ -34,6 +34,7 @@ translate = FreeCAD.Qt.translate
 
 UPDATEINTERVAL = 2000  # number of milliseconds between BIM Views Manager update
 PARAMS = FreeCAD.ParamGet("User parameter:BaseApp/Preferences/Mod/BIM")
+_view_services = {}
 
 
 if FreeCAD.GuiUp:
@@ -60,6 +61,8 @@ class BIM_Views:
         from PySide import QtCore, QtGui
 
         vm = findWidget()
+        self.model = _manager_model()
+        self.viewService = _view_service()
         self.allItemsInTree = []
         self.oldData = [[], []]
         bimviewsbutton = None
@@ -92,6 +95,7 @@ class BIM_Views:
 
             # set context menu
             self.dialog.tree.setContextMenuPolicy(QtCore.Qt.CustomContextMenu)
+            self.dialog.viewtree.setContextMenuPolicy(QtCore.Qt.CustomContextMenu)
             self.dialog.tree.setItemDelegateForColumn(2, _HeightEditDelegate(self.dialog.tree))
 
             # set button
@@ -162,7 +166,9 @@ class BIM_Views:
             self.dialog.tree.itemDoubleClicked.connect(show)
             self.dialog.viewtree.itemDoubleClicked.connect(show)
             self.dialog.tree.itemChanged.connect(self.editObject)
+            self.dialog.viewtree.itemChanged.connect(self.editObject)
             self.dialog.tree.customContextMenuRequested.connect(self.onContextMenu)
+            self.dialog.viewtree.customContextMenuRequested.connect(self.onViewContextMenu)
             # delay connecting after FreeCAD finishes setting up
             QtCore.QTimer.singleShot(UPDATEINTERVAL, self.connectDock)
 
@@ -322,17 +328,29 @@ class BIM_Views:
                     ficon = QtGui.QIcon.fromTheme("folder", QtGui.QIcon(":/icons/folder.svg"))
                     treeViewItems = []
 
-                    views = self.getViews()
-                    if views:
-                        top = QtGui.QTreeWidgetItem([translate("BIM", "2D Views"), ""])
+                    model = _manager_model()
+                    for group in model.saved_view_groups():
+                        top = QtGui.QTreeWidgetItem([translate("BIM", group.label), ""])
                         top.setIcon(0, ficon)
-                        for v in views:
-                            if hasattr(v, "Label"):
-                                i = QtGui.QTreeWidgetItem([v.Label, ""])
-                                if hasattr(v.ViewObject, "Icon"):
-                                    i.setIcon(0, v.ViewObject.Icon)
-                                i.setToolTip(0, v.Name)
-                                top.addChild(i)
+                        for view in group.views:
+                            i = QtGui.QTreeWidgetItem([view.Label, ""])
+                            i.setFlags(i.flags() | QtCore.Qt.ItemIsEditable)
+                            if hasattr(view.ViewObject, "Icon"):
+                                i.setIcon(0, view.ViewObject.Icon)
+                            i.setToolTip(0, view.Name)
+                            top.addChild(i)
+                        treeViewItems.append(top)
+
+                    legacy_views = model.legacy_views()
+                    if legacy_views:
+                        top = QtGui.QTreeWidgetItem([translate("BIM", "Legacy 2D Views"), ""])
+                        top.setIcon(0, ficon)
+                        for view in legacy_views:
+                            i = QtGui.QTreeWidgetItem([view.Label, ""])
+                            if hasattr(view.ViewObject, "Icon"):
+                                i.setIcon(0, view.ViewObject.Icon)
+                            i.setToolTip(0, view.Name)
+                            top.addChild(i)
                         treeViewItems.append(top)
 
                     pages = self.getPages()
@@ -365,12 +383,15 @@ class BIM_Views:
                 objActive = FreeCADGui.ActiveDocument.ActiveView.getActiveObject("NativeIFC")
                 if not objActive:
                     objActive = FreeCADGui.ActiveDocument.ActiveView.getActiveObject("Arch")
+                active_view = _view_service().active_view
 
                 default_background = allItemsInTrees[0].background(1)
                 default_font = allItemsInTrees[0].font(1)
                 for item in allItemsInTrees:
                     item.setSelected(item.toolTip(0) in objNameSelected)
-                    if objActive and item.toolTip(0) == objActive.Name:
+                    is_active = objActive and item.toolTip(0) == objActive.Name
+                    is_active_view = active_view and item.toolTip(0) == active_view.Name
+                    if is_active or is_active_view:
                         tparam = FreeCAD.ParamGet("User parameter:BaseApp/Preferences/TreeView")
                         activeColor = tparam.GetUnsigned("TreeActiveColor", 0)
                         if activeColor:
@@ -505,9 +526,10 @@ class BIM_Views:
 
         vm = findWidget()
         if vm:
-            if vm.tree.selectedItems():
+            selected = vm.tree.selectedItems() + vm.viewtree.selectedItems()
+            if selected:
                 FreeCAD.ActiveDocument.openTransaction("Delete")
-                for item in vm.tree.selectedItems():
+                for item in selected:
                     obj = FreeCAD.ActiveDocument.getObject(item.toolTip(0))
                     if obj:
                         FreeCAD.ActiveDocument.removeObject(obj.Name)
@@ -520,10 +542,13 @@ class BIM_Views:
 
         vm = findWidget()
         if vm:
-            if vm.tree.selectedItems():
-                if vm.tree.selectedItems():
-                    item = vm.tree.selectedItems()[-1]
-                    vm.tree.editItem(item, 0)
+            selected = vm.tree.selectedItems()
+            tree = vm.tree
+            if not selected:
+                selected = vm.viewtree.selectedItems()
+                tree = vm.viewtree
+            if selected:
+                tree.editItem(selected[-1], 0)
 
     @staticmethod
     def activate(dialog=None):
@@ -547,6 +572,8 @@ class BIM_Views:
             FreeCADGui.Selection.clearSelection()
             FreeCADGui.Selection.addSelection(self.contextObject)
             FreeCADGui.runCommand("Draft_SelectPlane")
+        elif _view_service().is_view_definition(self.contextObject):
+            _view_service().activate_view(self.contextObject)
         elif hasattr(self.contextObject.ViewObject, "DoubleClickActivates"):
             _toggle_active_container(self.contextObject, dialog=self.dialog)
             FreeCADGui.Selection.clearSelection()
@@ -641,10 +668,14 @@ class BIM_Views:
                         obj.ViewObject.Visibility = True
 
     def saveView(self):
-        "save the current camera angle to the selected item"
+        "save the current camera and context to the selected item"
 
         vm = findWidget()
         if vm:
+            for item in vm.viewtree.selectedItems():
+                obj = FreeCAD.ActiveDocument.getObject(item.toolTip(0))
+                if obj and _view_service().is_view_definition(obj):
+                    _view_service().capture(obj)
             for item in vm.tree.selectedItems():
                 obj = FreeCAD.ActiveDocument.getObject(item.toolTip(0))
                 if obj:
@@ -657,6 +688,10 @@ class BIM_Views:
 
         vm = findWidget()
         if vm:
+            for item in vm.viewtree.selectedItems():
+                obj = FreeCAD.ActiveDocument.getObject(item.toolTip(0))
+                if obj and _view_service().is_view_definition(obj):
+                    _view_service().capture(obj)
             for item in vm.tree.selectedItems():
                 obj = FreeCAD.ActiveDocument.getObject(item.toolTip(0))
                 if obj and hasattr(obj.ViewObject.Proxy, "writeState"):
@@ -696,7 +731,18 @@ class BIM_Views:
         """Fires the context menu"""
         import Draft
 
-        self.dialog.buttonAddProxy.setEnabled(True)
+        for action in (
+            self.dialog.buttonActive,
+            self.dialog.buttonAddLevel,
+            self.dialog.buttonAddProxy,
+            self.dialog.buttonDelete,
+            self.dialog.buttonToggle,
+            self.dialog.buttonIsolate,
+            self.dialog.buttonSaveView,
+            self.dialog.buttonSaveVisibility,
+            self.dialog.buttonRename,
+        ):
+            action.setEnabled(True)
         self.contextObject = None
         self.dialog.buttonActive.setText(translate("BIM", "Active"))
         self.dialog.buttonActive.setCheckable(True)
@@ -728,20 +774,40 @@ class BIM_Views:
                     self.dialog.buttonActive.setChecked(False)
         self.dialog.menu.exec_(self.dialog.tree.mapToGlobal(pos))
 
-    def getViews(self):
-        """Returns a list of 2D views"""
-        import Draft
+    def onViewContextMenu(self, pos):
+        """Show saved-view actions without exposing storey-only operations."""
 
-        views = []
-        for p in self.getPages():
-            for v in p.Views:
-                if getattr(v, "Source", None):
-                    views.append(v.Source)
-        bps = [o for o in FreeCAD.ActiveDocument.Objects if Draft.getType(o) == "BuildingPart"]
-        for v in [o for o in bps if isView(o)]:
-            if v not in views:
-                views.append(v)
-        return views
+        item = self.dialog.viewtree.itemAt(pos)
+        if item is None:
+            return
+        obj = FreeCAD.ActiveDocument.getObject(item.toolTip(0))
+        if obj is None or not _view_service().is_view_definition(obj):
+            return
+        self.dialog.viewtree.setCurrentItem(item)
+        self.contextObject = obj
+        self.dialog.buttonActive.setText(translate("BIM", "Open"))
+        self.dialog.buttonActive.setCheckable(False)
+        self.dialog.buttonActive.setToolTip(translate("BIM", "Opens the selected saved view"))
+        for action in (
+            self.dialog.buttonAddLevel,
+            self.dialog.buttonAddProxy,
+            self.dialog.buttonToggle,
+            self.dialog.buttonIsolate,
+        ):
+            action.setEnabled(False)
+        for action in (
+            self.dialog.buttonActive,
+            self.dialog.buttonDelete,
+            self.dialog.buttonSaveView,
+            self.dialog.buttonSaveVisibility,
+            self.dialog.buttonRename,
+        ):
+            action.setEnabled(True)
+        self.dialog.menu.exec_(self.dialog.viewtree.mapToGlobal(pos))
+
+    def getViews(self):
+        """Return legacy 2D views retained for document compatibility."""
+        return list(_manager_model().legacy_views())
 
     def getPages(self):
         """Returns a list of TD pages"""
@@ -786,7 +852,9 @@ def show(item, column=None):
         FreeCADGui.Selection.clearSelection()
         FreeCADGui.Selection.addSelection(obj)
         vparam = FreeCAD.ParamGet("User parameter:BaseApp/Preferences/View")
-        if obj.isDerivedFrom("TechDraw::DrawPage"):
+        if obj.isDerivedFrom("App::ViewDefinition"):
+            _view_service().activate_view(obj)
+        elif obj.isDerivedFrom("TechDraw::DrawPage"):
             # TD page: We switch to it.
             obj.ViewObject.Visibility = True
         elif isView(obj):
@@ -983,7 +1051,52 @@ def _toggle_active_container(obj, action=None, dialog=None):
             "NativeIFC" if Draft.getType(obj) in ("IfcBuilding", "IfcBuildingStorey") else "Arch"
         )
         FreeCADGui.ActiveDocument.ActiveView.setActiveObject(context, obj)
+        _view_service().activate_storey(obj)
         return True
+
+
+def _manager_model():
+    """Return the document-query model used by the dock."""
+
+    from bimviews.model import BIMViewManagerModel
+
+    return BIMViewManagerModel(FreeCAD.ActiveDocument, legacy_view_predicate=isView)
+
+
+def _apply_representation_request(request):
+    """Forward saved-view semantic intent to an active Plan Edit session."""
+
+    try:
+        import ArchRepresentation
+        from bimplan.runtime.session import get_active_session
+
+        session = get_active_session()
+        if session is None:
+            return
+        if request.purpose != ArchRepresentation.RepresentationPurpose.PLAN:
+            return
+        source = getattr(request, "source", None)
+        if source is not None:
+            session.representation_request.set_source(source, fit=False)
+        else:
+            session.representation_request.request = request
+            session.viewport.apply_representation_request(request, fit=False)
+    except (AttributeError, RuntimeError, ValueError):
+        return
+
+
+def _view_service():
+    """Return one activation service per open document."""
+
+    from bimviews.service import BIMViewService
+
+    document = FreeCAD.ActiveDocument
+    key = document.Name
+    service = _view_services.get(key)
+    if service is None or service.document is not document:
+        service = BIMViewService(document, representation_applier=_apply_representation_request)
+        _view_services[key] = service
+    return service
 
 
 FreeCADGui.addCommand("BIM_Views", BIM_Views())

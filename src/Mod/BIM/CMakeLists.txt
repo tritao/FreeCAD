@@ -192,6 +192,12 @@ SET(bimcontextual_SRCS
     bimcontextual/ui.py
 )
 
+SET(bimviews_SRCS
+    bimviews/__init__.py
+    bimviews/model.py
+    bimviews/service.py
+)
+
 SET(importers_SRCS
     importers/__init__.py
     importers/importIFC.py
@@ -369,6 +375,7 @@ SET(bimtests_SRCS
     bimtests/TestBimTaskWatcherGui.py
     bimtests/TestBimPlanEditLibraryGui.py
     bimtests/TestBimPlanEditExamplesGui.py
+    bimtests/TestBimViewsServiceGui.py
     bimtests/TestArchCovering.py
     bimtests/TestArchCoveringGui.py
     bimtests/TestArchBuildingPart.py
@@ -484,6 +491,7 @@ ADD_CUSTOM_TARGET(BIM ALL
     SOURCES ${Arch_SRCS}
     ${bimplan_SRCS}
     ${bimcontextual_SRCS}
+    ${bimviews_SRCS}
             ${Dice3DS_SRCS}
             ${Arch_presets}
             ${ArchGuiIcon_SVG}
@@ -503,6 +511,7 @@ add_custom_target(ArchSqlParser ALL DEPENDS ${BIM_GENERATED_PARSER})
 fc_copy_sources(BIM "${CMAKE_BINARY_DIR}/Mod/BIM" ${Arch_SRCS})
 fc_copy_sources(BIM "${CMAKE_BINARY_DIR}/Mod/BIM" ${bimplan_SRCS})
 fc_copy_sources(BIM "${CMAKE_BINARY_DIR}/Mod/BIM" ${bimcontextual_SRCS})
+fc_copy_sources(BIM "${CMAKE_BINARY_DIR}/Mod/BIM" ${bimviews_SRCS})
 fc_copy_sources(BIM "${CMAKE_BINARY_DIR}/Mod/BIM" ${Dice3DS_SRCS})
 fc_copy_sources(BIM "${CMAKE_BINARY_DIR}/Mod/BIM" ${importers_SRCS})
 fc_copy_sources(BIM "${CMAKE_BINARY_DIR}/Mod/BIM" ${bimcommands_SRCS})
@@ -548,6 +557,12 @@ INSTALL(
 
 INSTALL(
     DIRECTORY bimcontextual
+    DESTINATION Mod/BIM
+    FILES_MATCHING PATTERN "*.py"
+)
+
+INSTALL(
+    DIRECTORY bimviews
     DESTINATION Mod/BIM
     FILES_MATCHING PATTERN "*.py"
 )
