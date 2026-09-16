@@ -221,7 +221,15 @@ if FreeCAD.GuiUp:
             if y is None:
                 return None
             label = self._cursor_label(transform.y_at_pixel(self.cursor_position[1]))
-            return QtCore.QRect(3, y - 10, self.LEFT_BAND - 10, 20)
+            width = max(
+                self.LEFT_BAND - 10,
+                painter.fontMetrics().horizontalAdvance(label) + 12,
+            )
+            top = max(
+                self.TOP_BAND + 2,
+                min(y - 10, self.height() - 22),
+            )
+            return QtCore.QRect(3, top, width, 20)
 
 
     class _ViewportEventFilter(QtCore.QObject):

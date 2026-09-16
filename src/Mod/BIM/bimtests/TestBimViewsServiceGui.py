@@ -82,6 +82,27 @@ class TestBimViewsServiceGui(TestArchBaseGui):
         finally:
             overlay.close()
 
+    def test_left_cursor_measure_fits_long_values(self):
+        host = QtGui.QWidget()
+        host.resize(640, 480)
+        transform = RulerTransform(
+            0.0, 5000.0, 12000.0, -12000.0, 640.0, 480.0, 50.0
+        )
+        overlay = ViewportRulerOverlay(host, lambda: transform)
+        image = QtGui.QImage(640, 480, QtGui.QImage.Format_ARGB32)
+        painter = QtGui.QPainter(image)
+        try:
+            overlay.set_cursor_position((320, 479))
+            rect = overlay._vertical_cursor_rect(painter, transform, 479)
+            label = overlay._cursor_label(transform.y_at_pixel(479))
+            required_width = painter.fontMetrics().horizontalAdvance(label) + 10
+
+            self.assertGreaterEqual(rect.width(), required_width)
+            self.assertLessEqual(rect.bottom(), overlay.height())
+        finally:
+            painter.end()
+            overlay.close()
+
     def test_saved_views_are_grouped_separately_from_project_context(self):
         model_view = self.document.addObject("App::ViewDefinition", "ModelView")
         model_view.Label = "Default 3D"
