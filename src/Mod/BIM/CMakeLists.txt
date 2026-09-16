@@ -195,7 +195,9 @@ SET(bimcontextual_SRCS
 SET(bimviews_SRCS
     bimviews/__init__.py
     bimviews/model.py
+    bimviews/ruler_model.py
     bimviews/service.py
+    bimviews/viewport_ruler.py
 )
 
 SET(importers_SRCS

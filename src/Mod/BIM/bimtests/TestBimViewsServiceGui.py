@@ -4,10 +4,13 @@
 
 import ArchRepresentation
 import FreeCAD
+from PySide import QtGui
 
 from bimtests.TestArchBaseGui import TestArchBaseGui
 from bimviews.model import BIMViewManagerModel
+from bimviews.ruler_model import RulerTransform, engineering_interval, format_metric, tick_values
 from bimviews.service import BIMViewService
+from bimviews.viewport_ruler import ViewportRulerOverlay
 
 
 class _RecordingView:
@@ -27,6 +30,43 @@ class _RecordingView:
 
 
 class TestBimViewsServiceGui(TestArchBaseGui):
+    def test_ruler_uses_engineering_intervals(self):
+        self.assertEqual(100.0, engineering_interval(0.8))
+        self.assertEqual(200.0, engineering_interval(1.1))
+        self.assertEqual(500.0, engineering_interval(3.0))
+        self.assertEqual(1000.0, engineering_interval(8.0))
+
+    def test_ruler_transform_supports_directed_view_axes(self):
+        transform = RulerTransform(
+            -1000.0, 4000.0, 3000.0, -2000.0, 500.0, 500.0, 10.0
+        )
+
+        self.assertEqual(1000.0, transform.major_interval)
+        self.assertAlmostEqual(1500.0, transform.x_at_pixel(250.0))
+        self.assertAlmostEqual(500.0, transform.y_at_pixel(250.0))
+        self.assertAlmostEqual(100.0, transform.pixel_for_x(0.0))
+        self.assertEqual((-1000.0, 0.0, 1000.0), tick_values(-1100.0, 1100.0, 1000.0))
+        self.assertEqual("3.482 m", format_metric(3482.0, cursor=True))
+        self.assertEqual("100 mm", format_metric(100.0, 100.0))
+        self.assertEqual("0 mm", format_metric(0.0, 100.0))
+
+    def test_ruler_overlay_paints_ticks_and_cursor(self):
+        host = QtGui.QWidget()
+        host.resize(640, 480)
+        transform = RulerTransform(0.0, 5000.0, 4000.0, 0.0, 640.0, 480.0, 8.0)
+        overlay = ViewportRulerOverlay(host, lambda: transform)
+        try:
+            overlay.refresh_transform()
+            overlay.set_cursor_position((320, 240))
+            image = QtGui.QImage(640, 480, QtGui.QImage.Format_ARGB32)
+            image.fill(0)
+
+            overlay.render(image)
+
+            self.assertFalse(image.isNull())
+        finally:
+            overlay.close()
+
     def test_saved_views_are_grouped_separately_from_project_context(self):
         model_view = self.document.addObject("App::ViewDefinition", "ModelView")
         model_view.Label = "Default 3D"

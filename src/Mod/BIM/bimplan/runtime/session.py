@@ -57,6 +57,7 @@ from bimplan.ui.controls import PlanEditControlsWidget
 from bimplan.contextual_rendering import PlanContextualRenderingAPI
 from bimplan.representation_request import PlanRepresentationRequestAPI
 from bimplan.contextual_editing import PlanContextualEditingAPI
+from bimviews.viewport_ruler import ViewportRulerController
 
 QT_TRANSLATE_NOOP = FreeCAD.Qt.QT_TRANSLATE_NOOP
 translate = FreeCAD.Qt.translate
@@ -198,6 +199,7 @@ class PlanEditSession:
         self.contextual_editing = PlanContextualEditingAPI(self)
         self.status_text = PlanStatusTextAPI(self)
         self.task_panels = plan_task_panel.PlanTaskPanelsAPI(self)
+        self.view_rulers = ViewportRulerController(self)
         plan_session_state.initialize_session_state(self)
         self.viewport_state.plan_paper_rgb = _PLAN_PAPER_RGB
         self.viewport_state.plan_view_locked_actions = _PLAN_VIEW_LOCKED_ACTIONS
@@ -327,6 +329,8 @@ class PlanEditSession:
                 self.document_visuals.attach_document_observer()
             with self.performance.plan_perf_trace_span("register_edit_callbacks"):
                 self.viewport.register_edit_callbacks()
+            with self.performance.plan_perf_trace_span("attach_view_rulers"):
+                self.view_rulers.set_request(self.representation_request.request)
             with self.performance.plan_perf_trace_span(
                 "refresh_primary_selected_plan_target_on_enter"
             ):

@@ -96,6 +96,9 @@ class PlanRepresentationRequestAPI:
             raise ValueError("Object does not provide a BIM representation request")
         self.source = source
         self.request = request
+        view_rulers = getattr(self._session, "view_rulers", None)
+        if view_rulers is not None:
+            view_rulers.set_request(request)
         if _is_storey(source):
             self._session.active_storey = source
         if not refresh:
