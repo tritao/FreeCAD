@@ -28,6 +28,18 @@ class _RecordingView:
         self.calls.append(("apply", definition))
         return True
 
+    def setCameraType(self, camera_type):
+        self.calls.append(("camera-type", camera_type))
+
+    def setCameraOrientation(self, orientation):
+        self.calls.append(("camera-orientation", orientation))
+
+    def viewTop(self):
+        self.calls.append(("view-top", None))
+
+    def fitAll(self):
+        self.calls.append(("fit", None))
+
 
 class TestBimViewsServiceGui(TestArchBaseGui):
     def test_ruler_uses_engineering_intervals(self):
@@ -116,3 +128,55 @@ class TestBimViewsServiceGui(TestArchBaseGui):
         self.assertEqual("Default 3D Copy", duplicate.Label)
         self.assertEqual(original.CameraPayload, duplicate.CameraPayload)
         self.assertEqual(original.ForcedHidden, duplicate.ForcedHidden)
+        self.assertFalse(duplicate.BIMIsActiveView)
+
+    def test_active_saved_view_is_persistent_and_restorable(self):
+        calls = []
+        view = _RecordingView(calls)
+        service = BIMViewService(self.document, view=view)
+        first = service.create_model_view("Default 3D")
+        second = service.create_model_view("Context 3D")
+
+        restored_service = BIMViewService(self.document, view=view)
+
+        self.assertFalse(first.BIMIsActiveView)
+        self.assertTrue(second.BIMIsActiveView)
+        self.assertIs(second, restored_service.active_view)
+        self.assertTrue(restored_service.restore_active_view())
+        self.assertIs(second, restored_service.active_view)
+
+    def test_plan_creation_orients_and_captures_the_view(self):
+        calls = []
+        storey = self.document.addObject("App::FeaturePython", "FirstFloor")
+        storey.addProperty("App::PropertyPlacement", "Placement")
+        storey.Placement.Base = FreeCAD.Vector(1000, 2000, 3000)
+        service = BIMViewService(self.document, view=_RecordingView(calls))
+
+        definition = service.create_plan_view("First Floor Plan", storey)
+
+        call_names = tuple(call[0] for call in calls)
+        self.assertEqual(
+            ("camera-type", "camera-orientation", "fit", "capture"), call_names
+        )
+        self.assertEqual("Plan", definition.Purpose)
+        self.assertIs(storey, definition.BIMContextSource)
+        self.assertTrue(definition.BIMIsActiveView)
+
+    def test_sourced_plan_view_can_be_linked_to_a_sheet(self):
+        storey = self.document.addObject("App::FeaturePython", "SheetStorey")
+        storey.addProperty("App::PropertyPlacement", "Placement")
+        service = BIMViewService(self.document, view=_RecordingView([]))
+        definition = service.create_view("Sheet Plan", "Plan", storey)
+        page = self.document.addObject("TechDraw::DrawPage", "Page")
+        template = self.document.addObject("TechDraw::DrawSVGTemplate", "Template")
+        template.Template = (
+            FreeCAD.getResourceDir()
+            + "Mod/TechDraw/Templates/Default_Template_A4_Landscape.svg"
+        )
+        page.Template = template
+
+        drawing_view = service.place_on_sheet(definition, page)
+
+        self.assertIs(definition, drawing_view.BIMViewDefinition)
+        self.assertIs(storey, drawing_view.Source)
+        self.assertIn(drawing_view, page.Views)

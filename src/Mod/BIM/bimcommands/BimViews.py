@@ -101,6 +101,8 @@ class BIM_Views:
             # set button
             self.dialog.menu = QtGui.QMenu()
             for button in [
+                ("NewPlanView", translate("BIM", "New Floor Plan")),
+                ("NewModelView", translate("BIM", "New 3D View")),
                 ("Active", translate("BIM", "Active")),
                 ("AddLevel", translate("BIM", "New Level Above")),
                 ("AddProxy", translate("BIM", "New Working Plane Proxy")),
@@ -109,6 +111,8 @@ class BIM_Views:
                 ("Isolate", translate("BIM", "Isolate")),
                 ("SaveView", translate("BIM", "Save Camera View")),
                 ("SaveVisibility", translate("BIM", "Save Visibility of Objects")),
+                ("DuplicateView", translate("BIM", "Duplicate View")),
+                ("PlaceOnSheet", translate("BIM", "Place on Sheet…")),
                 ("Rename", translate("BIM", "Rename")),
             ]:
                 action = QtGui.QAction(button[1])
@@ -155,11 +159,15 @@ class BIM_Views:
             # connect signals
             self.dialog.buttonAddLevel.triggered.connect(self.addLevel)
             self.dialog.buttonAddProxy.triggered.connect(self.addProxy)
+            self.dialog.buttonNewPlanView.triggered.connect(self.newPlanView)
+            self.dialog.buttonNewModelView.triggered.connect(self.newModelView)
             self.dialog.buttonDelete.triggered.connect(self.delete)
             self.dialog.buttonToggle.triggered.connect(self.toggle)
             self.dialog.buttonIsolate.triggered.connect(self.isolate)
             self.dialog.buttonSaveView.triggered.connect(self.saveView)
             self.dialog.buttonSaveVisibility.triggered.connect(self.saveVisibility)
+            self.dialog.buttonDuplicateView.triggered.connect(self.duplicateView)
+            self.dialog.buttonPlaceOnSheet.triggered.connect(self.placeOnSheet)
             self.dialog.buttonRename.triggered.connect(self.rename)
             self.dialog.buttonActive.triggered.connect(self.activateContextItem)
             self.dialog.tree.itemClicked.connect(self.select)
@@ -487,6 +495,135 @@ class BIM_Views:
         FreeCADGui.Selection.addSelection(obj)
         self.update(False)
 
+    def _selectedProjectContext(self):
+        """Return the selected or active building/storey context, if any."""
+
+        import Draft
+
+        candidates = []
+        context_object = getattr(self, "contextObject", None)
+        if context_object is not None:
+            candidates.append(context_object)
+        candidates.extend(FreeCADGui.Selection.getSelection())
+        active_storey = _view_service().active_storey
+        if active_storey is not None:
+            candidates.append(active_storey)
+        for obj in candidates:
+            obj_type = Draft.getType(obj)
+            if obj_type in (
+                "Building",
+                "BuildingPart",
+                "Building Storey",
+                "IfcBuilding",
+                "IfcBuildingStorey",
+            ) or getattr(obj, "IfcType", "") in ("Building", "Building Storey"):
+                return obj
+        return None
+
+    def _uniqueViewLabel(self, base):
+        labels = {view.Label for view in _manager_model().saved_views()}
+        if base not in labels:
+            return base
+        index = 2
+        while "{} {}".format(base, index) in labels:
+            index += 1
+        return "{} {}".format(base, index)
+
+    def newPlanView(self):
+        source = self._selectedProjectContext()
+        base = (
+            translate("BIM", "{} Plan").format(source.Label)
+            if source is not None
+            else translate("BIM", "Floor Plan")
+        )
+        document = FreeCAD.ActiveDocument
+        document.openTransaction("Create BIM floor plan")
+        try:
+            definition = _view_service().create_plan_view(
+                self._uniqueViewLabel(base), source
+            )
+            document.commitTransaction()
+        except Exception:
+            document.abortTransaction()
+            raise
+        document.recompute()
+        self.update(False)
+        FreeCADGui.Selection.clearSelection()
+        FreeCADGui.Selection.addSelection(definition)
+
+    def newModelView(self):
+        source = self._selectedProjectContext()
+        document = FreeCAD.ActiveDocument
+        document.openTransaction("Create BIM 3D view")
+        try:
+            definition = _view_service().create_model_view(
+                self._uniqueViewLabel(translate("BIM", "Default 3D")), source
+            )
+            document.commitTransaction()
+        except Exception:
+            document.abortTransaction()
+            raise
+        document.recompute()
+        self.update(False)
+        FreeCADGui.Selection.clearSelection()
+        FreeCADGui.Selection.addSelection(definition)
+
+    def duplicateView(self):
+        if not self.contextObject or not _view_service().is_view_definition(
+            self.contextObject
+        ):
+            return
+        document = FreeCAD.ActiveDocument
+        document.openTransaction("Duplicate BIM view")
+        try:
+            duplicate = _view_service().duplicate_view(self.contextObject)
+            document.commitTransaction()
+        except Exception:
+            document.abortTransaction()
+            raise
+        document.recompute()
+        self.update(False)
+        FreeCADGui.Selection.clearSelection()
+        FreeCADGui.Selection.addSelection(duplicate)
+
+    def placeOnSheet(self):
+        from PySide import QtGui
+
+        definition = self.contextObject
+        service = _view_service()
+        if not definition or not service.can_place_on_sheet(definition):
+            return
+        pages = list(_manager_model().pages())
+        if not pages:
+            QtGui.QMessageBox.information(
+                self.dialog,
+                translate("BIM", "Place on Sheet"),
+                translate("BIM", "Create a TechDraw sheet before placing this view."),
+            )
+            return
+        labels = [page.Label for page in pages]
+        label, accepted = QtGui.QInputDialog.getItem(
+            self.dialog,
+            translate("BIM", "Place on Sheet"),
+            translate("BIM", "Sheet"),
+            labels,
+            0,
+            False,
+        )
+        if not accepted:
+            return
+        page = pages[labels.index(label)]
+        document = FreeCAD.ActiveDocument
+        document.openTransaction("Place BIM view on sheet")
+        try:
+            service.place_on_sheet(definition, page)
+            document.commitTransaction()
+        except Exception:
+            document.abortTransaction()
+            raise
+        document.recompute()
+        self.update(False)
+
     def addProxy(self):
         "adds a WP proxy"
 
@@ -526,13 +663,22 @@ class BIM_Views:
 
         vm = findWidget()
         if vm:
-            selected = vm.tree.selectedItems() + vm.viewtree.selectedItems()
+            context_object = getattr(self, "contextObject", None)
+            if context_object is not None:
+                selected = [context_object]
+            else:
+                selected = [
+                    FreeCAD.ActiveDocument.getObject(item.toolTip(0))
+                    for item in vm.tree.selectedItems() + vm.viewtree.selectedItems()
+                ]
             if selected:
                 FreeCAD.ActiveDocument.openTransaction("Delete")
-                for item in selected:
-                    obj = FreeCAD.ActiveDocument.getObject(item.toolTip(0))
+                for obj in selected:
                     if obj:
-                        FreeCAD.ActiveDocument.removeObject(obj.Name)
+                        if _view_service().is_view_definition(obj):
+                            _view_service().delete_view(obj)
+                        else:
+                            FreeCAD.ActiveDocument.removeObject(obj.Name)
                 FreeCAD.ActiveDocument.commitTransaction()
                 FreeCAD.ActiveDocument.recompute()
                 self.update(False)
@@ -542,6 +688,13 @@ class BIM_Views:
 
         vm = findWidget()
         if vm:
+            context_object = getattr(self, "contextObject", None)
+            if context_object is not None:
+                for tree in (vm.tree, vm.viewtree):
+                    for item in getAllItemsInTree(tree):
+                        if item.toolTip(0) == context_object.Name:
+                            tree.editItem(item, 0)
+                            return
             selected = vm.tree.selectedItems()
             tree = vm.tree
             if not selected:
@@ -672,6 +825,11 @@ class BIM_Views:
 
         vm = findWidget()
         if vm:
+            context_object = getattr(self, "contextObject", None)
+            if context_object and _view_service().is_view_definition(context_object):
+                _view_service().capture(context_object)
+                FreeCAD.ActiveDocument.recompute()
+                return
             for item in vm.viewtree.selectedItems():
                 obj = FreeCAD.ActiveDocument.getObject(item.toolTip(0))
                 if obj and _view_service().is_view_definition(obj):
@@ -688,6 +846,11 @@ class BIM_Views:
 
         vm = findWidget()
         if vm:
+            context_object = getattr(self, "contextObject", None)
+            if context_object and _view_service().is_view_definition(context_object):
+                _view_service().capture(context_object)
+                FreeCAD.ActiveDocument.recompute()
+                return
             for item in vm.viewtree.selectedItems():
                 obj = FreeCAD.ActiveDocument.getObject(item.toolTip(0))
                 if obj and _view_service().is_view_definition(obj):
@@ -732,6 +895,8 @@ class BIM_Views:
         import Draft
 
         for action in (
+            self.dialog.buttonNewPlanView,
+            self.dialog.buttonNewModelView,
             self.dialog.buttonActive,
             self.dialog.buttonAddLevel,
             self.dialog.buttonAddProxy,
@@ -740,9 +905,14 @@ class BIM_Views:
             self.dialog.buttonIsolate,
             self.dialog.buttonSaveView,
             self.dialog.buttonSaveVisibility,
+            self.dialog.buttonDuplicateView,
+            self.dialog.buttonPlaceOnSheet,
             self.dialog.buttonRename,
         ):
             action.setEnabled(True)
+            action.setVisible(True)
+        self.dialog.buttonDuplicateView.setVisible(False)
+        self.dialog.buttonPlaceOnSheet.setVisible(False)
         self.contextObject = None
         self.dialog.buttonActive.setText(translate("BIM", "Active"))
         self.dialog.buttonActive.setCheckable(True)
@@ -778,10 +948,15 @@ class BIM_Views:
         """Show saved-view actions without exposing storey-only operations."""
 
         item = self.dialog.viewtree.itemAt(pos)
-        if item is None:
-            return
-        obj = FreeCAD.ActiveDocument.getObject(item.toolTip(0))
-        if obj is None or not _view_service().is_view_definition(obj):
+        obj = FreeCAD.ActiveDocument.getObject(item.toolTip(0)) if item is not None else None
+        is_saved_view = obj is not None and _view_service().is_view_definition(obj)
+        for action in self.dialog.menu.actions():
+            action.setVisible(False)
+        self.dialog.buttonNewPlanView.setVisible(True)
+        self.dialog.buttonNewModelView.setVisible(True)
+        if not is_saved_view:
+            self.contextObject = None
+            self.dialog.menu.exec_(self.dialog.viewtree.mapToGlobal(pos))
             return
         self.dialog.viewtree.setCurrentItem(item)
         self.contextObject = obj
@@ -800,9 +975,13 @@ class BIM_Views:
             self.dialog.buttonDelete,
             self.dialog.buttonSaveView,
             self.dialog.buttonSaveVisibility,
+            self.dialog.buttonDuplicateView,
             self.dialog.buttonRename,
         ):
             action.setEnabled(True)
+            action.setVisible(True)
+        self.dialog.buttonPlaceOnSheet.setVisible(True)
+        self.dialog.buttonPlaceOnSheet.setEnabled(_view_service().can_place_on_sheet(obj))
         self.dialog.menu.exec_(self.dialog.viewtree.mapToGlobal(pos))
 
     def getViews(self):
@@ -1096,6 +1275,11 @@ def _view_service():
     if service is None or service.document is not document:
         service = BIMViewService(document, representation_applier=_apply_representation_request)
         _view_services[key] = service
+        if service.active_view is not None:
+            try:
+                service.restore_active_view()
+            except (RuntimeError, ValueError):
+                pass
     return service
 
 
