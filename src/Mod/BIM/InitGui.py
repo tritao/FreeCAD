@@ -1112,6 +1112,7 @@ class BIMWorkbench(Workbench):
             else:
                 w.show()
                 w.toggleViewAction().setVisible(True)
+            BimViews.placeInComboView()
 
         self.setupMultipleObjectSelection()
 
@@ -1173,6 +1174,7 @@ class BIMWorkbench(Workbench):
             PARAMS.SetInt("BimViewsSize", w.height())
             w.hide()
             w.toggleViewAction().setVisible(False)
+        BimViews.restoreComboViewTitle()
 
         # add NativeIFC document observer
         ifc_observer.remove_observer()

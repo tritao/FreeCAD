@@ -75,8 +75,8 @@ class BIM_Views:
     def GetResources(self):
         return {
             "Pixmap": "BIM_Views",
-            "MenuText": QT_TRANSLATE_NOOP("BIM_Views", "Views Manager"),
-            "ToolTip": QT_TRANSLATE_NOOP("BIM_Views", "Shows or hides the views manager"),
+            "MenuText": QT_TRANSLATE_NOOP("BIM_Views", "BIM Navigator"),
+            "ToolTip": QT_TRANSLATE_NOOP("BIM_Views", "Shows or hides the BIM Navigator"),
         }
 
     def Activated(self):
@@ -101,6 +101,7 @@ class BIM_Views:
                 PARAMS.SetBool("RestoreBimViews", False)
             else:
                 vm.show()
+                placeInComboView(vm)
                 if bimviewsbutton:
                     bimviewsbutton.setChecked(True)
                 PARAMS.SetBool("RestoreBimViews", True)
@@ -198,29 +199,17 @@ class BIM_Views:
             QtCore.QTimer.singleShot(0, self.connectDock)
 
             # set the dock widget
-            area = PARAMS.GetInt("BimViewArea", 1)
-            floating = PARAMS.GetBool("BimViewFloat", True)
-            height = PARAMS.GetBool("BimViewWidth", 200)
-            width = PARAMS.GetBool("BimViewHeight", 300)
-            tabs = PARAMS.GetString("BimViewTabs", "")
-            vm.setObjectName("BIM Views Manager")
-            vm.setWindowTitle(translate("BIM", "BIM Views Manager"))
+            width = PARAMS.GetInt("BimViewWidth", 300)
+            height = PARAMS.GetInt("BimViewHeight", 500)
+            vm.setObjectName("BIM Navigator")
+            vm.setWindowTitle(translate("BIM", "BIM Navigator"))
             mw = FreeCADGui.getMainWindow()
-            vm.setFloating(floating)
             vm.setGeometry(vm.x(), vm.y(), width, height)
-            mw.addDockWidget(self.getDockArea(area), vm)
-            if tabs:
-                tabs = tabs.split("+")
-                for tab in tabs:
-                    dw = mw.findChild(QtGui.QDockWidget, tab)
-                    if dw:
-                        mw.tabifyDockWidget(dw, vm)
-                        break
+            mw.addDockWidget(QtCore.Qt.LeftDockWidgetArea, vm)
+            placeInComboView(vm)
 
             # restore saved settings
             vm.navigator.setColumnWidth(0, PARAMS.GetInt("ViewManagerColumnWidth", 190))
-            vm.setFloating(PARAMS.GetBool("ViewManagerFloating", False))
-
             self.observer = _NavigatorObserver(self)
             FreeCAD.addDocumentObserver(self.observer)
             FreeCADGui.Selection.addObserver(self.observer)
@@ -841,14 +830,77 @@ class BIM_Views:
 
 
 def findWidget():
-    "finds the manager widget, if present"
+    """Find the navigator, including docks created under its legacy name."""
 
     from PySide import QtGui
 
     mw = FreeCADGui.getMainWindow()
-    vm = mw.findChild(QtGui.QDockWidget, "BIM Views Manager")
+    vm = mw.findChild(QtGui.QDockWidget, "BIM Navigator")
+    if vm is None:
+        vm = mw.findChild(QtGui.QDockWidget, "BIM Views Manager")
+        if vm is not None:
+            vm.setObjectName("BIM Navigator")
+            vm.setWindowTitle(translate("BIM", "BIM Navigator"))
     if vm:
         return vm
+    return None
+
+
+def placeInComboView(vm=None):
+    """Tab the BIM Navigator with Combo View and select it.
+
+    The generic Model/Tasks dock remains available as the adjacent ``Model``
+    tab.  Its normal title is restored when the BIM workbench is deactivated.
+    """
+
+    from PySide import QtCore, QtGui
+
+    mw = FreeCADGui.getMainWindow()
+    vm = vm or findWidget()
+    if vm is None:
+        return
+    combo = _findModelDock(mw)
+    if combo is None or combo is vm:
+        vm.show()
+        vm.raise_()
+        return
+    if combo.property("BIMOriginalWindowTitle") is None:
+        combo.setProperty("BIMOriginalWindowTitle", combo.windowTitle())
+    combo.setWindowTitle(translate("BIM", "Model"))
+    vm.setWindowTitle(translate("BIM", "BIM Navigator"))
+    vm.setFloating(False)
+    mw.addDockWidget(QtCore.Qt.LeftDockWidgetArea, vm)
+    # Using the navigator as the first dock gives it the leading tab position.
+    mw.tabifyDockWidget(vm, combo)
+    combo.show()
+    vm.show()
+    vm.raise_()
+
+
+def restoreComboViewTitle():
+    """Restore the generic Combo View title after leaving BIM."""
+
+    from PySide import QtGui
+
+    combo = _findModelDock(FreeCADGui.getMainWindow())
+    if combo is None:
+        return
+    title = combo.property("BIMOriginalWindowTitle")
+    if title is not None:
+        combo.setWindowTitle(str(title))
+        combo.setProperty("BIMOriginalWindowTitle", None)
+
+
+def _findModelDock(main_window=None):
+    """Return the standard combined Model/Tasks dock across FreeCAD versions."""
+
+    from PySide import QtGui
+
+    main_window = main_window or FreeCADGui.getMainWindow()
+    for name in ("Model", "Combo View", "ComboView"):
+        dock = main_window.findChild(QtGui.QDockWidget, name)
+        if dock is not None:
+            return dock
     return None
 
 

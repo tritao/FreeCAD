@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: LGPL-2.1-or-later
 
-"""Document model presented by the BIM Views Manager UI."""
+"""Document model presented by the BIM Navigator UI."""
 
 from dataclasses import dataclass
 

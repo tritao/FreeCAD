@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: LGPL-2.1-or-later
 
-"""Saved-view lifecycle and activation for the BIM Views Manager."""
+"""Saved-view lifecycle and activation for the BIM Navigator."""
 
 from dataclasses import dataclass
 
@@ -26,7 +26,7 @@ class BIMViewService:
 
     The service deliberately accepts its GUI view and representation applier as
     dependencies.  This keeps document traversal and view semantics testable
-    without constructing the Views Manager dock.
+    without constructing the BIM Navigator dock.
     """
 
     CONTEXT_SOURCE_PROPERTY = "BIMContextSource"

@@ -1,13 +1,15 @@
 # SPDX-License-Identifier: LGPL-2.1-or-later
 
-"""GUI-facing tests for the BIM Views Manager service seam."""
+"""GUI-facing tests for the BIM Navigator service seam."""
 
 from types import SimpleNamespace
 
 import ArchRepresentation
 import FreeCAD
+import FreeCADGui
 from PySide import QtCore, QtGui
 
+from bimcommands.BimViews import _findModelDock, placeInComboView, restoreComboViewTitle
 from bimtests.TestArchBaseGui import TestArchBaseGui
 from bimviews.model import BIMViewManagerModel
 from bimviews.navigator_model import BIMNavigatorModel
@@ -46,6 +48,26 @@ class _RecordingView:
 
 
 class TestBimViewsServiceGui(TestArchBaseGui):
+    def test_navigator_tabs_with_model_and_restores_combo_title(self):
+        main_window = FreeCADGui.getMainWindow()
+        combo = _findModelDock(main_window)
+        self.assertIsNotNone(combo)
+        original_title = combo.windowTitle()
+        navigator = QtGui.QDockWidget()
+        navigator.setObjectName("BIM Navigator Test")
+        main_window.addDockWidget(QtCore.Qt.LeftDockWidgetArea, navigator)
+        try:
+            placeInComboView(navigator)
+
+            self.assertEqual("BIM Navigator", navigator.windowTitle())
+            self.assertEqual("Model", combo.windowTitle())
+            self.assertIn(navigator, main_window.tabifiedDockWidgets(combo))
+        finally:
+            restoreComboViewTitle()
+            main_window.removeDockWidget(navigator)
+            navigator.deleteLater()
+        self.assertEqual(original_title, combo.windowTitle())
+
     def test_ruler_uses_engineering_intervals(self):
         self.assertEqual(100.0, engineering_interval(0.8))
         self.assertEqual(200.0, engineering_interval(1.1))

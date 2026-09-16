@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: LGPL-2.1-or-later
 
-"""Model and service layer for the BIM Views Manager."""
+"""Model and service layer for the BIM Navigator."""
 
 from .model import BIMViewManagerModel, SavedViewGroup
 from .navigator_model import BIMNavigatorModel, NavigatorSection, ProjectNode
