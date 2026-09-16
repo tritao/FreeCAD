@@ -103,6 +103,20 @@ class TestBimViewsServiceGui(TestArchBaseGui):
             painter.end()
             overlay.close()
 
+    def test_ruler_maps_sibling_viewport_without_parent_warning(self):
+        host = QtGui.QWidget()
+        host.resize(640, 480)
+        viewport = QtGui.QWidget(host)
+        viewport.setGeometry(46, 28, 594, 452)
+        transform = RulerTransform(
+            0.0, 5000.0, 4000.0, 0.0, 594.0, 452.0, 8.0
+        )
+        overlay = ViewportRulerOverlay(host, lambda: transform, viewport)
+        try:
+            self.assertEqual((46, 28), overlay._content_origin())
+        finally:
+            overlay.close()
+
     def test_saved_views_are_grouped_separately_from_project_context(self):
         model_view = self.document.addObject("App::ViewDefinition", "ModelView")
         model_view.Label = "Default 3D"

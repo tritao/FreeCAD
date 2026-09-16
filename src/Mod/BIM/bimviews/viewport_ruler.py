@@ -192,7 +192,8 @@ if FreeCAD.GuiUp:
         def _content_origin(self):
             if self.content_widget is self.host_widget:
                 return 0, 0
-            point = self.content_widget.mapTo(self, QtCore.QPoint(0, 0))
+            global_origin = self.content_widget.mapToGlobal(QtCore.QPoint(0, 0))
+            point = self.mapFromGlobal(global_origin)
             return point.x(), point.y()
 
         def _cursor_overlay_position(self):
