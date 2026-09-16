@@ -10,6 +10,7 @@ from PySide import QtCore, QtGui
 
 from bimtests.TestArchBaseGui import TestArchBaseGui
 from bimviews.model import BIMViewManagerModel
+from bimviews.navigator_model import BIMNavigatorModel
 from bimviews.ruler_model import RulerTransform, engineering_interval, format_metric, tick_values
 from bimviews.service import BIMViewService
 from bimviews.viewport_ruler import ViewportRulerOverlay, _ViewportEventFilter
@@ -149,6 +150,57 @@ class TestBimViewsServiceGui(TestArchBaseGui):
         self.assertEqual(("Plan", "Model"), tuple(group.key for group in groups))
         self.assertEqual((plan_view,), groups[0].views)
         self.assertEqual((model_view,), groups[1].views)
+
+    def test_navigator_exposes_stable_virtual_sections(self):
+        sections = BIMNavigatorModel(self.document).sections()
+
+        self.assertEqual(
+            ("Project", "Views", "CurrentView", "Sheets"),
+            tuple(section.key for section in sections),
+        )
+
+    def test_navigator_builds_project_context_without_qt_items(self):
+        building = self.document.addObject("App::Part", "Building")
+        upper = self.document.addObject("App::Part", "UpperStorey")
+        upper.Placement.Base.z = 3000.0
+        ground = self.document.addObject("App::Part", "GroundStorey")
+        ground.Placement.Base.z = 0.0
+        proxy = self.document.addObject("App::FeaturePython", "GroundWorkingPlane")
+        ground.addObject(proxy)
+        building.addObject(upper)
+        building.addObject(ground)
+        kinds = {
+            building.Name: "Building",
+            upper.Name: "Building Storey",
+            ground.Name: "Building Storey",
+            proxy.Name: "WorkingPlaneProxy",
+        }
+
+        nodes = BIMNavigatorModel(
+            self.document,
+            type_resolver=lambda obj: kinds.get(obj.Name, ""),
+        ).project_nodes()
+
+        self.assertEqual((building,), tuple(node.object for node in nodes))
+        self.assertEqual((ground, upper), tuple(node.object for node in nodes[0].children))
+        self.assertEqual((proxy,), tuple(node.object for node in nodes[0].children[0].children))
+
+    def test_view_scope_keeps_hidden_storey_objects_in_context(self):
+        storey = self.document.addObject("App::Part", "ScopeStorey")
+        visible = self.document.addObject("PartDesign::Feature", "VisibleWall")
+        hidden = self.document.addObject("PartDesign::Feature", "HiddenWall")
+        storey.addObject(visible)
+        storey.addObject(hidden)
+        hidden.ViewObject.Visibility = False
+        service = BIMViewService(self.document, view=_RecordingView([]))
+        definition = service.create_view("Scope Plan", "Plan", storey)
+
+        scope = service.scope_for(definition)
+
+        self.assertEqual((visible, hidden), scope.context_objects)
+        self.assertEqual((visible,), scope.visible_objects)
+        self.assertEqual((hidden,), scope.hidden_objects)
+        self.assertEqual((), scope.categories)
 
     def test_service_creates_captures_and_activates_a_plan_view(self):
         calls = []

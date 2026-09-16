@@ -242,7 +242,6 @@ class BIM_Views:
         "updates the view manager"
 
         from PySide import QtCore, QtGui
-        import Draft
 
         vm = findWidget()
         if vm and vm.isVisible():
@@ -254,77 +253,15 @@ class BIM_Views:
                     self.oldData[1] = []
                     vm.viewtree.clear()
             else:
+                model = _manager_model()
                 if vm.tree.state() != vm.tree.State.EditingState:
-                    treeViewItems = []  # QTreeWidgetItem to Display in tree
-                    lvHold = []
-                    soloProxyHold = []
-                    for obj in FreeCAD.ActiveDocument.Objects:
-                        t = Draft.getType(obj)
-                        if obj and (
-                            t
-                            in [
-                                "Building",
-                                "BuildingPart",
-                                "IfcBuilding",
-                                "IfcBuildingStorey",
-                            ]
-                        ):
-                            if (
-                                t in ["Building", "IfcBuilding"]
-                                or getattr(obj, "IfcType", "") == "Building"
-                            ):
-                                building, _ = getTreeViewItem(obj)
-                                subObjs = obj.Group
-                                # find every levels belongs to the building
-                                for subObj in subObjs:
-                                    if Draft.getType(subObj) in [
-                                        "BuildingPart",
-                                        "Building Storey",
-                                        "IfcBuildingStorey",
-                                    ]:
-                                        lv, lvH = getTreeViewItem(subObj)
-                                        subSubObjs = subObj.Group
-                                        # find every working plane proxy belongs to the level
-                                        for subSubObj in subSubObjs:
-                                            if Draft.getType(subSubObj) == "WorkingPlaneProxy":
-                                                wp, _ = getTreeViewItem(subSubObj)
-                                                lv.addChild(wp)
-                                        lvHold.append((lv, lvH))
-                                sortLvHold = sorted(lvHold, key=lambda x: x[1])
-                                sortLvItems = [item[0] for item in sortLvHold]
-                                for lvItem in sortLvItems:
-                                    building.addChild(lvItem)
-                                treeViewItems.append(building)
-                                lvHold.clear()
+                    def project_item(node):
+                        item, _elevation = getTreeViewItem(node.object)
+                        for child in node.children:
+                            item.addChild(project_item(child))
+                        return item
 
-                            if (
-                                t in ["Building Storey", "IfcBuildingStorey"]
-                                or getattr(obj, "IfcType", "") == "Building Storey"
-                            ):
-                                if (
-                                    Draft.getType(getParent(obj)) in ["Building", "IfcBuilding"]
-                                    or getattr(getParent(obj), "IfcType", "") == "Building"
-                                ):
-                                    continue
-                                lv, lvH = getTreeViewItem(obj)
-                                subObjs = obj.Group
-                                # find every working plane proxy belongs to the level
-                                for subObj in subObjs:
-                                    if Draft.getType(subObj) == "WorkingPlaneProxy":
-                                        wp, _ = getTreeViewItem(subObj)
-                                        lv.addChild(wp)
-                                lvHold.append((lv, lvH))
-                        if obj and (t == "WorkingPlaneProxy"):
-                            if (
-                                obj.getParent()
-                                and getattr(obj.getParent(), "IfcType", "") == "Building Storey"
-                            ):
-                                continue
-                            wp, _ = getTreeViewItem(obj)
-                            soloProxyHold.append(wp)
-                    sortLvHold = sorted(lvHold, key=lambda x: x[1])
-                    sortLvItems = [item[0] for item in sortLvHold]
-                    treeViewItems = treeViewItems + sortLvItems + soloProxyHold
+                    treeViewItems = [project_item(node) for node in model.project_nodes()]
                     new = self._treeToStringList(treeViewItems)
                     if new != self.oldData[0]:
                         self.oldData[0] = new
@@ -336,7 +273,6 @@ class BIM_Views:
                     ficon = QtGui.QIcon.fromTheme("folder", QtGui.QIcon(":/icons/folder.svg"))
                     treeViewItems = []
 
-                    model = _manager_model()
                     for group in model.saved_view_groups():
                         top = QtGui.QTreeWidgetItem([translate("BIM", group.label), ""])
                         top.setIcon(0, ficon)
@@ -1237,9 +1173,9 @@ def _toggle_active_container(obj, action=None, dialog=None):
 def _manager_model():
     """Return the document-query model used by the dock."""
 
-    from bimviews.model import BIMViewManagerModel
+    from bimviews.navigator_model import BIMNavigatorModel
 
-    return BIMViewManagerModel(FreeCAD.ActiveDocument, legacy_view_predicate=isView)
+    return BIMNavigatorModel(FreeCAD.ActiveDocument, legacy_view_predicate=isView)
 
 
 def _apply_representation_request(request):

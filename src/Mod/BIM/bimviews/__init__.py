@@ -3,12 +3,19 @@
 """Model and service layer for the BIM Views Manager."""
 
 from .model import BIMViewManagerModel, SavedViewGroup
+from .navigator_model import BIMNavigatorModel, NavigatorSection, ProjectNode
 from .service import BIMViewService, ViewActivationContext
+from .scope import BIMViewCategory, BIMViewScope
 from .ruler_model import RulerTransform, engineering_interval
 
 __all__ = (
     "BIMViewManagerModel",
+    "BIMNavigatorModel",
     "BIMViewService",
+    "BIMViewCategory",
+    "BIMViewScope",
+    "NavigatorSection",
+    "ProjectNode",
     "SavedViewGroup",
     "ViewActivationContext",
     "RulerTransform",

@@ -181,6 +181,15 @@ class BIMViewService:
             self.request_for(definition),
         )
 
+    def scope_for(self, definition=None):
+        """Return the object scope for a saved view or the active saved view."""
+
+        from .navigator_model import BIMNavigatorModel
+
+        return BIMNavigatorModel(self.document).current_view_scope(
+            definition or self.active_view
+        )
+
     def activate_storey(self, storey):
         self.active_storey = storey
 
