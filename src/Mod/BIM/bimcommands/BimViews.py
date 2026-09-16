@@ -32,7 +32,6 @@ import FreeCADGui
 QT_TRANSLATE_NOOP = FreeCAD.Qt.QT_TRANSLATE_NOOP
 translate = FreeCAD.Qt.translate
 
-UPDATEINTERVAL = 2000  # number of milliseconds between BIM Views Manager update
 PARAMS = FreeCAD.ParamGet("User parameter:BaseApp/Preferences/Mod/BIM")
 _view_services = {}
 
@@ -40,12 +39,35 @@ _view_services = {}
 if FreeCAD.GuiUp:
     from PySide import QtCore, QtGui
 
-    class _HeightEditDelegate(QtGui.QStyledItemDelegate):
-        """Allow editing the Height column only for objects that provide it."""
+    class _NavigatorObserver:
+        """Coalesce document and selection notifications for the navigator."""
 
-        def createEditor(self, parent, option, index):
-            if index.data(QtCore.Qt.UserRole):
-                return QtGui.QStyledItemDelegate.createEditor(self, parent, option, index)
+        def __init__(self, owner):
+            self.owner = owner
+
+        def slotCreatedObject(self, obj):
+            self.owner.scheduleUpdate()
+
+        def slotDeletedObject(self, obj):
+            self.owner.scheduleUpdate()
+
+        def slotChangedObject(self, obj, prop):
+            self.owner.scheduleUpdate()
+
+        def slotActivateDocument(self, doc):
+            self.owner.scheduleUpdate()
+
+        def slotDeletedDocument(self, doc):
+            self.owner.scheduleUpdate()
+
+        def addSelection(self, doc, obj, sub, point):
+            self.owner.scheduleSelectionSync()
+
+        def removeSelection(self, doc, obj, sub):
+            self.owner.scheduleSelectionSync()
+
+        def clearSelection(self, doc):
+            self.owner.scheduleSelectionSync()
 
 
 class BIM_Views:
@@ -63,8 +85,8 @@ class BIM_Views:
         vm = findWidget()
         self.model = _manager_model()
         self.viewService = _view_service()
-        self.allItemsInTree = []
-        self.oldData = [[], []]
+        self._updatePending = False
+        self._selectionPending = False
         bimviewsbutton = None
         mw = FreeCADGui.getMainWindow()
         st = mw.statusBar()
@@ -89,14 +111,11 @@ class BIM_Views:
             # create the dialog
             self.dialog = FreeCADGui.PySideUic.loadUi(":/ui/dialogViews.ui")
             vm.setWidget(self.dialog)
-            vm.tree = self.dialog.tree
-            vm.viewtree = self.dialog.viewtree
+            vm.navigator = self.dialog.navigator
             vm.closeEvent = self.onClose
 
             # set context menu
-            self.dialog.tree.setContextMenuPolicy(QtCore.Qt.CustomContextMenu)
-            self.dialog.viewtree.setContextMenuPolicy(QtCore.Qt.CustomContextMenu)
-            self.dialog.tree.setItemDelegateForColumn(2, _HeightEditDelegate(self.dialog.tree))
+            self.dialog.navigator.setContextMenuPolicy(QtCore.Qt.CustomContextMenu)
 
             # set button
             self.dialog.menu = QtGui.QMenu()
@@ -170,15 +189,13 @@ class BIM_Views:
             self.dialog.buttonPlaceOnSheet.triggered.connect(self.placeOnSheet)
             self.dialog.buttonRename.triggered.connect(self.rename)
             self.dialog.buttonActive.triggered.connect(self.activateContextItem)
-            self.dialog.tree.itemClicked.connect(self.select)
-            self.dialog.tree.itemDoubleClicked.connect(show)
-            self.dialog.viewtree.itemDoubleClicked.connect(show)
-            self.dialog.tree.itemChanged.connect(self.editObject)
-            self.dialog.viewtree.itemChanged.connect(self.editObject)
-            self.dialog.tree.customContextMenuRequested.connect(self.onContextMenu)
-            self.dialog.viewtree.customContextMenuRequested.connect(self.onViewContextMenu)
+            self.dialog.navigator.clicked.connect(self.select)
+            self.dialog.navigator.doubleClicked.connect(self.activateIndex)
+            self.dialog.navigator.customContextMenuRequested.connect(self.onNavigatorContextMenu)
+            self.dialog.navigator.expanded.connect(self.saveExpansion)
+            self.dialog.navigator.collapsed.connect(self.saveExpansion)
             # delay connecting after FreeCAD finishes setting up
-            QtCore.QTimer.singleShot(UPDATEINTERVAL, self.connectDock)
+            QtCore.QTimer.singleShot(0, self.connectDock)
 
             # set the dock widget
             area = PARAMS.GetInt("BimViewArea", 1)
@@ -201,8 +218,12 @@ class BIM_Views:
                         break
 
             # restore saved settings
-            vm.tree.setColumnWidth(0, PARAMS.GetInt("ViewManagerColumnWidth", 100))
+            vm.navigator.setColumnWidth(0, PARAMS.GetInt("ViewManagerColumnWidth", 190))
             vm.setFloating(PARAMS.GetBool("ViewManagerFloating", False))
+
+            self.observer = _NavigatorObserver(self)
+            FreeCAD.addDocumentObserver(self.observer)
+            FreeCADGui.Selection.addObserver(self.observer)
 
             # check the status bar button
             if bimviewsbutton:
@@ -219,6 +240,7 @@ class BIM_Views:
         if statuswidget and hasattr(statuswidget, "bimviewsbutton"):
             statuswidget.bimviewsbutton.setChecked(False)
         PARAMS.SetBool("RestoreBimViews", False)
+        event.accept()
 
     def connectDock(self):
         "watch for dock location"
@@ -227,151 +249,99 @@ class BIM_Views:
         if vm:
             vm.dockLocationChanged.connect(self.onDockLocationChanged)
 
-    def _treeToStringList(self, treeViewItems):
-        "generates a (nested) string list representation of treeViewItems"
+    def scheduleUpdate(self):
+        if self._updatePending:
+            return
+        self._updatePending = True
+        QtCore.QTimer.singleShot(0, self.update)
 
-        def _toStringList(itm):
-            children = []
-            for i in range(itm.childCount()):
-                children.append(_toStringList(itm.child(i)))
-            return [itm.toolTip(0), itm.text(0), itm.text(1), itm.text(2), children]
+    def scheduleSelectionSync(self):
+        if self._selectionPending:
+            return
+        self._selectionPending = True
+        QtCore.QTimer.singleShot(0, self.syncSelection)
 
-        return [_toStringList(itm) for itm in treeViewItems]
+    def _expandedKeys(self):
+        vm = findWidget()
+        if not vm or not hasattr(vm, "navigatorModel"):
+            return set()
+        model = vm.navigatorModel
+        keys = set()
+        pending = [model.index(row, 0) for row in range(model.rowCount())]
+        while pending:
+            index = pending.pop(0)
+            if vm.navigator.isExpanded(index):
+                keys.add(model.key_for_index(index))
+            pending.extend(model.index(row, 0, index) for row in range(model.rowCount(index)))
+        return keys
+
+    def saveExpansion(self, _index=None):
+        """Persist stable virtual/object node keys across dock sessions."""
+
+        keys = sorted(self._expandedKeys())
+        PARAMS.SetString("BimNavigatorExpanded", "\n".join(keys))
 
     def update(self, retrigger=True):
-        "updates the view manager"
+        """Refresh the navigator in response to document notifications."""
 
-        from PySide import QtCore, QtGui
+        from bimviews.navigator_qt import BIMNavigatorQtModel
+
+        self._updatePending = False
+        vm = findWidget()
+        if not vm or not vm.isVisible() or FreeCAD.isRestoring() or not FreeCAD.ActiveDocument:
+            return
+        expanded = self._expandedKeys()
+        self.model = _manager_model()
+        if not hasattr(vm, "navigatorModel"):
+            vm.navigatorModel = BIMNavigatorQtModel(self.model, vm.navigator)
+            vm.navigator.setModel(vm.navigatorModel)
+            saved = PARAMS.GetString("BimNavigatorExpanded", "")
+            expanded = set(saved.splitlines()) if saved else {
+                "section:project",
+                "section:views",
+                "section:current",
+                "section:sheets",
+            }
+        else:
+            vm.navigatorModel.rebuild(self.model)
+        for key in expanded:
+            index = vm.navigatorModel.index_for_key(key)
+            if index.isValid():
+                vm.navigator.setExpanded(index, True)
+        PARAMS.SetInt("ViewManagerColumnWidth", vm.navigator.columnWidth(0))
+        PARAMS.SetBool("ViewManagerFloating", vm.isFloating())
+        self.syncSelection()
+
+    def syncSelection(self):
+        self._selectionPending = False
+        vm = findWidget()
+        if not vm or not hasattr(vm, "navigatorModel"):
+            return
+        selection_model = vm.navigator.selectionModel()
+        selection_model.clearSelection()
+        flags = QtCore.QItemSelectionModel.Select | QtCore.QItemSelectionModel.Rows
+        for obj in FreeCADGui.Selection.getSelection():
+            indexes = vm.navigatorModel.indexes_for_object(obj)
+            if indexes:
+                selection_model.select(indexes[0], flags)
+
+    def select(self, index):
+        """Synchronize an object-backed navigator row with global selection."""
 
         vm = findWidget()
-        if vm and vm.isVisible():
-            if FreeCAD.isRestoring() or not FreeCAD.ActiveDocument:
-                if vm.tree.state() != vm.tree.State.EditingState:
-                    self.oldData[0] = []
-                    vm.tree.clear()
-                if vm.viewtree.state() != vm.viewtree.State.EditingState:
-                    self.oldData[1] = []
-                    vm.viewtree.clear()
-            else:
-                model = _manager_model()
-                if vm.tree.state() != vm.tree.State.EditingState:
-                    def project_item(node):
-                        item, _elevation = getTreeViewItem(node.object)
-                        for child in node.children:
-                            item.addChild(project_item(child))
-                        return item
+        obj = vm.navigatorModel.object_for_index(index) if vm else None
+        if obj is not None:
+            FreeCADGui.Selection.clearSelection()
+            FreeCADGui.Selection.addSelection(obj)
 
-                    treeViewItems = [project_item(node) for node in model.project_nodes()]
-                    new = self._treeToStringList(treeViewItems)
-                    if new != self.oldData[0]:
-                        self.oldData[0] = new
-                        vm.tree.clear()
-                        self.allItemsInTree.clear()
-                        vm.tree.addTopLevelItems(treeViewItems)
-
-                if vm.viewtree.state() != vm.viewtree.State.EditingState:
-                    ficon = QtGui.QIcon.fromTheme("folder", QtGui.QIcon(":/icons/folder.svg"))
-                    treeViewItems = []
-
-                    for group in model.saved_view_groups():
-                        top = QtGui.QTreeWidgetItem([translate("BIM", group.label), ""])
-                        top.setIcon(0, ficon)
-                        for view in group.views:
-                            i = QtGui.QTreeWidgetItem([view.Label, ""])
-                            i.setFlags(i.flags() | QtCore.Qt.ItemIsEditable)
-                            if hasattr(view.ViewObject, "Icon"):
-                                i.setIcon(0, view.ViewObject.Icon)
-                            i.setToolTip(0, view.Name)
-                            top.addChild(i)
-                        treeViewItems.append(top)
-
-                    legacy_views = model.legacy_views()
-                    if legacy_views:
-                        top = QtGui.QTreeWidgetItem([translate("BIM", "Legacy 2D Views"), ""])
-                        top.setIcon(0, ficon)
-                        for view in legacy_views:
-                            i = QtGui.QTreeWidgetItem([view.Label, ""])
-                            if hasattr(view.ViewObject, "Icon"):
-                                i.setIcon(0, view.ViewObject.Icon)
-                            i.setToolTip(0, view.Name)
-                            top.addChild(i)
-                        treeViewItems.append(top)
-
-                    pages = self.getPages()
-                    if pages:
-                        top = QtGui.QTreeWidgetItem([translate("BIM", "Sheets"), ""])
-                        top.setIcon(0, ficon)
-                        for p in pages:
-                            i = QtGui.QTreeWidgetItem([p.Label, ""])
-                            if hasattr(p.ViewObject, "Icon"):
-                                i.setIcon(0, p.ViewObject.Icon)
-                            i.setToolTip(0, p.Name)
-                            top.addChild(i)
-                        treeViewItems.append(top)
-
-                    new = self._treeToStringList(treeViewItems)
-                    if new != self.oldData[1]:
-                        self.oldData[1] = new
-                        vm.viewtree.clear()
-                        vm.viewtree.addTopLevelItems(treeViewItems)
-
-            # We reuse the variable later on in "Isolate", to not traverse the tree once
-            # again
-            self.allItemsInTree = getAllItemsInTree(vm.tree)
-            allItemsInTrees = self.allItemsInTree + getAllItemsInTree(vm.viewtree)
-
-            if allItemsInTrees:
-                # set TreeView Item selected if obj is selected
-                objSelected = FreeCADGui.Selection.getSelection()
-                objNameSelected = [obj.Name for obj in objSelected]
-                objActive = FreeCADGui.ActiveDocument.ActiveView.getActiveObject("NativeIFC")
-                if not objActive:
-                    objActive = FreeCADGui.ActiveDocument.ActiveView.getActiveObject("Arch")
-                active_view = _view_service().active_view
-
-                default_background = allItemsInTrees[0].background(1)
-                default_font = allItemsInTrees[0].font(1)
-                for item in allItemsInTrees:
-                    item.setSelected(item.toolTip(0) in objNameSelected)
-                    is_active = objActive and item.toolTip(0) == objActive.Name
-                    is_active_view = active_view and item.toolTip(0) == active_view.Name
-                    if is_active or is_active_view:
-                        tparam = FreeCAD.ParamGet("User parameter:BaseApp/Preferences/TreeView")
-                        activeColor = tparam.GetUnsigned("TreeActiveColor", 0)
-                        if activeColor:
-                            r = ((activeColor >> 24) & 0xFF) / 255.0
-                            g = ((activeColor >> 16) & 0xFF) / 255.0
-                            b = ((activeColor >> 8) & 0xFF) / 255.0
-                            activeColor = QtGui.QColor.fromRgbF(r, g, b)
-                            item.setBackground(0, QtGui.QBrush(activeColor, QtCore.Qt.SolidPattern))
-                            bold = QtGui.QFont()
-                            bold.setBold(True)
-                            item.setFont(0, bold)
-                    else:
-                        item.setBackground(0, default_background)
-                        item.setFont(0, default_font)
-
-        if retrigger:
-            QtCore.QTimer.singleShot(UPDATEINTERVAL, self.update)
-
-        # save state
-        PARAMS.SetInt("ViewManagerColumnWidth", vm.tree.columnWidth(0))
-        PARAMS.SetBool("ViewManagerFloating", vm.isFloating())
-
-        # expand
-        vm.tree.expandAll()
-        vm.viewtree.expandAll()
-
-    def select(self, item, column=None):
-        "selects a doc object corresponding to an item"
-
-        item.setSelected(True)
-        name = item.toolTip(0)
-        if name:
-            obj = FreeCAD.ActiveDocument.getObject(name)
-            if obj:
-                FreeCADGui.Selection.clearSelection()
-                FreeCADGui.Selection.addSelection(obj)
+    def activateIndex(self, index):
+        vm = findWidget()
+        if not vm:
+            return
+        obj = vm.navigatorModel.object_for_index(index)
+        kind = vm.navigatorModel.kind_for_index(index)
+        if obj is not None and kind != "scope-object":
+            show(obj.Name)
 
     def addLevel(self):
         """Add a new level, auto-stacked above the highest sibling level.
@@ -597,16 +567,9 @@ class BIM_Views:
     def delete(self):
         "deletes the selected object"
 
-        vm = findWidget()
-        if vm:
+        if findWidget():
             context_object = getattr(self, "contextObject", None)
-            if context_object is not None:
-                selected = [context_object]
-            else:
-                selected = [
-                    FreeCAD.ActiveDocument.getObject(item.toolTip(0))
-                    for item in vm.tree.selectedItems() + vm.viewtree.selectedItems()
-                ]
+            selected = [context_object] if context_object is not None else self._selectedObjects()
             if selected:
                 FreeCAD.ActiveDocument.openTransaction("Delete")
                 for obj in selected:
@@ -625,30 +588,23 @@ class BIM_Views:
         vm = findWidget()
         if vm:
             context_object = getattr(self, "contextObject", None)
-            if context_object is not None:
-                for tree in (vm.tree, vm.viewtree):
-                    for item in getAllItemsInTree(tree):
-                        if item.toolTip(0) == context_object.Name:
-                            tree.editItem(item, 0)
-                            return
-            selected = vm.tree.selectedItems()
-            tree = vm.tree
-            if not selected:
-                selected = vm.viewtree.selectedItems()
-                tree = vm.viewtree
-            if selected:
-                tree.editItem(selected[-1], 0)
+            indexes = (
+                vm.navigatorModel.indexes_for_object(context_object)
+                if context_object is not None
+                else vm.navigator.selectionModel().selectedRows(0)
+            )
+            if indexes:
+                vm.navigator.edit(indexes[-1])
 
     @staticmethod
     def activate(dialog=None):
         vm = findWidget()
-        if vm:
-            if vm.tree.selectedItems():
-                item = vm.tree.selectedItems()[-1]
-                obj = FreeCAD.ActiveDocument.getObject(item.toolTip(0))
-                if obj and hasattr(obj.ViewObject, "DoubleClickActivates"):
-                    _toggle_active_container(obj, dialog=dialog)
-                    FreeCADGui.Selection.clearSelection()
+        if vm and hasattr(vm, "navigatorModel"):
+            indexes = vm.navigator.selectionModel().selectedRows(0)
+            obj = vm.navigatorModel.object_for_index(indexes[-1]) if indexes else None
+            if obj and hasattr(obj.ViewObject, "DoubleClickActivates"):
+                _toggle_active_container(obj, dialog=dialog)
+                FreeCADGui.Selection.clearSelection()
 
     def activateContextItem(self):
         """Activate the item under the context menu."""
@@ -691,21 +647,10 @@ class BIM_Views:
     def toggle(self):
         "toggle selected item on/off"
 
-        vm = findWidget()
-        if vm:
-            for item in vm.tree.selectedItems():
-                obj = FreeCAD.ActiveDocument.getObject(item.toolTip(0))
-                if obj:
-                    obj.ViewObject.Visibility = not (obj.ViewObject.Visibility)
+        if findWidget():
+            for obj in self._selectedObjects():
+                obj.ViewObject.Visibility = not obj.ViewObject.Visibility
             FreeCAD.ActiveDocument.recompute()
-
-    def _isAncestor(self, ancestor_item, child_item):
-        current = child_item.parent()
-        while current is not None:
-            if current == ancestor_item:
-                return True
-            current = current.parent()
-        return False
 
     def isolate(self):
         import Draft
@@ -717,44 +662,25 @@ class BIM_Views:
         Then, it hides all items that are not currently selected by the user in the GUI tree view.
         As a result, only the selected items remain visible in the 3D view, effectively isolating them.
 
-        Assumes that `self.allItemsInTree` is a list of all QTreeWidgetItems in the tree.
+        The operation is limited to objects represented by the Project branch.
         """
 
-        # Iterate through all of the items and show them beforehand if they were hidden
-        # so we can "reset" the tree state before the real processing
-        for item in self.allItemsInTree:
-            toolTip = item.toolTip(0)
-            obj = FreeCAD.ActiveDocument.getObject(toolTip)
-            if obj:
-                # We switch visibility to be sure we will show childs of other childs
-                # beforehand, as the Visibility may not be propagated.
-                obj.ViewObject.Visibility = False
-                obj.ViewObject.Visibility = True
-
         vm = findWidget()
-        if vm:
-            selectedItems = vm.tree.selectedItems()
-            checkAncestors = False
-            # We can get a scenario where user has just selected only Building
-            # so we don't want to hide any of it's children, so just check if that's
-            # the case so we will know whether we should process items further or not
-            if len(selectedItems) == 1:
-                toolTip = selectedItems[0].toolTip(0)
-                obj = FreeCAD.ActiveDocument.getObject(toolTip)
-                t = Draft.getType(obj)
-                if obj and getattr(obj, "IfcType", "") == "Building":
-                    checkAncestors = True
-
-            for item in self.allItemsInTree:
-                toolTip = item.toolTip(0)
-                obj = FreeCAD.ActiveDocument.getObject(toolTip)
-                if obj:
-                    if item not in selectedItems and not (
-                        checkAncestors and self._isAncestor(selectedItems[0], item)
-                    ):
-                        obj.ViewObject.Visibility = False
-                    else:
-                        obj.ViewObject.Visibility = True
+        if vm and hasattr(vm, "navigatorModel"):
+            selected = set(self._selectedObjects())
+            include_descendants = len(selected) == 1 and any(
+                getattr(obj, "IfcType", "") == "Building" for obj in selected
+            )
+            visible = set(selected)
+            if include_descendants:
+                pending = list(getattr(next(iter(selected)), "Group", ()) or ())
+                while pending:
+                    obj = pending.pop(0)
+                    if obj not in visible:
+                        visible.add(obj)
+                        pending.extend(getattr(obj, "Group", ()) or ())
+            for obj in vm.navigatorModel.all_project_objects():
+                obj.ViewObject.Visibility = obj in visible
 
     def saveView(self):
         "save the current camera and context to the selected item"
@@ -766,12 +692,9 @@ class BIM_Views:
                 _view_service().capture(context_object)
                 FreeCAD.ActiveDocument.recompute()
                 return
-            for item in vm.viewtree.selectedItems():
-                obj = FreeCAD.ActiveDocument.getObject(item.toolTip(0))
+            for obj in self._selectedObjects():
                 if obj and _view_service().is_view_definition(obj):
                     _view_service().capture(obj)
-            for item in vm.tree.selectedItems():
-                obj = FreeCAD.ActiveDocument.getObject(item.toolTip(0))
                 if obj:
                     if hasattr(obj.ViewObject.Proxy, "writeCamera"):
                         obj.ViewObject.Proxy.writeCamera()
@@ -787,12 +710,9 @@ class BIM_Views:
                 _view_service().capture(context_object)
                 FreeCAD.ActiveDocument.recompute()
                 return
-            for item in vm.viewtree.selectedItems():
-                obj = FreeCAD.ActiveDocument.getObject(item.toolTip(0))
+            for obj in self._selectedObjects():
                 if obj and _view_service().is_view_definition(obj):
                     _view_service().capture(obj)
-            for item in vm.tree.selectedItems():
-                obj = FreeCAD.ActiveDocument.getObject(item.toolTip(0))
                 if obj and hasattr(obj.ViewObject.Proxy, "writeState"):
                     obj.ViewObject.Proxy.writeState()
         FreeCAD.ActiveDocument.recompute()
@@ -826,10 +746,27 @@ class BIM_Views:
         else:
             return QtCore.Qt.RightDockWidgetArea
 
-    def onContextMenu(self, pos):
-        """Fires the context menu"""
+    def _selectedObjects(self):
+        vm = findWidget()
+        if not vm or not hasattr(vm, "navigatorModel"):
+            return []
+        result = []
+        for index in vm.navigator.selectionModel().selectedRows(0):
+            obj = vm.navigatorModel.object_for_index(index)
+            if obj is not None and obj not in result:
+                result.append(obj)
+        return result
+
+    def onNavigatorContextMenu(self, pos):
+        """Show actions appropriate to the navigator row under the cursor."""
+
         import Draft
 
+        vm = findWidget()
+        index = self.dialog.navigator.indexAt(pos)
+        obj = vm.navigatorModel.object_for_index(index) if index.isValid() else None
+        kind = vm.navigatorModel.kind_for_index(index) if index.isValid() else ""
+        self.contextObject = obj
         for action in (
             self.dialog.buttonNewPlanView,
             self.dialog.buttonNewModelView,
@@ -849,76 +786,47 @@ class BIM_Views:
             action.setVisible(True)
         self.dialog.buttonDuplicateView.setVisible(False)
         self.dialog.buttonPlaceOnSheet.setVisible(False)
-        self.contextObject = None
         self.dialog.buttonActive.setText(translate("BIM", "Active"))
         self.dialog.buttonActive.setCheckable(True)
         self.dialog.buttonActive.setChecked(False)
         self.dialog.buttonActive.setToolTip(translate("BIM", "Activates the selected item"))
-        item = self.dialog.tree.itemAt(pos)
-        if item:
-            self.contextObject = FreeCAD.ActiveDocument.getObject(item.toolTip(0))
-            if self.contextObject:
-                if Draft.getType(self.contextObject).startswith("Ifc"):
-                    self.dialog.buttonAddProxy.setEnabled(False)
-                if Draft.getType(self.contextObject) == "WorkingPlaneProxy":
-                    self.dialog.buttonActive.setText(translate("BIM", "Set Working Plane"))
-                    self.dialog.buttonActive.setCheckable(False)
-                    self.dialog.buttonActive.setToolTip(
-                        translate("BIM", "Sets the selected item as the current working plane")
-                    )
-                elif (
-                    FreeCADGui.ActiveDocument.ActiveView.getActiveObject("NativeIFC")
-                    == self.contextObject
+        if kind in ("saved-view", "legacy-view", "sheet") or kind.endswith("group"):
+            for action in self.dialog.menu.actions():
+                action.setVisible(False)
+            self.dialog.buttonNewPlanView.setVisible(True)
+            self.dialog.buttonNewModelView.setVisible(True)
+            if kind == "saved-view":
+                self.dialog.buttonActive.setText(translate("BIM", "Open"))
+                self.dialog.buttonActive.setCheckable(False)
+                for action in (
+                    self.dialog.buttonActive,
+                    self.dialog.buttonDelete,
+                    self.dialog.buttonSaveView,
+                    self.dialog.buttonSaveVisibility,
+                    self.dialog.buttonDuplicateView,
+                    self.dialog.buttonRename,
+                    self.dialog.buttonPlaceOnSheet,
                 ):
-                    self.dialog.buttonActive.setChecked(True)
-                elif (
-                    FreeCADGui.ActiveDocument.ActiveView.getActiveObject("Arch")
-                    == self.contextObject
-                ):
-                    self.dialog.buttonActive.setChecked(True)
-                else:
-                    self.dialog.buttonActive.setChecked(False)
-        self.dialog.menu.exec_(self.dialog.tree.mapToGlobal(pos))
-
-    def onViewContextMenu(self, pos):
-        """Show saved-view actions without exposing storey-only operations."""
-
-        item = self.dialog.viewtree.itemAt(pos)
-        obj = FreeCAD.ActiveDocument.getObject(item.toolTip(0)) if item is not None else None
-        is_saved_view = obj is not None and _view_service().is_view_definition(obj)
-        for action in self.dialog.menu.actions():
-            action.setVisible(False)
-        self.dialog.buttonNewPlanView.setVisible(True)
-        self.dialog.buttonNewModelView.setVisible(True)
-        if not is_saved_view:
-            self.contextObject = None
-            self.dialog.menu.exec_(self.dialog.viewtree.mapToGlobal(pos))
-            return
-        self.dialog.viewtree.setCurrentItem(item)
-        self.contextObject = obj
-        self.dialog.buttonActive.setText(translate("BIM", "Open"))
-        self.dialog.buttonActive.setCheckable(False)
-        self.dialog.buttonActive.setToolTip(translate("BIM", "Opens the selected saved view"))
-        for action in (
-            self.dialog.buttonAddLevel,
-            self.dialog.buttonAddProxy,
-            self.dialog.buttonToggle,
-            self.dialog.buttonIsolate,
-        ):
-            action.setEnabled(False)
-        for action in (
-            self.dialog.buttonActive,
-            self.dialog.buttonDelete,
-            self.dialog.buttonSaveView,
-            self.dialog.buttonSaveVisibility,
-            self.dialog.buttonDuplicateView,
-            self.dialog.buttonRename,
-        ):
-            action.setEnabled(True)
-            action.setVisible(True)
-        self.dialog.buttonPlaceOnSheet.setVisible(True)
-        self.dialog.buttonPlaceOnSheet.setEnabled(_view_service().can_place_on_sheet(obj))
-        self.dialog.menu.exec_(self.dialog.viewtree.mapToGlobal(pos))
+                    action.setVisible(True)
+                self.dialog.buttonPlaceOnSheet.setEnabled(
+                    _view_service().can_place_on_sheet(obj)
+                )
+        elif obj is None:
+            for action in self.dialog.menu.actions():
+                action.setVisible(False)
+            self.dialog.buttonNewPlanView.setVisible(True)
+            self.dialog.buttonNewModelView.setVisible(True)
+        else:
+            if Draft.getType(obj).startswith("Ifc"):
+                self.dialog.buttonAddProxy.setEnabled(False)
+            if Draft.getType(obj) == "WorkingPlaneProxy":
+                self.dialog.buttonActive.setText(translate("BIM", "Set Working Plane"))
+                self.dialog.buttonActive.setCheckable(False)
+            else:
+                active = FreeCADGui.ActiveDocument.ActiveView.getActiveObject("NativeIFC")
+                active = active or FreeCADGui.ActiveDocument.ActiveView.getActiveObject("Arch")
+                self.dialog.buttonActive.setChecked(active == obj)
+        self.dialog.menu.exec_(self.dialog.navigator.viewport().mapToGlobal(pos))
 
     def getViews(self):
         """Return legacy 2D views retained for document compatibility."""

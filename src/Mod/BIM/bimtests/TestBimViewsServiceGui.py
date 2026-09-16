@@ -11,6 +11,7 @@ from PySide import QtCore, QtGui
 from bimtests.TestArchBaseGui import TestArchBaseGui
 from bimviews.model import BIMViewManagerModel
 from bimviews.navigator_model import BIMNavigatorModel
+from bimviews.navigator_qt import BIMNavigatorQtModel
 from bimviews.ruler_model import RulerTransform, engineering_interval, format_metric, tick_values
 from bimviews.service import BIMViewService
 from bimviews.viewport_ruler import ViewportRulerOverlay, _ViewportEventFilter
@@ -184,6 +185,37 @@ class TestBimViewsServiceGui(TestArchBaseGui):
         self.assertEqual((building,), tuple(node.object for node in nodes))
         self.assertEqual((ground, upper), tuple(node.object for node in nodes[0].children))
         self.assertEqual((proxy,), tuple(node.object for node in nodes[0].children[0].children))
+
+    def test_qt_navigator_presents_one_tree_with_semantic_scope(self):
+        storey = self.document.addObject("App::Part", "NavigatorStorey")
+        wall = self.document.addObject("PartDesign::Feature", "NavigatorWall")
+        wall.addProperty("App::PropertyString", "IfcType")
+        wall.IfcType = "Wall"
+        wall.ViewObject.Visibility = False
+        storey.addObject(wall)
+        service = BIMViewService(self.document, view=_RecordingView([]))
+        definition = service.create_view("Navigator Plan", "Plan", storey)
+        service.activate_view(definition)
+        navigator = BIMNavigatorModel(
+            self.document,
+            type_resolver=lambda obj: (
+                "Building Storey" if obj is storey else ""
+            ),
+        )
+
+        model = BIMNavigatorQtModel(navigator)
+
+        self.assertEqual(4, model.rowCount())
+        self.assertEqual(
+            ("Project", "Views", "Current View", "Sheets"),
+            tuple(model.index(row, 0).data() for row in range(4)),
+        )
+        current = model.index(2, 0)
+        walls = model.index(0, 0, current)
+        hidden_wall = model.index(0, 0, walls)
+        self.assertEqual("1", model.index(0, 1, current).data())
+        self.assertIs(wall, model.object_for_index(hidden_wall))
+        self.assertIsNotNone(hidden_wall.data(QtCore.Qt.ForegroundRole))
 
     def test_view_scope_keeps_hidden_storey_objects_in_context(self):
         storey = self.document.addObject("App::Part", "ScopeStorey")

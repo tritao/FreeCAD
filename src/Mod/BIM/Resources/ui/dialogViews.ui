@@ -15,11 +15,7 @@
   </property>
   <layout class="QVBoxLayout" name="verticalLayout">
    <item>
-    <widget class="QSplitter" name="splitter">
-     <property name="orientation">
-      <enum>Qt::Vertical</enum>
-     </property>
-     <widget class="QTreeWidget" name="tree">
+    <widget class="QTreeView" name="navigator">
       <property name="editTriggers">
        <set>QAbstractItemView::EditKeyPressed</set>
       </property>
@@ -33,7 +29,7 @@
        <number>18</number>
       </property>
       <property name="rootIsDecorated">
-       <bool>false</bool>
+       <bool>true</bool>
       </property>
       <property name="uniformRowHeights">
        <bool>false</bool>
@@ -45,10 +41,7 @@
        <bool>true</bool>
       </property>
       <property name="expandsOnDoubleClick">
-       <bool>false</bool>
-      </property>
-      <property name="columnCount">
-       <number>3</number>
+       <bool>true</bool>
       </property>
       <attribute name="headerVisible">
        <bool>true</bool>
@@ -59,33 +52,7 @@
       <attribute name="headerStretchLastSection">
        <bool>true</bool>
       </attribute>
-      <column>
-       <property name="text">
-        <string>Element</string>
-       </property>
-      </column>
-      <column>
-       <property name="text">
-        <string>Elevation</string>
-       </property>
-      </column>
-      <column>
-       <property name="text">
-        <string>Height</string>
-       </property>
-      </column>
      </widget>
-     <widget class="QTreeWidget" name="viewtree">
-      <attribute name="headerVisible">
-       <bool>false</bool>
-      </attribute>
-      <column>
-       <property name="text">
-        <string>2D Views</string>
-       </property>
-      </column>
-     </widget>
-    </widget>
    </item>
   </layout>
  </widget>
