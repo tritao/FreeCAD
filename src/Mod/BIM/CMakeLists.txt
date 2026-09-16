@@ -78,6 +78,7 @@ SET(Arch_SRCS
     ArchCurtainWall.py
     ArchSketchObject.py
     BimSelect.py
+    BimStartup.py
     BimStatus.py
     TestArch.py
     TestArchGui.py

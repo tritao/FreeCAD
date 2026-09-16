@@ -1325,6 +1325,16 @@ void Application::slotActiveDocument(const App::Document& Doc)
             }
         }
 
+        // A document may explicitly request the workbench in which it should
+        // open.  Keep this generic: workbench-specific startup state belongs
+        // to that workbench's own DocumentSettings namespace.
+        if (Doc.Meta.getValue("Gui.Startup.SchemaVersion") == "1") {
+            const auto startupWorkbench = Doc.Meta.getValue("Gui.Startup.Workbench");
+            if (!startupWorkbench.empty()) {
+                activateWorkbench(startupWorkbench.c_str());
+            }
+        }
+
         // Update the application to show the unit change
         ParameterGrp::handle hGrp = App::GetApplication().GetParameterGroupByPath(
             "User parameter:BaseApp/Preferences/Units"

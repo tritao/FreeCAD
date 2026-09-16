@@ -16,6 +16,7 @@ import FreeCAD as App
 import FreeCADGui as Gui
 import Part
 import Sketcher
+from bimviews.service import BIMViewService
 from PySide import QtCore
 
 
@@ -111,8 +112,16 @@ def build_document():
     notes.addObject(add_label("Blocked and expression-owned paths stay protected", App.Vector(3600, -600, 2800), 100))
 
     doc.recompute()
-    Gui.activeDocument().activeView().viewAxonometric()
-    Gui.activeDocument().activeView().fitAll()
+    plan_view = BIMViewService(doc).create_plan_view("Path Ownership Plan", level)
+
+    gui_startup = doc.settings("Gui.Startup")
+    gui_startup.setInt("SchemaVersion", 1)
+    gui_startup.setString("Workbench", "BIMWorkbench")
+    bim_startup = doc.settings("BIM.Startup")
+    bim_startup.setInt("SchemaVersion", 1)
+    bim_startup.setString("Activity", "PlanEdit")
+    bim_startup.setString("ContextObject", level.Name)
+    bim_startup.setString("ViewObject", plan_view.Name)
     doc.recompute()
     doc.saveAs(OUTPUT_PATH)
     App.closeDocument(doc.Name)

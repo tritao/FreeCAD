@@ -25,13 +25,20 @@ class TestBimPlanEditExamplesGui(TestArchBaseGui):
         self.assertTrue(os.path.isfile(path), f"Plan Edit example is missing: {path}")
         return path
 
-    def _open_example(self, filename):
+    def _open_example(self, filename, keep_startup_activity=False):
         FreeCAD.closeDocument(self.document.Name)
         self.document = FreeCAD.openDocument(self._example_path(filename))
         FreeCAD.setActiveDocument(self.document.Name)
         FreeCADGui.ActiveDocument = FreeCADGui.getDocument(self.document.Name)
         self.document.UndoMode = 1
         self.pump_gui_events()
+        if not keep_startup_activity:
+            from bimplan.runtime.session import get_active_session
+
+            session = get_active_session()
+            if session is not None:
+                session.shutdown(close_dialog=False)
+                self.pump_gui_events()
         return self.document
 
     @staticmethod
@@ -47,6 +54,29 @@ class TestBimPlanEditExamplesGui(TestArchBaseGui):
         self.addCleanup(session.shutdown, close_dialog=False)
         self.pump_gui_events()
         return session
+
+    def test_basic_example_restores_document_startup_context(self):
+        document = self._open_example(
+            "BIMPlanEditBasic.FCStd", keep_startup_activity=True
+        )
+        gui_startup = document.settings("Gui.Startup")
+        bim_startup = document.settings("BIM.Startup")
+        self.assertEqual(1, gui_startup.getInt("SchemaVersion", 0))
+        self.assertEqual("BIMWorkbench", gui_startup.getString("Workbench", ""))
+        self.assertEqual(1, bim_startup.getInt("SchemaVersion", 0))
+        self.assertEqual("PlanEdit", bim_startup.getString("Activity", ""))
+        self.assertEqual("BIMWorkbench", FreeCADGui.activeWorkbench().name())
+
+        from bimplan.runtime.session import get_active_session
+
+        session = get_active_session()
+        self.assertIsNotNone(session)
+        context = document.getObject(bim_startup.getString("ContextObject", ""))
+        definition = document.getObject(bim_startup.getString("ViewObject", ""))
+        self.assertIs(session.active_storey, context)
+        self.assertTrue(definition.isDerivedFrom("App::ViewDefinition"))
+        self.assertTrue(definition.BIMIsActiveView)
+        self.addCleanup(session.shutdown, close_dialog=False)
 
     def test_basic_example_loads_and_renders_semantically(self):
         document = self._open_example("BIMPlanEditBasic.FCStd")

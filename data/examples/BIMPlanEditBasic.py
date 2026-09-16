@@ -16,6 +16,7 @@ import Draft
 import FreeCAD as App
 import FreeCADGui as Gui
 import Part
+from bimviews.service import BIMViewService
 from PySide import QtCore
 
 
@@ -145,8 +146,16 @@ def build_document():
     notes.addObject(add_label("Drag wall ends, wall width and opening handles", App.Vector(0, -1250, 3200), 105))
 
     doc.recompute()
-    Gui.activeDocument().activeView().viewAxonometric()
-    Gui.activeDocument().activeView().fitAll()
+    plan_view = BIMViewService(doc).create_plan_view("Ground Floor Plan", level)
+
+    gui_startup = doc.settings("Gui.Startup")
+    gui_startup.setInt("SchemaVersion", 1)
+    gui_startup.setString("Workbench", "BIMWorkbench")
+    bim_startup = doc.settings("BIM.Startup")
+    bim_startup.setInt("SchemaVersion", 1)
+    bim_startup.setString("Activity", "PlanEdit")
+    bim_startup.setString("ContextObject", level.Name)
+    bim_startup.setString("ViewObject", plan_view.Name)
     doc.recompute()
     doc.saveAs(OUTPUT_PATH)
     App.closeDocument(doc.Name)
