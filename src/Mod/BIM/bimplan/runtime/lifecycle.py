@@ -134,7 +134,6 @@ def _cancel_current_tool_for_shutdown(session):
 
 def _cleanup_begin_teardown(session):
     session.view_rulers.close()
-    session.viewport.clear_viewport_status_chip()
     session.status_text.clear_input_hints()
     session.embedded_tools.cancel()
     session.wall_create.cancel_rect_wall_tool(refresh=False)
@@ -152,7 +151,6 @@ def _cleanup_begin_teardown(session):
 
 def _cleanup_shutdown(session, *, teardown=False):
     session.view_rulers.close()
-    session.viewport.clear_viewport_status_chip()
     session.status_text.clear_input_hints()
     session.embedded_tools.cancel()
     session.wall_create.cancel_rect_wall_tool(refresh=False)

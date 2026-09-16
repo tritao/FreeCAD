@@ -45,22 +45,6 @@ class PlanViewportAPI:
             self.session.viewport_state.plan_view_locked_actions,
         )
 
-    def ensure_viewport_status_chip(self):
-        from bimplan.ui.task_panel import _PlanEditViewportStatusChip
-
-        return ensure_viewport_status_chip(
-            self.session,
-            _PlanEditViewportStatusChip,
-        )
-
-    def refresh_viewport_status_chip(self):
-        from bimplan.ui.task_panel import _PlanEditViewportStatusChip
-
-        return refresh_viewport_status_chip(
-            self.session,
-            _PlanEditViewportStatusChip,
-        )
-
     def discard_stale_runtime_object(self, obj):
         return discard_stale_runtime_object(self.session, obj)
 
@@ -160,9 +144,6 @@ class PlanViewportAPI:
     def get_plan_view_widget(self):
         return get_plan_view_widget(self.session)
 
-    def clear_viewport_status_chip(self):
-        return clear_viewport_status_chip(self.session)
-
     def request_view_redraw(self):
         return request_view_redraw(self.session)
 
@@ -203,7 +184,6 @@ def discard_stale_runtime_object(session, obj):
 
 def discard_runtime_references(session):
     viewport_state = session.viewport_state
-    session.viewport.clear_viewport_status_chip()
     session.viewport.restore_preselection_state()
     session.doc = None
     session.gui_doc = None
@@ -981,49 +961,6 @@ def get_plan_view_widget(session):
         return session.view.graphicsView()
     except Exception:
         return None
-
-
-def ensure_viewport_status_chip(session, chip_factory):
-    widget = get_plan_view_widget(session)
-    if widget is None:
-        clear_viewport_status_chip(session)
-        return None
-    viewport_state = session.viewport_state
-    chip = viewport_state.status_chip
-    if chip is not None and getattr(chip, "host_widget", None) is widget:
-        return chip
-    clear_viewport_status_chip(session)
-    try:
-        chip = chip_factory(session, widget)
-    except Exception:
-        return None
-    viewport_state.status_chip = chip
-    return chip
-
-
-def refresh_viewport_status_chip(session, chip_factory):
-    if session.lifecycle_state.tearing_down:
-        return
-    chip = ensure_viewport_status_chip(session, chip_factory)
-    if chip is None:
-        return
-    title, body = session.status_text.get_status_chip_text()
-    try:
-        chip.set_texts(title, body)
-    except Exception:
-        clear_viewport_status_chip(session)
-
-
-def clear_viewport_status_chip(session):
-    viewport_state = session.viewport_state
-    chip = viewport_state.status_chip
-    viewport_state.status_chip = None
-    if chip is None:
-        return
-    try:
-        chip.close_chip()
-    except Exception:
-        pass
 
 
 def queue_scene_graph_mutation(session, key, callback, *, finalizer=False):

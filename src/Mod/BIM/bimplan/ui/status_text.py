@@ -53,9 +53,6 @@ class PlanStatusTextAPI:
     def format_provider_selected_object_help(self):
         return format_provider_selected_object_help(self.session)
 
-    def get_status_chip_text(self):
-        return get_status_chip_text(self.session)
-
     def get_input_hint_specs(self):
         return get_input_hint_specs(self.session)
 
@@ -72,10 +69,6 @@ class PlanStatusTextAPI:
     def summarize_plan_targets(self, targets):
         del self
         return summarize_plan_targets(targets)
-
-    def format_status_chip_action(self, message):
-        del self
-        return format_status_chip_action(message)
 
     def get_plan_target_display_label(self, obj):
         del self
@@ -165,20 +158,6 @@ def summarize_plan_targets(targets):
         if counts.get(kind)
     ]
     return ", ".join(parts)
-
-
-def format_status_chip_action(message):
-    if not message:
-        return ""
-    text = str(message)
-    if text.startswith("%1 "):
-        text = text[3:]
-    elif text.startswith("%1"):
-        text = text[2:]
-    text = text.strip()
-    if not text:
-        return ""
-    return text[0].upper() + text[1:]
 
 
 def get_plan_target_display_label(obj):
@@ -367,175 +346,6 @@ def get_integration_feedback_message(session):
         clear_integration_feedback_message(session)
         return ""
     return message
-
-
-def _format_status_chip_title(tool):
-    return translate("BIM_PlanEdit", "Plan Edit · {tool}").format(tool=tool)
-
-
-def _get_move_status_chip_text(title, context, label):
-    action = translate("BIM_PlanEdit", "Click target point")
-    return title, "{}\n{}".format(context or label, action)
-
-
-def _get_direct_tool_status_chip_text(
-    session, title, selected_kind, selected_obj, selected_context
-):
-    if session.current_tool == plan_runtime_tools.PlanTool.PROVIDER_POINT:
-        return (
-            _format_status_chip_title(session.providers.get_provider_point_tool_label()),
-            session.providers.get_provider_point_tool_prompt(),
-        )
-
-    if session.current_tool == plan_runtime_tools.PlanTool.MOVE_SYMBOL:
-        context = (
-            selected_context
-            if selected_kind == "symbol" and selected_obj is not None
-            else (translate("BIM_PlanEdit", "Symbol move"))
-        )
-        return _get_move_status_chip_text(title, context, translate("BIM_PlanEdit", "Symbol move"))
-
-    if session.current_tool == plan_runtime_tools.PlanTool.MOVE_PROVIDER:
-        context = (
-            selected_context
-            if selected_kind == "provider" and selected_obj is not None
-            else translate("BIM_PlanEdit", "Integration move")
-        )
-        return _get_move_status_chip_text(
-            title,
-            context,
-            translate("BIM_PlanEdit", "Integration move"),
-        )
-
-    if session.current_tool == plan_runtime_tools.PlanTool.ROTATE_SYMBOL:
-        context = (
-            selected_context
-            if selected_kind == "symbol" and selected_obj is not None
-            else translate("BIM_PlanEdit", "Symbol rotation")
-        )
-        if session.symbols.symbol_rotation_snap_enabled():
-            action = translate(
-                "BIM_PlanEdit", "Click target angle ({snap} snap, Shift = free)"
-            ).format(snap=session.symbols.format_symbol_rotation_snap_label())
-        else:
-            action = translate("BIM_PlanEdit", "Click target angle")
-        return title, "{}\n{}".format(context, action)
-
-    if session.current_tool == plan_runtime_tools.PlanTool.MOVE_WALL:
-        context = (
-            selected_context
-            if selected_kind == "wall" and selected_obj is not None
-            else translate("BIM_PlanEdit", "Wall move")
-        )
-        return _get_move_status_chip_text(title, context, translate("BIM_PlanEdit", "Wall move"))
-
-    if session.current_tool == plan_runtime_tools.PlanTool.JOIN:
-        target_wall, joint, detail = session.wall_relations.get_plan_join_candidate_state()
-        context = (
-            translate("BIM_PlanEdit", "Source wall: {label}").format(
-                label=get_plan_target_display_label(selected_obj)
-            )
-            if selected_kind == "wall" and selected_obj is not None
-            else translate("BIM_PlanEdit", "Wall join")
-        )
-        action = session.wall_relations.get_plan_join_mode_action_text(target_wall, joint)
-        if detail:
-            return title, "{}\n{}\n{}".format(context, detail, action)
-        return title, "{}\n{}".format(context, action)
-
-    if session.current_tool.startswith("Stretch "):
-        context = (
-            selected_context
-            if selected_kind == "wall" and selected_obj is not None
-            else translate("BIM_PlanEdit", "Wall stretch")
-        )
-        action = translate("BIM_PlanEdit", "Click endpoint or press Enter to type a value")
-        return title, "{}\n{}".format(context, action)
-
-    if session.current_tool == plan_runtime_tools.PlanTool.REGION:
-        parent_space = session.spaces.get_plan_region_parent_space()
-        context = (
-            translate("BIM_PlanEdit", "Parent space: {label}").format(label=parent_space.Label)
-            if session.selection.targets.is_plan_space_object(parent_space)
-            else translate("BIM_PlanEdit", "Plan region")
-        )
-        action = translate(
-            "BIM_PlanEdit",
-            "Click polygon points, press Enter to finish, or click near the first point to close",
-        )
-        return title, "{}\n{}".format(context, action)
-
-    return None
-
-
-def _get_default_status_chip_context(session, selected_context, provider_context):
-    if selected_context:
-        context = selected_context
-    elif provider_context:
-        context = provider_context
-    else:
-        context = translate("BIM_PlanEdit", "Storey: {label}").format(
-            label=session.storey.get_storey_label(session.active_storey)
-        )
-    selection_summary = get_plan_selection_summary_text(session)
-    if selection_summary:
-        context = "{}\n{}".format(context, selection_summary)
-    return context
-
-
-def _get_default_status_chip_action(
-    session,
-    selected_kind,
-    selected_obj,
-    provider_context,
-    provider_action,
-):
-    hints = get_input_hint_specs(session)
-    action = format_status_chip_action(hints[0][0]) if hints else ""
-    if selected_kind == "region" and session.current_tool == plan_runtime_tools.PlanTool.SELECT:
-        action = translate(
-            "BIM_PlanEdit",
-            "Edit label, scheme, type, and parent space in the task panel",
-        )
-    if (
-        selected_kind == "provider" or provider_context
-    ) and session.current_tool == plan_runtime_tools.PlanTool.SELECT:
-        if selected_kind == "provider":
-            action = format_provider_target_help(session, selected_obj)
-        else:
-            action = provider_action
-    relation_status_message = session.task_panel_state.relation_status_message
-    if relation_status_message:
-        action = relation_status_message
-    if not action:
-        action = translate("BIM_PlanEdit", "Work directly in the viewport")
-    return action
-
-
-def get_status_chip_text(session):
-    title = _format_status_chip_title(session.current_tool)
-    selected_kind, selected_obj = session.selection.state.get_selected_plan_target()
-    selected_context = format_plan_target_selection_state(session, selected_kind, selected_obj)
-    provider_context = format_provider_selected_object_state(session)
-    provider_action = format_provider_selected_object_help(session)
-    direct_text = _get_direct_tool_status_chip_text(
-        session,
-        title,
-        selected_kind,
-        selected_obj,
-        selected_context,
-    )
-    if direct_text is not None:
-        return direct_text
-    context = _get_default_status_chip_context(session, selected_context, provider_context)
-    action = _get_default_status_chip_action(
-        session,
-        selected_kind,
-        selected_obj,
-        provider_context,
-        provider_action,
-    )
-    return title, "{}\n{}".format(context, action)
 
 
 def clear_input_hints():

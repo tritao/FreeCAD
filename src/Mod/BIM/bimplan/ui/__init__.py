@@ -3,6 +3,5 @@
 """UI widgets for BIM Plan Edit."""
 
 from .controls import PlanEditControlsWidget
-from .task_panel import _PlanEditViewportStatusChip
 
-__all__ = ["PlanEditControlsWidget", "_PlanEditViewportStatusChip"]
+__all__ = ["PlanEditControlsWidget"]

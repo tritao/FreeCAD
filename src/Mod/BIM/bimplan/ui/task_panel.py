@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: LGPL-2.1-or-later
 
-"""Task panel ownership, refresh helpers, and viewport chip for BIM Plan Edit."""
+"""Task panel ownership and refresh helpers for BIM Plan Edit."""
 
 TASK_PANEL_REFRESH_FULL = "full"
 TASK_PANEL_REFRESH_SELECTION = "selection"
@@ -47,97 +47,6 @@ class PlanTaskPanelsAPI:
 
     def refresh_provider_overlay_mode_panels(self, *args, **kwargs):
         return refresh_provider_overlay_mode_panels(self.session, *args, **kwargs)
-
-
-class _PlanEditViewportStatusChip:
-    def __new__(cls, session, host_widget):
-        from PySide import QtCore, QtGui
-
-        class _Chip(QtGui.QFrame):
-            def __init__(self, plan_session, parent_widget):
-                super().__init__(parent_widget)
-                self.session = plan_session
-                self.host_widget = parent_widget
-                self.setObjectName("BIMPlanEditViewportStatusChip")
-                self.setAttribute(QtCore.Qt.WA_TransparentForMouseEvents, True)
-                self.setFocusPolicy(QtCore.Qt.NoFocus)
-                self.setFrameShape(QtGui.QFrame.NoFrame)
-                self.setStyleSheet("""
-                    QFrame#BIMPlanEditViewportStatusChip {
-                        background: rgba(250, 250, 248, 230);
-                        border: 1px solid rgba(24, 40, 56, 60);
-                        border-radius: 10px;
-                    }
-                    QLabel#BIMPlanEditViewportStatusTitle {
-                        color: rgb(25, 32, 38);
-                        font-weight: 600;
-                    }
-                    QLabel#BIMPlanEditViewportStatusBody {
-                        color: rgb(60, 68, 76);
-                    }
-                    """)
-
-                layout = QtGui.QVBoxLayout(self)
-                layout.setContentsMargins(12, 10, 12, 10)
-                layout.setSpacing(2)
-
-                self.title_label = QtGui.QLabel(self)
-                self.title_label.setObjectName("BIMPlanEditViewportStatusTitle")
-                self.body_label = QtGui.QLabel(self)
-                self.body_label.setObjectName("BIMPlanEditViewportStatusBody")
-                self.body_label.setWordWrap(True)
-                self.body_label.setMaximumWidth(300)
-
-                layout.addWidget(self.title_label)
-                layout.addWidget(self.body_label)
-
-                try:
-                    self.host_widget.installEventFilter(self)
-                except Exception:
-                    pass
-
-            def set_texts(self, title, body):
-                self.title_label.setText(title)
-                self.body_label.setText(body)
-                self.adjustSize()
-                self._reposition()
-                self.show()
-                self.raise_()
-
-            def _reposition(self):
-                host = self.host_widget
-                if host is None:
-                    return
-                margin = 14
-                max_width = max(180, host.width() - (margin * 2))
-                self.setMaximumWidth(max_width)
-                self.body_label.setMaximumWidth(max_width - 24)
-                self.adjustSize()
-                self.move(margin, margin)
-
-            def eventFilter(self, watched, event):
-                if watched is self.host_widget and event.type() in (
-                    QtCore.QEvent.Resize,
-                    QtCore.QEvent.Move,
-                    QtCore.QEvent.Show,
-                ):
-                    self._reposition()
-                return QtGui.QFrame.eventFilter(self, watched, event)
-
-            def close_chip(self):
-                from bimplan.ui import qt_lifetime as plan_qt_lifetime
-
-                host = self.host_widget
-                if host is not None:
-                    try:
-                        host.removeEventFilter(self)
-                    except Exception:
-                        pass
-                self.host_widget = None
-                plan_qt_lifetime.detach_widget(self)
-                plan_qt_lifetime.delete_later(self)
-
-        return _Chip(session, host_widget)
 
 
 def attach_task_panel(session, panel):
@@ -261,7 +170,6 @@ def _refresh_task_panels(session, reason):
     if reason != TASK_PANEL_REFRESH_PROVIDER_OVERLAY_MODE:
         session.selection.refresh.sanitize_plan_target_references()
         session.status_text.update_input_hints()
-        session.viewport.refresh_viewport_status_chip()
     panel = session.task_panel
     if panel:
         try:
