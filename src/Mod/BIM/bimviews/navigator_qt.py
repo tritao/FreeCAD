@@ -211,11 +211,17 @@ class BIMNavigatorQtModel(QtCore.QAbstractItemModel):
         if not index.isValid():
             return flags
         node = index.internalPointer()
+        try:
+            has_height = node.object is not None and hasattr(node.object, "Height")
+        except ReferenceError:
+            # Document notifications are delivered asynchronously. Qt can ask
+            # about an old index between object deletion and the queued reset.
+            return flags
         if node.object is not None and index.column() == 0:
             flags |= QtCore.Qt.ItemIsEditable
         elif index.column() == 1 and node.kind in ("building", "storey", "workingplane"):
             flags |= QtCore.Qt.ItemIsEditable
-        elif index.column() == 2 and node.object is not None and hasattr(node.object, "Height"):
+        elif index.column() == 2 and has_height:
             flags |= QtCore.Qt.ItemIsEditable
         return flags
 

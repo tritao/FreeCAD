@@ -238,6 +238,8 @@ class TestBimViewsServiceGui(TestArchBaseGui):
         self.assertEqual("1", model.index(0, 1, current).data())
         self.assertIs(wall, model.object_for_index(hidden_wall))
         self.assertIsNotNone(hidden_wall.data(QtCore.Qt.ForegroundRole))
+        self.document.removeObject(wall.Name)
+        self.assertTrue(model.flags(hidden_wall) & QtCore.Qt.ItemIsEnabled)
 
     def test_view_scope_keeps_hidden_storey_objects_in_context(self):
         storey = self.document.addObject("App::Part", "ScopeStorey")
