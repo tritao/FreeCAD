@@ -76,6 +76,9 @@ class TestBimViewsServiceGui(TestArchBaseGui):
             overlay.render(image)
 
             self.assertFalse(image.isNull())
+            self.assertEqual(
+                QtGui.QColor(*ViewportRulerOverlay.BAND_COLOR), image.pixelColor(100, 10)
+            )
         finally:
             overlay.close()
 

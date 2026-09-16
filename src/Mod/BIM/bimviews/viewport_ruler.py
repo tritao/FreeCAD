@@ -27,6 +27,9 @@ if FreeCAD.GuiUp:
         MAJOR_TICK = 8
         MINOR_TICK = 4
         LABEL_GAP = 8
+        BAND_COLOR = (248, 248, 246)
+        LINE_COLOR = (195, 199, 202)
+        TEXT_COLOR = (52, 56, 60)
 
         def __init__(self, host_widget, transform_provider, content_widget=None):
             super().__init__(host_widget)
@@ -66,10 +69,9 @@ if FreeCAD.GuiUp:
             painter = QtGui.QPainter(self)
             try:
                 painter.setRenderHint(QtGui.QPainter.TextAntialiasing, True)
-                palette = self.palette()
-                band_color = palette.color(QtGui.QPalette.Base).lighter(103)
-                line_color = palette.color(QtGui.QPalette.Midlight)
-                text_color = palette.color(QtGui.QPalette.Text)
+                band_color = QtGui.QColor(*self.BAND_COLOR)
+                line_color = QtGui.QColor(*self.LINE_COLOR)
+                text_color = QtGui.QColor(*self.TEXT_COLOR)
                 painter.fillRect(0, 0, self.width(), self.TOP_BAND, band_color)
                 painter.fillRect(0, 0, self.LEFT_BAND, self.height(), band_color)
                 painter.setPen(line_color)
