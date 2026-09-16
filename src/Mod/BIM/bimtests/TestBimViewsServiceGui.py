@@ -200,7 +200,26 @@ class TestBimViewsServiceGui(TestArchBaseGui):
         self.assertEqual((visible, hidden), scope.context_objects)
         self.assertEqual((visible,), scope.visible_objects)
         self.assertEqual((hidden,), scope.hidden_objects)
-        self.assertEqual((), scope.categories)
+
+    def test_view_scope_groups_semantic_objects_and_preserves_hidden_members(self):
+        storey = self.document.addObject("App::Part", "CategorizedStorey")
+        wall = self.document.addObject("PartDesign::Feature", "CategorizedWall")
+        wall.addProperty("App::PropertyString", "IfcType")
+        wall.IfcType = "Wall"
+        door = self.document.addObject("PartDesign::Feature", "CategorizedDoor")
+        door.addProperty("App::PropertyString", "IfcType")
+        door.IfcType = "Door"
+        door.ViewObject.Visibility = False
+        storey.addObject(wall)
+        storey.addObject(door)
+        service = BIMViewService(self.document, view=_RecordingView([]))
+        definition = service.create_view("Categorized Plan", "Plan", storey)
+
+        scope = service.scope_for(definition)
+
+        self.assertEqual(("Walls", "Doors"), tuple(item.key for item in scope.categories))
+        self.assertEqual((wall,), scope.categories[0].visible_objects)
+        self.assertEqual((door,), scope.categories[1].hidden_objects)
 
     def test_service_creates_captures_and_activates_a_plan_view(self):
         calls = []

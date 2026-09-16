@@ -97,6 +97,26 @@ class TestBimPlanEditExamplesGui(TestArchBaseGui):
         self.assertEqual(1, len(spaces))
         self.assertEqual(1, len(storeys))
         self.assertEqual(6, len(joints))
+        definitions = [
+            obj for obj in document.Objects if obj.isDerivedFrom("App::ViewDefinition")
+        ]
+        from bimviews.navigator_model import BIMNavigatorModel
+
+        project_nodes = BIMNavigatorModel(document).project_nodes()
+        self.assertEqual(1, len(project_nodes))
+        self.assertEqual("Building", project_nodes[0].kind)
+        self.assertEqual((storeys[0],), tuple(node.object for node in project_nodes[0].children))
+        self.assertEqual({"Model", "Plan"}, {definition.Purpose for definition in definitions})
+
+        from bimviews.service import BIMViewService
+
+        plan_view = next(item for item in definitions if item.Purpose == "Plan")
+        scope = BIMViewService(document).scope_for(plan_view)
+        categories = {category.key: category for category in scope.categories}
+        self.assertEqual(5, len(categories["Walls"].objects))
+        self.assertEqual(1, len(categories["Doors"].objects))
+        self.assertEqual(1, len(categories["Windows"].objects))
+        self.assertEqual(1, len(categories["Spaces"].objects))
         self.assertEqual(4, sum(joint.JointType == "Miter" for joint in joints))
         self.assertEqual(2, sum(joint.JointType == "Tee" for joint in joints))
         self.assertTrue(

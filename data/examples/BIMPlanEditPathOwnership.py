@@ -51,6 +51,8 @@ def build_document():
     App.setActiveDocument(doc.Name)
     Gui.ActiveDocument = Gui.getDocument(doc.Name)
     level = Arch.makeFloor(name="Level 0 - select this and start Plan Edit")
+    building = Arch.makeBuilding(name="Path Ownership Building")
+    building.addObject(level)
 
     native = Arch.makeWall(length=2600, width=200, height=2500)
     native.Label = "Native wall - BIM owns two endpoints"

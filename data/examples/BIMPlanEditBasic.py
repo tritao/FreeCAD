@@ -82,6 +82,8 @@ def build_document():
     Gui.ActiveDocument = Gui.getDocument(doc.Name)
 
     level = Arch.makeFloor(name="Level 0 - select this and start Plan Edit")
+    building = Arch.makeBuilding(name="Sample Building")
+    building.addObject(level)
     if hasattr(level, "PlanCutHeight"):
         level.PlanCutHeight = 1200.0
 
@@ -146,7 +148,11 @@ def build_document():
     notes.addObject(add_label("Drag wall ends, wall width and opening handles", App.Vector(0, -1250, 3200), 105))
 
     doc.recompute()
-    plan_view = BIMViewService(doc).create_plan_view("Ground Floor Plan", level)
+    service = BIMViewService(doc)
+    Gui.activeDocument().activeView().viewAxonometric()
+    Gui.activeDocument().activeView().fitAll()
+    service.create_model_view("Default 3D", building)
+    plan_view = service.create_plan_view("Ground Floor Plan", level)
 
     gui_startup = doc.settings("Gui.Startup")
     gui_startup.setInt("SchemaVersion", 1)
