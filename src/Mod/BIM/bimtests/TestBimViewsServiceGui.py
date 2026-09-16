@@ -2,15 +2,17 @@
 
 """GUI-facing tests for the BIM Views Manager service seam."""
 
+from types import SimpleNamespace
+
 import ArchRepresentation
 import FreeCAD
-from PySide import QtGui
+from PySide import QtCore, QtGui
 
 from bimtests.TestArchBaseGui import TestArchBaseGui
 from bimviews.model import BIMViewManagerModel
 from bimviews.ruler_model import RulerTransform, engineering_interval, format_metric, tick_values
 from bimviews.service import BIMViewService
-from bimviews.viewport_ruler import ViewportRulerOverlay
+from bimviews.viewport_ruler import ViewportRulerOverlay, _ViewportEventFilter
 
 
 class _RecordingView:
@@ -114,6 +116,23 @@ class TestBimViewsServiceGui(TestArchBaseGui):
         overlay = ViewportRulerOverlay(host, lambda: transform, viewport)
         try:
             self.assertEqual((46, 28), overlay._content_origin())
+        finally:
+            overlay.close()
+
+    def test_ruler_ignores_parent_mouse_coordinates(self):
+        graphics_view = QtGui.QWidget()
+        viewport = QtGui.QWidget(graphics_view)
+        overlay = ViewportRulerOverlay(graphics_view, lambda: None, viewport)
+        controller = SimpleNamespace(
+            overlay=overlay,
+            host_widget=viewport,
+        )
+        event_filter = _ViewportEventFilter(controller)
+        try:
+            event_filter.eventFilter(
+                graphics_view, QtCore.QEvent(QtCore.QEvent.MouseMove)
+            )
+            self.assertIsNone(overlay.cursor_position)
         finally:
             overlay.close()
 

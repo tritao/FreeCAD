@@ -242,10 +242,16 @@ if FreeCAD.GuiUp:
             event_type = event.type()
             if event_type in (QtCore.QEvent.Resize, QtCore.QEvent.Move):
                 self.controller.overlay.sync_geometry()
-            elif event_type == QtCore.QEvent.MouseMove:
+            elif (
+                watched is self.controller.host_widget
+                and event_type == QtCore.QEvent.MouseMove
+            ):
                 pos = event.position() if hasattr(event, "position") else event.pos()
                 self.controller.overlay.set_cursor_position((int(pos.x()), int(pos.y())))
-            elif event_type == QtCore.QEvent.Leave:
+            elif (
+                watched is self.controller.host_widget
+                and event_type == QtCore.QEvent.Leave
+            ):
                 self.controller.overlay.clear_cursor()
             return QtCore.QObject.eventFilter(self, watched, event)
 
