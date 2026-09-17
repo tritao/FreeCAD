@@ -43,6 +43,7 @@ using namespace Part;
  */
 
 ProgressIndicator::ProgressIndicator()
+    : ownerThread(std::this_thread::get_id())
 {
     progress = std::make_unique<Base::SequencerLauncher>("Processing...", 100);
 }
@@ -55,6 +56,12 @@ ProgressIndicator::~ProgressIndicator()
 void ProgressIndicator::Show(const Message_ProgressScope& theScope, const Standard_Boolean isForce)
 {
     (void)isForce;
+    // OCCT can invoke progress callbacks from its worker pool.  GUI progress
+    // belongs to the thread that created this indicator; entering the global
+    // sequencer from a worker can deadlock when the owner is waiting for it.
+    if (std::this_thread::get_id() != ownerThread) {
+        return;
+    }
     const char* name = theScope.Name();
     progress->setText(name ? name : "Processing...");
     std::size_t current = static_cast<std::size_t>(100. * theScope.Value() / theScope.MaxValue());

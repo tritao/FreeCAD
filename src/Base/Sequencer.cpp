@@ -182,18 +182,20 @@ bool SequencerBase::isRunning() const
 
 bool SequencerBase::wasCanceled() const
 {
-    std::lock_guard<std::recursive_mutex> locker(SequencerP::mutex);
-    return this->_bCanceled;
+    // Progress backends may query cancellation from worker threads while the
+    // GUI thread owns SequencerP::mutex.  Taking that mutex here can deadlock
+    // a parallel operation whose GUI thread is waiting for those workers.
+    return this->_bCanceled.load(std::memory_order_relaxed);
 }
 
 void SequencerBase::tryToCancel()
 {
-    this->_bCanceled = true;
+    this->_bCanceled.store(true, std::memory_order_relaxed);
 }
 
 void SequencerBase::rejectCancel()
 {
-    this->_bCanceled = false;
+    this->_bCanceled.store(false, std::memory_order_relaxed);
 }
 
 int SequencerBase::progressInPercent() const
@@ -203,7 +205,7 @@ int SequencerBase::progressInPercent() const
 
 void SequencerBase::resetData()
 {
-    this->_bCanceled = false;
+    this->_bCanceled.store(false, std::memory_order_relaxed);
 }
 
 void SequencerBase::setText(const char* /*text*/)

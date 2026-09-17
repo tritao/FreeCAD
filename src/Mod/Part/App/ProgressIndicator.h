@@ -25,6 +25,7 @@
 #pragma once
 
 #include <memory>
+#include <thread>
 
 #include <Message_ProgressIndicator.hxx>
 #include <Standard_Version.hxx>
@@ -48,6 +49,7 @@ public:
 
 private:
     std::size_t currentStep {0};
+    std::thread::id ownerThread;
     std::unique_ptr<Base::SequencerLauncher> progress;
 };
 

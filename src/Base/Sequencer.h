@@ -25,6 +25,7 @@
 
 #pragma once
 
+#include <atomic>
 #include <cstddef>
 #include <FCGlobal.h>
 
@@ -207,10 +208,10 @@ protected:
 protected:
     /** construction */
     SequencerBase();
-    SequencerBase(const SequencerBase&) = default;
-    SequencerBase(SequencerBase&&) = default;
-    SequencerBase& operator=(const SequencerBase&) = default;
-    SequencerBase& operator=(SequencerBase&&) = default;
+    SequencerBase(const SequencerBase&) = delete;
+    SequencerBase(SequencerBase&&) = delete;
+    SequencerBase& operator=(const SequencerBase&) = delete;
+    SequencerBase& operator=(SequencerBase&&) = delete;
     /**
      * Sets a text what the pending operation is doing. The default implementation
      * does nothing.
@@ -252,7 +253,7 @@ protected:
 
 private:
     bool _bLocked {false};     /**< Lock/unlock sequencer. */
-    bool _bCanceled {false};   /**< Is set to true if the last pending operation was canceled */
+    std::atomic_bool _bCanceled {false}; /**< True if the pending operation was canceled. */
     int _nLastPercentage {-1}; /**< Progress in percent. */
 };
 
