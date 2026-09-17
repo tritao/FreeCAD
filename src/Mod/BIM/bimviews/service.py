@@ -191,16 +191,16 @@ class BIMViewService:
             purpose = self.normalize_purpose(definition.Purpose)
         except ValueError:
             return False
-        return (
-            purpose == ArchRepresentation.RepresentationPurpose.PLAN
-            and self.context_source(definition) is not None
-        )
+        return purpose in (
+            ArchRepresentation.RepresentationPurpose.PLAN,
+            ArchRepresentation.RepresentationPurpose.ELEVATION,
+        ) and self.context_source(definition) is not None
 
     def place_on_sheet(self, definition, page):
-        """Create a linked TechDraw BIM view for a sourced PLAN definition."""
+        """Create a linked TechDraw BIM view for a sourced planar definition."""
 
         if not self.can_place_on_sheet(definition):
-            raise ValueError("Only PLAN views with a project context can be placed on a sheet")
+            raise ValueError("Only PLAN or ELEVATION views with a context can be placed on a sheet")
         if page is None or not page.isDerivedFrom("TechDraw::DrawPage"):
             raise TypeError("page must be a TechDraw::DrawPage")
         drawing_view = self.document.addObject("TechDraw::DrawViewArch", "BIMSavedView")

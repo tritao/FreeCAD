@@ -348,7 +348,11 @@ class ViewportRulerController:
         self._old_viewport_margins = None
 
     def _is_plan_request(self):
-        return getattr(self.request, "purpose", None) == RepresentationPurpose.PLAN
+        return getattr(self.request, "purpose", None) in (
+            RepresentationPurpose.PLAN,
+            RepresentationPurpose.SECTION,
+            RepresentationPurpose.ELEVATION,
+        )
 
     def _local_point(self, mouse_position):
         point = self.session.viewport.get_plan_point_from_mouse_pos(mouse_position)

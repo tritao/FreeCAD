@@ -79,6 +79,7 @@ class TestArchSectionPlane(TestArchBase.TestArchBase):
             elevation.purpose,
             ArchRepresentation.RepresentationPurpose.ELEVATION,
         )
+        self.assertEqual(elevation.projection_range, (-2500.0, 0.0))
 
     def testProjectionGeometryCharacterizesCutAndForwardShapes(self):
         """Neutral projection preserves the established section split."""

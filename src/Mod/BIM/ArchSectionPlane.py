@@ -1195,12 +1195,17 @@ class _SectionPlane:
         depth = float(getattr(getattr(obj, "Depth", 0.0), "Value", 0.0))
 
         purpose = ArchRepresentation.RepresentationPurpose(str(obj.Purpose))
+        projection_range = (0.0, depth)
+        if purpose == ArchRepresentation.RepresentationPurpose.ELEVATION and depth > 0.0:
+            # Elevation markers face away from their scoped building so the
+            # orthographic camera sits on local +Z and looks toward -Z.
+            projection_range = (-depth, 0.0)
         return ArchRepresentation.RepresentationRequest(
             purpose=purpose,
             reference_frame=obj.Placement,
             cut_offset=0.0,
             target_offset=0.0,
-            projection_range=(0.0, depth),
+            projection_range=projection_range,
             source=obj,
         )
 

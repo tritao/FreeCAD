@@ -564,7 +564,7 @@ class TestBimViewsServiceGui(TestArchBaseGui):
             ArchRepresentation.RepresentationPurpose.ELEVATION,
             request.purpose,
         )
-        self.assertEqual((0.0, plane.Depth.Value), request.projection_range)
+        self.assertEqual((-plane.Depth.Value, 0.0), request.projection_range)
 
     def test_elevation_scope_uses_section_plane_objects(self):
         storey = self.document.addObject("App::Part", "ScopedElevationStorey")
@@ -678,4 +678,27 @@ class TestBimViewsServiceGui(TestArchBaseGui):
 
         self.assertIs(definition, drawing_view.BIMViewDefinition)
         self.assertIs(storey, drawing_view.Source)
+        self.assertIn(drawing_view, page.Views)
+
+    def test_sourced_elevation_view_can_be_linked_to_a_sheet(self):
+        facade = self.document.addObject("PartDesign::Feature", "SheetElevationFacade")
+        facade.Shape = Part.makeBox(1000, 200, 1000)
+        plane = __import__("Arch").makeSectionPlane([facade], name="SheetElevation")
+        plane.Purpose = "Elevation"
+        service = BIMViewService(self.document, view=_RecordingView([]))
+        definition = service.create_view(
+            "Sheet Elevation", "Elevation", plane, capture=False
+        )
+        page = self.document.addObject("TechDraw::DrawPage", "ElevationPage")
+        template = self.document.addObject("TechDraw::DrawSVGTemplate", "ElevationTemplate")
+        template.Template = (
+            FreeCAD.getResourceDir()
+            + "Mod/TechDraw/Templates/Default_Template_A4_Landscape.svg"
+        )
+        page.Template = template
+
+        drawing_view = service.place_on_sheet(definition, page)
+
+        self.assertIs(plane, drawing_view.Source)
+        self.assertIs(definition, drawing_view.BIMViewDefinition)
         self.assertIn(drawing_view, page.Views)
