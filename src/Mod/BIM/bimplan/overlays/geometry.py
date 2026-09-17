@@ -3,6 +3,7 @@
 """Overlay geometry and cache helpers for BIM Plan Edit."""
 
 import ArchPlanGeometry
+from bimviews import representation_cache
 from bimplan.overlays import openings as opening_overlays
 from bimplan.overlays import spaces as space_overlays
 
@@ -148,6 +149,7 @@ def invalidate_plan_overlay_geometry_cache(session, obj=None, kinds=None):
         opening_overlays.invalidate_selected_opening_overlay_cache(session)
         space_overlays.invalidate_selected_space_overlay_cache(session)
         return
+    representation_cache.invalidate_object(obj)
     semantic_obj, key, _entry = get_plan_overlay_geometry_cache_entry(
         session, target_kinds[0], obj, create=False
     )
@@ -337,6 +339,11 @@ def get_contextual_representation(session, obj):
         return None
     request = _active_representation_request(session)
 
+    cached = representation_cache.get_cached_representation(semantic_obj, request)
+    if cached is not None:
+        _perf_count(session, "document_representation_cache_hits")
+        return cached
+
     def compute(source):
         representation = _get_proxy_representation(getattr(source, "Proxy", None), source, request)
         if representation is not None:
@@ -358,7 +365,7 @@ def get_contextual_representation(session, obj):
         for name in ("cut_geometry", "projected_geometry", "snap_geometry", "edit_handles")
     ):
         return None
-    return representation
+    return representation_cache.cache_representation(semantic_obj, request, representation)
 
 
 def get_wall_snap_geometry(session, wall):

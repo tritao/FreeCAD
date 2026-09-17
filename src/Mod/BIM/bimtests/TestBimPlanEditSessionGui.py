@@ -804,6 +804,38 @@ class TestBimPlanEditSessionGui(TestArchBaseGui):
         finally:
             session.shutdown(close_dialog=False)
 
+    def test_plan_representation_geometry_survives_session_switch(self):
+        """Returning from Model view reuses unchanged document geometry."""
+
+        wall = Arch.makeWall(length=3000, width=200, height=2500, align="Center")
+        self.document.recompute()
+        first_session = PlanEditSession()
+        self.assertTrue(first_session.enter())
+        first_representation = first_session.contextual_rendering.renderer._representations[wall]
+        first_session.shutdown(close_dialog=False)
+
+        second_session = PlanEditSession()
+        self.assertTrue(second_session.enter())
+        try:
+            second_representation = second_session.contextual_rendering.renderer._representations[
+                wall
+            ]
+            self.assertIs(first_representation, second_representation)
+        finally:
+            second_session.shutdown(close_dialog=False)
+
+        wall.Width = wall.Width.Value + 50
+        self.document.recompute()
+        third_session = PlanEditSession()
+        self.assertTrue(third_session.enter())
+        try:
+            changed_representation = third_session.contextual_rendering.renderer._representations[
+                wall
+            ]
+            self.assertIsNot(second_representation, changed_representation)
+        finally:
+            third_session.shutdown(close_dialog=False)
+
     def test_document_close_discards_pending_semantic_preview(self):
         original_document = self.document
         preview_document = FreeCAD.newDocument("PlanEditPreviewTeardown")
