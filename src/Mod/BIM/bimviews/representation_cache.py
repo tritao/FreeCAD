@@ -7,6 +7,36 @@ import FreeCAD
 
 _document_caches = {}
 _observer = None
+_GEOMETRY_PROPERTIES = {
+    "Shape",
+    "Placement",
+    "AttachmentOffset",
+    "Base",
+    "Support",
+    "Host",
+    "Hosts",
+    "Group",
+    "Objects",
+    "Geometry",
+    "Width",
+    "Height",
+    "Length",
+    "Align",
+    "Offset",
+    "EndingStart",
+    "EndingEnd",
+    "EndConditionOrderStart",
+    "EndConditionOrderEnd",
+    "Enabled",
+    "JointType",
+    "ButtTrimmed",
+    "TeeStem",
+    "EndA",
+    "EndB",
+    "WindowParts",
+    "Opening",
+    "SillHeight",
+}
 
 
 def _number_key(value):
@@ -111,6 +141,20 @@ def invalidate_object(obj):
     representation_layers.invalidate_document(document)
 
 
+def invalidate_for_object_change(obj, prop):
+    """Invalidate cached representations affected by one document property."""
+
+    try:
+        if obj.isDerivedFrom("App::ViewDefinition"):
+            return False
+    except (AttributeError, ReferenceError, RuntimeError):
+        pass
+    if str(prop or "") not in _GEOMETRY_PROPERTIES:
+        return False
+    invalidate_document(getattr(obj, "Document", None))
+    return True
+
+
 class _RepresentationCacheObserver:
     """Keep cached geometry valid while no Plan editing session exists."""
 
@@ -119,25 +163,7 @@ class _RepresentationCacheObserver:
         # Saved-view activation changes persistent selection metadata and camera
         # state but not model geometry.  Keeping this exception is what allows
         # MODEL -> PLAN -> MODEL -> PLAN to reuse the prepared representation.
-        try:
-            if obj.isDerivedFrom("App::ViewDefinition"):
-                return
-        except (AttributeError, ReferenceError, RuntimeError):
-            pass
-        if str(prop or "") not in {
-            "Shape",
-            "Placement",
-            "AttachmentOffset",
-            "Base",
-            "Support",
-            "Host",
-            "Hosts",
-            "Group",
-            "Objects",
-            "Geometry",
-        }:
-            return
-        invalidate_document(getattr(obj, "Document", None))
+        invalidate_for_object_change(obj, prop)
 
     @staticmethod
     def slotCreatedObject(obj):

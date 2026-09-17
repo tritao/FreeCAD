@@ -386,6 +386,9 @@ def _maybe_queue_deferred_selected_wall_suspension(session, obj, prop, selected_
 def slot_changed_object(session, obj, prop):
     if session.lifecycle_state.tearing_down:
         return
+    from bimviews.representation_cache import invalidate_for_object_change
+
+    invalidate_for_object_change(obj, prop)
     _invalidate_document_visual_dependency_caches(session)
     selected_wall = session.selection.state.get_selected_plan_target_object("wall")
     if are_document_visual_updates_deferred(session):
