@@ -560,6 +560,7 @@ class BIMRepresentation:
         self.source_mappings = []
         self.edit_handles = []
         self._face_meshes = {}
+        self.analytic_model = None
 
     def add_geometry(self, collection, geometry, role, subelement=None, *, related_sources=()):
         """Add geometry to a named collection and preserve semantic mapping."""

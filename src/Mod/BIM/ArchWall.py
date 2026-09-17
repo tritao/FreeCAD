@@ -1085,7 +1085,16 @@ class _Wall(ArchComponent.Component):
                 f"Wall does not provide a {request.purpose.value} representation"
             )
         representation = ArchRepresentation.BIMRepresentation(source=obj, request=request)
-        cut_faces = tuple(self._getCutRepresentation(obj, request))
+        analytic_model = None
+        if request.purpose == ArchRepresentation.RepresentationPurpose.PLAN:
+            import ArchPlanAnalytic
+
+            analytic_model = ArchPlanAnalytic.straight_wall_plan_model(obj, self, request)
+        if analytic_model is None:
+            cut_faces = tuple(self._getCutRepresentation(obj, request))
+        else:
+            representation.analytic_model = analytic_model
+            cut_faces = (analytic_model.make_face(),)
         for index, face in enumerate(cut_faces, start=1):
             representation.add_geometry(
                 "cut_geometry", face, "PlanCutFace", subelement=f"PlanFace{index}"

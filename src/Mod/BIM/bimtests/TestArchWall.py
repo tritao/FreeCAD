@@ -26,6 +26,8 @@
 
 import os
 import tempfile
+from unittest.mock import patch
+
 import Arch
 import ArchComponent
 import ArchRepresentation
@@ -271,6 +273,26 @@ class TestArchWall(TestArchBase.TestArchBase):
         self.assertIs(mapping.source, wall)
         self.assertEqual(mapping.role, "PlanCutFace")
         self.assertEqual(mapping.subelement, "PlanFace1")
+
+    def test_straight_wall_plan_representation_uses_analytic_model(self):
+        """A simple Plan wall must not section its final OCCT solid."""
+
+        line = Draft.makeLine(App.Vector(0, 0, 0), App.Vector(3000, 0, 0))
+        wall = Arch.makeWall(line, width=200, height=2500)
+        self.document.recompute()
+        request = ArchRepresentation.RepresentationRequest(
+            purpose=ArchRepresentation.RepresentationPurpose.PLAN,
+            cut_offset=1000.0,
+            target_offset=0.0,
+        )
+
+        with patch.object(wall.Proxy, "_getCutRepresentation") as section_shape:
+            representation = wall.Proxy.getRepresentation(wall, request)
+
+        section_shape.assert_not_called()
+        self.assertIsNotNone(representation.analytic_model)
+        self.assertEqual(1, len(representation.cut_geometry))
+        self.assertAlmostEqual(600000.0, representation.cut_geometry[0].Area)
 
     def test_wall_plan_provider_rejects_unsupported_purpose(self):
         """Unsupported view purposes should be explicit, not silent empty output."""
