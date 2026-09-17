@@ -328,20 +328,69 @@ class TestArchWall(TestArchBase.TestArchBase):
                 self.assertAlmostEqual(actual, expected, delta=1e-5)
             self.assertAlmostEqual(mesh.volume, wall.Shape.Volume, delta=1e-3)
 
-    def test_wall_plan_provider_rejects_unsupported_purpose(self):
-        """Unsupported view purposes should be explicit, not silent empty output."""
+    def test_wall_model_provider_selects_viewport_mesh_and_exact_fallback(self):
+        """Model requests opt into meshes and retain exact fallback behavior."""
 
         line = Draft.makeLine(App.Vector(0, 0, 0), App.Vector(3000, 0, 0))
         wall = Arch.makeWall(line, width=200, height=2500)
         self.document.recompute()
+        exact_request = ArchRepresentation.RepresentationRequest(
+            purpose=ArchRepresentation.RepresentationPurpose.MODEL
+        )
+        viewport_request = ArchRepresentation.RepresentationRequest(
+            purpose=ArchRepresentation.RepresentationPurpose.MODEL,
+            representation_mode=ArchRepresentation.RepresentationMode.VIEWPORT,
+        )
 
-        with self.assertRaises(ArchRepresentation.RepresentationUnavailable):
-            ArchRepresentation.representation_for(
-                wall,
-                ArchRepresentation.RepresentationRequest(
-                    purpose=ArchRepresentation.RepresentationPurpose.MODEL
-                ),
-            )
+        exact = ArchRepresentation.representation_for(wall, exact_request)
+        viewport = ArchRepresentation.representation_for(wall, viewport_request)
+
+        self.assertIsInstance(exact, ArchRepresentation.PartShapeRepresentation)
+        self.assertIsInstance(viewport, ArchRepresentation.ViewportRepresentation)
+        self.assertTrue(viewport.cut_geometry)
+        self.assertTrue(all(viewport.face_mesh_for(item) for item in viewport.cut_geometry))
+        picked = ArchRepresentation.query_representation_pick(
+            (viewport,),
+            (1500, 0),
+            lambda point: (point.x, point.y),
+            1,
+        )
+        self.assertIsNotNone(picked)
+        self.assertIs(picked.source, wall)
+        self.assertEqual("WallViewportTop", picked.role)
+
+        self._make_hosted_window(wall, "ModelFallbackWindow", 800, 500)
+        fallback = ArchRepresentation.representation_for(wall, viewport_request)
+        self.assertIsInstance(fallback, ArchRepresentation.PartShapeRepresentation)
+        self.assertTrue(fallback.cut_geometry)
+
+    def test_wall_model_representation_cache_separates_modes_and_invalidates(self):
+        """Viewport and exact model results have distinct invalidatable keys."""
+
+        from bimviews import representation_cache
+
+        wall = Arch.makeWall(length=3000, width=200, height=2500)
+        self.document.recompute()
+        exact_request = ArchRepresentation.RepresentationRequest(
+            purpose=ArchRepresentation.RepresentationPurpose.MODEL
+        )
+        viewport_request = ArchRepresentation.RepresentationRequest(
+            purpose=ArchRepresentation.RepresentationPurpose.MODEL,
+            representation_mode=ArchRepresentation.RepresentationMode.VIEWPORT,
+        )
+        exact = ArchRepresentation.representation_for(wall, exact_request)
+        viewport = ArchRepresentation.representation_for(wall, viewport_request)
+        representation_cache.cache_representation(wall, exact_request, exact)
+        representation_cache.cache_representation(wall, viewport_request, viewport)
+
+        self.assertIs(exact, representation_cache.get_cached_representation(wall, exact_request))
+        self.assertIs(
+            viewport,
+            representation_cache.get_cached_representation(wall, viewport_request),
+        )
+        representation_cache.invalidate_for_object_change(wall, "Width")
+        self.assertIsNone(representation_cache.get_cached_representation(wall, exact_request))
+        self.assertIsNone(representation_cache.get_cached_representation(wall, viewport_request))
 
     def test_wall_footprint_ignores_openings_above_cut_height(self):
         """Only openings intersecting the plan cut height should affect the wall footprint."""

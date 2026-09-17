@@ -84,6 +84,7 @@ def representation_request_key(request):
     )
     return (
         purpose,
+        getattr(getattr(request, "representation_mode", None), "value", None),
         source_key,
         _frame_key(getattr(request, "reference_frame", None)),
         _number_key(getattr(request, "cut_offset", None)),

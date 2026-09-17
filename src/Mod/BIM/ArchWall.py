@@ -1076,6 +1076,8 @@ class _Wall(ArchComponent.Component):
 
         if request is None:
             request = self.getDefaultPlanRequest(obj)
+        if request.purpose == ArchRepresentation.RepresentationPurpose.MODEL:
+            return self._get_model_representation(obj, request)
         if request.purpose not in (
             ArchRepresentation.RepresentationPurpose.PLAN,
             ArchRepresentation.RepresentationPurpose.SECTION,
@@ -1169,6 +1171,56 @@ class _Wall(ArchComponent.Component):
                     related_sources=joints,
                 )
         self._add_edit_handles(representation, obj, request)
+        return representation
+
+    def _get_model_representation(self, obj, request):
+        """Return an opt-in analytic mesh, with the exact Part shape as fallback."""
+
+        if (
+            getattr(
+                request,
+                "representation_mode",
+                ArchRepresentation.RepresentationMode.PART_SHAPE,
+            )
+            == ArchRepresentation.RepresentationMode.VIEWPORT
+        ):
+            import ArchPlanAnalytic
+
+            recipe = ArchPlanAnalytic.straight_wall_geometry_recipe(obj, self)
+            mesh = recipe.viewport_mesh() if recipe is not None else None
+            if mesh is not None:
+                representation = ArchRepresentation.ViewportRepresentation(
+                    source=obj, request=request
+                )
+                representation.analytic_model = recipe
+                roles = tuple(dict.fromkeys(mesh.triangle_roles))
+                for role in roles:
+                    triangles = tuple(
+                        triangle
+                        for triangle, triangle_role in zip(
+                            mesh.triangles, mesh.triangle_roles
+                        )
+                        if triangle_role == role
+                    )
+                    representation.add_mesh(
+                        "cut_geometry",
+                        mesh.vertices,
+                        triangles,
+                        f"WallViewport{role}",
+                        subelement=f"Viewport.{role}",
+                    )
+                return representation
+
+        representation = ArchRepresentation.PartShapeRepresentation(
+            source=obj, request=request
+        )
+        for index, face in enumerate(getattr(obj.Shape, "Faces", ()), start=1):
+            representation.add_geometry(
+                "cut_geometry",
+                face,
+                "WallPartShapeFace",
+                subelement=f"Face{index}",
+            )
         return representation
 
     def getEditCapabilities(self, obj, request=None):

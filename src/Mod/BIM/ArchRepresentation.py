@@ -27,6 +27,13 @@ class RepresentationPurpose(Enum):
     ELEVATION = "Elevation"
 
 
+class RepresentationMode(Enum):
+    """Geometry source requested by a representation consumer."""
+
+    PART_SHAPE = "PartShapeRepresentation"
+    VIEWPORT = "ViewportRepresentation"
+
+
 class BIMPreviewStyle(Enum):
     """Renderer-neutral presentation intent for transient semantic geometry."""
 
@@ -55,6 +62,7 @@ class RepresentationRequest:
         *,
         cut_offset=None,
         target_offset=None,
+        representation_mode=RepresentationMode.PART_SHAPE,
     ):
         if not isinstance(purpose, RepresentationPurpose):
             purpose = RepresentationPurpose(purpose)
@@ -65,6 +73,9 @@ class RepresentationRequest:
         self.source = source
         self.cut_offset = cut_offset
         self.target_offset = target_offset
+        if not isinstance(representation_mode, RepresentationMode):
+            representation_mode = RepresentationMode(representation_mode)
+        self.representation_mode = representation_mode
 
 
 class RepresentationSource:
@@ -546,6 +557,13 @@ class BIMFaceMesh:
     triangles: tuple
 
 
+@dataclass(frozen=True)
+class BIMMeshGeometry:
+    """Identity token for one semantically mapped portion of a viewport mesh."""
+
+    name: str
+
+
 class BIMRepresentation:
     """Renderer-neutral geometry and identity for one BIM object."""
 
@@ -606,6 +624,19 @@ class BIMRepresentation:
     def face_mesh_for(self, geometry):
         return self._face_meshes.get(id(geometry))
 
+    def add_mesh(self, collection, vertices, triangles, role, subelement=None):
+        """Add renderer-ready triangles without materializing a Part face."""
+
+        geometry = BIMMeshGeometry(str(subelement or role))
+        self.add_geometry(
+            collection,
+            geometry,
+            role,
+            subelement=subelement,
+            face_mesh=(vertices, triangles),
+        )
+        return geometry
+
     def mapping_for(self, geometry):
         """Return the mapping for an exact generated geometry object, if any."""
         return next(
@@ -631,6 +662,14 @@ class BIMRepresentation:
                     request=self.request,
                     related_sources=mapping.related_sources,
                 )
+
+
+class PartShapeRepresentation(BIMRepresentation):
+    """Representation materialized from the authoritative document shape."""
+
+
+class ViewportRepresentation(BIMRepresentation):
+    """Lightweight representation intended only for interactive display."""
 
 
 class BIMEditCapabilities:
@@ -768,6 +807,8 @@ def query_representation_snap(representations, point, tolerance, request=None):
 
 
 def _iter_pick_polylines(geometry):
+    if isinstance(geometry, BIMMeshGeometry):
+        return
     shape_type = getattr(geometry, "ShapeType", "")
     if shape_type == "Vertex":
         yield (FreeCAD.Vector(geometry.Point),)
@@ -811,7 +852,7 @@ def tessellate_face(geometry, deflection=0.25):
 
 
 def _screen_face_contains(geometry, cursor, project_point, mesh=None):
-    if getattr(geometry, "ShapeType", "") != "Face":
+    if mesh is None and getattr(geometry, "ShapeType", "") != "Face":
         return False
     try:
         if mesh is None:
