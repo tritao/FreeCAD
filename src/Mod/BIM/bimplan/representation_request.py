@@ -120,6 +120,14 @@ class PlanRepresentationRequestAPI:
         request = representation_request_from_source(source)
         if request is None:
             raise ValueError("Object does not provide a BIM representation request")
+        return self.set_request(request, refresh=refresh, fit=fit)
+
+    def set_request(self, request, *, refresh=True, fit=False):
+        """Apply one exact request without re-deriving saved-view parameters."""
+
+        if request is None:
+            raise ValueError("A BIM representation request is required")
+        source = getattr(request, "source", None)
         request_unchanged = self.source is source and _request_values_equal(self.request, request)
         self.source = source
         self.request = request
@@ -134,6 +142,8 @@ class PlanRepresentationRequestAPI:
             view_runtime.set_request(request)
         if _is_storey(source):
             self._session.active_storey = source
+        elif source is None:
+            self._session.active_storey = None
         if not refresh:
             return request
         if request_unchanged:
@@ -141,7 +151,13 @@ class PlanRepresentationRequestAPI:
         self._session.overlays.geometry.invalidate_plan_overlay_geometry_cache()
         self._session.viewport.apply_representation_request(request, fit=fit)
         self._session.visibility.apply_storey_visibility()
-        self._session.contextual_rendering.refresh_all()
+        contextual = self._session.contextual_rendering
+        if contextual.renderer is not None:
+            contextual.close(retain=True)
+            self._session.viewport.flush_scene_graph_mutations()
+            contextual.start()
+        else:
+            contextual.refresh_all()
         return request
 
     def includes_object(self, obj):

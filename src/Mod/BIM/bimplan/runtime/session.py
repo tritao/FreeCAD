@@ -234,27 +234,14 @@ def activate_representation_request(request):
 
     source = getattr(request, "source", None)
     if source is not None:
-        session.representation_request.set_source(source, fit=False)
+        session.representation_request.set_request(request, fit=False)
         return session
 
     # A request without a source is still meaningful (it represents the
     # document-level PLAN context).  Keep all live consumers synchronized when
     # switching from a sourced view so no stale storey/grid/runtime state is
     # retained.
-    representation = session.representation_request
-    representation.source = None
-    representation.request = request
-    session.active_storey = None
-    for target in (
-        getattr(session, "view_rulers", None),
-        getattr(session, "view_grid", None),
-        getattr(session, "view_runtime", None),
-    ):
-        if target is not None:
-            target.set_request(request)
-    session.viewport.apply_representation_request(request, fit=False)
-    session.visibility.apply_storey_visibility()
-    session.contextual_rendering.refresh_all()
+    session.representation_request.set_request(request, fit=False)
     return session
 
 
