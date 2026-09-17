@@ -144,7 +144,13 @@ def build_document():
     notes = doc.addObject("App::DocumentObjectGroup", "Instructions")
     notes.Label = "Instructions - orange points are contextual handles"
     notes.addObject(add_label("BIM PLAN EDIT - BASIC", App.Vector(0, -700, 3200), 220))
-    notes.addObject(add_label("Select Level 0, then start Plan Edit", App.Vector(0, -1000, 3200), 120))
+    notes.addObject(
+        add_label(
+            "Open Ground Floor Plan or South Elevation in BIM Navigator",
+            App.Vector(0, -1000, 3200),
+            105,
+        )
+    )
     notes.addObject(add_label("Drag wall ends, wall width and opening handles", App.Vector(0, -1250, 3200), 105))
 
     doc.recompute()
@@ -152,6 +158,7 @@ def build_document():
     Gui.activeDocument().activeView().viewAxonometric()
     Gui.activeDocument().activeView().fitAll()
     service.create_model_view("Default 3D", building)
+    service.create_elevation_view("South Elevation", level, direction="South")
     plan_view = service.create_plan_view("Ground Floor Plan", level)
 
     gui_startup = doc.settings("Gui.Startup")

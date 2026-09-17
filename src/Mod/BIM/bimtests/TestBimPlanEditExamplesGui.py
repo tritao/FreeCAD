@@ -109,7 +109,16 @@ class TestBimPlanEditExamplesGui(TestArchBaseGui):
         self.assertEqual(1, len(project_nodes))
         self.assertEqual("Building", project_nodes[0].kind)
         self.assertEqual((storeys[0],), tuple(node.object for node in project_nodes[0].children))
-        self.assertEqual({"Model", "Plan"}, {definition.Purpose for definition in definitions})
+        self.assertEqual(
+            {"Model", "Plan", "Elevation"},
+            {definition.Purpose for definition in definitions},
+        )
+        elevation_view = next(item for item in definitions if item.Purpose == "Elevation")
+        elevation_plane = elevation_view.BIMContextSource
+        self.assertEqual("Elevation", elevation_plane.Purpose)
+        self.assertEqual("South Elevation Marker", elevation_plane.Label)
+        self.assertGreater(elevation_plane.Depth.Value, 0.0)
+        self.assertEqual(7, len(elevation_plane.Objects))
 
         from bimviews.service import BIMViewService
 

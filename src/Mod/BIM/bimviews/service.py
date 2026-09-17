@@ -280,7 +280,7 @@ class BIMViewService:
             bounds.z_max + margin,
         )
         plane = Arch.makeSectionPlane(list(objects), name="Elevation")
-        plane.Label = "{} Elevation".format(str(direction).title())
+        plane.Label = "{} Elevation Marker".format(str(direction).title())
         plane.Purpose = "Elevation"
         plane.Placement = FreeCAD.Placement(rotation.multVec(local_origin), rotation)
         plane.Depth = bounds.depth + 2.0 * margin
