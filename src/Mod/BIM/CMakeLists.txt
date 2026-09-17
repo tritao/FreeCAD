@@ -201,6 +201,7 @@ SET(bimviews_SRCS
     bimviews/ruler_model.py
     bimviews/scope.py
     bimviews/service.py
+    bimviews/viewport_grid.py
     bimviews/viewport_ruler.py
 )
 

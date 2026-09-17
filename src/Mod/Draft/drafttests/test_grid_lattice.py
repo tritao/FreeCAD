@@ -31,10 +31,11 @@ class DraftGridLattice(unittest.TestCase):
         self.assertEqual(App.Vector(-200, -100, 0), lines[0].start)
         self.assertTrue(lines[2].major)
         self.assertFalse(lines[1].major)
+        self.assertEqual(App.Vector(1, 0, 0), lattice.u_axis)
+        self.assertEqual(App.Vector(0, 1, 0), lattice.v_axis)
 
     def test_adaptive_interval_uses_engineering_series(self):
         self.assertEqual(100.0, adaptive_grid_interval(0.8, target_pixels=100))
         self.assertEqual(200.0, adaptive_grid_interval(1.1, target_pixels=100))
         self.assertEqual(500.0, adaptive_grid_interval(3.0, target_pixels=100))
         self.assertEqual(1000.0, adaptive_grid_interval(8.0, target_pixels=100))
-

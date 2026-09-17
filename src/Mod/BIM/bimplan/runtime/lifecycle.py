@@ -76,6 +76,7 @@ def disconnect_teardown_signals(session):
 
 
 def discard_runtime_references(session):
+    session.view_grid.close()
     session.view_rulers.close()
     session.contextual_rendering.close()
     session.viewport.discard_runtime_references()
@@ -133,6 +134,7 @@ def _cancel_current_tool_for_shutdown(session):
 
 
 def _cleanup_begin_teardown(session):
+    session.view_grid.close()
     session.view_rulers.close()
     session.status_text.clear_input_hints()
     session.embedded_tools.cancel()
@@ -150,6 +152,7 @@ def _cleanup_begin_teardown(session):
 
 
 def _cleanup_shutdown(session, *, teardown=False):
+    session.view_grid.close()
     session.view_rulers.close()
     session.status_text.clear_input_hints()
     session.embedded_tools.cancel()

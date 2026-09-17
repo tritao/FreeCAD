@@ -54,7 +54,7 @@ class GridLattice:
         relative = point.sub(self.origin)
         u = round(relative.dot(self.u_axis) / self.spacing) * self.spacing
         v = round(relative.dot(self.v_axis) / self.spacing) * self.spacing
-        return self.origin.add(self.u_axis.multiply(u)).add(self.v_axis.multiply(v))
+        return self.origin.add(self._scaled(self.u_axis, u)).add(self._scaled(self.v_axis, v))
 
     def lines(self, bounds, display_spacing=None):
         """Generate visible grid lines for ``(u_min, u_max, v_min, v_max)``.
@@ -90,7 +90,13 @@ class GridLattice:
         return tuple(lines)
 
     def _point(self, u, v):
-        return self.origin.add(self.u_axis.multiply(u)).add(self.v_axis.multiply(v))
+        return self.origin.add(self._scaled(self.u_axis, u)).add(self._scaled(self.v_axis, v))
+
+    @staticmethod
+    def _scaled(axis, factor):
+        """Scale a vector without mutating the lattice's stored axes."""
+
+        return FreeCAD.Vector(axis.x * factor, axis.y * factor, axis.z * factor)
 
     def _is_major(self, value, display_spacing):
         lattice_units = value / self.spacing

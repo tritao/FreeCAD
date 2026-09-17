@@ -83,7 +83,7 @@ public:
 
     void Launch()
     {
-        if (Gui::isInternalGuiTestRun()) {
+        if (!shouldLaunch()) {
             return;
         }
 
@@ -99,7 +99,7 @@ public:
 
     void EnsureLaunched()
     {
-        if (Gui::isInternalGuiTestRun()) {
+        if (!shouldLaunch()) {
             return;
         }
 
@@ -111,6 +111,19 @@ public:
         if (!existingView) {
             Launch();
         }
+    }
+
+private:
+    static bool shouldLaunch()
+    {
+        if (Gui::isInternalGuiTestRun()) {
+            return false;
+        }
+
+        // A document (or script) supplied on the command line is the user's
+        // requested initial workspace.  Do not create a transient Start page
+        // alongside it; delayedStartup() will process the argument shortly.
+        return App::Application::getCmdLineFiles().empty();
     }
 };
 

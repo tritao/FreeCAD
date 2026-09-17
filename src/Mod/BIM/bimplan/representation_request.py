@@ -99,6 +99,9 @@ class PlanRepresentationRequestAPI:
         view_rulers = getattr(self._session, "view_rulers", None)
         if view_rulers is not None:
             view_rulers.set_request(request)
+        view_grid = getattr(self._session, "view_grid", None)
+        if view_grid is not None:
+            view_grid.set_request(request)
         if _is_storey(source):
             self._session.active_storey = source
         if not refresh:

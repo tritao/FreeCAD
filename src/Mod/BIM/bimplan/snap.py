@@ -210,6 +210,7 @@ class PlanSnapAPI:
         "_semantic_provider_active",
         "_interaction_grid",
         "_interaction_grid_active",
+        "_legacy_grid_state",
         "_interaction_plane",
         "_interaction_plane_active",
     )
@@ -221,6 +222,7 @@ class PlanSnapAPI:
         self._semantic_provider_active = False
         self._interaction_grid = None
         self._interaction_grid_active = False
+        self._legacy_grid_state = None
         self._interaction_plane = None
         self._interaction_plane_active = False
 
@@ -260,6 +262,7 @@ class PlanSnapAPI:
         if grid is not None:
             self._interaction_grid = grid
             self._interaction_grid_active = True
+            self._hide_legacy_grid()
         return grid
 
     def restore_plan_grid(self):
@@ -271,9 +274,59 @@ class PlanSnapAPI:
             self._interaction_grid,
             view=getattr(self.session, "view", None),
         )
+        self._restore_legacy_grid()
         self._interaction_grid = None
         self._interaction_grid_active = False
         return restored
+
+    def _hide_legacy_grid(self):
+        """Hide Draft's scene tracker while the BIM grid overlay is active."""
+
+        if self._legacy_grid_state is not None:
+            return
+        snapper = _get_snapper()
+        if snapper is None:
+            return
+        view = getattr(self.session, "view", None)
+        set_trackers = getattr(snapper, "setTrackers", None)
+        context_for = getattr(snapper, "context_for", None)
+        if not callable(set_trackers) or not callable(context_for):
+            return
+        try:
+            set_trackers(update_grid=False, view=view)
+            context = context_for(view)
+            grid = getattr(getattr(context, "trackers", None), "grid", None)
+            if grid is None:
+                grid = getattr(snapper, "grid", None)
+            if grid is None:
+                return
+            self._legacy_grid_state = (
+                grid,
+                bool(getattr(grid, "Visible", False)),
+                bool(getattr(grid, "show_always", False)),
+                bool(getattr(grid, "show_during_command", False)),
+            )
+            grid.show_always = False
+            grid.show_during_command = False
+            grid.off()
+        except (AttributeError, ReferenceError, RuntimeError, TypeError):
+            self._legacy_grid_state = None
+
+    def _restore_legacy_grid(self):
+        state = self._legacy_grid_state
+        if state is None:
+            return
+        self._legacy_grid_state = None
+        grid, visible, show_always, show_during_command = state
+        try:
+            grid.show_always = show_always
+            grid.show_during_command = show_during_command
+            if visible:
+                grid.on()
+            else:
+                grid.off()
+        except (AttributeError, ReferenceError, RuntimeError, TypeError):
+            pass
 
     def restore_snap_profile(self):
         self.restore_plan_grid()
