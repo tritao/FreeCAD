@@ -137,7 +137,9 @@ class TestBimPlanEditExamplesGui(TestArchBaseGui):
             host = opening.Hosts[0]
             subvolume = opening.Proxy.getSubVolume(opening, host=host)
             self.assertIsNotNone(subvolume)
-            self.assertAlmostEqual(host.Shape.common(subvolume).Volume, 0.0, delta=1e-6)
+            self.assertAlmostEqual(
+                host.Shape.common(subvolume, noElementMap=True).Volume, 0.0, delta=1e-6
+            )
         space_bounds = spaces[0].Shape.BoundBox
         self.assertAlmostEqual(walls[3].Shape.BoundBox.XMax, space_bounds.XMin)
         self.assertAlmostEqual(walls[4].Shape.BoundBox.XMin, space_bounds.XMax)
@@ -576,7 +578,9 @@ class TestBimPlanEditExamplesGui(TestArchBaseGui):
                     )
                 subvolume = door.Proxy.getSubVolume(door, host=host)
                 self.assertIsNotNone(subvolume)
-                self.assertAlmostEqual(host.Shape.common(subvolume).Volume, 0.0, delta=1e-6)
+                self.assertAlmostEqual(
+                    host.Shape.common(subvolume, noElementMap=True).Volume, 0.0, delta=1e-6
+                )
 
                 document.undo()
                 document.recompute()

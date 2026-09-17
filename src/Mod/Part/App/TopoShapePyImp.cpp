@@ -800,9 +800,9 @@ PyObject* TopoShapePy::multiFuse(PyObject* args, PyObject* keywds) const
     return makeShape(Part::OpCodes::Fuse, *getTopoShapePtr(), args, keywds);
 }
 
-PyObject* TopoShapePy::common(PyObject* args) const
+PyObject* TopoShapePy::common(PyObject* args, PyObject* keywds) const
 {
-    return makeShape(Part::OpCodes::Common, *getTopoShapePtr(), args);
+    return makeShape(Part::OpCodes::Common, *getTopoShapePtr(), args, keywds);
 }
 
 PyObject* TopoShapePy::section(PyObject* args) const

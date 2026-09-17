@@ -2505,7 +2505,11 @@ class _HostedOpeningRepresentationGeometry:
         host_envelope = Part.Face(Part.makePolygon((*envelope_points, envelope_points[0])))
 
         def clipped_voids(voids):
-            return tuple(face for void in voids for face in void.common(host_envelope).Faces)
+            return tuple(
+                face
+                for void in voids
+                for face in void.common(host_envelope, noElementMap=True).Faces
+            )
 
         current_voids = clipped_voids(current_voids)
         proposed_voids = clipped_voids(proposed_voids)

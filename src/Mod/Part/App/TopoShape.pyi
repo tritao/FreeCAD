@@ -296,12 +296,19 @@ class TopoShape(ComplexGeoData):
         ...
 
     @constmethod
-    def common(self, tools: Tuple[TopoShape, ...], tolerance: float = 0.0, /) -> TopoShape:
+    def common(
+        self,
+        tools: Tuple[TopoShape, ...],
+        tolerance: float = 0.0,
+        /,
+        *,
+        noElementMap: bool = False,
+    ) -> TopoShape:
         """
         Intersection of this and a given (list of) topo shape.
         common(tool) -> Shape
           or
-        common((tool1,tool2,...),[tolerance=0.0]) -> Shape
+        common((tool1,tool2,...),[tolerance=0.0], noElementMap=False) -> Shape
         --
         Supports:
         - Fuzzy Boolean operations (global tolerance for a Boolean operation)
@@ -309,6 +316,8 @@ class TopoShape(ComplexGeoData):
         - Parallelization of Boolean Operations algorithm
 
         OCC 6.9.0 or later is required.
+        Set noElementMap=True for transient analysis geometry where stable
+        element naming is not needed.
         """
         ...
 

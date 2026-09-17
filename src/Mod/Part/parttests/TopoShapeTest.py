@@ -586,8 +586,16 @@ class TopoShapeTest(unittest.TestCase, TopoShapeAssertions):
     def testTopoShapeCommon(self):
         # Act
         common = self.doc.Box1.Shape.common(self.doc.Box2.Shape)
+        transient_common = self.doc.Box1.Shape.common(
+            self.doc.Box2.Shape, noElementMap=True
+        )
+        transient_mixed_common = self.doc.Compound1.Shape.common(
+            Part.makeBox(1, 1, 1), noElementMap=True
+        )
         self.doc.recompute()
         # Assert elementMap
+        self.assertEqual(transient_common.ElementMapSize, 0)
+        self.assertEqual(transient_mixed_common.ElementMapSize, 0)
         if common.ElementMapVersion != "":  # Should be '4' as of Mar 2023.
             self.assertEqual(common.ElementMapSize, 26)
 
