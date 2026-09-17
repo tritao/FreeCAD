@@ -338,6 +338,38 @@ class TestArchWindow(TestArchBase.TestArchBase):
             f"ExpectedAfter: {expected_wall_vertical_area_after}",
         )
 
+    def test_opening_tool_cache_reuses_immutable_host_specific_shape(self):
+        """Automatic opening tools are reused without exposing cached mutation."""
+
+        wall = Arch.makeWall(length=3000, width=200, height=2400)
+        sketch = self._create_sketch_with_wires("CachedOpeningSketch", [(0, 0, 800, 1000)])
+        sketch.Placement.Rotation = FreeCAD.Rotation(FreeCAD.Vector(1, 0, 0), 90)
+        sketch.Placement.Base = FreeCAD.Vector(900, 0, 700)
+        window = Arch.makeWindow(sketch, name="CachedOpening")
+        window.Width = 800
+        window.Height = 1000
+        window.HoleDepth = 0
+        window.WindowParts = ["DefaultFrame", "Frame", "Wire0", "60", "0"]
+        self.document.recompute()
+
+        window.Proxy._opening_tool_cache = {}
+        first = window.Proxy.getSubVolume(window, host=wall)
+        self.assertEqual(1, len(window.Proxy._opening_tool_cache))
+        cached = next(iter(window.Proxy._opening_tool_cache.values()))
+        expected_bounds = cached.BoundBox
+        first.translate(FreeCAD.Vector(10000, 0, 0))
+
+        second = window.Proxy.getSubVolume(window, host=wall)
+        self.assertIs(cached, next(iter(window.Proxy._opening_tool_cache.values())))
+        self.assertAlmostEqual(expected_bounds.XMin, second.BoundBox.XMin)
+        self.assertAlmostEqual(expected_bounds.XMax, second.BoundBox.XMax)
+
+        original_depth = second.BoundBox.YLength
+        wall.Width = 300
+        self.document.recompute()
+        third = window.Proxy.getSubVolume(window, host=wall)
+        self.assertGreater(third.BoundBox.YLength, original_depth)
+
     def test_clone_window(self):
         """Test cloning an Arch.Window object.
 

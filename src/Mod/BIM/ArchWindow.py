@@ -2944,6 +2944,7 @@ class _Window(
         ArchComponent.Component.__init__(self, obj)
         self.Object = obj
         self.Type = "Window"
+        self._opening_tool_cache = {}
         self.setProperties(obj)
         obj.IfcType = "Window"
         obj.MoveWithHost = True
@@ -3126,6 +3127,7 @@ class _Window(
     def onDocumentRestored(self, obj):
 
         self.Object = obj
+        self._opening_tool_cache = {}
         ArchComponent.Component.onDocumentRestored(self, obj)
         self.setProperties(obj, mode="ODR")
 
@@ -3150,6 +3152,7 @@ class _Window(
     def loads(self, state):
 
         self.Type = "Window"
+        self._opening_tool_cache = {}
 
     def onBeforeChange(self, obj, prop):
 
@@ -3161,6 +3164,16 @@ class _Window(
     def onChanged(self, obj, prop):
 
         self.hideSubobjects(obj, prop)
+        if prop in {
+            "Base",
+            "Placement",
+            "HoleDepth",
+            "HoleWire",
+            "Normal",
+            "Subvolume",
+            "Shape",
+        }:
+            self._opening_tool_cache = {}
         if not "Restore" in obj.State:
             if prop in [
                 "Base",
@@ -3668,6 +3681,13 @@ class _Window(
         else:
             base = obj.Base
 
+        cache_key = self._opening_tool_cache_key(obj, base, host, plac, width)
+        cached = getattr(self, "_opening_tool_cache", {}).get(cache_key)
+        if cached is not None:
+            # The caller applies host-local placement to the returned tool, so
+            # never expose the cached shape itself to that mutation.
+            return cached.copy()
+
         # finding which wire to use to drill the hole
         f = None
         if hasattr(
@@ -3713,8 +3733,53 @@ class _Window(
                 # already in the correct global position. Reapplying obj.Placement
                 # here shifts the host cut away from the committed plan symbol.
                 f.Placement = obj.Placement
+            cache = getattr(self, "_opening_tool_cache", None)
+            if cache is None or len(cache) >= 32:
+                cache = {}
+                self._opening_tool_cache = cache
+            cache[cache_key] = f.copy()
             return f
         return None
+
+    @staticmethod
+    def _opening_tool_cache_key(obj, base, host, plac, width):
+        """Describe every input used to construct an automatic opening tool."""
+
+        def placement_key(value):
+            if value is None:
+                return None
+            try:
+                return tuple(round(float(item), 12) for item in value.toMatrix().A)
+            except (AttributeError, TypeError):
+                return repr(value)
+
+        shape = getattr(base, "Shape", None)
+        bounds = getattr(shape, "BoundBox", None)
+        shape_key = None
+        if shape is not None and not shape.isNull():
+            shape_key = (
+                shape.hashCode(),
+                len(shape.Wires),
+                (
+                    bounds.XMin,
+                    bounds.YMin,
+                    bounds.ZMin,
+                    bounds.XMax,
+                    bounds.YMax,
+                    bounds.ZMax,
+                ),
+            )
+        normal = getattr(obj, "Normal", FreeCAD.Vector())
+        return (
+            getattr(obj, "Name", None),
+            getattr(host, "Name", None),
+            round(float(width), 12),
+            int(getattr(obj, "HoleWire", 0)),
+            (round(normal.x, 12), round(normal.y, 12), round(normal.z, 12)),
+            shape_key,
+            placement_key(getattr(obj, "Placement", None)),
+            placement_key(plac),
+        )
 
     def computeAreas(self, obj):
         return
