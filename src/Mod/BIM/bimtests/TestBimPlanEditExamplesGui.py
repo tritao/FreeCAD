@@ -81,6 +81,47 @@ class TestBimPlanEditExamplesGui(TestArchBaseGui):
         self.assertTrue(definition.BIMIsActiveView)
         self.addCleanup(session.shutdown, close_dialog=False)
 
+    def test_basic_example_startup_reconciles_every_wall_pick_target(self):
+        """Startup must not expose native walls without semantic pick geometry."""
+
+        document = self._open_example(
+            "BIMPlanEditBasic.FCStd", keep_startup_activity=True
+        )
+        from BimContextualRendering import (
+            screen_pixel_from_view_pixel,
+            view_pixel_from_screen_pixel,
+        )
+        from bimplan.runtime.session import get_active_session
+
+        session = get_active_session()
+        self.assertIsNotNone(session)
+        self.addCleanup(session.shutdown, close_dialog=False)
+        self.pump_gui_events(250)
+        self.assertTrue(session.contextual_rendering.is_ready)
+
+        renderer = session.contextual_rendering.renderer
+        walls = self._objects_with_ifc_type(document, "Wall")
+        self.assertEqual(set(walls), set(walls).intersection(renderer.sources))
+        for wall in walls:
+            resolved = set()
+            representation = renderer._representations[wall]
+            for geometry in representation.cut_geometry:
+                mesh = representation.face_mesh_for(geometry)
+                if mesh is None:
+                    continue
+                for triangle in mesh.triangles:
+                    point = sum(
+                        (FreeCAD.Vector(mesh.vertices[index]) for index in triangle),
+                        FreeCAD.Vector(),
+                    ) / 3.0
+                    screen = session.view.getPointOnScreen(point)
+                    event_pixel = view_pixel_from_screen_pixel(session.view, screen)
+                    normalized = screen_pixel_from_view_pixel(session.view, event_pixel)
+                    target = session.picking.pick(normalized)
+                    if target is not None:
+                        resolved.add(target.obj)
+            self.assertIn(wall, resolved, wall.Name)
+
     def test_basic_example_loads_and_renders_semantically(self):
         document = self._open_example("BIMPlanEditBasic.FCStd")
         walls = self._objects_with_ifc_type(document, "Wall")

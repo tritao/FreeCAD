@@ -14,12 +14,25 @@ class PlanContextualRenderingAPI:
         self._renderer = None
         self._sources = set()
         self._generation = 0
+        self._pending_sources = set()
+        self._reconciliation_queued = False
+        self._reconciliation_attempt = 0
+        self._ready = False
 
     @property
     def renderer(self):
         return self._renderer
 
+    @property
+    def is_ready(self):
+        """Whether every required object has joined the semantic Plan layer."""
+
+        return self._ready and not self._pending_sources
+
     def start(self):
+        self._ready = False
+        self._pending_sources.clear()
+        self._reconciliation_attempt = 0
         reused = self._renderer is not None
         if self._renderer is None:
             self._renderer, reused = representation_layers.acquire(
@@ -32,7 +45,15 @@ class PlanContextualRenderingAPI:
                 self._sources = set(self._renderer.sources)
         if not reused:
             self.refresh_all()
+        else:
+            represented = set(self._renderer.sources)
+            self._sources = represented
+            self._pending_sources = self._required_sources() - represented
+            self._ready = not self._pending_sources
+            if self._pending_sources:
+                self._queue_reconciliation()
         self._session.viewport.flush_scene_graph_mutations()
+        self._sync_readiness_from_renderer()
         self._session.snap.enable_semantic_snapping()
 
     def close(self, *, retain=False):
@@ -40,6 +61,9 @@ class PlanContextualRenderingAPI:
         renderer = self._renderer
         self._renderer = None
         self._sources.clear()
+        self._pending_sources.clear()
+        self._reconciliation_queued = False
+        self._ready = False
         self._generation += 1
         if renderer is not None:
             self._session.viewport.queue_scene_graph_mutation(
@@ -161,6 +185,7 @@ class PlanContextualRenderingAPI:
             return
         self._session.performance.plan_perf_count("contextual_refresh_all")
         current = set()
+        pending = set()
         for obj in getattr(self._session.doc, "Objects", ()) or ():
             if not self._is_in_active_context(obj):
                 continue
@@ -169,6 +194,8 @@ class PlanContextualRenderingAPI:
             ):
                 representation = self._representation_for(obj)
             if representation is None:
+                if self._requires_representation(obj):
+                    pending.add(obj)
                 continue
             self._session.performance.plan_perf_count("contextual_representations")
             source = representation.source
@@ -183,7 +210,81 @@ class PlanContextualRenderingAPI:
                 lambda renderer, value=source: renderer.remove_representation(value),
             )
         self._sources = current
+        self._pending_sources = pending
+        self._ready = not pending
         self.sync_visible_handles()
+        if pending:
+            self._queue_reconciliation()
+
+    def _requires_representation(self, obj):
+        """Return whether Plan interaction requires a semantic object layer."""
+
+        return self._session.selection.targets.is_plan_selectable_wall(obj)
+
+    def _required_sources(self):
+        return {
+            obj
+            for obj in (getattr(self._session.doc, "Objects", ()) or ())
+            if self._is_in_active_context(obj) and self._requires_representation(obj)
+        }
+
+    def _sync_readiness_from_renderer(self):
+        represented = set(self._renderer.sources) if self._renderer is not None else set()
+        self._sources.intersection_update(represented)
+        self._pending_sources.update(self._required_sources() - represented)
+        self._ready = not self._pending_sources
+        if self._pending_sources:
+            self._queue_reconciliation()
+
+    def _queue_reconciliation(self):
+        if self._reconciliation_queued or not self._pending_sources:
+            return
+        try:
+            from PySide import QtCore
+        except ImportError:
+            return
+        generation = self._generation
+        self._reconciliation_queued = True
+        QtCore.QTimer.singleShot(0, lambda: self._reconcile_pending(generation))
+
+    def _reconcile_pending(self, generation):
+        """Retry providers after document and view-provider restoration yields."""
+
+        self._reconciliation_queued = False
+        if generation != self._generation or self._renderer is None:
+            return
+        pending = set()
+        for source in tuple(self._pending_sources):
+            self._session.overlays.geometry.invalidate_plan_overlay_geometry_cache(
+                source, kinds=("representation",)
+            )
+            representation = self._representation_for(source)
+            if representation is None:
+                pending.add(source)
+                continue
+            try:
+                self._renderer.set_representation(representation)
+            except Exception:
+                pending.add(source)
+                continue
+            self._sources.add(representation.source)
+        self._pending_sources = pending
+        self._sync_readiness_from_renderer()
+        if self._ready:
+            self._reconciliation_attempt = 0
+            self._session.viewport.request_view_redraw()
+            return
+        self._reconciliation_attempt += 1
+        if self._reconciliation_attempt < 32:
+            self._queue_reconciliation()
+            return
+        import FreeCAD
+
+        FreeCAD.Console.PrintWarning(
+            "BIM Plan view is waiting for semantic representations: {}\n".format(
+                ", ".join(sorted(obj.Name for obj in pending))
+            )
+        )
 
     def refresh_if_stale(self):
         """Rebuild an invalidated active layer and its pick mappings atomically."""
@@ -208,6 +309,13 @@ class PlanContextualRenderingAPI:
                 affected.add(opening)
         for source in affected:
             self._refresh_source(source)
+            if source in self._pending_sources:
+                # A dependency change is an explicit opportunity to resume a
+                # reconciliation that previously exhausted its idle retries.
+                self._ready = False
+        if any(source in self._pending_sources for source in affected):
+            self._reconciliation_attempt = 0
+            self._queue_reconciliation()
 
     def refresh_edit_dependencies(self, obj):
         """Refresh the bounded semantic neighborhood affected by a BIM edit."""

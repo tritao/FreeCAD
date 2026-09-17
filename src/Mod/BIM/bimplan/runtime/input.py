@@ -140,6 +140,10 @@ def _draft_point_request_owns_pointer(session):
 def _runtime_accepts_plan_tools(session):
     """Keep Plan tool input bound to the originating view runtime."""
 
+    contextual = getattr(session, "contextual_rendering", None)
+    if contextual is not None and getattr(contextual, "is_ready", True) is False:
+        return False
+
     supports = getattr(session, "supports_capability", None)
     if callable(supports):
         return bool(supports("planar_editing"))
