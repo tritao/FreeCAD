@@ -1092,12 +1092,18 @@ class _Wall(ArchComponent.Component):
             analytic_model = ArchPlanAnalytic.straight_wall_plan_model(obj, self, request)
         if analytic_model is None:
             cut_faces = tuple(self._getCutRepresentation(obj, request))
+            face_meshes = ()
         else:
             representation.analytic_model = analytic_model
             cut_faces = analytic_model.make_faces()
+            face_meshes = analytic_model.face_meshes
         for index, face in enumerate(cut_faces, start=1):
             representation.add_geometry(
-                "cut_geometry", face, "PlanCutFace", subelement=f"PlanFace{index}"
+                "cut_geometry",
+                face,
+                "PlanCutFace",
+                subelement=f"PlanFace{index}",
+                face_mesh=face_meshes[index - 1] if face_meshes else None,
             )
             outer_wire = getattr(face, "OuterWire", None)
             inner_index = 0

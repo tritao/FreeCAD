@@ -562,12 +562,28 @@ class BIMRepresentation:
         self._face_meshes = {}
         self.analytic_model = None
 
-    def add_geometry(self, collection, geometry, role, subelement=None, *, related_sources=()):
+    def add_geometry(
+        self,
+        collection,
+        geometry,
+        role,
+        subelement=None,
+        *,
+        related_sources=(),
+        face_mesh=None,
+    ):
         """Add geometry to a named collection and preserve semantic mapping."""
         if collection not in self._COLLECTIONS:
             raise ValueError("unknown representation collection: %s" % collection)
         getattr(self, collection).append(geometry)
-        if collection == "cut_geometry" and getattr(geometry, "ShapeType", "") == "Face":
+        if face_mesh is not None:
+            vertices, triangles = face_mesh
+            self._face_meshes[id(geometry)] = BIMFaceMesh(
+                geometry,
+                tuple(FreeCAD.Vector(point) for point in vertices),
+                tuple(tuple(int(index) for index in triangle) for triangle in triangles),
+            )
+        elif collection == "cut_geometry" and getattr(geometry, "ShapeType", "") == "Face":
             try:
                 vertices, triangles = tessellate_face(geometry)
                 self._face_meshes[id(geometry)] = BIMFaceMesh(

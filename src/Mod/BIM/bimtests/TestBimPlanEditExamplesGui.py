@@ -314,6 +314,20 @@ class TestBimPlanEditExamplesGui(TestArchBaseGui):
             representation = wall.Proxy.getRepresentation(wall, request)
             self.assertIsNotNone(representation.analytic_model, wall.Name)
             analytic_faces = tuple(representation.cut_geometry)
+            analytic_boundaries = representation.analytic_model.boundaries
+            self.assertEqual(len(analytic_boundaries), len(analytic_faces), wall.Name)
+            for face, boundary in zip(analytic_faces, analytic_boundaries):
+                mesh = representation.face_mesh_for(face)
+                self.assertIsNotNone(mesh, wall.Name)
+                self.assertEqual(len(boundary), len(mesh.vertices), wall.Name)
+                self.assertEqual(len(boundary) - 2, len(mesh.triangles), wall.Name)
+                self.assertTrue(
+                    all(
+                        expected.isEqual(actual, 1e-7)
+                        for expected, actual in zip(boundary, mesh.vertices)
+                    ),
+                    wall.Name,
+                )
             brep_faces = tuple(wall.Proxy._getCutRepresentation(wall, request))
             self.assertAlmostEqual(
                 sum(face.Area for face in brep_faces),
