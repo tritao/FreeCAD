@@ -20,9 +20,12 @@ class BIM_PlanEdit:
     def GetResources(self):
         return {
             "Pixmap": "Arch_Floor",
-            "MenuText": FreeCAD.Qt.QT_TRANSLATE_NOOP("BIM_PlanEdit", "Plan Edit"),
+            "MenuText": FreeCAD.Qt.QT_TRANSLATE_NOOP(
+                "BIM_PlanEdit", "Plan Edit (Compatibility)"
+            ),
             "ToolTip": FreeCAD.Qt.QT_TRANSLATE_NOOP(
-                "BIM_PlanEdit", "Enter a reversible, storey-scoped plan view"
+                "BIM_PlanEdit",
+                "Open the legacy Plan Edit controls for the active BIM plan view",
             ),
         }
 
@@ -36,7 +39,7 @@ class BIM_PlanEdit:
     def Activated(self):
         from bimplan.runtime.session import start_editing_session
 
-        start_editing_session()
+        start_editing_session(show_task_panel=True)
 
 
 FreeCADGui.addCommand("BIM_PlanEdit", BIM_PlanEdit())

@@ -36,12 +36,13 @@ def apply_document_startup(document):
 
     view_name = bim_settings.getString("ViewObject", "")
     definition = document.getObject(view_name) if view_name else None
+    activated = False
     if definition is not None:
         try:
             from bimcommands.BimViews import _apply_representation_request
             from bimviews.service import BIMViewService
 
-            BIMViewService(
+            activated = BIMViewService(
                 document,
                 representation_applier=_apply_representation_request,
             ).activate_view(definition)
@@ -50,10 +51,22 @@ def apply_document_startup(document):
                 "Could not restore BIM startup view: {}\n".format(exc)
             )
 
-    from bimcommands.BimPlanEdit import start_plan_edit_for
+    if not activated:
+        # Older documents may only persist a startup context.  Resolve that
+        # context through the same Navigator/runtime seam without invoking the
+        # deprecated Plan Edit command or opening its task panel.
+        try:
+            from bimplan.representation_request import representation_request_from_storey
+            from bimcommands.BimViews import _apply_representation_request
 
-    start_plan_edit_for(context)
-    return True
+            _apply_representation_request(representation_request_from_storey(context))
+            activated = True
+        except Exception as exc:
+            FreeCAD.Console.PrintWarning(
+                "Could not restore BIM startup context: {}\n".format(exc)
+            )
+
+    return activated
 
 
 class _BIMStartupObserver:

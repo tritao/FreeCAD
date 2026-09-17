@@ -73,7 +73,7 @@ class TestBimViewsServiceGui(TestArchBaseGui):
             ) as start:
                 self.assertIs(fake_session, _apply_representation_request(request))
 
-        start.assert_called_once_with()
+        start.assert_called_once_with(show_task_panel=False)
         self.assertEqual([("source", source, False)], calls)
 
     def test_navigator_tabs_with_model_and_restores_combo_title(self):

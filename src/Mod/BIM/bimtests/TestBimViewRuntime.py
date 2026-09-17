@@ -28,6 +28,8 @@ class TestBimViewRuntime(unittest.TestCase):
 
         self.assertFalse(runtime.is_planar)
         self.assertTrue(runtime.supports("model_editing"))
+        self.assertTrue(runtime.supports_tool("Select"))
+        self.assertFalse(runtime.supports_tool("Wall"))
         self.assertFalse(runtime.supports("rulers"))
 
     def test_close_releases_view_and_capabilities(self):
@@ -41,6 +43,14 @@ class TestBimViewRuntime(unittest.TestCase):
         self.assertIsNone(runtime.view)
         self.assertFalse(runtime.capabilities)
         self.assertFalse(runtime.set_request(SimpleNamespace()))
+
+    def test_plan_runtime_accepts_plan_tools(self):
+        runtime = BIMViewRuntime(
+            object(), SimpleNamespace(purpose=RepresentationPurpose.PLAN)
+        )
+
+        self.assertTrue(runtime.supports_tool("Select"))
+        self.assertTrue(runtime.supports_tool("Wall"))
 
 
 if __name__ == "__main__":

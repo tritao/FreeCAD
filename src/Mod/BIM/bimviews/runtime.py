@@ -72,6 +72,19 @@ class BIMViewRuntime:
 
         return capability in self.capabilities
 
+    def supports_tool(self, tool):
+        """Return whether a BIM tool can target this representation runtime.
+
+        Selection is valid in every live representation.  The current Plan
+        tool set is planar; model-specific tools can add their own capability
+        names as the model editing runtime grows.
+        """
+
+        tool_name = getattr(tool, "value", tool)
+        if str(tool_name or "") == "Select":
+            return self.supports("planar_editing") or self.supports("model_editing")
+        return self.supports("planar_editing")
+
     def accepts_view(self, view):
         """Return whether an input event belongs to this runtime's viewport."""
 

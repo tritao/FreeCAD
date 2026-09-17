@@ -150,21 +150,37 @@ def _register_builtin_plan_edit_integrations():
             pass
 
 
-def start_editing_session():
+def start_editing_session(*, show_task_panel=False):
+    """Start the representation editing runtime for the active PLAN view.
+
+    Navigator activation uses the runtime without opening the legacy Plan Edit
+    task panel.  The explicit ``BIM_PlanEdit`` compatibility command passes
+    ``show_task_panel=True`` so existing command-driven workflows retain their
+    controls.
+    """
+
     global _active_session
 
     if _active_session:
+        if show_task_panel:
+            _active_session.ensure_task_panel()
+            try:
+                FreeCADGui.Control.showTaskView()
+            except Exception:
+                pass
+            _refresh_contextual_task_watchers()
         return _active_session
 
     _register_builtin_plan_edit_integrations()
     session = BIMEditingSession()
-    if session.enter():
+    if session.enter(attach_task_panel=show_task_panel):
         _active_session = session
-        try:
-            FreeCADGui.Control.showTaskView()
-        except Exception:
-            pass
-        _refresh_contextual_task_watchers()
+        if show_task_panel:
+            try:
+                FreeCADGui.Control.showTaskView()
+            except Exception:
+                pass
+            _refresh_contextual_task_watchers()
         return session
     return None
 
@@ -172,7 +188,7 @@ def start_editing_session():
 def start_session():
     """Compatibility entry point for the former Plan Edit session."""
 
-    return start_editing_session()
+    return start_editing_session(show_task_panel=True)
 
 
 def activate_representation_request(request):
@@ -193,11 +209,16 @@ def activate_representation_request(request):
     import ArchRepresentation
 
     if getattr(request, "purpose", None) != ArchRepresentation.RepresentationPurpose.PLAN:
+        # The legacy Plan runtime must not keep intercepting input after the
+        # Navigator switches the viewport to MODEL/SECTION/ELEVATION.
+        session = get_active_session()
+        if session is not None:
+            session.shutdown(close_dialog=False)
         return None
 
     session = get_active_session()
     if session is None:
-        session = start_editing_session()
+        session = start_editing_session(show_task_panel=False)
     if session is None:
         return None
 
@@ -282,7 +303,12 @@ class BIMEditingSession:
 
     @current_tool.setter
     def current_tool(self, value):
-        self._current_tool = plan_runtime_tools.coerce_plan_tool(value)
+        tool = plan_runtime_tools.coerce_plan_tool(value)
+        if tool not in (None, plan_runtime_tools.PlanTool.SELECT):
+            runtime = getattr(self, "view_runtime", None)
+            if runtime is not None and not runtime.supports("planar_editing"):
+                return
+        self._current_tool = tool
 
     @property
     def hovered_wall(self):
@@ -332,7 +358,7 @@ class BIMEditingSession:
     def hovered_region(self, value):
         self.selection_state.hovered_region = value
 
-    def enter(self):
+    def enter(self, *, attach_task_panel=True):
         with self.performance.plan_perf_trace_event("enter_plan_edit"):
             self.performance.plan_perf_count(
                 "document_objects", len(getattr(self.doc, "Objects", []) or [])
@@ -413,12 +439,9 @@ class BIMEditingSession:
             ):
                 self.selection.refresh.refresh_primary_selected_plan_target()
 
-            with self.performance.plan_perf_trace_span("build_task_panel"):
-                panel = PlanEditControlsWidget(self)
-            with self.performance.plan_perf_trace_span("attach_task_panel"):
-                self.task_panels.attach_task_panel(panel)
-            with self.performance.plan_perf_trace_span("task_panel_initial_refresh"):
-                panel.refresh(refresh_integrations=False)
+            if attach_task_panel:
+                with self.performance.plan_perf_trace_span("build_task_panel"):
+                    self.ensure_task_panel()
             with self.performance.plan_perf_trace_span("queue_prime_wall_hosted_openings_cache"):
                 self.openings.queue_prime_wall_hosted_openings_cache()
             with self.performance.plan_perf_trace_span("queue_prime_hover_pick_caches"):
@@ -437,8 +460,44 @@ class BIMEditingSession:
                         path=self.performance_state.plan_pick_debug_log_path
                     )
                 )
-            FreeCAD.Console.PrintMessage(translate("BIM_PlanEdit", "Entered BIM Plan Edit mode.\n"))
             return True
+
+    def ensure_task_panel(self):
+        """Create the legacy controls only when an explicit command asks for them."""
+
+        if self.task_panel is not None:
+            return self.task_panel
+        runtime = getattr(self, "view_runtime", None)
+        if runtime is not None and not runtime.supports("planar_editing"):
+            return None
+        panel = PlanEditControlsWidget(self)
+        self.task_panels.attach_task_panel(panel)
+        panel.refresh(refresh_integrations=False)
+        return panel
+
+    def supports_capability(self, capability, view=None):
+        """Resolve a capability from the runtime owning the input viewport."""
+
+        runtime = self.runtime_for(view, create=False)
+        if runtime is None:
+            return False
+        return runtime.supports(capability)
+
+    def supports_tool(self, tool, view=None):
+        """Return whether a Plan tool is valid for the active view runtime."""
+
+        runtime = self.runtime_for(view, create=False)
+        if runtime is None:
+            return False
+        supports_tool = getattr(runtime, "supports_tool", None)
+        if callable(supports_tool):
+            return bool(supports_tool(tool))
+        normalized = plan_runtime_tools.coerce_plan_tool(tool)
+        if normalized in (None, plan_runtime_tools.PlanTool.SELECT):
+            return self.supports_capability("planar_editing", view=view) or self.supports_capability(
+                "model_editing", view=view
+            )
+        return self.supports_capability("planar_editing", view=view)
 
     def finish(self, cont=False, close_dialog=True, closed=False):
         del cont, closed

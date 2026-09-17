@@ -7,9 +7,6 @@ from bimplan.runtime import command_gate as plan_command_gate
 from bimplan.selection import target_dispatch as plan_target_dispatch
 from bimplan.selection import target_kinds as plan_target_kinds
 
-translate = FreeCAD.Qt.translate
-
-
 class PlanLifecycleAPI:
     """Owned session surface for Plan Edit lifecycle helpers."""
 
@@ -224,7 +221,6 @@ def shutdown(session, close_dialog=True, teardown=False):
                 session.doc = None
             except RuntimeError:
                 session.doc = None
-        FreeCAD.Console.PrintMessage(translate("BIM_PlanEdit", "Exited BIM Plan Edit mode.\n"))
     return True
 
 

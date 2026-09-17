@@ -137,6 +137,20 @@ def _draft_point_request_owns_pointer(session):
     return getattr(FreeCAD, "activeDraftCommand", None) is session
 
 
+def _runtime_accepts_plan_tools(session):
+    """Keep Plan tool input bound to the originating view runtime."""
+
+    supports = getattr(session, "supports_capability", None)
+    if callable(supports):
+        return bool(supports("planar_editing"))
+    runtime = getattr(session, "view_runtime", None)
+    if runtime is None:
+        # Lightweight test doubles and legacy callers have no runtime object.
+        return True
+    supports = getattr(runtime, "supports", None)
+    return bool(callable(supports) and supports("planar_editing"))
+
+
 def _coerce_current_tool(session):
     return coerce_plan_tool(session.current_tool)
 
@@ -218,6 +232,8 @@ def _record_hovered_after(session):
 def on_mouse_pressed(session, event_callback):
     if session.lifecycle_state.tearing_down:
         return
+    if not _runtime_accepts_plan_tools(session):
+        return
     if _event_is_handled(event_callback) or _draft_point_request_owns_pointer(
         session
     ):
@@ -267,6 +283,8 @@ def on_mouse_pressed(session, event_callback):
 def on_mouse_moved(session, event_callback):
     if session.lifecycle_state.tearing_down:
         return
+    if not _runtime_accepts_plan_tools(session):
+        return
     if _event_is_handled(event_callback) or _draft_point_request_owns_pointer(
         session
     ):
@@ -292,6 +310,8 @@ def on_mouse_moved(session, event_callback):
 
 def on_mouse_wheel(session, event_callback):
     if session.lifecycle_state.tearing_down:
+        return
+    if not _runtime_accepts_plan_tools(session):
         return
     event = event_callback.getEvent()
     try:
@@ -327,6 +347,8 @@ def _handle_escape_cancels(session):
 
 def on_key_pressed(session, event_callback):
     if session.lifecycle_state.tearing_down:
+        return
+    if not _runtime_accepts_plan_tools(session):
         return
     try:
         from pivy import coin

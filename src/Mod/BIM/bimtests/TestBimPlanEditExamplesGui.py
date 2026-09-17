@@ -71,6 +71,7 @@ class TestBimPlanEditExamplesGui(TestArchBaseGui):
 
         session = get_active_session()
         self.assertIsNotNone(session)
+        self.assertIsNone(session.task_panel)
         context = document.getObject(bim_startup.getString("ContextObject", ""))
         definition = document.getObject(bim_startup.getString("ViewObject", ""))
         self.assertIs(session.active_storey, context)
