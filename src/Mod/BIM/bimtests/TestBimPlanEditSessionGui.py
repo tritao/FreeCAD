@@ -812,7 +812,9 @@ class TestBimPlanEditSessionGui(TestArchBaseGui):
         first_session = PlanEditSession()
         self.assertTrue(first_session.enter())
         first_representation = first_session.contextual_rendering.renderer._representations[wall]
+        first_node = first_session.contextual_rendering.renderer._object_nodes[wall]
         first_session.shutdown(close_dialog=False)
+        first_session.viewport.flush_scene_graph_mutations()
 
         second_session = PlanEditSession()
         self.assertTrue(second_session.enter())
@@ -821,6 +823,10 @@ class TestBimPlanEditSessionGui(TestArchBaseGui):
                 wall
             ]
             self.assertIs(first_representation, second_representation)
+            self.assertIs(
+                first_node,
+                second_session.contextual_rendering.renderer._object_nodes[wall],
+            )
         finally:
             second_session.shutdown(close_dialog=False)
 
@@ -868,7 +874,9 @@ class TestBimPlanEditSessionGui(TestArchBaseGui):
 
             self.assertTrue(session.lifecycle_state.tearing_down)
             self.assertIsNone(session.contextual_rendering.renderer)
-            self.assertIsNone(renderer.root)
+            self.assertIsNotNone(renderer.root)
+            self.assertEqual(coin.SO_SWITCH_NONE, renderer.root.whichChild.getValue())
+            self.assertFalse(renderer._preview_nodes)
             self.assertFalse(session.viewport_state.scene_graph_mutations)
         finally:
             if preview_document_name in FreeCAD.listDocuments():

@@ -2,8 +2,8 @@
 
 """Viewer-local committed BIM representations used by Plan Edit."""
 
-import BimContextualRendering
 import ArchWallRelation
+from bimviews import representation_layers
 
 
 class PlanContextualRenderingAPI:
@@ -20,16 +20,22 @@ class PlanContextualRenderingAPI:
         return self._renderer
 
     def start(self):
+        reused = self._renderer is not None
         if self._renderer is None:
-            self._renderer = BimContextualRendering.ContextualRepresentationRenderer(
-                self._session.view
+            self._renderer, reused = representation_layers.acquire(
+                self._session.view,
+                self._session.representation_request.request,
+                self._session.doc,
             )
             self._generation += 1
-        self.refresh_all()
+            if reused:
+                self._sources = set(self._renderer.sources)
+        if not reused:
+            self.refresh_all()
         self._session.viewport.flush_scene_graph_mutations()
         self._session.snap.enable_semantic_snapping()
 
-    def close(self):
+    def close(self, *, retain=False):
         self._session.snap.disable_semantic_snapping()
         renderer = self._renderer
         self._renderer = None
@@ -38,7 +44,11 @@ class PlanContextualRenderingAPI:
         if renderer is not None:
             self._session.viewport.queue_scene_graph_mutation(
                 ("contextual-renderer-close", id(renderer)),
-                renderer.close,
+                lambda: (
+                    representation_layers.release(renderer)
+                    if retain
+                    else representation_layers.close_renderer(renderer)
+                ),
                 finalizer=True,
             )
 

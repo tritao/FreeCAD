@@ -79,7 +79,7 @@ def discard_runtime_references(session):
     session.view_runtime = None
     session.view_grid.close()
     session.view_rulers.close()
-    session.contextual_rendering.close()
+    session.contextual_rendering.close(retain=False)
     session.viewport.discard_runtime_references()
     session.selection.state.discard_runtime_references()
     session.providers.discard_runtime_references()
@@ -148,7 +148,7 @@ def _cleanup_begin_teardown(session):
     cancel_pending_edit(session)
     _cancel_current_tool_for_begin_teardown(session)
     session.overlays.clear_begin_teardown_visuals()
-    session.contextual_rendering.close()
+    session.contextual_rendering.close(retain=False)
     detach_runtime_observers(session)
 
 
@@ -164,7 +164,7 @@ def _cleanup_shutdown(session, *, teardown=False):
     cancel_pending_edit(session)
     _cancel_current_tool_for_shutdown(session)
     session.overlays.clear_shutdown_visuals()
-    session.contextual_rendering.close()
+    session.contextual_rendering.close(retain=not teardown)
     detach_runtime_observers(session)
 
 

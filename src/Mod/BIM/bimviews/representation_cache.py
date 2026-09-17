@@ -91,6 +91,9 @@ def cache_representation(obj, request, representation):
 def invalidate_document(document):
     if document is not None:
         _document_caches.pop(_document_key(document), None)
+        from . import representation_layers
+
+        representation_layers.invalidate_document(document)
 
 
 def invalidate_object(obj):
@@ -103,6 +106,9 @@ def invalidate_object(obj):
         for key in tuple(cache):
             if key[0] == name:
                 cache.pop(key, None)
+    from . import representation_layers
+
+    representation_layers.invalidate_document(document)
 
 
 class _RepresentationCacheObserver:

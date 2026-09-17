@@ -75,7 +75,8 @@ class ContextualRepresentationRenderer:
         self.render_representation = bool(render_representation)
         self.layer = view.pushViewContextLayer()
         self.scene = view.getSceneGraph()
-        self.root = coin.SoSeparator()
+        self.root = coin.SoSwitch()
+        self.root.whichChild = coin.SO_SWITCH_ALL
         self.root.ref()
         self.scene.addChild(self.root)
         self._object_nodes = {}
@@ -227,6 +228,30 @@ class ContextualRepresentationRenderer:
             self._hidden_sources.add(source)
         self._apply_source_visibility(source)
         return hidden_before == bool(visible)
+
+    def suspend(self):
+        """Hide this retained layer and reveal its document sources."""
+
+        if self.root is None:
+            return False
+        self.clear_preview()
+        self.set_visible_handle_sources(())
+        self.root.whichChild = coin.SO_SWITCH_NONE
+        if self.replace_source:
+            for source in self._representations:
+                self.view.setViewVisibility(self.layer, source, "Inherit")
+        return True
+
+    def resume(self):
+        """Show this retained layer and replace its document sources."""
+
+        if self.root is None:
+            return False
+        self.root.whichChild = coin.SO_SWITCH_ALL
+        if self.replace_source:
+            for source in self._representations:
+                self.view.setViewVisibility(self.layer, source, "Hidden")
+        return True
 
     def close(self):
         root = self.root

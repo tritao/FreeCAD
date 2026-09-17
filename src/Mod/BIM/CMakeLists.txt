@@ -202,6 +202,7 @@ SET(bimviews_SRCS
     bimviews/ruler_model.py
     bimviews/runtime.py
     bimviews/representation_cache.py
+    bimviews/representation_layers.py
     bimviews/scope.py
     bimviews/service.py
     bimviews/viewport_grid.py
