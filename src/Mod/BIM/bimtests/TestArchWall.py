@@ -299,16 +299,18 @@ class TestArchWall(TestArchBase.TestArchBase):
     def test_joined_wall_analytic_outputs_match_exact_shape(self):
         """Joined-wall meshes and directly compiled solids match legacy geometry."""
 
-        support = Arch.makeWall(length=2000, width=200, height=1000)
-        trimmed = Arch.makeWall(length=1000, width=200, height=1000)
-        trimmed.Placement = App.Placement(
-            App.Vector(1000, 500, 0),
-            App.Rotation(App.Vector(1, 0, 0), App.Vector(0, 1, 0)),
-        )
-        self.document.recompute()
-        joint = Arch.makeWallJoint(support, trimmed, "Butt")
-        joint.ButtTrimmed = "WallB"
-        self.document.recompute()
+        with patch.object(ArchWallExact, "compile_straight_wall", return_value=None):
+            support = Arch.makeWall(length=2000, width=200, height=1000)
+            trimmed = Arch.makeWall(length=1000, width=200, height=1000)
+            trimmed.Placement = App.Placement(
+                App.Vector(1000, 500, 0),
+                App.Rotation(App.Vector(1, 0, 0), App.Vector(0, 1, 0)),
+            )
+            self.document.recompute()
+            joint = Arch.makeWallJoint(support, trimmed, "Butt")
+            joint.ButtTrimmed = "WallB"
+            self.document.recompute()
+            legacy_shapes = {wall.Name: wall.Shape.copy() for wall in (support, trimmed)}
 
         for wall in (support, trimmed):
             recipe = ArchPlanAnalytic.straight_wall_geometry_recipe(wall, wall.Proxy)
@@ -319,7 +321,8 @@ class TestArchWall(TestArchBase.TestArchBase):
             compilation = ArchWallExact.compile_wall_recipe(recipe)
             self.assertIsNotNone(compilation)
             self.assertTrue(compilation.shape.isValid())
-            bounds = wall.Shape.BoundBox
+            legacy_shape = legacy_shapes[wall.Name]
+            bounds = legacy_shape.BoundBox
             expected_bounds = (
                 bounds.XMin,
                 bounds.YMin,
@@ -330,7 +333,7 @@ class TestArchWall(TestArchBase.TestArchBase):
             )
             for actual, expected in zip(mesh.bounds, expected_bounds):
                 self.assertAlmostEqual(actual, expected, delta=1e-5)
-            self.assertAlmostEqual(mesh.volume, wall.Shape.Volume, delta=1e-3)
+            self.assertAlmostEqual(mesh.volume, legacy_shape.Volume, delta=1e-3)
             compiled_bounds = compilation.shape.BoundBox
             for actual, expected in zip(
                 (
@@ -345,7 +348,40 @@ class TestArchWall(TestArchBase.TestArchBase):
             ):
                 self.assertAlmostEqual(actual, expected, delta=1e-5)
             self.assertAlmostEqual(
-                compilation.shape.Volume, wall.Shape.Volume, delta=1e-3
+                compilation.shape.Volume, legacy_shape.Volume, delta=1e-3
+            )
+
+        for wall in (support, trimmed):
+            wall.touch()
+        with patch.object(
+            support.Proxy, "processSubShapes", wraps=support.Proxy.processSubShapes
+        ) as legacy_subtractions:
+            self.document.recompute()
+        legacy_subtractions.assert_not_called()
+        for wall in (support, trimmed):
+            runtime_bounds = wall.Shape.BoundBox
+            legacy_bounds = legacy_shapes[wall.Name].BoundBox
+            for actual, expected in zip(
+                (
+                    runtime_bounds.XMin,
+                    runtime_bounds.YMin,
+                    runtime_bounds.ZMin,
+                    runtime_bounds.XMax,
+                    runtime_bounds.YMax,
+                    runtime_bounds.ZMax,
+                ),
+                (
+                    legacy_bounds.XMin,
+                    legacy_bounds.YMin,
+                    legacy_bounds.ZMin,
+                    legacy_bounds.XMax,
+                    legacy_bounds.YMax,
+                    legacy_bounds.ZMax,
+                ),
+            ):
+                self.assertAlmostEqual(actual, expected, delta=1e-5)
+            self.assertAlmostEqual(
+                wall.Shape.Volume, legacy_shapes[wall.Name].Volume, delta=1e-3
             )
 
     def test_wall_model_provider_selects_viewport_mesh_and_exact_fallback(self):
@@ -499,7 +535,7 @@ class TestArchWall(TestArchBase.TestArchBase):
             ArchComponent.Component,
             "_cut_subtraction_tools",
             side_effect=record_cut_tools,
-        ):
+        ), patch.object(ArchWallExact, "compile_straight_wall", return_value=None):
             for index, x_start in enumerate((500.0, 1800.0, 3100.0), start=1):
                 self._make_hosted_window(
                     wall,
@@ -523,24 +559,26 @@ class TestArchWall(TestArchBase.TestArchBase):
     def test_exact_wall_compiler_matches_legacy_opening_shape(self):
         """A perforated extrusion matches the legacy boolean wall result."""
 
-        line = Draft.makeLine(App.Vector(), App.Vector(5000, 0, 0))
-        wall = Arch.makeWall(line, width=200, height=3000)
-        self.document.recompute()
-        for index, x_start in enumerate((700.0, 2600.0), start=1):
-            self._make_hosted_window(
-                wall,
-                f"ExactCompilerOpening{index}",
-                x_start=x_start,
-                z_start=700.0,
-                width=700.0,
-                height=1200.0,
-            )
+        with patch.object(ArchWallExact, "compile_straight_wall", return_value=None):
+            line = Draft.makeLine(App.Vector(), App.Vector(5000, 0, 0))
+            wall = Arch.makeWall(line, width=200, height=3000)
+            self.document.recompute()
+            for index, x_start in enumerate((700.0, 2600.0), start=1):
+                self._make_hosted_window(
+                    wall,
+                    f"ExactCompilerOpening{index}",
+                    x_start=x_start,
+                    z_start=700.0,
+                    width=700.0,
+                    height=1200.0,
+                )
+            legacy_shape = wall.Shape.copy()
 
         compilation = ArchWallExact.compile_straight_wall(wall, wall.Proxy)
         self.assertIsNotNone(compilation)
         self.assertTrue(compilation.shape.isValid())
-        self.assertAlmostEqual(wall.Shape.Volume, compilation.shape.Volume, delta=1e-3)
-        legacy_bounds = wall.Shape.BoundBox
+        self.assertAlmostEqual(legacy_shape.Volume, compilation.shape.Volume, delta=1e-3)
+        legacy_bounds = legacy_shape.BoundBox
         compiled_bounds = compilation.shape.BoundBox
         for legacy, compiled in zip(
             (
@@ -561,7 +599,7 @@ class TestArchWall(TestArchBase.TestArchBase):
             ),
         ):
             self.assertAlmostEqual(legacy, compiled, delta=1e-6)
-        legacy_section = ArchComponent.get_horizontal_slice_faces(wall.Shape, 1000)
+        legacy_section = ArchComponent.get_horizontal_slice_faces(legacy_shape, 1000)
         compiled_section = ArchComponent.get_horizontal_slice_faces(
             compilation.shape, 1000
         )
@@ -570,6 +608,13 @@ class TestArchWall(TestArchBase.TestArchBase):
             sum(face.Area for face in compiled_section),
             delta=1e-3,
         )
+        wall.touch()
+        with patch.object(
+            wall.Proxy, "processSubShapes", wraps=wall.Proxy.processSubShapes
+        ) as legacy_subtractions:
+            self.document.recompute()
+        legacy_subtractions.assert_not_called()
+        self.assertAlmostEqual(wall.Shape.Volume, legacy_shape.Volume, delta=1e-3)
 
     def test_wall_footprint_uses_parent_storey_plan_cut_height(self):
         """Parent storeys should define the absolute plan cut for contained walls."""
