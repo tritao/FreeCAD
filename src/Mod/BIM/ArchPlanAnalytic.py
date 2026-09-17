@@ -4,6 +4,7 @@
 
 from dataclasses import dataclass
 
+import ArchWallGeometry
 import FreeCAD
 
 
@@ -12,13 +13,8 @@ class AnalyticWallPlan:
     """A straight wall footprint expressed without inspecting its final solid."""
 
     source: object
-    axis_start: object
-    axis_end: object
-    lateral: object
-    y_min: float
-    y_max: float
+    recipe: object
     target_z: float
-    trim_claims: tuple = ()
     opening_intervals: tuple = ()
 
     @property
@@ -27,61 +23,7 @@ class AnalyticWallPlan:
 
     @property
     def boundaries(self):
-        start = FreeCAD.Vector(self.axis_start)
-        end = FreeCAD.Vector(self.axis_end)
-        axis = end.sub(start)
-        axis.normalize()
-        for claim in self.trim_claims:
-            if claim.end_name == "Start":
-                start = start.sub(axis * float(claim.extension))
-            else:
-                end = end.add(axis * float(claim.extension))
-        lateral = FreeCAD.Vector(self.lateral)
-        polygon = [
-            start.add(lateral * self.y_min),
-            end.add(lateral * self.y_min),
-            end.add(lateral * self.y_max),
-            start.add(lateral * self.y_max),
-        ]
-        for claim in self.trim_claims:
-            reference = end if claim.end_name == "Start" else start
-            normal = claim.plane.Rotation.multVec(FreeCAD.Vector(0, 0, 1))
-            keep_sign = 1.0 if reference.sub(claim.plane.Base).dot(normal) >= 0 else -1.0
-            polygon = _clip_polygon(
-                polygon,
-                lambda point, origin=claim.plane.Base, direction=normal, sign=keep_sign: (
-                    point.sub(origin).dot(direction) * sign
-                ),
-            )
-
-        polygons = [polygon] if len(polygon) >= 3 else []
-        origin = FreeCAD.Vector(self.axis_start)
-        for lower, upper in self.opening_intervals:
-            pieces = []
-            for current in polygons:
-                left = _clip_polygon(
-                    current,
-                    lambda point, limit=lower: limit - point.sub(origin).dot(axis),
-                )
-                right = _clip_polygon(
-                    current,
-                    lambda point, limit=upper: point.sub(origin).dot(axis) - limit,
-                )
-                if len(left) >= 3:
-                    pieces.append(left)
-                if len(right) >= 3:
-                    pieces.append(right)
-            polygons = pieces
-
-        result = []
-        for points in polygons:
-            boundary = []
-            for point in points:
-                point = FreeCAD.Vector(point)
-                point.z = self.target_z
-                boundary.append(point)
-            result.append(tuple(boundary))
-        return tuple(result)
+        return self.recipe.plan_boundaries(self.target_z, self.opening_intervals)
 
     def make_faces(self):
         """Materialize analytic regions as lightweight planar faces."""
@@ -90,6 +32,18 @@ class AnalyticWallPlan:
 
         return tuple(
             Part.Face(Part.makePolygon((*boundary, boundary[0])))
+            for boundary in self.boundaries
+        )
+
+    @property
+    def face_meshes(self):
+        """Return direct convex polygon meshes for Plan rendering and picking."""
+
+        return tuple(
+            (
+                boundary,
+                tuple((0, index, index + 1) for index in range(1, len(boundary) - 1)),
+            )
             for boundary in self.boundaries
         )
 
@@ -102,30 +56,6 @@ class AnalyticWallPlan:
         return faces[0] if faces else Part.Face()
 
 
-def _clip_polygon(polygon, signed_distance, tolerance=1e-7):
-    """Clip a convex polygon to the non-negative side of one line."""
-
-    if not polygon:
-        return []
-    result = []
-    previous = polygon[-1]
-    previous_distance = float(signed_distance(previous))
-    for current in polygon:
-        current_distance = float(signed_distance(current))
-        previous_inside = previous_distance >= -tolerance
-        current_inside = current_distance >= -tolerance
-        if previous_inside != current_inside:
-            denominator = previous_distance - current_distance
-            if abs(denominator) > 1e-12:
-                ratio = previous_distance / denominator
-                result.append(previous.add(current.sub(previous) * ratio))
-        if current_inside:
-            result.append(FreeCAD.Vector(current))
-        previous = current
-        previous_distance = current_distance
-    return result
-
-
 def straight_wall_plan_model(wall, proxy, request):
     """Return an analytic model when a wall needs no BRep-derived Plan result."""
 
@@ -136,11 +66,45 @@ def straight_wall_plan_model(wall, proxy, request):
         frame_normal = frame.Rotation.multVec(FreeCAD.Vector(0, 0, 1))
         if abs(abs(frame_normal.z) - 1.0) > 1e-7:
             return None
-    if _has_manual_end_treatment(wall):
+    recipe = straight_wall_geometry_recipe(wall, proxy)
+    if recipe is None:
         return None
-    if not _has_straight_path(wall):
+    cut_z = float(request.cut_offset)
+    if frame is not None:
+        cut_z = frame.multVec(FreeCAD.Vector(0, 0, cut_z)).z
+    if cut_z < recipe.z_min - 1e-7 or cut_z > recipe.z_max + 1e-7:
         return None
+    target_z = request.target_offset
+    if target_z is None:
+        target_z = recipe.z_min
+    elif frame is not None:
+        target_z = frame.multVec(FreeCAD.Vector(0, 0, float(target_z))).z
+    opening_request = request
+    if frame is not None:
+        import ArchRepresentation
 
+        opening_request = ArchRepresentation.RepresentationRequest(
+            purpose=request.purpose,
+            cut_offset=cut_z,
+            target_offset=float(target_z),
+            source=getattr(request, "source", None),
+        )
+    opening_intervals = _hosted_opening_intervals(wall, opening_request, recipe)
+    if opening_intervals is None:
+        return None
+    return AnalyticWallPlan(
+        source=wall,
+        recipe=recipe,
+        target_z=float(target_z),
+        opening_intervals=opening_intervals,
+    )
+
+
+def straight_wall_geometry_recipe(wall, proxy):
+    """Resolve the shared geometry recipe for one supported straight wall."""
+
+    if _has_manual_end_treatment(wall) or not _has_straight_path(wall):
+        return None
     baseline = proxy.get_global_baseline(wall)
     section = proxy.get_resolved_section(wall)
     if baseline is None or section is None:
@@ -169,50 +133,25 @@ def straight_wall_plan_model(wall, proxy, request):
         shape_center = FreeCAD.Vector(bounds.Center)
         if shape_center.sub(baseline_midpoint).dot(lateral) * section_center < 0:
             lateral = lateral.negative()
-    cut_z = float(request.cut_offset)
-    if frame is not None:
-        cut_z = frame.multVec(FreeCAD.Vector(0, 0, cut_z)).z
-    if cut_z < bounds.ZMin - 1e-7 or cut_z > bounds.ZMax + 1e-7:
+    trim_planes = _wall_trim_planes(wall)
+    if trim_planes is None:
         return None
-    target_z = request.target_offset
-    if target_z is None:
-        target_z = bounds.ZMin
-    elif frame is not None:
-        target_z = frame.multVec(FreeCAD.Vector(0, 0, float(target_z))).z
-    trim_claims = _wall_trim_claims(wall)
-    if trim_claims is None:
-        return None
-    opening_request = request
-    if frame is not None:
-        import ArchRepresentation
-
-        opening_request = ArchRepresentation.RepresentationRequest(
-            purpose=request.purpose,
-            cut_offset=cut_z,
-            target_offset=float(target_z),
-            source=getattr(request, "source", None),
-        )
-    opening_intervals = _hosted_opening_intervals(wall, opening_request, baseline)
-    if opening_intervals is None:
-        return None
-    return AnalyticWallPlan(
-        source=wall,
-        axis_start=FreeCAD.Vector(baseline.start_point),
-        axis_end=FreeCAD.Vector(baseline.end_point),
+    return ArchWallGeometry.WallGeometryRecipe(
+        axis_start=baseline.start_point,
+        axis_end=baseline.end_point,
         lateral=lateral,
-        y_min=float(section.y_min),
-        y_max=float(section.y_max),
-        target_z=float(target_z),
-        trim_claims=trim_claims,
-        opening_intervals=opening_intervals,
+        section=section,
+        z_min=bounds.ZMin,
+        z_max=bounds.ZMax,
+        trim_planes=trim_planes,
     )
 
 
-def _wall_trim_claims(wall):
+def _wall_trim_planes(wall):
     import ArchWallRelation
     from bimviews import representation_cache
 
-    claims = []
+    trim_planes = []
     for relation in ArchWallRelation.iter_wall_relations(wall):
         if not getattr(relation, "Enabled", True):
             continue
@@ -228,14 +167,21 @@ def _wall_trim_claims(wall):
             return None
         claim = solution.trim_for_wall(wall)
         if claim is not None:
-            claims.append(claim)
-    return tuple(claims)
+            trim_planes.append(
+                ArchWallGeometry.WallTrimPlane(
+                    end_name=claim.end_name,
+                    origin=claim.plane.Base,
+                    normal=claim.plane.Rotation.multVec(FreeCAD.Vector(0, 0, 1)),
+                    extension=claim.extension,
+                )
+            )
+    return tuple(trim_planes)
 
 
-def _hosted_opening_intervals(wall, request, baseline):
+def _hosted_opening_intervals(wall, request, recipe):
     document = getattr(wall, "Document", None)
-    origin = FreeCAD.Vector(baseline.start_point)
-    axis = FreeCAD.Vector(baseline.end_point).sub(origin)
+    origin = FreeCAD.Vector(recipe.axis_start)
+    axis = FreeCAD.Vector(recipe.axis_end).sub(origin)
     axis.normalize()
     intervals = []
     for obj in (getattr(document, "Objects", ()) or ()):

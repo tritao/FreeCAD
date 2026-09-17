@@ -243,3 +243,131 @@ class WallSection:
         if lateral_direction.dot(world_direction) >= 0:
             return -self.y_min
         return -self.y_max
+
+
+@dataclass(frozen=True)
+class WallTrimPlane:
+    """Renderer-independent half-space trimming one end of a wall."""
+
+    end_name: str
+    origin: object
+    normal: object
+    extension: float = 0.0
+
+    def __post_init__(self):
+        if self.end_name not in ("Start", "End"):
+            raise ValueError("WallTrimPlane end_name must be Start or End")
+        normal = FreeCAD.Vector(self.normal)
+        if normal.Length <= 1e-9:
+            raise ValueError("WallTrimPlane requires a non-zero normal")
+        normal.normalize()
+        object.__setattr__(self, "origin", FreeCAD.Vector(self.origin))
+        object.__setattr__(self, "normal", normal)
+        object.__setattr__(self, "extension", float(self.extension))
+
+
+@dataclass(frozen=True)
+class WallGeometryRecipe:
+    """Resolved straight-wall geometry shared by display and exact outputs."""
+
+    axis_start: object
+    axis_end: object
+    lateral: object
+    section: WallSection
+    z_min: float
+    z_max: float
+    trim_planes: tuple = ()
+
+    def __post_init__(self):
+        start = FreeCAD.Vector(self.axis_start)
+        end = FreeCAD.Vector(self.axis_end)
+        if end.sub(start).Length <= 1e-9:
+            raise ValueError("WallGeometryRecipe requires a non-degenerate axis")
+        lateral = FreeCAD.Vector(self.lateral)
+        if lateral.Length <= 1e-9:
+            raise ValueError("WallGeometryRecipe requires a lateral direction")
+        lateral.normalize()
+        if not isinstance(self.section, WallSection):
+            raise TypeError("WallGeometryRecipe requires a WallSection")
+        object.__setattr__(self, "axis_start", start)
+        object.__setattr__(self, "axis_end", end)
+        object.__setattr__(self, "lateral", lateral)
+        object.__setattr__(self, "z_min", float(self.z_min))
+        object.__setattr__(self, "z_max", float(self.z_max))
+        object.__setattr__(self, "trim_planes", tuple(self.trim_planes or ()))
+
+    def plan_boundaries(self, target_z, opening_intervals=()):
+        """Derive clipped Plan polygons without constructing an OCCT shape."""
+
+        start = FreeCAD.Vector(self.axis_start)
+        end = FreeCAD.Vector(self.axis_end)
+        axis = end.sub(start)
+        axis.normalize()
+        for trim in self.trim_planes:
+            if trim.end_name == "Start":
+                start = start.sub(axis * trim.extension)
+            else:
+                end = end.add(axis * trim.extension)
+        polygon = [
+            start.add(self.lateral * self.section.y_min),
+            end.add(self.lateral * self.section.y_min),
+            end.add(self.lateral * self.section.y_max),
+            start.add(self.lateral * self.section.y_max),
+        ]
+        for trim in self.trim_planes:
+            reference = end if trim.end_name == "Start" else start
+            keep_sign = 1.0 if reference.sub(trim.origin).dot(trim.normal) >= 0 else -1.0
+            polygon = _clip_polygon(
+                polygon,
+                lambda point, trim=trim, sign=keep_sign: (
+                    point.sub(trim.origin).dot(trim.normal) * sign
+                ),
+            )
+
+        polygons = [polygon] if len(polygon) >= 3 else []
+        origin = FreeCAD.Vector(self.axis_start)
+        for lower, upper in opening_intervals:
+            pieces = []
+            for current in polygons:
+                left = _clip_polygon(
+                    current,
+                    lambda point, limit=lower: limit - point.sub(origin).dot(axis),
+                )
+                right = _clip_polygon(
+                    current,
+                    lambda point, limit=upper: point.sub(origin).dot(axis) - limit,
+                )
+                if len(left) >= 3:
+                    pieces.append(left)
+                if len(right) >= 3:
+                    pieces.append(right)
+            polygons = pieces
+
+        return tuple(
+            tuple(FreeCAD.Vector(point.x, point.y, float(target_z)) for point in polygon)
+            for polygon in polygons
+        )
+
+
+def _clip_polygon(polygon, signed_distance, tolerance=1e-7):
+    """Clip a convex polygon to the non-negative side of one line."""
+
+    if not polygon:
+        return []
+    result = []
+    previous = polygon[-1]
+    previous_distance = float(signed_distance(previous))
+    for current in polygon:
+        current_distance = float(signed_distance(current))
+        previous_inside = previous_distance >= -tolerance
+        current_inside = current_distance >= -tolerance
+        if previous_inside != current_inside:
+            denominator = previous_distance - current_distance
+            if abs(denominator) > 1e-12:
+                ratio = previous_distance / denominator
+                result.append(previous.add(current.sub(previous) * ratio))
+        if current_inside:
+            result.append(FreeCAD.Vector(current))
+        previous = current
+        previous_distance = current_distance
+    return result

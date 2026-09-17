@@ -96,3 +96,31 @@ class TestArchWallGeometry(TestArchBase.TestArchBase):
         self.assertEqual(section.offset_towards(App.Vector(1, 0, 0), App.Vector(-1, 0, 0)), -200)
         with self.assertRaises(AttributeError):
             section.layers = ()
+
+    def test_wall_geometry_recipe_derives_trimmed_open_plan_regions(self):
+        """One shared wall recipe derives Plan regions without OCCT booleans."""
+
+        section = ArchWallGeometry.WallSection(
+            (ArchWallGeometry.WallSectionLayer(200, -100, 100),)
+        )
+        recipe = ArchWallGeometry.WallGeometryRecipe(
+            axis_start=App.Vector(0, 0, 0),
+            axis_end=App.Vector(1000, 0, 0),
+            lateral=App.Vector(0, 1, 0),
+            section=section,
+            z_min=0,
+            z_max=3000,
+            trim_planes=(
+                ArchWallGeometry.WallTrimPlane(
+                    "End", App.Vector(900, 0, 0), App.Vector(1, 0, 0)
+                ),
+            ),
+        )
+
+        boundaries = recipe.plan_boundaries(25, ((300, 500),))
+        self.assertEqual(2, len(boundaries))
+        self.assertEqual([(0, 300), (500, 900)], [
+            (min(point.x for point in boundary), max(point.x for point in boundary))
+            for boundary in boundaries
+        ])
+        self.assertTrue(all(point.z == 25 for boundary in boundaries for point in boundary))
