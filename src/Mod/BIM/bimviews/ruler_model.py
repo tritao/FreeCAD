@@ -5,7 +5,10 @@
 from dataclasses import dataclass
 import math
 
+import FreeCAD
+
 from draftutils.grid import adaptive_grid_interval
+from draftutils.units import display_external
 
 
 def engineering_interval(units_per_pixel, target_pixels=100.0):
@@ -25,25 +28,74 @@ def tick_values(start, end, interval):
     return tuple(first + index * interval for index in range(count))
 
 
-def format_metric(value, interval=None, cursor=False):
-    """Format FreeCAD's millimetre coordinates using compact metric labels."""
+def format_length(value, interval=None, cursor=False):
+    """Format an internal millimetre length using the active unit schema."""
 
     value = float(value)
-    interval = abs(float(interval or 0.0))
-    if abs(value) >= 1000.0 or interval >= 1000.0:
-        decimals = 3 if cursor else max(
-            0,
-            min(3, int(math.ceil(-math.log10(max(interval / 1000.0, 1e-9))))),
-        )
-        text = ("{:.%df}" % decimals).format(value / 1000.0)
-        return "{} m".format(_trim_decimal(text))
-    decimals = 1 if cursor or interval < 1.0 else 0
-    text = ("{:.%df}" % decimals).format(value)
-    return "{} mm".format(_trim_decimal(text))
+    quantity = FreeCAD.Units.Quantity(value, FreeCAD.Units.Length)
+    if interval is None and not cursor:
+        return _compact_quantity_text(quantity.UserString)
+
+    if cursor and interval is None:
+        # Cursor feedback benefits from millimetre-level precision regardless
+        # of whether the preferred display unit is metres, feet or inches.
+        decimals = 3
+    else:
+        interval = abs(float(interval or 0.0))
+        conversion = _preferred_length_conversion(quantity)
+        preferred_interval = interval / conversion if conversion else interval
+        if preferred_interval <= 0.0 or not math.isfinite(preferred_interval):
+            decimals = 0
+        else:
+            decimals = max(0, min(6, int(math.ceil(-math.log10(preferred_interval)))))
+            if cursor:
+                decimals = min(6, decimals + 1)
+    try:
+        text = display_external(value, decimals=decimals, dim="Length", showUnit=True)
+    except (AttributeError, TypeError, ValueError, RuntimeError):
+        text = quantity.UserString
+    return _compact_quantity_text(text)
 
 
-def _trim_decimal(text):
-    return text.rstrip("0").rstrip(".") if "." in text else text
+def format_metric(value, interval=None, cursor=False):
+    """Compatibility alias for the unit-aware ruler formatter."""
+
+    return format_length(value, interval=interval, cursor=cursor)
+
+
+def preferred_length_unit():
+    """Return the active schema's preferred length unit label."""
+
+    try:
+        quantity = FreeCAD.Units.Quantity(1.0, FreeCAD.Units.Length)
+        return str(quantity.getUserPreferred()[2])
+    except (AttributeError, TypeError, ValueError, RuntimeError):
+        return ""
+
+
+def _preferred_length_conversion(quantity):
+    try:
+        conversion = float(quantity.getUserPreferred()[1])
+    except (AttributeError, TypeError, ValueError, RuntimeError):
+        return 1.0
+    return conversion if math.isfinite(conversion) and conversion > 0.0 else 1.0
+
+
+def _compact_quantity_text(text):
+    """Trim formatter padding while preserving unit/schema tokens."""
+
+    compact = []
+    for token in str(text).split():
+        for separator in (".", ","):
+            if separator in token:
+                head, tail = token.rsplit(separator, 1)
+                tail = tail.rstrip("0")
+                token = head if not tail else head + separator + tail
+                break
+        if token in ("-0", "+0"):
+            token = "0"
+        compact.append(token)
+    return " ".join(compact)
 
 
 @dataclass(frozen=True)

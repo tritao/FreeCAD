@@ -20,6 +20,38 @@ def adaptive_grid_interval(units_per_pixel, target_pixels=50.0):
     return 10.0 * decade
 
 
+def adaptive_lattice_interval(spacing, units_per_pixel, target_pixels=50.0):
+    """Return a readable interval that is always on the snap lattice.
+
+    The returned display interval is deliberately restricted to a small set
+    of integer multiples of ``spacing``.  This keeps every rendered line a
+    real snap line, even when zooming changes the preferred visual density.
+    Extremely zoomed-out views are handled by the renderer's line-count
+    guard, which can continue multiplying this lattice-aligned interval.
+    """
+
+    spacing = float(spacing)
+    if not math.isfinite(spacing) or spacing <= 0.0:
+        raise ValueError("Grid spacing must be positive")
+    try:
+        units_per_pixel = float(units_per_pixel)
+        target_pixels = float(target_pixels)
+    except (TypeError, ValueError):
+        units_per_pixel = 0.0
+        target_pixels = 50.0
+    if not math.isfinite(units_per_pixel) or units_per_pixel < 0.0:
+        units_per_pixel = 0.0
+    if not math.isfinite(target_pixels) or target_pixels <= 0.0:
+        target_pixels = 50.0
+
+    required = units_per_pixel * target_pixels
+    ratio = required / spacing
+    for multiplier in (2.0, 5.0, 10.0, 20.0):
+        if ratio <= multiplier:
+            return spacing * multiplier
+    return spacing * 20.0
+
+
 @dataclass(frozen=True)
 class GridLine:
     """One line in a planar grid, expressed in global coordinates."""

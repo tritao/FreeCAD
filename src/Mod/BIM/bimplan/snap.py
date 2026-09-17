@@ -4,11 +4,7 @@
 
 import FreeCAD
 import FreeCADGui
-
-
-_PLAN_GRID_PREFERENCES = "User parameter:BaseApp/Preferences/Mod/BIM/PlanEdit"
-_DEFAULT_GRID_SPACING = 100.0
-_DEFAULT_GRID_MAJOR_EVERY = 10
+from bimviews.grid_settings import get_grid_settings
 
 
 def _get_snapper():
@@ -83,23 +79,6 @@ def restore_snap_profile(view=None):
         pass
 
 
-def _plan_grid_spacing():
-    """Read Plan Edit grid spacing without changing Draft preferences."""
-
-    preferences = FreeCAD.ParamGet(_PLAN_GRID_PREFERENCES)
-    raw_spacing = preferences.GetString("GridSpacing", "100 mm")
-    try:
-        spacing = FreeCAD.Units.Quantity(raw_spacing).Value
-    except (TypeError, ValueError):
-        spacing = _DEFAULT_GRID_SPACING
-    if spacing <= 0:
-        spacing = _DEFAULT_GRID_SPACING
-    major_every = preferences.GetInt("GridMainlines", _DEFAULT_GRID_MAJOR_EVERY)
-    if major_every <= 0:
-        major_every = _DEFAULT_GRID_MAJOR_EVERY
-    return spacing, major_every
-
-
 def _build_plan_grid(session):
     """Build a lattice in the active Plan Edit reference frame."""
 
@@ -115,13 +94,13 @@ def _build_plan_grid(session):
     try:
         from draftutils.grid import GridLattice
 
-        spacing, major_every = _plan_grid_spacing()
+        settings = get_grid_settings()
         return GridLattice(
             getattr(plane, "position", FreeCAD.Vector()),
             getattr(plane, "u", FreeCAD.Vector(1, 0, 0)),
             getattr(plane, "v", FreeCAD.Vector(0, 1, 0)),
-            spacing=spacing,
-            major_every=major_every,
+            spacing=settings.spacing,
+            major_every=settings.major_every,
         )
     except Exception:
         return None

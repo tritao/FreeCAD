@@ -7,36 +7,19 @@ import math
 import FreeCAD
 
 from ArchRepresentation import RepresentationPurpose
-from draftutils.grid import GridLattice
+from draftutils.grid import GridLattice, adaptive_lattice_interval
+from .grid_settings import get_grid_settings
 from .ruler_model import RulerTransform
 
 
 PARAMS = FreeCAD.ParamGet("User parameter:BaseApp/Preferences/Mod/BIM")
 SHOW_GRID_PARAM = "ShowViewGrid"
-GRID_PREFERENCES = "User parameter:BaseApp/Preferences/Mod/BIM/PlanEdit"
-DEFAULT_GRID_SPACING = 100.0
-DEFAULT_GRID_MAJOR_EVERY = 10
 
 
 def grid_enabled():
     """Return whether the BIM planar grid should be displayed."""
 
     return PARAMS.GetBool(SHOW_GRID_PARAM, True)
-
-
-def _grid_settings():
-    preferences = FreeCAD.ParamGet(GRID_PREFERENCES)
-    raw_spacing = preferences.GetString("GridSpacing", "100 mm")
-    try:
-        spacing = FreeCAD.Units.Quantity(raw_spacing).Value
-    except (TypeError, ValueError):
-        spacing = DEFAULT_GRID_SPACING
-    if spacing <= 0.0:
-        spacing = DEFAULT_GRID_SPACING
-    major_every = preferences.GetInt("GridMainlines", DEFAULT_GRID_MAJOR_EVERY)
-    if major_every <= 0:
-        major_every = DEFAULT_GRID_MAJOR_EVERY
-    return float(spacing), int(major_every)
 
 
 if FreeCAD.GuiUp:
@@ -84,9 +67,12 @@ if FreeCAD.GuiUp:
             if width <= 0 or height <= 0:
                 return
 
-            # Keep a few subdivisions between the ruler's major marks while
-            # never rendering more densely than the snap lattice itself.
-            display_spacing = max(lattice.spacing, transform.major_interval / 5.0)
+            # Keep display lines on the snap lattice.  The renderer may make
+            # this interval coarser below if an extreme zoom would create too
+            # many lines, but it never switches to a non-lattice interval.
+            display_spacing = adaptive_lattice_interval(
+                lattice.spacing, transform.units_per_pixel
+            )
             bounds = (
                 transform.x_left,
                 transform.x_right,
@@ -240,13 +226,13 @@ class ViewportGridController:
         )
 
     def _make_lattice(self):
-        spacing, major_every = _grid_settings()
+        settings = get_grid_settings()
         return GridLattice(
             FreeCAD.Vector(),
             FreeCAD.Vector(1, 0, 0),
             FreeCAD.Vector(0, 1, 0),
-            spacing=spacing,
-            major_every=major_every,
+            spacing=settings.spacing,
+            major_every=settings.major_every,
         )
 
     def _make_transform(self):

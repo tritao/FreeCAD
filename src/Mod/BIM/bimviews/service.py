@@ -7,6 +7,8 @@ from dataclasses import dataclass
 import ArchRepresentation
 import FreeCAD
 
+from .grid_settings import get_grid_settings
+
 
 _SUPPORTED_PURPOSES = {
     purpose.value.casefold(): purpose for purpose in ArchRepresentation.RepresentationPurpose
@@ -36,11 +38,6 @@ _PLAN_SNAP_MODES = frozenset(
 _SECTION_SNAP_MODES = frozenset(
     ("Lock", "Near", "Endpoint", "Midpoint", "Intersection", "Ortho", "Grid")
 )
-_GRID_PREFERENCES = "User parameter:BaseApp/Preferences/Mod/BIM/PlanEdit"
-_DEFAULT_GRID_SPACING = 100.0
-_DEFAULT_GRID_MAJOR_EVERY = 10
-
-
 @dataclass(frozen=True)
 class ViewActivationContext:
     """The persistent view and semantic BIM context activated together."""
@@ -399,23 +396,13 @@ class BIMViewService:
         try:
             from draftutils.grid import GridLattice
 
-            preferences = FreeCAD.ParamGet(_GRID_PREFERENCES)
-            raw_spacing = preferences.GetString("GridSpacing", "100 mm")
-            try:
-                spacing = FreeCAD.Units.Quantity(raw_spacing).Value
-            except (TypeError, ValueError):
-                spacing = _DEFAULT_GRID_SPACING
-            if spacing <= 0:
-                spacing = _DEFAULT_GRID_SPACING
-            major_every = preferences.GetInt("GridMainlines", _DEFAULT_GRID_MAJOR_EVERY)
-            if major_every <= 0:
-                major_every = _DEFAULT_GRID_MAJOR_EVERY
+            settings = get_grid_settings()
             return GridLattice(
                 plane.position,
                 plane.u,
                 plane.v,
-                spacing=spacing,
-                major_every=major_every,
+                spacing=settings.spacing,
+                major_every=settings.major_every,
             )
         except (AttributeError, ImportError, RuntimeError, TypeError, ValueError):
             return None

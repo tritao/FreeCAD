@@ -6,7 +6,11 @@ import unittest
 
 import FreeCAD as App
 
-from draftutils.grid import GridLattice, adaptive_grid_interval
+from draftutils.grid import (
+    GridLattice,
+    adaptive_grid_interval,
+    adaptive_lattice_interval,
+)
 
 
 class DraftGridLattice(unittest.TestCase):
@@ -39,3 +43,12 @@ class DraftGridLattice(unittest.TestCase):
         self.assertEqual(200.0, adaptive_grid_interval(1.1, target_pixels=100))
         self.assertEqual(500.0, adaptive_grid_interval(3.0, target_pixels=100))
         self.assertEqual(1000.0, adaptive_grid_interval(8.0, target_pixels=100))
+
+    def test_adaptive_lattice_interval_stays_on_snap_lattice(self):
+        spacing = 100.0
+        allowed_multipliers = {2, 5, 10, 20}
+        for units_per_pixel in (0.01, 0.2, 1.0, 7.0, 100.0):
+            display_spacing = adaptive_lattice_interval(spacing, units_per_pixel)
+            multiplier = display_spacing / spacing
+            self.assertIn(round(multiplier), allowed_multipliers)
+            self.assertAlmostEqual(round(multiplier), multiplier)

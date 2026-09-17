@@ -8,6 +8,7 @@ from .service import BIMViewService, ViewActivationContext
 from .runtime import BIMViewRuntime
 from .scope import BIMViewCategory, BIMViewScope
 from .ruler_model import RulerTransform, engineering_interval
+from .grid_settings import GridSettings, get_grid_settings
 
 __all__ = (
     "BIMViewManagerModel",
@@ -22,4 +23,6 @@ __all__ = (
     "ViewActivationContext",
     "RulerTransform",
     "engineering_interval",
+    "GridSettings",
+    "get_grid_settings",
 )

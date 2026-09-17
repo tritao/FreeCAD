@@ -16,11 +16,20 @@ from bimcommands.BimViews import (
     placeInComboView,
     restoreComboViewTitle,
 )
+from draftutils.grid import GridLattice, adaptive_lattice_interval
 from bimtests.TestArchBaseGui import TestArchBaseGui
+from bimviews.grid_settings import get_grid_settings
 from bimviews.model import BIMViewManagerModel
 from bimviews.navigator_model import BIMNavigatorModel
 from bimviews.navigator_qt import BIMNavigatorQtModel
-from bimviews.ruler_model import RulerTransform, engineering_interval, format_metric, tick_values
+from bimviews.ruler_model import (
+    RulerTransform,
+    engineering_interval,
+    format_length,
+    format_metric,
+    preferred_length_unit,
+    tick_values,
+)
 from bimviews.service import BIMViewService
 from bimviews.viewport_ruler import ViewportRulerOverlay, _ViewportEventFilter
 
@@ -112,9 +121,75 @@ class TestBimViewsServiceGui(TestArchBaseGui):
         self.assertAlmostEqual(500.0, transform.y_at_pixel(250.0))
         self.assertAlmostEqual(100.0, transform.pixel_for_x(0.0))
         self.assertEqual((-1000.0, 0.0, 1000.0), tick_values(-1100.0, 1100.0, 1000.0))
-        self.assertEqual("3.482 m", format_metric(3482.0, cursor=True))
-        self.assertEqual("100 mm", format_metric(100.0, 100.0))
-        self.assertEqual("0 mm", format_metric(0.0, 100.0))
+        self.assertEqual(format_length(3482.0, cursor=True), format_metric(3482.0, cursor=True))
+        self.assertIn(preferred_length_unit(), format_length(100.0, 100.0))
+        self.assertIn(preferred_length_unit(), format_length(0.0, 100.0))
+
+    def test_grid_settings_parse_common_length_units(self):
+        expected = (
+            ("100 mm", 100.0),
+            ("10 cm", 100.0),
+            ("4 in", 101.6),
+            ("1 ft", 304.8),
+            ("1/8 in", 3.175),
+        )
+        for raw_spacing, expected_spacing in expected:
+            preferences = SimpleNamespace(
+                GetString=lambda _name, _default, value=raw_spacing: value,
+                GetInt=lambda _name, default: default,
+            )
+            settings = get_grid_settings(preferences)
+            self.assertAlmostEqual(expected_spacing, settings.spacing, places=9)
+            self.assertEqual(10, settings.major_every)
+
+    def test_grid_settings_validate_invalid_preferences(self):
+        preferences = SimpleNamespace(
+            GetString=lambda _name, _default: "0 mm",
+            GetInt=lambda _name, _default: -2,
+        )
+        settings = get_grid_settings(preferences)
+        self.assertEqual(100.0, settings.spacing)
+        self.assertEqual(10, settings.major_every)
+
+    def test_grid_nodes_are_schema_independent(self):
+        preferences = SimpleNamespace(
+            GetString=lambda _name, _default: "10 cm",
+            GetInt=lambda _name, default: default,
+        )
+        settings = get_grid_settings(preferences)
+        lattice = GridLattice(spacing=settings.spacing)
+        expected = lattice.nearest_node(FreeCAD.Vector(149.0, 51.0, 0.0))
+        original_schema = FreeCAD.Units.getSchema()
+        try:
+            schemas = FreeCAD.Units.listSchemas()
+            for schema_name in ("Internal", "MeterDecimal"):
+                if schema_name not in schemas:
+                    continue
+                FreeCAD.Units.setSchema(schemas.index(schema_name))
+                self.assertEqual(expected, lattice.nearest_node(FreeCAD.Vector(149.0, 51.0, 0.0)))
+        finally:
+            FreeCAD.Units.setSchema(original_schema)
+
+    def test_ruler_labels_follow_active_unit_schema(self):
+        original_schema = FreeCAD.Units.getSchema()
+        try:
+            schemas = FreeCAD.Units.listSchemas()
+            for schema_name, expected_unit in (("Internal", "mm"), ("MeterDecimal", "m")):
+                if schema_name not in schemas:
+                    continue
+                FreeCAD.Units.setSchema(schemas.index(schema_name))
+                self.assertIn(expected_unit, preferred_length_unit())
+                self.assertIn(expected_unit, format_length(1000.0, 1000.0))
+        finally:
+            FreeCAD.Units.setSchema(original_schema)
+
+    def test_adaptive_grid_display_interval_is_a_snap_multiple(self):
+        spacing = 100.0
+        for units_per_pixel in (0.01, 0.2, 1.0, 7.0, 100.0):
+            display_spacing = adaptive_lattice_interval(spacing, units_per_pixel)
+            multiplier = display_spacing / spacing
+            self.assertIn(round(multiplier), (2, 5, 10, 20))
+            self.assertAlmostEqual(round(multiplier), multiplier)
 
     def test_ruler_overlay_paints_ticks_and_cursor(self):
         host = QtGui.QWidget()

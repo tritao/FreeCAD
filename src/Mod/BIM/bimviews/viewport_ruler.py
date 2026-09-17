@@ -5,7 +5,12 @@
 import FreeCAD
 
 from ArchRepresentation import RepresentationPurpose
-from .ruler_model import RulerTransform, format_metric, tick_values
+from .ruler_model import (
+    RulerTransform,
+    format_length,
+    preferred_length_unit,
+    tick_values,
+)
 
 
 PARAMS = FreeCAD.ParamGet("User parameter:BaseApp/Preferences/Mod/BIM")
@@ -155,7 +160,7 @@ if FreeCAD.GuiUp:
             painter.setPen(color)
             painter.drawText(6, 11, "X →")
             painter.drawText(6, 23, "Y ↓")
-            painter.drawText(self.LEFT_BAND - 13, 18, "m")
+            painter.drawText(self.LEFT_BAND - 13, 18, preferred_length_unit())
 
         def _draw_cursor(self, painter, transform, color):
             if self.cursor_position is None:
@@ -203,12 +208,11 @@ if FreeCAD.GuiUp:
 
         @staticmethod
         def _tick_label(value, interval):
-            text = format_metric(value, interval)
-            return text.rsplit(" ", 1)[0]
+            return format_length(value, interval)
 
         @staticmethod
         def _cursor_label(value):
-            return format_metric(value, cursor=True).rsplit(" ", 1)[0]
+            return format_length(value, cursor=True)
 
         def _horizontal_cursor_rect(self, painter, transform, x):
             if x is None:
