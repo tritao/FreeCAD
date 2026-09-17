@@ -185,6 +185,17 @@ class PlanContextualRenderingAPI:
         self._sources = current
         self.sync_visible_handles()
 
+    def refresh_if_stale(self):
+        """Rebuild an invalidated active layer and its pick mappings atomically."""
+
+        renderer = self._renderer
+        if renderer is None or not representation_layers.is_stale(renderer):
+            return False
+        self.refresh_all()
+        self._session.viewport.flush_scene_graph_mutations()
+        representation_layers.mark_current(renderer)
+        return True
+
     def refresh_object(self, obj):
         if self._renderer is None or obj is None:
             return

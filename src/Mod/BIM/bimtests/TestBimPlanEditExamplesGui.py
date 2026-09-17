@@ -5,6 +5,7 @@
 import os
 from unittest.mock import patch
 
+import ArchRepresentation
 import FreeCAD
 import FreeCADGui
 from pivy import coin
@@ -242,6 +243,50 @@ class TestBimPlanEditExamplesGui(TestArchBaseGui):
         wall_after_joint = joint_session.contextual_rendering.renderer._representations[wall]
         self.assertIsNot(wall_after_opening, wall_after_joint)
         self.addCleanup(joint_session.shutdown, close_dialog=False)
+
+    def test_basic_example_refreshes_active_plan_geometry_and_picking(self):
+        """A recompute keeps the active Plan layer and semantic picking in sync."""
+
+        document = self._open_example(
+            "BIMPlanEditBasic.FCStd", keep_startup_activity=True
+        )
+        from bimplan.runtime.session import get_active_session
+
+        session = get_active_session()
+        self.assertIsNotNone(session)
+        self.addCleanup(session.shutdown, close_dialog=False)
+        wall = self._objects_with_ifc_type(document, "Wall")[-1]
+        renderer = session.contextual_rendering.renderer
+        original = renderer._representations[wall]
+
+        wall.Width = wall.Width.Value + 50
+        document.recompute()
+        self.pump_gui_events()
+
+        refreshed = renderer._representations[wall]
+        self.assertIsNot(original, refreshed)
+        face = next(
+            geometry
+            for geometry in refreshed.cut_geometry
+            if getattr(geometry, "ShapeType", "") == "Face"
+        )
+        mesh = refreshed.face_mesh_for(face)
+        vertices, triangles = mesh.vertices, mesh.triangles
+        self.assertAlmostEqual(face.BoundBox.XMin, min(point.x for point in vertices))
+        self.assertAlmostEqual(face.BoundBox.XMax, max(point.x for point in vertices))
+        self.assertAlmostEqual(face.BoundBox.YMin, min(point.y for point in vertices))
+        self.assertAlmostEqual(face.BoundBox.YMax, max(point.y for point in vertices))
+        session.view.fitAll()
+        self.pump_gui_events()
+        mappings = []
+        for triangle in triangles:
+            pick_point = sum(
+                (FreeCAD.Vector(vertices[index]) for index in triangle),
+                FreeCAD.Vector(),
+            ) / 3.0
+            screen_point = session.view.getPointOnScreen(pick_point)
+            mappings.append(session.contextual_rendering.pick_mapping(screen_point))
+        self.assertIn(wall, {mapping.source for mapping in mappings if mapping is not None})
 
     def test_basic_example_wall_edit_roundtrips(self):
         document = self._open_example("BIMPlanEditBasic.FCStd")

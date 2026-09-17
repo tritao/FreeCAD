@@ -496,6 +496,7 @@ def slot_recomputed_document(session, doc):
     if are_document_visual_updates_deferred(session):
         defer_document_visual_refresh(session)
         return
+    session.contextual_rendering.refresh_if_stale()
     invalidate_document_dependent_plan_visuals(session)
 
 

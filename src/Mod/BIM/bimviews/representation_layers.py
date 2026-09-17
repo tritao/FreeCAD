@@ -68,6 +68,22 @@ def invalidate_document(document):
             _layers.pop(key, None)
 
 
+def is_stale(renderer):
+    """Return whether an acquired renderer was invalidated while active."""
+
+    return any(entry.renderer is renderer and entry.stale for entry in _layers.values())
+
+
+def mark_current(renderer):
+    """Mark an active renderer current after its contents were rebuilt in place."""
+
+    for entry in _layers.values():
+        if entry.renderer is renderer:
+            entry.stale = False
+            return True
+    return False
+
+
 def close_renderer(renderer):
     for key, entry in tuple(_layers.items()):
         if entry.renderer is renderer:
