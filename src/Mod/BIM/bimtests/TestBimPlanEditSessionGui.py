@@ -874,8 +874,7 @@ class TestBimPlanEditSessionGui(TestArchBaseGui):
 
             self.assertTrue(session.lifecycle_state.tearing_down)
             self.assertIsNone(session.contextual_rendering.renderer)
-            self.assertIsNotNone(renderer.root)
-            self.assertEqual(coin.SO_SWITCH_NONE, renderer.root.whichChild.getValue())
+            self.assertIsNone(renderer.root)
             self.assertFalse(renderer._preview_nodes)
             self.assertFalse(session.viewport_state.scene_graph_mutations)
         finally:
@@ -883,7 +882,7 @@ class TestBimPlanEditSessionGui(TestArchBaseGui):
                 FreeCAD.closeDocument(preview_document_name)
             FreeCAD.setActiveDocument(original_document.Name)
 
-    def test_repeated_sessions_release_preview_scene_nodes(self):
+    def test_repeated_sessions_clear_preview_nodes_from_retained_layer(self):
         wall = Arch.makeWall(length=3000, width=200, height=2500, align="Center")
         self.document.recompute()
 
@@ -910,7 +909,9 @@ class TestBimPlanEditSessionGui(TestArchBaseGui):
                 session.shutdown(close_dialog=False)
                 session.viewport.flush_scene_graph_mutations()
 
-            self.assertIsNone(renderer.root)
+            self.assertIsNotNone(renderer.root)
+            self.assertEqual(coin.SO_SWITCH_NONE, renderer.root.whichChild.getValue())
+            self.assertFalse(renderer._preview_nodes)
             self.assertFalse(session.viewport_state.scene_graph_mutations)
             self.assertEqual("Inherit", view.getViewVisibility(wall))
 

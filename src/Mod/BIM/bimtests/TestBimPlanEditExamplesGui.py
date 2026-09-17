@@ -152,6 +152,97 @@ class TestBimPlanEditExamplesGui(TestArchBaseGui):
         )
         self.assertGreater(session.contextual_rendering.renderer.root.getNumChildren(), 0)
 
+    def test_basic_example_reuses_saved_plan_until_model_changes(self):
+        """Saved Model/Plan switching retains valid viewport representations."""
+
+        document = self._open_example("BIMPlanEditBasic.FCStd")
+        definitions = [
+            obj for obj in document.Objects if obj.isDerivedFrom("App::ViewDefinition")
+        ]
+        model_view = next(item for item in definitions if item.Purpose == "Model")
+        plan_view = next(item for item in definitions if item.Purpose == "Plan")
+        wall = self._objects_with_ifc_type(document, "Wall")[0]
+
+        from bimcommands.BimViews import _apply_representation_request
+        from bimplan.runtime.session import get_active_session
+        from bimviews.service import BIMViewService
+
+        view = FreeCADGui.ActiveDocument.ActiveView
+        service = BIMViewService(
+            document,
+            view=view,
+            representation_applier=_apply_representation_request,
+        )
+        alternate_plan = service.duplicate_view(plan_view, "Alternate Plan")
+        alternate_frame = FreeCAD.Placement(plan_view.ReferenceFrame)
+        alternate_frame.Base.z += 250
+        alternate_plan.ReferenceFrame = alternate_frame
+
+        service.activate_view(plan_view)
+        first_session = get_active_session()
+        first_renderer = first_session.contextual_rendering.renderer
+        first_representation = first_renderer._representations[wall]
+        first_node = first_renderer._object_nodes[wall]
+
+        service.activate_view(model_view)
+        self.pump_gui_events()
+        service.activate_view(plan_view)
+        second_session = get_active_session()
+        second_renderer = second_session.contextual_rendering.renderer
+        self.assertIs(first_renderer, second_renderer)
+        self.assertIs(first_representation, second_renderer._representations[wall])
+        self.assertIs(first_node, second_renderer._object_nodes[wall])
+
+        service.activate_view(alternate_plan)
+        alternate_session = get_active_session()
+        alternate_renderer = alternate_session.contextual_rendering.renderer
+        self.assertIsNot(first_renderer, alternate_renderer)
+        self.assertEqual(
+            alternate_frame,
+            alternate_session.representation_request.request.reference_frame,
+        )
+
+        service.activate_view(plan_view)
+        restored_session = get_active_session()
+        self.assertIs(first_renderer, restored_session.contextual_rendering.renderer)
+
+        service.activate_view(model_view)
+        self.pump_gui_events()
+        wall.Width = wall.Width.Value + 50
+        document.recompute()
+        service.activate_view(plan_view)
+        changed_session = get_active_session()
+        changed_renderer = changed_session.contextual_rendering.renderer
+        self.assertIsNot(first_renderer, changed_renderer)
+        wall_after_edit = changed_renderer._representations[wall]
+        self.assertIsNot(first_representation, wall_after_edit)
+
+        service.activate_view(model_view)
+        self.pump_gui_events()
+        opening = self._objects_with_ifc_type(document, "Window")[0]
+        opening.Width = opening.Width.Value + 50
+        document.recompute()
+        service.activate_view(plan_view)
+        opening_session = get_active_session()
+        wall_after_opening = opening_session.contextual_rendering.renderer._representations[wall]
+        self.assertIsNot(wall_after_edit, wall_after_opening)
+
+        service.activate_view(model_view)
+        self.pump_gui_events()
+        joint = next(
+            obj
+            for obj in document.Objects
+            if getattr(getattr(obj, "Proxy", None), "Type", None) == "WallJoint"
+            and wall in (obj.WallA, obj.WallB)
+        )
+        joint.Enabled = False
+        document.recompute()
+        service.activate_view(plan_view)
+        joint_session = get_active_session()
+        wall_after_joint = joint_session.contextual_rendering.renderer._representations[wall]
+        self.assertIsNot(wall_after_opening, wall_after_joint)
+        self.addCleanup(joint_session.shutdown, close_dialog=False)
+
     def test_basic_example_wall_edit_roundtrips(self):
         document = self._open_example("BIMPlanEditBasic.FCStd")
         wall = self._objects_with_ifc_type(document, "Wall")[0]

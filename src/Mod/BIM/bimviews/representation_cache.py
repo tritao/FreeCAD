@@ -124,16 +124,17 @@ class _RepresentationCacheObserver:
                 return
         except (AttributeError, ReferenceError, RuntimeError):
             pass
-        if str(prop or "") in {
-            "Visibility",
-            "Selectable",
-            "DisplayMode",
-            "ShapeColor",
-            "LineColor",
-            "PointColor",
-            "Transparency",
-            "LineWidth",
-            "PointSize",
+        if str(prop or "") not in {
+            "Shape",
+            "Placement",
+            "AttachmentOffset",
+            "Base",
+            "Support",
+            "Host",
+            "Hosts",
+            "Group",
+            "Objects",
+            "Geometry",
         }:
             return
         invalidate_document(getattr(obj, "Document", None))
