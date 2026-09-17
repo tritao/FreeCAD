@@ -32,6 +32,7 @@ import Arch
 import ArchComponent
 import ArchPlanAnalytic
 import ArchRepresentation
+import ArchWallExact
 import ArchWallEndCondition
 import Draft
 import Part
@@ -499,6 +500,57 @@ class TestArchWall(TestArchBase.TestArchBase):
             3 * opening_width * wall_width * opening_height
         )
         self.assertAlmostEqual(expected_volume, wall.Shape.Volume, delta=1e-3)
+
+    def test_exact_wall_compiler_matches_legacy_opening_shape(self):
+        """A perforated extrusion matches the legacy boolean wall result."""
+
+        line = Draft.makeLine(App.Vector(), App.Vector(5000, 0, 0))
+        wall = Arch.makeWall(line, width=200, height=3000)
+        self.document.recompute()
+        for index, x_start in enumerate((700.0, 2600.0), start=1):
+            self._make_hosted_window(
+                wall,
+                f"ExactCompilerOpening{index}",
+                x_start=x_start,
+                z_start=700.0,
+                width=700.0,
+                height=1200.0,
+            )
+
+        compilation = ArchWallExact.compile_straight_wall(wall, wall.Proxy)
+        self.assertIsNotNone(compilation)
+        self.assertTrue(compilation.shape.isValid())
+        self.assertAlmostEqual(wall.Shape.Volume, compilation.shape.Volume, delta=1e-3)
+        legacy_bounds = wall.Shape.BoundBox
+        compiled_bounds = compilation.shape.BoundBox
+        for legacy, compiled in zip(
+            (
+                legacy_bounds.XMin,
+                legacy_bounds.YMin,
+                legacy_bounds.ZMin,
+                legacy_bounds.XMax,
+                legacy_bounds.YMax,
+                legacy_bounds.ZMax,
+            ),
+            (
+                compiled_bounds.XMin,
+                compiled_bounds.YMin,
+                compiled_bounds.ZMin,
+                compiled_bounds.XMax,
+                compiled_bounds.YMax,
+                compiled_bounds.ZMax,
+            ),
+        ):
+            self.assertAlmostEqual(legacy, compiled, delta=1e-6)
+        legacy_section = ArchComponent.get_horizontal_slice_faces(wall.Shape, 1000)
+        compiled_section = ArchComponent.get_horizontal_slice_faces(
+            compilation.shape, 1000
+        )
+        self.assertAlmostEqual(
+            sum(face.Area for face in legacy_section),
+            sum(face.Area for face in compiled_section),
+            delta=1e-3,
+        )
 
     def test_wall_footprint_uses_parent_storey_plan_cut_height(self):
         """Parent storeys should define the absolute plan cut for contained walls."""

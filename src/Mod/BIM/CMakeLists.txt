@@ -34,6 +34,7 @@ SET(Arch_SRCS
     ArchWallEndCondition.py
     ArchWallTrimming.py
     ArchWallGeometry.py
+    ArchWallExact.py
     ArchWallJoint.py
     ArchWallJointGui.py
     ArchWallRelation.py

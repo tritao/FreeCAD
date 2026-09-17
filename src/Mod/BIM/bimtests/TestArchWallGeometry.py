@@ -21,6 +21,7 @@
 """Direct tests for the wall path and section value objects."""
 
 import ArchWallGeometry
+import ArchWallExact
 import FreeCAD as App
 import Part
 
@@ -183,3 +184,61 @@ class TestArchWallGeometry(TestArchBase.TestArchBase):
                 ),
             ).viewport_mesh()
         )
+
+    def test_exact_compiler_extrudes_perforated_wall_profile(self):
+        """The exact compiler creates and classifies one perforated extrusion."""
+
+        section = ArchWallGeometry.WallSection(
+            (ArchWallGeometry.WallSectionLayer(200, -100, 100),)
+        )
+        opening_source = object()
+        recipe = ArchWallGeometry.WallGeometryRecipe(
+            axis_start=App.Vector(0, 0, 0),
+            axis_end=App.Vector(3000, 0, 0),
+            lateral=App.Vector(0, 1, 0),
+            section=section,
+            z_min=0,
+            z_max=2500,
+            openings=(
+                ArchWallGeometry.WallOpeningRecipe(
+                    opening_source, 900, 1700, -100, 100, 700, 1900
+                ),
+            ),
+        )
+
+        compilation = ArchWallExact.compile_wall_recipe(recipe)
+        self.assertIsNotNone(compilation)
+        self.assertTrue(compilation.shape.isValid())
+        self.assertEqual(1, len(compilation.shape.Solids))
+        self.assertAlmostEqual(
+            (3000 * 2500 - 800 * 1200) * 200,
+            compilation.shape.Volume,
+            delta=1e-3,
+        )
+        roles = [item.role for item in compilation.face_roles]
+        self.assertEqual(2, roles.count("SideMin") + roles.count("SideMax"))
+        self.assertIn("OpeningSill", roles)
+        self.assertIn("OpeningHead", roles)
+        self.assertEqual(2, roles.count("OpeningJamb"))
+        self.assertTrue(
+            all(
+                item.source is opening_source
+                for item in compilation.face_roles
+                if item.role.startswith("Opening")
+            )
+        )
+
+        unsupported = ArchWallGeometry.WallGeometryRecipe(
+            axis_start=recipe.axis_start,
+            axis_end=recipe.axis_end,
+            lateral=recipe.lateral,
+            section=recipe.section,
+            z_min=recipe.z_min,
+            z_max=recipe.z_max,
+            trim_planes=(
+                ArchWallGeometry.WallTrimPlane(
+                    "End", App.Vector(2900, 0, 0), App.Vector(1, 0, 0)
+                ),
+            ),
+        )
+        self.assertIsNone(ArchWallExact.compile_wall_recipe(unsupported))
