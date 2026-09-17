@@ -296,8 +296,8 @@ class TestArchWall(TestArchBase.TestArchBase):
         self.assertEqual(1, len(representation.cut_geometry))
         self.assertAlmostEqual(600000.0, representation.cut_geometry[0].Area)
 
-    def test_joined_wall_viewport_mesh_matches_exact_shape(self):
-        """Experimental joined-wall meshes match exact bounds and volume."""
+    def test_joined_wall_analytic_outputs_match_exact_shape(self):
+        """Joined-wall meshes and directly compiled solids match legacy geometry."""
 
         support = Arch.makeWall(length=2000, width=200, height=1000)
         trimmed = Arch.makeWall(length=1000, width=200, height=1000)
@@ -316,6 +316,9 @@ class TestArchWall(TestArchBase.TestArchBase):
             mesh = recipe.viewport_mesh()
             self.assertIsNotNone(mesh)
             self.assertTrue(mesh.is_closed)
+            compilation = ArchWallExact.compile_wall_recipe(recipe)
+            self.assertIsNotNone(compilation)
+            self.assertTrue(compilation.shape.isValid())
             bounds = wall.Shape.BoundBox
             expected_bounds = (
                 bounds.XMin,
@@ -328,6 +331,22 @@ class TestArchWall(TestArchBase.TestArchBase):
             for actual, expected in zip(mesh.bounds, expected_bounds):
                 self.assertAlmostEqual(actual, expected, delta=1e-5)
             self.assertAlmostEqual(mesh.volume, wall.Shape.Volume, delta=1e-3)
+            compiled_bounds = compilation.shape.BoundBox
+            for actual, expected in zip(
+                (
+                    compiled_bounds.XMin,
+                    compiled_bounds.YMin,
+                    compiled_bounds.ZMin,
+                    compiled_bounds.XMax,
+                    compiled_bounds.YMax,
+                    compiled_bounds.ZMax,
+                ),
+                expected_bounds,
+            ):
+                self.assertAlmostEqual(actual, expected, delta=1e-5)
+            self.assertAlmostEqual(
+                compilation.shape.Volume, wall.Shape.Volume, delta=1e-3
+            )
 
     def test_wall_model_provider_selects_viewport_mesh_and_exact_fallback(self):
         """Model requests opt into meshes and retain exact fallback behavior."""

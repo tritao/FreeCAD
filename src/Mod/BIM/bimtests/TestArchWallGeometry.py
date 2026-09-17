@@ -228,7 +228,7 @@ class TestArchWallGeometry(TestArchBase.TestArchBase):
             )
         )
 
-        unsupported = ArchWallGeometry.WallGeometryRecipe(
+        trimmed = ArchWallGeometry.WallGeometryRecipe(
             axis_start=recipe.axis_start,
             axis_end=recipe.axis_end,
             lateral=recipe.lateral,
@@ -241,4 +241,25 @@ class TestArchWallGeometry(TestArchBase.TestArchBase):
                 ),
             ),
         )
-        self.assertIsNone(ArchWallExact.compile_wall_recipe(unsupported))
+        trimmed_compilation = ArchWallExact.compile_wall_recipe(trimmed)
+        self.assertIsNotNone(trimmed_compilation)
+        self.assertTrue(trimmed_compilation.shape.isValid())
+        self.assertAlmostEqual(2900 * 200 * 2500, trimmed_compilation.shape.Volume)
+        self.assertIn(
+            "EndEnd", [item.role for item in trimmed_compilation.face_roles]
+        )
+
+        nonvertical = ArchWallGeometry.WallGeometryRecipe(
+            axis_start=recipe.axis_start,
+            axis_end=recipe.axis_end,
+            lateral=recipe.lateral,
+            section=recipe.section,
+            z_min=recipe.z_min,
+            z_max=recipe.z_max,
+            trim_planes=(
+                ArchWallGeometry.WallTrimPlane(
+                    "End", App.Vector(2900, 0, 0), App.Vector(1, 0, 1)
+                ),
+            ),
+        )
+        self.assertIsNone(ArchWallExact.compile_wall_recipe(nonvertical))

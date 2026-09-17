@@ -34,14 +34,14 @@ def compile_straight_wall(wall, proxy):
 
 
 def compile_wall_recipe(recipe, tolerance=1e-7):
-    """Extrude one perforated wall-local profile, or return ``None``.
+    """Build one perforated wall solid directly, or return ``None``.
 
-    This first exact compiler intentionally accepts only horizontal, straight,
-    single-layer walls without end trims. Openings must be disjoint rectangles
-    fully contained by the wall and span its complete lateral thickness.
+    Supported walls are horizontal, straight and single-layer. End trims must
+    be vertical. Openings must be disjoint rectangles fully contained by the
+    wall and span its complete lateral thickness.
     """
 
-    if recipe is None or recipe.trim_planes:
+    if recipe is None:
         return None
     layers = recipe.section.visible_layers
     if len(layers) != 1 or recipe.z_max <= recipe.z_min + tolerance:
@@ -54,12 +54,35 @@ def compile_wall_recipe(recipe, tolerance=1e-7):
         return None
     if abs(axis.dot(lateral)) > tolerance:
         return None
+    if any(abs(trim.normal.z) > tolerance for trim in recipe.trim_planes):
+        return None
+
+    boundaries = recipe.plan_boundaries(recipe.z_min)
+    if len(boundaries) != 1 or len(boundaries[0]) < 3:
+        return None
+    footprint = tuple(
+        (
+            point.sub(recipe.axis_start).dot(axis),
+            point.sub(recipe.axis_start).dot(lateral),
+        )
+        for point in boundaries[0]
+    )
+    side_extents = {
+        side: _polygon_u_extents_at_v(footprint, side, tolerance)
+        for side in (recipe.section.y_min, recipe.section.y_max)
+    }
+    if any(extents is None for extents in side_extents.values()):
+        return None
 
     openings = tuple(recipe.openings)
     for opening in openings:
+        inside_both_sides = all(
+            extents[0] + tolerance < opening.u_min
+            and opening.u_max < extents[1] - tolerance
+            for extents in side_extents.values()
+        )
         if (
-            opening.u_min <= tolerance
-            or opening.u_max >= length - tolerance
+            not inside_both_sides
             or opening.z_min <= recipe.z_min + tolerance
             or opening.z_max >= recipe.z_max - tolerance
             or opening.v_min > recipe.section.y_min + tolerance
@@ -76,6 +99,11 @@ def compile_wall_recipe(recipe, tolerance=1e-7):
             )
             if not separated:
                 return None
+
+    if recipe.trim_planes:
+        return _compile_trimmed_prism(
+            recipe, axis, lateral, footprint, side_extents, tolerance
+        )
 
     import Part
 
@@ -120,6 +148,132 @@ def compile_wall_recipe(recipe, tolerance=1e-7):
     return WallExactCompilation(shape, _classify_faces(shape, recipe, axis, tolerance))
 
 
+def _polygon_u_extents_at_v(polygon, target_v, tolerance):
+    intersections = []
+    for first, second in zip(polygon, polygon[1:] + polygon[:1]):
+        u1, v1 = first
+        u2, v2 = second
+        if abs(v1 - target_v) <= tolerance:
+            intersections.append(u1)
+        if abs(v2 - target_v) <= tolerance:
+            intersections.append(u2)
+        if (v1 < target_v - tolerance and v2 > target_v + tolerance) or (
+            v2 < target_v - tolerance and v1 > target_v + tolerance
+        ):
+            parameter = (target_v - v1) / (v2 - v1)
+            intersections.append(u1 + parameter * (u2 - u1))
+    if len(intersections) < 2:
+        return None
+    return min(intersections), max(intersections)
+
+
+def _compile_trimmed_prism(recipe, axis, lateral, footprint, side_extents, tolerance):
+    """Build a joined wall as an explicitly closed shell without a 3D BOP."""
+
+    import Part
+
+    origin = FreeCAD.Vector(recipe.axis_start)
+
+    def point(u, v, z):
+        result = origin.add(axis * float(u)).add(lateral * float(v))
+        result.z = float(z)
+        return result
+
+    def wire(points, reverse=False):
+        values = list(points)
+        if reverse:
+            values.reverse()
+        return Part.makePolygon((*values, values[0]))
+
+    faces = []
+
+    def add_face(points, holes=()):
+        outer = wire(points)
+        inner = tuple(wire(hole, reverse=True) for hole in holes)
+        face = Part.Face([outer, *inner]) if inner else Part.Face(outer)
+        faces.append(face)
+
+    bottom = tuple(point(u, v, recipe.z_min) for u, v in footprint)
+    top = tuple(point(u, v, recipe.z_max) for u, v in footprint)
+    add_face(bottom)
+    add_face(top)
+
+    for side in (recipe.section.y_min, recipe.section.y_max):
+        u_min, u_max = side_extents[side]
+        outer = (
+            point(u_min, side, recipe.z_min),
+            point(u_max, side, recipe.z_min),
+            point(u_max, side, recipe.z_max),
+            point(u_min, side, recipe.z_max),
+        )
+        holes = tuple(
+            (
+                point(opening.u_min, side, opening.z_min),
+                point(opening.u_max, side, opening.z_min),
+                point(opening.u_max, side, opening.z_max),
+                point(opening.u_min, side, opening.z_max),
+            )
+            for opening in recipe.openings
+        )
+        add_face(outer, holes=holes)
+
+    for first, second in zip(footprint, footprint[1:] + footprint[:1]):
+        if abs(first[1] - second[1]) <= tolerance:
+            continue
+        add_face(
+            (
+                point(first[0], first[1], recipe.z_min),
+                point(second[0], second[1], recipe.z_min),
+                point(second[0], second[1], recipe.z_max),
+                point(first[0], first[1], recipe.z_max),
+            )
+        )
+
+    for opening in recipe.openings:
+        v_min = recipe.section.y_min
+        v_max = recipe.section.y_max
+        add_face(
+            (
+                point(opening.u_min, v_min, opening.z_min),
+                point(opening.u_min, v_max, opening.z_min),
+                point(opening.u_min, v_max, opening.z_max),
+                point(opening.u_min, v_min, opening.z_max),
+            ),
+        )
+        add_face(
+            (
+                point(opening.u_max, v_min, opening.z_min),
+                point(opening.u_max, v_max, opening.z_min),
+                point(opening.u_max, v_max, opening.z_max),
+                point(opening.u_max, v_min, opening.z_max),
+            ),
+        )
+        for z in (opening.z_min, opening.z_max):
+            add_face(
+                (
+                    point(opening.u_min, v_min, z),
+                    point(opening.u_max, v_min, z),
+                    point(opening.u_max, v_max, z),
+                    point(opening.u_min, v_max, z),
+                )
+            )
+
+    try:
+        # Stitching the known boundary faces avoids the general 3D Boolean
+        # intersection machinery (and its thread pool) used by wall joins.
+        shell = Part.makeShell(faces)
+        shape = Part.makeSolid(shell)
+        if shape.Volume < 0:
+            shape.reverse()
+    except Part.OCCError:
+        return None
+    if shape.isNull() or not shape.isValid() or len(shape.Solids) != 1:
+        return None
+    return WallExactCompilation(
+        shape, _classify_faces(shape, recipe, axis, tolerance)
+    )
+
+
 def _classify_faces(shape, recipe, axis, tolerance):
     roles = []
     origin = FreeCAD.Vector(recipe.axis_start)
@@ -139,10 +293,6 @@ def _classify_faces(shape, recipe, axis, tolerance):
             role = "SideMin"
         elif abs(v - recipe.section.y_max) <= tolerance:
             role = "SideMax"
-        elif abs(u) <= tolerance:
-            role = "EndStart"
-        elif abs(u - recipe.axis_end.sub(recipe.axis_start).Length) <= tolerance:
-            role = "EndEnd"
         else:
             for opening in recipe.openings:
                 if (
@@ -157,5 +307,8 @@ def _classify_faces(shape, recipe, axis, tolerance):
                     else:
                         role = "OpeningJamb"
                     break
+            if role == "WallFace":
+                middle_u = recipe.axis_end.sub(recipe.axis_start).Length * 0.5
+                role = "EndStart" if u < middle_u else "EndEnd"
         roles.append(WallExactFaceRole(index, role, source))
     return tuple(roles)
