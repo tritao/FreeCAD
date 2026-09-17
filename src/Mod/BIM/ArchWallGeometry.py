@@ -277,6 +277,7 @@ class WallGeometryRecipe:
     z_min: float
     z_max: float
     trim_planes: tuple = ()
+    openings: tuple = ()
 
     def __post_init__(self):
         start = FreeCAD.Vector(self.axis_start)
@@ -295,6 +296,23 @@ class WallGeometryRecipe:
         object.__setattr__(self, "z_min", float(self.z_min))
         object.__setattr__(self, "z_max", float(self.z_max))
         object.__setattr__(self, "trim_planes", tuple(self.trim_planes or ()))
+        object.__setattr__(self, "openings", tuple(self.openings or ()))
+
+    def opening_intervals_at(self, cut_z):
+        """Return merged axis intervals for openings crossing one elevation."""
+
+        intervals = [
+            (opening.u_min, opening.u_max)
+            for opening in self.openings
+            if opening.intersects_elevation(cut_z)
+        ]
+        merged = []
+        for lower, upper in sorted(intervals):
+            if merged and lower <= merged[-1][1] + 1e-7:
+                merged[-1] = (merged[-1][0], max(merged[-1][1], upper))
+            else:
+                merged.append((lower, upper))
+        return tuple(merged)
 
     def plan_boundaries(self, target_z, opening_intervals=()):
         """Derive clipped Plan polygons without constructing an OCCT shape."""
@@ -371,3 +389,33 @@ def _clip_polygon(polygon, signed_distance, tolerance=1e-7):
         previous = current
         previous_distance = current_distance
     return result
+
+
+@dataclass(frozen=True)
+class WallOpeningRecipe:
+    """A host-aligned opening volume consumed by Plan and future 3D outputs."""
+
+    source: object
+    u_min: float
+    u_max: float
+    v_min: float
+    v_max: float
+    z_min: float
+    z_max: float
+
+    def __post_init__(self):
+        for lower_name, upper_name in (
+            ("u_min", "u_max"),
+            ("v_min", "v_max"),
+            ("z_min", "z_max"),
+        ):
+            lower = float(getattr(self, lower_name))
+            upper = float(getattr(self, upper_name))
+            if upper <= lower:
+                raise ValueError(f"WallOpeningRecipe requires {upper_name} > {lower_name}")
+            object.__setattr__(self, lower_name, lower)
+            object.__setattr__(self, upper_name, upper)
+
+    def intersects_elevation(self, elevation, tolerance=1e-7):
+        elevation = float(elevation)
+        return self.z_min - tolerance <= elevation <= self.z_max + tolerance

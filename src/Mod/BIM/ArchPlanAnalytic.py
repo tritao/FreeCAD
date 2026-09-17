@@ -2,7 +2,7 @@
 
 """Analytic architectural models used to derive inexpensive Plan geometry."""
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 import ArchWallGeometry
 import FreeCAD
@@ -79,24 +79,11 @@ def straight_wall_plan_model(wall, proxy, request):
         target_z = recipe.z_min
     elif frame is not None:
         target_z = frame.multVec(FreeCAD.Vector(0, 0, float(target_z))).z
-    opening_request = request
-    if frame is not None:
-        import ArchRepresentation
-
-        opening_request = ArchRepresentation.RepresentationRequest(
-            purpose=request.purpose,
-            cut_offset=cut_z,
-            target_offset=float(target_z),
-            source=getattr(request, "source", None),
-        )
-    opening_intervals = _hosted_opening_intervals(wall, opening_request, recipe)
-    if opening_intervals is None:
-        return None
     return AnalyticWallPlan(
         source=wall,
         recipe=recipe,
         target_z=float(target_z),
-        opening_intervals=opening_intervals,
+        opening_intervals=recipe.opening_intervals_at(cut_z),
     )
 
 
@@ -136,7 +123,7 @@ def straight_wall_geometry_recipe(wall, proxy):
     trim_planes = _wall_trim_planes(wall)
     if trim_planes is None:
         return None
-    return ArchWallGeometry.WallGeometryRecipe(
+    recipe = ArchWallGeometry.WallGeometryRecipe(
         axis_start=baseline.start_point,
         axis_end=baseline.end_point,
         lateral=lateral,
@@ -145,6 +132,8 @@ def straight_wall_geometry_recipe(wall, proxy):
         z_max=bounds.ZMax,
         trim_planes=trim_planes,
     )
+    openings = _hosted_opening_recipes(wall, recipe)
+    return None if openings is None else replace(recipe, openings=openings)
 
 
 def _wall_trim_planes(wall):
@@ -178,44 +167,29 @@ def _wall_trim_planes(wall):
     return tuple(trim_planes)
 
 
-def _hosted_opening_intervals(wall, request, recipe):
+def _hosted_opening_recipes(wall, recipe):
+    from bimviews import representation_cache
+
     document = getattr(wall, "Document", None)
-    origin = FreeCAD.Vector(recipe.axis_start)
-    axis = FreeCAD.Vector(recipe.axis_end).sub(origin)
-    axis.normalize()
-    intervals = []
+    openings = []
     for obj in (getattr(document, "Objects", ()) or ()):
         if wall not in (getattr(obj, "Hosts", None) or ()):
             continue
-        shape = getattr(obj, "Shape", None)
-        cut_z = float(request.cut_offset)
-        if shape and not shape.isNull() and (
-            cut_z < shape.BoundBox.ZMin - 1e-7 or cut_z > shape.BoundBox.ZMax + 1e-7
-        ):
-            continue
-        provider = getattr(getattr(obj, "Proxy", None), "get_plan_overlay_geometry", None)
+        provider = getattr(
+            getattr(obj, "Proxy", None), "get_hosted_opening_geometry_recipe", None
+        )
         if not callable(provider):
             return None
-        geometry = provider(request)
-        jambs = tuple(geometry.get("jamb_polylines", ()) or ())
-        points = [FreeCAD.Vector(point) for polyline in jambs for point in polyline]
-        if not points:
+        opening = representation_cache.get_or_create_derived_value(
+            document,
+            "hosted-opening-recipe",
+            (getattr(obj, "Name", id(obj)), getattr(wall, "Name", id(wall))),
+            lambda provider=provider, recipe=recipe: provider(recipe),
+        )
+        if opening is None:
             return None
-        values = [point.sub(origin).dot(axis) for point in points]
-        intervals.append((min(values), max(values)))
-    return _merge_intervals(intervals)
-
-
-def _merge_intervals(intervals, tolerance=1e-7):
-    """Return ordered, non-overlapping intervals."""
-
-    merged = []
-    for lower, upper in sorted(intervals):
-        if merged and lower <= merged[-1][1] + tolerance:
-            merged[-1] = (merged[-1][0], max(merged[-1][1], upper))
-        else:
-            merged.append((lower, upper))
-    return tuple(merged)
+        openings.append(opening)
+    return tuple(openings)
 
 
 def _has_manual_end_treatment(wall):

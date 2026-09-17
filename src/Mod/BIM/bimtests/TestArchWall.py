@@ -318,7 +318,7 @@ class TestArchWall(TestArchBase.TestArchBase):
         self.document.recompute()
 
         low_window_width = 700.0
-        self._make_hosted_window(
+        low_window = self._make_hosted_window(
             wall,
             "LowFootprintWindow",
             x_start=700,
@@ -327,7 +327,7 @@ class TestArchWall(TestArchBase.TestArchBase):
             height=1200.0,
         )
         high_window_width = 500.0
-        self._make_hosted_window(
+        high_window = self._make_hosted_window(
             wall,
             "HighFootprintWindow",
             x_start=2400,
@@ -336,7 +336,16 @@ class TestArchWall(TestArchBase.TestArchBase):
             height=700.0,
         )
 
-        footprint_faces = wall.Proxy.getFootprint(wall)
+        with patch.object(
+            low_window.Proxy,
+            "get_plan_overlay_geometry",
+            side_effect=AssertionError("wall recipes must not consume Plan overlay geometry"),
+        ), patch.object(
+            high_window.Proxy,
+            "get_plan_overlay_geometry",
+            side_effect=AssertionError("wall recipes must not consume Plan overlay geometry"),
+        ):
+            footprint_faces = wall.Proxy.getFootprint(wall)
         self.assertEqual(
             len(footprint_faces),
             2,

@@ -1827,6 +1827,49 @@ class _HostedOpeningPlanGeometry:
             "source_vmax": source_vmax,
         }
 
+    def get_hosted_opening_geometry_recipe(self, wall_recipe):
+        """Return this opening in the host wall's normalized geometry frame."""
+
+        import ArchWallGeometry
+
+        point_lists = self._get_base_global_point_lists()
+        points = [FreeCAD.Vector(point) for point_list in point_lists for point in point_list]
+        if len(points) < 2:
+            return None
+        cut_z = (min(point.z for point in points) + max(point.z for point in points)) * 0.5
+        profile = self._get_hosted_opening_plan_frame(
+            getattr(self.Object, "Shape", None), cut_z, wall_recipe.z_min
+        )
+        if not profile:
+            return None
+
+        axis = FreeCAD.Vector(wall_recipe.axis_end).sub(wall_recipe.axis_start)
+        axis.normalize()
+        origin = FreeCAD.Vector(wall_recipe.axis_start)
+        lateral = FreeCAD.Vector(wall_recipe.lateral)
+        corners = [
+            FreeCAD.Vector(profile["origin"])
+            .add(FreeCAD.Vector(profile["axis_u"]) * u)
+            .add(FreeCAD.Vector(profile["axis_v"]) * v)
+            for u in (profile["umin"], profile["umax"])
+            for v in (profile["vmin"], profile["vmax"])
+        ]
+        u_values = [point.sub(origin).dot(axis) for point in corners]
+        v_values = [point.sub(origin).dot(lateral) for point in corners]
+        z_values = [point.z for point in points]
+        try:
+            return ArchWallGeometry.WallOpeningRecipe(
+                source=self.Object,
+                u_min=min(u_values),
+                u_max=max(u_values),
+                v_min=min(v_values),
+                v_max=max(v_values),
+                z_min=min(z_values),
+                z_max=max(z_values),
+            )
+        except ValueError:
+            return None
+
     def _get_hosted_opening_placement_target(self):
         obj = getattr(self, "Object", None)
         if not obj:

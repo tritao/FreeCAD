@@ -115,12 +115,27 @@ class TestArchWallGeometry(TestArchBase.TestArchBase):
                     "End", App.Vector(900, 0, 0), App.Vector(1, 0, 0)
                 ),
             ),
+            openings=(
+                ArchWallGeometry.WallOpeningRecipe(
+                    source=None,
+                    u_min=300,
+                    u_max=500,
+                    v_min=-100,
+                    v_max=100,
+                    z_min=0,
+                    z_max=2000,
+                ),
+            ),
         )
 
-        boundaries = recipe.plan_boundaries(25, ((300, 500),))
+        boundaries = recipe.plan_boundaries(25, recipe.opening_intervals_at(25))
         self.assertEqual(2, len(boundaries))
-        self.assertEqual([(0, 300), (500, 900)], [
-            (min(point.x for point in boundary), max(point.x for point in boundary))
-            for boundary in boundaries
-        ])
+        self.assertEqual(
+            [(0, 300), (500, 900)],
+            [
+                (min(point.x for point in boundary), max(point.x for point in boundary))
+                for boundary in boundaries
+            ],
+        )
         self.assertTrue(all(point.z == 25 for boundary in boundaries for point in boundary))
+        self.assertEqual((), recipe.opening_intervals_at(2500))
