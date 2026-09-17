@@ -119,6 +119,43 @@ class BIMViewService:
         self.configure_snap_context(definition, view=view)
         return definition
 
+    def create_elevation_view(
+        self,
+        label,
+        source=None,
+        *,
+        direction="South",
+        plane=None,
+        view=None,
+    ):
+        """Create an elevation marker and its saved orthographic view.
+
+        ``source`` is normally a building or storey.  Passing an existing
+        elevation ``plane`` preserves manual placement while still creating
+        the saved-view contract around it.
+        """
+
+        target_view = self._view(view)
+        if target_view is None:
+            raise RuntimeError("An active 3D view is required to create an elevation")
+        if plane is None:
+            plane = self._create_elevation_plane(source, direction)
+        request = plane.Proxy.getRepresentationRequest(plane)
+        if request.purpose != ArchRepresentation.RepresentationPurpose.ELEVATION:
+            raise ValueError("Elevation views require an elevation section plane")
+        definition = self.create_view(
+            label, "Elevation", plane, capture=False, view=target_view
+        )
+        definition.ReferenceFrame = request.reference_frame
+        with self._instant_view_transition(target_view):
+            if self._representation_applier is not None:
+                self._representation_applier(request)
+            self._orient_plan_view(request, definition=definition, view=target_view)
+            self.capture(definition, view=target_view)
+        self._mark_active(definition)
+        self.configure_snap_context(definition, view=target_view)
+        return definition
+
     def duplicate_view(self, definition, label=None):
         if not self.is_view_definition(definition):
             raise TypeError("definition must be an App::ViewDefinition")
@@ -203,11 +240,73 @@ class BIMViewService:
             request = representation_request_from_storey(source)
             request.reference_frame = definition.ReferenceFrame
             return request
+        provider = getattr(getattr(source, "Proxy", None), "getRepresentationRequest", None)
+        if callable(provider):
+            request = provider(source)
+            if getattr(request, "purpose", None) == purpose:
+                request.reference_frame = definition.ReferenceFrame
+                return request
         return ArchRepresentation.RepresentationRequest(
             purpose=purpose,
             reference_frame=definition.ReferenceFrame,
             source=source,
         )
+
+    def _create_elevation_plane(self, source, direction):
+        import Arch
+        pending = list(getattr(source, "Group", ()) or ()) if source else []
+        objects = []
+        seen = set()
+        while pending:
+            obj = pending.pop(0)
+            if obj in seen:
+                continue
+            seen.add(obj)
+            pending.extend(getattr(obj, "Group", ()) or ())
+            if hasattr(obj, "Shape") and not obj.Shape.isNull():
+                objects.append(obj)
+        objects = tuple(objects)
+        if not objects:
+            raise ValueError("An elevation source must contain shape objects")
+        rotation = self._elevation_rotation(direction)
+        initial_frame = FreeCAD.Placement(FreeCAD.Vector(), rotation)
+        bounds = planar_view_bounds(objects, frame=initial_frame)
+        if bounds is None:
+            raise ValueError("The elevation source has no geometric bounds")
+        margin = max(0.05 * max(bounds.width, bounds.height, bounds.depth), 1.0)
+        local_origin = FreeCAD.Vector(
+            bounds.center.x,
+            bounds.center.y,
+            bounds.z_max + margin,
+        )
+        plane = Arch.makeSectionPlane(list(objects), name="Elevation")
+        plane.Label = "{} Elevation".format(str(direction).title())
+        plane.Purpose = "Elevation"
+        plane.Placement = FreeCAD.Placement(rotation.multVec(local_origin), rotation)
+        plane.Depth = bounds.depth + 2.0 * margin
+        if getattr(plane, "ViewObject", None) is not None:
+            if hasattr(plane.ViewObject, "DisplayLength"):
+                plane.ViewObject.DisplayLength = bounds.width + 2.0 * margin
+            if hasattr(plane.ViewObject, "DisplayHeight"):
+                plane.ViewObject.DisplayHeight = bounds.height + 2.0 * margin
+        return plane
+
+    @staticmethod
+    def _elevation_rotation(direction):
+        key = str(direction or "South").strip().casefold()
+        normals = {
+            "south": FreeCAD.Vector(0, -1, 0),
+            "north": FreeCAD.Vector(0, 1, 0),
+            "west": FreeCAD.Vector(-1, 0, 0),
+            "east": FreeCAD.Vector(1, 0, 0),
+        }
+        try:
+            normal = normals[key]
+        except KeyError as exc:
+            raise ValueError("Unsupported elevation direction: {}".format(direction)) from exc
+        vertical = FreeCAD.Vector(0, 0, 1)
+        horizontal = vertical.cross(normal)
+        return FreeCAD.Rotation(horizontal, vertical, normal, "ZXY")
 
     def context_for(self, definition):
         return ViewActivationContext(

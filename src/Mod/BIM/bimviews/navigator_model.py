@@ -152,7 +152,12 @@ class BIMNavigatorModel:
 
     @staticmethod
     def _group(obj):
-        return tuple(getattr(obj, "Group", ()) or ())
+        group = tuple(getattr(obj, "Group", ()) or ())
+        if group:
+            return group
+        if getattr(getattr(obj, "Proxy", None), "Type", "") == "SectionPlane":
+            return tuple(getattr(obj, "Objects", ()) or ())
+        return ()
 
     @staticmethod
     def _elevation(obj):

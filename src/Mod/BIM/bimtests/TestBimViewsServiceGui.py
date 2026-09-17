@@ -515,6 +515,47 @@ class TestBimViewsServiceGui(TestArchBaseGui):
         self.assertIs(storey, definition.BIMContextSource)
         self.assertTrue(definition.BIMIsActiveView)
 
+    def test_elevation_creation_builds_marker_and_saved_view(self):
+        calls = []
+        storey = self.document.addObject("App::Part", "ElevationStorey")
+        facade = self.document.addObject("PartDesign::Feature", "ElevationFacade")
+        facade.Shape = Part.makeBox(4000, 200, 3000)
+        storey.addObject(facade)
+        service = BIMViewService(self.document, view=_RecordingView(calls))
+
+        definition = service.create_elevation_view(
+            "South Elevation", storey, direction="South"
+        )
+        plane = definition.BIMContextSource
+
+        self.assertEqual("Elevation", definition.Purpose)
+        self.assertEqual("Elevation", plane.Purpose)
+        self.assertEqual([facade], list(plane.Objects))
+        self.assertGreater(plane.Depth.Value, 200.0)
+        self.assertEqual(plane.Placement, definition.ReferenceFrame)
+        self.assertEqual(
+            ("camera-type", "camera-orientation", "fit", "capture"),
+            tuple(call[0] for call in calls),
+        )
+        request = service.request_for(definition)
+        self.assertEqual(
+            ArchRepresentation.RepresentationPurpose.ELEVATION,
+            request.purpose,
+        )
+        self.assertEqual((0.0, plane.Depth.Value), request.projection_range)
+
+    def test_elevation_scope_uses_section_plane_objects(self):
+        storey = self.document.addObject("App::Part", "ScopedElevationStorey")
+        facade = self.document.addObject("PartDesign::Feature", "ScopedFacade")
+        facade.Shape = Part.makeBox(1000, 200, 1000)
+        storey.addObject(facade)
+        service = BIMViewService(self.document, view=_RecordingView([]))
+        definition = service.create_elevation_view("West Elevation", storey, direction="West")
+
+        scope = service.scope_for(definition)
+
+        self.assertEqual((facade,), scope.context_objects)
+
     def test_plan_creation_frames_visible_scope_geometry_not_the_coin_scene(self):
         calls = []
         storey = self.document.addObject("App::Part", "FramedStorey")
