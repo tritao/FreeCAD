@@ -537,6 +537,15 @@ class BIMPickResult:
         return self.target.role
 
 
+@dataclass(frozen=True)
+class BIMFaceMesh:
+    """Immutable world-space triangles shared by rendering and picking."""
+
+    geometry: object
+    vertices: tuple
+    triangles: tuple
+
+
 class BIMRepresentation:
     """Renderer-neutral geometry and identity for one BIM object."""
 
@@ -550,12 +559,23 @@ class BIMRepresentation:
         self.snap_geometry = []
         self.source_mappings = []
         self.edit_handles = []
+        self._face_meshes = {}
 
     def add_geometry(self, collection, geometry, role, subelement=None, *, related_sources=()):
         """Add geometry to a named collection and preserve semantic mapping."""
         if collection not in self._COLLECTIONS:
             raise ValueError("unknown representation collection: %s" % collection)
         getattr(self, collection).append(geometry)
+        if collection == "cut_geometry" and getattr(geometry, "ShapeType", "") == "Face":
+            try:
+                vertices, triangles = tessellate_face(geometry)
+                self._face_meshes[id(geometry)] = BIMFaceMesh(
+                    geometry,
+                    tuple(FreeCAD.Vector(point) for point in vertices),
+                    tuple(tuple(int(index) for index in triangle) for triangle in triangles),
+                )
+            except Exception:
+                pass
         self.source_mappings.append(
             RepresentationSource(
                 geometry,
@@ -565,6 +585,9 @@ class BIMRepresentation:
                 related_sources=related_sources,
             )
         )
+
+    def face_mesh_for(self, geometry):
+        return self._face_meshes.get(id(geometry))
 
     def mapping_for(self, geometry):
         """Return the mapping for an exact generated geometry object, if any."""
@@ -760,30 +783,46 @@ def _screen_segment_distance_squared(cursor, start, end):
     return (x - cursor[0]) ** 2 + (y - cursor[1]) ** 2
 
 
-def _screen_face_contains(geometry, cursor, project_point):
+def tessellate_face(geometry, deflection=0.25):
+    """Return face triangles in document coordinates, including its placement."""
+
+    vertices, triangles = geometry.tessellate(deflection)
+    placement = getattr(geometry, "Placement", None)
+    if placement is not None:
+        vertices = [placement.multVec(FreeCAD.Vector(point)) for point in vertices]
+    return vertices, triangles
+
+
+def _screen_face_contains(geometry, cursor, project_point, mesh=None):
     if getattr(geometry, "ShapeType", "") != "Face":
         return False
-    inside = False
-    for wire in geometry.Wires:
-        try:
-            polygon = [project_point(point) for point in wire.discretize(Deflection=0.5)]
-        except Exception:
+    try:
+        if mesh is None:
+            vertices, triangles = tessellate_face(geometry)
+        else:
+            vertices, triangles = mesh.vertices, mesh.triangles
+        projected = [project_point(point) for point in vertices]
+    except Exception:
+        return False
+    for triangle in triangles:
+        first, second, third = (projected[index] for index in triangle)
+        denominator = (second[1] - third[1]) * (first[0] - third[0]) + (
+            third[0] - second[0]
+        ) * (first[1] - third[1])
+        if abs(denominator) <= 1e-12:
             continue
-        if len(polygon) < 3:
-            continue
-        wire_contains = False
-        previous = polygon[-1]
-        for current in polygon:
-            if (current[1] > cursor[1]) != (previous[1] > cursor[1]):
-                crossing_x = previous[0] + (cursor[1] - previous[1]) * (
-                    current[0] - previous[0]
-                ) / (current[1] - previous[1])
-                if cursor[0] < crossing_x:
-                    wire_contains = not wire_contains
-            previous = current
-        if wire_contains:
-            inside = not inside
-    return inside
+        first_weight = (
+            (second[1] - third[1]) * (cursor[0] - third[0])
+            + (third[0] - second[0]) * (cursor[1] - third[1])
+        ) / denominator
+        second_weight = (
+            (third[1] - first[1]) * (cursor[0] - third[0])
+            + (first[0] - third[0]) * (cursor[1] - third[1])
+        ) / denominator
+        third_weight = 1.0 - first_weight - second_weight
+        if min(first_weight, second_weight, third_weight) >= -1e-9:
+            return True
+    return False
 
 
 def query_representation_pick(representations, cursor, project_point, tolerance):
@@ -805,9 +844,16 @@ def query_representation_pick(representations, cursor, project_point, tolerance)
                 mapping.role,
                 representation.request,
             )
-            if _screen_face_contains(mapping.geometry, cursor, project_point):
-                if winner is None:
-                    winner = BIMPickResult(target, 0.0)
+            if _screen_face_contains(
+                mapping.geometry,
+                cursor,
+                project_point,
+                representation.face_mesh_for(mapping.geometry),
+            ):
+                # Coplanar contextual faces can overlap at wall joints. Coin
+                # draws later representations on top, so keep the last face
+                # hit to select the geometry the user actually sees.
+                winner = BIMPickResult(target, 0.0)
                 continue
             for polyline in _iter_pick_polylines(mapping.geometry):
                 try:

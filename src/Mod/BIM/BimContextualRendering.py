@@ -14,6 +14,13 @@ def _xyz(point):
     return float(point.x), float(point.y), float(point.z)
 
 
+def _node_key(node):
+    try:
+        return int(node.getNodeId())
+    except (AttributeError, RuntimeError, TypeError):
+        return id(node)
+
+
 def ray_from_view(view, mouse_pos):
     """Convert a viewer pixel into a normalized world-space BIM edit ray."""
 
@@ -142,13 +149,16 @@ class ContextualRepresentationRenderer:
                 self.view.setViewVisibility(self.layer, source, "Inherit")
 
     def mapping_for_node(self, node):
-        return self._node_mappings.get(id(node))
+        return self._node_mappings.get(_node_key(node))
 
     def pick_mapping(self, mouse_pos, project_point, radius_px=4):
         """Pick rendered semantic geometry through the neutral representation contract."""
 
         if not self.render_representation or mouse_pos is None or not callable(project_point):
             return None
+        mapping = self._ray_pick_mapping(mouse_pos, radius_px)
+        if mapping is not None:
+            return mapping
         result = ArchRepresentation.query_representation_pick(
             tuple(self._representations.values()),
             mouse_pos,
@@ -164,6 +174,27 @@ class ContextualRepresentationRenderer:
             target.role,
             target.geometry,
         )
+
+    def _ray_pick_mapping(self, mouse_pos, radius_px):
+        """Resolve identity from the exact Coin node visible under the cursor."""
+
+        try:
+            render_manager = self.view.getViewer().getSoRenderManager()
+            action = coin.SoRayPickAction(render_manager.getViewportRegion())
+            pixel = _screen_pixel_for_ray(self.view, mouse_pos)
+            action.setPoint(coin.SbVec2s(int(pixel[0]), int(pixel[1])))
+            action.setRadius(float(radius_px))
+            action.setPickAll(True)
+            action.apply(render_manager.getSceneGraph())
+            for picked_point in action.getPickedPointList():
+                path = picked_point.getPath()
+                for index in range(path.getLength() - 1, -1, -1):
+                    mapping = self._node_mappings.get(_node_key(path.getNode(index)))
+                    if mapping is not None:
+                        return mapping
+        except (AttributeError, ReferenceError, RuntimeError, TypeError):
+            return None
+        return None
 
     def pick_edit_handle(self, mouse_pos, project_point, radius_px=8):
         """Return the nearest visible semantic edit handle in screen space."""
@@ -423,7 +454,7 @@ class ContextualRepresentationRenderer:
     def _record_node(self, node, representation, geometry):
         mapping = representation.mapping_for(geometry)
         if mapping is not None:
-            self._node_mappings[id(node)] = ContextualNodeMapping(
+            self._node_mappings[_node_key(node)] = ContextualNodeMapping(
                 mapping.source,
                 mapping.subelement,
                 mapping.role,
@@ -441,7 +472,8 @@ class ContextualRepresentationRenderer:
     ):
         for face in representation.cut_geometry:
             try:
-                vertices, triangles = face.tessellate(0.25)
+                mesh = representation.face_mesh_for(face)
+                vertices, triangles = mesh.vertices, mesh.triangles
             except Exception:
                 continue
             if not vertices or not triangles:
@@ -519,7 +551,7 @@ class ContextualRepresentationRenderer:
             self._handle_position_fields[key] = glyph.position
             self._handle_color_fields[key] = glyph.color
             handle_switch.addChild(glyph)
-            self._node_mappings[id(glyph)] = ContextualNodeMapping(
+            self._node_mappings[_node_key(glyph)] = ContextualNodeMapping(
                 handle.source,
                 handle.subelement,
                 handle.role,
