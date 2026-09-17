@@ -70,6 +70,32 @@ def representation_request_from_source(source):
     return None
 
 
+def _request_values_equal(left, right):
+    """Return whether two representation requests describe the same context."""
+
+    if left is right:
+        return True
+    if left is None or right is None:
+        return False
+    if getattr(left, "purpose", None) != getattr(right, "purpose", None):
+        return False
+    if getattr(left, "source", None) is not getattr(right, "source", None):
+        return False
+    for name in ("cut_offset", "target_offset", "cut_range", "projection_range"):
+        if getattr(left, name, None) != getattr(right, name, None):
+            return False
+    left_frame = getattr(left, "reference_frame", None)
+    right_frame = getattr(right, "reference_frame", None)
+    if left_frame is right_frame:
+        return True
+    if left_frame is None or right_frame is None:
+        return False
+    try:
+        return bool(left_frame.isSame(right_frame, 1e-9))
+    except (AttributeError, TypeError):
+        return left_frame == right_frame
+
+
 class PlanRepresentationRequestAPI:
     """Resolve and activate one BIM representation request for the session."""
 
@@ -94,6 +120,7 @@ class PlanRepresentationRequestAPI:
         request = representation_request_from_source(source)
         if request is None:
             raise ValueError("Object does not provide a BIM representation request")
+        request_unchanged = self.source is source and _request_values_equal(self.request, request)
         self.source = source
         self.request = request
         view_rulers = getattr(self._session, "view_rulers", None)
@@ -108,6 +135,8 @@ class PlanRepresentationRequestAPI:
         if _is_storey(source):
             self._session.active_storey = source
         if not refresh:
+            return request
+        if request_unchanged:
             return request
         self._session.overlays.geometry.invalidate_plan_overlay_geometry_cache()
         self._session.viewport.apply_representation_request(request, fit=fit)

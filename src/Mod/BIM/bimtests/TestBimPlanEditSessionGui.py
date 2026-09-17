@@ -783,6 +783,27 @@ class TestBimPlanEditSessionGui(TestArchBaseGui):
         finally:
             session.shutdown(close_dialog=False)
 
+    def test_reapplying_same_plan_context_preserves_rendered_nodes(self):
+        """An identical saved-plan request must not rebuild contextual geometry."""
+
+        wall = Arch.makeWall(length=3000, width=200, height=2500, align="Center")
+        self.document.recompute()
+        session = PlanEditSession()
+        self.assertTrue(session.enter())
+        try:
+            renderer = session.contextual_rendering.renderer
+            original_node = renderer._object_nodes[wall]
+
+            session.representation_request.set_source(
+                session.representation_request.source,
+                fit=False,
+            )
+            session.viewport.flush_scene_graph_mutations()
+
+            self.assertIs(original_node, renderer._object_nodes[wall])
+        finally:
+            session.shutdown(close_dialog=False)
+
     def test_document_close_discards_pending_semantic_preview(self):
         original_document = self.document
         preview_document = FreeCAD.newDocument("PlanEditPreviewTeardown")
