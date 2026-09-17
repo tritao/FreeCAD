@@ -48,6 +48,8 @@ def main():
         raise ValueError("--openings and --iterations must be positive")
 
     import ArchComponent
+    import ArchWallExact
+    import ArchWallGeometry
 
     wall_length = max(10000.0, options.openings * 850.0 + 1000.0)
     wall = Part.makeBox(
@@ -60,6 +62,28 @@ def main():
         Part.makeBox(600, 400, 1200, FreeCAD.Vector(500 + index * 850, -200, 700))
         for index in range(options.openings)
     )
+    recipe = ArchWallGeometry.WallGeometryRecipe(
+        axis_start=FreeCAD.Vector(),
+        axis_end=FreeCAD.Vector(wall_length, 0, 0),
+        lateral=FreeCAD.Vector(0, 1, 0),
+        section=ArchWallGeometry.WallSection(
+            (ArchWallGeometry.WallSectionLayer(200, -100, 100),)
+        ),
+        z_min=0,
+        z_max=3000,
+        openings=tuple(
+            ArchWallGeometry.WallOpeningRecipe(
+                None,
+                500 + index * 850,
+                1100 + index * 850,
+                -100,
+                100,
+                700,
+                1900,
+            )
+            for index in range(options.openings)
+        ),
+    )
 
     def sequential():
         result = wall
@@ -70,20 +94,31 @@ def main():
     def batched():
         return ArchComponent.Component._cut_subtraction_tools(wall, openings)
 
+    def compiled():
+        return ArchWallExact.compile_wall_recipe(recipe).shape
+
     sequential_shape, sequential_time = _measure(sequential, options.iterations)
     batched_shape, batched_time = _measure(batched, options.iterations)
+    compiled_shape, compiled_time = _measure(compiled, options.iterations)
     if not batched_shape.isValid():
         raise RuntimeError("batched subtraction produced an invalid shape")
     if abs(sequential_shape.Volume - batched_shape.Volume) > 1e-5:
         raise RuntimeError("sequential and batched subtraction volumes differ")
+    if abs(sequential_shape.Volume - compiled_shape.Volume) > 1e-5:
+        raise RuntimeError("boolean and compiled wall volumes differ")
 
     print(f"openings: {options.openings}, iterations: {options.iterations}")
-    for name, result in (("sequential", sequential_time), ("batched", batched_time)):
+    for name, result in (
+        ("sequential", sequential_time),
+        ("batched", batched_time),
+        ("compiled", compiled_time),
+    ):
         print(
             f"{name}: median={result[0]:.3f} ms "
             f"min={result[1]:.3f} ms max={result[2]:.3f} ms"
         )
     print(f"median speedup: {sequential_time[0] / batched_time[0]:.2f}x")
+    print(f"compiler vs batched: {batched_time[0] / compiled_time[0]:.2f}x")
 
 
 def _invoked_as_script():
