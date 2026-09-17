@@ -11,7 +11,10 @@ machine, build type, and OpenCascade version.
 """
 
 import argparse
+import cProfile
+import io
 import os
+import pstats
 import statistics
 import sys
 import time
@@ -29,6 +32,7 @@ def _arguments():
     parser.add_argument("--iterations", type=int, default=20)
     parser.add_argument("--sample")
     parser.add_argument("--details", action="store_true")
+    parser.add_argument("--profile", action="store_true")
     return parser.parse_args(arguments)
 
 
@@ -76,6 +80,7 @@ def main():
         raise FileNotFoundError(sample)
 
     import ArchPlanAnalytic
+    from bimviews import representation_cache
 
     document = FreeCAD.openDocument(sample)
     try:
@@ -97,14 +102,16 @@ def main():
             for wall in walls:
                 tuple(wall.Proxy._getCutRepresentation(wall, request))
 
-        # Exclude one-time module loading and OCCT initialization from samples.
-        analytic()
+        # Report the first derived-data pass separately from steady-state use.
         brep()
+        representation_cache.invalidate_document(document)
+        analytic_cold = _measure(analytic, 1)
         analytic_result = _measure(analytic, options.iterations)
         brep_result = _measure(brep, options.iterations)
         speedup = brep_result["median"] / analytic_result["median"]
         print(f"sample: {sample}")
         print(f"walls: {len(walls)}, iterations: {options.iterations}")
+        print(f"analytic cold: {analytic_cold['median']:.3f} ms")
         for name, result in (("analytic", analytic_result), ("brep", brep_result)):
             print(
                 f"{name}: median={result['median']:.3f} ms "
@@ -134,6 +141,14 @@ def main():
                     f"  {wall.Name}: {analytic_wall_result['median']:.3f} / "
                     f"{brep_wall_result['median']:.3f} ms"
                 )
+        if options.profile:
+            profiler = cProfile.Profile()
+            profiler.enable()
+            analytic()
+            profiler.disable()
+            output = io.StringIO()
+            pstats.Stats(profiler, stream=output).sort_stats("cumulative").print_stats(30)
+            print(output.getvalue())
     finally:
         FreeCAD.closeDocument(document.Name)
 
