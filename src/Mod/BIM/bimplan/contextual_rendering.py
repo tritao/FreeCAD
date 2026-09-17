@@ -149,13 +149,18 @@ class PlanContextualRenderingAPI:
     def refresh_all(self):
         if self._renderer is None:
             return
+        self._session.performance.plan_perf_count("contextual_refresh_all")
         current = set()
         for obj in getattr(self._session.doc, "Objects", ()) or ():
             if not self._is_in_active_context(obj):
                 continue
-            representation = self._representation_for(obj)
+            with self._session.performance.plan_perf_trace_span(
+                "contextual_representation_for_object"
+            ):
+                representation = self._representation_for(obj)
             if representation is None:
                 continue
+            self._session.performance.plan_perf_count("contextual_representations")
             source = representation.source
             self._queue_renderer_mutation(
                 ("representation", source),
