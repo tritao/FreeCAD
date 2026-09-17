@@ -47,8 +47,8 @@ def compile_wall_recipe(recipe, tolerance=1e-7):
     """Build one perforated wall solid directly, or return ``None``.
 
     Supported walls are horizontal, straight and single-layer. End trims must
-    be vertical. Openings must be disjoint rectangles fully contained by the
-    wall and span its complete lateral thickness.
+    be vertical. Openings must be disjoint rectangles, may meet the wall's
+    bottom boundary, and must span its complete lateral thickness.
     """
 
     if recipe is None:
@@ -86,6 +86,15 @@ def compile_wall_recipe(recipe, tolerance=1e-7):
 
     openings = tuple(recipe.openings)
     for opening in openings:
+        section_width = recipe.section.y_max - recipe.section.y_min
+        opening_depth = opening.v_max - opening.v_min
+        spans_section = (
+            opening_depth >= section_width - tolerance
+            or (
+                opening.v_min <= recipe.section.y_min + tolerance
+                and opening.v_max >= recipe.section.y_max - tolerance
+            )
+        )
         inside_both_sides = all(
             extents[0] + tolerance < opening.u_min
             and opening.u_max < extents[1] - tolerance
@@ -93,10 +102,9 @@ def compile_wall_recipe(recipe, tolerance=1e-7):
         )
         if (
             not inside_both_sides
-            or opening.z_min <= recipe.z_min + tolerance
+            or opening.z_min < recipe.z_min - tolerance
             or opening.z_max >= recipe.z_max - tolerance
-            or opening.v_min > recipe.section.y_min + tolerance
-            or opening.v_max < recipe.section.y_max - tolerance
+            or not spans_section
         ):
             return None
     for index, opening in enumerate(openings):
@@ -110,8 +118,13 @@ def compile_wall_recipe(recipe, tolerance=1e-7):
             if not separated:
                 return None
 
-    if recipe.trim_planes:
-        return _compile_trimmed_prism(
+    boundary_openings = tuple(
+        opening
+        for opening in openings
+        if opening.z_min <= recipe.z_min + tolerance
+    )
+    if recipe.trim_planes or boundary_openings:
+        return _compile_boundary_shell(
             recipe, axis, lateral, footprint, side_extents, tolerance
         )
 
@@ -177,8 +190,8 @@ def _polygon_u_extents_at_v(polygon, target_v, tolerance):
     return min(intersections), max(intersections)
 
 
-def _compile_trimmed_prism(recipe, axis, lateral, footprint, side_extents, tolerance):
-    """Build a joined wall as an explicitly closed shell without a 3D BOP."""
+def _compile_boundary_shell(recipe, axis, lateral, footprint, side_extents, tolerance):
+    """Build joined or bottom-open wall geometry without a three-dimensional BOP."""
 
     import Part
 
@@ -190,7 +203,7 @@ def _compile_trimmed_prism(recipe, axis, lateral, footprint, side_extents, toler
         return result
 
     def wire(points, reverse=False):
-        values = list(points)
+        values = _clean_polygon_points(points, tolerance)
         if reverse:
             values.reverse()
         return Part.makePolygon((*values, values[0]))
@@ -203,18 +216,40 @@ def _compile_trimmed_prism(recipe, axis, lateral, footprint, side_extents, toler
         face = Part.Face([outer, *inner]) if inner else Part.Face(outer)
         faces.append(face)
 
-    bottom = tuple(point(u, v, recipe.z_min) for u, v in footprint)
     top = tuple(point(u, v, recipe.z_max) for u, v in footprint)
-    add_face(bottom)
     add_face(top)
+
+    bottom_openings = tuple(
+        opening
+        for opening in recipe.openings
+        if opening.z_min <= recipe.z_min + tolerance
+    )
+    bottom_intervals = tuple(
+        (opening.u_min, opening.u_max) for opening in bottom_openings
+    )
+    for boundary in recipe.plan_boundaries(recipe.z_min, bottom_intervals):
+        add_face(
+            tuple(
+                point(
+                    vertex.sub(recipe.axis_start).dot(axis),
+                    vertex.sub(recipe.axis_start).dot(lateral),
+                    recipe.z_min,
+                )
+                for vertex in boundary
+            )
+        )
 
     for side in (recipe.section.y_min, recipe.section.y_max):
         u_min, u_max = side_extents[side]
-        outer = (
-            point(u_min, side, recipe.z_min),
-            point(u_max, side, recipe.z_min),
-            point(u_max, side, recipe.z_max),
-            point(u_min, side, recipe.z_max),
+        outer = tuple(
+            point(u, side, z)
+            for u, z in _elevation_outline(
+                u_min,
+                u_max,
+                recipe.z_min,
+                recipe.z_max,
+                bottom_openings,
+            )
         )
         holes = tuple(
             (
@@ -224,6 +259,7 @@ def _compile_trimmed_prism(recipe, axis, lateral, footprint, side_extents, toler
                 point(opening.u_min, side, opening.z_max),
             )
             for opening in recipe.openings
+            if opening not in bottom_openings
         )
         add_face(outer, holes=holes)
 
@@ -258,7 +294,10 @@ def _compile_trimmed_prism(recipe, axis, lateral, footprint, side_extents, toler
                 point(opening.u_max, v_min, opening.z_max),
             ),
         )
-        for z in (opening.z_min, opening.z_max):
+        reveal_levels = [opening.z_max]
+        if opening not in bottom_openings:
+            reveal_levels.insert(0, opening.z_min)
+        for z in reveal_levels:
             add_face(
                 (
                     point(opening.u_min, v_min, z),
@@ -282,6 +321,50 @@ def _compile_trimmed_prism(recipe, axis, lateral, footprint, side_extents, toler
     return WallExactCompilation(
         shape, _classify_faces(shape, recipe, axis, tolerance)
     )
+
+
+def _elevation_outline(u_min, u_max, z_min, z_max, bottom_openings):
+    """Return a wall-side outline with floor-touching openings as notches."""
+
+    points = [(u_min, z_min)]
+    for opening in sorted(bottom_openings, key=lambda item: item.u_min):
+        points.extend(
+            (
+                (opening.u_min, z_min),
+                (opening.u_min, opening.z_max),
+                (opening.u_max, opening.z_max),
+                (opening.u_max, z_min),
+            )
+        )
+    points.extend(((u_max, z_min), (u_max, z_max), (u_min, z_max)))
+    return tuple(points)
+
+
+def _clean_polygon_points(points, tolerance):
+    """Remove clipping duplicates and straight-through vertices from a wire."""
+
+    values = []
+    for point in points:
+        value = FreeCAD.Vector(point)
+        if not values or value.sub(values[-1]).Length > tolerance:
+            values.append(value)
+    if len(values) > 1 and values[0].sub(values[-1]).Length <= tolerance:
+        values.pop()
+
+    changed = True
+    while changed and len(values) > 3:
+        changed = False
+        for index, value in enumerate(values):
+            incoming = value.sub(values[index - 1])
+            outgoing = values[(index + 1) % len(values)].sub(value)
+            scale = max(1.0, incoming.Length * outgoing.Length)
+            if incoming.cross(outgoing).Length <= tolerance * scale and incoming.dot(
+                outgoing
+            ) >= 0:
+                values.pop(index)
+                changed = True
+                break
+    return values
 
 
 def _classify_faces(shape, recipe, axis, tolerance):
