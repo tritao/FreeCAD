@@ -62,6 +62,23 @@ class _RecordingView:
         self.calls.append(("fit", None))
 
 
+class _AnimatedRecordingView(_RecordingView):
+    def __init__(self, calls):
+        super().__init__(calls)
+        self.animation_enabled = True
+
+    def stopAnimating(self):
+        self.calls.append(("stop-animation", None))
+
+    def isAnimationEnabled(self):
+        self.calls.append(("get-animation", None))
+        return self.animation_enabled
+
+    def setAnimationEnabled(self, enabled):
+        self.animation_enabled = bool(enabled)
+        self.calls.append(("set-animation", self.animation_enabled))
+
+
 class TestBimViewsServiceGui(TestArchBaseGui):
     def test_plan_saved_view_activation_starts_shared_editing_runtime(self):
         source = SimpleNamespace()
@@ -82,8 +99,29 @@ class TestBimViewsServiceGui(TestArchBaseGui):
             ) as start:
                 self.assertIs(fake_session, _apply_representation_request(request))
 
-        start.assert_called_once_with(show_task_panel=False)
-        self.assertEqual([("source", source, False)], calls)
+        start.assert_called_once_with(show_task_panel=False, initial_request=request)
+        self.assertEqual([], calls)
+
+    def test_saved_view_activation_suppresses_camera_animation(self):
+        calls = []
+        view = _AnimatedRecordingView(calls)
+        service = BIMViewService(self.document, view=view)
+        definition = service.create_view("Instant Plan", "Plan", capture=False)
+
+        with patch.object(service, "configure_snap_context"):
+            self.assertTrue(service.activate_view(definition))
+
+        self.assertEqual(
+            [
+                ("stop-animation", None),
+                ("get-animation", None),
+                ("set-animation", False),
+                ("apply", definition),
+                ("set-animation", True),
+            ],
+            calls,
+        )
+        self.assertTrue(view.animation_enabled)
 
     def test_navigator_tabs_with_model_and_restores_combo_title(self):
         main_window = FreeCADGui.getMainWindow()

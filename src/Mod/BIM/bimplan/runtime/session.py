@@ -150,13 +150,14 @@ def _register_builtin_plan_edit_integrations():
             pass
 
 
-def start_editing_session(*, show_task_panel=False):
+def start_editing_session(*, show_task_panel=False, initial_request=None):
     """Start the representation editing runtime for the active PLAN view.
 
     Navigator activation uses the runtime without opening the legacy Plan Edit
     task panel.  The explicit ``BIM_PlanEdit`` compatibility command passes
     ``show_task_panel=True`` so existing command-driven workflows retain their
-    controls.
+    controls.  ``initial_request`` lets saved-view activation initialize the
+    runtime from its target representation in the same pass as session entry.
     """
 
     global _active_session
@@ -173,6 +174,7 @@ def start_editing_session(*, show_task_panel=False):
 
     _register_builtin_plan_edit_integrations()
     session = BIMEditingSession()
+    session._initial_representation_request = initial_request
     if session.enter(attach_task_panel=show_task_panel):
         _active_session = session
         if show_task_panel:
@@ -217,10 +219,18 @@ def activate_representation_request(request):
         return None
 
     session = get_active_session()
+    created = False
     if session is None:
-        session = start_editing_session(show_task_panel=False)
+        session = start_editing_session(show_task_panel=False, initial_request=request)
+        created = session is not None
     if session is None:
         return None
+
+    # A newly-created session was initialized from this exact request and has
+    # already applied it during enter().  Avoid applying the same camera,
+    # working plane and representation a second time.
+    if created:
+        return session
 
     source = getattr(request, "source", None)
     if source is not None:
@@ -407,9 +417,26 @@ class BIMEditingSession:
                 self.performance.plan_perf_set_fields(
                     active_storey=self.performance.plan_perf_describe_object(self.active_storey)
                 )
-            self.representation_request.set_source(
-                self.representation_request.find_initial_source(), refresh=False
-            )
+            initial_request = getattr(self, "_initial_representation_request", None)
+            initial_source = getattr(initial_request, "source", None)
+            if initial_request is None:
+                self.representation_request.set_source(
+                    self.representation_request.find_initial_source(), refresh=False
+                )
+            else:
+                self.representation_request.source = initial_source
+                self.representation_request.request = initial_request
+                if initial_source is not None:
+                    try:
+                        import Draft
+
+                        is_storey = Draft.getType(initial_source) == "Floor" or getattr(
+                            initial_source, "IfcType", ""
+                        ) == "Building Storey"
+                    except Exception:
+                        is_storey = getattr(initial_source, "IfcType", "") == "Building Storey"
+                    if is_storey:
+                        self.active_storey = initial_source
             with self.performance.plan_perf_trace_span("capture_object_view_state"):
                 self.visibility.capture_object_view_state()
             self.visibility.begin_view_context()

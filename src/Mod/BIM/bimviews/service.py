@@ -2,6 +2,7 @@
 
 """Saved-view lifecycle and activation for the BIM Navigator."""
 
+from contextlib import contextmanager
 from dataclasses import dataclass
 
 import ArchRepresentation
@@ -98,10 +99,14 @@ class BIMViewService:
 
         definition = self.create_view(label, "Plan", source, capture=False, view=view)
         request = self.request_for(definition)
-        if self._representation_applier is not None:
-            self._representation_applier(request)
-        self._orient_plan_view(request, view=view)
-        self.capture(definition, view=view)
+        target_view = self._view(view)
+        if target_view is None:
+            raise RuntimeError("An active 3D view is required to create a floor plan")
+        with self._instant_view_transition(target_view):
+            if self._representation_applier is not None:
+                self._representation_applier(request)
+            self._orient_plan_view(request, view=target_view)
+            self.capture(definition, view=target_view)
         self._mark_active(definition)
         self.configure_snap_context(definition, view=view)
         return definition
@@ -223,18 +228,65 @@ class BIMViewService:
 
     def activate_view(self, definition, view=None):
         context = self.context_for(definition)
-        if self._representation_applier is not None:
-            self._representation_applier(context.request)
         target_view = self._view(view)
         if target_view is None or not hasattr(target_view, "applyViewDefinition"):
             raise RuntimeError("An active 3D view is required to activate a BIM view")
-        applied = bool(target_view.applyViewDefinition(definition))
+        # Saved-view activation is a state change, not a camera-navigation
+        # gesture.  The representation bridge may orient the camera before
+        # the persisted camera is applied; keep both operations synchronous so
+        # switching PLAN/MODEL never waits for a navigation animation.
+        with self._instant_view_transition(target_view):
+            if self._representation_applier is not None:
+                self._representation_applier(context.request)
+            applied = bool(target_view.applyViewDefinition(definition))
         if applied:
             self.configure_snap_context(definition, view=target_view)
             self._mark_active(definition)
             if context.source is not None:
                 self.active_storey = context.source
         return applied
+
+    @staticmethod
+    @contextmanager
+    def _instant_view_transition(view):
+        """Temporarily suppress navigation animation for a view switch.
+
+        ``View3DInventor.setCameraOrientation`` animates whenever navigation
+        animation is enabled, even for programmatic orientation changes with
+        ``moveToCenter=False``.  BIM saved-view activation must apply a stored
+        camera immediately while preserving the user's normal navigation
+        preference after the operation.
+        """
+
+        stop = getattr(view, "stopAnimating", None)
+        if callable(stop):
+            try:
+                stop()
+            except (AttributeError, ReferenceError, RuntimeError):
+                pass
+
+        get_enabled = getattr(view, "isAnimationEnabled", None)
+        set_enabled = getattr(view, "setAnimationEnabled", None)
+        previous = None
+        if callable(get_enabled):
+            try:
+                previous = bool(get_enabled())
+            except (AttributeError, ReferenceError, RuntimeError, TypeError, ValueError):
+                previous = None
+        if callable(set_enabled):
+            try:
+                set_enabled(False)
+            except (AttributeError, ReferenceError, RuntimeError, TypeError, ValueError):
+                pass
+
+        try:
+            yield
+        finally:
+            if previous is not None and callable(set_enabled):
+                try:
+                    set_enabled(previous)
+                except (AttributeError, ReferenceError, RuntimeError, TypeError, ValueError):
+                    pass
 
     def configure_snap_context(self, definition=None, view=None, semantic_providers=None):
         """Apply one saved view's snapping inputs to its originating viewport.
