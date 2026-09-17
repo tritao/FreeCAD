@@ -296,6 +296,44 @@ class TestBimPlanEditExamplesGui(TestArchBaseGui):
             mappings.append(session.contextual_rendering.pick_mapping(screen_point))
         self.assertIn(wall, {mapping.source for mapping in mappings if mapping is not None})
 
+        # Real input arrives in Coin viewport coordinates, while semantic
+        # overlays and getPointOnScreen use projected screen coordinates.
+        # Exercise that conversion for every wall, including the narrow
+        # clipped exterior walls that expose even a small coordinate offset.
+        from BimContextualRendering import (
+            screen_pixel_from_view_pixel,
+            view_pixel_from_screen_pixel,
+        )
+
+        for candidate in self._objects_with_ifc_type(document, "Wall"):
+            candidate_representation = renderer._representations[candidate]
+            candidate_hits = []
+            for geometry in candidate_representation.cut_geometry:
+                candidate_mesh = candidate_representation.face_mesh_for(geometry)
+                if candidate_mesh is None:
+                    continue
+                for triangle in candidate_mesh.triangles:
+                    point = sum(
+                        (
+                            FreeCAD.Vector(candidate_mesh.vertices[index])
+                            for index in triangle
+                        ),
+                        FreeCAD.Vector(),
+                    ) / 3.0
+                    screen = session.view.getPointOnScreen(point)
+                    event_pixel = view_pixel_from_screen_pixel(session.view, screen)
+                    normalized = screen_pixel_from_view_pixel(
+                        session.view, event_pixel
+                    )
+                    candidate_hits.append(
+                        session.contextual_rendering.pick_mapping(normalized)
+                    )
+            self.assertIn(
+                candidate,
+                {mapping.source for mapping in candidate_hits if mapping is not None},
+                candidate.Name,
+            )
+
     def test_basic_example_analytic_wall_plans_match_brep_sections(self):
         """Analytic joins and opening intervals preserve the legacy Plan result."""
 
