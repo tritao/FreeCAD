@@ -202,7 +202,7 @@ def get_reference_slice_faces(shape, request):
         size = max(shape.BoundBox.DiagonalLength * 2.0, 1.0)
         corner = origin - x_axis * (size * 0.5) - y_axis * (size * 0.5)
         plane = Part.makePlane(size, size, corner, normal, x_axis)
-        section = shape.section(plane)
+        section = shape.section(plane, noElementMap=True)
         edges = list(section.Edges)
         if not edges:
             return []

@@ -602,8 +602,12 @@ class TopoShapeTest(unittest.TestCase, TopoShapeAssertions):
     def testTopoShapeSection(self):
         # Act
         section = self.doc.Box1.Shape.Faces[0].section(self.doc.Box2.Shape.Faces[3])
+        transient_section = self.doc.Box1.Shape.Faces[0].section(
+            self.doc.Box2.Shape.Faces[3], noElementMap=True
+        )
         self.doc.recompute()
         # Assert elementMap
+        self.assertEqual(transient_section.ElementMapSize, 0)
         if section.ElementMapVersion != "":  # Should be '4' as of Mar 2023.
             self.assertEqual(section.ElementMapSize, 3)
 

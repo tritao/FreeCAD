@@ -323,13 +323,19 @@ class TopoShape(ComplexGeoData):
 
     @constmethod
     def section(
-        self, tool: Tuple[TopoShape, ...], tolerance: float = 0.0, approximation: bool = False, /
+        self,
+        tool: Tuple[TopoShape, ...],
+        tolerance: float = 0.0,
+        approximation: bool = False,
+        /,
+        *,
+        noElementMap: bool = False,
     ) -> TopoShape:
         """
         Section of this with a given (list of) topo shape.
         section(tool,[approximation=False]) -> Shape
           or
-        section((tool1,tool2,...),[tolerance=0.0, approximation=False]) -> Shape
+        section((tool1,tool2,...),[tolerance=0.0, approximation=False], noElementMap=False) -> Shape
         --
         If approximation is True, section edges are approximated to a C1-continuous BSpline curve.
 
@@ -339,6 +345,8 @@ class TopoShape(ComplexGeoData):
         - Parallelization of Boolean Operations algorithm
 
         OCC 6.9.0 or later is required.
+        Set noElementMap=True for transient analysis geometry where stable
+        element naming is not needed.
         """
         ...
 

@@ -805,9 +805,9 @@ PyObject* TopoShapePy::common(PyObject* args, PyObject* keywds) const
     return makeShape(Part::OpCodes::Common, *getTopoShapePtr(), args, keywds);
 }
 
-PyObject* TopoShapePy::section(PyObject* args) const
+PyObject* TopoShapePy::section(PyObject* args, PyObject* keywds) const
 {
-    return makeShape(Part::OpCodes::Section, *getTopoShapePtr(), args);
+    return makeShape(Part::OpCodes::Section, *getTopoShapePtr(), args, keywds);
 }
 
 PyObject* TopoShapePy::slice(PyObject* args, PyObject* keywds) const
