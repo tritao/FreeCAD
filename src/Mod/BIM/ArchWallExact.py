@@ -24,12 +24,22 @@ class WallExactCompilation:
     face_roles: tuple
 
 
-def compile_straight_wall(wall, proxy):
+def compile_straight_wall(wall, proxy, geometry_shape=None):
     """Compile a supported wall without invoking a three-dimensional boolean."""
+
+    if (
+        getattr(wall, "Additions", None)
+        or getattr(wall, "Subtractions", None)
+        or getattr(wall, "Axis", None)
+        or getattr(wall, "MakeBlocks", False)
+    ):
+        return None
 
     import ArchPlanAnalytic
 
-    recipe = ArchPlanAnalytic.straight_wall_geometry_recipe(wall, proxy)
+    recipe = ArchPlanAnalytic.straight_wall_geometry_recipe(
+        wall, proxy, geometry_shape=geometry_shape
+    )
     return compile_wall_recipe(recipe) if recipe is not None else None
 
 

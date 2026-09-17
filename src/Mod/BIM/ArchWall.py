@@ -711,6 +711,27 @@ class _Wall(ArchComponent.Component):
             # walls can be made of only a series of additions and have no base shape
             base = Part.Shape()
 
+        # The exact compiler consumes the same resolved wall recipe used by
+        # Plan display and builds openings and vertical join trims as boundary
+        # faces.  When it accepts the wall, skip the general OCCT booleans
+        # below; unsupported wall features retain the established path.
+        import ArchWallExact
+
+        compiler_shape = base.copy()
+        compiler_shape.Placement = pl.multiply(compiler_shape.Placement)
+        compilation = ArchWallExact.compile_straight_wall(
+            obj, self, geometry_shape=compiler_shape
+        )
+        if compilation is not None:
+            # Recipes and compiler results use document coordinates. Convert
+            # back to the object's local frame because applyShape restores
+            # ``pl`` after assigning the shape.
+            base = compilation.shape.copy()
+            base.Placement = pl.inverse().multiply(base.Placement)
+            self.applyShape(obj, base, pl)
+            self._finish_execute(obj, base)
+            return
+
         relation_endings = ArchWallRelationResolver.collect_wall_relation_endings(obj)
         end_conditions = {
             end_name: self._resolve_end_condition(obj, end_name, relation_endings)
@@ -736,6 +757,11 @@ class _Wall(ArchComponent.Component):
             trimmed_base = ArchComponent._copy_without_element_map(trimmed_base)
         base = trimmed_base
         self.applyShape(obj, base, pl)
+
+        self._finish_execute(obj, base)
+
+    def _finish_execute(self, obj, base):
+        """Update derived wall properties after assigning its final shape."""
 
         # Check if there is base, and if width and height is provided or not
         # Provide users message below to check the setting of the Wall object

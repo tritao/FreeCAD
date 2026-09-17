@@ -87,7 +87,7 @@ def straight_wall_plan_model(wall, proxy, request):
     )
 
 
-def straight_wall_geometry_recipe(wall, proxy):
+def straight_wall_geometry_recipe(wall, proxy, geometry_shape=None):
     """Resolve the shared geometry recipe for one supported straight wall."""
 
     if _has_manual_end_treatment(wall) or not _has_straight_path(wall):
@@ -108,7 +108,7 @@ def straight_wall_geometry_recipe(wall, proxy):
         return None
     lateral.normalize()
 
-    shape = getattr(wall, "Shape", None)
+    shape = geometry_shape or getattr(wall, "Shape", None)
     if not shape or shape.isNull():
         return None
     bounds = shape.BoundBox
