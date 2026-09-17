@@ -110,6 +110,11 @@ class Snapper:
         self.tracker = None
         self.extLine = None
         self.grid = None
+        # Hosts such as BIM Plan Edit can temporarily provide a semantic
+        # interaction grid without replacing Draft's document-local grid
+        # tracker or its preferences.  The stack makes nested hosts safe.
+        self.interaction_grid = None
+        self._interaction_grid_stack = []
         self.constrainLine = None
         self.trackLine = None
         self.extLine2 = None
@@ -242,6 +247,37 @@ class Snapper:
             if self.semanticSnapProviders[index] is provider:
                 return self.semanticSnapProviders.pop(index)
         return None
+
+    def push_interaction_grid(self, grid):
+        """Install a temporary renderer-independent interaction grid.
+
+        The normal ``grid`` tracker remains untouched.  This is intended for
+        embedded planar hosts that need their own reference frame and snap
+        spacing while still using Draft's point acquisition machinery.
+        """
+
+        if grid is None:
+            return None
+        self._interaction_grid_stack.append(self.interaction_grid)
+        self.interaction_grid = grid
+        return grid
+
+    def pop_interaction_grid(self, grid=None):
+        """Restore the previous temporary interaction grid.
+
+        Passing ``grid`` guards against an owner accidentally removing a
+        newer nested provider.  With no stack entry, the active provider is
+        simply cleared to keep teardown idempotent.
+        """
+
+        active = self.interaction_grid
+        if grid is not None and active is not grid:
+            return None
+        if self._interaction_grid_stack:
+            self.interaction_grid = self._interaction_grid_stack.pop()
+        else:
+            self.interaction_grid = None
+        return active
 
     def set_snap_style(self):
         self.snapStyle = params.get_param("snapStyle")
@@ -838,10 +874,20 @@ class Snapper:
 
     def snapToGrid(self, point):
         """Return a grid snap point if available."""
-        if self.grid:
-            if self.grid.Visible:
-                if self.isEnabled("Grid"):
-                    np = self.grid.getClosestNode(point)
+        grid = self.interaction_grid if self.interaction_grid is not None else self.grid
+        if grid is not None and self.isEnabled("Grid"):
+            # Temporary interaction grids are semantic providers and do not
+            # expose Draft tracker visibility state.  The regular tracker
+            # retains its existing Visible gate.
+            visible = self.interaction_grid is not None or bool(
+                getattr(grid, "Visible", False)
+            )
+            if visible:
+                get_node = getattr(grid, "nearest_node", None)
+                if not callable(get_node):
+                    get_node = getattr(grid, "getClosestNode", None)
+                if callable(get_node):
+                    np = get_node(point)
                     if np:
                         dv = point.sub(np)
                         if (self.radius == 0) or (dv.Length <= self.radius):

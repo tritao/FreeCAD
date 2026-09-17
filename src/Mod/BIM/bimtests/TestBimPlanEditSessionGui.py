@@ -20,6 +20,7 @@ from ArchRepresentation import (
 )
 from bimtests.TestArchBaseGui import TestArchBaseGui
 from bimplan.runtime.session import PlanEditSession
+from bimplan import snap as plan_snap
 from bimcontextual.session import ContextualSession
 from bimcontextual.interaction import ContextualInteractionHost
 from bimcontextual import context_policy
@@ -77,6 +78,42 @@ class _HostedOpeningProxy:
 
 
 class TestBimPlanEditSessionGui(TestArchBaseGui):
+    def test_plan_snap_api_installs_reference_frame_grid_and_restores_it(self):
+        """Plan Edit owns a temporary lattice and leaves Draft's provider intact."""
+
+        plane = SimpleNamespace(
+            position=FreeCAD.Vector(100, 200, 300),
+            u=FreeCAD.Vector(0, 1, 0),
+            v=FreeCAD.Vector(-1, 0, 0),
+        )
+        session = SimpleNamespace(
+            viewport=SimpleNamespace(get_interaction_plane=lambda: plane),
+        )
+        pushed = []
+
+        class _Snapper:
+            def push_interaction_grid(self, grid):
+                pushed.append(grid)
+
+            def pop_interaction_grid(self, grid):
+                self.restored = grid
+                return grid
+
+        snapper = _Snapper()
+        with patch.object(FreeCADGui, "Snapper", snapper, create=True):
+            api = plan_snap.PlanSnapAPI(session, ())
+            grid = api.apply_plan_grid()
+            self.assertIs(grid, pushed[0])
+            self.assertAlmostEqual(100.0, grid.spacing)
+            self.assertEqual(10, grid.major_every)
+            self.assertEqual(FreeCAD.Vector(100, 200, 300), grid.origin)
+            self.assertEqual(FreeCAD.Vector(0, 1, 0), grid.u_axis)
+            self.assertEqual(FreeCAD.Vector(-1, 0, 0), grid.v_axis)
+            self.assertIs(grid, api.apply_plan_grid())
+            self.assertIs(grid, api.restore_plan_grid())
+            self.assertIs(grid, snapper.restored)
+            self.assertIsNone(api.restore_plan_grid())
+
     def test_contextual_task_panel_consumes_provider_tools(self):
         provider = _ContextualToolProvider()
         session = ContextualSession(

@@ -233,6 +233,38 @@ class DraftSnapper(test_base.DraftTestCaseDoc):
 
         save_snap_state.assert_not_called()
 
+    def test_temporary_interaction_grids_are_stacked_and_route_grid_snapping(self):
+        """Embedded hosts can override Draft's grid without changing its tracker."""
+
+        snapper = gui_snapper.Snapper()
+        draft_grid = SimpleNamespace(
+            Visible=True,
+            getClosestNode=lambda point: App.Vector(100, 0, 0),
+        )
+        first_grid = SimpleNamespace(
+            nearest_node=lambda point: App.Vector(200, 0, 0),
+        )
+        second_grid = SimpleNamespace(
+            nearest_node=lambda point: App.Vector(300, 0, 0),
+        )
+        snapper.grid = draft_grid
+        snapper.active_snaps = ["Lock", "Grid"]
+        point = App.Vector(1, 0, 0)
+
+        with patch.object(snapper, "setCursor"):
+            self.assertEqual(App.Vector(100, 0, 0), snapper.snapToGrid(point))
+            self.assertIs(first_grid, snapper.push_interaction_grid(first_grid))
+            self.assertEqual(App.Vector(200, 0, 0), snapper.snapToGrid(point))
+            self.assertIs(second_grid, snapper.push_interaction_grid(second_grid))
+            self.assertEqual(App.Vector(300, 0, 0), snapper.snapToGrid(point))
+            self.assertIsNone(snapper.pop_interaction_grid(first_grid))
+            self.assertIs(second_grid, snapper.interaction_grid)
+            self.assertIs(second_grid, snapper.pop_interaction_grid())
+            self.assertIs(first_grid, snapper.interaction_grid)
+            self.assertIs(first_grid, snapper.pop_interaction_grid(first_grid))
+            self.assertIsNone(snapper.interaction_grid)
+            self.assertEqual(App.Vector(100, 0, 0), snapper.snapToGrid(point))
+
     def test_interaction_host_forwards_hints_and_modifier_resolver(self):
         """Embedded hosts should pass point-input policy to Snapper."""
 

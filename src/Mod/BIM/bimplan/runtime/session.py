@@ -67,6 +67,7 @@ _PLAN_EDIT_SNAP_SET = {
     "Lock",
     "Near",
     "Extension",
+    "Grid",
     "Endpoint",
     "Midpoint",
     "Perpendicular",
@@ -320,6 +321,8 @@ class PlanEditSession:
                 )
             with self.performance.plan_perf_trace_span("apply_plan_snap_profile"):
                 self.snap.apply_plan_snap_profile()
+            with self.performance.plan_perf_trace_span("apply_plan_grid"):
+                self.snap.apply_plan_grid()
             self.visibility.apply_storey_visibility()
             with self.performance.plan_perf_trace_span("start_contextual_rendering"):
                 self.contextual_rendering.start()
