@@ -139,3 +139,47 @@ class TestArchWallGeometry(TestArchBase.TestArchBase):
         )
         self.assertTrue(all(point.z == 25 for boundary in boundaries for point in boundary))
         self.assertEqual((), recipe.opening_intervals_at(2500))
+
+    def test_wall_geometry_recipe_derives_closed_viewport_mesh(self):
+        """A trimmed straight-wall recipe produces a closed semantic prism mesh."""
+
+        section = ArchWallGeometry.WallSection(
+            (ArchWallGeometry.WallSectionLayer(200, -100, 100),)
+        )
+        recipe = ArchWallGeometry.WallGeometryRecipe(
+            axis_start=App.Vector(0, 0, 0),
+            axis_end=App.Vector(1000, 0, 0),
+            lateral=App.Vector(0, 1, 0),
+            section=section,
+            z_min=0,
+            z_max=3000,
+            trim_planes=(
+                ArchWallGeometry.WallTrimPlane(
+                    "End", App.Vector(900, 0, 0), App.Vector(1, 0, 0)
+                ),
+            ),
+        )
+
+        mesh = recipe.viewport_mesh()
+        self.assertIsNotNone(mesh)
+        self.assertTrue(mesh.is_closed)
+        self.assertEqual((0, -100, 0, 900, 100, 3000), mesh.bounds)
+        self.assertAlmostEqual(540000000, mesh.volume)
+        self.assertEqual(len(mesh.triangles), len(mesh.triangle_roles))
+        self.assertEqual({"Bottom", "Top", "SideMin", "SideMax", "End"}, set(mesh.triangle_roles))
+
+        self.assertIsNone(
+            ArchWallGeometry.WallGeometryRecipe(
+                axis_start=recipe.axis_start,
+                axis_end=recipe.axis_end,
+                lateral=recipe.lateral,
+                section=recipe.section,
+                z_min=recipe.z_min,
+                z_max=recipe.z_max,
+                openings=(
+                    ArchWallGeometry.WallOpeningRecipe(
+                        None, 200, 400, -100, 100, 0, 2000
+                    ),
+                ),
+            ).viewport_mesh()
+        )

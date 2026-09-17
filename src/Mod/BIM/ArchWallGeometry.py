@@ -267,6 +267,47 @@ class WallTrimPlane:
 
 
 @dataclass(frozen=True)
+class WallViewportMesh:
+    """Closed triangle mesh derived from a wall recipe without OCCT."""
+
+    vertices: tuple
+    triangles: tuple
+    triangle_roles: tuple
+
+    @property
+    def bounds(self):
+        """Return axis-aligned bounds as ``(xmin, ymin, zmin, xmax, ymax, zmax)``."""
+
+        coordinates = tuple(zip(*((point.x, point.y, point.z) for point in self.vertices)))
+        return tuple(min(values) for values in coordinates) + tuple(
+            max(values) for values in coordinates
+        )
+
+    @property
+    def volume(self):
+        """Return the volume enclosed by the consistently oriented triangles."""
+
+        signed_volume = 0.0
+        for first, second, third in self.triangles:
+            a = self.vertices[first]
+            b = self.vertices[second]
+            c = self.vertices[third]
+            signed_volume += a.dot(b.cross(c)) / 6.0
+        return abs(signed_volume)
+
+    @property
+    def is_closed(self):
+        """Whether every undirected triangle edge has exactly two users."""
+
+        edge_users = {}
+        for triangle in self.triangles:
+            for first, second in zip(triangle, triangle[1:] + triangle[:1]):
+                edge = tuple(sorted((first, second)))
+                edge_users[edge] = edge_users.get(edge, 0) + 1
+        return bool(edge_users) and all(count == 2 for count in edge_users.values())
+
+
+@dataclass(frozen=True)
 class WallGeometryRecipe:
     """Resolved straight-wall geometry shared by display and exact outputs."""
 
@@ -365,6 +406,56 @@ class WallGeometryRecipe:
             tuple(FreeCAD.Vector(point.x, point.y, float(target_z)) for point in polygon)
             for polygon in polygons
         )
+
+    def viewport_mesh(self):
+        """Build an experimental closed mesh for a straight wall without openings.
+
+        Openings deliberately remain unsupported until their full 3D topology can
+        be represented without falling back to boolean operations.
+        """
+
+        if self.openings or self.z_max <= self.z_min:
+            return None
+        boundaries = self.plan_boundaries(self.z_min)
+        if len(boundaries) != 1 or len(boundaries[0]) < 3:
+            return None
+        bottom = list(boundaries[0])
+        signed_area = sum(
+            first.x * second.y - second.x * first.y
+            for first, second in zip(bottom, bottom[1:] + bottom[:1])
+        )
+        if signed_area < 0:
+            bottom.reverse()
+        count = len(bottom)
+        top = [FreeCAD.Vector(point.x, point.y, self.z_max) for point in bottom]
+        triangles = []
+        roles = []
+        for index in range(1, count - 1):
+            triangles.append((0, index + 1, index))
+            roles.append("Bottom")
+            triangles.append((count, count + index, count + index + 1))
+            roles.append("Top")
+        axis = self.axis_end.sub(self.axis_start)
+        axis.normalize()
+        for index in range(count):
+            following = (index + 1) % count
+            triangles.extend(
+                (
+                    (index, following, count + following),
+                    (index, count + following, count + index),
+                )
+            )
+            edge = bottom[following].sub(bottom[index])
+            if abs(edge.dot(axis)) >= abs(edge.dot(self.lateral)):
+                midpoint = bottom[index].add(bottom[following]) * 0.5
+                offset = midpoint.sub(self.axis_start).dot(self.lateral)
+                role = "SideMin" if abs(offset - self.section.y_min) <= abs(
+                    offset - self.section.y_max
+                ) else "SideMax"
+            else:
+                role = "End"
+            roles.extend((role, role))
+        return WallViewportMesh(tuple(bottom + top), tuple(triangles), tuple(roles))
 
 
 def _clip_polygon(polygon, signed_distance, tolerance=1e-7):

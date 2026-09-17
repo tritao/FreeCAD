@@ -30,6 +30,7 @@ from unittest.mock import patch
 
 import Arch
 import ArchComponent
+import ArchPlanAnalytic
 import ArchRepresentation
 import ArchWallEndCondition
 import Draft
@@ -293,6 +294,39 @@ class TestArchWall(TestArchBase.TestArchBase):
         self.assertIsNotNone(representation.analytic_model)
         self.assertEqual(1, len(representation.cut_geometry))
         self.assertAlmostEqual(600000.0, representation.cut_geometry[0].Area)
+
+    def test_joined_wall_viewport_mesh_matches_exact_shape(self):
+        """Experimental joined-wall meshes match exact bounds and volume."""
+
+        support = Arch.makeWall(length=2000, width=200, height=1000)
+        trimmed = Arch.makeWall(length=1000, width=200, height=1000)
+        trimmed.Placement = App.Placement(
+            App.Vector(1000, 500, 0),
+            App.Rotation(App.Vector(1, 0, 0), App.Vector(0, 1, 0)),
+        )
+        self.document.recompute()
+        joint = Arch.makeWallJoint(support, trimmed, "Butt")
+        joint.ButtTrimmed = "WallB"
+        self.document.recompute()
+
+        for wall in (support, trimmed):
+            recipe = ArchPlanAnalytic.straight_wall_geometry_recipe(wall, wall.Proxy)
+            self.assertIsNotNone(recipe)
+            mesh = recipe.viewport_mesh()
+            self.assertIsNotNone(mesh)
+            self.assertTrue(mesh.is_closed)
+            bounds = wall.Shape.BoundBox
+            expected_bounds = (
+                bounds.XMin,
+                bounds.YMin,
+                bounds.ZMin,
+                bounds.XMax,
+                bounds.YMax,
+                bounds.ZMax,
+            )
+            for actual, expected in zip(mesh.bounds, expected_bounds):
+                self.assertAlmostEqual(actual, expected, delta=1e-5)
+            self.assertAlmostEqual(mesh.volume, wall.Shape.Volume, delta=1e-3)
 
     def test_wall_plan_provider_rejects_unsupported_purpose(self):
         """Unsupported view purposes should be explicit, not silent empty output."""
