@@ -208,8 +208,6 @@ class BIM_Views:
             mw.addDockWidget(QtCore.Qt.LeftDockWidgetArea, vm)
             placeInComboView(vm)
 
-            # restore saved settings
-            vm.navigator.setColumnWidth(0, PARAMS.GetInt("ViewManagerColumnWidth", 190))
             self.observer = _NavigatorObserver(self)
             FreeCAD.addDocumentObserver(self.observer)
             FreeCADGui.Selection.addObserver(self.observer)
@@ -273,7 +271,7 @@ class BIM_Views:
     def update(self, retrigger=True):
         """Refresh the navigator in response to document notifications."""
 
-        from bimviews.navigator_qt import BIMNavigatorQtModel
+        from bimviews.navigator_qt import BIMNavigatorQtModel, configure_navigator_columns
 
         self._updatePending = False
         vm = findWidget()
@@ -284,6 +282,7 @@ class BIM_Views:
         if not hasattr(vm, "navigatorModel"):
             vm.navigatorModel = BIMNavigatorQtModel(self.model, vm.navigator)
             vm.navigator.setModel(vm.navigatorModel)
+            configure_navigator_columns(vm.navigator)
             saved = PARAMS.GetString("BimNavigatorExpanded", "")
             expanded = set(saved.splitlines()) if saved else {
                 "section:project",
@@ -297,7 +296,6 @@ class BIM_Views:
             index = vm.navigatorModel.index_for_key(key)
             if index.isValid():
                 vm.navigator.setExpanded(index, True)
-        PARAMS.SetInt("ViewManagerColumnWidth", vm.navigator.columnWidth(0))
         PARAMS.SetBool("ViewManagerFloating", vm.isFloating())
         self.syncSelection()
 

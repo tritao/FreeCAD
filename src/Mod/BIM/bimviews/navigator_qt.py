@@ -9,6 +9,16 @@ import FreeCADGui
 from PySide import QtCore, QtGui
 
 
+def configure_navigator_columns(tree):
+    """Keep labels readable as the navigator dock changes width."""
+
+    header = tree.header()
+    header.setStretchLastSection(False)
+    header.setSectionResizeMode(0, QtGui.QHeaderView.Stretch)
+    header.setSectionResizeMode(1, QtGui.QHeaderView.ResizeToContents)
+    header.setSectionResizeMode(2, QtGui.QHeaderView.ResizeToContents)
+
+
 @dataclass
 class _Node:
     key: str
@@ -274,12 +284,12 @@ class BIMNavigatorQtModel(QtCore.QAbstractItemModel):
         obj = node.object
         if obj is None:
             return False
-        if node.kind == "saved-view":
-            return bool(getattr(obj, "BIMIsActiveView", False))
         try:
+            if node.kind == "saved-view":
+                return bool(getattr(obj, "BIMIsActiveView", False))
             view = FreeCADGui.activeDocument().activeView()
             return obj in (view.getActiveObject("NativeIFC"), view.getActiveObject("Arch"))
-        except (AttributeError, RuntimeError):
+        except (AttributeError, ReferenceError, RuntimeError):
             return False
 
     @staticmethod

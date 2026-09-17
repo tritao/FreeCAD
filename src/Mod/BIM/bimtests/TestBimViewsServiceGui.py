@@ -21,7 +21,7 @@ from bimtests.TestArchBaseGui import TestArchBaseGui
 from bimviews.grid_settings import get_grid_settings
 from bimviews.model import BIMViewManagerModel
 from bimviews.navigator_model import BIMNavigatorModel
-from bimviews.navigator_qt import BIMNavigatorQtModel
+from bimviews.navigator_qt import BIMNavigatorQtModel, configure_navigator_columns
 from bimviews.ruler_model import (
     RulerTransform,
     engineering_interval,
@@ -322,6 +322,17 @@ class TestBimViewsServiceGui(TestArchBaseGui):
             ("Project", "Views", "CurrentView", "Sheets"),
             tuple(section.key for section in sections),
         )
+
+    def test_navigator_columns_keep_element_labels_in_available_space(self):
+        tree = QtGui.QTreeView()
+        tree.setModel(QtGui.QStandardItemModel(0, 3, tree))
+        configure_navigator_columns(tree)
+        header = tree.header()
+
+        self.assertFalse(header.stretchLastSection())
+        self.assertEqual(QtGui.QHeaderView.Stretch, header.sectionResizeMode(0))
+        self.assertEqual(QtGui.QHeaderView.ResizeToContents, header.sectionResizeMode(1))
+        self.assertEqual(QtGui.QHeaderView.ResizeToContents, header.sectionResizeMode(2))
 
     def test_navigator_builds_project_context_without_qt_items(self):
         building = self.document.addObject("App::Part", "Building")
