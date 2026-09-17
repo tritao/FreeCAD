@@ -49,6 +49,7 @@ SET(Arch_SRCS
     ArchCovering.py
     ArchCoveringGui.py
     ArchSectionPlane.py
+    ArchSectionProjection.py
     ArchWindow.py
     ArchWindowPresets.py
     ArchAxis.py

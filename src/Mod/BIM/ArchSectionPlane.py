@@ -148,122 +148,18 @@ def getCutShapes(
     obtained from performing a series of booleans against the given cut plane
     """
 
-    import Part
-    import DraftGeomUtils
+    import ArchSectionProjection
 
-    shapes = []
-    hshapes = []
-    sshapes = []
-    objectShapes = []
-    objectSshapes = []
-
-    if joinArch:
-        shtypes = {}
-        for o in objs:
-            if Draft.getType(o) in ["Wall", "Structure"]:
-                if o.Shape.isNull():
-                    pass
-                elif onlySolids:
-                    shtypes.setdefault(
-                        o.Material.Name if (hasattr(o, "Material") and o.Material) else "None", []
-                    ).extend(o.Shape.Solids)
-                else:
-                    shtypes.setdefault(
-                        o.Material.Name if (hasattr(o, "Material") and o.Material) else "None", []
-                    ).append(o.Shape.copy())
-            elif hasattr(o, "Shape"):
-                if o.Shape.isNull():
-                    pass
-                elif onlySolids:
-                    shapes.extend(o.Shape.Solids)
-                    objectShapes.append((o, o.Shape.Solids))
-                else:
-                    shapes.append(o.Shape.copy())
-                    objectShapes.append((o, [o.Shape.copy()]))
-        for k, v in shtypes.items():
-            v1 = v.pop()
-            if v:
-                v1 = v1.multiFuse(v)
-                v1 = v1.removeSplitter()
-            if v1.Solids:
-                shapes.extend(v1.Solids)
-                objectShapes.append((k, v1.Solids))
-            else:
-                print("ArchSectionPlane: Fusing BIM objects produced non-solid results")
-                shapes.append(v1)
-                objectShapes.append((k, [v1]))
-    else:
-        for o in objs:
-            if hasattr(o, "Shape"):
-                if o.Shape.isNull():
-                    pass
-                elif onlySolids:
-                    if o.Shape.isValid():
-                        shapes.extend(o.Shape.Solids)
-                        objectShapes.append((o, o.Shape.Solids))
-                else:
-                    shapes.append(o.Shape)
-                    objectShapes.append((o, [o.Shape]))
-
-    cutface, cutvolume, invcutvolume = ArchCommands.getCutVolume(cutplane, shapes, clip)
-    shapes = []
-    for o, shapeList in objectShapes:
-        tmpSshapes = []
-
-        # For multi-material objects, track section faces per layer so each
-        # layer can be rendered with its own fill color.
-        layer_materials = None
-        if (
-            groupSshapesByObject
-            and not isinstance(o, str)
-            and hasattr(o, "Material")
-            and o.Material
-            and hasattr(o.Material, "Materials")
-            and o.Material.Materials
-            and hasattr(o.Material, "Thicknesses")
-        ):
-            activematerials = [
-                o.Material.Materials[i]
-                for i in range(len(o.Material.Materials))
-                if o.Material.Thicknesses[i] >= 0
-            ]
-            if len(activematerials) == len(shapeList):
-                layer_materials = activematerials
-
-        per_layer_sshapes = [[] for _ in shapeList] if layer_materials else None
-
-        for sh_idx, sh in enumerate(shapeList):
-            for sub in (sh.SubShapes if sh.ShapeType == "Compound" else [sh]):
-                if cutvolume:
-                    if sub.Volume < 0:
-                        sub = sub.reversed()  # Use reversed as sub is immutable.
-                    c = sub.cut(cutvolume)
-                    s = sub.common(cutface)
-                    tmpSshapes.extend(s.Faces)
-                    if per_layer_sshapes is not None:
-                        per_layer_sshapes[sh_idx].extend(s.Faces)
-                    shapes.extend(c.SubShapes if c.ShapeType == "Compound" else [c])
-                    if showHidden:
-                        c = sub.cut(invcutvolume)
-                        hshapes.extend(c.SubShapes if c.ShapeType == "Compound" else [c])
-                else:
-                    shapes.append(sub)
-
-        if len(tmpSshapes) > 0:
-            sshapes.extend(tmpSshapes)
-
-            if groupSshapesByObject:
-                if per_layer_sshapes and layer_materials:
-                    for mat, layer_faces in zip(layer_materials, per_layer_sshapes):
-                        if layer_faces:
-                            objectSshapes.append((mat, layer_faces))
-                else:
-                    objectSshapes.append((o, tmpSshapes))
-
-    if groupSshapesByObject:
-        return shapes, hshapes, sshapes, cutface, cutvolume, invcutvolume, objectSshapes
-    else:
-        return shapes, hshapes, sshapes, cutface, cutvolume, invcutvolume
+    result = ArchSectionProjection.project_shapes(
+        objs,
+        cutplane,
+        only_solids=onlySolids,
+        clip=clip,
+        join_arch=joinArch,
+        include_hidden=showHidden,
+        group_cut_shapes_by_object=groupSshapesByObject,
+    )
+    return result.legacy_tuple(groupSshapesByObject)
 
 
 def getFillForObject(o, defaultFill, source):
