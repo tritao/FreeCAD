@@ -29,6 +29,7 @@ import TechDrawBIM
 import Draft
 import os
 import FreeCAD as App
+import Part
 from bimtests import TestArchBase
 
 
@@ -78,6 +79,58 @@ class TestArchSectionPlane(TestArchBase.TestArchBase):
             elevation.purpose,
             ArchRepresentation.RepresentationPurpose.ELEVATION,
         )
+
+    def testProjectionGeometryCharacterizesCutAndForwardShapes(self):
+        """Neutral projection preserves the established section split."""
+
+        box = self._makeBox(length=1000, width=1000, height=1000)
+        cutplane = Part.makePlane(
+            2000,
+            2000,
+            App.Vector(500, -500, -500),
+            App.Vector(1, 0, 0),
+        )
+
+        result = ArchSectionPlane.getCutShapes(
+            (box,),
+            cutplane,
+            True,
+            clip=False,
+            joinArch=False,
+            showHidden=True,
+        )
+
+        visible, hidden, cut, _face, _front, _behind = result
+        self.assertTrue(visible)
+        self.assertTrue(hidden)
+        self.assertEqual(1, len(cut))
+        self.assertAlmostEqual(1000000.0, cut[0].Area)
+
+    def testProjectionGeometryRetainsPerObjectCutSources(self):
+        """Grouped section faces retain their originating document object."""
+
+        box = self._makeBox(length=1000, width=1000, height=1000)
+        cutplane = Part.makePlane(
+            2000,
+            2000,
+            App.Vector(500, -500, -500),
+            App.Vector(1, 0, 0),
+        )
+
+        result = ArchSectionPlane.getCutShapes(
+            (box,),
+            cutplane,
+            True,
+            clip=False,
+            joinArch=False,
+            showHidden=False,
+            groupSshapesByObject=True,
+        )
+
+        object_cut_shapes = result[-1]
+        self.assertEqual(1, len(object_cut_shapes))
+        self.assertIs(box, object_cut_shapes[0][0])
+        self.assertEqual(1, len(object_cut_shapes[0][1]))
 
     def testTechDrawUsesSemanticRepresentationWithoutLegacyCutShapes(self):
         """The production section path consumes provider geometry directly."""
