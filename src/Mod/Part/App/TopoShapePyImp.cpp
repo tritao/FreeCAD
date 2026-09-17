@@ -810,19 +810,40 @@ PyObject* TopoShapePy::section(PyObject* args) const
     return makeShape(Part::OpCodes::Section, *getTopoShapePtr(), args);
 }
 
-PyObject* TopoShapePy::slice(PyObject* args) const
+PyObject* TopoShapePy::slice(PyObject* args, PyObject* keywds) const
 {
     PyObject* dir;
     double d;
-    if (!PyArg_ParseTuple(args, "O!d", &(Base::VectorPy::Type), &dir, &d)) {
+    PyObject* noElementMap = Py_False;
+    static const std::array<const char*, 4> kwd_list {
+        "direction",
+        "distance",
+        "noElementMap",
+        nullptr
+    };
+    if (!Base::Wrapped_ParseTupleAndKeywords(
+            args,
+            keywds,
+            "O!d|$O!",
+            kwd_list,
+            &(Base::VectorPy::Type),
+            &dir,
+            &d,
+            &PyBool_Type,
+            &noElementMap
+        )) {
         return nullptr;
     }
 
     Base::Vector3d vec = Py::Vector(dir, false).toVector();
+    auto elementMapPolicy = Base::asBoolean(noElementMap) ? ElementMapPolicy::Drop
+                                                          : ElementMapPolicy::Propagate;
 
     try {
         Py::List wires;
-        for (auto& w : getTopoShapePtr()->makeElementSlice(vec, d).getSubTopoShapes(TopAbs_WIRE)) {
+        for (auto& w : getTopoShapePtr()
+                          ->makeElementSlice(vec, d, nullptr, elementMapPolicy)
+                          .getSubTopoShapes(TopAbs_WIRE)) {
             wires.append(shape2pyshape(w));
         }
         return Py::new_reference_to(wires);
@@ -838,14 +859,33 @@ PyObject* TopoShapePy::slice(PyObject* args) const
     }
 }
 
-PyObject* TopoShapePy::slices(PyObject* args) const
+PyObject* TopoShapePy::slices(PyObject* args, PyObject* keywds) const
 {
     PyObject *dir, *dist;
-    if (!PyArg_ParseTuple(args, "O!O", &(Base::VectorPy::Type), &dir, &dist)) {
+    PyObject* noElementMap = Py_False;
+    static const std::array<const char*, 4> kwd_list {
+        "direction",
+        "distancesList",
+        "noElementMap",
+        nullptr
+    };
+    if (!Base::Wrapped_ParseTupleAndKeywords(
+            args,
+            keywds,
+            "O!O|$O!",
+            kwd_list,
+            &(Base::VectorPy::Type),
+            &dir,
+            &dist,
+            &PyBool_Type,
+            &noElementMap
+        )) {
         return nullptr;
     }
 
     try {
+        auto elementMapPolicy = Base::asBoolean(noElementMap) ? ElementMapPolicy::Drop
+                                                              : ElementMapPolicy::Propagate;
         Base::Vector3d vec = Py::Vector(dir, false).toVector();
         Py::Sequence list(dist);
         std::vector<double> d;
@@ -853,7 +893,9 @@ PyObject* TopoShapePy::slices(PyObject* args) const
         for (Py::Sequence::iterator it = list.begin(); it != list.end(); ++it) {
             d.push_back((double)Py::Float(*it));
         }
-        return Py::new_reference_to(shape2pyshape(getTopoShapePtr()->makeElementSlices(vec, d)));
+        return Py::new_reference_to(
+            shape2pyshape(getTopoShapePtr()->makeElementSlices(vec, d, nullptr, elementMapPolicy))
+        );
     }
     catch (Standard_Failure& e) {
         PyErr_SetString(PartExceptionOCCError, e.GetMessageString());

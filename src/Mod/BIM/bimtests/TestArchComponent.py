@@ -56,9 +56,13 @@ class TestArchComponent(TestArchBase.TestArchBase):
         """Generic footprint slicing should return closed planar cut faces."""
 
         box = Part.makeBox(100, 80, 60)
+        box.ElementMap = {"Solid": "Solid"}
+        self.assertGreater(box.ElementMapSize, 0)
+
         faces = ArchComponent.get_horizontal_slice_faces(box, 30)
 
         self.assertEqual(len(faces), 1)
+        self.assertEqual(faces[0].ElementMapSize, 0)
         self.assertAlmostEqual(faces[0].Area, 8000.0, places=6)
         self.assertAlmostEqual(faces[0].CenterOfMass.z, 30.0, places=6)
 

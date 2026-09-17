@@ -334,18 +334,36 @@ class TopoShape(ComplexGeoData):
         ...
 
     @constmethod
-    def slices(self, direction: Vector, distancesList: List[float], /) -> List:
+    def slices(
+        self,
+        direction: Vector,
+        distancesList: List[float],
+        /,
+        *,
+        noElementMap: bool = False,
+    ) -> List:
         """
         Make slices of this shape.
-        slices(direction, distancesList) --> Wires
+        slices(direction, distancesList, noElementMap=False) --> Wires
+        Set noElementMap=True for transient analysis geometry where stable
+        element naming is not needed.
         """
         ...
 
     @constmethod
-    def slice(self, direction: Vector, distance: float, /) -> List:
+    def slice(
+        self,
+        direction: Vector,
+        distance: float,
+        /,
+        *,
+        noElementMap: bool = False,
+    ) -> List:
         """
         Make single slice of this shape.
-        slice(direction, distance) --> Wires
+        slice(direction, distance, noElementMap=False) --> Wires
+        Set noElementMap=True for transient analysis geometry where stable
+        element naming is not needed.
         """
         ...
 

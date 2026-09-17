@@ -106,10 +106,13 @@ def get_horizontal_slice_edges(shape, cut_z):
         return []
 
     try:
-        wires = shape.slice(FreeCAD.Vector(0, 0, 1), cut_z)
+        wires = shape.slice(FreeCAD.Vector(0, 0, 1), cut_z, noElementMap=True)
     except TypeError:
+        transient_shape = _copy_without_element_map(shape)
+        if not transient_shape or transient_shape.isNull():
+            return []
         try:
-            wires = shape.slice(FreeCAD.Vector(0, 0, 1), cut_z, 0.0)
+            wires = transient_shape.slice(FreeCAD.Vector(0, 0, 1), cut_z, 0.0)
         except Exception:
             return []
     except Exception:

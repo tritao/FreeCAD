@@ -602,17 +602,26 @@ class TopoShapeTest(unittest.TestCase, TopoShapeAssertions):
     def testTopoShapeSlice(self):
         # Act
         slice = self.doc.Box1.Shape.slice(App.Vector(10, 10, 0), 1)
+        transient_slice = self.doc.Box1.Shape.slice(
+            App.Vector(10, 10, 0), 1, noElementMap=True
+        )
         self.doc.recompute()
         # Assert elementMap
         self.assertEqual(len(slice), 1)
+        self.assertEqual(len(transient_slice), 1)
+        self.assertEqual(transient_slice[0].ElementMapSize, 0)
         if slice[0].ElementMapVersion != "":  # Should be '4' as of Mar 2023.
             self.assertEqual(slice[0].ElementMapSize, 8)
 
     def testTopoShapeSlices(self):
         # Act
         slices = self.doc.Box1.Shape.Faces[0].slices(App.Vector(10, 10, 0), [1, 2])
+        transient_slices = self.doc.Box1.Shape.Faces[0].slices(
+            App.Vector(10, 10, 0), [1, 2], noElementMap=True
+        )
         self.doc.recompute()
         # Assert elementMap
+        self.assertEqual(transient_slices.ElementMapSize, 0)
         if slices.ElementMapVersion != "":  # Should be '4' as of Mar 2023.
             self.assertEqual(slices.ElementMapSize, 6)
 
