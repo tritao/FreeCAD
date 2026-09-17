@@ -8,6 +8,7 @@ from unittest.mock import patch
 import ArchRepresentation
 import FreeCAD
 import FreeCADGui
+import Part
 from pivy import coin
 from bimtests.TestArchBaseGui import TestArchBaseGui
 from bimplan.runtime.session import PlanEditSession
@@ -151,6 +152,13 @@ class TestBimPlanEditExamplesGui(TestArchBaseGui):
         self.assertTrue(
             all(wall in session.contextual_rendering.renderer.sources for wall in walls)
         )
+        self.assertTrue(
+            all(
+                session.contextual_rendering.renderer._representations[wall].analytic_model
+                is not None
+                for wall in walls
+            )
+        )
         self.assertGreater(session.contextual_rendering.renderer.root.getNumChildren(), 0)
 
     def test_basic_example_reuses_saved_plan_until_model_changes(self):
@@ -287,6 +295,44 @@ class TestBimPlanEditExamplesGui(TestArchBaseGui):
             screen_point = session.view.getPointOnScreen(pick_point)
             mappings.append(session.contextual_rendering.pick_mapping(screen_point))
         self.assertIn(wall, {mapping.source for mapping in mappings if mapping is not None})
+
+    def test_basic_example_analytic_wall_plans_match_brep_sections(self):
+        """Analytic joins and opening intervals preserve the legacy Plan result."""
+
+        document = self._open_example("BIMPlanEditBasic.FCStd")
+        plan_view = next(
+            obj
+            for obj in document.Objects
+            if obj.isDerivedFrom("App::ViewDefinition") and obj.Purpose == "Plan"
+        )
+        from bimplan.representation_request import representation_request_from_storey
+        from bimviews.service import BIMViewService
+
+        service = BIMViewService(document)
+        request = representation_request_from_storey(service.context_source(plan_view))
+        for wall in self._objects_with_ifc_type(document, "Wall"):
+            representation = wall.Proxy.getRepresentation(wall, request)
+            self.assertIsNotNone(representation.analytic_model, wall.Name)
+            analytic_faces = tuple(representation.cut_geometry)
+            brep_faces = tuple(wall.Proxy._getCutRepresentation(wall, request))
+            self.assertAlmostEqual(
+                sum(face.Area for face in brep_faces),
+                sum(face.Area for face in analytic_faces),
+                delta=1e-3,
+                msg=wall.Name,
+            )
+            analytic_bounds = Part.makeCompound(analytic_faces).BoundBox
+            brep_bounds = Part.makeCompound(brep_faces).BoundBox
+            for analytic_value, brep_value in zip(
+                (
+                    analytic_bounds.XMin,
+                    analytic_bounds.XMax,
+                    analytic_bounds.YMin,
+                    analytic_bounds.YMax,
+                ),
+                (brep_bounds.XMin, brep_bounds.XMax, brep_bounds.YMin, brep_bounds.YMax),
+            ):
+                self.assertAlmostEqual(brep_value, analytic_value, delta=1e-4, msg=wall.Name)
 
     def test_basic_example_wall_edit_roundtrips(self):
         document = self._open_example("BIMPlanEditBasic.FCStd")
