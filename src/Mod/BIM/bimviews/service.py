@@ -5,11 +5,40 @@
 from dataclasses import dataclass
 
 import ArchRepresentation
+import FreeCAD
 
 
 _SUPPORTED_PURPOSES = {
     purpose.value.casefold(): purpose for purpose in ArchRepresentation.RepresentationPurpose
 }
+
+_PLANAR_PURPOSES = frozenset(
+    (
+        ArchRepresentation.RepresentationPurpose.PLAN,
+        ArchRepresentation.RepresentationPurpose.SECTION,
+        ArchRepresentation.RepresentationPurpose.ELEVATION,
+    )
+)
+_PLAN_SNAP_MODES = frozenset(
+    (
+        "Lock",
+        "Near",
+        "Extension",
+        "Grid",
+        "Endpoint",
+        "Midpoint",
+        "Perpendicular",
+        "Ortho",
+        "Intersection",
+        "WorkingPlane",
+    )
+)
+_SECTION_SNAP_MODES = frozenset(
+    ("Lock", "Near", "Endpoint", "Midpoint", "Intersection", "Ortho", "Grid")
+)
+_GRID_PREFERENCES = "User parameter:BaseApp/Preferences/Mod/BIM/PlanEdit"
+_DEFAULT_GRID_SPACING = 100.0
+_DEFAULT_GRID_MAJOR_EVERY = 10
 
 
 @dataclass(frozen=True)
@@ -54,7 +83,7 @@ class BIMViewService:
         except KeyError as exc:
             raise ValueError("Unsupported BIM view purpose: {}".format(purpose)) from exc
 
-    def create_view(self, label, purpose="Model", source=None, capture=True):
+    def create_view(self, label, purpose="Model", source=None, capture=True, view=None):
         purpose = self.normalize_purpose(purpose)
         definition = self.document.addObject("App::ViewDefinition", "BIMView")
         definition.Label = label
@@ -64,24 +93,26 @@ class BIMViewService:
         if source is not None and hasattr(source, "Placement"):
             definition.ReferenceFrame = source.Placement
         if capture:
-            self.capture(definition)
+            self.capture(definition, view=view)
         return definition
 
-    def create_plan_view(self, label, source=None):
+    def create_plan_view(self, label, source=None, view=None):
         """Create and open an orthographic PLAN view for a project context."""
 
-        definition = self.create_view(label, "Plan", source, capture=False)
+        definition = self.create_view(label, "Plan", source, capture=False, view=view)
         request = self.request_for(definition)
         if self._representation_applier is not None:
             self._representation_applier(request)
-        self._orient_plan_view(request)
-        self.capture(definition)
+        self._orient_plan_view(request, view=view)
+        self.capture(definition, view=view)
         self._mark_active(definition)
+        self.configure_snap_context(definition, view=view)
         return definition
 
-    def create_model_view(self, label="Default 3D", source=None):
-        definition = self.create_view(label, "Model", source, capture=True)
+    def create_model_view(self, label="Default 3D", source=None, view=None):
+        definition = self.create_view(label, "Model", source, capture=True, view=view)
         self._mark_active(definition)
+        self.configure_snap_context(definition, view=view)
         return definition
 
     def duplicate_view(self, definition, label=None):
@@ -146,13 +177,13 @@ class BIMViewService:
             drawing_view.Scale = page.Scale
         return drawing_view
 
-    def capture(self, definition):
+    def capture(self, definition, view=None):
         if not self.is_view_definition(definition):
             raise TypeError("definition must be an App::ViewDefinition")
-        view = self._view()
-        if view is None or not hasattr(view, "captureViewDefinition"):
+        target_view = self._view(view)
+        if target_view is None or not hasattr(target_view, "captureViewDefinition"):
             raise RuntimeError("An active 3D view is required to capture a BIM view")
-        return bool(view.captureViewDefinition(definition))
+        return bool(target_view.captureViewDefinition(definition))
 
     def context_source(self, definition):
         return getattr(definition, self.CONTEXT_SOURCE_PROPERTY, None)
@@ -193,19 +224,91 @@ class BIMViewService:
     def activate_storey(self, storey):
         self.active_storey = storey
 
-    def activate_view(self, definition):
+    def activate_view(self, definition, view=None):
         context = self.context_for(definition)
         if self._representation_applier is not None:
             self._representation_applier(context.request)
-        view = self._view()
-        if view is None or not hasattr(view, "applyViewDefinition"):
+        target_view = self._view(view)
+        if target_view is None or not hasattr(target_view, "applyViewDefinition"):
             raise RuntimeError("An active 3D view is required to activate a BIM view")
-        applied = bool(view.applyViewDefinition(definition))
+        applied = bool(target_view.applyViewDefinition(definition))
         if applied:
+            self.configure_snap_context(definition, view=target_view)
             self._mark_active(definition)
             if context.source is not None:
                 self.active_storey = context.source
         return applied
+
+    def configure_snap_context(self, definition=None, view=None, semantic_providers=None):
+        """Apply one saved view's snapping inputs to its originating viewport.
+
+        MODEL views inherit the user's Draft snap modes and working plane.  A
+        PLAN, SECTION or ELEVATION view gets a local planar working plane and
+        a reference-frame grid.  Semantic providers are optional because live
+        editing sessions own their provider lifecycle; callers with a saved
+        representation query can supply them explicitly.
+        """
+
+        definition = definition or self.active_view
+        if definition is None:
+            return None
+        target_view = self._view(view)
+        if target_view is None:
+            return None
+        try:
+            import FreeCADGui
+
+            snapper = getattr(FreeCADGui, "Snapper", None)
+            configure = getattr(snapper, "configure_view", None)
+        except (ImportError, AttributeError, RuntimeError):
+            return None
+        if not callable(configure):
+            return None
+
+        request = self.request_for(definition)
+        purpose = self.normalize_purpose(definition.Purpose)
+        plane = self._snap_plane_for(request) if purpose in _PLANAR_PURPOSES else None
+        grid = self._snap_grid_for(plane) if plane is not None else None
+        if purpose == ArchRepresentation.RepresentationPurpose.PLAN:
+            modes = _PLAN_SNAP_MODES
+        elif purpose in (
+            ArchRepresentation.RepresentationPurpose.SECTION,
+            ArchRepresentation.RepresentationPurpose.ELEVATION,
+        ):
+            modes = _SECTION_SNAP_MODES
+        else:
+            modes = None
+        kwargs = {
+            "modes": modes,
+            "interaction_plane": plane,
+            "grid_provider": grid,
+        }
+        if semantic_providers is not None:
+            kwargs["semantic_providers"] = semantic_providers
+        try:
+            return configure(target_view, **kwargs)
+        except (AttributeError, ReferenceError, RuntimeError, TypeError, ValueError):
+            return None
+
+    def clear_snap_context(self, view=None):
+        """Release the Snapper context associated with a closed viewport."""
+
+        target_view = self._view(view)
+        if target_view is None:
+            return None
+        try:
+            import FreeCADGui
+
+            snapper = getattr(FreeCADGui, "Snapper", None)
+            remove = getattr(snapper, "remove_context", None)
+        except (ImportError, AttributeError, RuntimeError):
+            return None
+        if not callable(remove):
+            return None
+        try:
+            return remove(target_view)
+        except (AttributeError, ReferenceError, RuntimeError, TypeError):
+            return None
 
     def restore_active_view(self):
         definition = self._persisted_active_view()
@@ -244,21 +347,21 @@ class BIMViewService:
             obj.BIMIsActiveView = obj is definition
         self.active_view = definition
 
-    def _orient_plan_view(self, request):
-        view = self._view()
-        if view is None:
+    def _orient_plan_view(self, request, view=None):
+        target_view = self._view(view)
+        if target_view is None:
             raise RuntimeError("An active 3D view is required to create a floor plan")
         frame = getattr(request, "reference_frame", None)
         if frame is None:
             source = getattr(request, "source", None)
             frame = getattr(source, "Placement", None)
         try:
-            view.setCameraType("Orthographic")
+            target_view.setCameraType("Orthographic")
         except (AttributeError, RuntimeError):
             pass
         if frame is None:
             try:
-                view.viewTop()
+                target_view.viewTop()
             except (AttributeError, RuntimeError):
                 pass
         else:
@@ -268,15 +371,58 @@ class BIMViewService:
                 vx = frame.Rotation.multVec(FreeCAD.Vector(1, 0, 0))
                 vy = frame.Rotation.multVec(FreeCAD.Vector(0, 1, 0))
                 vz = frame.Rotation.multVec(FreeCAD.Vector(0, 0, 1))
-                view.setCameraOrientation(FreeCAD.Rotation(vx, vy, vz, "ZXY").Q)
+                target_view.setCameraOrientation(FreeCAD.Rotation(vx, vy, vz, "ZXY").Q)
             except (AttributeError, RuntimeError):
                 pass
         try:
-            view.fitAll()
+            target_view.fitAll()
         except (AttributeError, RuntimeError):
             pass
 
-    def _view(self):
+    def _snap_plane_for(self, request):
+        frame = getattr(request, "reference_frame", None)
+        if frame is None:
+            return None
+        try:
+            import WorkingPlane
+
+            plane = WorkingPlane.PlaneBase()
+            plane.align_to_placement(frame)
+            return plane
+        except (AttributeError, ImportError, RuntimeError, TypeError, ValueError):
+            return None
+
+    @staticmethod
+    def _snap_grid_for(plane):
+        if plane is None:
+            return None
+        try:
+            from draftutils.grid import GridLattice
+
+            preferences = FreeCAD.ParamGet(_GRID_PREFERENCES)
+            raw_spacing = preferences.GetString("GridSpacing", "100 mm")
+            try:
+                spacing = FreeCAD.Units.Quantity(raw_spacing).Value
+            except (TypeError, ValueError):
+                spacing = _DEFAULT_GRID_SPACING
+            if spacing <= 0:
+                spacing = _DEFAULT_GRID_SPACING
+            major_every = preferences.GetInt("GridMainlines", _DEFAULT_GRID_MAJOR_EVERY)
+            if major_every <= 0:
+                major_every = _DEFAULT_GRID_MAJOR_EVERY
+            return GridLattice(
+                plane.position,
+                plane.u,
+                plane.v,
+                spacing=spacing,
+                major_every=major_every,
+            )
+        except (AttributeError, ImportError, RuntimeError, TypeError, ValueError):
+            return None
+
+    def _view(self, view=None):
+        if view is not None:
+            return view
         if self.view is not None:
             return self.view
         try:

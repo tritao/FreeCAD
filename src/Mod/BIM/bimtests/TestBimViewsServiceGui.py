@@ -3,6 +3,7 @@
 """GUI-facing tests for the BIM Navigator service seam."""
 
 from types import SimpleNamespace
+from unittest.mock import patch
 
 import ArchRepresentation
 import FreeCAD
@@ -345,6 +346,52 @@ class TestBimViewsServiceGui(TestArchBaseGui):
         self.assertEqual("Plan", definition.Purpose)
         self.assertIs(storey, definition.BIMContextSource)
         self.assertTrue(definition.BIMIsActiveView)
+
+    def test_saved_view_activation_configures_originating_snap_context(self):
+        """Saved PLAN and MODEL views keep independent Snapper inputs."""
+
+        calls = []
+        snapper = SimpleNamespace(
+            configure_view=lambda view, **kwargs: calls.append((view, kwargs)),
+            remove_context=lambda view: calls.append((view, "removed")),
+        )
+        storey = self.document.addObject("App::FeaturePython", "SnapStorey")
+        storey.addProperty("App::PropertyPlacement", "Placement")
+        storey.Placement.Base = FreeCAD.Vector(1000, 2000, 3000)
+        view = _RecordingView([])
+        service = BIMViewService(self.document, view=view)
+        plan = service.create_view("Snap Plan", "Plan", storey, capture=False)
+        section = service.create_view("Snap Section", "Section", storey, capture=False)
+        model = service.create_view("Snap Model", "Model", capture=False)
+
+        with patch.object(FreeCADGui, "Snapper", snapper, create=True):
+            self.assertTrue(service.activate_view(plan))
+            plan_view, plan_kwargs = calls[-1]
+            self.assertIs(view, plan_view)
+            self.assertIn("Grid", plan_kwargs["modes"])
+            self.assertIsNotNone(plan_kwargs["interaction_plane"])
+            self.assertIsNotNone(plan_kwargs["grid_provider"])
+            self.assertEqual(
+                FreeCAD.Vector(1000, 2000, 3000),
+                plan_kwargs["grid_provider"].nearest_node(FreeCAD.Vector(1049, 2049, 3000)),
+            )
+
+            self.assertTrue(service.activate_view(section))
+            section_view, section_kwargs = calls[-1]
+            self.assertIs(view, section_view)
+            self.assertIn("Midpoint", section_kwargs["modes"])
+            self.assertIsNotNone(section_kwargs["interaction_plane"])
+            self.assertIsNotNone(section_kwargs["grid_provider"])
+
+            self.assertTrue(service.activate_view(model))
+            model_view, model_kwargs = calls[-1]
+            self.assertIs(view, model_view)
+            self.assertIsNone(model_kwargs["modes"])
+            self.assertIsNone(model_kwargs["interaction_plane"])
+            self.assertIsNone(model_kwargs["grid_provider"])
+
+            service.clear_snap_context(view)
+            self.assertEqual((view, "removed"), calls[-1])
 
     def test_sourced_plan_view_can_be_linked_to_a_sheet(self):
         storey = self.document.addObject("App::FeaturePython", "SheetStorey")
