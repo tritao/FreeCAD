@@ -88,6 +88,7 @@ def arm_provider_point_tool(session):
             ),
             title=get_provider_point_tool_prompt(session),
             noTracker=True,
+            view=session.view,
         )
     except Exception:
         session.snap.set_point_focus_suppressed(False)

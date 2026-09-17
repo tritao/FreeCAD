@@ -93,7 +93,7 @@ class PolarArray(gui_base.GuiCommandBase):
         event = event_cb.getEvent()
         mousepos = event.getPosition().getValue()
         ctrl = event.wasCtrlDown()
-        self.point = Gui.Snapper.snap(mousepos, active=ctrl)
+        self.point = Gui.Snapper.snap(mousepos, active=ctrl, view=self.view)
         if self.ui:
             self.ui.display_point(self.point)
 

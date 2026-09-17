@@ -101,6 +101,57 @@ class DraftSnapper(test_base.DraftTestCaseDoc):
             snapper._snap_to_semantic_provider(App.Vector()).role,
         )
 
+    def test_snap_view_contexts_keep_modes_planes_grids_and_providers_isolated(self):
+        """Each originating viewport gets independent snapping inputs."""
+
+        snapper = gui_snapper.Snapper()
+        view_a = object()
+        view_b = object()
+        plane_a = SimpleNamespace(name="plan")
+        plane_b = SimpleNamespace(name="section")
+        grid_a = SimpleNamespace(nearest_node=lambda point: App.Vector(100, 0, 0))
+        grid_b = SimpleNamespace(nearest_node=lambda point: App.Vector(200, 0, 0))
+        provider_a = lambda point, tolerance: SimpleNamespace(role="plan")
+        provider_b = lambda point, tolerance: SimpleNamespace(role="section")
+
+        context_a = snapper.configure_view(
+            view_a,
+            modes={"Lock", "Grid"},
+            interaction_plane=plane_a,
+            grid_provider=grid_a,
+            semantic_providers=(provider_a,),
+        )
+        context_b = snapper.configure_view(
+            view_b,
+            modes={"Lock", "Endpoint"},
+            interaction_plane=plane_b,
+            grid_provider=grid_b,
+            semantic_providers=(provider_b,),
+        )
+
+        self.assertIsNot(context_a, context_b)
+        self.assertIs(plane_a, context_a.interaction_plane)
+        self.assertIs(plane_b, context_b.interaction_plane)
+        self.assertEqual([provider_a], context_a.semantic_providers)
+        self.assertEqual([provider_b], context_b.semantic_providers)
+
+        with patch.object(snapper, "setCursor"):
+            snapper._activate_context(view_a)
+            self.assertTrue(snapper.isEnabled("Grid"))
+            self.assertFalse(snapper.isEnabled("Endpoint"))
+            self.assertEqual(App.Vector(100, 0, 0), snapper.snapToGrid(App.Vector()))
+            self.assertIs(plane_a, snapper._get_wp())
+
+            snapper._activate_context(view_b)
+            self.assertFalse(snapper.isEnabled("Grid"))
+            self.assertTrue(snapper.isEnabled("Endpoint"))
+            self.assertEqual(App.Vector(), snapper.snapToGrid(App.Vector()))
+            self.assertIs(plane_b, snapper._get_wp())
+            self.assertEqual(
+                "section",
+                snapper._snap_to_semantic_provider(App.Vector()).role,
+            )
+
     class _FakeView:
         def __init__(self):
             self.click_callback = None

@@ -21,6 +21,7 @@ class _PlanContextualInputAdapter:
                 last=point, callback=callback, movecallback=move_callback,
                 title=title, noTracker=True,
                 interaction_plane=self.session.viewport.get_interaction_plane(),
+                view=self.session.view,
             )
         except Exception:
             self.clear()

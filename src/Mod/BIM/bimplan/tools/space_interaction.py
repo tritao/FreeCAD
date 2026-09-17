@@ -87,6 +87,7 @@ def _start_snap_tool(session, tool_name, callback, title, *, movecallback=None):
     kwargs = {
         "callback": callback,
         "title": title,
+        "view": session.view,
     }
     if movecallback is not None:
         kwargs["movecallback"] = movecallback
@@ -230,6 +231,7 @@ def _request_next_plan_region_point(session, last_point, *, title):
         last=last_point,
         title=title,
         mode="line",
+        view=session.view,
     )
 
 
@@ -474,6 +476,7 @@ def _request_space_separator_end_point(session, start):
         last=start,
         title=translate("BIM_PlanEdit", "Separator end point"),
         mode="line",
+        view=session.view,
     )
 
 
@@ -562,6 +565,7 @@ def start_space_text_position_pick(session):
         last=plan_space_boundaries.get_space_reference_point(session, space),
         title=translate("BIM_PlanEdit", "Pick space text position"),
         noTracker=True,
+        view=session.view,
     )
     session.viewport.queue_focus_plan_view()
     return True

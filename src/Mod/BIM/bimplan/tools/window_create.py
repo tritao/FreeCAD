@@ -393,6 +393,7 @@ def activate_opening_tool(session, opening_kind):
             creation_preview_state.opening_kind
         ),
         noTracker=True,
+        view=session.view,
     )
     session.viewport.queue_focus_plan_view()
     session.task_panels.refresh_task_panel_status()

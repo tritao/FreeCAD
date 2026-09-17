@@ -135,6 +135,8 @@ class DraftInteractionHost:
             kwargs["hints"] = hints
         if modifier_resolver is not None:
             kwargs["modifier_resolver"] = modifier_resolver
+        if self.view is not None:
+            kwargs["view"] = self.view
         interaction_plane = self.get_interaction_plane()
         if interaction_plane is not None:
             kwargs["interaction_plane"] = interaction_plane

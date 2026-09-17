@@ -78,6 +78,50 @@ class _HostedOpeningProxy:
 
 
 class TestBimPlanEditSessionGui(TestArchBaseGui):
+    def test_plan_snap_api_configures_only_the_session_view_context(self):
+        """Plan Edit's modes and plane stay local to its originating view."""
+
+        plane = SimpleNamespace(
+            position=FreeCAD.Vector(0, 0, 0),
+            u=FreeCAD.Vector(1, 0, 0),
+            v=FreeCAD.Vector(0, 1, 0),
+        )
+        context = SimpleNamespace(interaction_plane=None)
+        view = object()
+        session = SimpleNamespace(
+            view=view,
+            viewport=SimpleNamespace(get_interaction_plane=lambda: plane),
+        )
+
+        class _Snapper:
+            def context_for(self, candidate):
+                self.context_view = candidate
+                return context
+
+            def configure_view(self, candidate, **kwargs):
+                self.configured_view = candidate
+                context.interaction_plane = kwargs["interaction_plane"]
+
+            def push_snap_modes(self, modes, view=None):
+                self.pushed_modes = tuple(modes)
+                self.pushed_view = view
+
+            def pop_snap_modes(self, view=None):
+                self.popped_view = view
+
+        snapper = _Snapper()
+        with patch.object(FreeCADGui, "Snapper", snapper, create=True):
+            api = plan_snap.PlanSnapAPI(session, ("Lock", "Grid"))
+            api.apply_plan_snap_profile()
+            self.assertIs(view, snapper.context_view)
+            self.assertIs(view, snapper.configured_view)
+            self.assertIs(view, snapper.pushed_view)
+            self.assertIs(plane, context.interaction_plane)
+
+            api.restore_snap_profile()
+            self.assertIs(view, snapper.popped_view)
+            self.assertIsNone(context.interaction_plane)
+
     def test_plan_snap_api_installs_reference_frame_grid_and_restores_it(self):
         """Plan Edit owns a temporary lattice and leaves Draft's provider intact."""
 

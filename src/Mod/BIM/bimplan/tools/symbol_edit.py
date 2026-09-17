@@ -295,6 +295,7 @@ def start_symbol_handle_point_pick(session, symbol, handle_role):
                 last=start_point,
                 callback=session.symbols.finish_symbol_handle_point_pick,
                 movecallback=session.symbols.update_symbol_handle_point_pick,
+                view=session.view,
                 title=(
                     translate("BIM_PlanEdit", "Pick new symbol position")
                     if handle_role == "move"

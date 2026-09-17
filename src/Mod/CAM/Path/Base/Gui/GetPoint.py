@@ -145,7 +145,7 @@ class TaskPanel:
                 cntrl = event.wasCtrlDown()
                 shift = event.wasShiftDown()
                 self.pt = FreeCADGui.Snapper.snap(
-                    pos, lastpoint=start, active=cntrl, constrain=shift
+                    pos, lastpoint=start, active=cntrl, constrain=shift, view=self.view
                 )
                 plane = FreeCAD.DraftWorkingPlane
                 p = plane.getLocalCoords(self.pt)

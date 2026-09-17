@@ -56,6 +56,7 @@ from draftgeoutils import general as geo_general
 from draftgeoutils import geometry as geo_geometry
 from draftgeoutils import intersections as geo_intersections
 from draftguitools import gui_trackers as trackers
+from draftguitools.snap_context import SnapViewContext
 from draftutils import gui_utils
 from draftutils import params
 from draftutils import utils
@@ -68,6 +69,7 @@ __author__ = "Yorik van Havre"
 __url__ = "https://www.freecad.org"
 
 UNSNAPPABLES = ("Image::ImagePlane",)
+_UNSET = object()
 
 
 class Snapper:
@@ -139,6 +141,11 @@ class Snapper:
         self.snapObjectIndex = 0
         self.pointConstraintProvider = None
         self.semanticSnapProviders = []
+        self._contexts = {}
+        self._fallback_context = SnapViewContext()
+        self._current_context = None
+        self._point_plane_override_active = False
+        self._active_view = None
 
         # snap keys, it's important that they are in this order for
         # saving in preferences and for properly restoring the toolbar
@@ -162,6 +169,7 @@ class Snapper:
         # fmt: on
 
         self.init_active_snaps()
+        self._active_snaps_alias = self.active_snaps
         self._snap_mode_stack = []
         self.set_snap_style()
 
@@ -187,68 +195,259 @@ class Snapper:
         # is too slow for this function which gets called repeatedly when moving
         # the mouse
         # See: https://github.com/FreeCAD/FreeCAD/issues/24013
-        return getattr(self, "interaction_plane", None) or WorkingPlane.get_working_plane(
-            update=False
-        )
+        interaction_plane = getattr(self, "interaction_plane", None)
+        if interaction_plane is not None:
+            return interaction_plane
+        context = self._current_context
+        if context is not None and context.interaction_plane is not None:
+            return context.interaction_plane
+        return WorkingPlane.get_working_plane(update=False)
+
+    def context_for(self, view=None):
+        """Return the persistent snapping context for ``view``.
+
+        View wrappers are retained by the context itself, so using their
+        ``id`` as the registry key also works for bindings that are not
+        hashable. A single fallback context preserves the old no-view API.
+        """
+
+        if view is None:
+            view = gui_utils.get_3d_view()
+        if view is None:
+            return self._fallback_context
+        key = id(view)
+        context = self._contexts.get(key)
+        if context is not None and context.view is view:
+            return context
+        if context is not None:
+            try:
+                if context.view == view:
+                    return context
+            except Exception:
+                pass
+        for context in self._contexts.values():
+            try:
+                if context.view is view or context.view == view:
+                    return context
+            except Exception:
+                continue
+        context = SnapViewContext(view=view)
+        self._contexts[key] = context
+        return context
+
+    def current_context(self, view=None):
+        """Return the context used by the latest snap event."""
+
+        if view is not None:
+            return self._sync_context_aliases(self.context_for(view))
+        if self._current_context is not None:
+            return self._sync_context_aliases(self._current_context)
+        return self._sync_context_aliases(self.context_for())
+
+    def remove_context(self, view):
+        """Forget a closed viewport and its transient trackers."""
+
+        if view is None:
+            return None
+        context = self._contexts.pop(id(view), None)
+        if context is None:
+            for key, candidate in tuple(self._contexts.items()):
+                try:
+                    if candidate.view == view:
+                        context = self._contexts.pop(key)
+                        break
+                except Exception:
+                    continue
+        if context is not None:
+            self._snap_mode_stack = [
+                entry for entry in self._snap_mode_stack if entry[0] is not context
+            ]
+            self._interaction_grid_stack = [
+                entry for entry in self._interaction_grid_stack if entry[0] is not context
+            ]
+            # Keep the legacy parallel arrays in sync for callers that still
+            # inspect them directly.  The context owns the actual trackers.
+            for index, tracker in enumerate(
+                (
+                    context.trackers.grid,
+                    context.trackers.snap,
+                    context.trackers.extension,
+                    context.trackers.radius,
+                    context.trackers.dim1,
+                    context.trackers.dim2,
+                    context.trackers.track_line,
+                    context.trackers.extension2,
+                    context.trackers.hold,
+                ),
+                start=1,
+            ):
+                if tracker is None:
+                    continue
+                try:
+                    self.trackers[index].remove(tracker)
+                except (ValueError, IndexError):
+                    pass
+            try:
+                self.trackers[0].remove(context.view)
+            except (ValueError, IndexError):
+                pass
+        if context is self._current_context:
+            self._sync_context_aliases(self._fallback_context)
+        return context
+
+    def _effective_snap_modes(self, context):
+        if context is None or context.modes is None:
+            return self._global_active_snaps
+        return context.modes
+
+    def _sync_context_aliases(self, context):
+        """Update legacy fields to point at the active context."""
+
+        # ``active_snaps`` predates view-local contexts and is still assigned
+        # directly by a few integrations.  Notice a replacement of that
+        # legacy list before rebinding it to the context, preserving the old
+        # API while keeping context-local overrides isolated.
+        legacy_modes = getattr(self, "active_snaps", None)
+        legacy_alias = getattr(self, "_active_snaps_alias", None)
+        if legacy_modes is not None and legacy_modes is not legacy_alias:
+            requested = set(legacy_modes)
+            normalized = [snap for snap in self.snaps if snap in requested]
+            if self._current_context is not None and self._current_context.modes is not None:
+                self._current_context.modes = normalized
+            else:
+                self._global_active_snaps = normalized
+
+        self._current_context = context
+        self._active_view = context.view
+        self.activeview = context.view
+        self.active_snaps = self._effective_snap_modes(context)
+        self._active_snaps_alias = self.active_snaps
+        self.interaction_grid = context.grid_provider
+        self.semanticSnapProviders = context.semantic_providers
+        if not self._point_plane_override_active:
+            self.interaction_plane = context.interaction_plane
+        return context
+
+    def _activate_context(self, view=None):
+        return self._sync_context_aliases(self.context_for(view))
+
+    def configure_view(
+        self,
+        view=None,
+        *,
+        modes=_UNSET,
+        interaction_plane=_UNSET,
+        grid_provider=_UNSET,
+        semantic_providers=_UNSET,
+    ):
+        """Configure only the view-local inputs used by snapping."""
+
+        context = self.context_for(view)
+        if modes is not _UNSET:
+            if modes is None:
+                context.modes = None
+            else:
+                requested = set(modes)
+                context.modes = [snap for snap in self.snaps if snap in requested]
+        if interaction_plane is not _UNSET:
+            context.interaction_plane = interaction_plane
+        if grid_provider is not _UNSET:
+            context.grid_provider = grid_provider
+        if semantic_providers is not _UNSET:
+            context.semantic_providers = list(semantic_providers or ())
+        if context is self._current_context:
+            self._sync_context_aliases(context)
+        return context
 
     def init_active_snaps(self):
         """
         set self.active_snaps according to user prefs
         """
-        self.active_snaps = []
+        self._global_active_snaps = []
         snap_modes = params.get_param("snapModes")
         i = 0
         for snap in snap_modes:
             if bool(int(snap)):
-                self.active_snaps.append(self.snaps[i])
+                self._global_active_snaps.append(self.snaps[i])
             i += 1
+        self.active_snaps = self._global_active_snaps
 
-    def get_snap_modes(self):
+    def get_snap_modes(self, view=None):
         """Return the currently active snap names."""
+        if view is not None:
+            return list(self._effective_snap_modes(self.context_for(view)))
+        if self._current_context is not None:
+            return list(self._effective_snap_modes(self._current_context))
         return list(self.active_snaps)
 
-    def set_snap_modes(self, active_snaps):
+    def set_snap_modes(self, active_snaps, view=None):
         """Replace the current active snaps with the provided snap names."""
         requested = set(active_snaps)
         valid_snaps = [snap for snap in self.snaps if snap in requested]
-        self.active_snaps = valid_snaps
+        context = self.current_context(view)
+        context.modes = valid_snaps
+        if context is self._current_context:
+            self._sync_context_aliases(context)
         self.save_snap_state()
-        return list(self.active_snaps)
+        return list(valid_snaps)
 
-    def push_snap_modes(self, active_snaps):
+    def push_snap_modes(self, active_snaps, view=None):
         """Save current snap state and apply a temporary snap profile."""
-        self._snap_mode_stack.append(self.get_snap_modes())
+        context = self.current_context(view)
+        self._snap_mode_stack.append((context, context.modes))
         requested = set(active_snaps)
-        self.active_snaps = [snap for snap in self.snaps if snap in requested]
-        return self.get_snap_modes()
+        context.modes = [snap for snap in self.snaps if snap in requested]
+        if context is self._current_context:
+            self._sync_context_aliases(context)
+        return self.get_snap_modes(view=context.view)
 
-    def pop_snap_modes(self):
+    def pop_snap_modes(self, view=None):
         """Restore the most recently pushed temporary snap profile."""
         if not self._snap_mode_stack:
-            return self.get_snap_modes()
-        self.active_snaps = self._snap_mode_stack.pop()
-        return self.get_snap_modes()
+            return self.get_snap_modes(view=view)
+        context = self.context_for(view) if view is not None else self.current_context()
+        stack_index = len(self._snap_mode_stack) - 1
+        while stack_index >= 0 and self._snap_mode_stack[stack_index][0] is not context:
+            stack_index -= 1
+        if stack_index < 0:
+            return self.get_snap_modes(view=view)
+        context, previous = self._snap_mode_stack.pop(stack_index)
+        context.modes = previous
+        if context is self._current_context:
+            self._sync_context_aliases(context)
+        return self.get_snap_modes(view=context.view if view is not None else None)
 
-    def push_semantic_snap_provider(self, provider):
+    def push_semantic_snap_provider(self, provider, view=None):
         """Add a temporary renderer-independent snap source."""
 
         if callable(provider):
-            self.semanticSnapProviders.append(provider)
+            context = self.current_context(view)
+            context.semantic_providers.append(provider)
+            if context is self._current_context:
+                self._sync_context_aliases(context)
         return provider
 
-    def pop_semantic_snap_provider(self, provider=None):
+    def pop_semantic_snap_provider(self, provider=None, view=None):
         """Remove the newest provider, or a specific registered provider."""
 
-        if not self.semanticSnapProviders:
+        context = self.current_context(view)
+        providers = context.semantic_providers
+        if not providers:
             return None
         if provider is None:
-            return self.semanticSnapProviders.pop()
-        for index in range(len(self.semanticSnapProviders) - 1, -1, -1):
-            if self.semanticSnapProviders[index] is provider:
-                return self.semanticSnapProviders.pop(index)
+            removed = providers.pop()
+            if context is self._current_context:
+                self._sync_context_aliases(context)
+            return removed
+        for index in range(len(providers) - 1, -1, -1):
+            if providers[index] is provider:
+                removed = providers.pop(index)
+                if context is self._current_context:
+                    self._sync_context_aliases(context)
+                return removed
         return None
 
-    def push_interaction_grid(self, grid):
+    def push_interaction_grid(self, grid, view=None):
         """Install a temporary renderer-independent interaction grid.
 
         The normal ``grid`` tracker remains untouched.  This is intended for
@@ -258,11 +457,14 @@ class Snapper:
 
         if grid is None:
             return None
-        self._interaction_grid_stack.append(self.interaction_grid)
-        self.interaction_grid = grid
+        context = self.current_context(view)
+        self._interaction_grid_stack.append((context, context.grid_provider))
+        context.grid_provider = grid
+        if context is self._current_context:
+            self._sync_context_aliases(context)
         return grid
 
-    def pop_interaction_grid(self, grid=None):
+    def pop_interaction_grid(self, grid=None, view=None):
         """Restore the previous temporary interaction grid.
 
         Passing ``grid`` guards against an owner accidentally removing a
@@ -270,13 +472,25 @@ class Snapper:
         simply cleared to keep teardown idempotent.
         """
 
-        active = self.interaction_grid
+        context = self.current_context(view)
+        active = context.grid_provider
         if grid is not None and active is not grid:
             return None
         if self._interaction_grid_stack:
-            self.interaction_grid = self._interaction_grid_stack.pop()
+            stack_index = len(self._interaction_grid_stack) - 1
+            while (
+                stack_index >= 0
+                and self._interaction_grid_stack[stack_index][0] is not context
+            ):
+                stack_index -= 1
+            if stack_index < 0:
+                return None
+            stacked_context, previous = self._interaction_grid_stack.pop(stack_index)
+            context.grid_provider = previous
         else:
-            self.interaction_grid = None
+            context.grid_provider = None
+        if context is self._current_context:
+            self._sync_context_aliases(context)
         return active
 
     def set_snap_style(self):
@@ -327,11 +541,19 @@ class Snapper:
             self.radiusTracker.update(fpt)
         return fpt
 
-    def snap(self, screenpos, lastpoint=None, active=True, constrain=False, noTracker=False):
+    def snap(
+        self,
+        screenpos,
+        lastpoint=None,
+        active=True,
+        constrain=False,
+        noTracker=False,
+        view=None,
+    ):
         """Return a snapped point from the given (x, y) screen position.
 
         snap(screenpos,lastpoint=None,active=True,constrain=False,
-        noTracker=False): returns a snapped point from the given
+        noTracker=False,view=None): returns a snapped point from the given
         (x,y) screenpos (the position of the mouse cursor), active is to
         activate active point snapping or not (passive),
         lastpoint is an optional other point used to draw an
@@ -343,6 +565,9 @@ class Snapper:
         if self.running:
             # do not allow concurrent runs
             return None
+
+        view = view if view is not None else gui_utils.get_3d_view()
+        self._activate_context(view)
 
         self.running = True
 
@@ -366,10 +591,10 @@ class Snapper:
             return None
 
         # Setup trackers if needed
-        self.setTrackers()
+        self.setTrackers(view=view)
 
         # Get current snap radius
-        self.radius = self.getScreenDist(params.get_param("snapRange"), screenpos)
+        self.radius = self.getScreenDist(params.get_param("snapRange"), screenpos, view=view)
         if self.radiusTracker:
             self.radiusTracker.update(self.radius)
             self.radiusTracker.off()
@@ -392,7 +617,7 @@ class Snapper:
         if self.dim2:
             self.dim2.off()
 
-        point = self.getApparentPoint(screenpos[0], screenpos[1])
+        point = self.getApparentPoint(screenpos[0], screenpos[1], view=view)
 
         semantic_snap = self._snap_to_semantic_provider(point) if active else None
         if semantic_snap is not None:
@@ -431,8 +656,10 @@ class Snapper:
 
         # Check if we have an object under the cursor and try to
         # snap to it
-        _view = gui_utils.get_3d_view()
-        objectsUnderCursor = _view.getObjectsInfo((screenpos[0], screenpos[1]))
+        if view is None:
+            self.running = False
+            return point
+        objectsUnderCursor = view.getObjectsInfo((screenpos[0], screenpos[1]))
         if objectsUnderCursor:
             if self.snapObjectIndex >= len(objectsUnderCursor):
                 self.snapObjectIndex = 0
@@ -628,7 +855,6 @@ class Snapper:
         if winner_not_near is None or shortest_not_near == shortest_all:
             winner = winner_all
         else:
-            view = gui_utils.get_3d_view()
             # get screen points with pixel coordinates
             scr_win_not_near_pt = App.Vector(*view.getPointOnScreen(winner_not_near[0]), 0)
             scr_cursor_pt = App.Vector(*view.getPointOnScreen(cursor_pt), 0)
@@ -667,9 +893,11 @@ class Snapper:
             return self._get_wp().project_point(point)
         return point
 
-    def getApparentPoint(self, x, y):
+    def getApparentPoint(self, x, y, view=None):
         """Return a 3D point, projected on the current working plane."""
-        view = gui_utils.get_3d_view()
+        view = view if view is not None else self._active_view or gui_utils.get_3d_view()
+        if view is None:
+            return App.Vector()
         pt = view.getPoint(x, y)
         if self.mask != "z":
             if view.getCameraType() == "Perspective":
@@ -1295,9 +1523,11 @@ class Snapper:
 
         return snaps
 
-    def getScreenDist(self, dist, cursor):
+    def getScreenDist(self, dist, cursor, view=None):
         """Return a distance in 3D space from a screen pixels distance."""
-        view = gui_utils.get_3d_view()
+        view = view if view is not None else self._active_view or gui_utils.get_3d_view()
+        if view is None:
+            return 0.0
         p1 = view.getPoint(cursor)
         p2 = view.getPoint((cursor[0] + dist, cursor[1]))
         return (p2.sub(p1)).Length
@@ -1446,6 +1676,7 @@ class Snapper:
         self.selectMode = False
         self.running = False
         self.interaction_plane = None
+        self._point_plane_override_active = False
         self.holdPoints = []
         self.lastObj = []
         self.lastObjSubelements = []
@@ -1622,6 +1853,7 @@ class Snapper:
         modifier_resolver=None,
         interaction_plane=None,
         noTracker=False,
+        view=None,
     ):
         """Get a 3D point from the screen.
 
@@ -1661,6 +1893,9 @@ class Snapper:
 
         ``modifier_resolver`` is an optional callable that can override the
         Ctrl/Shift modifier state used for snapping and constraints.
+
+        ``view`` optionally identifies the originating 3D viewport. When it
+        is omitted, the active FreeCAD viewport is used for compatibility.
         """
         if (
             last is None
@@ -1674,11 +1909,15 @@ class Snapper:
         ):
             self._clear_point_callbacks()
             self.interaction_plane = None
+            self._point_plane_override_active = False
             return
 
+        origin_view = view if view is not None else gui_utils.get_3d_view()
+        self._activate_context(origin_view)
         self.pt = None
         self.holdPoints = []
         self.interaction_plane = interaction_plane
+        self._point_plane_override_active = interaction_plane is not None
         # Point requests should start from a clean constraint state. Otherwise
         # stale mask/affinity/basepoint values from a previous command can
         # distort the first preview frame of the next interactive request.
@@ -1686,7 +1925,7 @@ class Snapper:
         self.mask = None
         self.constraintAxis = None
         self.ui = Gui.draftToolBar
-        self.view = gui_utils.get_3d_view()
+        self.view = origin_view
 
         # remove any previous leftover callbacks
         self._clear_point_callbacks()
@@ -1713,6 +1952,7 @@ class Snapper:
                 active=ctrl,
                 constrain=shift,
                 noTracker=noTracker,
+                view=origin_view,
             )
             self.ui.displayPoint(self.pt, last, plane=self._get_wp(), mask=Gui.Snapper.affinity)
             if movecallback:
@@ -1862,8 +2102,9 @@ class Snapper:
         Save snap state to user preferences to be restored in next session.
         """
         snap_modes = ""
+        global_modes = self._global_active_snaps
         for snap in self.snaps:
-            if snap in self.active_snaps:
+            if snap in global_modes:
                 snap_modes += "1"
             else:
                 snap_modes += "0"
@@ -1883,9 +2124,22 @@ class Snapper:
             App.Base.TypeId.fromName("Gui::View3DInventor")
         )  # All 3D views.
         for view in views:
-            if view in self.trackers[0]:
-                i = self.trackers[0].index(view)
-                grid = self.trackers[1][i]
+            context = self._contexts.get(id(view))
+            if context is None:
+                for candidate in self._contexts.values():
+                    try:
+                        if candidate.view == view:
+                            context = candidate
+                            break
+                    except Exception:
+                        continue
+            grid = context.trackers.grid if context is not None else None
+            if grid is None:
+                try:
+                    grid = self.trackers[1][self.trackers[0].index(view)]
+                except (ValueError, IndexError):
+                    grid = None
+            if grid is not None:
                 if show and grid.show_always:
                     grid.on()
                 else:
@@ -1903,52 +2157,54 @@ class Snapper:
         """Set the grid, if visible."""
         self.setTrackers()
 
-    def setTrackers(self, update_grid=True):
-        """Set the trackers."""
-        v = gui_utils.get_3d_view()
+    def setTrackers(self, update_grid=True, view=None):
+        """Set the tracker bundle for one originating viewport."""
+        v = view if view is not None else gui_utils.get_3d_view()
         if v is None:
             return
 
-        if v != self.activeview:
-            if v in self.trackers[0]:
-                i = self.trackers[0].index(v)
-                self.grid = self.trackers[1][i]
-                self.tracker = self.trackers[2][i]
-                self.extLine = self.trackers[3][i]
-                self.radiusTracker = self.trackers[4][i]
-                self.dim1 = self.trackers[5][i]
-                self.dim2 = self.trackers[6][i]
-                self.trackLine = self.trackers[7][i]
-                self.extLine2 = self.trackers[8][i]
-                self.holdTracker = self.trackers[9][i]
-            else:
-                doc_name = App.ActiveDocument.Name if App.ActiveDocument is not None else None
-                self.grid = trackers.gridTracker(doc_name)
-                if params.get_param("alwaysShowGrid"):
-                    self.grid.show_always = True
-                if params.get_param("grid"):
-                    self.grid.show_during_command = True
-                self.tracker = trackers.snapTracker()
-                self.trackLine = trackers.lineTracker()
-                self.extLine = trackers.lineTracker(dotted=True)
-                self.extLine2 = trackers.lineTracker(dotted=True)
-                self.radiusTracker = trackers.radiusTracker()
-                self.dim1 = trackers.archDimTracker(mode=2)
-                self.dim2 = trackers.archDimTracker(mode=3)
-                self.holdTracker = trackers.snapTracker()
-                self.holdTracker.setMarker("cross")
-                self.holdTracker.clear()
-                self.trackers[0].append(v)
-                self.trackers[1].append(self.grid)
-                self.trackers[2].append(self.tracker)
-                self.trackers[3].append(self.extLine)
-                self.trackers[4].append(self.radiusTracker)
-                self.trackers[5].append(self.dim1)
-                self.trackers[6].append(self.dim2)
-                self.trackers[7].append(self.trackLine)
-                self.trackers[8].append(self.extLine2)
-                self.trackers[9].append(self.holdTracker)
-            self.activeview = v
+        context = self._activate_context(v)
+        bundle = context.trackers
+        if bundle.grid is None:
+            doc_name = App.ActiveDocument.Name if App.ActiveDocument is not None else None
+            bundle.grid = trackers.gridTracker(doc_name)
+            if params.get_param("alwaysShowGrid"):
+                bundle.grid.show_always = True
+            if params.get_param("grid"):
+                bundle.grid.show_during_command = True
+            bundle.snap = trackers.snapTracker()
+            bundle.track_line = trackers.lineTracker()
+            bundle.extension = trackers.lineTracker(dotted=True)
+            bundle.extension2 = trackers.lineTracker(dotted=True)
+            bundle.radius = trackers.radiusTracker()
+            bundle.dim1 = trackers.archDimTracker(mode=2)
+            bundle.dim2 = trackers.archDimTracker(mode=3)
+            bundle.hold = trackers.snapTracker()
+            bundle.hold.setMarker("cross")
+            bundle.hold.clear()
+            # Keep the old parallel arrays populated for third-party code
+            # that still inspects them; all internal lookup is context based.
+            self.trackers[0].append(v)
+            self.trackers[1].append(bundle.grid)
+            self.trackers[2].append(bundle.snap)
+            self.trackers[3].append(bundle.extension)
+            self.trackers[4].append(bundle.radius)
+            self.trackers[5].append(bundle.dim1)
+            self.trackers[6].append(bundle.dim2)
+            self.trackers[7].append(bundle.track_line)
+            self.trackers[8].append(bundle.extension2)
+            self.trackers[9].append(bundle.hold)
+
+        self.grid = bundle.grid
+        self.tracker = bundle.snap
+        self.extLine = bundle.extension
+        self.radiusTracker = bundle.radius
+        self.dim1 = bundle.dim1
+        self.dim2 = bundle.dim2
+        self.trackLine = bundle.track_line
+        self.extLine2 = bundle.extension2
+        self.holdTracker = bundle.hold
+        self.activeview = v
 
         self.hideRadius()
 

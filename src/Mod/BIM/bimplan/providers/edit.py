@@ -152,6 +152,7 @@ def start_provider_handle_point_pick(session, provider_obj, handle_index, handle
         movecallback=update_provider_handle_point_pick,
         title=_get_provider_handle_prompt(handle),
         noTracker=True,
+        view=session.view,
     )
     session.viewport.queue_focus_plan_view()
 

@@ -557,7 +557,9 @@ class Edit(gui_base_original.Modifier):
         orthoConstrain = False
         if event.wasShiftDown() == 1:
             orthoConstrain = True
-        snappedPos = Gui.Snapper.snap((pos[0], pos[1]), self.node[-1], constrain=orthoConstrain)
+        snappedPos = Gui.Snapper.snap(
+            (pos[0], pos[1]), self.node[-1], constrain=orthoConstrain, view=self.view
+        )
         self.trackers[self.obj.Name][self.editing].set(snappedPos)
         self.ui.displayPoint(snappedPos, self.node[-1], mask=Gui.Snapper.affinity)
         if self.ghost:

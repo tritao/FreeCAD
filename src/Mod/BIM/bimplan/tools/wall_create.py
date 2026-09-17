@@ -223,6 +223,7 @@ def activate_rect_wall_tool(session):
     FreeCADGui.Snapper.getPoint(
         callback=session.wall_create.handle_rect_wall_point,
         title=translate("BIM_PlanEdit", "First rectangle corner"),
+        view=session.view,
     )
     session.task_panels.refresh_task_panel_status()
 
@@ -363,6 +364,7 @@ def handle_rect_wall_point(session, point=None, obj=None):
             last=point,
             title=translate("BIM_PlanEdit", "Opposite rectangle corner"),
             mode="line",
+            view=session.view,
         )
         return
 

@@ -319,9 +319,16 @@ def get_point(target, args, noTracker=False):
     point = None
 
     if hasattr(Gui, "Snapper"):
-        point = Gui.Snapper.snap(
-            args["Position"], lastpoint=last, active=smod, constrain=cmod, noTracker=noTracker
-        )
+        snap_kwargs = {
+            "lastpoint": last,
+            "active": smod,
+            "constrain": cmod,
+            "noTracker": noTracker,
+        }
+        target_view = getattr(target, "view", None)
+        if target_view is not None:
+            snap_kwargs["view"] = target_view
+        point = Gui.Snapper.snap(args["Position"], **snap_kwargs)
         info = Gui.Snapper.snapInfo
         mask = Gui.Snapper.affinity
     if point is None:

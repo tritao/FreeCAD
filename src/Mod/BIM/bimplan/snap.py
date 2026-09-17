@@ -23,22 +23,62 @@ def _get_snapper_method(method_name):
     return method if callable(method) else None
 
 
-def apply_plan_snap_profile(snap_modes):
+def _call_for_view(method, *args, view=None):
+    """Call a view-aware Snapper method with legacy fallback support."""
+
+    if view is None:
+        return method(*args)
+    try:
+        return method(*args, view=view)
+    except TypeError:
+        return method(*args)
+
+
+def _configure_plan_interaction_plane(session, plane):
+    """Set the Plan Edit plane on the session's view-local Snapper context."""
+
+    snapper = _get_snapper()
+    configure = getattr(snapper, "configure_view", None) if snapper else None
+    context_for = getattr(snapper, "context_for", None) if snapper else None
+    if not callable(configure) or not callable(context_for):
+        return False, None
+    view = getattr(session, "view", None)
+    try:
+        context = context_for(view)
+        previous = getattr(context, "interaction_plane", None)
+        configure(view, interaction_plane=plane)
+    except Exception:
+        return False, None
+    return True, previous
+
+
+def _restore_plan_interaction_plane(session, previous):
+    snapper = _get_snapper()
+    configure = getattr(snapper, "configure_view", None) if snapper else None
+    if not callable(configure):
+        return None
+    try:
+        return configure(getattr(session, "view", None), interaction_plane=previous)
+    except Exception:
+        return None
+
+
+def apply_plan_snap_profile(snap_modes, view=None):
     push_snap_modes = _get_snapper_method("push_snap_modes")
     if push_snap_modes is None:
         return
     try:
-        push_snap_modes(snap_modes)
+        _call_for_view(push_snap_modes, snap_modes, view=view)
     except Exception:
         pass
 
 
-def restore_snap_profile():
+def restore_snap_profile(view=None):
     pop_snap_modes = _get_snapper_method("pop_snap_modes")
     if pop_snap_modes is None:
         return
     try:
-        pop_snap_modes()
+        _call_for_view(pop_snap_modes, view=view)
     except Exception:
         pass
 
@@ -97,20 +137,20 @@ def apply_plan_grid(session):
     if grid is None:
         return None
     try:
-        push_interaction_grid(grid)
+        _call_for_view(push_interaction_grid, grid, view=getattr(session, "view", None))
     except Exception:
         return None
     return grid
 
 
-def restore_plan_grid(grid=None):
+def restore_plan_grid(grid=None, view=None):
     """Restore the previous Draft interaction grid during Plan Edit teardown."""
 
     pop_interaction_grid = _get_snapper_method("pop_interaction_grid")
     if pop_interaction_grid is None:
         return None
     try:
-        return pop_interaction_grid(grid)
+        return _call_for_view(pop_interaction_grid, grid, view=view)
     except Exception:
         return None
 
@@ -170,6 +210,8 @@ class PlanSnapAPI:
         "_semantic_provider_active",
         "_interaction_grid",
         "_interaction_grid_active",
+        "_interaction_plane",
+        "_interaction_plane_active",
     )
 
     def __init__(self, session, plan_snap_modes):
@@ -179,13 +221,35 @@ class PlanSnapAPI:
         self._semantic_provider_active = False
         self._interaction_grid = None
         self._interaction_grid_active = False
+        self._interaction_plane = None
+        self._interaction_plane_active = False
 
     @property
     def session(self):
         return self._session
 
     def apply_plan_snap_profile(self):
-        return apply_plan_snap_profile(self._plan_snap_modes)
+        result = apply_plan_snap_profile(
+            self._plan_snap_modes,
+            view=getattr(self.session, "view", None),
+        )
+        if not self._interaction_plane_active:
+            plane = None
+            viewport = getattr(self.session, "viewport", None)
+            get_plane = getattr(viewport, "get_interaction_plane", None)
+            if callable(get_plane):
+                try:
+                    plane = get_plane()
+                except Exception:
+                    plane = None
+            if plane is not None:
+                configured, previous = _configure_plan_interaction_plane(
+                    self.session, plane
+                )
+                if configured:
+                    self._interaction_plane = previous
+                    self._interaction_plane_active = True
+        return result
 
     def apply_plan_grid(self):
         """Install the session's temporary reference-frame grid once."""
@@ -203,21 +267,33 @@ class PlanSnapAPI:
 
         if not self._interaction_grid_active:
             return None
-        restored = restore_plan_grid(self._interaction_grid)
+        restored = restore_plan_grid(
+            self._interaction_grid,
+            view=getattr(self.session, "view", None),
+        )
         self._interaction_grid = None
         self._interaction_grid_active = False
         return restored
 
     def restore_snap_profile(self):
         self.restore_plan_grid()
-        return restore_snap_profile()
+        result = restore_snap_profile(view=getattr(self.session, "view", None))
+        if self._interaction_plane_active:
+            _restore_plan_interaction_plane(self.session, self._interaction_plane)
+            self._interaction_plane = None
+            self._interaction_plane_active = False
+        return result
 
     def enable_semantic_snapping(self):
         if self._semantic_provider_active:
             return
         method = _get_snapper_method("push_semantic_snap_provider")
         if method is not None:
-            method(self._semantic_provider)
+            _call_for_view(
+                method,
+                self._semantic_provider,
+                view=getattr(self.session, "view", None),
+            )
             self._semantic_provider_active = True
 
     def disable_semantic_snapping(self):
@@ -225,7 +301,11 @@ class PlanSnapAPI:
             return
         method = _get_snapper_method("pop_semantic_snap_provider")
         if method is not None:
-            method(self._semantic_provider)
+            _call_for_view(
+                method,
+                self._semantic_provider,
+                view=getattr(self.session, "view", None),
+            )
         self._semantic_provider_active = False
 
     def _query_semantic_snap(self, point, tolerance):

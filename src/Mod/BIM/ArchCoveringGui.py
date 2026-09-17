@@ -1484,7 +1484,9 @@ if FreeCAD.GuiUp:
                 ctrl = arg["CtrlDown"]
                 shift = arg["ShiftDown"]
                 # Invoke the snapper manually to allow standard keyboard modifiers.
-                self._pt = FreeCADGui.Snapper.snap(arg["Position"], active=ctrl, constrain=shift)
+                self._pt = FreeCADGui.Snapper.snap(
+                    arg["Position"], active=ctrl, constrain=shift, view=self._view
+                )
                 self.onMouseMove(self._pt, None)
 
             # Handle click to confirm the origin point.
