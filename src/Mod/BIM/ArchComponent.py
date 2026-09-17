@@ -1262,7 +1262,7 @@ class Component(ArchIFC.IfcProduct):
                             base = s
 
         # treat subtractions
-        subs = obj.Subtractions
+        subs = list(obj.Subtractions)
         for link in obj.InListRecursive:
             if hasattr(link, "Host"):
                 if (
@@ -1274,6 +1274,8 @@ class Component(ArchIFC.IfcProduct):
             elif hasattr(link, "Hosts"):
                 if obj in link.Hosts and not self._objectInInternalLinkgroup(link):
                     subs.append(link)
+        subs = tuple(dict.fromkeys(subs))
+        subtraction_tools = []
         for o in subs:
             if base:
                 if base.isNull():
@@ -1305,10 +1307,8 @@ class Component(ArchIFC.IfcProduct):
                         if placement:
                             # see https://forum.freecad.org/viewtopic.php?p=579754#p579754
                             subvolume.Placement = placement.multiply(subvolume.Placement)
-                        if len(base.Solids) > 1:
-                            base = Part.makeCompound([sol.cut(subvolume) for sol in base.Solids])
-                        else:
-                            base = base.cut(subvolume)
+                        if base.BoundBox.intersect(subvolume.BoundBox):
+                            subtraction_tools.append(subvolume)
                 elif hasattr(o, "Shape"):
                     # no subvolume, we subtract the whole shape
                     if o.Shape:
@@ -1319,16 +1319,47 @@ class Component(ArchIFC.IfcProduct):
                                 if placement:
                                     # see https://forum.freecad.org/viewtopic.php?p=579754#p579754
                                     s.Placement = placement.multiply(s.Placement)
-                                try:
-                                    if len(base.Solids) > 1:
-                                        base = Part.makeCompound(
-                                            [sol.cut(s) for sol in base.Solids]
-                                        )
-                                    else:
-                                        base = base.cut(s)
-                                except Part.OCCError:
-                                    print("Arch: unable to cut object ", o.Name, " from ", obj.Name)
+                                if base.BoundBox.intersect(s.BoundBox):
+                                    subtraction_tools.append(s)
+        if subtraction_tools:
+            # OCCT can subtract several tools in one BOPAlgo operation.  This
+            # avoids rebuilding and remapping the intermediate wall topology
+            # after every hosted opening (the cost grows quickly with opening
+            # count).  Keep one-tool subtraction on the simpler code path;
+            # _cut_subtraction_tools() falls back to the historical sequence
+            # when OCCT cannot solve a particular multi-tool configuration.
+            try:
+                if len(base.Solids) > 1:
+                    base = Part.makeCompound(
+                        [
+                            self._cut_subtraction_tools(solid, subtraction_tools)
+                            for solid in base.Solids
+                        ]
+                    )
+                else:
+                    base = self._cut_subtraction_tools(base, subtraction_tools)
+            except Part.OCCError:
+                print("Arch: unable to cut subtractions from ", obj.Name)
         return base
+
+    @staticmethod
+    def _cut_subtraction_tools(base, tools):
+        """Subtract tools in one OCCT operation, preserving a robust fallback."""
+
+        import Part
+
+        if len(tools) == 1:
+            return base.cut(tools[0])
+        try:
+            result = base.cut(tools)
+            if not result.isNull():
+                return result
+        except Part.OCCError:
+            pass
+        result = base
+        for tool in tools:
+            result = result.cut(tool)
+        return result
 
     def spread(self, obj, shape, placement=None):
         """Copy the object to its Axis's points.

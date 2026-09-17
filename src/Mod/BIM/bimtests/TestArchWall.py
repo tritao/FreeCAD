@@ -457,6 +457,49 @@ class TestArchWall(TestArchBase.TestArchBase):
             msg="Explicit plan requests should drive wall plan representation height.",
         )
 
+    def test_wall_batches_multiple_hosted_opening_subtractions(self):
+        """Several hosted openings retain the expected exact wall solid."""
+
+        wall_length = 5000.0
+        wall_width = 200.0
+        wall_height = 3000.0
+        opening_width = 600.0
+        opening_height = 1200.0
+        line = Draft.makeLine(App.Vector(), App.Vector(wall_length, 0, 0))
+        wall = Arch.makeWall(line, width=wall_width, height=wall_height)
+        self.document.recompute()
+        cut_tool_counts = []
+        cut_tools = ArchComponent.Component._cut_subtraction_tools
+
+        def record_cut_tools(base, tools):
+            cut_tool_counts.append(len(tools))
+            return cut_tools(base, tools)
+
+        with patch.object(
+            ArchComponent.Component,
+            "_cut_subtraction_tools",
+            side_effect=record_cut_tools,
+        ):
+            for index, x_start in enumerate((500.0, 1800.0, 3100.0), start=1):
+                self._make_hosted_window(
+                    wall,
+                    f"BatchOpening{index}",
+                    x_start=x_start,
+                    z_start=700.0,
+                    width=opening_width,
+                    height=opening_height,
+                )
+            wall.touch()
+            self.document.recompute()
+
+        self.assertIn(3, cut_tool_counts)
+        self.assertTrue(wall.Shape.isValid())
+        self.assertEqual(1, len(wall.Shape.Solids))
+        expected_volume = wall_length * wall_width * wall_height - (
+            3 * opening_width * wall_width * opening_height
+        )
+        self.assertAlmostEqual(expected_volume, wall.Shape.Volume, delta=1e-3)
+
     def test_wall_footprint_uses_parent_storey_plan_cut_height(self):
         """Parent storeys should define the absolute plan cut for contained walls."""
         self.printTestMessage("Checking wall footprint uses parent storey plan cut height...")
