@@ -49,6 +49,7 @@ from draftgeoutils import general as geo_general
 from draftgeoutils import geometry as geo_geometry
 from draftgeoutils import wires as geo_wires
 from draftutils import grid_observer
+from draftutils.grid import GridLattice
 from draftutils import gui_utils
 from draftutils import params
 from draftutils import utils
@@ -1554,6 +1555,13 @@ class gridTracker(Tracker):
         """Move and rotate the grid according to the current working plane."""
         self.reset()
         wp = self._get_wp()
+        self.lattice = GridLattice(
+            wp.position,
+            wp.u,
+            wp.v,
+            spacing=self.space,
+            major_every=self.mainlines,
+        )
         Q = wp.get_placement().Rotation.Q
         P = wp.position
         self.trans.rotation.setValue([Q[0], Q[1], Q[2], Q[3]])
@@ -1575,11 +1583,14 @@ class gridTracker(Tracker):
     def getClosestNode(self, point):
         """Return the closest node from the given point."""
         wp = self._get_wp()
-        pt = wp.get_local_coords(point)
-        pu = round(pt.x / self.space, 0) * self.space
-        pv = round(pt.y / self.space, 0) * self.space
-        pt = wp.get_global_coords(Vector(pu, pv, 0))
-        return pt
+        self.lattice = GridLattice(
+            wp.position,
+            wp.u,
+            wp.v,
+            spacing=self.space,
+            major_every=self.mainlines,
+        )
+        return self.lattice.nearest_node(point)
 
 
 class boxTracker(Tracker):

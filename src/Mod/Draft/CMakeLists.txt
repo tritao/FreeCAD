@@ -67,6 +67,7 @@ SET(Draft_tests
     drafttests/test_dwg.py
     drafttests/test_dxf.py
     drafttests/test_grid_settings.py
+    drafttests/test_grid_lattice.py
     drafttests/test_gui_snapper.py
     drafttests/test_import.py
     drafttests/test_import_gui.py
@@ -83,6 +84,7 @@ SET(Draft_tests
 
 SET(Draft_utilities
     draftutils/__init__.py
+    draftutils/grid.py
     draftutils/grid_observer.py
     draftutils/groups.py
     draftutils/gui_utils.py

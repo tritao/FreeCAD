@@ -5,17 +5,12 @@
 from dataclasses import dataclass
 import math
 
+from draftutils.grid import adaptive_grid_interval
+
 
 def engineering_interval(units_per_pixel, target_pixels=100.0):
     """Return a readable major interval using the engineering 1/2/5 series."""
-
-    required = max(float(units_per_pixel) * float(target_pixels), 1e-12)
-    decade = 10.0 ** math.floor(math.log10(required))
-    normalized = required / decade
-    for step in (1.0, 2.0, 5.0, 10.0):
-        if normalized <= step:
-            return step * decade
-    return 10.0 * decade
+    return adaptive_grid_interval(units_per_pixel, target_pixels)
 
 
 def tick_values(start, end, interval):
