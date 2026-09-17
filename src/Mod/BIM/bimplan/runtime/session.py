@@ -194,15 +194,14 @@ def start_session():
 
 
 def activate_representation_request(request):
-    """Apply a saved PLAN request through the active BIM editing runtime.
+    """Apply a saved BIM request through its compatible editing runtime.
 
     Saved views are the user-facing editing context.  The former Plan Edit
     command remains available for compatibility, but opening a PLAN view from
     the BIM Navigator must initialize the same runtime without requiring the
-    command to have been invoked first.  MODEL/SECTION/ELEVATION requests are
-    intentionally left to :class:`bimviews.service.BIMViewService` for now;
-    their viewport-local runtime hooks can be added without changing this
-    PLAN compatibility bridge.
+    command to have been invoked first.  SECTION and ELEVATION use the shared
+    object-agnostic contextual session; MODEL leaves document interaction to
+    the standard viewport.
     """
 
     if request is None:
@@ -210,13 +209,43 @@ def activate_representation_request(request):
 
     import ArchRepresentation
 
-    if getattr(request, "purpose", None) != ArchRepresentation.RepresentationPurpose.PLAN:
-        # The legacy Plan runtime must not keep intercepting input after the
-        # Navigator switches the viewport to MODEL/SECTION/ELEVATION.
+    purpose = getattr(request, "purpose", None)
+    if purpose != ArchRepresentation.RepresentationPurpose.PLAN:
+        # The Plan runtime must not keep intercepting input after switching
+        # to another representation.
         session = get_active_session()
         if session is not None:
             session.shutdown(close_dialog=False)
-        return None
+        from bimcontextual.session import active_session as active_contextual_session
+
+        contextual = active_contextual_session()
+        if purpose not in (
+            ArchRepresentation.RepresentationPurpose.SECTION,
+            ArchRepresentation.RepresentationPurpose.ELEVATION,
+        ):
+            if contextual is not None:
+                contextual.close()
+            return None
+        if contextual is not None:
+            if contextual.request is request:
+                return contextual
+            contextual.close()
+        from ArchContextualCreation import architectural_contextual_providers
+        from bimcontextual.session import start_session as start_contextual_session
+
+        source = getattr(request, "source", None)
+        return start_contextual_session(
+            request=request,
+            sources=tuple(getattr(source, "Objects", ()) or ()),
+            orient_to_request=False,
+            providers=architectural_contextual_providers(),
+        )
+
+    from bimcontextual.session import active_session as active_contextual_session
+
+    contextual = active_contextual_session()
+    if contextual is not None:
+        contextual.close()
 
     session = get_active_session()
     created = False

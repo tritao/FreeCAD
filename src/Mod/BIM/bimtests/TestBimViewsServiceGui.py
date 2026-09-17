@@ -35,6 +35,7 @@ from bimviews.ruler_model import (
 from bimviews.framing import planar_view_bounds
 from bimviews.service import BIMViewService
 from bimviews.viewport_ruler import ViewportRulerOverlay, _ViewportEventFilter
+from bimplan.runtime.session import activate_representation_request
 
 
 class _RecordingView:
@@ -118,6 +119,27 @@ class TestBimViewsServiceGui(TestArchBaseGui):
 
         start.assert_called_once_with(show_task_panel=False, initial_request=request)
         self.assertEqual([], calls)
+
+    def test_elevation_saved_view_starts_contextual_editing_runtime(self):
+        source = SimpleNamespace(Objects=("wall", "window"))
+        request = ArchRepresentation.RepresentationRequest(
+            purpose=ArchRepresentation.RepresentationPurpose.ELEVATION,
+            source=source,
+        )
+        contextual = SimpleNamespace()
+
+        with patch("bimplan.runtime.session.get_active_session", return_value=None):
+            with patch("bimcontextual.session.active_session", return_value=None):
+                with patch(
+                    "bimcontextual.session.start_session", return_value=contextual
+                ) as start:
+                    self.assertIs(contextual, activate_representation_request(request))
+
+        kwargs = start.call_args.kwargs
+        self.assertIs(request, kwargs["request"])
+        self.assertEqual(("wall", "window"), kwargs["sources"])
+        self.assertFalse(kwargs["orient_to_request"])
+        self.assertTrue(kwargs["providers"])
 
     def test_saved_view_activation_suppresses_camera_animation(self):
         calls = []
