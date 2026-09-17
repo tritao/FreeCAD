@@ -557,20 +557,25 @@ class TestArchWall(TestArchBase.TestArchBase):
         self.assertAlmostEqual(expected_volume, wall.Shape.Volume, delta=1e-3)
 
     def test_exact_wall_compiler_matches_legacy_opening_shape(self):
-        """A perforated extrusion matches the legacy boolean wall result."""
+        """Compiled window and floor-touching door openings match legacy geometry."""
 
         with patch.object(ArchWallExact, "compile_straight_wall", return_value=None):
             line = Draft.makeLine(App.Vector(), App.Vector(5000, 0, 0))
             wall = Arch.makeWall(line, width=200, height=3000)
             self.document.recompute()
-            for index, x_start in enumerate((700.0, 2600.0), start=1):
+            openings = (
+                ("Window1", 700.0, 700.0, 1200.0),
+                ("Window2", 2600.0, 700.0, 1200.0),
+                ("Door", 4000.0, 0.0, 2100.0),
+            )
+            for name, x_start, z_start, height in openings:
                 self._make_hosted_window(
                     wall,
-                    f"ExactCompilerOpening{index}",
+                    f"ExactCompiler{name}",
                     x_start=x_start,
-                    z_start=700.0,
-                    width=700.0,
-                    height=1200.0,
+                    z_start=z_start,
+                    width=600.0 if name == "Door" else 700.0,
+                    height=height,
                 )
             legacy_shape = wall.Shape.copy()
 
