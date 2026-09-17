@@ -8,6 +8,7 @@ from dataclasses import dataclass
 import ArchRepresentation
 import FreeCAD
 
+from .framing import frame_planar_view, planar_view_bounds
 from .grid_settings import get_grid_settings
 
 
@@ -39,6 +40,7 @@ _PLAN_SNAP_MODES = frozenset(
 _SECTION_SNAP_MODES = frozenset(
     ("Lock", "Near", "Endpoint", "Midpoint", "Intersection", "Ortho", "Grid")
 )
+
 @dataclass(frozen=True)
 class ViewActivationContext:
     """The persistent view and semantic BIM context activated together."""
@@ -105,7 +107,7 @@ class BIMViewService:
         with self._instant_view_transition(target_view):
             if self._representation_applier is not None:
                 self._representation_applier(request)
-            self._orient_plan_view(request, view=target_view)
+            self._orient_plan_view(request, definition=definition, view=target_view)
             self.capture(definition, view=target_view)
         self._mark_active(definition)
         self.configure_snap_context(definition, view=view)
@@ -396,7 +398,7 @@ class BIMViewService:
             obj.BIMIsActiveView = obj is definition
         self.active_view = definition
 
-    def _orient_plan_view(self, request, view=None):
+    def _orient_plan_view(self, request, definition=None, view=None):
         target_view = self._view(view)
         if target_view is None:
             raise RuntimeError("An active 3D view is required to create a floor plan")
@@ -423,6 +425,15 @@ class BIMViewService:
                 target_view.setCameraOrientation(FreeCAD.Rotation(vx, vy, vz, "ZXY").Q)
             except (AttributeError, RuntimeError):
                 pass
+        scope = self.scope_for(definition) if definition is not None else None
+        bounds = planar_view_bounds(
+            getattr(scope, "visible_objects", ()), frame=frame
+        )
+        if bounds is not None and frame_planar_view(target_view, bounds, frame):
+            return
+        # Empty contexts and lightweight/legacy views may have no semantic
+        # shape bounds or writable camera.  Preserve scene fitting only as a
+        # compatibility fallback for those cases.
         try:
             target_view.fitAll()
         except (AttributeError, RuntimeError):

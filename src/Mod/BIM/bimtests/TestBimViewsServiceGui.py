@@ -8,7 +8,9 @@ from unittest.mock import patch
 import ArchRepresentation
 import FreeCAD
 import FreeCADGui
+import Part
 from PySide import QtCore, QtGui
+from pivy import coin
 
 from bimcommands.BimViews import (
     _apply_representation_request,
@@ -30,6 +32,7 @@ from bimviews.ruler_model import (
     preferred_length_unit,
     tick_values,
 )
+from bimviews.framing import planar_view_bounds
 from bimviews.service import BIMViewService
 from bimviews.viewport_ruler import ViewportRulerOverlay, _ViewportEventFilter
 
@@ -77,6 +80,20 @@ class _AnimatedRecordingView(_RecordingView):
     def setAnimationEnabled(self, enabled):
         self.animation_enabled = bool(enabled)
         self.calls.append(("set-animation", self.animation_enabled))
+
+
+class _FramingRecordingView(_RecordingView):
+    def __init__(self, calls, size=(1000, 500)):
+        super().__init__(calls)
+        self.camera = coin.SoOrthographicCamera()
+        self.camera.position.setValue(0.0, 0.0, 10.0)
+        self.size = size
+
+    def getCameraNode(self):
+        return self.camera
+
+    def getSize(self):
+        return self.size
 
 
 class TestBimViewsServiceGui(TestArchBaseGui):
@@ -497,6 +514,43 @@ class TestBimViewsServiceGui(TestArchBaseGui):
         self.assertEqual("Plan", definition.Purpose)
         self.assertIs(storey, definition.BIMContextSource)
         self.assertTrue(definition.BIMIsActiveView)
+
+    def test_plan_creation_frames_visible_scope_geometry_not_the_coin_scene(self):
+        calls = []
+        storey = self.document.addObject("App::Part", "FramedStorey")
+        visible = self.document.addObject("PartDesign::Feature", "VisiblePlanGeometry")
+        visible.Shape = Part.makeBox(100, 50, 20)
+        hidden = self.document.addObject("PartDesign::Feature", "HiddenOutlier")
+        hidden.Shape = Part.makeBox(10000, 10000, 20)
+        hidden.ViewObject.Visibility = False
+        storey.addObject(visible)
+        storey.addObject(hidden)
+        view = _FramingRecordingView(calls)
+
+        definition = BIMViewService(self.document, view=view).create_plan_view(
+            "Framed Plan", storey
+        )
+
+        self.assertEqual(
+            ("camera-type", "camera-orientation", "capture"),
+            tuple(call[0] for call in calls),
+        )
+        self.assertAlmostEqual(57.5, view.camera.height.getValue())
+        position = view.camera.position.getValue()
+        self.assertAlmostEqual(50.0, position[0])
+        self.assertAlmostEqual(25.0, position[1])
+        self.assertTrue(definition.BIMIsActiveView)
+
+    def test_planar_view_bounds_uses_the_view_reference_frame(self):
+        feature = self.document.addObject("PartDesign::Feature", "OffsetGeometry")
+        feature.Shape = Part.makeBox(40, 20, 10, FreeCAD.Vector(100, 200, 30))
+        frame = FreeCAD.Placement(FreeCAD.Vector(100, 200, 30), FreeCAD.Rotation())
+
+        bounds = planar_view_bounds((feature,), frame)
+
+        self.assertEqual((0.0, 40.0), (bounds.x_min, bounds.x_max))
+        self.assertEqual((0.0, 20.0), (bounds.y_min, bounds.y_max))
+        self.assertEqual((0.0, 10.0), (bounds.z_min, bounds.z_max))
 
     def test_saved_view_activation_configures_originating_snap_context(self):
         """Saved PLAN and MODEL views keep independent Snapper inputs."""
