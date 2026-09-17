@@ -10,7 +10,12 @@ import FreeCAD
 import FreeCADGui
 from PySide import QtCore, QtGui
 
-from bimcommands.BimViews import _findModelDock, placeInComboView, restoreComboViewTitle
+from bimcommands.BimViews import (
+    _apply_representation_request,
+    _findModelDock,
+    placeInComboView,
+    restoreComboViewTitle,
+)
 from bimtests.TestArchBaseGui import TestArchBaseGui
 from bimviews.model import BIMViewManagerModel
 from bimviews.navigator_model import BIMNavigatorModel
@@ -49,6 +54,28 @@ class _RecordingView:
 
 
 class TestBimViewsServiceGui(TestArchBaseGui):
+    def test_plan_saved_view_activation_starts_shared_editing_runtime(self):
+        source = SimpleNamespace()
+        request = ArchRepresentation.RepresentationRequest(
+            purpose=ArchRepresentation.RepresentationPurpose.PLAN,
+            source=source,
+        )
+        calls = []
+        representation = SimpleNamespace(
+            set_source=lambda value, fit=False: calls.append(("source", value, fit))
+        )
+        fake_session = SimpleNamespace(representation_request=representation)
+
+        with patch("bimplan.runtime.session.get_active_session", return_value=None):
+            with patch(
+                "bimplan.runtime.session.start_editing_session",
+                return_value=fake_session,
+            ) as start:
+                self.assertIs(fake_session, _apply_representation_request(request))
+
+        start.assert_called_once_with()
+        self.assertEqual([("source", source, False)], calls)
+
     def test_navigator_tabs_with_model_and_restores_combo_title(self):
         main_window = FreeCADGui.getMainWindow()
         combo = _findModelDock(main_window)

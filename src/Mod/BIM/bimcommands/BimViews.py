@@ -1139,24 +1139,13 @@ def _manager_model():
 
 
 def _apply_representation_request(request):
-    """Forward saved-view semantic intent to an active Plan Edit session."""
+    """Forward saved-view intent to the representation editing runtime."""
 
     try:
-        import ArchRepresentation
-        from bimplan.runtime.session import get_active_session
+        from bimplan.runtime.session import activate_representation_request
 
-        session = get_active_session()
-        if session is None:
-            return
-        if request.purpose != ArchRepresentation.RepresentationPurpose.PLAN:
-            return
-        source = getattr(request, "source", None)
-        if source is not None:
-            session.representation_request.set_source(source, fit=False)
-        else:
-            session.representation_request.request = request
-            session.viewport.apply_representation_request(request, fit=False)
-    except (AttributeError, RuntimeError, ValueError):
+        return activate_representation_request(request)
+    except (AttributeError, ImportError, ReferenceError, RuntimeError, TypeError, ValueError):
         return
 
 
