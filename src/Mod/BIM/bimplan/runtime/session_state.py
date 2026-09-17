@@ -360,11 +360,13 @@ def initialize_session_read_state(session):
 
 
 def initialize_session_state(session):
-    """Populate the runtime state owned by a PlanEditSession instance."""
+    """Populate the runtime state owned by a BIMEditingSession instance."""
     session.doc = FreeCAD.ActiveDocument
     session.gui_doc = FreeCADGui.ActiveDocument
     session.view = None
     session.viewer = None
+    session.view_runtime = None
+    session.view_runtimes = {}
     session.task_panel = None
     initialize_session_read_state(session)
     session.current_tool = plan_runtime_tools.PlanTool.SELECT

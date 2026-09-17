@@ -76,6 +76,10 @@ def disconnect_teardown_signals(session):
 
 
 def discard_runtime_references(session):
+    for view_runtime in tuple(getattr(session, "view_runtimes", {}).values()):
+        view_runtime.close()
+    session.view_runtimes = {}
+    session.view_runtime = None
     session.view_grid.close()
     session.view_rulers.close()
     session.contextual_rendering.close()

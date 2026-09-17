@@ -57,6 +57,7 @@ from bimplan.ui.controls import PlanEditControlsWidget
 from bimplan.contextual_rendering import PlanContextualRenderingAPI
 from bimplan.representation_request import PlanRepresentationRequestAPI
 from bimplan.contextual_editing import PlanContextualEditingAPI
+from bimviews.runtime import BIMViewRuntime
 from bimviews.viewport_grid import ViewportGridController
 from bimviews.viewport_ruler import ViewportRulerController
 
@@ -149,14 +150,14 @@ def _register_builtin_plan_edit_integrations():
             pass
 
 
-def start_session():
+def start_editing_session():
     global _active_session
 
     if _active_session:
         return _active_session
 
     _register_builtin_plan_edit_integrations()
-    session = PlanEditSession()
+    session = BIMEditingSession()
     if session.enter():
         _active_session = session
         try:
@@ -168,12 +169,28 @@ def start_session():
     return None
 
 
-class PlanEditSession:
-    """Owns the viewer state and control dock for Plan Edit mode."""
+def start_session():
+    """Compatibility entry point for the former Plan Edit session."""
+
+    return start_editing_session()
+
+
+class BIMEditingSession:
+    """Own the BIM editing session and its active viewport runtime.
+
+    The public ``PlanEditSession`` name remains as a compatibility alias while
+    the implementation moves toward a representation-driven BIM session.
+    """
 
     # State-backed compatibility properties are bound after class definition.
 
     def __init__(self):
+        self.view_runtime = None
+        # Keyed by ``id(view)`` so transient GUI view wrappers do not need to
+        # be hashable.  The registry is the migration seam for simultaneous
+        # PLAN/MODEL/SECTION viewports; the legacy Plan Edit command still
+        # drives only the active runtime for now.
+        self.view_runtimes = {}
         self.picking = PlanPickingAPI(self)
         self.selection = PlanSelectionAPI(self)
         self.spaces = PlanSpacesAPI(self)
@@ -297,6 +314,7 @@ class PlanEditSession:
                         )
                     )
                     return False
+                self.view_runtime = self.runtime_for(self.view)
 
             with self.performance.plan_perf_trace_span("capture_plan_edit_state"):
                 self.viewport.capture_state()
@@ -374,6 +392,43 @@ class PlanEditSession:
         del cont, closed
         return plan_lifecycle.finish(self, close_dialog=close_dialog)
 
+    def runtime_for(self, view=None, *, create=True):
+        """Return the BIM runtime associated with a viewport.
+
+        ``view=None`` means the active viewport owned by this editing
+        session.  Existing Plan Edit code continues to use ``view_runtime``;
+        new view-aware tools can ask for the runtime belonging to the view
+        that generated an input event.
+        """
+
+        target = view if view is not None else self.view
+        if target is None:
+            return None
+        key = id(target)
+        runtime = self.view_runtimes.get(key)
+        if runtime is None or runtime.closed:
+            if not create:
+                return None
+            runtime = BIMViewRuntime(target, session=self)
+            self.view_runtimes[key] = runtime
+        if target is self.view:
+            self.view_runtime = runtime
+        return runtime
+
+    def remove_view_runtime(self, view=None):
+        """Close and forget one viewport runtime."""
+
+        target = view if view is not None else self.view
+        if target is None:
+            return False
+        runtime = self.view_runtimes.pop(id(target), None)
+        if runtime is None:
+            return False
+        runtime.close()
+        if runtime is self.view_runtime:
+            self.view_runtime = None
+        return True
+
     def begin_teardown(self):
         return plan_lifecycle.begin_teardown(self)
 
@@ -436,3 +491,9 @@ class PlanEditSession:
 
     def slotDeletedDocument(self, *args):
         return self.document_visuals.slot_deleted_document(*args)
+
+
+# Compatibility for commands, addons and tests that still construct the old
+# modal session directly.  New code should use BIMEditingSession and inspect
+# ``session.view_runtime`` for representation capabilities.
+PlanEditSession = BIMEditingSession

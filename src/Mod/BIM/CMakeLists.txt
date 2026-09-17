@@ -199,6 +199,7 @@ SET(bimviews_SRCS
     bimviews/navigator_model.py
     bimviews/navigator_qt.py
     bimviews/ruler_model.py
+    bimviews/runtime.py
     bimviews/scope.py
     bimviews/service.py
     bimviews/viewport_grid.py
@@ -382,6 +383,7 @@ SET(bimtests_SRCS
     bimtests/TestBimTaskWatcherGui.py
     bimtests/TestBimPlanEditLibraryGui.py
     bimtests/TestBimPlanEditExamplesGui.py
+    bimtests/TestBimViewRuntime.py
     bimtests/TestBimViewsServiceGui.py
     bimtests/TestArchCovering.py
     bimtests/TestArchCoveringGui.py

@@ -34,9 +34,9 @@ class BIM_PlanEdit:
         )
 
     def Activated(self):
-        from bimplan.runtime.session import start_session
+        from bimplan.runtime.session import start_editing_session
 
-        start_session()
+        start_editing_session()
 
 
 FreeCADGui.addCommand("BIM_PlanEdit", BIM_PlanEdit())

@@ -1,3 +1,7 @@
 # SPDX-License-Identifier: LGPL-2.1-or-later
 
-"""Plan Edit runtime/session modules."""
+"""BIM editing runtime/session modules.
+
+Plan-specific helpers remain available while the public session boundary moves
+to representation-driven BIM editing runtimes.
+"""
