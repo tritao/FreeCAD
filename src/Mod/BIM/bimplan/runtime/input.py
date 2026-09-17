@@ -188,10 +188,15 @@ def claim_left_button_click(session, event_callback):
     session.input.set_event_handled(event_callback)
 
 
-def _get_mouse_event_position(event):
+def _get_mouse_event_position(event, view=None):
     try:
         pos = event.getPosition().getValue()
-        return (pos[0], pos[1])
+        pixel = (pos[0], pos[1])
+        if view is None:
+            return pixel
+        from BimContextualRendering import screen_pixel_from_view_pixel
+
+        return screen_pixel_from_view_pixel(view, pixel)
     except Exception:
         return None
 
@@ -244,7 +249,7 @@ def on_mouse_pressed(session, event_callback):
         return
 
     event = event_callback.getEvent()
-    mouse_pos = _get_mouse_event_position(event)
+    mouse_pos = _get_mouse_event_position(event, session.view)
     selected_before = session.selection.state.get_selected_plan_target()
     selected_before_description = _describe_plan_target(session, selected_before)
     with session.performance.plan_perf_trace_event(
@@ -289,7 +294,7 @@ def on_mouse_moved(session, event_callback):
         session
     ):
         return
-    mouse_pos = _get_mouse_event_position(event_callback.getEvent())
+    mouse_pos = _get_mouse_event_position(event_callback.getEvent(), session.view)
     hovered_before = session.selection.hover.get_hovered_plan_target()
     with session.performance.plan_perf_trace_event(
         "mouse_moved",

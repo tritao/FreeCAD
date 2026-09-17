@@ -135,8 +135,13 @@ def pick_plan_space_target_from_overlays(session, mouse_pos, radius_px=10):
 
 def _get_view_objects_info(session, mouse_pos):
     try:
+        from BimContextualRendering import view_pixel_from_screen_pixel
+
+        view_pixel = view_pixel_from_screen_pixel(session.view, mouse_pos)
         with _perf_trace_span(session, "view_get_objects_info"):
-            infos = session.view.getObjectsInfo((int(mouse_pos[0]), int(mouse_pos[1])))
+            infos = session.view.getObjectsInfo(
+                (int(view_pixel[0]), int(view_pixel[1]))
+            )
     except (AttributeError, ReferenceError, RuntimeError):
         return []
     return list(infos or [])

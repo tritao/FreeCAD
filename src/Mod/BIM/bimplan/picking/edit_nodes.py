@@ -145,7 +145,13 @@ def _get_ray_picked_edit_node(session, mouse_pos):
         return _emit_get_edit_node_result(session, mouse_pos, "coin_import_failed", None)
 
     ray_pick = coin.SoRayPickAction(render_manager.getViewportRegion())
-    ray_pick.setPoint(coin.SbVec2s(*mouse_pos))
+    try:
+        from BimContextualRendering import view_pixel_from_screen_pixel
+
+        mouse_pos = view_pixel_from_screen_pixel(session.view, mouse_pos)
+    except Exception:
+        pass
+    ray_pick.setPoint(coin.SbVec2s(int(mouse_pos[0]), int(mouse_pos[1])))
     ray_pick.setRadius(8)
     ray_pick.setPickAll(True)
     ray_pick.apply(render_manager.getSceneGraph())

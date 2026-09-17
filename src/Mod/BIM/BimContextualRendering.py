@@ -65,6 +65,25 @@ def _screen_pixel_for_ray(view, mouse_pos):
     return round(pixel_x), round(pixel_y)
 
 
+def screen_pixel_from_view_pixel(view, pixel):
+    """Convert a Coin viewport pixel to ``getPointOnScreen`` coordinates."""
+
+    try:
+        focal_point = view.getPointOnFocalPlane(
+            (int(round(pixel[0])), int(round(pixel[1])))
+        )
+        screen = view.getPointOnScreen(focal_point)
+        return float(screen[0]), float(screen[1])
+    except (AttributeError, ReferenceError, RuntimeError, TypeError, ValueError):
+        return float(pixel[0]), float(pixel[1])
+
+
+def view_pixel_from_screen_pixel(view, pixel):
+    """Convert ``getPointOnScreen`` coordinates to a Coin viewport pixel."""
+
+    return _screen_pixel_for_ray(view, pixel)
+
+
 @dataclass(frozen=True)
 class ContextualNodeMapping:
     source: object
