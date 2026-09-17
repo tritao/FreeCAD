@@ -210,6 +210,7 @@ def straight_wall_plan_model(wall, proxy, request):
 
 def _wall_trim_claims(wall):
     import ArchWallRelation
+    from bimviews import representation_cache
 
     claims = []
     for relation in ArchWallRelation.iter_wall_relations(wall):
@@ -217,7 +218,12 @@ def _wall_trim_claims(wall):
             continue
         if not ArchWallRelation.is_wall_joint(relation):
             return None
-        solution = ArchWallRelation.solve_wall_joint(relation)
+        solution = representation_cache.get_or_create_derived_value(
+            getattr(relation, "Document", None),
+            "wall-joint-solution",
+            getattr(relation, "Name", id(relation)),
+            lambda relation=relation: ArchWallRelation.solve_wall_joint(relation),
+        )
         if not solution.is_ok():
             return None
         claim = solution.trim_for_wall(wall)

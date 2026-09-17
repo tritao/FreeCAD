@@ -55,6 +55,33 @@ from bimcontextual.context_policy import capabilities_for, supports
 
 
 class TestArchRepresentation(unittest.TestCase):
+    def test_document_derived_values_are_reused_until_invalidation(self):
+        from bimviews import representation_cache
+
+        document = FreeCAD.newDocument("RepresentationDerivedValueCache")
+        self.addCleanup(FreeCAD.closeDocument, document.Name)
+        created = []
+
+        def factory():
+            value = object()
+            created.append(value)
+            return value
+
+        first = representation_cache.get_or_create_derived_value(
+            document, "test", "shared", factory
+        )
+        second = representation_cache.get_or_create_derived_value(
+            document, "test", "shared", factory
+        )
+        self.assertIs(first, second)
+
+        representation_cache.invalidate_document(document)
+        third = representation_cache.get_or_create_derived_value(
+            document, "test", "shared", factory
+        )
+        self.assertIsNot(first, third)
+        self.assertEqual(2, len(created))
+
     def test_contextual_wall_creation_uses_bim_wall_preferences(self):
         preferences = {
             "WallWidth": 345.0,

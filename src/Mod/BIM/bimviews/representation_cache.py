@@ -6,6 +6,7 @@ import FreeCAD
 
 
 _document_caches = {}
+_document_derived_values = {}
 _observer = None
 _GEOMETRY_PROPERTIES = {
     "Shape",
@@ -118,9 +119,23 @@ def cache_representation(obj, request, representation):
     return representation
 
 
+def get_or_create_derived_value(document, namespace, key, factory):
+    """Reuse document-derived data until semantic geometry is invalidated."""
+
+    if document is None:
+        return factory()
+    install_observer()
+    cache = _document_derived_values.setdefault(_document_key(document), {})
+    cache_key = (str(namespace), key)
+    if cache_key not in cache:
+        cache[cache_key] = factory()
+    return cache[cache_key]
+
+
 def invalidate_document(document):
     if document is not None:
         _document_caches.pop(_document_key(document), None)
+        _document_derived_values.pop(_document_key(document), None)
         from . import representation_layers
 
         representation_layers.invalidate_document(document)
@@ -136,6 +151,7 @@ def invalidate_object(obj):
         for key in tuple(cache):
             if key[0] == name:
                 cache.pop(key, None)
+    _document_derived_values.pop(_document_key(document), None)
     from . import representation_layers
 
     representation_layers.invalidate_document(document)
