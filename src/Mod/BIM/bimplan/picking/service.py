@@ -24,22 +24,30 @@ class PlanPickingAPI:
         self.session = session
 
     def pick(self, mouse_pos, *, mode="click", include_space_fallback=True):
+        from bimplan.picking.viewport import viewport_pixel
+
         del mode
         return plan_picking_coordinator.get_plan_target_at_position(
             self.session,
-            mouse_pos,
+            viewport_pixel(mouse_pos),
             include_space_fallback=include_space_fallback,
         )
 
     def hover(self, mouse_pos, force=False):
+        from bimplan.picking.viewport import viewport_pixel
+
         return plan_hover_picking.update_hovered_plan_target(
             self.session,
-            mouse_pos,
+            viewport_pixel(mouse_pos),
             force=force,
         )
 
     def pick_edit_node(self, mouse_pos):
-        return plan_edit_node_picking.get_edit_node(self.session, mouse_pos)
+        from bimplan.picking.viewport import viewport_pixel
+
+        return plan_edit_node_picking.get_edit_node(
+            self.session, viewport_pixel(mouse_pos)
+        )
 
     def get_plan_target_from_edit_node(self, node):
         return plan_edit_node_picking.get_plan_target_from_edit_node(self.session, node)

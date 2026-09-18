@@ -24,64 +24,13 @@ def _node_key(node):
 def ray_from_view(view, mouse_pos):
     """Convert a viewer pixel into a normalized world-space BIM edit ray."""
 
-    pixel = _screen_pixel_for_ray(view, mouse_pos)
-    near_point, far_point = view.projectPointToLine(pixel)
+    from bimplan.picking.viewport import coin_pixel
+
+    near_point, far_point = view.projectPointToLine(coin_pixel(mouse_pos))
     return ArchRepresentation.BIMEditRay(
         FreeCAD.Vector(near_point),
         FreeCAD.Vector(far_point).sub(FreeCAD.Vector(near_point)),
     )
-
-
-def _screen_pixel_for_ray(view, mouse_pos):
-    """Map projected overlay pixels to the view-volume ray coordinate system.
-
-    FreeCAD's world-to-screen helper and camera ray helper can use slightly
-    different viewport mappings. Calibrate the affine transform through the
-    focal plane so an overlay point and the ray for its mouse pixel agree.
-    """
-
-    step = 1000.0
-
-    def project_focal_pixel(pixel):
-        focal_point = view.getPointOnFocalPlane(pixel)
-        return view.getPointOnScreen(focal_point)
-
-    origin = (0, 0)
-    screen_origin = project_focal_pixel(origin)
-    screen_x = project_focal_pixel((int(step), 0))
-    screen_y = project_focal_pixel((0, int(step)))
-    ax = (float(screen_x[0]) - screen_origin[0]) / step
-    ay = (float(screen_y[0]) - screen_origin[0]) / step
-    bx = (float(screen_x[1]) - screen_origin[1]) / step
-    by = (float(screen_y[1]) - screen_origin[1]) / step
-    determinant = ax * by - ay * bx
-    if abs(determinant) <= 1e-10:
-        return int(mouse_pos[0]), int(mouse_pos[1])
-
-    dx = float(mouse_pos[0]) - screen_origin[0]
-    dy = float(mouse_pos[1]) - screen_origin[1]
-    pixel_x = (dx * by - ay * dy) / determinant
-    pixel_y = (ax * dy - dx * bx) / determinant
-    return round(pixel_x), round(pixel_y)
-
-
-def screen_pixel_from_view_pixel(view, pixel):
-    """Convert a Coin viewport pixel to ``getPointOnScreen`` coordinates."""
-
-    try:
-        focal_point = view.getPointOnFocalPlane(
-            (int(round(pixel[0])), int(round(pixel[1])))
-        )
-        screen = view.getPointOnScreen(focal_point)
-        return float(screen[0]), float(screen[1])
-    except (AttributeError, ReferenceError, RuntimeError, TypeError, ValueError):
-        return float(pixel[0]), float(pixel[1])
-
-
-def view_pixel_from_screen_pixel(view, pixel):
-    """Convert ``getPointOnScreen`` coordinates to a Coin viewport pixel."""
-
-    return _screen_pixel_for_ray(view, pixel)
 
 
 @dataclass(frozen=True)
@@ -198,13 +147,10 @@ class ContextualRepresentationRenderer:
         """Resolve identity from the exact Coin node visible under the cursor."""
 
         try:
+            from bimplan.picking.viewport import ray_pick_action
+
             render_manager = self.view.getViewer().getSoRenderManager()
-            action = coin.SoRayPickAction(render_manager.getViewportRegion())
-            pixel = _screen_pixel_for_ray(self.view, mouse_pos)
-            action.setPoint(coin.SbVec2s(int(pixel[0]), int(pixel[1])))
-            action.setRadius(float(radius_px))
-            action.setPickAll(True)
-            action.apply(render_manager.getSceneGraph())
+            action = ray_pick_action(render_manager, mouse_pos, radius_px=radius_px)
             for picked_point in action.getPickedPointList():
                 path = picked_point.getPath()
                 for index in range(path.getLength() - 1, -1, -1):

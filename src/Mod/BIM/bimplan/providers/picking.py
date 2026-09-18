@@ -317,7 +317,9 @@ def pick_provider_overlay_target_from_objects_info(session, mouse_pos):
         if not session.view or not mouse_pos:
             return plan_target_kinds.make_plan_target_ref()
         try:
-            infos = session.view.getObjectsInfo((int(mouse_pos[0]), int(mouse_pos[1])))
+            from bimplan.picking.viewport import objects_info
+
+            infos = objects_info(session.view, mouse_pos)
         except (AttributeError, ReferenceError, RuntimeError):
             return plan_target_kinds.make_plan_target_ref()
         if not infos:

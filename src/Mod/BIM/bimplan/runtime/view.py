@@ -783,12 +783,6 @@ def get_plan_point_from_mouse_pos(session, mouse_pos):
     if get_point is None:
         return None
     try:
-        from BimContextualRendering import view_pixel_from_screen_pixel
-
-        mouse_pos = view_pixel_from_screen_pixel(session.view, mouse_pos)
-    except Exception:
-        pass
-    try:
         point = get_point(int(mouse_pos[0]), int(mouse_pos[1]))
     except TypeError:
         try:

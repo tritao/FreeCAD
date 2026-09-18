@@ -121,6 +121,7 @@ SET(bimplan_SRCS
     bimplan/picking/hover.py
     bimplan/picking/overlays.py
     bimplan/picking/service.py
+    bimplan/picking/viewport.py
     bimplan/providers/__init__.py
     bimplan/providers/action_payloads.py
     bimplan/providers/builtin.py

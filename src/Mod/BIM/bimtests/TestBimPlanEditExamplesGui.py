@@ -87,10 +87,6 @@ class TestBimPlanEditExamplesGui(TestArchBaseGui):
         document = self._open_example(
             "BIMPlanEditBasic.FCStd", keep_startup_activity=True
         )
-        from BimContextualRendering import (
-            screen_pixel_from_view_pixel,
-            view_pixel_from_screen_pixel,
-        )
         from bimplan.runtime.session import get_active_session
 
         session = get_active_session()
@@ -115,12 +111,74 @@ class TestBimPlanEditExamplesGui(TestArchBaseGui):
                         FreeCAD.Vector(),
                     ) / 3.0
                     screen = session.view.getPointOnScreen(point)
-                    event_pixel = view_pixel_from_screen_pixel(session.view, screen)
-                    normalized = screen_pixel_from_view_pixel(session.view, event_pixel)
-                    target = session.picking.pick(normalized)
+                    target = session.picking.pick(screen)
                     if target is not None:
                         resolved.add(target.obj)
             self.assertIn(wall, resolved, wall.Name)
+
+    def test_basic_example_hover_resolves_last_coin_mouse_move(self):
+        """A throttled final Coin move must still hover each vertical wall."""
+
+        document = self._open_example(
+            "BIMPlanEditBasic.FCStd", keep_startup_activity=True
+        )
+        from bimplan.runtime.session import get_active_session
+
+        session = get_active_session()
+        self.assertIsNotNone(session)
+        self.addCleanup(session.shutdown, close_dialog=False)
+        self.pump_gui_events(250)
+
+        walls = self._objects_with_ifc_type(document, "Wall")
+        y_oriented_walls = sorted(
+            (
+                wall
+                for wall in walls
+                if wall.Shape.BoundBox.YLength > wall.Shape.BoundBox.XLength
+            ),
+            key=lambda wall: wall.Shape.BoundBox.Center.x,
+        )
+        vertical_walls = (y_oriented_walls[0], y_oriented_walls[-1])
+        horizontal_wall = next(
+            wall
+            for wall in walls
+            if wall.Shape.BoundBox.XLength > wall.Shape.BoundBox.YLength
+        )
+        self.assertGreaterEqual(len(y_oriented_walls), 2)
+
+        def event_pixel_for(wall):
+            representation = session.contextual_rendering.renderer._representations[wall]
+            for geometry in representation.cut_geometry:
+                mesh = representation.face_mesh_for(geometry)
+                if mesh is None:
+                    continue
+                for triangle in mesh.triangles:
+                    point = sum(
+                        (FreeCAD.Vector(mesh.vertices[index]) for index in triangle),
+                        FreeCAD.Vector(),
+                    ) / 3.0
+                    screen = session.view.getPointOnScreen(point)
+                    target = session.picking.pick(screen)
+                    if target is not None and target.obj is wall:
+                        return screen
+            self.fail(f"No visible semantic pick point for {wall.Name}")
+
+        event_manager = session.view.getViewer().getSoEventManager()
+
+        def send_move(pixel):
+            event = coin.SoLocation2Event()
+            event.setPosition(coin.SbVec2s(round(pixel[0]), round(pixel[1])))
+            event_manager.processEvent(event)
+
+        lead_in = event_pixel_for(horizontal_wall)
+        for wall in vertical_walls:
+            session.hover_pick_state.last_time = 0.0
+            send_move(lead_in)
+            send_move(event_pixel_for(wall))
+            self.assertTrue(session.hover_pick_state.trailing_pick_queued)
+            self.pump_gui_events(100)
+            hovered = session.selection.hover.get_hovered_plan_target()
+            self.assertIs(wall, hovered.obj)
 
     def test_basic_example_loads_and_renders_semantically(self):
         document = self._open_example("BIMPlanEditBasic.FCStd")
@@ -346,14 +404,9 @@ class TestBimPlanEditExamplesGui(TestArchBaseGui):
             mappings.append(session.contextual_rendering.pick_mapping(screen_point))
         self.assertIn(wall, {mapping.source for mapping in mappings if mapping is not None})
 
-        # Real input arrives in Coin viewport coordinates, while semantic
-        # overlays and getPointOnScreen use projected screen coordinates.
-        # Exercise that conversion for every wall, including the narrow
-        # clipped exterior walls that expose even a small coordinate offset.
-        from BimContextualRendering import (
-            screen_pixel_from_view_pixel,
-            view_pixel_from_screen_pixel,
-        )
+        # Coin events, native ray picks, and getPointOnScreen all use the same
+        # viewport/device-pixel contract. Exercise it for every wall, including
+        # the narrow clipped exterior walls that expose small coordinate shifts.
 
         for candidate in self._objects_with_ifc_type(document, "Wall"):
             candidate_representation = renderer._representations[candidate]
@@ -371,12 +424,8 @@ class TestBimPlanEditExamplesGui(TestArchBaseGui):
                         FreeCAD.Vector(),
                     ) / 3.0
                     screen = session.view.getPointOnScreen(point)
-                    event_pixel = view_pixel_from_screen_pixel(session.view, screen)
-                    normalized = screen_pixel_from_view_pixel(
-                        session.view, event_pixel
-                    )
                     candidate_hits.append(
-                        session.contextual_rendering.pick_mapping(normalized)
+                        session.contextual_rendering.pick_mapping(screen)
                     )
             self.assertIn(
                 candidate,

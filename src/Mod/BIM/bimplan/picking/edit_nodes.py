@@ -140,21 +140,11 @@ def _get_ray_picked_edit_node(session, mouse_pos):
     if not render_manager:
         return _emit_get_edit_node_result(session, mouse_pos, "no_render_manager", None)
     try:
-        from pivy import coin
+        from bimplan.picking.viewport import ray_pick_action
     except Exception:
         return _emit_get_edit_node_result(session, mouse_pos, "coin_import_failed", None)
 
-    ray_pick = coin.SoRayPickAction(render_manager.getViewportRegion())
-    try:
-        from BimContextualRendering import view_pixel_from_screen_pixel
-
-        mouse_pos = view_pixel_from_screen_pixel(session.view, mouse_pos)
-    except Exception:
-        pass
-    ray_pick.setPoint(coin.SbVec2s(int(mouse_pos[0]), int(mouse_pos[1])))
-    ray_pick.setRadius(8)
-    ray_pick.setPickAll(True)
-    ray_pick.apply(render_manager.getSceneGraph())
+    ray_pick = ray_pick_action(render_manager, mouse_pos, radius_px=8)
     picked_points = ray_pick.getPickedPointList()
     if not picked_points:
         return _emit_get_edit_node_result(session, mouse_pos, "no_edit_node", None)

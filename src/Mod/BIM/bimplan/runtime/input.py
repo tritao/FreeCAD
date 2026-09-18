@@ -193,14 +193,16 @@ def claim_left_button_click(session, event_callback):
 
 
 def _get_mouse_event_position(event, view=None):
+    del view
     try:
-        pos = event.getPosition().getValue()
-        pixel = (pos[0], pos[1])
-        if view is None:
-            return pixel
-        from BimContextualRendering import screen_pixel_from_view_pixel
+        from bimplan.picking.viewport import viewport_pixel
 
-        return screen_pixel_from_view_pixel(view, pixel)
+        pos = event.getPosition().getValue()
+        # SoEvent, SoRayPickAction, and View3D.getObjectsInfo all share Coin's
+        # viewport/device-pixel coordinate system.  Keep that coordinate intact
+        # throughout input routing; world projection is only needed when testing
+        # analytic geometry in screen space.
+        return viewport_pixel(pos)
     except Exception:
         return None
 
