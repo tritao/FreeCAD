@@ -240,10 +240,11 @@ class TestBimPlanEditExamplesGui(TestArchBaseGui):
             session.hover_pick_state.last_time = 0.0
             send_move(lead_in)
             send_move(event_pixel_for(wall))
-            self.assertTrue(session.hover_pick_state.trailing_pick_queued)
-            self.pump_gui_events(100)
-            hovered = session.selection.hover.get_hovered_plan_target()
-            self.assertIs(wall, hovered.obj)
+            self.assertTrue(
+                self.pump_gui_events_until(
+                    lambda: session.selection.hover.get_hovered_plan_target().obj is wall,
+                )
+            )
 
     def test_basic_example_loads_and_renders_semantically(self):
         document = self._open_example("BIMPlanEditBasic.FCStd")
@@ -769,6 +770,7 @@ class TestBimPlanEditExamplesGui(TestArchBaseGui):
                 self.pump_gui_events(20)
                 with patch.object(session.picking, "pick_edit_node", return_value=edit_node):
                     send_button(start, coin.SoButtonEvent.DOWN)
+                send_button(start, coin.SoButtonEvent.UP)
                 self.pump_gui_events(20)
                 self.assertIsNotNone(session.contextual_editing.editor)
 

@@ -540,6 +540,10 @@ def apply_plan_view(session, fit=True):
 def apply_representation_request(session, request, fit=True):
     """Apply the camera and Draft plane described by a BIM request."""
 
+    runtime = session.runtime_for(session.view, create=False)
+    if runtime is not None:
+        runtime.set_request(request)
+
     frame = getattr(request, "reference_frame", None)
     if frame is None:
         return apply_plan_view(session, fit=fit)

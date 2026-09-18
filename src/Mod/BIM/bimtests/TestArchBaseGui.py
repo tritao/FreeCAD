@@ -87,3 +87,16 @@ class TestArchBaseGui(TestArchBase):
         except Exception:
             # Best-effort: if Qt isn't present or event pumping fails, continue.
             pass
+
+    def pump_gui_events_until(self, predicate, timeout_ms=1000, poll_ms=20):
+        """Process GUI events until `predicate` succeeds or the timeout expires."""
+
+        try:
+            from PySide import QtCore
+
+            deadline = QtCore.QDeadlineTimer(int(timeout_ms))
+            while not predicate() and deadline.remainingTime() > 0:
+                self.pump_gui_events(min(int(poll_ms), deadline.remainingTime()))
+            return bool(predicate())
+        except Exception:
+            return False
