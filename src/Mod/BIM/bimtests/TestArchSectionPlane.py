@@ -29,6 +29,7 @@ import ArchSectionPlane
 import TechDrawBIM
 import Draft
 import os
+from types import SimpleNamespace
 import FreeCAD as App
 import Part
 from bimtests import TestArchBase
@@ -120,6 +121,22 @@ class TestArchSectionPlane(TestArchBase.TestArchBase):
             ArchRepresentation.ProjectedLineCategory.VISIBLE_HARD.value,
             representation.source_mappings[0].role,
         )
+
+    def testElevationPresentationProfileClamps_invalid_line_weights(self):
+        section_plane = Arch.makeSectionPlane(name="InvalidPresentation")
+        section_plane.Purpose = "Elevation"
+        request_source = SimpleNamespace(
+            Purpose="Elevation",
+            Placement=section_plane.Placement,
+            Depth=0.0,
+            ShowSilhouettes=True,
+            VisibleLineWidth=-2.0,
+            SilhouetteLineWidth=float("nan"),
+        )
+        request = section_plane.Proxy.getRepresentationRequest(request_source)
+
+        self.assertEqual(0.1, request.presentation_profile["visible_line_width"])
+        self.assertEqual(1.35, request.presentation_profile["silhouette_line_width"])
 
     def testProjectionGeometryCharacterizesCutAndForwardShapes(self):
         """Neutral projection preserves the established section split."""

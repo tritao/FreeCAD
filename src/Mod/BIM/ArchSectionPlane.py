@@ -1267,6 +1267,13 @@ class _SectionPlane:
 
         depth = float(getattr(getattr(obj, "Depth", 0.0), "Value", 0.0))
 
+        def profile_width(name, default):
+            try:
+                value = float(getattr(obj, name, default))
+            except (TypeError, ValueError):
+                value = float(default)
+            return max(0.1, value) if math.isfinite(value) else float(default)
+
         purpose = ArchRepresentation.RepresentationPurpose(str(obj.Purpose))
         projection_range = (0.0, depth)
         if purpose == ArchRepresentation.RepresentationPurpose.ELEVATION and depth > 0.0:
@@ -1282,10 +1289,8 @@ class _SectionPlane:
             source=obj,
             presentation_profile={
                 "show_silhouettes": bool(getattr(obj, "ShowSilhouettes", True)),
-                "visible_line_width": float(getattr(obj, "VisibleLineWidth", 1.0)),
-                "silhouette_line_width": float(
-                    getattr(obj, "SilhouetteLineWidth", 1.35)
-                ),
+                "visible_line_width": profile_width("VisibleLineWidth", 1.0),
+                "silhouette_line_width": profile_width("SilhouetteLineWidth", 1.35),
             },
         )
 
