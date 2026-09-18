@@ -166,22 +166,23 @@ def project_shapes(
     )
 
 
-def project_elevation_object(obj, request, *, deflection=None):
-    """Return a viewport-ready 2D projection of one object on an elevation.
-
-    The generic adapter deliberately uses TechDraw's OCC projection rather
-    than inventing a second HLR implementation. Object-specific BIM providers
-    can replace this result later while preserving the same representation
-    contract and semantic source mappings.
-    """
-
+def _validate_elevation_request(request):
     if getattr(request, "purpose", None) != ArchRepresentation.RepresentationPurpose.ELEVATION:
         raise ValueError("An Elevation representation request is required")
     frame = getattr(request, "reference_frame", None)
-    shape = getattr(obj, "Shape", None)
-    if frame is None or shape is None or shape.isNull():
+    if frame is None:
         raise ArchRepresentation.RepresentationUnavailable(
-            "Elevation projection requires a reference frame and a shape"
+            "Elevation projection requires a reference frame"
+        )
+    return frame
+
+
+def _local_elevation_shape(obj, request):
+    frame = _validate_elevation_request(request)
+    shape = getattr(obj, "Shape", None)
+    if shape is None or shape.isNull():
+        raise ArchRepresentation.RepresentationUnavailable(
+            "Elevation projection requires a shape"
         )
 
     local_shape = shape.copy()
@@ -191,7 +192,29 @@ def project_elevation_object(obj, request, *, deflection=None):
         range_min, range_max = sorted(float(value) for value in projection_range)
         bounds = local_shape.BoundBox
         if bounds.ZMax < range_min or bounds.ZMin > range_max:
-            return ArchRepresentation.ViewportRepresentation(source=obj, request=request)
+            return None
+        if bounds.ZMin < range_min or bounds.ZMax > range_max:
+            import Part
+
+            margin = max(bounds.DiagonalLength * 0.01, 1.0)
+            clip = Part.makeBox(
+                max(bounds.XLength + 2.0 * margin, margin),
+                max(bounds.YLength + 2.0 * margin, margin),
+                max(range_max - range_min, 1e-7),
+                FreeCAD.Vector(bounds.XMin - margin, bounds.YMin - margin, range_min),
+            )
+            unclipped_shape = local_shape
+            local_shape = local_shape.common(clip)
+            if local_shape.isNull():
+                return None
+            if not local_shape.BoundBox.isValid():
+                local_shape = unclipped_shape
+    return local_shape
+
+
+def _project_visible_edges(local_shape):
+    if local_shape is None or local_shape.isNull():
+        return ()
 
     import TechDraw
 
@@ -204,8 +227,15 @@ def project_elevation_object(obj, request, *, deflection=None):
     edges = [edge for group in groups[:5] for edge in getattr(group, "Edges", ())]
     if edges:
         edges = TechDraw.scrubEdges(edges)
+    return tuple(edges)
+
+
+def _representation_from_edges(obj, request, local_shape, edges, deflection=None):
+    frame = _validate_elevation_request(request)
 
     representation = ArchRepresentation.ViewportRepresentation(source=obj, request=request)
+    if local_shape is None:
+        return representation
     target_offset = float(getattr(request, "target_offset", 0.0) or 0.0)
     if deflection is None:
         diagonal = max(local_shape.BoundBox.DiagonalLength, 1.0)
@@ -228,3 +258,81 @@ def project_elevation_object(obj, request, *, deflection=None):
             subelement="ElevationEdge{}".format(index),
         )
     return representation
+
+
+def project_elevation_object(obj, request, *, deflection=None):
+    """Return a viewport-ready 2D projection of one object on an elevation."""
+
+    local_shape = _local_elevation_shape(obj, request)
+    return _representation_from_edges(
+        obj,
+        request,
+        local_shape,
+        _project_visible_edges(local_shape),
+        deflection=deflection,
+    )
+
+
+def project_elevation_scope(objects, request, *, deflection=None):
+    """Project one elevation scope with global hidden-line removal.
+
+    The scope is projected as one compound so nearer objects suppress geometry
+    behind them. Surviving edges are then associated with the nearest source
+    whose independent projection contains that edge, preserving semantic BIM
+    identity for viewport picking and contextual editing.
+    """
+
+    _validate_elevation_request(request)
+    local_shapes = []
+    for obj in objects:
+        try:
+            shape = _local_elevation_shape(obj, request)
+        except ArchRepresentation.RepresentationUnavailable:
+            shape = None
+        if (
+            shape is not None
+            and not shape.isNull()
+            and shape.BoundBox.isValid()
+        ):
+            local_shapes.append((obj, shape))
+
+    representations = {
+        obj: ArchRepresentation.ViewportRepresentation(source=obj, request=request)
+        for obj in objects
+    }
+    if not local_shapes:
+        return representations
+
+    import Part
+
+    scope_edges = _project_visible_edges(
+        Part.makeCompound([shape for _obj, shape in local_shapes])
+    )
+    source_edges = {
+        obj: _project_visible_edges(shape) for obj, shape in local_shapes
+    }
+    diagonal = max(
+        (shape.BoundBox.DiagonalLength for _obj, shape in local_shapes), default=1.0
+    )
+    tolerance = max(diagonal * 1e-7, 1e-5)
+    assigned = {obj: [] for obj, _shape in local_shapes}
+    for edge in scope_edges:
+        candidates = []
+        for obj, shape in local_shapes:
+            if any(
+                edge.distToShape(candidate)[0] <= tolerance
+                for candidate in source_edges[obj]
+            ):
+                candidates.append((shape.BoundBox.ZMax, obj))
+        if candidates:
+            assigned[max(candidates, key=lambda item: item[0])[1]].append(edge)
+
+    for obj, shape in local_shapes:
+        representations[obj] = _representation_from_edges(
+            obj,
+            request,
+            shape,
+            assigned[obj],
+            deflection=deflection,
+        )
+    return representations

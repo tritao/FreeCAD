@@ -316,6 +316,16 @@ class ContextualSession:
 
         current_sources = set()
         current_capabilities = []
+        elevation_representations = {}
+        if self._projected_elevation:
+            import ArchSectionProjection
+
+            try:
+                elevation_representations = ArchSectionProjection.project_elevation_scope(
+                    selected, self.request
+                )
+            except (ArchRepresentation.RepresentationUnavailable, RuntimeError):
+                elevation_representations = {}
         for obj in selected:
             try:
                 capabilities = ArchRepresentation.edit_capabilities_for(obj, self.request)
@@ -334,9 +344,8 @@ class ContextualSession:
                 continue
             display = capabilities
             if self._projected_elevation:
-                try:
-                    display = ArchRepresentation.view_representation_for(obj, self.request)
-                except (ArchRepresentation.RepresentationUnavailable, RuntimeError):
+                display = elevation_representations.get(obj)
+                if display is None:
                     display = ArchRepresentation.ViewportRepresentation(
                         source=obj, request=self.request
                     )

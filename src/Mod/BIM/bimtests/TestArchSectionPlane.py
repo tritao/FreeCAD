@@ -176,6 +176,31 @@ class TestArchSectionPlane(TestArchBase.TestArchBase):
 
         self.assertFalse(representation.projected_geometry)
 
+    def testElevationScopeRemovesEdgesHiddenBehindNearerObjects(self):
+        front = self._makeBox(length=1000, width=1200, height=50)
+        front.Placement.Base.z = -100
+        back = self._makeBox(length=1000, width=1200, height=50)
+        back.Placement.Base.z = -300
+        request = ArchRepresentation.RepresentationRequest(
+            purpose=ArchRepresentation.RepresentationPurpose.ELEVATION,
+            reference_frame=App.Placement(),
+            projection_range=(-500.0, 0.0),
+        )
+        self.document.recompute()
+
+        representations = ArchSectionProjection.project_elevation_scope(
+            (front, back), request
+        )
+
+        self.assertTrue(representations[front].projected_geometry)
+        self.assertFalse(representations[back].projected_geometry)
+        self.assertTrue(
+            all(
+                mapping.source is front
+                for mapping in representations[front].source_mappings
+            )
+        )
+
     def testTechDrawUsesSemanticRepresentationWithoutLegacyCutShapes(self):
         """The production section path consumes provider geometry directly."""
 
