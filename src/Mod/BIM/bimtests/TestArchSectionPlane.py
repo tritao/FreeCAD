@@ -294,6 +294,20 @@ class TestArchSectionPlane(TestArchBase.TestArchBase):
         self.assertGreater(first_count, 0)
         self.assertGreater(len(calls), first_count)
 
+        styled_request = ArchRepresentation.RepresentationRequest(
+            purpose=ArchRepresentation.RepresentationPurpose.ELEVATION,
+            reference_frame=request.reference_frame,
+            projection_range=request.projection_range,
+            presentation_profile={"show_silhouettes": False, "visible_line_width": 2.0},
+        )
+        geometry_calls = len(calls)
+        ArchSectionProjection.project_elevation_scope((box,), styled_request)
+        self.assertEqual(
+            geometry_calls,
+            len(calls),
+            "Presentation changes should not invalidate derived OCC geometry",
+        )
+
     def testTechDrawUsesSemanticRepresentationWithoutLegacyCutShapes(self):
         """The production section path consumes provider geometry directly."""
 

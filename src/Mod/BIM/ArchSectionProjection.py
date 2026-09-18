@@ -327,7 +327,7 @@ def project_elevation_scope(objects, request, *, deflection=None):
     from bimviews import representation_cache
 
     cache_key = (
-        representation_cache.representation_request_key(request),
+        representation_cache.geometry_request_key(request),
         tuple(getattr(obj, "Name", None) or id(obj) for obj in objects),
     )
 

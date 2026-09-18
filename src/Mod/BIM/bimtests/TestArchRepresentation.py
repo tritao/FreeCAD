@@ -99,6 +99,10 @@ class TestArchRepresentation(unittest.TestCase):
             representation_cache.representation_request_key(base),
             representation_cache.representation_request_key(changed),
         )
+        self.assertEqual(
+            representation_cache.geometry_request_key(base),
+            representation_cache.geometry_request_key(changed),
+        )
 
     def test_plan_request_comparison_includes_presentation_profile(self):
         from bimplan.representation_request import _request_values_equal

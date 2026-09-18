@@ -72,7 +72,7 @@ def _frame_key(frame):
         return repr(frame)
 
 
-def representation_request_key(request):
+def representation_request_key(request, *, include_presentation=True):
     """Return a stable value key for renderer-independent request inputs."""
 
     if request is None:
@@ -83,7 +83,7 @@ def representation_request_key(request):
         getattr(getattr(source, "Document", None), "Name", None),
         getattr(source, "Name", None),
     )
-    return (
+    key = (
         purpose,
         getattr(getattr(request, "representation_mode", None), "value", None),
         source_key,
@@ -92,8 +92,16 @@ def representation_request_key(request):
         _number_key(getattr(request, "target_offset", None)),
         _range_key(getattr(request, "cut_range", None)),
         _range_key(getattr(request, "projection_range", None)),
-        tuple(sorted(getattr(request, "presentation_profile", {}).items())),
     )
+    if include_presentation:
+        key += (tuple(sorted(getattr(request, "presentation_profile", {}).items())),)
+    return key
+
+
+def geometry_request_key(request):
+    """Return a key for derived geometry, excluding renderer presentation."""
+
+    return representation_request_key(request, include_presentation=False)
 
 
 def _document_key(document):
