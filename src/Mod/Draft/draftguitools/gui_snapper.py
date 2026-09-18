@@ -1556,10 +1556,28 @@ class Snapper:
                 self.dim2.on()
 
     def get_quarter_widget(self, mw):
+        if not Gui.isValidQObject(mw):
+            return []
+        try:
+            mdi_area = mw.findChild(QtWidgets.QMdiArea)
+        except (AttributeError, RuntimeError, TypeError):
+            return []
+        if not Gui.isValidQObject(mdi_area):
+            return []
+        try:
+            widgets = mdi_area.findChildren(QtWidgets.QWidget)
+        except (AttributeError, RuntimeError, TypeError):
+            return []
+
         views = []
-        for w in mw.findChild(QtWidgets.QMdiArea).findChildren(QtWidgets.QWidget):
-            if w.inherits("SIM::Coin3D::Quarter::QuarterWidget"):
-                views.append(w)
+        for widget in widgets:
+            if not Gui.isValidQObject(widget):
+                continue
+            try:
+                if widget.inherits("SIM::Coin3D::Quarter::QuarterWidget"):
+                    views.append(widget)
+            except (AttributeError, RuntimeError, TypeError):
+                continue
         return views
 
     def device_pixel_ratio(self):

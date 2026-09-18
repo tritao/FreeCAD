@@ -27,7 +27,7 @@
 import FreeCAD as App
 import FreeCADGui as Gui
 import DraftGui
-from PySide import QtCore
+from PySide import QtCore, QtWidgets
 from draftguitools import gui_base
 from draftguitools import gui_snapper
 from draftguitools import gui_trackers
@@ -81,6 +81,26 @@ class DraftSnapper(test_base.DraftTestCaseDoc):
 
         def displayPoint(self, *args, **kwargs):
             pass
+
+    def test_get_quarter_widget_ignores_deleted_wrappers(self):
+        """MDI teardown may leave deleted widget wrappers in a traversal result."""
+        try:
+            from shiboken6 import Shiboken
+        except ImportError:
+            from shiboken2 import Shiboken
+
+        deleted_widget = QtWidgets.QWidget()
+        Shiboken.delete(deleted_widget)
+        mdi_area = SimpleNamespace(findChildren=lambda _widget_type: [deleted_widget])
+        main_window = SimpleNamespace(findChild=lambda _widget_type: mdi_area)
+        snapper = gui_snapper.Snapper()
+
+        with patch.object(
+            Gui,
+            "isValidQObject",
+            side_effect=lambda obj: obj is not deleted_widget,
+        ):
+            self.assertEqual([], snapper.get_quarter_widget(main_window))
 
     def test_semantic_snap_providers_are_stacked_and_removable(self):
         snapper = gui_snapper.Snapper()
