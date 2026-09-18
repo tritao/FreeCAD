@@ -203,28 +203,42 @@ def document_is_alive(session):
 
 def attach_document_observer(session):
     visual_state = _document_visual_state(session)
-    if visual_state.document_observer_added:
-        return
-    try:
-        import FreeCAD
+    if not visual_state.representation_cache_listener_added:
+        try:
+            from bimviews import representation_cache
 
-        FreeCAD.addDocumentObserver(session)
-        visual_state.document_observer_added = True
-    except (ImportError, AttributeError, RuntimeError):
-        pass
+            representation_cache.add_invalidation_listener(session)
+            visual_state.representation_cache_listener_added = True
+        except (ImportError, AttributeError, RuntimeError, TypeError):
+            pass
+    if not visual_state.document_observer_added:
+        try:
+            import FreeCAD
+
+            FreeCAD.addDocumentObserver(session)
+            visual_state.document_observer_added = True
+        except (ImportError, AttributeError, RuntimeError):
+            pass
 
 
 def detach_document_observer(session):
     visual_state = _document_visual_state(session)
-    if not visual_state.document_observer_added:
-        return
-    try:
-        import FreeCAD
+    if visual_state.representation_cache_listener_added:
+        try:
+            from bimviews import representation_cache
 
-        FreeCAD.removeDocumentObserver(session)
-    except (ImportError, AttributeError, RuntimeError):
-        pass
-    visual_state.document_observer_added = False
+            representation_cache.remove_invalidation_listener(session)
+        except (ImportError, AttributeError, RuntimeError, TypeError):
+            pass
+        visual_state.representation_cache_listener_added = False
+    if visual_state.document_observer_added:
+        try:
+            import FreeCAD
+
+            FreeCAD.removeDocumentObserver(session)
+        except (ImportError, AttributeError, RuntimeError):
+            pass
+        visual_state.document_observer_added = False
 
 
 @contextmanager
@@ -502,6 +516,41 @@ def slot_recomputed_document(session, doc):
     invalidate_document_dependent_plan_visuals(session)
 
 
+def queue_contextual_representation_refresh(session, obj):
+    if session.lifecycle_state.tearing_down or obj is None:
+        return
+    if getattr(obj, "Document", None) is not session.doc:
+        return
+    visual_state = _document_visual_state(session)
+    visual_state.dirty_contextual_representation_sources.add(obj)
+    if visual_state.contextual_representation_refresh_queued:
+        return
+    visual_state.contextual_representation_refresh_queued = True
+    import FreeCADGui
+
+    FreeCADGui.invokeLater(
+        lambda: flush_contextual_representation_refresh(session, session.doc)
+    )
+
+
+def flush_contextual_representation_refresh(session, doc):
+    visual_state = _document_visual_state(session)
+    visual_state.contextual_representation_refresh_queued = False
+    if session.lifecycle_state.tearing_down or doc is not session.doc:
+        return False
+    dirty_sources = tuple(visual_state.dirty_contextual_representation_sources)
+    visual_state.dirty_contextual_representation_sources.clear()
+    if not dirty_sources:
+        return False
+    from bimviews.representation_cache import invalidate_object
+
+    for source in dirty_sources:
+        invalidate_object(source)
+        session.contextual_rendering.refresh_object(source)
+    session.viewport.flush_scene_graph_mutations()
+    return True
+
+
 def slot_deleted_document(session, doc):
     del doc
     if session.lifecycle_state.tearing_down:
@@ -581,6 +630,12 @@ class PlanDocumentVisualsAPI:
 
     def slot_recomputed_document(self, doc):
         return slot_recomputed_document(self.session, doc)
+
+    def queue_contextual_representation_refresh(self, obj):
+        return queue_contextual_representation_refresh(self.session, obj)
+
+    def flush_contextual_representation_refresh(self, doc):
+        return flush_contextual_representation_refresh(self.session, doc)
 
     def slot_deleted_document(self, doc):
         return slot_deleted_document(self.session, doc)

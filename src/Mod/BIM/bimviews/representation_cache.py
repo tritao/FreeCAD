@@ -3,11 +3,13 @@
 """Document-owned renderer-neutral BIM representation cache."""
 
 import FreeCAD
+import weakref
 
 
 _document_caches = {}
 _document_derived_values = {}
 _observer = None
+_invalidation_listeners = weakref.WeakSet()
 _GEOMETRY_PROPERTIES = {
     "Shape",
     "Placement",
@@ -182,6 +184,24 @@ def invalidate_for_object_change(obj, prop):
     return True
 
 
+def add_invalidation_listener(listener):
+    """Observe cache invalidations through the single document observer."""
+
+    _invalidation_listeners.add(listener)
+    install_observer()
+
+
+def remove_invalidation_listener(listener):
+    _invalidation_listeners.discard(listener)
+
+
+def _notify_invalidation_listeners(method_name, *args):
+    for listener in tuple(_invalidation_listeners):
+        callback = getattr(listener, method_name, None)
+        if callable(callback):
+            callback(*args)
+
+
 class _RepresentationCacheObserver:
     """Keep cached geometry valid while no Plan editing session exists."""
 
@@ -190,7 +210,8 @@ class _RepresentationCacheObserver:
         # Saved-view activation changes persistent selection metadata and camera
         # state but not model geometry.  Keeping this exception is what allows
         # MODEL -> PLAN -> MODEL -> PLAN to reuse the prepared representation.
-        invalidate_for_object_change(obj, prop)
+        if invalidate_for_object_change(obj, prop):
+            _notify_invalidation_listeners("representationCacheObjectInvalidated", obj)
 
     @staticmethod
     def slotCreatedObject(obj):

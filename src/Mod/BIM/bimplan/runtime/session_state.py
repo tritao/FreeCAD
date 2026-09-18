@@ -222,7 +222,10 @@ class PlanDocumentVisualState:
     document_visual_refresh_deferred: bool = False
     deferred_selection_effects: list = field(default_factory=list)
     document_observer_added: bool = False
+    representation_cache_listener_added: bool = False
     contextual_edit_recompute_depth: int = 0
+    dirty_contextual_representation_sources: set = field(default_factory=set)
+    contextual_representation_refresh_queued: bool = False
 
 
 @dataclass

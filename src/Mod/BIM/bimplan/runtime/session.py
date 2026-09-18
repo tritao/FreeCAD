@@ -643,6 +643,9 @@ class BIMEditingSession:
     def slotRecomputedDocument(self, *args):
         return self.document_visuals.slot_recomputed_document(*args)
 
+    def representationCacheObjectInvalidated(self, obj):
+        return self.document_visuals.queue_contextual_representation_refresh(obj)
+
     def slotDeletedDocument(self, *args):
         return self.document_visuals.slot_deleted_document(*args)
 

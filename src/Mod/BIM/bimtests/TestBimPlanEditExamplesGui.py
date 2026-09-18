@@ -577,18 +577,27 @@ class TestBimPlanEditExamplesGui(TestArchBaseGui):
         wall = self._objects_with_ifc_type(document, "Wall")[-1]
         renderer = session.contextual_rendering.renderer
         original = renderer._representations[wall]
-
+        original_bounds = tuple(
+            (geometry.BoundBox.XLength, geometry.BoundBox.YLength)
+            for geometry in original.cut_geometry
+            if getattr(geometry, "ShapeType", "") == "Face"
+        )
         wall.Width = wall.Width.Value + 50
         document.recompute()
         self.pump_gui_events()
 
         refreshed = renderer._representations[wall]
-        self.assertIsNot(original, refreshed)
         face = next(
             geometry
             for geometry in refreshed.cut_geometry
             if getattr(geometry, "ShapeType", "") == "Face"
         )
+        refreshed_bounds = tuple(
+            (geometry.BoundBox.XLength, geometry.BoundBox.YLength)
+            for geometry in refreshed.cut_geometry
+            if getattr(geometry, "ShapeType", "") == "Face"
+        )
+        self.assertNotEqual(original_bounds, refreshed_bounds)
         mesh = refreshed.face_mesh_for(face)
         vertices, triangles = mesh.vertices, mesh.triangles
         self.assertAlmostEqual(face.BoundBox.XMin, min(point.x for point in vertices))
