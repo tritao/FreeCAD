@@ -335,11 +335,7 @@ class ContextualSession:
             display = capabilities
             if self._projected_elevation:
                 try:
-                    import ArchSectionProjection
-
-                    display = ArchSectionProjection.project_elevation_object(
-                        obj, self.request
-                    )
+                    display = ArchRepresentation.view_representation_for(obj, self.request)
                 except (ArchRepresentation.RepresentationUnavailable, RuntimeError):
                     display = ArchRepresentation.ViewportRepresentation(
                         source=obj, request=self.request

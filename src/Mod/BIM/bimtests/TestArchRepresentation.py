@@ -43,6 +43,7 @@ from ArchRepresentation import (
     query_representation_snap_candidates,
     edit_capabilities_for,
     representation_for,
+    view_representation_for,
 )
 from bimcontextual.editing import (
     BIMContextualHandleEditor,
@@ -1048,6 +1049,27 @@ class TestArchRepresentation(unittest.TestCase):
         obj.Proxy = object()
         with self.assertRaises(RepresentationUnavailable):
             representation_for(obj, RepresentationRequest())
+
+    def test_view_representation_falls_back_to_view_provider(self):
+        request = RepresentationRequest(purpose=RepresentationPurpose.PLAN)
+
+        class ViewProvider:
+            def getRepresentation(self, obj, requested_request):
+                self.args = (obj, requested_request)
+                return BIMRepresentation(source=obj, request=requested_request)
+
+        class BIMObject:
+            pass
+
+        obj = BIMObject()
+        obj.Proxy = object()
+        obj.ViewObject = BIMObject()
+        obj.ViewObject.Proxy = ViewProvider()
+
+        result = view_representation_for(obj, request)
+
+        self.assertIs(result.source, obj)
+        self.assertEqual((obj, request), obj.ViewObject.Proxy.args)
 
     def test_edit_capabilities_have_no_representation_geometry(self):
         request = RepresentationRequest(purpose=RepresentationPurpose.MODEL)

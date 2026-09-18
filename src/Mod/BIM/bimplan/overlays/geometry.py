@@ -3,6 +3,7 @@
 """Overlay geometry and cache helpers for BIM Plan Edit."""
 
 import ArchPlanGeometry
+import ArchRepresentation
 from bimviews import representation_cache
 from bimplan.overlays import openings as opening_overlays
 from bimplan.overlays import spaces as space_overlays
@@ -328,11 +329,9 @@ def get_wall_representation(session, wall):
 def get_contextual_representation(session, obj):
     """Request an object-owned representation for the active BIM request.
 
-    Representation ownership is capability-based: the semantic object's
-    provider (or its view provider for hosted objects) implements
-    ``getRepresentation(obj, request)``.  This keeps the rendering session
-    independent of BIM type names and lets SectionPlane/elevation providers
-    participate without adding another dispatcher branch.
+    Resolution is delegated to the shared architectural-view projector. This
+    keeps Plan Edit independent of BIM type names and gives plan, section, and
+    elevation viewports one representation boundary.
     """
     semantic_obj = session.visibility.get_plan_semantic_object(obj)
     if semantic_obj is None:
@@ -345,11 +344,10 @@ def get_contextual_representation(session, obj):
         return cached
 
     def compute(source):
-        representation = _get_proxy_representation(getattr(source, "Proxy", None), source, request)
-        if representation is not None:
-            return representation
-        view_object = getattr(source, "ViewObject", None)
-        return _get_proxy_representation(getattr(view_object, "Proxy", None), source, request)
+        try:
+            return ArchRepresentation.view_representation_for(source, request)
+        except (ArchRepresentation.RepresentationUnavailable, RuntimeError, TypeError):
+            return None
 
     representation = get_cached_plan_overlay_geometry(
         session,

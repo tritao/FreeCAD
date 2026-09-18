@@ -952,6 +952,35 @@ def representation_for(obj, request):
     return representation
 
 
+def view_representation_for(obj, request):
+    """Resolve the viewport representation for any architectural view purpose.
+
+    Plan and section geometry remains owned by semantic object providers.
+    Elevations use the generic shape projector until providers expose richer
+    elevation-specific geometry. View-provider lookup preserves hosted-object
+    compatibility without leaking that policy into individual view sessions.
+    """
+
+    if request.purpose == RepresentationPurpose.ELEVATION:
+        import ArchSectionProjection
+
+        return ArchSectionProjection.project_elevation_object(obj, request)
+
+    try:
+        return representation_for(obj, request)
+    except RepresentationUnavailable:
+        view_provider = getattr(getattr(obj, "ViewObject", None), "Proxy", None)
+        provider = getattr(view_provider, "getRepresentation", None)
+        if not callable(provider):
+            raise
+        representation = provider(obj, request)
+        if not isinstance(representation, BIMRepresentation):
+            raise TypeError(
+                "getRepresentation(obj, request) must return BIMRepresentation"
+            )
+        return representation
+
+
 def edit_capabilities_for(obj, request):
     """Request semantic edit capabilities without requesting display geometry."""
 
