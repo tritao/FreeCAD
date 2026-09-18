@@ -490,6 +490,15 @@ class ContextualRepresentationRenderer:
                 ArchRepresentation.ProjectedLineCategory.VISIBLE_SEAM.value: 0.75,
                 ArchRepresentation.ProjectedLineCategory.VISIBLE_ISO.value: 0.6,
             }
+            profile = getattr(getattr(representation, "request", None), "presentation_profile", {})
+            if role == ArchRepresentation.ProjectedLineCategory.SILHOUETTE.value:
+                category_widths[role] = float(
+                    profile.get("silhouette_line_width", category_widths[role])
+                )
+            elif role:
+                category_widths[role] = float(
+                    profile.get("visible_line_width", category_widths.get(role, 1.0))
+                )
             material = coin.SoMaterial()
             material.diffuseColor = color
             group.addChild(material)

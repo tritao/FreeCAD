@@ -92,6 +92,7 @@ def representation_request_key(request):
         _number_key(getattr(request, "target_offset", None)),
         _range_key(getattr(request, "cut_range", None)),
         _range_key(getattr(request, "projection_range", None)),
+        tuple(sorted(getattr(request, "presentation_profile", {}).items())),
     )
 
 

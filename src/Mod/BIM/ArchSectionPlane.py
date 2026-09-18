@@ -1176,6 +1176,33 @@ class _SectionPlane:
             )
             obj.Purpose = ["Section", "Elevation"]
             obj.Purpose = "Section"
+        if "ShowSilhouettes" not in pl:
+            obj.addProperty(
+                "App::PropertyBool",
+                "ShowSilhouettes",
+                "SectionPlane",
+                QT_TRANSLATE_NOOP("App::Property", "Show silhouette edges in projected elevations."),
+                locked=True,
+            )
+            obj.ShowSilhouettes = True
+        if "VisibleLineWidth" not in pl:
+            obj.addProperty(
+                "App::PropertyFloat",
+                "VisibleLineWidth",
+                "SectionPlane",
+                QT_TRANSLATE_NOOP("App::Property", "Relative weight of visible projected edges."),
+                locked=True,
+            )
+            obj.VisibleLineWidth = 1.0
+        if "SilhouetteLineWidth" not in pl:
+            obj.addProperty(
+                "App::PropertyFloat",
+                "SilhouetteLineWidth",
+                "SectionPlane",
+                QT_TRANSLATE_NOOP("App::Property", "Relative weight of silhouette projected edges."),
+                locked=True,
+            )
+            obj.SilhouetteLineWidth = 1.35
 
     def onDocumentRestored(self, obj):
 
@@ -1235,6 +1262,13 @@ class _SectionPlane:
             target_offset=0.0,
             projection_range=projection_range,
             source=obj,
+            presentation_profile={
+                "show_silhouettes": bool(getattr(obj, "ShowSilhouettes", True)),
+                "visible_line_width": float(getattr(obj, "VisibleLineWidth", 1.0)),
+                "silhouette_line_width": float(
+                    getattr(obj, "SilhouetteLineWidth", 1.35)
+                ),
+            },
         )
 
     def dumps(self):

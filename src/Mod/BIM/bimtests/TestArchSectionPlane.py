@@ -73,6 +73,9 @@ class TestArchSectionPlane(TestArchBase.TestArchBase):
         self.assertIs(request.purpose, ArchRepresentation.RepresentationPurpose.SECTION)
         self.assertEqual(request.reference_frame, section_plane.Placement)
         self.assertEqual(request.projection_range, (0.0, 2500.0))
+        self.assertTrue(request.presentation_profile["show_silhouettes"])
+        self.assertEqual(request.presentation_profile["visible_line_width"], 1.0)
+        self.assertEqual(request.presentation_profile["silhouette_line_width"], 1.35)
 
         section_plane.Purpose = "Elevation"
         elevation = section_plane.Proxy.getRepresentationRequest(section_plane)
@@ -81,6 +84,42 @@ class TestArchSectionPlane(TestArchBase.TestArchBase):
             ArchRepresentation.RepresentationPurpose.ELEVATION,
         )
         self.assertEqual(elevation.projection_range, (-2500.0, 0.0))
+
+    def testElevationPresentationProfileControlsProjectedLinework(self):
+        """Elevation presentation settings are applied before geometry reaches renderers."""
+
+        frame = App.Placement()
+        request = ArchRepresentation.RepresentationRequest(
+            purpose=ArchRepresentation.RepresentationPurpose.ELEVATION,
+            reference_frame=frame,
+            presentation_profile={
+                "show_silhouettes": False,
+                "visible_line_width": 1.2,
+                "silhouette_line_width": 2.0,
+            },
+        )
+        edge = Part.makeLine(App.Vector(0, 0, 0), App.Vector(100, 0, 0))
+        projected_edges = (
+            ArchSectionProjection._ProjectedEdge(
+                edge, ArchRepresentation.ProjectedLineCategory.VISIBLE_HARD
+            ),
+            ArchSectionProjection._ProjectedEdge(
+                edge, ArchRepresentation.ProjectedLineCategory.SILHOUETTE
+            ),
+        )
+
+        representation = ArchSectionProjection._representation_from_edges(
+            None,
+            request,
+            Part.makeBox(100, 100, 100),
+            projected_edges,
+        )
+
+        self.assertEqual(1, len(representation.projected_geometry))
+        self.assertEqual(
+            ArchRepresentation.ProjectedLineCategory.VISIBLE_HARD.value,
+            representation.source_mappings[0].role,
+        )
 
     def testProjectionGeometryCharacterizesCutAndForwardShapes(self):
         """Neutral projection preserves the established section split."""

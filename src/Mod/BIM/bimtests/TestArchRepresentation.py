@@ -83,6 +83,23 @@ class TestArchRepresentation(unittest.TestCase):
         self.assertIsNot(first, third)
         self.assertEqual(2, len(created))
 
+    def test_representation_request_key_includes_presentation_profile(self):
+        from bimviews import representation_cache
+
+        base = RepresentationRequest(
+            purpose=RepresentationPurpose.ELEVATION,
+            presentation_profile={"show_silhouettes": True, "visible_line_width": 1.0},
+        )
+        changed = RepresentationRequest(
+            purpose=RepresentationPurpose.ELEVATION,
+            presentation_profile={"show_silhouettes": False, "visible_line_width": 1.0},
+        )
+
+        self.assertNotEqual(
+            representation_cache.representation_request_key(base),
+            representation_cache.representation_request_key(changed),
+        )
+
     def test_contextual_wall_creation_uses_bim_wall_preferences(self):
         preferences = {
             "WallWidth": 345.0,

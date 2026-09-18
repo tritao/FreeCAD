@@ -74,6 +74,7 @@ class RepresentationRequest:
         cut_offset=None,
         target_offset=None,
         representation_mode=RepresentationMode.PART_SHAPE,
+        presentation_profile=None,
     ):
         if not isinstance(purpose, RepresentationPurpose):
             purpose = RepresentationPurpose(purpose)
@@ -87,6 +88,7 @@ class RepresentationRequest:
         if not isinstance(representation_mode, RepresentationMode):
             representation_mode = RepresentationMode(representation_mode)
         self.representation_mode = representation_mode
+        self.presentation_profile = dict(presentation_profile or {})
 
 
 class RepresentationSource:

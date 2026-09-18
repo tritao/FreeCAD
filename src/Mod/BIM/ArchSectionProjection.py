@@ -264,6 +264,13 @@ def _representation_from_edges(obj, request, local_shape, edges, deflection=None
         diagonal = max(local_shape.BoundBox.DiagonalLength, 1.0)
         deflection = max(0.1, min(5.0, diagonal / 1000.0))
     for index, projected_edge in enumerate(edges, start=1):
+        profile = getattr(request, "presentation_profile", {}) or {}
+        if (
+            projected_edge.category
+            == ArchRepresentation.ProjectedLineCategory.SILHOUETTE
+            and not profile.get("show_silhouettes", True)
+        ):
+            continue
         edge = projected_edge.shape
         try:
             points = edge.discretize(Deflection=float(deflection))
