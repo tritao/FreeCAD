@@ -8,7 +8,6 @@ from dataclasses import dataclass, field
 import FreeCADGui
 
 from bimplan.runtime import tools as plan_runtime_tools
-
 from . import gui_sync as plan_selection_gui_sync
 from . import target_dispatch as plan_target_dispatch
 from . import target_kinds as plan_target_kinds
@@ -718,7 +717,7 @@ class PlanSelectionRefreshService(_SessionAPI):
         try:
             from PySide import QtCore
 
-            QtCore.QTimer.singleShot(0, lambda: self.reset_selected_wall_after_change())
+            FreeCADGui.invokeLater(lambda: self.reset_selected_wall_after_change())
         except ImportError:
             self.reset_selected_wall_after_change()
 
@@ -905,7 +904,7 @@ class PlanSelectionSyncService(_SessionAPI):
         try:
             from PySide import QtCore
 
-            QtCore.QTimer.singleShot(0, lambda: self.run_scheduled_selection_refresh())
+            FreeCADGui.invokeLater(lambda: self.run_scheduled_selection_refresh())
         except Exception:
             self.run_scheduled_selection_refresh()
 
@@ -935,7 +934,7 @@ class PlanSelectionSyncService(_SessionAPI):
         try:
             from PySide import QtCore
 
-            QtCore.QTimer.singleShot(0, lambda: self.run_scheduled_clear_plan_selection_state())
+            FreeCADGui.invokeLater(lambda: self.run_scheduled_clear_plan_selection_state())
         except Exception:
             self.run_scheduled_clear_plan_selection_state()
 
@@ -972,9 +971,9 @@ class PlanSelectionSyncService(_SessionAPI):
         try:
             from PySide import QtCore
 
-            QtCore.QTimer.singleShot(
-                delay_ms,
+            FreeCADGui.invokeLater(
                 lambda generation=generation: self.run_scheduled_gui_selection_sync(generation),
+                delay_ms,
             )
         except Exception:
             self.run_scheduled_gui_selection_sync(generation)

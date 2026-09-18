@@ -4,7 +4,7 @@
 
 from bimplan import document_visuals as plan_document_visuals
 from bimplan.runtime import tools as plan_runtime_tools
-
+import FreeCADGui
 
 def _perf_count(session, name, delta=1):
     return session.performance.plan_perf_count(name, delta=delta)
@@ -77,7 +77,7 @@ def queue_plan_overlay_visual_refresh(session, visuals, visual_all, visual_selec
         refresh_plan_overlay_visuals(session, dirty)
         return
     refresh_state.overlay_refresh_queued = True
-    QtCore.QTimer.singleShot(0, lambda: flush_plan_overlay_visual_refresh(session))
+    FreeCADGui.invokeLater(lambda: flush_plan_overlay_visual_refresh(session))
 
 
 def queue_plan_overlay_view_scale_refresh(session, visual_view_scale, delay_ms):
@@ -99,8 +99,8 @@ def queue_plan_overlay_view_scale_refresh(session, visual_view_scale, delay_ms):
             refresh_plan_overlay_visuals(session, dirty)
         return
     refresh_state.view_scale_overlay_refresh_queued = True
-    QtCore.QTimer.singleShot(
-        max(0, int(delay_ms)), lambda: flush_view_scale_overlay_refresh(session)
+    FreeCADGui.invokeLater(
+        lambda: flush_view_scale_overlay_refresh(session), max(0, int(delay_ms))
     )
 
 
@@ -466,7 +466,7 @@ def finalize_trackers(trackers):
         from PySide import QtCore
         from draftutils.todo import ToDo
 
-        QtCore.QTimer.singleShot(0, ToDo.doTasks)
+        FreeCADGui.invokeLater(ToDo.doTasks)
     except Exception:
         pass
 

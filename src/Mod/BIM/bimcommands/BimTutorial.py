@@ -92,7 +92,7 @@ class BIM_Tutorial:
 
             # self.load()
             # todo.ToDo.delay(self.load,None)
-            QtCore.QTimer.singleShot(1000, self.load)
+            FreeCADGui.invokeLater(self.load, 1000)
 
     def load(self, arg=None):
         import re
@@ -261,7 +261,7 @@ class BIM_Tutorial:
         self.done1 = False
         self.done2 = False
         if self.test1[self.step] or self.test2[self.step]:
-            QtCore.QTimer.singleShot(TESTINTERVAL, self.checkGoals)
+            FreeCADGui.invokeLater(self.checkGoals, TESTINTERVAL)
 
     def checkGoals(self):
         from PySide import QtCore
@@ -298,7 +298,7 @@ class BIM_Tutorial:
         if (self.test1[self.step] or self.test2[self.step]) and (
             (not self.done1) or (not self.done2)
         ):
-            QtCore.QTimer.singleShot(TESTINTERVAL, self.checkGoals)
+            FreeCADGui.invokeLater(self.checkGoals, TESTINTERVAL)
 
 
 FreeCADGui.addCommand("BIM_Tutorial", BIM_Tutorial())

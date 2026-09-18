@@ -5,7 +5,7 @@
 import warnings
 
 import FreeCAD
-from bimplan.ui import qt_lifetime as plan_qt_lifetime
+import FreeCADGui
 from bimplan.ui import task_panel_view_model as plan_task_panel_view_model
 
 translate = FreeCAD.Qt.translate
@@ -364,8 +364,10 @@ class PlanEditControlsShellMixin:
                         layout.removeWidget(form)
             except (AttributeError, RuntimeError, TypeError):
                 pass
-            plan_qt_lifetime.detach_widget(form)
-            plan_qt_lifetime.delete_later(form)
+            if FreeCADGui.isValidQObject(form):
+                form.hide()
+                form.setParent(None)
+            FreeCADGui.deleteLater(form)
         self.form = None
         self.session = None
         self._task_dialog_document_name = ""

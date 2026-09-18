@@ -405,6 +405,22 @@ def updateGui() -> None:
     """Process pending GUI updates."""
     ...
 
+def invokeLater(callback: object, delay: int = 0, context: object | None = None, /) -> object:
+    """Schedule a Python callable on the GUI event loop and return a cancellation handle."""
+    ...
+
+def cancelInvoke(handle: object, /) -> None:
+    """Cancel a pending call created by :func:`invokeLater`."""
+    ...
+
+def deleteLater(obj: object, /) -> None:
+    """Adopt a Python-created QObject tree and safely schedule its deletion."""
+    ...
+
+def isValidQObject(obj: object, /) -> bool:
+    """Return whether an object is a live PySide QObject wrapper."""
+    ...
+
 def updateLocale() -> None:
     """Reload GUI translation state after locale changes."""
     ...

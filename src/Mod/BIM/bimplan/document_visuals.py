@@ -131,9 +131,8 @@ def queue_created_plan_object(session, obj):
         return
     visual_state.created_plan_objects_flush_queued = True
     try:
-        from PySide import QtCore
-
-        QtCore.QTimer.singleShot(0, lambda: flush_created_plan_objects(session))
+        import FreeCADGui
+        FreeCADGui.invokeLater(lambda: flush_created_plan_objects(session))
     except ImportError:
         flush_created_plan_objects(session)
 

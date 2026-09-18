@@ -26,7 +26,7 @@ import os
 import time
 
 import FreeCAD
-
+import FreeCADGui
 from . import ifc_tools
 from . import ifc_psets
 from . import ifc_materials
@@ -54,7 +54,7 @@ def open(filename):
     FreeCAD.setActiveDocument(doc.Name)
     insert(filename, doc.Name, singledoc=None)
     del FreeCAD.IsOpeningIFC
-    QtCore.QTimer.singleShot(100, unset_modified)
+    FreeCADGui.invokeLater(unset_modified, 100)
     return doc
 
 
@@ -88,10 +88,10 @@ def insert(
         singledoc = PARAMS.GetBool("SingleDoc", True)
     if singledoc:
         prj_obj = ifc_tools.convert_document(document, filename, shapemode, strategy)
-        QtCore.QTimer.singleShot(100, toggle_lock_on)
+        FreeCADGui.invokeLater(toggle_lock_on, 100)
     else:
         prj_obj = ifc_tools.create_document_object(document, filename, shapemode, strategy)
-        QtCore.QTimer.singleShot(100, toggle_lock_off)
+        FreeCADGui.invokeLater(toggle_lock_off, 100)
     if PARAMS.GetBool("LoadOrphans", True):
         ifc_tools.load_orphans(prj_obj)
     if not silent and PARAMS.GetBool("LoadMaterials", False):

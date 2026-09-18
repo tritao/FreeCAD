@@ -206,9 +206,8 @@ def activate_symbol_handle(session, symbol, handle_role):
         session.symbols.activate_symbol_handle_now(symbol, handle_role)
         return
 
-    QtCore.QTimer.singleShot(
-        0,
-        lambda: session.symbols.activate_symbol_handle_now(symbol, handle_role),
+    FreeCADGui.invokeLater(
+        lambda: session.symbols.activate_symbol_handle_now(symbol, handle_role)
     )
 
 
@@ -434,4 +433,4 @@ def queue_restore_selected_symbol(session, symbol):
     except ImportError:
         session.symbols.restore_selected_symbol(symbol)
         return
-    QtCore.QTimer.singleShot(0, lambda: session.symbols.restore_selected_symbol(symbol))
+    FreeCADGui.invokeLater(lambda: session.symbols.restore_selected_symbol(symbol))

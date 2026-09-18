@@ -78,10 +78,66 @@ class _HostedOpeningProxy:
 
 
 class TestBimPlanEditSessionGui(TestArchBaseGui):
+    def test_freecadgui_delete_later_pins_deferred_widget_trees(self):
+        """Deferred deletion must keep every wrapped Qt child alive."""
+
+        from PySide import QtCore, QtWidgets
+        import FreeCADGui
+        destroyed = []
+        callbacks = []
+        parent = QtWidgets.QWidget()
+        layout = QtWidgets.QHBoxLayout(parent)
+        child = QtWidgets.QLabel(parent)
+        layout.addWidget(child)
+        parent.destroyed.connect(lambda: destroyed.append(True))
+
+        FreeCADGui.deleteLater(parent)
+        FreeCADGui.invokeLater(lambda: callbacks.append(True))
+        del child, layout, parent
+
+        loop = QtCore.QEventLoop()
+        FreeCADGui.invokeLater(loop.quit)
+        loop.exec_()
+        for _ in range(3):
+            QtCore.QCoreApplication.sendPostedEvents(
+                None, QtCore.QEvent.DeferredDelete
+            )
+            QtWidgets.QApplication.processEvents()
+
+        self.assertTrue(destroyed)
+        self.assertTrue(callbacks)
+
+    def test_freecadgui_invoke_later_releases_callback_when_it_raises(self):
+        """A callback failure must not leave its retained timer behind."""
+
+        import sys
+        from unittest.mock import patch
+
+        from PySide import QtCore, QtWidgets
+        import FreeCADGui
+        callback_calls = []
+
+        def fail():
+            callback_calls.append(True)
+            raise RuntimeError("expected timer callback failure")
+
+        loop = QtCore.QEventLoop()
+        with patch.object(sys, "excepthook") as excepthook:
+            FreeCADGui.invokeLater(fail)
+            FreeCADGui.invokeLater(loop.quit)
+            loop.exec_()
+            for _ in range(3):
+                QtCore.QCoreApplication.sendPostedEvents(
+                    None, QtCore.QEvent.DeferredDelete
+                )
+                QtWidgets.QApplication.processEvents()
+
+        self.assertTrue(callback_calls)
+        excepthook.assert_called_once()
+
     def test_hover_throttle_resolves_latest_pointer_position(self):
         """A stopped pointer must not leave the last throttled hover unresolved."""
 
-        from PySide import QtCore
         from bimplan.picking import hover as plan_hover
         from bimplan.runtime.session_state import PlanHoverPickState
 
@@ -94,9 +150,9 @@ class TestBimPlanEditSessionGui(TestArchBaseGui):
         with (
             patch.object(plan_hover.time, "monotonic", side_effect=(10.01, 10.02)),
             patch.object(
-                QtCore.QTimer,
-                "singleShot",
-                side_effect=lambda _delay, callback: callbacks.append(callback),
+                FreeCADGui,
+                "invokeLater",
+                side_effect=lambda callback, _delay=0: callbacks.append(callback),
             ),
         ):
             self.assertTrue(plan_hover.should_skip_hover_pick(session, (10, 20)))

@@ -86,6 +86,31 @@ class TestGuiDocument(unittest.TestCase):
 
         return predicate()
 
+    def testInvokeLaterCanBeCancelled(self):
+        calls = []
+        handle = FreeCADGui.invokeLater(lambda: calls.append(True), 1000)
+        FreeCADGui.cancelInvoke(handle)
+
+        loop = QtCore.QEventLoop()
+        FreeCADGui.invokeLater(loop.quit)
+        loop.exec()
+        self.assertEqual([], calls)
+
+    def testInvokeLaterContextCancelsOnDestruction(self):
+        calls = []
+        context = QtWidgets.QWidget()
+        self.assertTrue(FreeCADGui.isValidQObject(context))
+        FreeCADGui.invokeLater(lambda: calls.append(True), 1000, context)
+        FreeCADGui.deleteLater(context)
+
+        loop = QtCore.QEventLoop()
+        FreeCADGui.invokeLater(loop.quit)
+        loop.exec()
+        QtCore.QCoreApplication.sendPostedEvents(None, QtCore.QEvent.DeferredDelete)
+        QtWidgets.QApplication.processEvents()
+        self.assertEqual([], calls)
+        self.assertFalse(FreeCADGui.isValidQObject(context))
+
     def _assertRecoveryArchiveContains(self, expected_label=None):
         archive = self._recoveryArchive()
         self.assertTrue(os.path.isfile(archive))

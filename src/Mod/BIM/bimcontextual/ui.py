@@ -6,7 +6,6 @@ from PySide import QtWidgets
 
 import FreeCADGui
 
-
 class ContextualActionPanel:
     """Generic TaskView panel populated entirely from contextual providers."""
 
@@ -29,7 +28,7 @@ class ContextualActionPanel:
             item = self._layout.takeAt(0)
             widget = item.widget()
             if widget is not None:
-                widget.deleteLater()
+                FreeCADGui.deleteLater(widget)
         for section in self.sections:
             group = QtWidgets.QGroupBox(section.title, self.form)
             layout = QtWidgets.QVBoxLayout(group)

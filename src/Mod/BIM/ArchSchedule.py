@@ -739,7 +739,8 @@ class _ViewProviderArchSchedule:
         if not self.taskd.form.isVisible():
             from PySide import QtCore
 
-            QtCore.QTimer.singleShot(100, self.showEditor)
+            import FreeCADGui
+            FreeCADGui.invokeLater(self.showEditor, 100)
         return True
 
     def showEditor(self):

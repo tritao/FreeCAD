@@ -25,6 +25,7 @@
 """Document observer to act on documents containing NativeIFC objects"""
 
 import FreeCAD
+import FreeCADGui
 from . import has_ifcopenshell
 
 params = FreeCAD.ParamGet("User parameter:BaseApp/Preferences/Mod/NativeIFC")
@@ -68,7 +69,7 @@ class ifc_observer:
         # delay execution to not get caught under the wait sursor
         # that occurs when the saveAs file dialog is shown
         # TODO find a more solid way
-        QtCore.QTimer.singleShot(100, self.save)
+        FreeCADGui.invokeLater(self.save, 100)
 
     def slotDeletedObject(self, obj):
         """Deletes the corresponding object in the IFC document"""
@@ -128,7 +129,7 @@ class ifc_observer:
                 self.objname = obj.Name
                 self.docname = obj.Document.Name
                 # delaying to make sure all other properties are set
-                QtCore.QTimer.singleShot(100, self.convert)
+                FreeCADGui.invokeLater(self.convert, 100)
 
     def slotActivateDocument(self, doc):
         """Check if we need to lock"""

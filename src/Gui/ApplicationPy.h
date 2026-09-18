@@ -58,6 +58,10 @@ public:
 
     static PyObject* sGetMainWindow            (PyObject *self,PyObject *args);
     static PyObject* sUpdateGui                (PyObject *self,PyObject *args);
+    static PyObject* sInvokeLater              (PyObject *self,PyObject *args);
+    static PyObject* sCancelInvoke             (PyObject *self,PyObject *args);
+    static PyObject* sDeleteLater              (PyObject *self,PyObject *args);
+    static PyObject* sIsValidQObject           (PyObject *self,PyObject *args);
     static PyObject* sUpdateLocale             (PyObject *self,PyObject *args);
     static PyObject* sGetLocale                (PyObject *self,PyObject *args);
     static PyObject* sSetLocale                (PyObject *self,PyObject *args);

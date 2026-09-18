@@ -21,6 +21,7 @@ from bimcommands.BimViews import (
 from draftutils.grid import GridLattice, adaptive_lattice_interval
 from bimtests.TestArchBaseGui import TestArchBaseGui
 from bimviews.grid_settings import get_grid_settings
+from bimviews.viewport_grid import ViewportGridController
 from bimviews.model import BIMViewManagerModel
 from bimviews.navigator_model import BIMNavigatorModel
 from bimviews.navigator_qt import BIMNavigatorQtModel, configure_navigator_columns
@@ -40,8 +41,6 @@ from bimviews.viewport_ruler import (
     _ViewportEventFilter,
 )
 from bimplan.runtime.session import activate_representation_request
-
-
 class _RecordingView:
     def __init__(self, calls):
         self.calls = calls
@@ -183,7 +182,7 @@ class TestBimViewsServiceGui(TestArchBaseGui):
         finally:
             restoreComboViewTitle()
             main_window.removeDockWidget(navigator)
-            navigator.deleteLater()
+            FreeCADGui.deleteLater(navigator)
         self.assertEqual(original_title, combo.windowTitle())
 
     def test_ruler_uses_engineering_intervals(self):
@@ -324,6 +323,59 @@ class TestBimViewsServiceGui(TestArchBaseGui):
             self.assertIs(controller.host_widget, graphics_view.viewport())
         finally:
             controller.close()
+
+    def test_viewport_controllers_ignore_deleted_graphics_view_wrappers(self):
+        graphics_view = QtGui.QGraphicsView()
+        from shiboken6 import Shiboken
+
+        Shiboken.delete(graphics_view)
+        viewport = SimpleNamespace(get_plan_view_widget=lambda: graphics_view)
+        request = SimpleNamespace(
+            purpose=ArchRepresentation.RepresentationPurpose.PLAN,
+            reference_frame=None,
+            source=None,
+        )
+        session = SimpleNamespace(view=None, viewport=viewport)
+        ruler = ViewportRulerController(session, request)
+        grid = ViewportGridController(session, request)
+
+        with patch("bimviews.viewport_ruler.rulers_enabled", return_value=True), patch(
+            "bimviews.viewport_grid.grid_enabled", return_value=True
+        ):
+            self.assertFalse(ruler.attach())
+            self.assertFalse(grid.attach())
+            ruler.close()
+            grid.close()
+            ruler.close()
+            grid.close()
+
+    def test_grid_controller_clears_widgets_destroyed_after_attach(self):
+        graphics_view = QtGui.QGraphicsView()
+        graphics_view.resize(640, 480)
+        viewport = SimpleNamespace(
+            get_plan_view_widget=lambda: graphics_view,
+            get_plan_point_from_mouse_pos=lambda pos: FreeCAD.Vector(pos[0], pos[1], 0),
+            get_plan_view_units_per_pixel=lambda: 1.0,
+            get_plan_projection_cache_key=lambda: None,
+        )
+        request = SimpleNamespace(
+            purpose=ArchRepresentation.RepresentationPurpose.PLAN,
+            reference_frame=None,
+            source=None,
+        )
+        controller = ViewportGridController(
+            SimpleNamespace(view=None, viewport=viewport), request
+        )
+
+        with patch("bimviews.viewport_grid.grid_enabled", return_value=True):
+            self.assertTrue(controller.attach())
+        from shiboken6 import Shiboken
+
+        Shiboken.delete(graphics_view)
+        self.assertIsNone(controller.graphics_view)
+        self.assertIsNone(controller.host_widget)
+        controller.close()
+        controller.close()
 
     def test_left_cursor_measure_fits_long_values(self):
         host = QtGui.QWidget()

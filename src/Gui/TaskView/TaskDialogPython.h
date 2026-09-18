@@ -68,6 +68,7 @@ public:
 
 private:
     Py::Object watcher;
+    std::vector<Py::Object> contentWrappers;
 };
 
 /**
@@ -194,6 +195,7 @@ private:
 
 private:
     Py::Object dlg;
+    std::vector<Py::Object> contentWrappers;
 };
 
 }  // namespace TaskView

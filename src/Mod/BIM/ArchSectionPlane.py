@@ -33,6 +33,7 @@
 import math
 import re
 import tempfile
+import FreeCADGui
 import time
 import uuid
 
@@ -1076,7 +1077,7 @@ def getCoinSVG(cutplane, objs, cameradata=None, linewidth=0.2, singleface=False,
         svg = svg.replace("</svg>", "</g>\n</svg>")
 
     # trigger viewer close
-    QtCore.QTimer.singleShot(1, lambda: closeViewer(view_window_name))
+    FreeCADGui.invokeLater(lambda: closeViewer(view_window_name), 1)
 
     # strip svg tags (needed for TD Arch view)
     svg = re.sub(r"<\?xml.*?>", "", svg, flags=re.MULTILINE | re.DOTALL)

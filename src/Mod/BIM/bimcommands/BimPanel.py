@@ -26,7 +26,6 @@
 
 import FreeCAD
 import FreeCADGui
-
 QT_TRANSLATE_NOOP = FreeCAD.Qt.QT_TRANSLATE_NOOP
 translate = FreeCAD.Qt.translate
 
@@ -181,7 +180,7 @@ class Arch_Panel:
         self.doc.recompute()
         from PySide import QtCore
 
-        QtCore.QTimer.singleShot(100, self.check_continueMode)
+        FreeCADGui.invokeLater(self.check_continueMode, 100)
 
     def check_continueMode(self):
         "checks if continueMode is true and restarts Panel"

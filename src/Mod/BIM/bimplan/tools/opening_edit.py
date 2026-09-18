@@ -47,14 +47,11 @@ def restore_selected_opening(session, opening):
 
 def queue_restore_selected_opening(session, opening):
     try:
-        from PySide import QtCore
+        import FreeCADGui
     except ImportError:
         restore_selected_opening(session, opening)
         return
-    QtCore.QTimer.singleShot(
-        0,
-        lambda: _run_queued_restore_selected_opening(session, opening),
-    )
+    FreeCADGui.invokeLater(lambda: _run_queued_restore_selected_opening(session, opening))
 
 
 def _run_queued_restore_selected_opening(session, opening):
@@ -366,12 +363,8 @@ def queue_hard_refresh_selected_opening_visuals(session):
     session.overlays.openings.clear_selected_opening_overlay()
     session.viewport.request_view_redraw()
     try:
-        from PySide import QtCore
-
-        QtCore.QTimer.singleShot(
-            0,
-            lambda: flush_hard_refresh_selected_opening_visuals(session),
-        )
+        import FreeCADGui
+        FreeCADGui.invokeLater(lambda: flush_hard_refresh_selected_opening_visuals(session))
     except ImportError:
         flush_hard_refresh_selected_opening_visuals(session)
 

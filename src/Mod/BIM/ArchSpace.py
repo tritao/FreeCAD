@@ -4547,8 +4547,9 @@ def schedule_auto_space_text_refresh(doc, changed_bounds=None):
 
     _SCHEDULED_AUTO_SPACE_TEXT_REFRESHES[doc_name] = changed_bounds
     try:
-        QtCore.QTimer.singleShot(
-            0, lambda name=doc_name: run_scheduled_auto_space_text_refresh(name)
+        import FreeCADGui
+        FreeCADGui.invokeLater(
+            lambda name=doc_name: run_scheduled_auto_space_text_refresh(name)
         )
     except Exception:
         return run_scheduled_auto_space_text_refresh(doc_name)

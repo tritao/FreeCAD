@@ -20,7 +20,7 @@ def _queue_trailing_hover_pick(session, delay_ms):
     if state.trailing_pick_queued:
         return
     try:
-        from PySide import QtCore
+        import FreeCADGui
     except ImportError:
         return
     state.trailing_pick_queued = True
@@ -33,7 +33,7 @@ def _queue_trailing_hover_pick(session, delay_ms):
         if mouse_pos is not None:
             update_hovered_plan_target(session, mouse_pos, force=True)
 
-    QtCore.QTimer.singleShot(max(1, int(math.ceil(delay_ms))), resolve_latest)
+    FreeCADGui.invokeLater(resolve_latest, max(1, int(math.ceil(delay_ms))))
 
 
 def get_hovered_plan_target(session):
@@ -45,11 +45,11 @@ def queue_prime_hover_pick_caches(session):
     if session.lifecycle_state.tearing_down or hover_pick_state.cache_queued or not session.doc:
         return
     try:
-        from PySide import QtCore
+        import FreeCADGui
     except ImportError:
         return
     hover_pick_state.cache_queued = True
-    QtCore.QTimer.singleShot(0, lambda: prime_hover_pick_caches(session))
+    FreeCADGui.invokeLater(lambda: prime_hover_pick_caches(session))
 
 
 def prime_hover_pick_caches(session):

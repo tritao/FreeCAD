@@ -324,7 +324,7 @@ class ifc_vp_object:
 
         # delay the action to prevent the object to be deleted
         # before the end of the drop
-        QtCore.QTimer.singleShot(100, lambda: self.onDrop(incoming_object))
+        FreeCADGui.invokeLater(lambda: self.onDrop(incoming_object), 100)
 
     def onDrop(self, incoming_object):
         """Delayed action to be taken when dropping an object"""

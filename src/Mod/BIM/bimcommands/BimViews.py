@@ -28,7 +28,6 @@ import sys
 
 import FreeCAD
 import FreeCADGui
-
 QT_TRANSLATE_NOOP = FreeCAD.Qt.QT_TRANSLATE_NOOP
 translate = FreeCAD.Qt.translate
 
@@ -198,7 +197,7 @@ class BIM_Views:
             self.dialog.navigator.expanded.connect(self.saveExpansion)
             self.dialog.navigator.collapsed.connect(self.saveExpansion)
             # delay connecting after FreeCAD finishes setting up
-            QtCore.QTimer.singleShot(0, self.connectDock)
+            FreeCADGui.invokeLater(self.connectDock)
 
             # set the dock widget
             width = PARAMS.GetInt("BimViewWidth", 300)
@@ -242,13 +241,13 @@ class BIM_Views:
         if self._updatePending:
             return
         self._updatePending = True
-        QtCore.QTimer.singleShot(0, self.update)
+        FreeCADGui.invokeLater(self.update)
 
     def scheduleSelectionSync(self):
         if self._selectionPending:
             return
         self._selectionPending = True
-        QtCore.QTimer.singleShot(0, self.syncSelection)
+        FreeCADGui.invokeLater(self.syncSelection)
 
     def _expandedKeys(self):
         vm = findWidget()

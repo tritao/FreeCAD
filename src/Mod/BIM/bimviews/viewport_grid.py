@@ -10,7 +10,8 @@ from ArchRepresentation import RepresentationPurpose
 from draftutils.grid import GridLattice, adaptive_lattice_interval
 from .grid_settings import get_grid_settings
 from .ruler_model import RulerTransform
-
+from . import viewport_widgets
+import FreeCADGui
 
 PARAMS = FreeCAD.ParamGet("User parameter:BaseApp/Preferences/Mod/BIM")
 SHOW_GRID_PARAM = "ShowViewGrid"
@@ -156,9 +157,15 @@ class ViewportGridController:
     def attach(self):
         if not FreeCAD.GuiUp or not grid_enabled() or not self._is_planar_request():
             return False
-        graphics_view = self.session.viewport.get_plan_view_widget()
+        graphics_view, host_widget = viewport_widgets.resolve_widgets(
+            self.session.viewport
+        )
+        if graphics_view is None:
+            return False
         self.graphics_view = graphics_view
-        self.host_widget = graphics_view.viewport() if graphics_view is not None else None
+        self.host_widget = host_widget
+        graphics_view.destroyed.connect(self._graphics_view_destroyed)
+        host_widget.destroyed.connect(self._host_widget_destroyed)
         if self.host_widget is None:
             return False
         self.host_widget.setMouseTracking(True)
@@ -196,27 +203,28 @@ class ViewportGridController:
                 self.overlay.refresh()
 
     def close(self):
-        if self.timer is not None:
+        if FreeCADGui.isValidQObject(self.timer):
             self.timer.stop()
-        if self.host_widget is not None and self.event_filter is not None:
-            try:
-                self.host_widget.removeEventFilter(self.event_filter)
-            except RuntimeError:
-                pass
-        if self.graphics_view is not None and self.event_filter is not None:
-            try:
-                self.graphics_view.removeEventFilter(self.event_filter)
-            except RuntimeError:
-                pass
-        if self.overlay is not None:
+        viewport_widgets.remove_event_filter(self.host_widget, self.event_filter)
+        viewport_widgets.remove_event_filter(self.graphics_view, self.event_filter)
+        if FreeCADGui.isValidQObject(self.overlay):
             self.overlay.close()
-            self.overlay.deleteLater()
+            # Delete the overlay (and the timer it parents) while its Python
+            # wrapper is still alive; see viewport_ruler.close().
+            FreeCADGui.deleteLater(self.overlay)
         self.timer = None
         self.event_filter = None
         self.overlay = None
         self.host_widget = None
         self.graphics_view = None
         self._projection_key = None
+
+    def _graphics_view_destroyed(self, *_args):
+        self.graphics_view = None
+        self.host_widget = None
+
+    def _host_widget_destroyed(self, *_args):
+        self.host_widget = None
 
     def _is_planar_request(self):
         return getattr(self.request, "purpose", None) in (

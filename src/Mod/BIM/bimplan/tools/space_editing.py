@@ -6,7 +6,7 @@ import FreeCAD
 
 from bimplan.selection import target_kinds as plan_target_kinds
 from bimplan.tools import space_boundaries as plan_space_boundaries
-
+import FreeCADGui
 translate = FreeCAD.Qt.translate
 
 
@@ -251,8 +251,7 @@ def queue_restore_selected_semantic_target(session, kind, obj, *, clear_edit_spa
             clear_edit_space=clear_edit_space,
         )
         return
-    QtCore.QTimer.singleShot(
-        0,
+    FreeCADGui.invokeLater(
         lambda: restore_selected_semantic_target(
             session,
             kind,

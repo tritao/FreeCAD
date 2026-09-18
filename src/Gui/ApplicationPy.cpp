@@ -72,6 +72,7 @@
 #include "MainWindowPy.h"
 #include "PythonEditor.h"
 #include "PythonWrapper.h"
+#include "PythonQtLifetime.h"
 #include "SoFCDB.h"
 #include "SplitView3DInventor.h"
 #include "StartupProcess.h"
@@ -999,6 +1000,76 @@ PyObject* ApplicationPy::sUpdateGui(PyObject* /*self*/, PyObject* args)
     qApp->processEvents();
 
     Py_Return;
+}
+
+PyObject* ApplicationPy::sInvokeLater(PyObject* /*self*/, PyObject* args)
+{
+    PyObject* callback = nullptr;
+    PyObject* contextWrapper = Py_None;
+    int delay = 0;
+    if (!PyArg_ParseTuple(args, "O|iO", &callback, &delay, &contextWrapper)) {
+        return nullptr;
+    }
+    if (!PyCallable_Check(callback)) {
+        PyErr_SetString(PyExc_TypeError, "callback must be callable");
+        return nullptr;
+    }
+
+    requirePythonMainThread("FreeCADGui.invokeLater");
+    QObject* context = nullptr;
+    if (contextWrapper != Py_None) {
+        context = PythonWrapper().toQObject(Py::Object(contextWrapper));
+        if (!context) {
+            PyErr_SetString(PyExc_TypeError, "context must be a PySide QObject");
+            return nullptr;
+        }
+    }
+
+    QObject* handle = invokePythonLater(callback, delay, context);
+    return Py::new_reference_to(PythonWrapper().fromQObject(handle, "QObject"));
+}
+
+PyObject* ApplicationPy::sCancelInvoke(PyObject* /*self*/, PyObject* args)
+{
+    PyObject* handleWrapper = nullptr;
+    if (!PyArg_ParseTuple(args, "O", &handleWrapper)) {
+        return nullptr;
+    }
+    requirePythonMainThread("FreeCADGui.cancelInvoke");
+    QObject* handle = PythonWrapper().toQObject(Py::Object(handleWrapper));
+    if (!handle || !cancelPythonInvoke(handle)) {
+        PyErr_SetString(PyExc_ValueError, "handle is not a pending FreeCADGui invocation");
+        return nullptr;
+    }
+    Py_RETURN_NONE;
+}
+
+PyObject* ApplicationPy::sDeleteLater(PyObject* /*self*/, PyObject* args)
+{
+    PyObject* wrapper = nullptr;
+    if (!PyArg_ParseTuple(args, "O", &wrapper)) {
+        return nullptr;
+    }
+    requirePythonMainThread("FreeCADGui.deleteLater");
+    try {
+        deletePythonQObjectLater(wrapper);
+    }
+    catch (const Py::Exception&) {
+        return nullptr;
+    }
+    Py_RETURN_NONE;
+}
+
+PyObject* ApplicationPy::sIsValidQObject(PyObject* /*self*/, PyObject* args)
+{
+    PyObject* wrapper = nullptr;
+    if (!PyArg_ParseTuple(args, "O", &wrapper)) {
+        return nullptr;
+    }
+    if (PythonWrapper().isValidQObject(Py::Object(wrapper))) {
+        Py_RETURN_TRUE;
+    }
+    Py_RETURN_FALSE;
 }
 
 PyObject* ApplicationPy::sUpdateLocale(PyObject* /*self*/, PyObject* args)

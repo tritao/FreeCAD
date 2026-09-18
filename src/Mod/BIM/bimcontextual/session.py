@@ -345,7 +345,7 @@ class ContextualSession:
         if self._closed or self._selection_refresh_pending:
             return
         self._selection_refresh_pending = True
-        QtCore.QTimer.singleShot(0, self._refresh_selection)
+        FreeCADGui.invokeLater(self._refresh_selection)
 
     def _refresh_selection(self):
         self._selection_refresh_pending = False
@@ -549,7 +549,7 @@ class ContextualSession:
     def _defer(self, callback):
         if self._closed:
             return
-        QtCore.QTimer.singleShot(0, lambda: None if self._closed else callback())
+        FreeCADGui.invokeLater(lambda: None if self._closed else callback())
 
     @staticmethod
     def _show_feedback(message):

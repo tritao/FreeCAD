@@ -829,7 +829,8 @@ if FreeCAD.GuiUp:
             editor = FreeCADGui.UiLoader().createWidget("Gui::InputField")
             editor.ensurePolished()
             height = max(editor.sizeHint().height(), editor.minimumSizeHint().height())
-            editor.deleteLater()
+            import FreeCADGui
+            FreeCADGui.deleteLater(editor)
             return height
 
         def createEditor(self, parent, option, index):

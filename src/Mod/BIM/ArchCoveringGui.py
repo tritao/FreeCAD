@@ -10,7 +10,7 @@ import FreeCAD
 import Arch
 import ArchCovering
 import ArchTessellation  # resolve_stagger() is there to avoid a circular import with ArchCovering
-
+import FreeCADGui
 if FreeCAD.GuiUp:
     from PySide import QtGui, QtCore
     import FreeCADGui
@@ -1626,7 +1626,7 @@ if FreeCAD.GuiUp:
             if hints:
                 FreeCADGui.HintManager.show(*hints)
             else:
-                QtCore.QTimer.singleShot(0, FreeCADGui.HintManager.hide)
+                FreeCADGui.invokeLater(FreeCADGui.HintManager.hide)
 
         def getStandardButtons(self):
             return QtGui.QDialogButtonBox.Ok | QtGui.QDialogButtonBox.Cancel
@@ -1810,7 +1810,7 @@ if FreeCAD.GuiUp:
             self._cleanup_snapper()
             # Ensure hints are hidden regardless of the state _cleanup_snapper left behind.
             # This is queued after any deferred show/hide that _cleanup_snapper may have posted.
-            QtCore.QTimer.singleShot(0, FreeCADGui.HintManager.hide)
+            FreeCADGui.invokeLater(FreeCADGui.HintManager.hide)
             self._unregister_observer()
             if self.template:
                 self.template.destroy()
@@ -1821,7 +1821,7 @@ if FreeCAD.GuiUp:
             # rather than deleting them. Schedule deletion now so Qt destroys them while the event
             # dispatcher is still alive.
             for widget in self.form:
-                widget.deleteLater()
+                FreeCADGui.deleteLater(widget)
             FreeCADGui.Control.closeDialog()
 
 

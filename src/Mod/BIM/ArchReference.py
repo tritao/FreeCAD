@@ -961,7 +961,8 @@ class ArchReferenceTaskPanel:
                     self.obj.Part = self.partCombo.itemData(i)
             else:
                 self.obj.Part = ""
-            QtCore.QTimer.singleShot(0, FreeCAD.ActiveDocument.recompute)
+            import FreeCADGui
+            FreeCADGui.invokeLater(FreeCAD.ActiveDocument.recompute)
         if self.filename and self.obj.Label == "External Reference":
             self.obj.Label = os.path.basename(self.filename)
         FreeCADGui.ActiveDocument.resetEdit()

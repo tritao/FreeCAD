@@ -78,14 +78,13 @@ def can_rehost_provider_target(session, provider_obj, host_obj=None):
 
 def activate_provider_handle(session, provider_obj, handle_index):
     try:
-        from PySide import QtCore
+        import FreeCADGui
     except ImportError:
         activate_provider_handle_now(session, provider_obj, handle_index)
         return
 
-    QtCore.QTimer.singleShot(
-        0,
-        lambda: activate_provider_handle_now(session, provider_obj, handle_index),
+    FreeCADGui.invokeLater(
+        lambda: activate_provider_handle_now(session, provider_obj, handle_index)
     )
 
 
@@ -273,11 +272,11 @@ def restore_selected_provider(session, provider_obj):
 
 def queue_restore_selected_provider(session, provider_obj):
     try:
-        from PySide import QtCore
+        import FreeCADGui
     except ImportError:
         restore_selected_provider(session, provider_obj)
         return
-    QtCore.QTimer.singleShot(0, lambda: restore_selected_provider(session, provider_obj))
+    FreeCADGui.invokeLater(lambda: restore_selected_provider(session, provider_obj))
 
 
 def _get_provider_handle_transaction_label(handle):

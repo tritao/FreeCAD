@@ -8,7 +8,6 @@ import FreeCAD
 import FreeCADGui
 from bimplan.providers import runtime as plan_provider_runtime
 
-
 @contextmanager
 def selection_changes_suppressed(session):
     previous_ignore = session.lifecycle_state.ignore_selection_changes
@@ -92,9 +91,8 @@ def _schedule_finish_gui_selection_sync(session, generation):
     try:
         from PySide import QtCore
 
-        QtCore.QTimer.singleShot(
-            0,
-            lambda generation=generation: _finish_gui_selection_sync(session, generation),
+        FreeCADGui.invokeLater(
+            lambda generation=generation: _finish_gui_selection_sync(session, generation)
         )
     except Exception:
         _finish_gui_selection_sync(session, generation)
@@ -348,4 +346,4 @@ def queue_clear_gui_preselection(session):
             return
         clear_gui_preselection()
 
-    QtCore.QTimer.singleShot(0, flush)
+    FreeCADGui.invokeLater(flush)

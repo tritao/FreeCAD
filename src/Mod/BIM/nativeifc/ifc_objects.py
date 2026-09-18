@@ -122,9 +122,9 @@ class ifc_object:
                         child.touch()
             else:
                 obj.Proxy.cached = True
-                QtCore.QTimer.singleShot(100, obj.touch)
-            QtCore.QTimer.singleShot(100, obj.Document.recompute)
-            QtCore.QTimer.singleShot(100, self.fit_all)
+                FreeCADGui.invokeLater(obj.touch, 100)
+            FreeCADGui.invokeLater(obj.Document.recompute, 100)
+            FreeCADGui.invokeLater(self.fit_all, 100)
 
     def assign_classification(self, obj):
         """

@@ -26,7 +26,6 @@
 
 import FreeCAD
 import FreeCADGui
-
 QT_TRANSLATE_NOOP = FreeCAD.Qt.QT_TRANSLATE_NOOP
 translate = FreeCAD.Qt.translate
 
@@ -418,10 +417,10 @@ class BIM_IfcElements:
         changed = False
         if index == 1:
             FreeCADGui.runCommand("Arch_Material")
-            QtCore.QTimer.singleShot(1000, self.checkMatChanged)
+            FreeCADGui.invokeLater(self.checkMatChanged, 1000)
         elif index == 2:
             FreeCADGui.runCommand("Arch_MultiMaterial")
-            QtCore.QTimer.singleShot(1000, self.checkMatChanged)
+            FreeCADGui.invokeLater(self.checkMatChanged, 1000)
         elif index >= 3:
             mat = self.materials[index - 3]
             sel = self.form.tree.selectedIndexes()
@@ -445,7 +444,7 @@ class BIM_IfcElements:
         if getattr(self, "form", None) is None:
             return
         if FreeCADGui.Control.activeDialog():
-            QtCore.QTimer.singleShot(500, self.checkMatChanged)
+            FreeCADGui.invokeLater(self.checkMatChanged, 500)
             return
         mats = [
             o.Name

@@ -4,7 +4,6 @@
 
 import FreeCAD
 import FreeCADGui
-
 _VIEW_PREFERENCES_PATH = "User parameter:BaseApp/Preferences/View"
 _ENABLE_PRESELECTION_PARAM = "EnablePreselection"
 
@@ -951,7 +950,7 @@ def queue_focus_plan_view(session):
     except Exception:
         focus_plan_view(session)
         return
-    QtCore.QTimer.singleShot(0, lambda: focus_plan_view(session))
+    FreeCADGui.invokeLater(lambda: focus_plan_view(session))
 
 
 def get_plan_view_widget(session):
@@ -980,7 +979,7 @@ def queue_scene_graph_mutation(session, key, callback, *, finalizer=False):
         flush_scene_graph_mutations(session)
         return True
     state.scene_graph_flush_queued = True
-    QtCore.QTimer.singleShot(0, lambda: flush_scene_graph_mutations(session))
+    FreeCADGui.invokeLater(lambda: flush_scene_graph_mutations(session))
     return True
 
 
@@ -1027,7 +1026,7 @@ def request_view_redraw(session):
     except ImportError:
         return flush_view_redraw(session)
     state.redraw_queued = True
-    QtCore.QTimer.singleShot(0, lambda: flush_view_redraw(session))
+    FreeCADGui.invokeLater(lambda: flush_view_redraw(session))
     return True
 
 

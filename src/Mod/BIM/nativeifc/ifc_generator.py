@@ -107,7 +107,7 @@ def generate_geometry(obj, cached=False):
         node, placement = generate_coin(ifcfile, elements, cached)
         if node:
             # TODO this still needs to be fixed
-            # QtCore.QTimer.singleShot(0, lambda: set_representation(obj.ViewObject, node))
+            # FreeCADGui.invokeLater(lambda: set_representation(obj.ViewObject, node))
             set_representation(obj.ViewObject, node)
             colors = node[0]
         else:
@@ -118,7 +118,7 @@ def generate_geometry(obj, cached=False):
 
     # set shape and diffuse colors
     if colors:
-        QtCore.QTimer.singleShot(0, lambda: ifc_tools.set_colors(obj, colors))  # TODO migrate here?
+        FreeCADGui.invokeLater(lambda: ifc_tools.set_colors(obj, colors))
 
 
 def generate_shape(ifcfile, elements, cached=False):

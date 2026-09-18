@@ -29,6 +29,7 @@ import os
 from PySide import QtCore
 
 import FreeCAD
+import FreeCADGui
 import Arch
 import ArchBuildingPart
 import Draft
@@ -351,7 +352,7 @@ def create_children(
         result.extend(create_child(obj, child))
     assign_groups(children)
     # TEST: mark new objects to recompute
-    QtCore.QTimer.singleShot(0, lambda: recompute([get_object(c) for c in children]))
+    FreeCADGui.invokeLater(lambda: recompute([get_object(c) for c in children]))
     return result
 
 
@@ -1777,7 +1778,7 @@ def load_orphans(obj):
                 project.Proxy.addObject(project, o)
 
     # TEST: Try recomputing
-    QtCore.QTimer.singleShot(0, lambda: recompute(objs))
+    FreeCADGui.invokeLater(lambda: recompute(objs))
 
 
 def remove_tree(objs):

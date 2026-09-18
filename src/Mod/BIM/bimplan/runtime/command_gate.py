@@ -6,7 +6,6 @@ import os
 
 import FreeCAD
 import FreeCADGui
-
 translate = FreeCAD.Qt.translate
 
 ALLOW_EXTERNAL_COMMANDS_ENV = "FC_BIM_PLAN_EDIT_ALLOW_EXTERNAL_COMMANDS"
@@ -109,7 +108,7 @@ def refresh_later():
 
     for delay in (0, 50, 250):
         try:
-            QtCore.QTimer.singleShot(delay, _run_refresh)
+            FreeCADGui.invokeLater(_run_refresh, delay)
         except Exception:
             pass
 

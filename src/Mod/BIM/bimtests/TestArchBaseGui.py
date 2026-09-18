@@ -73,15 +73,16 @@ class TestArchBaseGui(TestArchBase):
     def pump_gui_events(self, timeout_ms=200):
         """Run the Qt event loop briefly so queued GUI callbacks execute.
 
-        This helper starts a QEventLoop and quits it after `timeout_ms` milliseconds using
-        QTimer.singleShot. Any exception (e.g. missing Qt in the environment) is silently ignored so
-        tests can still run in pure-CLI environments where the GUI isn't available.
+        This helper starts a QEventLoop and quits it after `timeout_ms` milliseconds.
+        FreeCADGui owns the deferred callback across nested event-loop teardown. Any exception (e.g.
+        missing Qt in the environment) is silently ignored so tests can still run
+        in pure-CLI environments where the GUI isn't available.
         """
         try:
             from PySide import QtCore
-
+            import FreeCADGui
             loop = QtCore.QEventLoop()
-            QtCore.QTimer.singleShot(int(timeout_ms), loop.quit)
+            FreeCADGui.invokeLater(loop.quit, int(timeout_ms))
             loop.exec_()
         except Exception:
             # Best-effort: if Qt isn't present or event pumping fails, continue.

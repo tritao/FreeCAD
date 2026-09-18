@@ -100,11 +100,11 @@ def queue_prime_wall_hosted_openings_cache(session):
     ):
         return
     try:
-        from PySide import QtCore
+        import FreeCADGui
     except ImportError:
         return
     cache_state.wall_hosted_openings_cache_queued = True
-    QtCore.QTimer.singleShot(0, session.openings.prime_wall_hosted_openings_cache)
+    FreeCADGui.invokeLater(session.openings.prime_wall_hosted_openings_cache)
 
 
 def prime_wall_hosted_openings_cache(session):

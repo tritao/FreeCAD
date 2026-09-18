@@ -114,6 +114,7 @@
 # undef _POSIX_C_SOURCE
 # undef _XOPEN_SOURCE
 # include <basewrapper.h>
+# include <bindingmanager.h>
 # include <sbkconverter.h>
 # include <sbkmodule.h>
 # include <shiboken.h>
@@ -602,6 +603,19 @@ QObject* PythonWrapper::toQObject(const Py::Object& pyobject)
     return qt_getCppType<QObject>(pyobject.ptr());
 }
 
+bool PythonWrapper::isValidQObject(const Py::Object& pyobject)
+{
+#if defined(HAVE_SHIBOKEN) && defined(HAVE_PYSIDE)
+    if (!Shiboken::Object::checkType(pyobject.ptr())) {
+        return false;
+    }
+    auto sbkObject = reinterpret_cast<SbkObject*>(pyobject.ptr());
+    return Shiboken::Object::isValid(sbkObject, false) && toQObject(pyobject);
+#else
+    return toQObject(pyobject) != nullptr;
+#endif
+}
+
 qsizetype PythonWrapper::tryEnum(PyObject* pyPtr)
 {
     if (PyObject* number = PyNumber_Long(pyPtr)) {
@@ -904,6 +918,48 @@ const char* PythonWrapper::getWrapperName(QObject* obj) const
     }
 #endif
     return "QObject";
+}
+
+void PythonWrapper::adoptByCpp(const Py::Object& pyobject)
+{
+#if defined(HAVE_SHIBOKEN) && defined(HAVE_PYSIDE)
+    if (Shiboken::Object::checkType(pyobject.ptr())) {
+        auto sbkObject = reinterpret_cast<SbkObject*>(pyobject.ptr());
+        if (Shiboken::Object::isValid(sbkObject, false)
+            && Shiboken::Object::hasOwnership(sbkObject)) {
+            Shiboken::Object::releaseOwnership(sbkObject);
+        }
+    }
+#else
+    Q_UNUSED(pyobject);
+#endif
+}
+
+void PythonWrapper::adoptQObjectTree(QObject* root, std::vector<Py::Object>& retained)
+{
+#if defined(HAVE_SHIBOKEN) && defined(HAVE_PYSIDE)
+    if (!root) {
+        return;
+    }
+
+    const auto adopt = [this, &retained](QObject* object) {
+        if (auto wrapper = Shiboken::BindingManager::instance().retrieveWrapper(object)) {
+            auto pyobject = reinterpret_cast<PyObject*>(wrapper);
+            Py_INCREF(pyobject);
+            Py::Object retainedWrapper = Py::asObject(pyobject);
+            adoptByCpp(retainedWrapper);
+            retained.push_back(retainedWrapper);
+        }
+    };
+
+    adopt(root);
+    for (QObject* child : root->findChildren<QObject*>()) {
+        adopt(child);
+    }
+#else
+    Q_UNUSED(root);
+    Q_UNUSED(retained);
+#endif
 }
 
 bool PythonWrapper::loadCoreModule()

@@ -352,6 +352,9 @@ TaskWatcherPython::TaskWatcherPython(const Py::Object& o)
                 if (object) {
                     QWidget* w = qobject_cast<QWidget*>(object);
                     if (w) {
+                        // The watcher deletes the widget tree it shows, so C++
+                        // has to own every already-wrapped object in that tree.
+                        wrap.adoptQObjectTree(w, contentWrappers);
                         if (tb) {
                             tb->groupLayout()->addWidget(w);
                         }
@@ -377,12 +380,18 @@ TaskWatcherPython::TaskWatcherPython(const Py::Object& o)
 
 TaskWatcherPython::~TaskWatcherPython()
 {
-    std::vector<QPointer<QWidget>> guarded;
-    guarded.insert(guarded.begin(), Content.begin(), Content.end());
-    Content.clear();
+    // Delete the content while the Python references to the watcher and its
+    // widgets are still alive. Releasing them first can destroy the Python
+    // wrapper of a child widget before Qt deletes the corresponding C++ child,
+    // and Shiboken then releases the same wrapper twice, which crashes when
+    // the task watchers are cleared.
     Base::PyGILStateLocker lock;
+    for (QWidget* widget : Content) {
+        delete widget;
+    }
+    Content.clear();
+    contentWrappers.clear();
     this->watcher = Py::None();
-    Content.insert(Content.begin(), guarded.begin(), guarded.end());
 }
 
 bool TaskWatcherPython::shouldShow()
@@ -727,17 +736,18 @@ TaskDialogPython::TaskDialogPython(const Py::Object& o)
 
 TaskDialogPython::~TaskDialogPython()
 {
-    std::vector<QPointer<QWidget>> guarded;
-    guarded.insert(guarded.begin(), Content.begin(), Content.end());
+    // Delete the task box content while the Python references to the dialog
+    // and its form widgets are still alive. Releasing the form first destroys
+    // the Python wrapper of a child widget before Qt deletes the matching C++
+    // child, and Shiboken then releases the same wrapper twice, which crashes.
+    Base::PyGILStateLocker lock;
+    for (QWidget* widget : Content) {
+        delete widget;
+    }
     Content.clear();
 
-    Base::PyGILStateLocker lock;
     clearForm();
-
-    // Assigning None to 'dlg' may destroy some of the stored widgets.
-    // By guarding them with QPointer their pointers will be set to null
-    // so that the destructor of the base class can reliably call 'delete'.
-    Content.insert(Content.begin(), guarded.begin(), guarded.end());
+    contentWrappers.clear();
 }
 
 bool TaskDialogPython::tryLoadUiFile()
@@ -801,6 +811,8 @@ bool TaskDialogPython::tryLoadForm()
 
 void TaskDialogPython::appendForm(QWidget* form, const QPixmap& icon)
 {
+    Gui::PythonWrapper wrap;
+    wrap.adoptQObjectTree(form, contentWrappers);
     form->installEventFilter(this);
     auto taskbox = new Gui::TaskView::TaskBox(icon, form->windowTitle(), true, nullptr);
     taskbox->groupLayout()->addWidget(form);

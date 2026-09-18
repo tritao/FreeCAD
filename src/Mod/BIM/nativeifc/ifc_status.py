@@ -91,7 +91,7 @@ def set_properties_editor(statuswidget):
             pHLayout.insertStretch(0)
             editor.setCornerWidget(pTabCornerWidget, QtCore.Qt.BottomRightCorner)
             statuswidget.propertybuttons = pTabCornerWidget
-            QtCore.QTimer.singleShot(0, pTabCornerWidget.show)
+            FreeCADGui.invokeLater(pTabCornerWidget.show)
 
 
 def on_add_property():
@@ -417,7 +417,7 @@ def lock_document():
             FreeCAD.Console.PrintError(
                 "Unable to lock this document because it contains several IFC documents\n"
             )
-            QtCore.QTimer.singleShot(100, on_toggle_lock)
+            FreeCADGui.invokeLater(on_toggle_lock, 100)
         elif doc.Objects:
             # 3 there is no project but objects
             doc.openTransaction("Lock document")

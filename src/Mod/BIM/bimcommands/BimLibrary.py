@@ -1881,7 +1881,7 @@ class BIM_Library_TaskPanel:
         if hasattr(self, "origin") and self.origin:
             try:
                 self.origin.hide()
-                self.origin.deleteLater()
+                FreeCADGui.deleteLater(self.origin)
             except Exception:
                 pass
             self.origin = None
@@ -3237,7 +3237,7 @@ class BIM_Library_TaskPanel:
             QtGui.QApplication.setOverrideCursor(QtCore.Qt.WaitCursor)
             self.form.repaint()
             QtGui.QApplication.processEvents()
-            QtCore.QTimer.singleShot(1, writeOfflineLib)
+            FreeCADGui.invokeLater(writeOfflineLib, 1)
             self.form.setEnabled(True)
             QtGui.QApplication.restoreOverrideCursor()
         else:

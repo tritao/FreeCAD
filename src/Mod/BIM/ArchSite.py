@@ -43,6 +43,7 @@ import math
 import re
 
 import FreeCAD
+import FreeCADGui
 import ArchCommands
 import ArchComponent
 import ArchIFC
@@ -834,14 +835,12 @@ class _Site(ArchIFC.IfcProduct):
             #    function call, a race condition occurs: the GUI may build its widget *before* the
             #    constraints are set, resulting in an unconstrained input field.
             #
-            # To solve this, we defer the constraint restoration. We use QTimer.singleShot(0, ...)
-            # to push the `restoreConstraints` call to the end of the Qt event queue. This
+            # To solve this, FreeCADGui.invokeLater() pushes constraint restoration to the end of
+            # the Qt event queue. This
             # guarantees that the Property Editor has fully processed the property-add signals in
             # one event loop cycle *before* we apply the constraints in a subsequent cycle.
-            from PySide import QtCore
-
-            QtCore.QTimer.singleShot(
-                0, lambda: obj.ViewObject.Proxy.restoreConstraints(obj.ViewObject)
+            FreeCADGui.invokeLater(
+                lambda: obj.ViewObject.Proxy.restoreConstraints(obj.ViewObject)
             )
 
     def execute(self, obj):
@@ -1339,7 +1338,7 @@ class _ViewProviderSite:
         # Defer the constraint and default value setup until after the GUI is fully initialized.
         from PySide import QtCore
 
-        QtCore.QTimer.singleShot(0, lambda: self.restoreConstraints(vobj))
+        FreeCADGui.invokeLater(lambda: self.restoreConstraints(vobj))
 
     def setProperties(self, vobj):
         """Give the site view provider its site view provider specific properties.
@@ -1723,7 +1722,7 @@ class _ViewProviderSite:
             vobj = obj.ViewObject
             from PySide import QtCore
 
-            QtCore.QTimer.singleShot(0, lambda: self.updateSunPosition(vobj))
+            FreeCADGui.invokeLater(lambda: self.updateSunPosition(vobj))
         elif prop == "Declination":
             self.onChanged(obj.ViewObject, "SolarDiagramPosition")
             self.updateTrueNorthRotation()
@@ -1731,7 +1730,7 @@ class _ViewProviderSite:
                 vobj = obj.ViewObject
                 from PySide import QtCore
 
-                QtCore.QTimer.singleShot(0, lambda: self.updateSunPosition(vobj))
+                FreeCADGui.invokeLater(lambda: self.updateSunPosition(vobj))
         elif prop == "Terrain":
             self.updateCompassLocation(obj.ViewObject)
         elif prop == "Placement":
@@ -2072,7 +2071,7 @@ class _ViewProviderSite:
 
         if vobj is None:
             # ViewObject binding not ready yet: schedule a retry
-            QtCore.QTimer.singleShot(50, lambda: self._wait_for_viewobject(callback))
+            FreeCADGui.invokeLater(lambda: self._wait_for_viewobject(callback), 50)
             return
 
         # ViewObject is ready, execute the callback
@@ -2096,7 +2095,7 @@ class _ViewProviderSite:
 
         # Give the UI one more event cycle to pick up the new properties,
         # then restore constraints and defaults.
-        QtCore.QTimer.singleShot(0, lambda: self.restoreConstraints(vobj))
+        FreeCADGui.invokeLater(lambda: self.restoreConstraints(vobj))
 
     def updateSunPosition(self, vobj):
         """Calculates sun position and updates the sphere, path arc, and ray object."""
@@ -2137,7 +2136,7 @@ class _ViewProviderSite:
                 try:
                     from PySide import QtCore
 
-                    QtCore.QTimer.singleShot(0, lambda: self.updateSunPosition(vobj))
+                    FreeCADGui.invokeLater(lambda: self.updateSunPosition(vobj))
                 except Exception:
                     # If Qt is unavailable or scheduling fails, just return silently.
                     pass

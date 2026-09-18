@@ -23,6 +23,8 @@
 
 #pragma once
 
+#include <vector>
+
 #include "qglobal.h"
 #include <Base/PyObjectBase.h>
 #include <FCGlobal.h>
@@ -54,6 +56,7 @@ public:
 
     bool toCString(const Py::Object&, std::string&);
     QObject* toQObject(const Py::Object&);
+    bool isValidQObject(const Py::Object&);
     qsizetype toEnum(PyObject* pyPtr);
     qsizetype toEnum(const Py::Object& pyobject);
     Py::Object toStandardButton(qsizetype);
@@ -67,6 +70,19 @@ public:
     Py::Object fromQObject(QObject*, const char* className = nullptr);
     Py::Object fromQWidget(QWidget*, const char* className = nullptr);
     const char* getWrapperName(QObject*) const;
+    /*!
+      Make the C++ side responsible for deleting a Python-created object.
+      The object is adopted by C++, so Python must not delete it.
+     */
+    void adoptByCpp(const Py::Object&);
+    /*!
+      Adopt a QObject and its already-created wrapped descendants.
+
+      Qt destroys a QObject tree from the parent down. Keep every existing
+      Python wrapper alive until that C++ deletion has completed, otherwise
+      Shiboken can release a child wrapper before its C++ object is destroyed.
+     */
+    void adoptQObjectTree(QObject*, std::vector<Py::Object>& retained);
 
     Py::Object fromQImage(const QImage&);
     QImage* toQImage(PyObject* pyobj);

@@ -5,7 +5,7 @@
 import weakref
 
 import FreeCAD
-from bimplan.ui import qt_lifetime as plan_qt_lifetime
+import FreeCADGui
 from bimplan.ui import task_panel_view_model as plan_task_panel_view_model
 from bimplan.providers import PlanIssueSeverity, PlanToolInteraction
 
@@ -370,12 +370,14 @@ class PlanEditIntegrationPanelMixin:
             child_layout = item.layout()
             if child_layout is not None:
                 self._clear_layout(child_layout)
-                plan_qt_lifetime.delete_later(child_layout)
+                FreeCADGui.deleteLater(child_layout)
                 continue
             widget = item.widget()
             if widget is not None:
-                plan_qt_lifetime.detach_widget(widget)
-                plan_qt_lifetime.delete_later(widget)
+                if FreeCADGui.isValidQObject(widget):
+                    widget.hide()
+                    widget.setParent(None)
+                FreeCADGui.deleteLater(widget)
 
     def _add_integration_action_row(
         self,
@@ -1108,11 +1110,11 @@ class PlanEditIntegrationPanelMixin:
             from PySide import QtCore
 
             panel_ref = weakref.ref(self)
-            QtCore.QTimer.singleShot(
-                int(delay_ms),
+            FreeCADGui.invokeLater(
                 lambda generation=generation, panel_ref=panel_ref: (
                     _run_queued_integration_panel_refresh(panel_ref, generation)
                 ),
+                int(delay_ms),
             )
         except Exception:
             self._run_queued_integration_panel_refresh(generation)
