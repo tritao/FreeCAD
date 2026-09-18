@@ -429,6 +429,14 @@ void ViewProviderDocumentObject::refreshDisplayModes(bool preserveCurrent)
 
 void ViewProviderDocumentObject::update(const App::Property* prop)
 {
+    // A view provider can still receive property updates while it is detached
+    // from its object (pcObject is null), for example while a link view is
+    // being torn down.  There is then no object state to reflect and
+    // dereferencing the null object would crash.
+    if (!pcObject) {
+        return;
+    }
+
     // bypass view provider update to always allow changing visibility from
     // document object
     if (prop == &getObject()->Visibility) {
