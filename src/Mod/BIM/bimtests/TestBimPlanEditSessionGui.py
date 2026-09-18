@@ -1317,6 +1317,8 @@ class TestBimPlanEditSessionGui(TestArchBaseGui):
         )
         try:
             self.pump_gui_events(20)
+            self.assertEqual("Hidden", view.getViewVisibility(section))
+            self.assertTrue(section.ViewObject.Visibility)
             self.assertIs(
                 RepresentationPurpose.SECTION,
                 session.request.purpose,
@@ -1334,6 +1336,8 @@ class TestBimPlanEditSessionGui(TestArchBaseGui):
         finally:
             session.close()
             self.pump_gui_events(10)
+        self.assertEqual("Inherit", view.getViewVisibility(section))
+        self.assertTrue(section.ViewObject.Visibility)
         restored_camera = tuple(
             line.strip()
             for line in view.getCamera().splitlines()
@@ -1343,6 +1347,8 @@ class TestBimPlanEditSessionGui(TestArchBaseGui):
 
     def test_elevation_contextual_edit_uses_shared_host(self):
         wall = Arch.makeWall(length=3000, width=200, height=2500, align="Center")
+        elevation = Arch.makeSectionPlane([wall])
+        elevation.Purpose = "Elevation"
         frame = FreeCAD.Placement(
             FreeCAD.Vector(1500, 0, 0),
             FreeCAD.Rotation(FreeCAD.Vector(0, 1, 0), 90),
@@ -1351,6 +1357,7 @@ class TestBimPlanEditSessionGui(TestArchBaseGui):
             purpose=RepresentationPurpose.ELEVATION,
             reference_frame=frame,
             projection_range=(0.0, 5000.0),
+            source=elevation,
         )
         self.document.recompute()
         session = ContextualSession(
@@ -1361,6 +1368,11 @@ class TestBimPlanEditSessionGui(TestArchBaseGui):
         )
         try:
             self.pump_gui_events(20)
+            self.assertEqual(
+                "Hidden",
+                FreeCADGui.ActiveDocument.ActiveView.getViewVisibility(elevation),
+            )
+            self.assertTrue(elevation.ViewObject.Visibility)
             self.assertIs(RepresentationPurpose.ELEVATION, session.request.purpose)
             self.assertTrue(session.renderer.replace_source)
             self.assertTrue(session.renderer.render_representation)
@@ -1379,6 +1391,10 @@ class TestBimPlanEditSessionGui(TestArchBaseGui):
             self.assertIsNone(session.active_edit)
         finally:
             session.close()
+        self.assertEqual(
+            "Inherit", FreeCADGui.ActiveDocument.ActiveView.getViewVisibility(elevation)
+        )
+        self.assertTrue(elevation.ViewObject.Visibility)
 
     def test_section_plane_exposes_its_contextual_edit_command(self):
         section = Arch.makeSectionPlane(name="ContextualSection")

@@ -57,7 +57,7 @@ class ContextualSession:
             self.renderer = BimContextualRendering.ContextualInteractionRenderer(self.view)
         self._hidden_context_marker = None
         marker = getattr(self.request, "source", None)
-        if self._projected_elevation and marker is not None:
+        if self._should_hide_own_context_marker(marker):
             try:
                 self.view.setViewVisibility(self.renderer.layer, marker, "Hidden")
                 self._hidden_context_marker = marker
@@ -96,6 +96,24 @@ class ContextualSession:
             self.close()
             raise
         self._queue_selection_refresh()
+
+    def _should_hide_own_context_marker(self, marker):
+        """Keep a planar view's defining plane out of its own rendered content.
+
+        The marker remains a normal document object in model views.  Hiding it
+        through the renderer's view-context layer avoids changing persistent
+        visibility while preventing its large face from obscuring or winning
+        picks against the section/elevation content it defines.
+        """
+
+        if marker is None:
+            return False
+        if self.request.purpose not in (
+            ArchRepresentation.RepresentationPurpose.SECTION,
+            ArchRepresentation.RepresentationPurpose.ELEVATION,
+        ):
+            return False
+        return getattr(getattr(marker, "Proxy", None), "Type", "") == "SectionPlane"
 
     @property
     def active_edit(self):
