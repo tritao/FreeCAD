@@ -81,8 +81,8 @@ class TestBimPlanEditExamplesGui(TestArchBaseGui):
         self.assertTrue(definition.BIMIsActiveView)
         self.addCleanup(session.shutdown, close_dialog=False)
 
-    def test_basic_example_startup_reconciles_every_wall_pick_target(self):
-        """Startup must not expose native walls without semantic pick geometry."""
+    def test_basic_example_startup_builds_every_wall_pick_target(self):
+        """GUI restore completion must build the complete semantic wall layer."""
 
         document = self._open_example(
             "BIMPlanEditBasic.FCStd", keep_startup_activity=True

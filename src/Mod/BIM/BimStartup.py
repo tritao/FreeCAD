@@ -4,7 +4,6 @@
 
 import FreeCAD
 import FreeCADGui
-from PySide import QtCore
 
 
 GUI_SCHEMA_VERSION = 1
@@ -12,7 +11,7 @@ BIM_SCHEMA_VERSION = 1
 
 
 def apply_document_startup(document):
-    """Apply the supported BIM startup activity once the GUI is idle."""
+    """Apply the supported BIM startup activity after GUI restoration."""
 
     if document is None or FreeCAD.ActiveDocument is not document:
         return False
@@ -71,24 +70,29 @@ def apply_document_startup(document):
 
 class _BIMStartupObserver:
     def __init__(self):
-        self._scheduled = set()
+        self._restored = set()
+        self._applied = set()
 
-    def slotActivateDocument(self, document):
-        if document.Name in self._scheduled:
+    def slotFinishRestoreDocument(self, gui_document):
+        document = gui_document.Document
+        self._restored.add(document.Name)
+        self._apply(document)
+
+    def slotActivateDocument(self, gui_document):
+        document = gui_document.Document
+        if document.Name in self._restored or not document.Restoring:
+            self._apply(document)
+
+    def slotDeletedDocument(self, gui_document):
+        name = gui_document.Document.Name
+        self._restored.discard(name)
+        self._applied.discard(name)
+
+    def _apply(self, document):
+        if document.Name in self._applied:
             return
-        self._scheduled.add(document.Name)
-        QtCore.QTimer.singleShot(0, lambda name=document.Name: self._apply(name))
-
-    def slotDeletedDocument(self, document):
-        self._scheduled.discard(document.Name)
-
-    def _apply(self, document_name):
-        try:
-            document = FreeCAD.getDocument(document_name)
-        except NameError:
-            document = None
-        if document is not None:
-            apply_document_startup(document)
+        if apply_document_startup(document):
+            self._applied.add(document.Name)
 
 
 _observer = None
@@ -98,4 +102,9 @@ def install_observer():
     global _observer
     if _observer is None:
         _observer = _BIMStartupObserver()
-        FreeCAD.addDocumentObserver(_observer)
+        FreeCADGui.addDocumentObserver(_observer)
+        # Workbench initialization can happen after an already-open document
+        # completed restoration, so apply that one known-ready document now.
+        if FreeCAD.ActiveDocument is not None and not FreeCAD.ActiveDocument.Restoring:
+            _observer._restored.add(FreeCAD.ActiveDocument.Name)
+            _observer._apply(FreeCAD.ActiveDocument)
