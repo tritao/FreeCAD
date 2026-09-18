@@ -209,6 +209,34 @@ class ContextualSession:
 
         self._queue_selection_refresh()
 
+    def refresh_request_from_source(self, source=None):
+        """Refresh a saved planar request after its defining object changes.
+
+        Section-plane presentation settings are document properties, while a
+        contextual session owns an immutable request snapshot.  Rebuilding the
+        request here keeps an active elevation in sync without forcing the user
+        to leave and re-enter edit mode.
+        """
+
+        if self._closed:
+            return False
+        source = source or getattr(self.request, "source", None)
+        provider = getattr(getattr(source, "Proxy", None), "getRepresentationRequest", None)
+        if not callable(provider):
+            return False
+        request = provider(source)
+        if request is None or request.purpose != self.request.purpose:
+            return False
+        if self.active_edit is not None:
+            self.controller.cancel(refresh=False)
+        self.request = request
+        self.controller.request = request
+        if self.controller.editor is not None:
+            self.controller.editor.request = request
+        self.host.request = request
+        self._queue_selection_refresh()
+        return True
+
     def addSelection(self, *_args):
         self._queue_selection_refresh()
 

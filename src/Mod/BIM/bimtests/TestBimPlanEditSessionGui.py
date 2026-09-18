@@ -1392,6 +1392,54 @@ class TestBimPlanEditSessionGui(TestArchBaseGui):
         finally:
             session.close()
 
+    def test_elevation_session_refreshes_persisted_presentation_profile(self):
+        wall = Arch.makeWall(length=3000, width=200, height=2500, align="Center")
+        elevation = Arch.makeSectionPlane([wall])
+        elevation.Purpose = "Elevation"
+        request = elevation.Proxy.getRepresentationRequest(elevation)
+        self.document.recompute()
+        session = ContextualSession(
+            FreeCADGui.ActiveDocument.ActiveView,
+            request=request,
+            sources=(wall,),
+        )
+        try:
+            self.pump_gui_events(20)
+            elevation.ShowSilhouettes = False
+            elevation.VisibleLineWidth = 2.0
+            elevation.SilhouetteLineWidth = 3.0
+            self.document.recompute()
+            self.assertTrue(session.refresh_request_from_source(elevation))
+            self.pump_gui_events(20)
+            self.assertFalse(session.request.presentation_profile["show_silhouettes"])
+            self.assertEqual(2.0, session.controller.request.presentation_profile["visible_line_width"])
+            self.assertIs(session.request, session.host.request)
+        finally:
+            session.close()
+
+    def test_section_plane_task_panel_edits_elevation_presentation_profile(self):
+        from ArchSectionPlane import SectionPlaneTaskPanel
+
+        wall = Arch.makeWall(length=3000, width=200, height=2500, align="Center")
+        elevation = Arch.makeSectionPlane([wall])
+        elevation.Purpose = "Elevation"
+        panel = SectionPlaneTaskPanel()
+        panel.obj = elevation
+        panel.update()
+        try:
+            self.assertTrue(panel.presentation_widget.isEnabled())
+            self.assertTrue(panel.showSilhouettes.isChecked())
+            self.assertEqual(1.0, panel.visibleLineWidth.value())
+            self.assertEqual(1.35, panel.silhouetteLineWidth.value())
+            panel.showSilhouettes.setChecked(False)
+            panel.visibleLineWidth.setValue(2.0)
+            panel.silhouetteLineWidth.setValue(3.0)
+            self.assertFalse(elevation.ShowSilhouettes)
+            self.assertEqual(2.0, elevation.VisibleLineWidth)
+            self.assertEqual(3.0, elevation.SilhouetteLineWidth)
+        finally:
+            panel.reject()
+
     def test_elevation_projection_failure_preserves_last_valid_view(self):
         wall = Arch.makeWall(length=3000, width=200, height=2500, align="Center")
         elevation = Arch.makeSectionPlane([wall])

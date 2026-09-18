@@ -481,14 +481,32 @@ def getSVG(
                 }
                 elevation_role_styles = {}
                 if str(getattr(source, "Purpose", "")) == "Elevation":
+                    request = getattr(
+                        getattr(contextual_representations[0], "request", None),
+                        "presentation_profile",
+                        {},
+                    ) or {}
+                    visible_width = float(request.get("visible_line_width", 1.0))
+                    silhouette_width = float(
+                        request.get("silhouette_line_width", 1.35)
+                    )
+                    visible_style = dict(style)
+                    silhouette_style = dict(style)
+                    if visible_width != 1.0:
+                        visible_style["stroke-width"] = "{}px".format(
+                            scaledLineWidth * visible_width
+                        )
+                    silhouette_style["stroke-width"] = "{}px".format(
+                        scaledLineWidth * silhouette_width
+                    )
                     elevation_role_styles = {
                         "ProjectionSilhouette": {
-                            "hStyle": cut_style,
-                            "h0Style": cut_style,
-                            "h1Style": cut_style,
-                            "vStyle": cut_style,
-                            "v0Style": cut_style,
-                            "v1Style": cut_style,
+                            "hStyle": silhouette_style,
+                            "h0Style": silhouette_style,
+                            "h1Style": silhouette_style,
+                            "vStyle": silhouette_style,
+                            "v0Style": silhouette_style,
+                            "v1Style": silhouette_style,
                         }
                     }
                 for representation in contextual_representations:
@@ -497,12 +515,12 @@ def getSVG(
                             representation,
                             direction,
                             collection="projected_geometry",
-                            hStyle=style,
-                            h0Style=style,
-                            h1Style=style,
-                            vStyle=style,
-                            v0Style=style,
-                            v1Style=style,
+                            hStyle=visible_style if elevation_role_styles else style,
+                            h0Style=visible_style if elevation_role_styles else style,
+                            h1Style=visible_style if elevation_role_styles else style,
+                            vStyle=visible_style if elevation_role_styles else style,
+                            v0Style=visible_style if elevation_role_styles else style,
+                            v1Style=visible_style if elevation_role_styles else style,
                             role_styles=elevation_role_styles,
                         )
                     if representation.cut_geometry:
@@ -1827,6 +1845,30 @@ class SectionPlaneTaskPanel:
         size_pos_layout.addWidget(self.recenterButton)
         tools_layout.addLayout(size_pos_layout)
 
+        # Elevation presentation controls.  The document properties remain
+        # locked to preserve the historical section-plane property contract;
+        # these controls are the supported editing surface for the persisted
+        # profile.
+        self.presentation_widget = QtGui.QWidget()
+        presentation_layout = QtGui.QFormLayout(self.presentation_widget)
+        self.showSilhouettes = QtGui.QCheckBox(self.presentation_widget)
+        self.visibleLineWidth = QtGui.QDoubleSpinBox(self.presentation_widget)
+        self.silhouetteLineWidth = QtGui.QDoubleSpinBox(self.presentation_widget)
+        self.visibleLineWidthLabel = QtGui.QLabel(self.presentation_widget)
+        self.silhouetteLineWidthLabel = QtGui.QLabel(self.presentation_widget)
+        for editor in (self.visibleLineWidth, self.silhouetteLineWidth):
+            editor.setRange(0.1, 10.0)
+            editor.setDecimals(2)
+            editor.setSingleStep(0.1)
+        presentation_layout.addRow(self.showSilhouettes)
+        presentation_layout.addRow(self.visibleLineWidthLabel, self.visibleLineWidth)
+        presentation_layout.addRow(
+            self.silhouetteLineWidthLabel, self.silhouetteLineWidth
+        )
+        self.showSilhouettes.stateChanged.connect(self.setShowSilhouettes)
+        self.visibleLineWidth.valueChanged.connect(self.setVisibleLineWidth)
+        self.silhouetteLineWidth.valueChanged.connect(self.setSilhouetteLineWidth)
+
         QtCore.QObject.connect(self.addButton, QtCore.SIGNAL("clicked()"), self.addElement)
         QtCore.QObject.connect(self.delButton, QtCore.SIGNAL("clicked()"), self.removeElement)
         QtCore.QObject.connect(self.rotateXButton, QtCore.SIGNAL("clicked()"), self.rotateX)
@@ -1836,7 +1878,7 @@ class SectionPlaneTaskPanel:
         QtCore.QObject.connect(self.recenterButton, QtCore.SIGNAL("clicked()"), self.recenter)
         QtCore.QObject.connect(self.tree, QtCore.SIGNAL("itemSelectionChanged()"), self.onTreeClick)
 
-        self.form = [self.scope_widget, self.tools_widget]
+        self.form = [self.scope_widget, self.tools_widget, self.presentation_widget]
         self.update()
 
     def isAllowedAlterSelection(self):
@@ -1870,7 +1912,47 @@ class SectionPlaneTaskPanel:
                 item.setIcon(0, self.getIcon(o))
             if self.obj.ViewObject and hasattr(self.obj.ViewObject, "CutView"):
                 self.cutViewButton.setChecked(self.obj.ViewObject.CutView)
+            is_elevation = str(getattr(self.obj, "Purpose", "")) == "Elevation"
+            self.presentation_widget.setEnabled(is_elevation)
+            self.showSilhouettes.blockSignals(True)
+            self.visibleLineWidth.blockSignals(True)
+            self.silhouetteLineWidth.blockSignals(True)
+            self.showSilhouettes.setChecked(
+                bool(getattr(self.obj, "ShowSilhouettes", True))
+            )
+            self.visibleLineWidth.setValue(
+                float(getattr(self.obj, "VisibleLineWidth", 1.0))
+            )
+            self.silhouetteLineWidth.setValue(
+                float(getattr(self.obj, "SilhouetteLineWidth", 1.35))
+            )
+            self.showSilhouettes.blockSignals(False)
+            self.visibleLineWidth.blockSignals(False)
+            self.silhouetteLineWidth.blockSignals(False)
         self.retranslateUi()
+
+    def _set_presentation_property(self, name, value):
+        if self.obj is None or not hasattr(self.obj, name):
+            return
+        setattr(self.obj, name, value)
+        self.obj.Document.recompute()
+        try:
+            from bimcontextual.session import active_session
+
+            session = active_session()
+            if session is not None and getattr(session.request, "source", None) is self.obj:
+                session.refresh_request_from_source(self.obj)
+        except (ImportError, AttributeError, RuntimeError):
+            pass
+
+    def setShowSilhouettes(self, checked):
+        self._set_presentation_property("ShowSilhouettes", bool(checked))
+
+    def setVisibleLineWidth(self, value):
+        self._set_presentation_property("VisibleLineWidth", float(value))
+
+    def setSilhouetteLineWidth(self, value):
+        self._set_presentation_property("SilhouetteLineWidth", float(value))
 
     def addElement(self):
         if self.obj:
@@ -1998,5 +2080,32 @@ class SectionPlaneTaskPanel:
         self.recenterButton.setToolTip(
             QtGui.QApplication.translate(
                 "Arch", "Centers the plane on the objects in the list above", None
+            )
+        )
+        self.presentation_widget.setWindowTitle(
+            QtGui.QApplication.translate("Arch", "Elevation Presentation", None)
+        )
+        self.showSilhouettes.setText(
+            QtGui.QApplication.translate("Arch", "Show silhouette edges", None)
+        )
+        self.visibleLineWidthLabel.setText(
+            QtGui.QApplication.translate("Arch", "Visible edge weight", None)
+        )
+        self.silhouetteLineWidthLabel.setText(
+            QtGui.QApplication.translate("Arch", "Silhouette edge weight", None)
+        )
+        self.showSilhouettes.setToolTip(
+            QtGui.QApplication.translate(
+                "Arch", "Include the outer silhouette edges in projected elevations", None
+            )
+        )
+        self.visibleLineWidth.setToolTip(
+            QtGui.QApplication.translate(
+                "Arch", "Relative weight of visible projected edges", None
+            )
+        )
+        self.silhouetteLineWidth.setToolTip(
+            QtGui.QApplication.translate(
+                "Arch", "Relative weight of silhouette projected edges", None
             )
         )

@@ -338,6 +338,38 @@ class TestArchSectionPlane(TestArchBase.TestArchBase):
 
         self.assertTrue(svg)
 
+    def testTechDrawElevationUsesPresentationProfileWeights(self):
+        """TechDraw receives the same persisted weights as the viewport."""
+
+        box = self._makeBox(length=1000, width=200, height=1200)
+        elevation = Arch.makeSectionPlane([box])
+        elevation.Purpose = "Elevation"
+        elevation.Depth = 2000
+        elevation.VisibleLineWidth = 2.0
+        elevation.SilhouetteLineWidth = 3.0
+        self.document.recompute()
+
+        calls = []
+        original_project = TechDrawBIM.project_representation_to_svg
+
+        def capture_project(
+            representation, direction, collection="projected_geometry", **styles
+        ):
+            calls.append((collection, styles))
+            return "<g/>"
+
+        TechDrawBIM.project_representation_to_svg = capture_project
+        try:
+            ArchSectionPlane.getSVG(elevation, techdraw=True, renderMode="Wireframe")
+        finally:
+            TechDrawBIM.project_representation_to_svg = original_project
+
+        projected = [styles for collection, styles in calls if collection == "projected_geometry"]
+        self.assertTrue(projected)
+        self.assertEqual("2.0px", projected[0]["hStyle"]["stroke-width"])
+        silhouette = projected[0]["role_styles"]["ProjectionSilhouette"]
+        self.assertEqual("3.0px", silhouette["hStyle"]["stroke-width"])
+
     def testTechDrawConvertsSemanticPolylinesToProjectionGeometry(self):
         """Semantic cut lines remain directly consumable by TechDraw."""
 
