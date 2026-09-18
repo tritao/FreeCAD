@@ -420,6 +420,43 @@ class TestGuiDocument(unittest.TestCase):
         finally:
             FreeCADGui.unregisterStartupActivity(workbench, "GuiTest")
 
+    def testNestedOpenKeepsPresentationFrozenUntilOuterOpenFinishes(self):
+        main_window = FreeCADGui.getMainWindow()
+        observed = {}
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            outer_path = os.path.join(temp_dir, "outer_startup.FCStd")
+            inner_path = os.path.join(temp_dir, "inner_startup.FCStd")
+            self.doc.saveAs(outer_path)
+
+            inner_source = FreeCAD.newDocument("NestedOpenSource")
+            inner_source.saveAs(inner_path)
+            FreeCAD.closeDocument(inner_source.Name)
+
+            class Observer:
+                def slotFinishRestoreDocument(observer_self, gui_document):
+                    if gui_document.Document.FileName != outer_path or "nested" in observed:
+                        return
+                    observed["outer_restore_frozen"] = main_window.isPresentationFrozen()
+                    observed["nested"] = FreeCAD.openDocument(inner_path).Name
+                    observed["after_nested_frozen"] = main_window.isPresentationFrozen()
+
+            FreeCAD.closeDocument(self.doc.Name)
+            self.doc = None
+            observer = Observer()
+            FreeCADGui.addDocumentObserver(observer)
+            try:
+                self.doc = FreeCAD.openDocument(outer_path)
+            finally:
+                FreeCADGui.removeDocumentObserver(observer)
+                nested_name = observed.get("nested")
+                if nested_name in FreeCAD.listDocuments():
+                    FreeCAD.closeDocument(nested_name)
+
+        self.assertTrue(observed.get("outer_restore_frozen"), observed)
+        self.assertTrue(observed.get("after_nested_frozen"), observed)
+        self.assertFalse(main_window.isPresentationFrozen())
+
     def testStartupActivitySkipsPopulationAfterDocumentClose(self):
         workbench = FreeCADGui.activeWorkbench().name()
         populated = []

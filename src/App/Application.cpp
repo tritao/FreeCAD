@@ -783,7 +783,7 @@ std::string Application::getUniqueDocumentName(const char* Name, bool tempDoc) c
 
 int Application::addPendingDocument(const char *FileName, const char *objName, bool allowPartial)
 {
-    if(!_isRestoring)
+    if (_openDocumentDepth == 0)
         return 0;
     if(allowPartial && _allowPartial)
         return -1;
@@ -801,7 +801,7 @@ int Application::addPendingDocument(const char *FileName, const char *objName, b
 }
 
 bool Application::isRestoring() const {
-    return _isRestoring || Document::isAnyRestoring();
+    return _openDocumentDepth > 0 || Document::isAnyRestoring();
 }
 
 bool Application::isClosingAll() const {
@@ -898,18 +898,32 @@ struct DocTiming {
 
 class DocOpenGuard {
 public:
-    bool &flag;
-    fastsignals::signal<void ()> &signal;
-    DocOpenGuard(bool &f, fastsignals::signal<void ()> &s)
-        :flag(f),signal(s)
+    DocOpenGuard(
+        unsigned int& depth,
+        fastsignals::signal<void ()>& startSignal,
+        fastsignals::signal<void ()>& finishSignal)
+        : depth(depth)
+        , finishSignal(finishSignal)
     {
-        flag = true;
-    }
-    ~DocOpenGuard() {
-        if(flag) {
-            flag = false;
+        if (depth++ == 0) {
             try {
-                signal();
+                startSignal();
+            }
+            catch (...) {
+                --depth;
+                throw;
+            }
+        }
+    }
+
+    DocOpenGuard(const DocOpenGuard&) = delete;
+    DocOpenGuard& operator=(const DocOpenGuard&) = delete;
+
+    ~DocOpenGuard()
+    {
+        if (depth > 0 && --depth == 0) {
+            try {
+                finishSignal();
             }
             catch (const boost::exception&) {
                 // reported by code analyzers
@@ -917,6 +931,10 @@ public:
             }
         }
     }
+
+private:
+    unsigned int& depth;
+    fastsignals::signal<void ()>& finishSignal;
 };
 
 Document* Application::openDocument(const char * FileName, DocumentInitFlags initFlags) {
@@ -977,13 +995,11 @@ std::vector<Document*> Application::openDocuments(const std::vector<std::string>
     if (errs)
         errs->resize(filenames.size());
 
-    DocOpenGuard guard(_isRestoring, signalFinishOpenDocument);
+    DocOpenGuard guard(_openDocumentDepth, signalStartOpenDocument, signalFinishOpenDocument);
     _pendingDocs.clear();
     _pendingDocsReopen.clear();
     _pendingDocMap.clear();
     _docReloadAttempts.clear();
-
-    signalStartOpenDocument();
 
     ParameterGrp::handle hGrp = GetParameterGroupByPath("User parameter:BaseApp/Preferences/Document");
     _allowPartial = !hGrp->GetBool("NoPartialLoading",false);
@@ -1164,9 +1180,6 @@ std::vector<Document*> Application::openDocuments(const std::vector<std::string>
         Base::Console().log("%s postprocess time: %f\n", doc.getDocumentName(), timing.d2.count());
     }
     PropertyLinkBase::updateAllElementReferences();
-    _isRestoring = false;
-
-    signalFinishOpenDocument();
     return res;
 }
 

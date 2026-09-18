@@ -381,18 +381,11 @@ void Application::populateStartupActivities()
         return;
     }
 
-    auto pending = std::make_shared<std::vector<ApplicationP::PendingStartupActivity>>();
-    pending->swap(d->pendingStartupActivities);
-    auto dispatch = std::make_shared<std::function<void()>>();
-    *dispatch = [pending, dispatch]() {
-        if (auto* mainWindow = getMainWindow();
-            mainWindow && mainWindow->isPresentationFrozen()) {
-            QTimer::singleShot(0, *dispatch);
-            return;
-        }
-
+    std::vector<ApplicationP::PendingStartupActivity> pending;
+    pending.swap(d->pendingStartupActivities);
+    QTimer::singleShot(0, [pending = std::move(pending)]() mutable {
         Base::PyGILStateLocker lock;
-        for (auto& activity : *pending) {
+        for (auto& activity : pending) {
             App::Document* doc = App::GetApplication().getDocument(activity.documentName.c_str());
             if (doc) {
                 PyObject* result = PyObject_CallOneArg(activity.populate, doc->getPyObject());
@@ -410,9 +403,7 @@ void Application::populateStartupActivities()
             Py_DECREF(activity.populate);
             activity.populate = nullptr;
         }
-        *dispatch = nullptr;
-    };
-    QTimer::singleShot(0, *dispatch);
+    });
 }
 
 PyObject* ApplicationPy::sSubgraphFromObject(PyObject* /*self*/, PyObject* args)
@@ -685,9 +676,6 @@ Application::Application(bool GUIenabled)
         App::GetApplication().signalFinishOpenDocument.connect([this]() {
             if (auto* mainWindow = getMainWindow()) {
                 mainWindow->unfreezePresentation();
-                if (mainWindow->isPresentationFrozen()) {
-                    return;
-                }
             }
             populateStartupActivities();
         });

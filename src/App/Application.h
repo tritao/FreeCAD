@@ -1069,7 +1069,8 @@ private:
     // that document to finish before closing it
     void cancelRecomputeRequestsForDocument(const std::string& documentName);
 
-    bool _isRestoring{false};
+    // Nested opens share one outer start/finish transaction.
+    unsigned int _openDocumentDepth{0};
     bool _allowPartial{false};
     bool _isClosingAll{false};
 
