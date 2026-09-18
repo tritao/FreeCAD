@@ -376,6 +376,11 @@ void View3DInventorPy::init_type()
         "graphicsView(): Access this view as QGraphicsView"
     );
     add_varargs_method(
+        "viewportDecoration",
+        &View3DInventorPy::viewportDecoration,
+        "viewportDecoration(edge): Return the top, left, or corner viewport decoration host"
+    );
+    add_varargs_method(
         "setCornerCrossVisible",
         &View3DInventorPy::setCornerCrossVisible,
         "setCornerCrossVisible(bool): Defines corner axis cross visibility"
@@ -2827,6 +2832,21 @@ Py::Object View3DInventorPy::graphicsView()
     PythonWrapper wrap;
     wrap.loadWidgetsModule();
     return wrap.fromQWidget(getView3DInventorPtr()->getViewer(), "QGraphicsView");
+}
+
+Py::Object View3DInventorPy::viewportDecoration(const Py::Tuple& args)
+{
+    char* edge = nullptr;
+    if (!PyArg_ParseTuple(args.ptr(), "s", &edge)) {
+        throw Py::Exception();
+    }
+    QWidget* widget = getView3DInventorPtr()->viewportDecoration(edge);
+    if (!widget) {
+        throw Py::ValueError("edge must be 'top', 'left', or 'corner'");
+    }
+    PythonWrapper wrap;
+    wrap.loadWidgetsModule();
+    return wrap.fromQWidget(widget, "QWidget");
 }
 
 Py::Object View3DInventorPy::setCornerCrossVisible(const Py::Tuple& args)

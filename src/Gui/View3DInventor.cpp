@@ -28,6 +28,7 @@
 #include <QDropEvent>
 #include <QDragEnterEvent>
 #include <QLayout>
+#include <QGridLayout>
 #include <QMdiSubWindow>
 #include <QMessageBox>
 #include <QMimeData>
@@ -103,6 +104,19 @@ View3DInventor::View3DInventor(
     , _viewerPy(nullptr)
 {
     stack = new QStackedWidget(this);
+    viewportFrame = new QWidget(this);
+    auto* viewportLayout = new QGridLayout(viewportFrame);
+    viewportLayout->setContentsMargins(0, 0, 0, 0);
+    viewportLayout->setSpacing(0);
+    viewportTopDecoration = new QWidget(viewportFrame);
+    viewportLeftDecoration = new QWidget(viewportFrame);
+    viewportCornerDecoration = new QWidget(viewportFrame);
+    viewportTopDecoration->setObjectName(QStringLiteral("View3DViewportTopDecoration"));
+    viewportLeftDecoration->setObjectName(QStringLiteral("View3DViewportLeftDecoration"));
+    viewportCornerDecoration->setObjectName(QStringLiteral("View3DViewportCornerDecoration"));
+    viewportTopDecoration->hide();
+    viewportLeftDecoration->hide();
+    viewportCornerDecoration->hide();
     // important for highlighting
     setMouseTracking(true);
     // accept drops on the window, get handled in dropEvent, dragEnterEvent
@@ -135,7 +149,13 @@ View3DInventor::View3DInventor(
 
     // create the inventor widget and set the defaults
     _viewer->setDocument(this->_pcDocument);
-    stack->addWidget(_viewer->getWidget());
+    viewportLayout->addWidget(viewportCornerDecoration, 0, 0);
+    viewportLayout->addWidget(viewportTopDecoration, 0, 1);
+    viewportLayout->addWidget(viewportLeftDecoration, 1, 0);
+    viewportLayout->addWidget(_viewer->getWidget(), 1, 1);
+    viewportLayout->setRowStretch(1, 1);
+    viewportLayout->setColumnStretch(1, 1);
+    stack->addWidget(viewportFrame);
     // https://forum.freecad.org/viewtopic.php?f=3&t=6055&sid=150ed90cbefba50f1e2ad4b4e6684eba
     // describes a minor error but trying to fix it leads to a major issue
     // https://forum.freecad.org/viewtopic.php?f=3&t=6085&sid=3f4bcab8007b96aaf31928b564190fd7
@@ -153,6 +173,20 @@ View3DInventor::View3DInventor(
     setWindowIcon(
         Gui::BitmapFactory().iconFromTheme("Document", QIcon(Gui::BitmapFactory().pixmap("Document")))
     );
+}
+
+QWidget* View3DInventor::viewportDecoration(const char* edge) const
+{
+    if (std::strcmp(edge, "top") == 0) {
+        return viewportTopDecoration;
+    }
+    if (std::strcmp(edge, "left") == 0) {
+        return viewportLeftDecoration;
+    }
+    if (std::strcmp(edge, "corner") == 0) {
+        return viewportCornerDecoration;
+    }
+    return nullptr;
 }
 
 View3DInventor::~View3DInventor()

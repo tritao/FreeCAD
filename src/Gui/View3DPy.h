@@ -127,6 +127,7 @@ public:
     Py::Object toggleClippingPlane(const Py::Tuple& args, const Py::Dict&);
     Py::Object hasClippingPlane();
     Py::Object graphicsView();
+    Py::Object viewportDecoration(const Py::Tuple& args);
     Py::Object setCornerCrossVisible(const Py::Tuple& args);
     Py::Object isCornerCrossVisible();
     Py::Object setCornerCrossSize(const Py::Tuple& args);

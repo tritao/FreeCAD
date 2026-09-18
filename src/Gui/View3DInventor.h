@@ -35,6 +35,7 @@
 class QPrinter;
 class QOpenGLWidget;
 class QStackedWidget;
+class QWidget;
 
 namespace Gui
 {
@@ -129,6 +130,13 @@ public:
     void setOverlayWidget(QWidget*);
     void removeOverlayWidget();
 
+    /** Return a layout-owned host for non-interactive UI around the 3D viewport.
+     *
+     * Decorations are siblings of the Quarter widget, so adding view chrome never
+     * changes Quarter's internal viewport origin or input coordinate system.
+     */
+    QWidget* viewportDecoration(const char* edge) const;
+
     View3DInventorViewer* getViewer() const
     {
         return _viewer;
@@ -163,6 +171,10 @@ private:
     PyObject* _viewerPy;
     QTimer* stopSpinTimer;
     QStackedWidget* stack;
+    QWidget* viewportFrame;
+    QWidget* viewportTopDecoration;
+    QWidget* viewportLeftDecoration;
+    QWidget* viewportCornerDecoration;
     std::unique_ptr<View3DSettings> viewSettings;
     std::unique_ptr<NaviCubeSettings> naviSettings;
 
