@@ -98,15 +98,10 @@ def _set_view_object_property(session, view_object, property_name, value):
         setter = _get_callable(getattr(session, "view", None), "setViewVisibility")
         if layer is not None and owner is not None and setter is not None:
             try:
-                if setter(layer, owner, "Visible" if value else "Hidden"):
-                    return True
+                return bool(setter(layer, owner, "Visible" if value else "Hidden"))
             except (ReferenceError, RuntimeError):
                 session.view = None
                 return False
-            # Some Python view providers, including SectionPlane, cannot be
-            # overridden by the native per-view layer. Continue to the
-            # session-tracked property fallback so the state is restored when
-            # Plan Edit ends.
     current_value = _get_view_object_property(view_object, property_name)
     if current_value == value:
         return False
@@ -796,6 +791,15 @@ def _hide_planar_view_markers(session):
         apply_hidden_object_state(session, getattr(obj, "ViewObject", None))
 
 
+def hide_replaced_plan_source(session, obj):
+    """Suppress native geometry in this view after installing its replacement."""
+
+    view_object = getattr(obj, "ViewObject", None)
+    if view_object is None:
+        return False
+    return _set_view_object_property(session, view_object, "Visibility", False)
+
+
 def apply_storey_visibility(session):
     viewport_state = _viewport_state(session)
     with _perf_trace_span(
@@ -955,3 +959,6 @@ class PlanVisibilityAPI:
 
     def apply_storey_visibility(self, *args, **kwargs):
         return apply_storey_visibility(self.session, *args, **kwargs)
+
+    def hide_replaced_plan_source(self, *args, **kwargs):
+        return hide_replaced_plan_source(self.session, *args, **kwargs)

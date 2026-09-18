@@ -2620,13 +2620,6 @@ class _HostedOpeningRepresentationGeometry:
 
         if request is None:
             request = self._get_default_opening_plan_request(self.Object)
-        if getattr(request, "reference_frame", None) is not None:
-            return {
-                "jamb_polylines": (),
-                "symbol_polylines": (),
-                "guide_polylines": (),
-            }
-
         shape = getattr(self.Object, "Shape", None)
         cut_z = getattr(request, "cut_offset", None)
         base_z = getattr(request, "target_offset", None)
@@ -2642,6 +2635,18 @@ class _HostedOpeningRepresentationGeometry:
                 "symbol_polylines": (),
                 "guide_polylines": (),
             }
+        frame = getattr(request, "reference_frame", None)
+        if frame is not None:
+            frame_normal = frame.Rotation.multVec(FreeCAD.Vector(0, 0, 1))
+            if abs(abs(frame_normal.z) - 1.0) > 1e-7:
+                return {
+                    "jamb_polylines": (),
+                    "symbol_polylines": (),
+                    "guide_polylines": (),
+                }
+            cut_z = frame.multVec(FreeCAD.Vector(0, 0, float(cut_z))).z
+            if base_z is not None:
+                base_z = frame.multVec(FreeCAD.Vector(0, 0, float(base_z))).z
         profile = self._get_hosted_opening_plan_frame(shape, cut_z, base_z)
         if not profile:
             return {
@@ -2671,13 +2676,16 @@ class _HostedOpeningRepresentationGeometry:
             request = self._get_default_opening_plan_request(source)
         representation = ArchRepresentation.BIMRepresentation(source=source, request=request)
         self._add_position_edit_handle(representation, source, request)
-        if getattr(request, "reference_frame", None) is not None:
+        purpose = getattr(request, "purpose", ArchRepresentation.RepresentationPurpose.PLAN)
+        if (
+            getattr(request, "reference_frame", None) is not None
+            and purpose != ArchRepresentation.RepresentationPurpose.PLAN
+        ):
             faces = ArchComponent.get_reference_slice_faces(source.Shape, request)
             self._add_section_geometry(representation, faces)
             self._add_section_edit_handles(representation, source, request)
             return representation
 
-        purpose = getattr(request, "purpose", ArchRepresentation.RepresentationPurpose.PLAN)
         if purpose != ArchRepresentation.RepresentationPurpose.PLAN:
             cut_z = getattr(request, "cut_offset", None)
             if cut_z is None:

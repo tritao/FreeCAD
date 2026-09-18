@@ -93,6 +93,12 @@ class PlanContextualRenderingAPI:
             ("contextual-renderer", key), guarded_mutation
         )
 
+    def _install_representation(self, renderer, representation):
+        """Install a semantic drawing before suppressing its native geometry."""
+
+        renderer.set_representation(representation)
+        self._session.visibility.hide_replaced_plan_source(representation.source)
+
     def mapping_for_node(self, node):
         if self._renderer is None:
             return None
@@ -203,7 +209,9 @@ class PlanContextualRenderingAPI:
             source = representation.source
             self._queue_renderer_mutation(
                 ("representation", source),
-                lambda renderer, value=representation: renderer.set_representation(value),
+                lambda renderer, value=representation: self._install_representation(
+                    renderer, value
+                ),
             )
             current.add(source)
         for source in self._sources - current:
@@ -316,7 +324,7 @@ class PlanContextualRenderingAPI:
             return
         self._queue_renderer_mutation(
             ("representation", source),
-            lambda renderer: renderer.set_representation(representation),
+            lambda renderer: self._install_representation(renderer, representation),
         )
         self._sources.add(representation.source)
         self._pending_sources.discard(representation.source)

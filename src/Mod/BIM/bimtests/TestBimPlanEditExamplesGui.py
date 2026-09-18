@@ -132,13 +132,53 @@ class TestBimPlanEditExamplesGui(TestArchBaseGui):
         ]
         self.assertTrue(markers)
         for marker in markers:
-            self.assertFalse(marker.ViewObject.Visibility, marker.Name)
+            self.assertEqual("Hidden", session.view.getViewVisibility(marker), marker.Name)
+            self.assertTrue(marker.ViewObject.Visibility, marker.Name)
 
         view = session.view
         session.shutdown(close_dialog=False)
         for marker in markers:
             self.assertEqual("Inherit", view.getViewVisibility(marker), marker.Name)
             self.assertTrue(marker.ViewObject.Visibility, marker.Name)
+
+    def test_basic_example_door_uses_semantic_plan_symbol(self):
+        document = self._open_example(
+            "BIMPlanEditBasic.FCStd", keep_startup_activity=True
+        )
+        from bimplan.runtime.session import get_active_session
+
+        session = get_active_session()
+        self.assertIsNotNone(session)
+        self.addCleanup(session.shutdown, close_dialog=False)
+        self.pump_gui_events(100)
+        door = next(obj for obj in document.Objects if getattr(obj, "IfcType", "") == "Door")
+        host = door.Hosts[0]
+        wall_representation = session.contextual_rendering.renderer._representations[host]
+        representation = session.overlays.geometry.get_opening_representation(door)
+        self.assertIn(
+            "OpeningSymbol",
+            {mapping.role for mapping in representation.source_mappings},
+        )
+        self.assertEqual("Hidden", session.view.getViewVisibility(host))
+        self.assertEqual("Hidden", session.view.getViewVisibility(door))
+        self.assertTrue(host.ViewObject.Visibility)
+        self.assertTrue(door.ViewObject.Visibility)
+
+        model = wall_representation.analytic_model
+        self.assertIsNotNone(model)
+        self.assertEqual(1, len(model.opening_intervals))
+        lower, upper = model.opening_intervals[0]
+        axis = model.recipe.axis_end.sub(model.recipe.axis_start)
+        axis.normalize()
+        section = model.recipe.section
+        doorway = model.recipe.axis_start.add(axis * ((lower + upper) * 0.5))
+        doorway = doorway.add(
+            model.recipe.lateral * ((section.y_min + section.y_max) * 0.5)
+        )
+        doorway.z = model.target_z
+        self.assertFalse(
+            any(face.isInside(doorway, 1e-7, True) for face in wall_representation.cut_geometry)
+        )
 
     def test_basic_example_hover_resolves_last_coin_mouse_move(self):
         """A throttled final Coin move must still hover each vertical wall."""
