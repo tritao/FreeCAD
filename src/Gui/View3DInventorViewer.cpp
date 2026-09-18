@@ -4492,6 +4492,7 @@ bool View3DInventorViewer::applyCameraState(const SoCamera& sourceCamera)
         targetPerspective->nearDistance = sourcePerspective.nearDistance;
         targetPerspective->farDistance = sourcePerspective.farDistance;
         targetPerspective->focalDistance = sourcePerspective.focalDistance;
+        targetPerspective->heightAngle = sourcePerspective.heightAngle;
     }
     else if (targetCamera->getTypeId() == SoOrthographicCamera::getClassTypeId()) {
         auto* targetOrthographic = static_cast<SoOrthographicCamera*>(targetCamera);

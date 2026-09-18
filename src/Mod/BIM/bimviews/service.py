@@ -166,9 +166,14 @@ class BIMViewService:
             capture=False,
         )
         for name in (
-            "CameraCodec",
-            "CameraVersion",
-            "CameraPayload",
+            "CameraType",
+            "CameraPlacement",
+            "CameraFocalDistance",
+            "CameraHeightAngle",
+            "CameraHeight",
+            "CameraAspectRatio",
+            "CameraNearDistance",
+            "CameraFarDistance",
             "ReferenceFrame",
             "ForcedVisible",
             "ForcedHidden",

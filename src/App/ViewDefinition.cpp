@@ -8,28 +8,71 @@ using namespace App;
 
 PROPERTY_SOURCE(App::ViewDefinition, App::DocumentObject)
 
+namespace
+{
+
+const char* CameraTypeEnums[] = {"Orthographic", "Perspective", nullptr};
+
+}  // namespace
+
 ViewDefinition::ViewDefinition()
 {
+    CameraType.setEnums(CameraTypeEnums);
     ADD_PROPERTY_TYPE(
-        CameraCodec,
-        (""),
-        "View",
+        CameraType,
+        ("Orthographic"),
+        "Camera",
         Prop_None,
-        "Renderer camera codec identifier"
+        "Projection model of the saved camera"
     );
     ADD_PROPERTY_TYPE(
-        CameraVersion,
-        (1),
-        "View",
+        CameraPlacement,
+        (Base::Placement()),
+        "Camera",
         Prop_None,
-        "Version of the camera payload schema"
+        "Pose of the saved camera"
     );
     ADD_PROPERTY_TYPE(
-        CameraPayload,
-        (""),
-        "View",
+        CameraFocalDistance,
+        (0.0),
+        "Camera",
         Prop_None,
-        "Versioned renderer camera payload"
+        "Distance from the camera position to the focal point"
+    );
+    ADD_PROPERTY_TYPE(
+        CameraHeightAngle,
+        (0.0),
+        "Camera",
+        Prop_None,
+        "Vertical field of view of a perspective camera"
+    );
+    ADD_PROPERTY_TYPE(
+        CameraHeight,
+        (0.0),
+        "Camera",
+        Prop_None,
+        "Vertical extent of an orthographic camera"
+    );
+    ADD_PROPERTY_TYPE(
+        CameraAspectRatio,
+        (1.0),
+        "Camera",
+        Prop_None,
+        "Stored aspect ratio of an orthographic camera"
+    );
+    ADD_PROPERTY_TYPE(
+        CameraNearDistance,
+        (0.0),
+        "Camera",
+        Prop_None,
+        "Near clipping distance of the saved camera"
+    );
+    ADD_PROPERTY_TYPE(
+        CameraFarDistance,
+        (0.0),
+        "Camera",
+        Prop_None,
+        "Far clipping distance of the saved camera"
     );
     ADD_PROPERTY_TYPE(
         ReferenceFrame,
@@ -60,4 +103,34 @@ ViewDefinition::ViewDefinition()
         Prop_None,
         "Persistent clipping definitions referenced by this view"
     );
+}
+
+ViewCamera ViewDefinition::camera() const
+{
+    ViewCamera state;
+    state.type = std::string(CameraType.getValueAsString()) == "Perspective"
+        ? ViewCameraType::Perspective
+        : ViewCameraType::Orthographic;
+    const Base::Placement& placement = CameraPlacement.getValue();
+    state.position = placement.getPosition();
+    state.orientation = placement.getRotation();
+    state.focalDistance = CameraFocalDistance.getValue();
+    state.heightAngle = CameraHeightAngle.getValue();
+    state.height = CameraHeight.getValue();
+    state.aspectRatio = CameraAspectRatio.getValue();
+    state.nearDistance = CameraNearDistance.getValue();
+    state.farDistance = CameraFarDistance.getValue();
+    return state;
+}
+
+void ViewDefinition::setCamera(const ViewCamera& state)
+{
+    CameraType.setValue(state.type == ViewCameraType::Perspective ? "Perspective" : "Orthographic");
+    CameraPlacement.setValue(Base::Placement(state.position, state.orientation));
+    CameraFocalDistance.setValue(state.focalDistance);
+    CameraHeightAngle.setValue(state.heightAngle);
+    CameraHeight.setValue(state.height);
+    CameraAspectRatio.setValue(state.aspectRatio);
+    CameraNearDistance.setValue(state.nearDistance);
+    CameraFarDistance.setValue(state.farDistance);
 }

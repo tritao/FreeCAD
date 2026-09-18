@@ -115,11 +115,7 @@ bool ViewContext::applyDefinition(const App::ViewDefinition* definition)
         affected.insert(object);
     }
     definitionVisibility.clear();
-    activeCameraState = {
-        definition->CameraCodec.getValue(),
-        definition->CameraVersion.getValue(),
-        definition->CameraPayload.getValue()
-    };
+    activeCamera = definition->camera();
     activeReferenceFrame = definition->ReferenceFrame.getValue();
     for (auto* object : definition->ForcedVisible.getValues()) {
         definitionVisibility[object] = Visibility::Visible;
@@ -184,9 +180,7 @@ bool ViewContext::captureDefinition(App::ViewDefinition* definition) const
     }
     definition->ForcedVisible.setValues(std::move(forcedVisible));
     definition->ForcedHidden.setValues(std::move(forcedHidden));
-    definition->CameraPayload.setValue(activeCameraState.payload);
-    definition->CameraCodec.setValue(activeCameraState.codec);
-    definition->CameraVersion.setValue(activeCameraState.version);
+    definition->setCamera(activeCamera);
     definition->ReferenceFrame.setValue(activeReferenceFrame);
     std::vector<App::DocumentObject*> planes;
     planes.reserve(activeClippingPlanes.size());
@@ -197,14 +191,14 @@ bool ViewContext::captureDefinition(App::ViewDefinition* definition) const
     return true;
 }
 
-void ViewContext::setCameraState(CameraState state)
+void ViewContext::setCamera(App::ViewCamera state)
 {
-    activeCameraState = std::move(state);
+    activeCamera = std::move(state);
 }
 
-const ViewContext::CameraState& ViewContext::cameraState() const
+const App::ViewCamera& ViewContext::camera() const
 {
-    return activeCameraState;
+    return activeCamera;
 }
 
 void ViewContext::setReferenceFrame(const Base::Placement& frame)

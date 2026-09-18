@@ -257,6 +257,7 @@ SET(Document_HPP_SRCS
     Transactions.h
     TransactionalObject.h
     VRMLObject.h
+    ViewCamera.h
     ViewDefinition.h
     MaterialObject.h
     MergeDocuments.h

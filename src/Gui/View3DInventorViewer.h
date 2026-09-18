@@ -508,6 +508,8 @@ public:
     ) const;
     void setCameraType(SoType type) override;
     bool setCamera(const char* pCamera);
+    /// Apply a camera node, honoring the active navigation style.
+    bool applyCameraState(const SoCamera& camera);
     void moveCameraTo(const SbRotation& orientation, const SbVec3f& position, int duration = -1);
     /**
      * Zooms the viewport to the size of the bounding box.
@@ -694,7 +696,6 @@ private:
     void setCursorRepresentation(int mode);
     void aboutToDestroyGLContext();
     void createStandardCursors();
-    bool applyCameraState(const SoCamera& camera);
     void applyGradientBackgroundDirect(Background gradient);
     void applyGradientBackgroundColorDirect(const SbColor& fromColor, const SbColor& toColor);
     void applyGradientBackgroundColorDirect(

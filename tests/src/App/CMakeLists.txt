@@ -27,6 +27,7 @@ add_executable(App_tests_run
         PropertyExpressionEngine.cpp
         StringHasher.cpp
         VarSet.cpp
+        ViewCamera.cpp
         VRMLObject.cpp
 )
 

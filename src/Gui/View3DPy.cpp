@@ -1105,16 +1105,8 @@ Py::Object View3DInventorPy::applyViewDefinition(const Py::Tuple& args)
     if (!definition->getDocument()) {
         return Py::Boolean(false);
     }
-    const ViewContext::CameraState camera {
-        definition->CameraCodec.getValue(),
-        definition->CameraVersion.getValue(),
-        definition->CameraPayload.getValue()
-    };
-    if (!CoinCameraCodec::supports(camera)) {
-        throw Py::ValueError("unsupported saved camera codec or version");
-    }
     auto* view = getView3DInventorPtr();
-    if (!CoinCameraCodec::apply(camera, *view)) {
+    if (!CoinCameraCodec::apply(definition->camera(), *view)) {
         return Py::Boolean(false);
     }
     return Py::Boolean(view->getViewer()->getViewContext().applyDefinition(definition));
@@ -1133,7 +1125,7 @@ Py::Object View3DInventorPy::captureViewDefinition(const Py::Tuple& args)
     }
     auto* view = getView3DInventorPtr();
     auto& context = view->getViewer()->getViewContext();
-    context.setCameraState(CoinCameraCodec::capture(*view));
+    context.setCamera(CoinCameraCodec::capture(*view));
     return Py::Boolean(context.captureDefinition(definition));
 }
 

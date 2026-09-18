@@ -48,9 +48,9 @@ class _RecordingView:
 
     def captureViewDefinition(self, definition):
         self.calls.append(("capture", definition))
-        definition.CameraCodec = "CoinCamera"
-        definition.CameraVersion = 1
-        definition.CameraPayload = "camera"
+        definition.CameraType = "Perspective"
+        definition.CameraFocalDistance = 250.0
+        definition.CameraHeightAngle = 0.75
         return True
 
     def applyViewDefinition(self, definition):
@@ -538,7 +538,9 @@ class TestBimViewsServiceGui(TestArchBaseGui):
         duplicate = service.duplicate_view(original)
 
         self.assertEqual("Default 3D Copy", duplicate.Label)
-        self.assertEqual(original.CameraPayload, duplicate.CameraPayload)
+        self.assertEqual(original.CameraType, duplicate.CameraType)
+        self.assertEqual(original.CameraHeightAngle, duplicate.CameraHeightAngle)
+        self.assertEqual(original.CameraPlacement, duplicate.CameraPlacement)
         self.assertEqual(original.ForcedHidden, duplicate.ForcedHidden)
         self.assertFalse(duplicate.BIMIsActiveView)
 

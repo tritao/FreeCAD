@@ -17,7 +17,6 @@
 #include <App/Document.h>
 #include <App/ViewDefinition.h>
 #include <Gui/Application.h>
-#include <Gui/CoinCameraCodec.h>
 #include <Gui/Inventor/SoViewContextElement.h>
 #include <Gui/Selection/SoFCUnifiedSelection.h>
 #include <Gui/ViewContext.h>
@@ -333,19 +332,26 @@ TEST_F(ViewProviderDocumentObjectTest, viewDefinitionRoundTripsTypedCameraState)
     auto* definition = static_cast<App::ViewDefinition*>(
         _doc->addObject("App::ViewDefinition", "SavedView")
     );
+
+    App::ViewCamera saved;
+    saved.type = App::ViewCameraType::Perspective;
+    saved.position = Base::Vector3d(1.0, 2.0, 3.0);
+    saved.orientation = Base::Rotation(Base::Vector3d(0.0, 0.0, 1.0), 1.5);
+    saved.focalDistance = 250.0;
+    saved.heightAngle = 0.75;
+    saved.nearDistance = 1.0;
+    saved.farDistance = 1000.0;
+
     Gui::ViewContext context;
-    context.setCameraState(Gui::CoinCameraCodec::encode("PerspectiveCamera { position 1 2 3 }"));
+    context.setCamera(saved);
 
     ASSERT_TRUE(context.captureDefinition(definition));
-    EXPECT_STREQ(definition->CameraCodec.getValue(), "CoinCamera");
-    EXPECT_EQ(definition->CameraVersion.getValue(), Gui::CoinCameraCodec::CurrentVersion);
-    EXPECT_STREQ(definition->CameraPayload.getValue(), "PerspectiveCamera { position 1 2 3 }");
+    EXPECT_STREQ(definition->CameraType.getValueAsString(), "Perspective");
+    EXPECT_EQ(definition->camera(), saved);
 
     Gui::ViewContext restored;
     ASSERT_TRUE(restored.applyDefinition(definition));
-    EXPECT_EQ(restored.cameraState().codec, "CoinCamera");
-    EXPECT_EQ(restored.cameraState().version, Gui::CoinCameraCodec::CurrentVersion);
-    EXPECT_EQ(restored.cameraState().payload, "PerspectiveCamera { position 1 2 3 }");
+    EXPECT_EQ(restored.camera(), saved);
 }
 
 TEST_F(ViewProviderDocumentObjectTest, clippingReferencesPersistAndRemainViewerLocal)

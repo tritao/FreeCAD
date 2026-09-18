@@ -11,6 +11,7 @@
 
 #include <FCGlobal.h>
 #include <Base/Placement.h>
+#include <App/ViewCamera.h>
 
 namespace App
 {
@@ -27,18 +28,6 @@ class ViewProviderDocumentObject;
 class GuiExport ViewContext
 {
 public:
-    struct CameraState
-    {
-        std::string codec;
-        long version = 1;
-        std::string payload;
-
-        bool empty() const noexcept
-        {
-            return codec.empty() && payload.empty();
-        }
-    };
-
     enum class Visibility
     {
         Inherit,
@@ -59,8 +48,8 @@ public:
     bool effectiveVisibility(const ViewProviderDocumentObject* provider) const;
     bool applyDefinition(const App::ViewDefinition* definition);
     bool captureDefinition(App::ViewDefinition* definition) const;
-    void setCameraState(CameraState state);
-    const CameraState& cameraState() const;
+    void setCamera(App::ViewCamera camera);
+    const App::ViewCamera& camera() const;
     void setReferenceFrame(const Base::Placement& frame);
     const Base::Placement& referenceFrame() const;
     void setClippingPlanes(const std::vector<const App::ClippingPlane*>& planes);
@@ -82,7 +71,7 @@ private:
     ChangedCallback changed;
     ClippingChangedCallback clippingChanged;
     std::vector<const App::ClippingPlane*> activeClippingPlanes;
-    CameraState activeCameraState;
+    App::ViewCamera activeCamera;
     Base::Placement activeReferenceFrame;
 };
 
