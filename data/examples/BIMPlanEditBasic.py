@@ -159,6 +159,7 @@ def build_document():
     Gui.activeDocument().activeView().fitAll()
     service.create_model_view("Default 3D", building)
     service.create_elevation_view("South Elevation", level, direction="South")
+    service.create_section_view("Building Section", section)
     plan_view = service.create_plan_view("Ground Floor Plan", level)
 
     gui_startup = doc.settings("Gui.Startup")

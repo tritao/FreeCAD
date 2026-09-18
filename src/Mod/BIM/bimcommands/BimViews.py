@@ -121,6 +121,7 @@ class BIM_Views:
             self.dialog.menu = QtGui.QMenu()
             for button in [
                 ("NewPlanView", translate("BIM", "New Floor Plan")),
+                ("NewSectionView", translate("BIM", "New Section")),
                 ("NewElevationView", translate("BIM", "New Elevation")),
                 ("NewModelView", translate("BIM", "New 3D View")),
                 ("Active", translate("BIM", "Active")),
@@ -180,6 +181,7 @@ class BIM_Views:
             self.dialog.buttonAddLevel.triggered.connect(self.addLevel)
             self.dialog.buttonAddProxy.triggered.connect(self.addProxy)
             self.dialog.buttonNewPlanView.triggered.connect(self.newPlanView)
+            self.dialog.buttonNewSectionView.triggered.connect(self.newSectionView)
             self.dialog.buttonNewElevationView.triggered.connect(self.newElevationView)
             self.dialog.buttonNewModelView.triggered.connect(self.newModelView)
             self.dialog.buttonDelete.triggered.connect(self.delete)
@@ -452,6 +454,40 @@ class BIM_Views:
         try:
             definition = _view_service().create_model_view(
                 self._uniqueViewLabel(translate("BIM", "Default 3D")), source
+            )
+            document.commitTransaction()
+        except Exception:
+            document.abortTransaction()
+            raise
+        document.recompute()
+        self.update(False)
+        FreeCADGui.Selection.clearSelection()
+        FreeCADGui.Selection.addSelection(definition)
+
+    def _selectedSectionPlane(self):
+        candidates = [self.contextObject]
+        candidates.extend(FreeCADGui.Selection.getSelection())
+        for obj in candidates:
+            if (
+                obj is not None
+                and getattr(getattr(obj, "Proxy", None), "Type", "") == "SectionPlane"
+                and str(getattr(obj, "Purpose", "")) == "Section"
+            ):
+                return obj
+        return None
+
+    def newSectionView(self):
+        """Create a saved view from the selected architectural section plane."""
+
+        plane = self._selectedSectionPlane()
+        if plane is None:
+            return
+        base = translate("BIM", "{} View").format(plane.Label)
+        document = FreeCAD.ActiveDocument
+        document.openTransaction("Create BIM section")
+        try:
+            definition = _view_service().create_section_view(
+                self._uniqueViewLabel(base), plane
             )
             document.commitTransaction()
         except Exception:
@@ -779,6 +815,8 @@ class BIM_Views:
         self.contextObject = obj
         for action in (
             self.dialog.buttonNewPlanView,
+            self.dialog.buttonNewSectionView,
+            self.dialog.buttonNewElevationView,
             self.dialog.buttonNewModelView,
             self.dialog.buttonActive,
             self.dialog.buttonAddLevel,
@@ -827,6 +865,10 @@ class BIM_Views:
             self.dialog.buttonNewPlanView.setVisible(True)
             self.dialog.buttonNewModelView.setVisible(True)
         else:
+            self.dialog.buttonNewSectionView.setEnabled(
+                getattr(getattr(obj, "Proxy", None), "Type", "") == "SectionPlane"
+                and str(getattr(obj, "Purpose", "")) == "Section"
+            )
             if Draft.getType(obj).startswith("Ifc"):
                 self.dialog.buttonAddProxy.setEnabled(False)
             if Draft.getType(obj) == "WorkingPlaneProxy":

@@ -120,7 +120,11 @@ class TestBimViewsServiceGui(TestArchBaseGui):
             ) as start:
                 self.assertIs(fake_session, _apply_representation_request(request))
 
-        start.assert_called_once_with(show_task_panel=False, initial_request=request)
+        start.assert_called_once_with(
+            show_task_panel=False,
+            initial_request=request,
+            prepare_only=False,
+        )
         self.assertEqual([], calls)
 
     def test_elevation_saved_view_starts_contextual_editing_runtime(self):
@@ -141,6 +145,27 @@ class TestBimViewsServiceGui(TestArchBaseGui):
         kwargs = start.call_args.kwargs
         self.assertIs(request, kwargs["request"])
         self.assertEqual(("wall", "window"), kwargs["sources"])
+        self.assertFalse(kwargs["orient_to_request"])
+        self.assertTrue(kwargs["providers"])
+
+    def test_section_saved_view_starts_contextual_editing_runtime(self):
+        source = SimpleNamespace(Objects=("wall", "door"))
+        request = ArchRepresentation.RepresentationRequest(
+            purpose=ArchRepresentation.RepresentationPurpose.SECTION,
+            source=source,
+        )
+        contextual = SimpleNamespace()
+
+        with patch("bimplan.runtime.session.get_active_session", return_value=None):
+            with patch("bimcontextual.session.active_session", return_value=None):
+                with patch(
+                    "bimcontextual.session.start_session", return_value=contextual
+                ) as start:
+                    self.assertIs(contextual, activate_representation_request(request))
+
+        kwargs = start.call_args.kwargs
+        self.assertIs(request, kwargs["request"])
+        self.assertEqual(("wall", "door"), kwargs["sources"])
         self.assertFalse(kwargs["orient_to_request"])
         self.assertTrue(kwargs["providers"])
 
@@ -469,7 +494,9 @@ class TestBimViewsServiceGui(TestArchBaseGui):
         ground = self.document.addObject("App::Part", "GroundStorey")
         ground.Placement.Base.z = 0.0
         proxy = self.document.addObject("App::FeaturePython", "GroundWorkingPlane")
+        section = __import__("Arch").makeSectionPlane(name="GroundSection")
         ground.addObject(proxy)
+        ground.addObject(section)
         building.addObject(upper)
         building.addObject(ground)
         kinds = {
@@ -486,7 +513,10 @@ class TestBimViewsServiceGui(TestArchBaseGui):
 
         self.assertEqual((building,), tuple(node.object for node in nodes))
         self.assertEqual((ground, upper), tuple(node.object for node in nodes[0].children))
-        self.assertEqual((proxy,), tuple(node.object for node in nodes[0].children[0].children))
+        self.assertEqual(
+            (proxy, section),
+            tuple(node.object for node in nodes[0].children[0].children),
+        )
 
     def test_qt_navigator_presents_one_tree_with_semantic_scope(self):
         storey = self.document.addObject("App::Part", "NavigatorStorey")
@@ -657,6 +687,44 @@ class TestBimViewsServiceGui(TestArchBaseGui):
         )
         self.assertEqual((-plane.Depth.Value, 0.0), request.projection_range)
 
+    def test_section_creation_builds_saved_view_from_existing_plane(self):
+        calls = []
+        wall = self.document.addObject("PartDesign::Feature", "SectionWall")
+        wall.Shape = Part.makeBox(4000, 200, 3000)
+        plane = __import__("Arch").makeSectionPlane([wall], name="BuildingSection")
+        plane.Placement = FreeCAD.Placement(
+            FreeCAD.Vector(2000, 100, 1500),
+            FreeCAD.Rotation(FreeCAD.Vector(1, 0, 0), 90),
+        )
+        service = BIMViewService(self.document, view=_RecordingView(calls))
+
+        definition = service.create_section_view("Building Section", plane)
+
+        self.assertEqual("Section", definition.Purpose)
+        self.assertIs(plane, definition.BIMContextSource)
+        self.assertEqual(plane.Placement, definition.ReferenceFrame)
+        self.assertTrue(definition.BIMIsActiveView)
+        self.assertEqual(
+            ("camera-type", "camera-orientation", "fit", "capture"),
+            tuple(call[0] for call in calls),
+        )
+        request = service.request_for(definition)
+        self.assertEqual(
+            ArchRepresentation.RepresentationPurpose.SECTION,
+            request.purpose,
+        )
+        self.assertEqual((wall,), service.scope_for(definition).context_objects)
+
+    def test_section_creation_rejects_elevation_plane(self):
+        facade = self.document.addObject("PartDesign::Feature", "NotASectionFacade")
+        facade.Shape = Part.makeBox(1000, 200, 1000)
+        plane = __import__("Arch").makeSectionPlane([facade], name="ElevationOnly")
+        plane.Purpose = "Elevation"
+        service = BIMViewService(self.document, view=_RecordingView([]))
+
+        with self.assertRaisesRegex(ValueError, "section-purpose"):
+            service.create_section_view("Invalid Section", plane)
+
     def test_elevation_scope_uses_section_plane_objects(self):
         storey = self.document.addObject("App::Part", "ScopedElevationStorey")
         facade = self.document.addObject("PartDesign::Feature", "ScopedFacade")
@@ -782,6 +850,28 @@ class TestBimViewsServiceGui(TestArchBaseGui):
         )
         page = self.document.addObject("TechDraw::DrawPage", "ElevationPage")
         template = self.document.addObject("TechDraw::DrawSVGTemplate", "ElevationTemplate")
+        template.Template = (
+            FreeCAD.getResourceDir()
+            + "Mod/TechDraw/Templates/Default_Template_A4_Landscape.svg"
+        )
+        page.Template = template
+
+        drawing_view = service.place_on_sheet(definition, page)
+
+        self.assertIs(plane, drawing_view.Source)
+        self.assertIs(definition, drawing_view.BIMViewDefinition)
+        self.assertIn(drawing_view, page.Views)
+
+    def test_sourced_section_view_can_be_linked_to_a_sheet(self):
+        wall = self.document.addObject("PartDesign::Feature", "SheetSectionWall")
+        wall.Shape = Part.makeBox(1000, 200, 1000)
+        plane = __import__("Arch").makeSectionPlane([wall], name="SheetSection")
+        service = BIMViewService(self.document, view=_RecordingView([]))
+        definition = service.create_view(
+            "Sheet Section", "Section", plane, capture=False
+        )
+        page = self.document.addObject("TechDraw::DrawPage", "SectionPage")
+        template = self.document.addObject("TechDraw::DrawSVGTemplate", "SectionTemplate")
         template.Template = (
             FreeCAD.getResourceDir()
             + "Mod/TechDraw/Templates/Default_Template_A4_Landscape.svg"

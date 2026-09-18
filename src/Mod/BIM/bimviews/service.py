@@ -109,6 +109,10 @@ class BIMViewService:
                 self._representation_applier(request)
             self._orient_plan_view(request, definition=definition, view=target_view)
             self.capture(definition, view=target_view)
+        # Native capture persists the viewport context's previous reference
+        # frame along with the camera.  The newly created planar view owns the
+        # request frame, so establish it after capture.
+        definition.ReferenceFrame = request.reference_frame
         self._mark_active(definition)
         self.configure_snap_context(definition, view=view)
         return definition
@@ -117,6 +121,34 @@ class BIMViewService:
         definition = self.create_view(label, "Model", source, capture=True, view=view)
         self._mark_active(definition)
         self.configure_snap_context(definition, view=view)
+        return definition
+
+    def create_section_view(self, label, plane, view=None):
+        """Create and open a saved orthographic view for a section plane."""
+
+        target_view = self._view(view)
+        if target_view is None:
+            raise RuntimeError("An active 3D view is required to create a section")
+        request_provider = getattr(
+            getattr(plane, "Proxy", None), "getRepresentationRequest", None
+        )
+        if not callable(request_provider):
+            raise TypeError("Section views require an Arch section plane")
+        request = request_provider(plane)
+        if request.purpose != ArchRepresentation.RepresentationPurpose.SECTION:
+            raise ValueError("Section views require a section-purpose plane")
+        definition = self.create_view(
+            label, "Section", plane, capture=False, view=target_view
+        )
+        definition.ReferenceFrame = request.reference_frame
+        with self._instant_view_transition(target_view):
+            if self._representation_applier is not None:
+                self._representation_applier(request)
+            self._orient_plan_view(request, definition=definition, view=target_view)
+            self.capture(definition, view=target_view)
+        definition.ReferenceFrame = request.reference_frame
+        self._mark_active(definition)
+        self.configure_snap_context(definition, view=target_view)
         return definition
 
     def create_elevation_view(
@@ -152,6 +184,7 @@ class BIMViewService:
                 self._representation_applier(request)
             self._orient_plan_view(request, definition=definition, view=target_view)
             self.capture(definition, view=target_view)
+        definition.ReferenceFrame = request.reference_frame
         self._mark_active(definition)
         self.configure_snap_context(definition, view=target_view)
         return definition
@@ -198,6 +231,7 @@ class BIMViewService:
             return False
         return purpose in (
             ArchRepresentation.RepresentationPurpose.PLAN,
+            ArchRepresentation.RepresentationPurpose.SECTION,
             ArchRepresentation.RepresentationPurpose.ELEVATION,
         ) and self.context_source(definition) is not None
 
@@ -205,7 +239,9 @@ class BIMViewService:
         """Create a linked TechDraw BIM view for a sourced planar definition."""
 
         if not self.can_place_on_sheet(definition):
-            raise ValueError("Only PLAN or ELEVATION views with a context can be placed on a sheet")
+            raise ValueError(
+                "Only PLAN, SECTION or ELEVATION views with a context can be placed on a sheet"
+            )
         if page is None or not page.isDerivedFrom("TechDraw::DrawPage"):
             raise TypeError("page must be a TechDraw::DrawPage")
         drawing_view = self.document.addObject("TechDraw::DrawViewArch", "BIMSavedView")

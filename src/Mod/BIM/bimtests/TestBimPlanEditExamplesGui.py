@@ -304,12 +304,33 @@ class TestBimPlanEditExamplesGui(TestArchBaseGui):
         from bimviews.navigator_model import BIMNavigatorModel
 
         project_nodes = BIMNavigatorModel(document).project_nodes()
-        self.assertEqual(1, len(project_nodes))
-        self.assertEqual("Building", project_nodes[0].kind)
-        self.assertEqual((storeys[0],), tuple(node.object for node in project_nodes[0].children))
+        building_node = next(node for node in project_nodes if node.kind == "Building")
         self.assertEqual(
-            {"Model", "Plan", "Elevation"},
+            (storeys[0],), tuple(node.object for node in building_node.children)
+        )
+        pending_nodes = list(project_nodes)
+        section_nodes = []
+        while pending_nodes:
+            node = pending_nodes.pop(0)
+            pending_nodes.extend(node.children)
+            if node.kind == "SectionPlane":
+                section_nodes.append(node)
+        self.assertEqual(
+            ("Editable Section",),
+            tuple(node.object.Label for node in section_nodes),
+        )
+        self.assertEqual(
+            {"Model", "Plan", "Section", "Elevation"},
             {definition.Purpose for definition in definitions},
+        )
+        section_view = next(item for item in definitions if item.Purpose == "Section")
+        section_plane = section_view.BIMContextSource
+        self.assertEqual("Section", section_plane.Purpose)
+        self.assertEqual("Editable Section", section_plane.Label)
+        self.assertEqual(section_plane.Placement, section_view.ReferenceFrame)
+        self.assertEqual(
+            set(walls + doors + windows),
+            set(section_plane.Objects),
         )
         elevation_view = next(item for item in definitions if item.Purpose == "Elevation")
         elevation_plane = elevation_view.BIMContextSource
@@ -508,6 +529,36 @@ class TestBimPlanEditExamplesGui(TestArchBaseGui):
             self.assertIs(reopened_elevation, drawing_view.BIMViewDefinition)
             self.assertIn(drawing_view, page.Views)
             self.addCleanup(reopened_session.close)
+
+    def test_basic_example_saved_section_activates_contextual_runtime(self):
+        document = self._open_example("BIMPlanEditBasic.FCStd")
+        section_view = next(
+            item
+            for item in document.Objects
+            if item.isDerivedFrom("App::ViewDefinition") and item.Purpose == "Section"
+        )
+
+        from bimcommands.BimViews import _apply_representation_request
+        from bimcontextual.session import active_session as active_contextual_session
+        from bimviews.service import BIMViewService
+
+        service = BIMViewService(
+            document,
+            view=FreeCADGui.ActiveDocument.ActiveView,
+            representation_applier=_apply_representation_request,
+        )
+
+        self.assertTrue(service.activate_view(section_view))
+        self.pump_gui_events(80)
+        session = active_contextual_session()
+        self.assertIsNotNone(session)
+        self.addCleanup(session.close)
+        self.assertEqual(
+            ArchRepresentation.RepresentationPurpose.SECTION,
+            session.request.purpose,
+        )
+        self.assertEqual(section_view.ReferenceFrame, session.request.reference_frame)
+        self.assertTrue(session.renderer._representations)
 
     def test_basic_example_reuses_saved_plan_until_model_changes(self):
         """Saved Model/Plan switching retains valid viewport representations."""

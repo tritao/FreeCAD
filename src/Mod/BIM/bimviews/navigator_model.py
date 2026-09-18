@@ -53,9 +53,11 @@ class BIMNavigatorModel:
         buildings = tuple(obj for obj in objects if self._kind(obj) == "Building")
         storeys = tuple(obj for obj in objects if self._kind(obj) == "Storey")
         proxies = tuple(obj for obj in objects if self._kind(obj) == "WorkingPlane")
+        section_planes = tuple(obj for obj in objects if self._kind(obj) == "SectionPlane")
 
         owned_storeys = set()
         owned_proxies = set()
+        owned_section_planes = set()
         roots = []
         for building in buildings:
             children = []
@@ -63,7 +65,9 @@ class BIMNavigatorModel:
                 if self._kind(storey) != "Storey":
                     continue
                 owned_storeys.add(storey)
-                node = self._storey_node(storey, owned_proxies)
+                node = self._storey_node(
+                    storey, owned_proxies, owned_section_planes
+                )
                 children.append(node)
             children.sort(key=lambda node: self._elevation(node.object))
             roots.append(ProjectNode(building, "Building", tuple(children)))
@@ -72,13 +76,20 @@ class BIMNavigatorModel:
         for storey in storeys:
             if storey in owned_storeys:
                 continue
-            unowned_storeys.append(self._storey_node(storey, owned_proxies))
+            unowned_storeys.append(
+                self._storey_node(storey, owned_proxies, owned_section_planes)
+            )
         unowned_storeys.sort(key=lambda node: self._elevation(node.object))
         roots.extend(unowned_storeys)
         roots.extend(
             ProjectNode(proxy, "WorkingPlane")
             for proxy in proxies
             if proxy not in owned_proxies
+        )
+        roots.extend(
+            ProjectNode(plane, "SectionPlane")
+            for plane in section_planes
+            if plane not in owned_section_planes
         )
         return tuple(roots)
 
@@ -106,15 +117,20 @@ class BIMNavigatorModel:
             NavigatorSection("Sheets", "Sheets", self.pages()),
         )
 
-    def _storey_node(self, storey, owned_proxies):
+    def _storey_node(self, storey, owned_proxies, owned_section_planes):
         proxies = tuple(
             obj for obj in self._group(storey) if self._kind(obj) == "WorkingPlane"
         )
+        section_planes = tuple(
+            obj for obj in self._group(storey) if self._kind(obj) == "SectionPlane"
+        )
         owned_proxies.update(proxies)
+        owned_section_planes.update(section_planes)
         return ProjectNode(
             storey,
             "Storey",
-            tuple(ProjectNode(proxy, "WorkingPlane") for proxy in proxies),
+            tuple(ProjectNode(proxy, "WorkingPlane") for proxy in proxies)
+            + tuple(ProjectNode(plane, "SectionPlane") for plane in section_planes),
         )
 
     def _active_view(self):
@@ -148,6 +164,12 @@ class BIMNavigatorModel:
             return "Storey"
         if draft_type == "WorkingPlaneProxy":
             return "WorkingPlane"
+        if getattr(getattr(obj, "Proxy", None), "Type", "") == "SectionPlane":
+            return (
+                "ElevationMarker"
+                if str(getattr(obj, "Purpose", "")) == "Elevation"
+                else "SectionPlane"
+            )
         return "Object"
 
     @staticmethod
