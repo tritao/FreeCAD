@@ -201,6 +201,39 @@ class TestArchSectionPlane(TestArchBase.TestArchBase):
             )
         )
 
+    def testElevationScopeProjectionIsReusedUntilDocumentInvalidation(self):
+        from bimviews import representation_cache
+
+        box = self._makeBox(length=1000, width=1200, height=50)
+        box.Placement.Base.z = -100
+        request = ArchRepresentation.RepresentationRequest(
+            purpose=ArchRepresentation.RepresentationPurpose.ELEVATION,
+            reference_frame=App.Placement(),
+            projection_range=(-500.0, 0.0),
+        )
+        self.document.recompute()
+        representation_cache.invalidate_document(self.document)
+        original_project = ArchSectionProjection._project_visible_edges
+        calls = []
+
+        def capture_project(shape):
+            calls.append(shape)
+            return original_project(shape)
+
+        ArchSectionProjection._project_visible_edges = capture_project
+        try:
+            ArchSectionProjection.project_elevation_scope((box,), request)
+            first_count = len(calls)
+            ArchSectionProjection.project_elevation_scope((box,), request)
+            self.assertEqual(first_count, len(calls))
+            representation_cache.invalidate_document(self.document)
+            ArchSectionProjection.project_elevation_scope((box,), request)
+        finally:
+            ArchSectionProjection._project_visible_edges = original_project
+
+        self.assertGreater(first_count, 0)
+        self.assertGreater(len(calls), first_count)
+
     def testTechDrawUsesSemanticRepresentationWithoutLegacyCutShapes(self):
         """The production section path consumes provider geometry directly."""
 

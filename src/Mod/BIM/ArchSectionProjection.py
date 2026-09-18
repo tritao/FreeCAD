@@ -41,6 +41,13 @@ class ProjectedViewGeometry:
         return values
 
 
+@dataclass(frozen=True)
+class _ElevationScopeProjection:
+    """Cached OCC result from one scope-wide elevation projection."""
+
+    sources: tuple
+
+
 def project_shapes(
     objects,
     cut_plane,
@@ -283,25 +290,54 @@ def project_elevation_scope(objects, request, *, deflection=None):
     """
 
     _validate_elevation_request(request)
+    objects = tuple(objects)
+    representations = {
+        obj: ArchRepresentation.ViewportRepresentation(source=obj, request=request)
+        for obj in objects
+    }
+
+    document = next(
+        (getattr(obj, "Document", None) for obj in objects if getattr(obj, "Document", None)),
+        None,
+    )
+    from bimviews import representation_cache
+
+    cache_key = (
+        representation_cache.representation_request_key(request),
+        tuple(getattr(obj, "Name", None) or id(obj) for obj in objects),
+    )
+
+    def compute_scope():
+        return _compute_elevation_scope_projection(objects, request)
+
+    projection = representation_cache.get_or_create_derived_value(
+        document,
+        "elevation-scope",
+        cache_key,
+        compute_scope,
+    )
+    for obj, shape, edges in projection.sources:
+        representations[obj] = _representation_from_edges(
+            obj,
+            request,
+            shape,
+            edges,
+            deflection=deflection,
+        )
+    return representations
+
+
+def _compute_elevation_scope_projection(objects, request):
     local_shapes = []
     for obj in objects:
         try:
             shape = _local_elevation_shape(obj, request)
         except ArchRepresentation.RepresentationUnavailable:
             shape = None
-        if (
-            shape is not None
-            and not shape.isNull()
-            and shape.BoundBox.isValid()
-        ):
+        if shape is not None and not shape.isNull() and shape.BoundBox.isValid():
             local_shapes.append((obj, shape))
-
-    representations = {
-        obj: ArchRepresentation.ViewportRepresentation(source=obj, request=request)
-        for obj in objects
-    }
     if not local_shapes:
-        return representations
+        return _ElevationScopeProjection(())
 
     import Part
 
@@ -327,12 +363,6 @@ def project_elevation_scope(objects, request, *, deflection=None):
         if candidates:
             assigned[max(candidates, key=lambda item: item[0])[1]].append(edge)
 
-    for obj, shape in local_shapes:
-        representations[obj] = _representation_from_edges(
-            obj,
-            request,
-            shape,
-            assigned[obj],
-            deflection=deflection,
-        )
-    return representations
+    return _ElevationScopeProjection(
+        tuple((obj, shape, tuple(assigned[obj])) for obj, shape in local_shapes)
+    )

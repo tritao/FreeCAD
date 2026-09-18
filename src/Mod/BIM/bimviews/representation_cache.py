@@ -21,6 +21,7 @@ _GEOMETRY_PROPERTIES = {
     "Geometry",
     "Width",
     "Height",
+    "Depth",
     "Length",
     "Align",
     "Offset",
