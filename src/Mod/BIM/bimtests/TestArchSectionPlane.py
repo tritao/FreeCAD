@@ -238,6 +238,30 @@ class TestArchSectionPlane(TestArchBase.TestArchBase):
         self.assertTrue(svg)
         self.assertIn("cut_geometry", calls)
 
+    def testTechDrawElevationUsesSharedScopeProjection(self):
+        front = self._makeBox(length=1000, width=1200, height=50)
+        front.Placement.Base.z = -100
+        back = self._makeBox(length=1000, width=1200, height=50)
+        back.Placement.Base.z = -300
+        section_plane = Arch.makeSectionPlane([front, back])
+        section_plane.Purpose = "Elevation"
+        section_plane.Depth = 500
+        self.document.recompute()
+        original_cut_shapes = ArchSectionPlane.getCutShapes
+
+        def fail_legacy_cut_shapes(*args, **kwargs):
+            raise AssertionError("elevation TechDraw must use the shared projection")
+
+        ArchSectionPlane.getCutShapes = fail_legacy_cut_shapes
+        try:
+            svg = ArchSectionPlane.getSVG(
+                section_plane, techdraw=True, renderMode="Wireframe"
+            )
+        finally:
+            ArchSectionPlane.getCutShapes = original_cut_shapes
+
+        self.assertTrue(svg)
+
     def testTechDrawConvertsSemanticPolylinesToProjectionGeometry(self):
         """Semantic cut lines remain directly consumable by TechDraw."""
 

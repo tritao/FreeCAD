@@ -54,9 +54,9 @@ def project_representation_to_svg(
 
 def project_object_to_svg(obj, context, direction, collection="projected_geometry", **styles):
     """Request an object's representation and project it with TechDraw."""
-    from ArchRepresentation import representation_for
+    from ArchRepresentation import view_representation_for
 
-    representation = representation_for(obj, context)
+    representation = view_representation_for(obj, context)
     return project_representation_to_svg(
         representation,
         direction,

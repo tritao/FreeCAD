@@ -721,12 +721,27 @@ def _get_contextual_representations(
     if request is None:
         return []
 
-    from ArchRepresentation import RepresentationUnavailable, representation_for
+    from ArchRepresentation import (
+        RepresentationPurpose,
+        RepresentationUnavailable,
+        view_representation_for,
+    )
+
+    if request.purpose == RepresentationPurpose.ELEVATION:
+        import ArchSectionProjection
+
+        projected = ArchSectionProjection.project_elevation_scope(objects, request)
+        representations = [projected[obj] for obj in objects]
+        if not any(
+            representation.projected_geometry for representation in representations
+        ):
+            return []
+        return representations
 
     representations = []
     for obj in objects:
         try:
-            representation = representation_for(obj, request)
+            representation = view_representation_for(obj, request)
         except RepresentationUnavailable:
             return []
         if not (
