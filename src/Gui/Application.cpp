@@ -534,6 +534,21 @@ Application::Application(bool GUIenabled)
             std::bind(&Gui::Application::slotRelabelDocument, this, sp::_1));
         App::GetApplication().signalShowHidden.connect(
             std::bind(&Gui::Application::slotShowHidden, this, sp::_1));
+        // A document is restored in several stages and the per-document
+        // workbench startup activity runs on top of them.  Hold back the
+        // presentation of views created during the open transaction so the
+        // user only ever sees the final state instead of a default camera or
+        // the raw model flashing before the intended view.
+        App::GetApplication().signalStartOpenDocument.connect([]() {
+            if (auto* mainWindow = getMainWindow()) {
+                mainWindow->freezePresentation();
+            }
+        });
+        App::GetApplication().signalFinishOpenDocument.connect([]() {
+            if (auto* mainWindow = getMainWindow()) {
+                mainWindow->unfreezePresentation();
+            }
+        });
         // NOLINTEND
         // install the last active language
         ParameterGrp::handle hPGrp = App::GetApplication().GetUserParameter().GetGroup("BaseApp");

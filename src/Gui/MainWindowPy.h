@@ -51,6 +51,7 @@ public:
     Py::Object getWindowsOfType(const Py::Tuple&);
     Py::Object setActiveWindow(const Py::Tuple&);
     Py::Object getActiveWindow(const Py::Tuple&);
+    Py::Object isPresentationFrozen();
     Py::Object addWindow(const Py::Tuple&);
     Py::Object removeWindow(const Py::Tuple&);
 

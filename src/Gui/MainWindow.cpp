@@ -339,6 +339,12 @@ struct MainWindowP
     QTimer saveStateTimer;
     QTimer restoreStateTimer;
     QMdiArea* mdiArea;
+    /// Nesting depth of freezePresentation().  Views created while non-zero are
+    /// held back until the outermost unfreezePresentation() reveals them.
+    int presentationFreezeDepth = 0;
+    /// MDI sub-windows created while the presentation was frozen.  Kept so the
+    /// reveal can repaint exactly the views this transaction was holding back.
+    QList<QPointer<QMdiSubWindow>> frozenPresentationWindows;
     QPointer<MDIView> activeView;
     QSignalMapper* windowMapper;
     SplashScreen* splashscreen;
@@ -1461,6 +1467,15 @@ void MainWindow::addWindow(MDIView* view)
 
         QAction* action = menu->addAction(tr("Close All"));
         connect(action, &QAction::triggered, d->mdiArea, &QMdiArea::closeAllSubWindows);
+
+        // A window created while documents are being opened must not paint the
+        // intermediate restore stages.  Disable its updates before the window
+        // is shown and repaint it when the presentation is revealed.
+        if (d->presentationFreezeDepth > 0) {
+            child->setUpdatesEnabled(false);
+            d->frozenPresentationWindows.append(child);
+        }
+
         d->mdiArea->addSubWindow(child);
     }
 
@@ -3041,6 +3056,36 @@ void MainWindow::customEvent(QEvent* e)
 QMdiArea* MainWindow::getMdiArea() const
 {
     return d->mdiArea;
+}
+
+void MainWindow::freezePresentation()
+{
+    ++d->presentationFreezeDepth;
+}
+
+void MainWindow::unfreezePresentation()
+{
+    if (d->presentationFreezeDepth == 0) {
+        return;
+    }
+    if (--d->presentationFreezeDepth > 0) {
+        return;
+    }
+
+    auto& windows = d->frozenPresentationWindows;
+    for (auto& window : windows) {
+        if (!window) {
+            continue;
+        }
+        window->setUpdatesEnabled(true);
+        window->update();
+    }
+    windows.clear();
+}
+
+bool MainWindow::isPresentationFrozen() const
+{
+    return d->presentationFreezeDepth > 0;
 }
 
 void MainWindow::setWindowTitle(const QString& string)

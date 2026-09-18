@@ -144,6 +144,29 @@ public:
      */
     QMdiArea* getMdiArea() const;
     /**
+     * Suppresses painting of MDI views created while the presentation is frozen.
+     *
+     * A document is restored in several stages: view providers, camera, the
+     * persisted workbench and workbench-owned startup activities.  Presenting
+     * every stage would flash intermediate states (a default camera, then the
+     * raw model) before the intended view appears.  Callers opening a document
+     * bracket those stages with freezePresentation()/unfreezePresentation() so
+     * only the final state is shown.
+     *
+     * Calls nest; the presentation is revealed when the outermost freeze is
+     * released.  Reveal always happens, even if a startup activity fails.
+     */
+    void freezePresentation();
+    /**
+     * Releases one freezePresentation() call.  Reveals and repaints the pending
+     * MDI views once the outermost freeze is released.
+     */
+    void unfreezePresentation();
+    /**
+     * Returns true while the presentation is frozen by freezePresentation().
+     */
+    bool isPresentationFrozen() const;
+    /**
      * Can be called after the caption of an MDIView has changed to update the tab's caption.
      */
     void tabChanged(MDIView* view);

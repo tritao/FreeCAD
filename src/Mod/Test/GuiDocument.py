@@ -294,6 +294,62 @@ class TestGuiDocument(unittest.TestCase):
                     FreeCAD.closeDocument(self.doc.Name)
                 self.doc = None
 
+    def testOpenHoldsBackIntermediatePresentation(self):
+        """A restored document is only presented once its startup is complete.
+
+        Restoring a document happens in several stages: view providers, camera,
+        the persisted workbench and workbench-owned startup activities.  The
+        MDI view is created up front with a default camera, so the main window
+        freezes its presentation for the duration of the open transaction.
+        Without that gate the user sees a default camera (and then the raw
+        model) flash before the intended view appears.
+        """
+
+        self.doc.addObject("App::FeaturePython", "StartupPresentationObject")
+
+        main_window = FreeCADGui.getMainWindow()
+        self.assertFalse(main_window.isPresentationFrozen())
+
+        observed = {}
+
+        class Observer:
+            def slotFinishRestoreDocument(self, gui_document):
+                windows = main_window.findChildren(QtWidgets.QMdiSubWindow)
+                observed["frozen"] = main_window.isPresentationFrozen()
+                observed["held_back"] = sum(1 for window in windows if not window.updatesEnabled())
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            path = os.path.join(temp_dir, "startup_presentation.FCStd")
+            self.doc.saveAs(path)
+            FreeCAD.closeDocument(self.doc.Name)
+            self.doc = None
+
+            observer = Observer()
+            FreeCADGui.addDocumentObserver(observer)
+            try:
+                restored_doc = FreeCAD.openDocument(path)
+                self.doc = restored_doc
+                FreeCAD.setActiveDocument(restored_doc.Name)
+            finally:
+                FreeCADGui.removeDocumentObserver(observer)
+
+        # The last per-document restore event still runs inside the open
+        # transaction, i.e. before the workbench startup activity is applied.
+        self.assertTrue(observed.get("frozen"), observed)
+        self.assertGreaterEqual(observed.get("held_back", 0), 1, observed)
+
+        # The transaction is closed once the document is fully open.
+        self.assertFalse(main_window.isPresentationFrozen())
+        self.assertEqual(
+            0,
+            sum(
+                1
+                for window in main_window.findChildren(QtWidgets.QMdiSubWindow)
+                if not window.updatesEnabled()
+            ),
+        )
+        self.assertIsNotNone(FreeCADGui.getDocument(self.doc.Name).ActiveView)
+
     def testAutoSaverFlushWritesRecoverySnapshot(self):
         obj = self.doc.addObject("App::FeaturePython", "AutoSaveGuiObject")
         obj.Label = "AutoSaveImmediate"

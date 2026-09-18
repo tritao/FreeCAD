@@ -52,6 +52,11 @@ void MainWindowPy::init_type()
     add_varargs_method("getWindowsOfType", &MainWindowPy::getWindowsOfType, "getWindowsOfType(typeid)");
     add_varargs_method("setActiveWindow", &MainWindowPy::setActiveWindow, "setActiveWindow(MDIView)");
     add_varargs_method("getActiveWindow", &MainWindowPy::getActiveWindow, "getActiveWindow()");
+    add_noargs_method(
+        "isPresentationFrozen",
+        &MainWindowPy::isPresentationFrozen,
+        "isPresentationFrozen()"
+    );
     add_varargs_method("addWindow", &MainWindowPy::addWindow, "addWindow(MDIView)");
     add_varargs_method("removeWindow", &MainWindowPy::removeWindow, "removeWindow(MDIView)");
     add_varargs_method("showHint", &MainWindowPy::showHint, "showHint(hint)");
@@ -104,6 +109,7 @@ Py::Object MainWindowPy::createWrapper(MainWindow* mw)
         "getWindowsOfType",
         "setActiveWindow",
         "getActiveWindow",
+        "isPresentationFrozen",
         "addWindow",
         "removeWindow",
         "showHint",
@@ -205,6 +211,11 @@ Py::Object MainWindowPy::getActiveWindow(const Py::Tuple& args)
         }
     }
     return Py::None();
+}
+
+Py::Object MainWindowPy::isPresentationFrozen()
+{
+    return Py::Boolean(_mw && _mw->isPresentationFrozen());
 }
 
 Py::Object MainWindowPy::addWindow(const Py::Tuple& args)
