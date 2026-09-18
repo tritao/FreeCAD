@@ -100,6 +100,20 @@ class TestArchRepresentation(unittest.TestCase):
             representation_cache.representation_request_key(changed),
         )
 
+    def test_plan_request_comparison_includes_presentation_profile(self):
+        from bimplan.representation_request import _request_values_equal
+
+        base = RepresentationRequest(
+            purpose=RepresentationPurpose.PLAN,
+            presentation_profile={"show_silhouettes": True},
+        )
+        changed = RepresentationRequest(
+            purpose=RepresentationPurpose.PLAN,
+            presentation_profile={"show_silhouettes": False},
+        )
+
+        self.assertFalse(_request_values_equal(base, changed))
+
     def test_contextual_wall_creation_uses_bim_wall_preferences(self):
         preferences = {
             "WallWidth": 345.0,

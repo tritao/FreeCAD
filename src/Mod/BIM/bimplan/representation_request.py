@@ -81,7 +81,13 @@ def _request_values_equal(left, right):
         return False
     if getattr(left, "source", None) is not getattr(right, "source", None):
         return False
-    for name in ("cut_offset", "target_offset", "cut_range", "projection_range"):
+    for name in (
+        "cut_offset",
+        "target_offset",
+        "cut_range",
+        "projection_range",
+        "presentation_profile",
+    ):
         if getattr(left, name, None) != getattr(right, name, None):
             return False
     left_frame = getattr(left, "reference_frame", None)

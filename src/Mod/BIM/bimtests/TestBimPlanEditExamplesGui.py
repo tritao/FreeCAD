@@ -398,6 +398,9 @@ class TestBimPlanEditExamplesGui(TestArchBaseGui):
         marker_placement = FreeCAD.Placement(marker.Placement)
         marker_placement.Base.x += 100.0
         marker.Placement = marker_placement
+        marker.ShowSilhouettes = False
+        marker.VisibleLineWidth = 1.8
+        marker.SilhouetteLineWidth = 2.4
         document.recompute()
         service.activate_view(elevation_view)
         self.pump_gui_events(50)
@@ -405,6 +408,9 @@ class TestBimPlanEditExamplesGui(TestArchBaseGui):
         self.assertEqual(
             (-marker.Depth.Value, 0.0), refreshed.request.projection_range
         )
+        self.assertFalse(refreshed.request.presentation_profile["show_silhouettes"])
+        self.assertEqual(1.8, refreshed.request.presentation_profile["visible_line_width"])
+        self.assertEqual(2.4, refreshed.request.presentation_profile["silhouette_line_width"])
 
         with tempfile.TemporaryDirectory(prefix="freecad-elevation-") as directory:
             path = os.path.join(directory, "lifecycle.FCStd")
@@ -438,6 +444,17 @@ class TestBimPlanEditExamplesGui(TestArchBaseGui):
             self.assertEqual(
                 ArchRepresentation.RepresentationPurpose.ELEVATION,
                 reopened_session.request.purpose,
+            )
+            self.assertFalse(
+                reopened_session.request.presentation_profile["show_silhouettes"]
+            )
+            self.assertEqual(
+                1.8,
+                reopened_session.request.presentation_profile["visible_line_width"],
+            )
+            self.assertEqual(
+                2.4,
+                reopened_session.request.presentation_profile["silhouette_line_width"],
             )
             self.assertTrue(reopened_session.renderer._representations)
 
