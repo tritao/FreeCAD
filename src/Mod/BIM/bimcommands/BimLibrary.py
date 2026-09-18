@@ -377,6 +377,7 @@ class BIM_Library_TaskPanel:
         self._expanded_tree_paths = set()
 
         resolved_roots = resolve_library_root_entries()
+        force_offline = bool(offlinemode or libraryroots is not None or librarypath)
         if libraryroots is not None:
             initial_roots = _normalize_library_root_entries(libraryroots)
         elif isinstance(librarypath, (list, tuple)):
@@ -579,8 +580,10 @@ class BIM_Library_TaskPanel:
             )
         )
         mode_chosen = PARAMS.GetBool("LibraryModeChosen", False)
-        initial_online = PARAMS.GetBool("LibraryOnline", not offlinemode)
-        if not mode_chosen:
+        initial_online = PARAMS.GetBool("LibraryOnline", not force_offline)
+        if force_offline:
+            initial_online = False
+        elif not mode_chosen:
             initial_online = False if self.libraryroots else True
         if not self.libraryroots:
             initial_online = True
