@@ -13,6 +13,7 @@ from PySide import QtCore, QtGui
 from pivy import coin
 
 from bimcommands.BimViews import (
+    _SectionViewPlacement,
     _apply_representation_request,
     _findModelDock,
     placeInComboView,
@@ -101,6 +102,71 @@ class _FramingRecordingView(_RecordingView):
 
 
 class TestBimViewsServiceGui(TestArchBaseGui):
+    def test_section_placement_collects_line_and_side_then_cleans_up(self):
+        requests = []
+        finishes = []
+        snapper = SimpleNamespace(
+            getPoint=lambda **kwargs: requests.append(kwargs),
+            cancelPointRequest=lambda: requests.append("cancelled"),
+            off=lambda: requests.append("off"),
+        )
+        owner = SimpleNamespace(
+            viewService=SimpleNamespace(_snap_plane_for=lambda _request: "plane"),
+            _finishSectionPlacement=lambda *args: finishes.append(args),
+            _sectionPlacement=None,
+        )
+        source = SimpleNamespace()
+        frame = FreeCAD.Placement()
+        placement = _SectionViewPlacement(owner, source, frame, "view")
+        owner._sectionPlacement = placement
+
+        with patch.object(FreeCADGui, "Snapper", snapper):
+            placement.start()
+            requests[-1]["callback"](FreeCAD.Vector(0, 0, 0))
+            requests[-1]["callback"](FreeCAD.Vector(1000, 0, 0))
+            requests[-1]["callback"](FreeCAD.Vector(500, -500, 0))
+
+        self.assertEqual(
+            (
+                source,
+                frame,
+                FreeCAD.Vector(0, 0, 0),
+                FreeCAD.Vector(1000, 0, 0),
+                FreeCAD.Vector(500, -500, 0),
+            ),
+            finishes[0],
+        )
+        self.assertIn("cancelled", requests)
+        self.assertIn("off", requests)
+        self.assertIsNone(owner._sectionPlacement)
+        self.assertIsNone(FreeCAD.activeDraftCommand)
+
+    def test_section_placement_cancel_creates_nothing(self):
+        requests = []
+        finishes = []
+        snapper = SimpleNamespace(
+            getPoint=lambda **kwargs: requests.append(kwargs),
+            cancelPointRequest=lambda: requests.append("cancelled"),
+            off=lambda: requests.append("off"),
+        )
+        owner = SimpleNamespace(
+            viewService=SimpleNamespace(_snap_plane_for=lambda _request: "plane"),
+            _finishSectionPlacement=lambda *args: finishes.append(args),
+            _sectionPlacement=None,
+        )
+        placement = _SectionViewPlacement(
+            owner, SimpleNamespace(), FreeCAD.Placement(), "view"
+        )
+        owner._sectionPlacement = placement
+
+        with patch.object(FreeCADGui, "Snapper", snapper):
+            placement.start()
+            requests[-1]["callback"](None)
+
+        self.assertFalse(finishes)
+        self.assertIsNone(owner._sectionPlacement)
+        self.assertIsNone(FreeCAD.activeDraftCommand)
+
     def test_plan_saved_view_activation_starts_shared_editing_runtime(self):
         source = SimpleNamespace()
         request = ArchRepresentation.RepresentationRequest(
@@ -724,6 +790,98 @@ class TestBimViewsServiceGui(TestArchBaseGui):
 
         with self.assertRaisesRegex(ValueError, "section-purpose"):
             service.create_section_view("Invalid Section", plane)
+
+    def test_section_line_creation_sets_scope_direction_and_extents(self):
+        storey = self.document.addObject("App::Part", "SectionLineStorey")
+        wall = self.document.addObject("PartDesign::Feature", "SectionLineWall")
+        wall.Shape = Part.makeBox(1000, 200, 3000)
+        storey.addObject(wall)
+        service = BIMViewService(self.document, view=_RecordingView([]))
+
+        definition = service.create_section_view_from_line(
+            "Cross Section",
+            storey,
+            FreeCAD.Vector(0, 100, 0),
+            FreeCAD.Vector(1000, 100, 0),
+            FreeCAD.Vector(500, -100, 0),
+        )
+        plane = definition.BIMContextSource
+
+        self.assertEqual("Section", definition.Purpose)
+        self.assertEqual("Section", plane.Purpose)
+        self.assertEqual((wall,), tuple(plane.Objects))
+        self.assertAlmostEqual(1000.0, plane.ViewObject.DisplayLength.Value)
+        self.assertGreater(plane.ViewObject.DisplayHeight.Value, 3000.0)
+        self.assertGreater(plane.Depth.Value, 100.0)
+        normal = plane.Placement.Rotation.multVec(FreeCAD.Vector(0, 0, 1))
+        self.assertAlmostEqual(-1.0, normal.y)
+        self.assertEqual(plane.Placement, definition.ReferenceFrame)
+
+    def test_section_line_viewing_side_reverses_normal(self):
+        storey = self.document.addObject("App::Part", "ReverseSectionStorey")
+        wall = self.document.addObject("PartDesign::Feature", "ReverseSectionWall")
+        wall.Shape = Part.makeBox(1000, 200, 3000)
+        storey.addObject(wall)
+        service = BIMViewService(self.document, view=_RecordingView([]))
+
+        definition = service.create_section_view_from_line(
+            "Reverse Section",
+            storey,
+            FreeCAD.Vector(0, 100, 0),
+            FreeCAD.Vector(1000, 100, 0),
+            FreeCAD.Vector(500, 300, 0),
+        )
+
+        normal = definition.BIMContextSource.Placement.Rotation.multVec(
+            FreeCAD.Vector(0, 0, 1)
+        )
+        self.assertAlmostEqual(1.0, normal.y)
+
+    def test_section_line_rejects_degenerate_picks_without_creating_objects(self):
+        storey = self.document.addObject("App::Part", "InvalidSectionStorey")
+        wall = self.document.addObject("PartDesign::Feature", "InvalidSectionWall")
+        wall.Shape = Part.makeBox(1000, 200, 3000)
+        storey.addObject(wall)
+        service = BIMViewService(self.document, view=_RecordingView([]))
+
+        with self.assertRaisesRegex(ValueError, "distinct plan points"):
+            service.create_section_view_from_line(
+                "Invalid Section",
+                storey,
+                FreeCAD.Vector(0, 0, 0),
+                FreeCAD.Vector(0, 0, 1000),
+                FreeCAD.Vector(100, 0, 0),
+            )
+
+        self.assertFalse(
+            any(obj.isDerivedFrom("App::ViewDefinition") for obj in self.document.Objects)
+        )
+
+    def test_section_line_creation_is_one_undoable_transaction(self):
+        storey = self.document.addObject("App::Part", "UndoSectionStorey")
+        wall = self.document.addObject("PartDesign::Feature", "UndoSectionWall")
+        wall.Shape = Part.makeBox(1000, 200, 3000)
+        storey.addObject(wall)
+        service = BIMViewService(self.document, view=_RecordingView([]))
+        self.document.recompute()
+
+        self.document.openTransaction("Create BIM section")
+        definition = service.create_section_view_from_line(
+            "Undo Section",
+            storey,
+            FreeCAD.Vector(0, 100, 0),
+            FreeCAD.Vector(1000, 100, 0),
+            FreeCAD.Vector(500, -100, 0),
+        )
+        plane_name = definition.BIMContextSource.Name
+        definition_name = definition.Name
+        self.document.commitTransaction()
+        self.document.recompute()
+
+        self.document.undo()
+
+        self.assertIsNone(self.document.getObject(plane_name))
+        self.assertIsNone(self.document.getObject(definition_name))
 
     def test_elevation_scope_uses_section_plane_objects(self):
         storey = self.document.addObject("App::Part", "ScopedElevationStorey")

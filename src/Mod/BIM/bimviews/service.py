@@ -151,6 +151,69 @@ class BIMViewService:
         self.configure_snap_context(definition, view=target_view)
         return definition
 
+    def create_section_view_from_line(
+        self,
+        label,
+        source,
+        start,
+        end,
+        side,
+        *,
+        reference_frame=None,
+        view=None,
+    ):
+        """Create a section plane and saved view from a line drawn in a plan."""
+
+        import Arch
+
+        objects = self._shape_objects_in_scope(source)
+        if not objects:
+            raise ValueError("A section source must contain shape objects")
+        frame = reference_frame or getattr(source, "Placement", FreeCAD.Placement())
+        vertical = frame.Rotation.multVec(FreeCAD.Vector(0, 0, 1))
+        line = FreeCAD.Vector(end).sub(FreeCAD.Vector(start))
+        line = line.sub(vertical * line.dot(vertical))
+        if line.Length <= 1e-7:
+            raise ValueError("A section line requires two distinct plan points")
+        line_length = line.Length
+        horizontal = line.normalize()
+        normal = horizontal.cross(vertical)
+        midpoint = (FreeCAD.Vector(start) + FreeCAD.Vector(end)) * 0.5
+        side_vector = FreeCAD.Vector(side).sub(midpoint)
+        side_vector = side_vector.sub(vertical * side_vector.dot(vertical))
+        if side_vector.Length <= 1e-7:
+            raise ValueError("The viewing side must not lie on the section line")
+        if side_vector.dot(normal) < 0.0:
+            horizontal = -horizontal
+            normal = -normal
+        rotation = FreeCAD.Rotation(horizontal, vertical, normal, "ZXY")
+        initial_frame = FreeCAD.Placement(FreeCAD.Vector(), rotation)
+        bounds = planar_view_bounds(objects, frame=initial_frame)
+        if bounds is None:
+            raise ValueError("The section source has no geometric bounds")
+        local_midpoint = rotation.inverted().multVec(midpoint)
+        local_origin = FreeCAD.Vector(
+            local_midpoint.x,
+            bounds.center.y,
+            local_midpoint.z,
+        )
+        placement = FreeCAD.Placement(rotation.multVec(local_origin), rotation)
+        local_bounds = planar_view_bounds(objects, frame=placement)
+        margin = max(0.05 * max(bounds.width, bounds.height, bounds.depth), 1.0)
+        depth = max((local_bounds.z_max if local_bounds else 0.0) + margin, margin)
+
+        plane = Arch.makeSectionPlane(list(objects), name="Section")
+        plane.Label = "{} Marker".format(label)
+        plane.Purpose = "Section"
+        plane.Placement = placement
+        plane.Depth = depth
+        if getattr(plane, "ViewObject", None) is not None:
+            if hasattr(plane.ViewObject, "DisplayLength"):
+                plane.ViewObject.DisplayLength = line_length
+            if hasattr(plane.ViewObject, "DisplayHeight"):
+                plane.ViewObject.DisplayHeight = bounds.height + 2.0 * margin
+        return self.create_section_view(label, plane, view=view)
+
     def create_elevation_view(
         self,
         label,
@@ -295,18 +358,7 @@ class BIMViewService:
 
     def _create_elevation_plane(self, source, direction):
         import Arch
-        pending = list(getattr(source, "Group", ()) or ()) if source else []
-        objects = []
-        seen = set()
-        while pending:
-            obj = pending.pop(0)
-            if obj in seen:
-                continue
-            seen.add(obj)
-            pending.extend(getattr(obj, "Group", ()) or ())
-            if hasattr(obj, "Shape") and not obj.Shape.isNull():
-                objects.append(obj)
-        objects = tuple(objects)
+        objects = self._shape_objects_in_scope(source)
         if not objects:
             raise ValueError("An elevation source must contain shape objects")
         rotation = self._elevation_rotation(direction)
@@ -331,6 +383,21 @@ class BIMViewService:
             if hasattr(plane.ViewObject, "DisplayHeight"):
                 plane.ViewObject.DisplayHeight = bounds.height + 2.0 * margin
         return plane
+
+    @staticmethod
+    def _shape_objects_in_scope(source):
+        pending = list(getattr(source, "Group", ()) or ()) if source else []
+        objects = []
+        seen = set()
+        while pending:
+            obj = pending.pop(0)
+            if obj in seen:
+                continue
+            seen.add(obj)
+            pending.extend(getattr(obj, "Group", ()) or ())
+            if hasattr(obj, "Shape") and not obj.Shape.isNull():
+                objects.append(obj)
+        return tuple(objects)
 
     @staticmethod
     def _elevation_rotation(direction):

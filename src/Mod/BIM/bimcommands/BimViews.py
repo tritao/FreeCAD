@@ -26,6 +26,7 @@
 
 import sys
 
+import ArchRepresentation
 import FreeCAD
 import FreeCADGui
 QT_TRANSLATE_NOOP = FreeCAD.Qt.QT_TRANSLATE_NOOP
@@ -67,6 +68,79 @@ if FreeCAD.GuiUp:
 
         def clearSelection(self, doc):
             self.owner.scheduleSelectionSync()
+
+
+    class _SectionViewPlacement:
+        """Collect a plan section line and viewing side through Draft snapping."""
+
+        def __init__(self, owner, source, reference_frame, view):
+            self.owner = owner
+            self.source = source
+            self.reference_frame = reference_frame
+            self.view = view
+            self.points = []
+
+        def start(self):
+            FreeCAD.activeDraftCommand = self
+            self._request_point()
+
+        def _request_point(self):
+            labels = (
+                translate("BIM", "Pick section line start"),
+                translate("BIM", "Pick section line end"),
+                translate("BIM", "Pick the viewing side"),
+            )
+            last = None
+            if len(self.points) == 1:
+                last = self.points[0]
+            elif len(self.points) == 2:
+                last = (self.points[0] + self.points[1]) * 0.5
+            request = ArchRepresentation.RepresentationRequest(
+                purpose=ArchRepresentation.RepresentationPurpose.PLAN,
+                reference_frame=self.reference_frame,
+                source=self.source,
+            )
+            interaction_plane = self.owner.viewService._snap_plane_for(request)
+            FreeCADGui.Snapper.getPoint(
+                last=last,
+                callback=self.accept_point,
+                hints=[
+                    FreeCADGui.InputHint(
+                        labels[len(self.points)], FreeCADGui.UserInput.MouseLeft
+                    )
+                ],
+                interaction_plane=interaction_plane,
+                view=self.view,
+            )
+
+        def accept_point(self, point=None, _obj=None):
+            if point is None:
+                self.cancel()
+                return
+            self.points.append(FreeCAD.Vector(point))
+            if len(self.points) < 3:
+                self._request_point()
+                return
+            self._finish()
+
+        def _finish(self):
+            self._cleanup()
+            self.owner._finishSectionPlacement(
+                self.source,
+                self.reference_frame,
+                *self.points,
+            )
+
+        def cancel(self):
+            self._cleanup()
+
+        def _cleanup(self):
+            FreeCADGui.Snapper.cancelPointRequest()
+            FreeCADGui.Snapper.off()
+            if FreeCAD.activeDraftCommand is self:
+                FreeCAD.activeDraftCommand = None
+            if getattr(self.owner, "_sectionPlacement", None) is self:
+                self.owner._sectionPlacement = None
 
 
 class BIM_Views:
@@ -477,17 +551,61 @@ class BIM_Views:
         return None
 
     def newSectionView(self):
-        """Create a saved view from the selected architectural section plane."""
+        """Save a selected section plane or draw a new section in a plan."""
 
         plane = self._selectedSectionPlane()
-        if plane is None:
+        if plane is not None:
+            self._createSectionViewFromPlane(plane)
             return
+        source = self._selectedProjectContext()
+        active_definition = self.viewService.active_view
+        if (
+            active_definition is not None
+            and str(getattr(active_definition, "Purpose", "")) == "Plan"
+        ):
+            source = self.viewService.context_source(active_definition) or source
+            reference_frame = active_definition.ReferenceFrame
+        elif source is not None:
+            reference_frame = source.Placement
+        else:
+            return
+        self._sectionPlacement = _SectionViewPlacement(
+            self,
+            source,
+            reference_frame,
+            FreeCADGui.ActiveDocument.ActiveView,
+        )
+        self._sectionPlacement.start()
+
+    def _createSectionViewFromPlane(self, plane):
         base = translate("BIM", "{} View").format(plane.Label)
         document = FreeCAD.ActiveDocument
         document.openTransaction("Create BIM section")
         try:
             definition = _view_service().create_section_view(
                 self._uniqueViewLabel(base), plane
+            )
+            document.commitTransaction()
+        except Exception:
+            document.abortTransaction()
+            raise
+        document.recompute()
+        self.update(False)
+        FreeCADGui.Selection.clearSelection()
+        FreeCADGui.Selection.addSelection(definition)
+
+    def _finishSectionPlacement(self, source, reference_frame, start, end, side):
+        base = translate("BIM", "{} Section").format(source.Label)
+        document = FreeCAD.ActiveDocument
+        document.openTransaction("Create BIM section")
+        try:
+            definition = _view_service().create_section_view_from_line(
+                self._uniqueViewLabel(base),
+                source,
+                start,
+                end,
+                side,
+                reference_frame=reference_frame,
             )
             document.commitTransaction()
         except Exception:
@@ -859,6 +977,9 @@ class BIM_Views:
                 self.dialog.buttonPlaceOnSheet.setEnabled(
                     _view_service().can_place_on_sheet(obj)
                 )
+                if str(getattr(obj, "Purpose", "")) == "Plan":
+                    self.dialog.buttonNewSectionView.setVisible(True)
+                    self.dialog.buttonNewSectionView.setEnabled(True)
         elif obj is None:
             for action in self.dialog.menu.actions():
                 action.setVisible(False)
@@ -866,8 +987,12 @@ class BIM_Views:
             self.dialog.buttonNewModelView.setVisible(True)
         else:
             self.dialog.buttonNewSectionView.setEnabled(
-                getattr(getattr(obj, "Proxy", None), "Type", "") == "SectionPlane"
-                and str(getattr(obj, "Purpose", "")) == "Section"
+                (
+                    getattr(getattr(obj, "Proxy", None), "Type", "")
+                    == "SectionPlane"
+                    and str(getattr(obj, "Purpose", "")) == "Section"
+                )
+                or self._selectedProjectContext() is not None
             )
             if Draft.getType(obj).startswith("Ifc"):
                 self.dialog.buttonAddProxy.setEnabled(False)
