@@ -3,6 +3,7 @@
 """End-to-end GUI checks for the generated BIM Plan Edit examples."""
 
 import os
+import tempfile
 from unittest.mock import patch
 
 import ArchRepresentation
@@ -332,6 +333,127 @@ class TestBimPlanEditExamplesGui(TestArchBaseGui):
             )
         )
         self.assertGreater(session.contextual_rendering.renderer.root.getNumChildren(), 0)
+
+    def test_basic_example_elevation_lifecycle_survives_edit_and_reopen(self):
+        """Saved elevations remain editable, cacheable, and sheet-compatible."""
+
+        document = self._open_example("BIMPlanEditBasic.FCStd")
+        definitions = [
+            obj for obj in document.Objects if obj.isDerivedFrom("App::ViewDefinition")
+        ]
+        model_view = next(item for item in definitions if item.Purpose == "Model")
+        plan_view = next(item for item in definitions if item.Purpose == "Plan")
+        elevation_view = next(item for item in definitions if item.Purpose == "Elevation")
+
+        from bimcommands.BimViews import _apply_representation_request
+        from bimcontextual.session import active_session as active_contextual_session
+        from bimviews.service import BIMViewService
+
+        view = FreeCADGui.ActiveDocument.ActiveView
+        service = BIMViewService(
+            document,
+            view=view,
+            representation_applier=_apply_representation_request,
+        )
+        service.activate_view(plan_view)
+        self.pump_gui_events(40)
+        from bimplan.runtime.session import get_active_session
+
+        self.assertIsNotNone(get_active_session())
+
+        service.activate_view(elevation_view)
+        self.pump_gui_events(80)
+        elevation_session = active_contextual_session()
+        self.assertIsNotNone(elevation_session)
+        self.assertEqual(
+            ArchRepresentation.RepresentationPurpose.ELEVATION,
+            elevation_session.request.purpose,
+        )
+        self.assertTrue(elevation_session.renderer.render_representation)
+        self.assertTrue(elevation_session.renderer.replace_source)
+        walls = self._objects_with_ifc_type(document, "Wall")
+        self.assertTrue(all(wall in elevation_session.renderer._representations for wall in walls))
+        self.assertTrue(
+            any(
+                elevation_session.renderer._representations[wall].projected_geometry
+                for wall in walls
+            )
+        )
+
+        wall = walls[0]
+        old_height = wall.Height.Value
+        wall.Height = old_height + 25.0
+        document.recompute()
+        service.activate_view(elevation_view)
+        self.pump_gui_events(40)
+        self.assertAlmostEqual(old_height + 25.0, wall.Height.Value)
+        elevation_session = active_contextual_session()
+        self.assertTrue(
+            elevation_session.renderer._representations[wall].projected_geometry
+        )
+
+        marker = elevation_view.BIMContextSource
+        original_depth = marker.Depth.Value
+        marker.Depth = original_depth + 250.0
+        marker_placement = FreeCAD.Placement(marker.Placement)
+        marker_placement.Base.x += 100.0
+        marker.Placement = marker_placement
+        document.recompute()
+        service.activate_view(elevation_view)
+        self.pump_gui_events(50)
+        refreshed = active_contextual_session()
+        self.assertEqual(
+            (-marker.Depth.Value, 0.0), refreshed.request.projection_range
+        )
+
+        with tempfile.TemporaryDirectory(prefix="freecad-elevation-") as directory:
+            path = os.path.join(directory, "lifecycle.FCStd")
+            document.saveAs(path)
+            saved_name = document.Name
+            FreeCAD.closeDocument(saved_name)
+            reopened = FreeCAD.openDocument(path)
+            self.document = reopened
+            FreeCAD.setActiveDocument(reopened.Name)
+            FreeCADGui.ActiveDocument = FreeCADGui.getDocument(reopened.Name)
+            reopened_view = FreeCADGui.activeDocument().activeView()
+            if not hasattr(reopened_view, "applyViewDefinition"):
+                reopened_view = FreeCADGui.activeDocument().createView(
+                    "Gui::View3DInventor"
+                )
+            self.assertTrue(hasattr(reopened_view, "applyViewDefinition"))
+            reopened_service = BIMViewService(
+                reopened,
+                view=reopened_view,
+                representation_applier=_apply_representation_request,
+            )
+            reopened_elevation = next(
+                item
+                for item in reopened.Objects
+                if item.isDerivedFrom("App::ViewDefinition") and item.Purpose == "Elevation"
+            )
+            self.assertTrue(reopened_service.activate_view(reopened_elevation))
+            self.pump_gui_events(100)
+            reopened_session = active_contextual_session()
+            self.assertIsNotNone(reopened_session)
+            self.assertEqual(
+                ArchRepresentation.RepresentationPurpose.ELEVATION,
+                reopened_session.request.purpose,
+            )
+            self.assertTrue(reopened_session.renderer._representations)
+
+            page = reopened.addObject("TechDraw::DrawPage", "LifecycleElevationPage")
+            template = reopened.addObject(
+                "TechDraw::DrawSVGTemplate", "LifecycleElevationTemplate"
+            )
+            template.Template = (
+                FreeCAD.getResourceDir()
+                + "Mod/TechDraw/Templates/Default_Template_A4_Landscape.svg"
+            )
+            page.Template = template
+            drawing_view = reopened_service.place_on_sheet(reopened_elevation, page)
+            self.assertIs(reopened_elevation, drawing_view.BIMViewDefinition)
+            self.assertIn(drawing_view, page.Views)
+            self.addCleanup(reopened_session.close)
 
     def test_basic_example_reuses_saved_plan_until_model_changes(self):
         """Saved Model/Plan switching retains valid viewport representations."""

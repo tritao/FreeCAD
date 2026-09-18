@@ -76,6 +76,7 @@ class ContextualSession:
         self._closed = False
         self._selection_refresh_pending = False
         self._capabilities = ()
+        self._last_projection_error = None
         self.contextual_actions = ()
         self.contextual_tools = ()
         self.inspector_sections = ()
@@ -335,6 +336,7 @@ class ContextualSession:
         current_sources = set()
         current_capabilities = []
         elevation_representations = {}
+        projection_failed = False
         if self._projected_elevation:
             import ArchSectionProjection
 
@@ -343,7 +345,18 @@ class ContextualSession:
                     selected, self.request
                 )
             except (ArchRepresentation.RepresentationUnavailable, RuntimeError):
-                elevation_representations = {}
+                projection_failed = True
+                elevation_representations = {
+                    obj: self.renderer._representations.get(obj)
+                    for obj in selected
+                    if self.renderer._representations.get(obj) is not None
+                }
+                self._last_projection_error = (
+                    "Elevation projection refresh failed; showing the last valid view"
+                )
+                self._show_feedback(self._last_projection_error)
+            else:
+                self._last_projection_error = None
         for obj in selected:
             try:
                 capabilities = ArchRepresentation.edit_capabilities_for(obj, self.request)
@@ -359,7 +372,11 @@ class ContextualSession:
                         getattr(obj, "Label", getattr(obj, "Name", "object")), exc
                     )
                 )
-                continue
+                if not self._projected_elevation:
+                    continue
+                capabilities = ArchRepresentation.BIMEditCapabilities(
+                    source=obj, request=self.request
+                )
             display = capabilities
             if self._projected_elevation:
                 display = elevation_representations.get(obj)
@@ -367,10 +384,15 @@ class ContextualSession:
                     display = ArchRepresentation.ViewportRepresentation(
                         source=obj, request=self.request
                     )
-                for handle in capabilities.edit_handles:
-                    display.add_edit_handle(handle)
-            if not capabilities.edit_handles and not getattr(
-                display, "projected_geometry", ()
+                if not projection_failed:
+                    for handle in capabilities.edit_handles:
+                        display.add_edit_handle(handle)
+                elif display is not None:
+                    display.edit_handles = list(capabilities.edit_handles)
+            if (
+                not self._projected_elevation
+                and not capabilities.edit_handles
+                and not getattr(display, "projected_geometry", ())
             ):
                 continue
             self.renderer.set_representation(display)

@@ -1391,6 +1391,35 @@ class TestBimPlanEditSessionGui(TestArchBaseGui):
             self.assertIsNone(session.active_edit)
         finally:
             session.close()
+
+    def test_elevation_projection_failure_preserves_last_valid_view(self):
+        wall = Arch.makeWall(length=3000, width=200, height=2500, align="Center")
+        elevation = Arch.makeSectionPlane([wall])
+        elevation.Purpose = "Elevation"
+        request = RepresentationRequest(
+            purpose=RepresentationPurpose.ELEVATION,
+            reference_frame=elevation.Placement,
+            projection_range=(-5000.0, 0.0),
+            source=elevation,
+        )
+        self.document.recompute()
+        session = ContextualSession(
+            FreeCADGui.ActiveDocument.ActiveView,
+            request=request,
+            sources=(wall,),
+        )
+        try:
+            self.pump_gui_events(20)
+            previous = session.renderer._representations[wall]
+            with patch(
+                "ArchSectionProjection.project_elevation_scope",
+                side_effect=RuntimeError("synthetic OCC failure"),
+            ):
+                session._refresh_selection()
+            self.assertIs(previous, session.renderer._representations[wall])
+            self.assertIn("last valid view", session._last_projection_error)
+        finally:
+            session.close()
         self.assertEqual(
             "Inherit", FreeCADGui.ActiveDocument.ActiveView.getViewVisibility(elevation)
         )
