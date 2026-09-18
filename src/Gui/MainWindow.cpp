@@ -3079,6 +3079,9 @@ void MainWindow::unfreezePresentation()
         }
         window->setUpdatesEnabled(true);
         window->update();
+        if (auto* view = qobject_cast<MDIView*>(window->widget())) {
+            view->refreshStatusPanes();
+        }
     }
     windows.clear();
 }
@@ -3086,6 +3089,11 @@ void MainWindow::unfreezePresentation()
 bool MainWindow::isPresentationFrozen() const
 {
     return d->presentationFreezeDepth > 0;
+}
+
+QString MainWindow::dimensionPaneText() const
+{
+    return d->sizeLabel->text();
 }
 
 void MainWindow::setWindowTitle(const QString& string)

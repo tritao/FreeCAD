@@ -167,6 +167,13 @@ public:
      */
     bool isPresentationFrozen() const;
     /**
+     * Returns the text shown by the dimension pane in the status bar.
+     *
+     * The pane mirrors the active 3D view's camera and is empty while no view
+     * reports its dimensions.
+     */
+    QString dimensionPaneText() const;
+    /**
      * Can be called after the caption of an MDIView has changed to update the tab's caption.
      */
     void tabChanged(MDIView* view);

@@ -57,6 +57,11 @@ void MainWindowPy::init_type()
         &MainWindowPy::isPresentationFrozen,
         "isPresentationFrozen()"
     );
+    add_noargs_method(
+        "getDimensionPaneText",
+        &MainWindowPy::getDimensionPaneText,
+        "getDimensionPaneText()"
+    );
     add_varargs_method("addWindow", &MainWindowPy::addWindow, "addWindow(MDIView)");
     add_varargs_method("removeWindow", &MainWindowPy::removeWindow, "removeWindow(MDIView)");
     add_varargs_method("showHint", &MainWindowPy::showHint, "showHint(hint)");
@@ -110,6 +115,7 @@ Py::Object MainWindowPy::createWrapper(MainWindow* mw)
         "setActiveWindow",
         "getActiveWindow",
         "isPresentationFrozen",
+        "getDimensionPaneText",
         "addWindow",
         "removeWindow",
         "showHint",
@@ -216,6 +222,14 @@ Py::Object MainWindowPy::getActiveWindow(const Py::Tuple& args)
 Py::Object MainWindowPy::isPresentationFrozen()
 {
     return Py::Boolean(_mw && _mw->isPresentationFrozen());
+}
+
+Py::Object MainWindowPy::getDimensionPaneText()
+{
+    if (!_mw) {
+        return Py::String();
+    }
+    return Py::String(_mw->dimensionPaneText().toStdString());
 }
 
 Py::Object MainWindowPy::addWindow(const Py::Tuple& args)

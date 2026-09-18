@@ -618,6 +618,14 @@ public:
     void updateColors();
 
     void getDimensions(float& fHeight, float& fWidth) const;
+    /** Recompute the status-bar dimension pane immediately.
+     *
+     * The pane is normally refreshed from the render path.  A view whose
+     * presentation was frozen while a document was restored may not have
+     * rendered since its camera reached the final state, so it forces the
+     * refresh once it is revealed.
+     */
+    void refreshDimensionPane() const;
     float getMaxDimension() const;
     SbVec3f getFocalPoint() const;
 

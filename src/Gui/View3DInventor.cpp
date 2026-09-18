@@ -302,6 +302,13 @@ void View3DInventor::viewAll()
     _viewer->viewAll();
 }
 
+void View3DInventor::refreshStatusPanes()
+{
+    if (_viewer) {
+        _viewer->refreshDimensionPane();
+    }
+}
+
 const char* View3DInventor::getName() const
 {
     return "View3DInventor";

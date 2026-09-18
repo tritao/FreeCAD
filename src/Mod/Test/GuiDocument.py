@@ -317,12 +317,15 @@ class TestGuiDocument(unittest.TestCase):
                 windows = main_window.findChildren(QtWidgets.QMdiSubWindow)
                 observed["frozen"] = main_window.isPresentationFrozen()
                 observed["held_back"] = sum(1 for window in windows if not window.updatesEnabled())
+                observed["pane"] = main_window.getDimensionPaneText()
 
         with tempfile.TemporaryDirectory() as temp_dir:
             path = os.path.join(temp_dir, "startup_presentation.FCStd")
             self.doc.saveAs(path)
             FreeCAD.closeDocument(self.doc.Name)
             self.doc = None
+
+            pane_before_open = main_window.getDimensionPaneText()
 
             observer = Observer()
             FreeCADGui.addDocumentObserver(observer)
@@ -337,9 +340,14 @@ class TestGuiDocument(unittest.TestCase):
         # transaction, i.e. before the workbench startup activity is applied.
         self.assertTrue(observed.get("frozen"), observed)
         self.assertGreaterEqual(observed.get("held_back", 0), 1, observed)
+        # The dimension pane mirrors the view's camera, which is still the
+        # default one at this point; it must not report that intermediate state.
+        self.assertEqual(pane_before_open, observed.get("pane"), observed)
 
         # The transaction is closed once the document is fully open.
         self.assertFalse(main_window.isPresentationFrozen())
+        pane_after_open = main_window.getDimensionPaneText()
+        self.assertTrue(any(char.isdigit() for char in pane_after_open), pane_after_open)
         self.assertEqual(
             0,
             sum(

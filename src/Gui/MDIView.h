@@ -74,6 +74,15 @@ public:
     /// get called when the document is updated
     void onRelabel(Gui::Document* pDoc) override;
     virtual void viewAll();
+    /** Refresh status-bar panes that mirror this view's state.
+     *
+     * A view may suppress its own status refreshes while a document is being
+     * restored.  The main window calls this once the presentation of that
+     * document is revealed so its panes are guaranteed to show the final
+     * state rather than an intermediate one.
+     */
+    virtual void refreshStatusPanes()
+    {}
 
     /// build window title
     QString buildWindowTitle() const;

@@ -256,6 +256,13 @@ QString dimensionText(const View3DInventorViewer& viewer)
 
 void updateDimensionPane(const View3DInventorViewer& viewer, bool forceUpdate)
 {
+    // A frozen presentation is intentionally not showing its intermediate
+    // states, so the pane must not report them either.  MainWindow calls
+    // refreshDimensionPane() once the presentation is revealed.
+    if (auto* mainWindow = getMainWindow(); mainWindow && mainWindow->isPresentationFrozen()) {
+        return;
+    }
+
     auto& state = dimensionPaneState();
     if (!forceUpdate && state.updateTimer.isValid()
         && state.updateTimer.elapsed() < DimensionPaneUpdateIntervalMs) {
@@ -3752,6 +3759,11 @@ void View3DInventorViewer::getDimensions(float& fHeight, float& fWidth) const
 void View3DInventorViewer::printDimension() const
 {
     updateDimensionPane(*this, false);
+}
+
+void View3DInventorViewer::refreshDimensionPane() const
+{
+    updateDimensionPane(*this, true);
 }
 
 void View3DInventorViewer::selectAll()

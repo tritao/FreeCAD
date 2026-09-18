@@ -109,6 +109,7 @@ public:
     void onRename(Gui::Document* pDoc) override;
     void onUpdate() override;
     void viewAll() override;
+    void refreshStatusPanes() override;
     const char* getName() const override;
 
     /// print function of the view
