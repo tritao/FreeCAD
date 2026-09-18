@@ -383,6 +383,69 @@ class TestGuiDocument(unittest.TestCase):
         )
         self.assertIsNotNone(FreeCADGui.getDocument(self.doc.Name).ActiveView)
 
+    def testStartupActivityPreparesBeforeRevealAndPopulatesAfter(self):
+        workbench = FreeCADGui.activeWorkbench().name()
+        calls = []
+        main_window = FreeCADGui.getMainWindow()
+
+        def prepare(document):
+            calls.append(("prepare", document.Name, main_window.isPresentationFrozen()))
+            return True
+
+        def populate(document):
+            calls.append(("populate", document.Name, main_window.isPresentationFrozen()))
+
+        FreeCADGui.registerStartupActivity(workbench, "GuiTest", 1, prepare, populate)
+        try:
+            with tempfile.TemporaryDirectory() as temp_dir:
+                path = os.path.join(temp_dir, "startup_activity.FCStd")
+                startup = self.doc.settings("Gui.Startup")
+                startup.setInt("SchemaVersion", 1)
+                startup.setString("Workbench", workbench)
+                self.doc.saveAs(path)
+                FreeCAD.closeDocument(self.doc.Name)
+                self.doc = FreeCAD.openDocument(path)
+
+                self.assertEqual(
+                    [("prepare", self.doc.Name, True)],
+                    calls,
+                )
+                self.assertFalse(main_window.isPresentationFrozen())
+                self.assertTrue(
+                    self._processEventsUntil(
+                        lambda: any(phase == "populate" for phase, _name, _frozen in calls)
+                    )
+                )
+                self.assertEqual(("populate", self.doc.Name, False), calls[-1])
+        finally:
+            FreeCADGui.unregisterStartupActivity(workbench, "GuiTest")
+
+    def testStartupActivitySkipsPopulationAfterDocumentClose(self):
+        workbench = FreeCADGui.activeWorkbench().name()
+        populated = []
+        FreeCADGui.registerStartupActivity(
+            workbench,
+            "GuiTestCancel",
+            1,
+            lambda _document: True,
+            lambda document: populated.append(document.Name),
+        )
+        try:
+            with tempfile.TemporaryDirectory() as temp_dir:
+                path = os.path.join(temp_dir, "startup_activity_cancel.FCStd")
+                startup = self.doc.settings("Gui.Startup")
+                startup.setInt("SchemaVersion", 1)
+                startup.setString("Workbench", workbench)
+                self.doc.saveAs(path)
+                FreeCAD.closeDocument(self.doc.Name)
+                self.doc = FreeCAD.openDocument(path)
+                FreeCAD.closeDocument(self.doc.Name)
+                self.doc = None
+                QtWidgets.QApplication.processEvents()
+                self.assertEqual([], populated)
+        finally:
+            FreeCADGui.unregisterStartupActivity(workbench, "GuiTestCancel")
+
     def testAutoSaverFlushWritesRecoverySnapshot(self):
         obj = self.doc.addObject("App::FeaturePython", "AutoSaveGuiObject")
         obj.Label = "AutoSaveImmediate"

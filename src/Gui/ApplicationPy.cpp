@@ -1044,6 +1044,45 @@ PyObject* ApplicationPy::sCancelInvoke(PyObject* /*self*/, PyObject* args)
     Py_RETURN_NONE;
 }
 
+PyObject* ApplicationPy::sRegisterStartupActivity(PyObject* /*self*/, PyObject* args)
+{
+    const char* workbench = nullptr;
+    const char* activity = nullptr;
+    int schemaVersion = 0;
+    PyObject* prepare = nullptr;
+    PyObject* populate = nullptr;
+    if (!PyArg_ParseTuple(
+            args, "ssiOO", &workbench, &activity, &schemaVersion, &prepare, &populate)) {
+        return nullptr;
+    }
+    if (schemaVersion <= 0) {
+        PyErr_SetString(PyExc_ValueError, "schema_version must be positive");
+        return nullptr;
+    }
+    if (!PyCallable_Check(prepare) || !PyCallable_Check(populate)) {
+        PyErr_SetString(PyExc_TypeError, "prepare and populate must be callable");
+        return nullptr;
+    }
+
+    requirePythonMainThread("FreeCADGui.registerStartupActivity");
+    Application::Instance->registerStartupActivity(
+        workbench, activity, schemaVersion, prepare, populate);
+    Py_RETURN_NONE;
+}
+
+PyObject* ApplicationPy::sUnregisterStartupActivity(PyObject* /*self*/, PyObject* args)
+{
+    const char* workbench = nullptr;
+    const char* activity = nullptr;
+    if (!PyArg_ParseTuple(args, "ss", &workbench, &activity)) {
+        return nullptr;
+    }
+
+    requirePythonMainThread("FreeCADGui.unregisterStartupActivity");
+    Application::Instance->unregisterStartupActivity(workbench, activity);
+    Py_RETURN_NONE;
+}
+
 PyObject* ApplicationPy::sDeleteLater(PyObject* /*self*/, PyObject* args)
 {
     PyObject* wrapper = nullptr;

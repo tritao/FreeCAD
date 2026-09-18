@@ -1271,7 +1271,7 @@ FreeCADGui.addWorkbench(BIMWorkbench)
 
 import BimStartup
 
-BimStartup.install_observer()
+BimStartup.register_startup_activity()
 
 # Preference pages for importing and exporting various file formats
 # are independent of the loading of the workbench and can be loaded at startup

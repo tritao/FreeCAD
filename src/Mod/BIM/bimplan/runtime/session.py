@@ -151,7 +151,7 @@ def _register_builtin_plan_edit_integrations():
 
 
 def start_editing_session(
-    *, show_task_panel=False, initial_request=None, defer_population=False
+    *, show_task_panel=False, initial_request=None, prepare_only=False
 ):
     """Start the representation editing runtime for the active PLAN view.
 
@@ -179,9 +179,7 @@ def start_editing_session(
     session._initial_representation_request = initial_request
     if session.prepare():
         _active_session = session
-        if defer_population:
-            session.defer_population(attach_task_panel=show_task_panel)
-        elif not session.populate(attach_task_panel=show_task_panel):
+        if not prepare_only and not session.populate(attach_task_panel=show_task_panel):
             _active_session = None
             session.shutdown(close_dialog=False)
             return None
@@ -201,7 +199,7 @@ def start_session():
     return start_editing_session(show_task_panel=True)
 
 
-def activate_representation_request(request, *, defer_population=False):
+def activate_representation_request(request, *, prepare_only=False):
     """Apply a saved BIM request through its compatible editing runtime.
 
     Saved views are the user-facing editing context.  The former Plan Edit
@@ -261,7 +259,7 @@ def activate_representation_request(request, *, defer_population=False):
         session = start_editing_session(
             show_task_panel=False,
             initial_request=request,
-            defer_population=defer_population,
+            prepare_only=prepare_only,
         )
         created = session is not None
     if session is None:
@@ -298,7 +296,6 @@ class BIMEditingSession:
     def __init__(self):
         self._prepared = False
         self._populated = False
-        self._population_pending = False
         self.view_runtime = None
         # Keyed by ``id(view)`` so transient GUI view wrappers do not need to
         # be hashable.  The registry is the migration seam for simultaneous
@@ -499,6 +496,10 @@ class BIMEditingSession:
                 self.view_rulers.set_request(self.representation_request.request)
             with self.performance.plan_perf_trace_span("attach_view_grid"):
                 self.view_grid.set_request(self.representation_request.request)
+            # Teardown must already be observable during the prepare/populate
+            # gap so closing a document cancels a prepared session cleanly.
+            with self.performance.plan_perf_trace_span("attach_document_observer"):
+                self.document_visuals.attach_document_observer()
             self._prepared = True
             return True
 
@@ -511,14 +512,11 @@ class BIMEditingSession:
             return True
         if not self._prepared and not self.prepare():
             return False
-        self._population_pending = False
         with self.performance.plan_perf_trace_event("populate_plan_edit"):
             with self.performance.plan_perf_trace_span("start_contextual_rendering"):
                 self.contextual_rendering.start()
             with self.performance.plan_perf_trace_span("attach_selection_observer"):
                 self.selection.sync.attach_selection_observer()
-            with self.performance.plan_perf_trace_span("attach_document_observer"):
-                self.document_visuals.attach_document_observer()
             with self.performance.plan_perf_trace_span("register_edit_callbacks"):
                 self.viewport.register_edit_callbacks()
             with self.performance.plan_perf_trace_span(
@@ -549,37 +547,6 @@ class BIMEditingSession:
                     )
                 )
             return True
-
-    def defer_population(self, *, attach_task_panel=False):
-        """Queue population for the next event-loop turn.
-
-        Restore observers run inside the open-document transaction.  A zero
-        timer therefore runs only after the core presentation gate has
-        revealed the prepared first frame.
-        """
-
-        if self._populated or self._population_pending:
-            return
-        self._population_pending = True
-
-        from PySide import QtCore
-
-        def populate_if_active():
-            self._population_pending = False
-            if get_active_session() is not self or self.lifecycle_state.tearing_down:
-                return
-            try:
-                self.populate(attach_task_panel=attach_task_panel)
-            except Exception as exc:
-                FreeCAD.Console.PrintError(
-                    translate(
-                        "BIM_PlanEdit",
-                        "Could not finish BIM Plan Edit startup: {error}\n",
-                    ).format(error=exc)
-                )
-                self.shutdown(close_dialog=False)
-
-        QtCore.QTimer.singleShot(0, populate_if_active)
 
     def ensure_task_panel(self):
         """Create the legacy controls only when an explicit command asks for them."""

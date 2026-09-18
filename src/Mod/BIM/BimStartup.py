@@ -10,8 +10,8 @@ GUI_SCHEMA_VERSION = 1
 BIM_SCHEMA_VERSION = 1
 
 
-def apply_document_startup(document):
-    """Apply the supported BIM startup activity after GUI restoration."""
+def prepare_document_startup(document):
+    """Prepare the supported BIM startup activity before document reveal."""
 
     if document is None or FreeCAD.ActiveDocument is not document:
         return False
@@ -44,7 +44,7 @@ def apply_document_startup(document):
             activated = BIMViewService(
                 document,
                 representation_applier=lambda request: activate_representation_request(
-                    request, defer_population=True
+                    request, prepare_only=True
                 ),
             ).activate_view(definition)
         except Exception as exc:
@@ -61,7 +61,7 @@ def apply_document_startup(document):
             from bimplan.runtime.session import activate_representation_request
 
             activate_representation_request(
-                representation_request_from_storey(context), defer_population=True
+                representation_request_from_storey(context), prepare_only=True
             )
             activated = True
         except Exception as exc:
@@ -72,43 +72,31 @@ def apply_document_startup(document):
     return activated
 
 
-class _BIMStartupObserver:
-    def __init__(self):
-        self._restored = set()
-        self._applied = set()
+def populate_document_startup(document):
+    """Populate the prepared BIM activity after presentation is released."""
 
-    def slotFinishRestoreDocument(self, gui_document):
-        document = gui_document.Document
-        self._restored.add(document.Name)
-        self._apply(document)
+    from bimplan.runtime.session import get_active_session
 
-    def slotActivateDocument(self, gui_document):
-        document = gui_document.Document
-        if document.Name in self._restored or not document.Restoring:
-            self._apply(document)
-
-    def slotDeletedDocument(self, gui_document):
-        name = gui_document.Document.Name
-        self._restored.discard(name)
-        self._applied.discard(name)
-
-    def _apply(self, document):
-        if document.Name in self._applied:
-            return
-        if apply_document_startup(document):
-            self._applied.add(document.Name)
+    session = get_active_session()
+    if session is None or session.doc is not document:
+        return False
+    try:
+        return session.populate(attach_task_panel=False)
+    except Exception as exc:
+        FreeCAD.Console.PrintError(
+            "Could not finish BIM Plan Edit startup: {}\n".format(exc)
+        )
+        session.shutdown(close_dialog=False)
+        return False
 
 
-_observer = None
+def register_startup_activity():
+    """Register BIM's versioned startup lifecycle with GUI core."""
 
-
-def install_observer():
-    global _observer
-    if _observer is None:
-        _observer = _BIMStartupObserver()
-        FreeCADGui.addDocumentObserver(_observer)
-        # Workbench initialization can happen after an already-open document
-        # completed restoration, so apply that one known-ready document now.
-        if FreeCAD.ActiveDocument is not None and not FreeCAD.ActiveDocument.Restoring:
-            _observer._restored.add(FreeCAD.ActiveDocument.Name)
-            _observer._apply(FreeCAD.ActiveDocument)
+    FreeCADGui.registerStartupActivity(
+        "BIMWorkbench",
+        "PlanEdit",
+        GUI_SCHEMA_VERSION,
+        prepare_document_startup,
+        populate_document_startup,
+    )

@@ -50,6 +50,7 @@
 #include <QLoggingCategory>
 #include <fmt/format.h>
 #include <list>
+#include <memory>
 #include <ranges>
 
 #include <App/Document.h>
@@ -235,6 +236,19 @@ public:
 // Pimpl class
 struct ApplicationP
 {
+    struct StartupActivity
+    {
+        int schemaVersion {0};
+        PyObject* prepare {nullptr};
+        PyObject* populate {nullptr};
+    };
+
+    struct PendingStartupActivity
+    {
+        std::string documentName;
+        PyObject* populate {nullptr};
+    };
+
     explicit ApplicationP(bool GUIenabled)
     {
         // create the macro manager
@@ -253,6 +267,15 @@ struct ApplicationP
 
     ~ApplicationP()
     {
+        Base::PyGILStateLocker lock;
+        for (auto& item : startupActivities) {
+            auto& registration = item.second;
+            Py_XDECREF(registration.prepare);
+            Py_XDECREF(registration.populate);
+        }
+        for (auto& pending : pendingStartupActivities) {
+            Py_XDECREF(pending.populate);
+        }
         delete macroMngr;
         delete prefPackManager;
     }
@@ -275,7 +298,122 @@ struct ApplicationP
     CommandManager commandManager;
     ViewProviderMap viewproviderMap;
     std::bitset<32> StatusBits;
+    std::map<std::pair<std::string, std::string>, StartupActivity> startupActivities;
+    std::vector<PendingStartupActivity> pendingStartupActivities;
 };
+
+void Application::registerStartupActivity(const std::string& workbench,
+                                          const std::string& activity,
+                                          int schemaVersion,
+                                          PyObject* prepare,
+                                          PyObject* populate)
+{
+    const auto key = std::make_pair(workbench, activity);
+    auto& registration = d->startupActivities[key];
+    Py_XINCREF(prepare);
+    Py_XINCREF(populate);
+    Py_XDECREF(registration.prepare);
+    Py_XDECREF(registration.populate);
+    registration = {schemaVersion, prepare, populate};
+}
+
+void Application::unregisterStartupActivity(const std::string& workbench,
+                                            const std::string& activity)
+{
+    const auto it = d->startupActivities.find(std::make_pair(workbench, activity));
+    if (it == d->startupActivities.end()) {
+        return;
+    }
+    Py_XDECREF(it->second.prepare);
+    Py_XDECREF(it->second.populate);
+    d->startupActivities.erase(it);
+}
+
+void Application::prepareStartupActivities(const App::Document& doc)
+{
+    const auto schemaText = doc.Meta.getValue("Gui.Startup.SchemaVersion");
+    const auto workbench = doc.Meta.getValue("Gui.Startup.Workbench");
+    if (schemaText.empty() || workbench.empty()) {
+        return;
+    }
+
+    int schemaVersion = 0;
+    try {
+        schemaVersion = std::stoi(schemaText);
+    }
+    catch (const std::exception&) {
+        return;
+    }
+
+    Base::PyGILStateLocker lock;
+    for (const auto& [key, registration] : d->startupActivities) {
+        if (key.first != workbench || registration.schemaVersion != schemaVersion) {
+            continue;
+        }
+
+        PyObject* result = PyObject_CallOneArg(
+            registration.prepare, const_cast<App::Document&>(doc).getPyObject());
+        if (!result) {
+            Base::Console().warning(
+                "Document startup activity '%s' prepare callback failed\n",
+                key.second.c_str()
+            );
+            PyErr_Print();
+            continue;
+        }
+        const int prepared = PyObject_IsTrue(result);
+        Py_DECREF(result);
+        if (prepared <= 0) {
+            if (prepared < 0) {
+                PyErr_Print();
+            }
+            continue;
+        }
+
+        Py_INCREF(registration.populate);
+        d->pendingStartupActivities.push_back({doc.getName(), registration.populate});
+    }
+}
+
+void Application::populateStartupActivities()
+{
+    if (d->pendingStartupActivities.empty()) {
+        return;
+    }
+
+    auto pending = std::make_shared<std::vector<ApplicationP::PendingStartupActivity>>();
+    pending->swap(d->pendingStartupActivities);
+    auto dispatch = std::make_shared<std::function<void()>>();
+    *dispatch = [pending, dispatch]() {
+        if (auto* mainWindow = getMainWindow();
+            mainWindow && mainWindow->isPresentationFrozen()) {
+            QTimer::singleShot(0, *dispatch);
+            return;
+        }
+
+        Base::PyGILStateLocker lock;
+        for (auto& activity : *pending) {
+            App::Document* doc = App::GetApplication().getDocument(activity.documentName.c_str());
+            if (doc) {
+                PyObject* result = PyObject_CallOneArg(activity.populate, doc->getPyObject());
+                if (!result) {
+                    Base::Console().warning(
+                        "Document startup populate callback failed for '%s'\n",
+                        activity.documentName.c_str()
+                    );
+                    PyErr_Print();
+                }
+                else {
+                    Py_DECREF(result);
+                }
+            }
+            Py_DECREF(activity.populate);
+            activity.populate = nullptr;
+        }
+        *dispatch = nullptr;
+    };
+    QTimer::singleShot(0, *dispatch);
+}
 
 PyObject* ApplicationPy::sSubgraphFromObject(PyObject* /*self*/, PyObject* args)
 {
@@ -544,10 +682,14 @@ Application::Application(bool GUIenabled)
                 mainWindow->freezePresentation();
             }
         });
-        App::GetApplication().signalFinishOpenDocument.connect([]() {
+        App::GetApplication().signalFinishOpenDocument.connect([this]() {
             if (auto* mainWindow = getMainWindow()) {
                 mainWindow->unfreezePresentation();
+                if (mainWindow->isPresentationFrozen()) {
+                    return;
+                }
             }
+            populateStartupActivities();
         });
         // NOLINTEND
         // install the last active language
@@ -1344,11 +1486,19 @@ void Application::slotActiveDocument(const App::Document& Doc)
         // A document may explicitly request the workbench in which it should
         // open.  Keep this generic: workbench-specific startup state belongs
         // to that workbench's own DocumentSettings namespace.
-        if (Doc.Meta.getValue("Gui.Startup.SchemaVersion") == "1") {
+        if (!Doc.Meta.getValue("Gui.Startup.SchemaVersion").empty()) {
             const auto startupWorkbench = Doc.Meta.getValue("Gui.Startup.Workbench");
             if (!startupWorkbench.empty()) {
                 activateWorkbench(startupWorkbench.c_str());
             }
+        }
+
+        // Workbench activation registers any startup activities it owns.
+        // Prepare them while the open-document presentation gate is still
+        // closed; their population callbacks run after the gate is released.
+        if (auto* mainWindow = getMainWindow();
+            mainWindow && mainWindow->isPresentationFrozen()) {
+            prepareStartupActivities(Doc);
         }
 
         // Update the application to show the unit change

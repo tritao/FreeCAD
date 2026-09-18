@@ -83,24 +83,23 @@ class TestBimPlanEditExamplesGui(TestArchBaseGui):
         self.addCleanup(session.shutdown, close_dialog=False)
 
     def test_basic_example_populates_plan_session_after_presentation_reveal(self):
-        from bimplan.contextual_rendering import PlanContextualRenderingAPI
         from bimplan.runtime.session import BIMEditingSession
 
         main_window = FreeCADGui.getMainWindow()
         phase_gate_states = []
         original_prepare = BIMEditingSession.prepare
-        original_start = PlanContextualRenderingAPI.start
+        original_populate = BIMEditingSession.populate
 
         def record_prepare(session):
             phase_gate_states.append(("prepare", main_window.isPresentationFrozen()))
             return original_prepare(session)
 
-        def record_render_start(rendering):
+        def record_populate(session, *args, **kwargs):
             phase_gate_states.append(("populate", main_window.isPresentationFrozen()))
-            return original_start(rendering)
+            return original_populate(session, *args, **kwargs)
 
         with patch.object(BIMEditingSession, "prepare", record_prepare), patch.object(
-            PlanContextualRenderingAPI, "start", record_render_start
+            BIMEditingSession, "populate", record_populate
         ):
             self._open_example("BIMPlanEditBasic.FCStd", keep_startup_activity=True)
 

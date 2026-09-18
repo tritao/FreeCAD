@@ -413,6 +413,25 @@ def cancelInvoke(handle: object, /) -> None:
     """Cancel a pending call created by :func:`invokeLater`."""
     ...
 
+def registerStartupActivity(
+    workbench: str,
+    activity: str,
+    schema_version: int,
+    prepare: object,
+    populate: object,
+    /,
+) -> None:
+    """Register a versioned startup activity.
+
+    ``prepare(document)`` runs while presentation is frozen. When it returns
+    truthy, ``populate(document)`` runs on the GUI event loop after reveal.
+    """
+    ...
+
+def unregisterStartupActivity(workbench: str, activity: str, /) -> None:
+    """Remove a previously registered document startup activity."""
+    ...
+
 def adoptQObject(obj: object, /) -> None:
     """Transfer a Python-created QObject tree to its C++ owner and retain wrappers until destruction."""
     ...

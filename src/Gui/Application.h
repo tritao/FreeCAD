@@ -114,6 +114,14 @@ public:
     void updateActive();
     /// call update to all command actions
     void updateActions(bool delay = false);
+
+    /** Register a workbench-owned two-phase document startup activity. */
+    void registerStartupActivity(const std::string& workbench,
+                                 const std::string& activity,
+                                 int schemaVersion,
+                                 PyObject* prepare,
+                                 PyObject* populate);
+    void unregisterStartupActivity(const std::string& workbench, const std::string& activity);
     //@}
 
     /** @name Signals of the Application */
@@ -349,6 +357,8 @@ public:
     //@}
 
 private:
+    void prepareStartupActivities(const App::Document& doc);
+    void populateStartupActivities();
     struct ApplicationP* d;
     /// workbench python dictionary
     PyObject* _pcWorkbenchDictionary;
