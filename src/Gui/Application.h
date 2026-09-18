@@ -128,6 +128,8 @@ public:
     fastsignals::signal<void(const Gui::Document&)> signalRenameDocument;
     /// signal on activating Document
     fastsignals::signal<void(const Gui::Document&)> signalActiveDocument;
+    /// signal after the GUI document and all view providers have finished restoring
+    fastsignals::signal<void(const Gui::Document&)> signalFinishRestoreDocument;
     /// signal on new Object
     fastsignals::signal<void(const Gui::ViewProvider&)> signalNewObject;
     /// signal on deleted Object

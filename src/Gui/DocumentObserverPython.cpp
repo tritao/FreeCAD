@@ -82,6 +82,7 @@ DocumentObserverPython::DocumentObserverPython(const Py::Object& obj)
     FC_PY_ELEMENT_ARG1(RelabelDocument, RelabelDocument)
     FC_PY_ELEMENT_ARG1(RenameDocument, RenameDocument)
     FC_PY_ELEMENT_ARG1(ActivateDocument, ActiveDocument)
+    FC_PY_ELEMENT_ARG1(FinishRestoreDocument, FinishRestoreDocument)
     FC_PY_ELEMENT_ARG1(CreatedObject, NewObject)
     FC_PY_ELEMENT_ARG1(DeletedObject, DeletedObject)
     FC_PY_ELEMENT_ARG2(BeforeChangeObject, BeforeChangeObject)
@@ -159,6 +160,20 @@ void DocumentObserverPython::slotActivateDocument(const Gui::Document& Doc)
     }
     catch (Py::Exception&) {
         Base::PyException e;  // extract the Python error text
+        e.reportException();
+    }
+}
+
+void DocumentObserverPython::slotFinishRestoreDocument(const Gui::Document& Doc)
+{
+    Base::PyGILStateLocker lock;
+    try {
+        Py::Tuple args(1);
+        args.setItem(0, Py::asObject(const_cast<Gui::Document&>(Doc).getPyObject()));
+        Base::pyCall(pyFinishRestoreDocument.ptr(), args.ptr());
+    }
+    catch (Py::Exception&) {
+        Base::PyException e;
         e.reportException();
     }
 }

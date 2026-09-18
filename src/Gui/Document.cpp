@@ -2149,6 +2149,11 @@ void Document::slotFinishRestoreDocument(const App::Document& doc)
 
     // reset modified flag
     setModified(doc.testStatus(App::Document::LinkStampChanged));
+
+    // App's restore notification starts the final GUI restoration above.  Publish
+    // a distinct event only after view providers, camera state, and overrides are
+    // ready so GUI clients do not have to guess with event-loop timers.
+    Application::Instance->signalFinishRestoreDocument(*this);
 }
 
 void Document::slotShowHidden(const App::Document& doc)

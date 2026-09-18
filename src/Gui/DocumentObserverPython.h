@@ -69,6 +69,8 @@ private:
     void slotRenameDocument(const Gui::Document& Doc);
     /** Checks if the given document is activated */
     void slotActivateDocument(const Gui::Document& Doc);
+    /** Checks if the GUI document has finished restoring */
+    void slotFinishRestoreDocument(const Gui::Document& Doc);
     /** Checks if a new object was added. */
     void slotCreatedObject(const Gui::ViewProvider& Obj);
     /** Checks if the given object is about to be removed. */
@@ -101,6 +103,7 @@ private:
     Connection pyRelabelDocument;
     Connection pyRenameDocument;
     Connection pyActivateDocument;
+    Connection pyFinishRestoreDocument;
     Connection pyCreatedObject;
     Connection pyDeletedObject;
     Connection pyBeforeChangeObject;
