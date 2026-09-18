@@ -74,6 +74,10 @@ private:
     void notify(const App::DocumentObject* object) const;
 
     std::map<LayerId, VisibilityMap> layers;
+    // Saved view state is the stable base beneath transient activity layers.
+    // Applying another definition must not invalidate layer handles owned by
+    // tools that are already active in this viewport.
+    VisibilityMap definitionVisibility;
     LayerId nextLayerId = 1;
     ChangedCallback changed;
     ClippingChangedCallback clippingChanged;

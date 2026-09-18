@@ -264,6 +264,25 @@ TEST_F(ViewProviderDocumentObjectTest, viewDefinitionAppliesAndCapturesContextOv
     EXPECT_EQ(viewDefinition->ForcedHidden.getValues().front(), _child);
 }
 
+TEST_F(ViewProviderDocumentObjectTest, applyingDefinitionPreservesTransientLayers)
+{
+    auto* definition = static_cast<App::ViewDefinition*>(
+        _doc->addObject("App::ViewDefinition", "SavedView")
+    );
+    definition->ForcedVisible.setValues({_child});
+
+    Gui::ViewContext context;
+    const auto activityLayer = context.pushLayer();
+    ASSERT_TRUE(
+        context.setVisibility(activityLayer, _child, Gui::ViewContext::Visibility::Hidden)
+    );
+
+    ASSERT_TRUE(context.applyDefinition(definition));
+    EXPECT_EQ(context.visibility(_child), Gui::ViewContext::Visibility::Hidden);
+    EXPECT_TRUE(context.removeLayer(activityLayer));
+    EXPECT_EQ(context.visibility(_child), Gui::ViewContext::Visibility::Visible);
+}
+
 TEST_F(ViewProviderDocumentObjectTest, viewDefinitionCaptureFlattensLayerOverrides)
 {
     auto* definition = static_cast<App::ViewDefinition*>(

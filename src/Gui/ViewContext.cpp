@@ -81,6 +81,10 @@ ViewContext::Visibility ViewContext::visibility(const App::DocumentObject* objec
             return pos->second;
         }
     }
+    const auto defined = definitionVisibility.find(object);
+    if (defined != definitionVisibility.end()) {
+        return defined->second;
+    }
     return Visibility::Inherit;
 }
 
@@ -105,19 +109,25 @@ bool ViewContext::applyDefinition(const App::ViewDefinition* definition)
     if (!definition || !definition->getDocument()) {
         return false;
     }
-    clear();
+    std::set<const App::DocumentObject*> affected;
+    for (const auto& [object, visibility] : definitionVisibility) {
+        (void)visibility;
+        affected.insert(object);
+    }
+    definitionVisibility.clear();
     activeCameraState = {
         definition->CameraCodec.getValue(),
         definition->CameraVersion.getValue(),
         definition->CameraPayload.getValue()
     };
     activeReferenceFrame = definition->ReferenceFrame.getValue();
-    const auto layer = pushLayer();
     for (auto* object : definition->ForcedVisible.getValues()) {
-        setVisibility(layer, object, Visibility::Visible);
+        definitionVisibility[object] = Visibility::Visible;
+        affected.insert(object);
     }
     for (auto* object : definition->ForcedHidden.getValues()) {
-        setVisibility(layer, object, Visibility::Hidden);
+        definitionVisibility[object] = Visibility::Hidden;
+        affected.insert(object);
     }
     std::vector<const App::ClippingPlane*> planes;
     for (auto* object : definition->ClippingPlanes.getValues()) {
@@ -126,6 +136,9 @@ bool ViewContext::applyDefinition(const App::ViewDefinition* definition)
         }
     }
     setClippingPlanes(planes);
+    for (const auto* object : affected) {
+        notify(object);
+    }
     return true;
 }
 
@@ -156,6 +169,17 @@ bool ViewContext::captureDefinition(App::ViewDefinition* definition) const
                 case Visibility::Inherit:
                     break;
             }
+        }
+    }
+    for (const auto& [object, visibility] : definitionVisibility) {
+        if (!object || !captured.insert(object).second) {
+            continue;
+        }
+        if (visibility == Visibility::Visible) {
+            forcedVisible.push_back(const_cast<App::DocumentObject*>(object));
+        }
+        else if (visibility == Visibility::Hidden) {
+            forcedHidden.push_back(const_cast<App::DocumentObject*>(object));
         }
     }
     definition->ForcedVisible.setValues(std::move(forcedVisible));
@@ -215,6 +239,7 @@ void ViewContext::removeObject(const App::DocumentObject* object)
         (void)id;
         values.erase(object);
     }
+    definitionVisibility.erase(object);
     const auto oldSize = activeClippingPlanes.size();
     activeClippingPlanes.erase(
         std::remove(activeClippingPlanes.begin(), activeClippingPlanes.end(), object),
@@ -235,7 +260,12 @@ void ViewContext::clear()
             affected.insert(object);
         }
     }
+    for (const auto& [object, visibility] : definitionVisibility) {
+        (void)visibility;
+        affected.insert(object);
+    }
     layers.clear();
+    definitionVisibility.clear();
     const bool hadClippingPlanes = !activeClippingPlanes.empty();
     activeClippingPlanes.clear();
     for (const auto* object : affected) {
