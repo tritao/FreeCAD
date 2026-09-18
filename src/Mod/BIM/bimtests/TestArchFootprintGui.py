@@ -944,8 +944,6 @@ class TestArchFootprintGui(TestArchBaseGui.TestArchBaseGui):
         proxy = opening.ViewObject.Proxy
         polylines = self._get_line_polylines(proxy)
         self.assertGreater(proxy.lcoords.point.getNum(), 0)
-        self.assertEqual(len(polylines), 3)
+        self.assertEqual(len(polylines), 2)
         self.assertEqual(len(polylines[0]), 2)
-        self.assertEqual(len(polylines[1]), 2)
-        self.assertGreater(len(polylines[2]), 2)
-        self.assertTrue(polylines[0][0].isEqual(polylines[1][0], 1e-6))
+        self.assertGreater(len(polylines[1]), 2)

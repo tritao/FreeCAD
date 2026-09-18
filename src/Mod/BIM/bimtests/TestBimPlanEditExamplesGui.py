@@ -283,7 +283,10 @@ class TestBimPlanEditExamplesGui(TestArchBaseGui):
         self.assertEqual("Elevation", elevation_plane.Purpose)
         self.assertEqual("South Elevation Marker", elevation_plane.Label)
         self.assertGreater(elevation_plane.Depth.Value, 0.0)
-        self.assertEqual(7, len(elevation_plane.Objects))
+        self.assertEqual(
+            set(walls + doors + windows + spaces),
+            set(elevation_plane.Objects),
+        )
 
         from bimviews.service import BIMViewService
 
