@@ -98,10 +98,15 @@ def _set_view_object_property(session, view_object, property_name, value):
         setter = _get_callable(getattr(session, "view", None), "setViewVisibility")
         if layer is not None and owner is not None and setter is not None:
             try:
-                return bool(setter(layer, owner, "Visible" if value else "Hidden"))
+                if setter(layer, owner, "Visible" if value else "Hidden"):
+                    return True
             except (ReferenceError, RuntimeError):
                 session.view = None
                 return False
+            # Some Python view providers, including SectionPlane, cannot be
+            # overridden by the native per-view layer. Continue to the
+            # session-tracked property fallback so the state is restored when
+            # Plan Edit ends.
     current_value = _get_view_object_property(view_object, property_name)
     if current_value == value:
         return False
@@ -580,7 +585,7 @@ def register_object_view_state(session, obj):
     if not obj:
         return
     view_object = getattr(obj, "ViewObject", None)
-    if not view_object:
+    if view_object is None:
         return
     state = _capture_view_object_state(view_object, ("Visibility", "Transparency", "Selectable"))
     if state:
@@ -659,7 +664,7 @@ def restore_object_view_state(session):
         if not obj:
             continue
         view_object = getattr(obj, "ViewObject", None)
-        if not view_object:
+        if view_object is None:
             continue
         state = viewport_state.saved_object_view_state.get(obj_name, {})
         _restore_view_object_properties(
@@ -715,7 +720,7 @@ def apply_context_object_selectability(session, obj, view_object):
 
 
 def apply_hidden_object_state(session, view_object):
-    if not view_object:
+    if view_object is None:
         return
     _set_view_object_property(session, view_object, "Visibility", False)
     _set_view_object_property(session, view_object, "Selectable", False)
@@ -782,6 +787,15 @@ def _apply_storey_visibility_for_other_storey_object(session, obj, view_object, 
     apply_hidden_object_state(session, view_object)
 
 
+def _hide_planar_view_markers(session):
+    """Hide section/elevation marker surfaces from an active plan canvas."""
+
+    for obj in session.doc.Objects:
+        if getattr(getattr(obj, "Proxy", None), "Type", "") != "SectionPlane":
+            continue
+        apply_hidden_object_state(session, getattr(obj, "ViewObject", None))
+
+
 def apply_storey_visibility(session):
     viewport_state = _viewport_state(session)
     with _perf_trace_span(
@@ -796,13 +810,14 @@ def apply_storey_visibility(session):
 
         if active_storey_name is None:
             _apply_global_plan_visibility(session)
+            _hide_planar_view_markers(session)
             return
 
         for obj in session.doc.Objects:
             _perf_count(session, "storey_visibility_objects_scanned")
             view_object = getattr(obj, "ViewObject", None)
             state = viewport_state.saved_object_view_state.get(obj.Name)
-            if not view_object or not state:
+            if view_object is None or not state:
                 _perf_count(session, "storey_visibility_objects_skipped_no_view_state")
                 continue
 
@@ -817,6 +832,11 @@ def apply_storey_visibility(session):
                 continue
 
             _apply_storey_visibility_for_other_storey_object(session, obj, view_object, state)
+
+        # View-defining marker faces are presentation chrome in 3D, not model
+        # content in a plan.  Enforce this after storey classification so no
+        # grouping or saved-visibility restoration can expose them again.
+        _hide_planar_view_markers(session)
 
 
 class PlanVisibilityAPI:

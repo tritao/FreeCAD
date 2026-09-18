@@ -116,6 +116,30 @@ class TestBimPlanEditExamplesGui(TestArchBaseGui):
                         resolved.add(target.obj)
             self.assertIn(wall, resolved, wall.Name)
 
+    def test_basic_example_plan_view_hides_section_plane_markers(self):
+        document = self._open_example(
+            "BIMPlanEditBasic.FCStd", keep_startup_activity=True
+        )
+        from bimplan.runtime.session import get_active_session
+
+        session = get_active_session()
+        self.assertIsNotNone(session)
+        self.addCleanup(session.shutdown, close_dialog=False)
+        markers = [
+            obj
+            for obj in document.Objects
+            if getattr(getattr(obj, "Proxy", None), "Type", "") == "SectionPlane"
+        ]
+        self.assertTrue(markers)
+        for marker in markers:
+            self.assertFalse(marker.ViewObject.Visibility, marker.Name)
+
+        view = session.view
+        session.shutdown(close_dialog=False)
+        for marker in markers:
+            self.assertEqual("Inherit", view.getViewVisibility(marker), marker.Name)
+            self.assertTrue(marker.ViewObject.Visibility, marker.Name)
+
     def test_basic_example_hover_resolves_last_coin_mouse_move(self):
         """A throttled final Coin move must still hover each vertical wall."""
 
