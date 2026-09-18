@@ -48,6 +48,12 @@ class _ElevationScopeProjection:
     sources: tuple
 
 
+@dataclass(frozen=True)
+class _ProjectedEdge:
+    shape: object
+    category: ArchRepresentation.ProjectedLineCategory
+
+
 def project_shapes(
     objects,
     cut_plane,
@@ -231,10 +237,20 @@ def _project_visible_edges(local_shape):
         raise ArchRepresentation.RepresentationUnavailable(
             "TechDraw could not project this object's shape"
         ) from error
-    edges = [edge for group in groups[:5] for edge in getattr(group, "Edges", ())]
-    if edges:
-        edges = TechDraw.scrubEdges(edges)
-    return tuple(edges)
+    categories = (
+        ArchRepresentation.ProjectedLineCategory.VISIBLE_HARD,
+        ArchRepresentation.ProjectedLineCategory.VISIBLE_SMOOTH,
+        ArchRepresentation.ProjectedLineCategory.VISIBLE_SEAM,
+        ArchRepresentation.ProjectedLineCategory.SILHOUETTE,
+        ArchRepresentation.ProjectedLineCategory.VISIBLE_ISO,
+    )
+    projected = []
+    for group, category in zip(groups[:5], categories):
+        edges = list(getattr(group, "Edges", ()))
+        if edges:
+            edges = TechDraw.scrubEdges(edges)
+        projected.extend(_ProjectedEdge(edge, category) for edge in edges)
+    return tuple(projected)
 
 
 def _representation_from_edges(obj, request, local_shape, edges, deflection=None):
@@ -247,7 +263,8 @@ def _representation_from_edges(obj, request, local_shape, edges, deflection=None
     if deflection is None:
         diagonal = max(local_shape.BoundBox.DiagonalLength, 1.0)
         deflection = max(0.1, min(5.0, diagonal / 1000.0))
-    for index, edge in enumerate(edges, start=1):
+    for index, projected_edge in enumerate(edges, start=1):
+        edge = projected_edge.shape
         try:
             points = edge.discretize(Deflection=float(deflection))
         except (AttributeError, RuntimeError, TypeError, ValueError):
@@ -261,7 +278,7 @@ def _representation_from_edges(obj, request, local_shape, edges, deflection=None
         representation.add_geometry(
             "projected_geometry",
             projected,
-            "ElevationVisibleEdge",
+            projected_edge.category.value,
             subelement="ElevationEdge{}".format(index),
         )
     return representation
@@ -356,7 +373,7 @@ def _compute_elevation_scope_projection(objects, request):
         candidates = []
         for obj, shape in local_shapes:
             if any(
-                edge.distToShape(candidate)[0] <= tolerance
+                edge.shape.distToShape(candidate.shape)[0] <= tolerance
                 for candidate in source_edges[obj]
             ):
                 candidates.append((shape.BoundBox.ZMax, obj))

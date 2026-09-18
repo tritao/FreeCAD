@@ -479,6 +479,18 @@ def getSVG(
                     "stroke-linecap": "SVGLINECAP",
                     "stroke-width": "SVGCUTLINEWIDTH",
                 }
+                elevation_role_styles = {}
+                if str(getattr(source, "Purpose", "")) == "Elevation":
+                    elevation_role_styles = {
+                        "ProjectionSilhouette": {
+                            "hStyle": cut_style,
+                            "h0Style": cut_style,
+                            "h1Style": cut_style,
+                            "vStyle": cut_style,
+                            "v0Style": cut_style,
+                            "v1Style": cut_style,
+                        }
+                    }
                 for representation in contextual_representations:
                     if representation.projected_geometry:
                         svgcache += TechDrawBIM.project_representation_to_svg(
@@ -491,6 +503,7 @@ def getSVG(
                             vStyle=style,
                             v0Style=style,
                             v1Style=style,
+                            role_styles=elevation_role_styles,
                         )
                     if representation.cut_geometry:
                         svgcache += TechDrawBIM.project_representation_to_svg(

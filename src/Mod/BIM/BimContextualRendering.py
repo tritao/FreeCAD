@@ -535,11 +535,20 @@ class ContextualRepresentationRenderer:
             if len(points) < 2:
                 continue
             group = coin.SoSeparator()
+            mapping = representation.mapping_for(geometry)
+            role = getattr(mapping, "role", None)
+            category_widths = {
+                ArchRepresentation.ProjectedLineCategory.SILHOUETTE.value: 1.35,
+                ArchRepresentation.ProjectedLineCategory.VISIBLE_HARD.value: 1.0,
+                ArchRepresentation.ProjectedLineCategory.VISIBLE_SMOOTH.value: 0.75,
+                ArchRepresentation.ProjectedLineCategory.VISIBLE_SEAM.value: 0.75,
+                ArchRepresentation.ProjectedLineCategory.VISIBLE_ISO.value: 0.6,
+            }
             material = coin.SoMaterial()
             material.diffuseColor = color
             group.addChild(material)
             style = coin.SoDrawStyle()
-            style.lineWidth = float(line_width)
+            style.lineWidth = float(line_width) * category_widths.get(role, 1.0)
             group.addChild(style)
             coordinates = coin.SoCoordinate3()
             coordinates.point.setValues(0, len(points), points)

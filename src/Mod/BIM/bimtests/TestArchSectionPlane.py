@@ -156,6 +156,10 @@ class TestArchSectionPlane(TestArchBase.TestArchBase):
 
         self.assertTrue(representation.projected_geometry)
         self.assertTrue(representation.source_mappings)
+        categories = {item.value for item in ArchRepresentation.ProjectedLineCategory}
+        self.assertTrue(
+            all(mapping.role in categories for mapping in representation.source_mappings)
+        )
         self.assertTrue(
             all(mapping.source is box for mapping in representation.source_mappings)
         )
@@ -312,6 +316,47 @@ class TestArchSectionPlane(TestArchBase.TestArchBase):
         self.assertFalse(geometry.isNull())
         self.assertEqual(1, len(geometry.Edges))
         self.assertEqual(2, len(geometry.Vertexes))
+
+    def testTechDrawAppliesStylesByProjectedLineCategory(self):
+        representation = ArchRepresentation.BIMRepresentation()
+        representation.add_geometry(
+            "projected_geometry",
+            (App.Vector(0, 0, 0), App.Vector(100, 0, 0)),
+            ArchRepresentation.ProjectedLineCategory.VISIBLE_HARD.value,
+        )
+        representation.add_geometry(
+            "projected_geometry",
+            (App.Vector(0, 50, 0), App.Vector(100, 50, 0)),
+            ArchRepresentation.ProjectedLineCategory.SILHOUETTE.value,
+        )
+        import TechDraw
+
+        original_project = TechDraw.projectToSVG
+        calls = []
+
+        def capture_project(shape, direction, **styles):
+            calls.append(styles)
+            return "<g/>"
+
+        TechDraw.projectToSVG = capture_project
+        try:
+            svg = TechDrawBIM.project_representation_to_svg(
+                representation,
+                App.Vector(0, 0, 1),
+                hStyle={"stroke-width": "normal"},
+                role_styles={
+                    ArchRepresentation.ProjectedLineCategory.SILHOUETTE.value: {
+                        "hStyle": {"stroke-width": "heavy"}
+                    }
+                },
+            )
+        finally:
+            TechDraw.projectToSVG = original_project
+
+        self.assertEqual("<g/><g/>", svg)
+        self.assertEqual(2, len(calls))
+        self.assertIn({"stroke-width": "normal"}, [call["hStyle"] for call in calls])
+        self.assertIn({"stroke-width": "heavy"}, [call["hStyle"] for call in calls])
 
     def testSectionPlaneFitUsesLocalAxesAfterRotateY(self):
         """Resize-to-fit dimensions follow the rotated section plane axes."""

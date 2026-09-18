@@ -27,6 +27,17 @@ class RepresentationPurpose(Enum):
     ELEVATION = "Elevation"
 
 
+class ProjectedLineCategory(Enum):
+    """Renderer-neutral classifications produced by architectural HLR."""
+
+    VISIBLE_HARD = "ProjectionVisibleHard"
+    VISIBLE_SMOOTH = "ProjectionVisibleSmooth"
+    VISIBLE_SEAM = "ProjectionVisibleSeam"
+    SILHOUETTE = "ProjectionSilhouette"
+    VISIBLE_ISO = "ProjectionVisibleIso"
+    HIDDEN = "ProjectionHidden"
+
+
 class RepresentationMode(Enum):
     """Geometry source requested by a representation consumer."""
 
