@@ -24,6 +24,7 @@
 
 import Arch
 import ArchRepresentation
+import ArchSectionProjection
 import ArchSectionPlane
 import TechDrawBIM
 import Draft
@@ -132,6 +133,48 @@ class TestArchSectionPlane(TestArchBase.TestArchBase):
         self.assertEqual(1, len(object_cut_shapes))
         self.assertIs(box, object_cut_shapes[0][0])
         self.assertEqual(1, len(object_cut_shapes[0][1]))
+
+    def testElevationProjectionProducesMappedPlanarLines(self):
+        """Elevation projection is 2D while retaining the BIM source."""
+
+        box = self._makeBox(length=1000, width=200, height=1200)
+        rotation = App.Rotation(
+            App.Vector(1, 0, 0),
+            App.Vector(0, 0, 1),
+            App.Vector(0, -1, 0),
+            "ZXY",
+        )
+        frame = App.Placement(App.Vector(500, -100, 600), rotation)
+        request = ArchRepresentation.RepresentationRequest(
+            purpose=ArchRepresentation.RepresentationPurpose.ELEVATION,
+            reference_frame=frame,
+            projection_range=(-400.0, 0.0),
+            target_offset=0.0,
+        )
+
+        representation = ArchSectionProjection.project_elevation_object(box, request)
+
+        self.assertTrue(representation.projected_geometry)
+        self.assertTrue(representation.source_mappings)
+        self.assertTrue(
+            all(mapping.source is box for mapping in representation.source_mappings)
+        )
+        for polyline in representation.projected_geometry:
+            for point in polyline:
+                self.assertAlmostEqual(0.0, frame.inverse().multVec(point).z)
+
+    def testElevationProjectionHonorsDepthRange(self):
+        box = self._makeBox(length=1000, width=200, height=1200)
+        frame = App.Placement(App.Vector(0, 0, -1000), App.Rotation())
+        request = ArchRepresentation.RepresentationRequest(
+            purpose=ArchRepresentation.RepresentationPurpose.ELEVATION,
+            reference_frame=frame,
+            projection_range=(-100.0, 0.0),
+        )
+
+        representation = ArchSectionProjection.project_elevation_object(box, request)
+
+        self.assertFalse(representation.projected_geometry)
 
     def testTechDrawUsesSemanticRepresentationWithoutLegacyCutShapes(self):
         """The production section path consumes provider geometry directly."""

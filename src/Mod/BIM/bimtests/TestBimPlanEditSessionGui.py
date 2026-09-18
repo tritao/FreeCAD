@@ -1333,6 +1333,11 @@ class TestBimPlanEditSessionGui(TestArchBaseGui):
         try:
             self.pump_gui_events(20)
             self.assertIs(RepresentationPurpose.ELEVATION, session.request.purpose)
+            self.assertTrue(session.renderer.replace_source)
+            self.assertTrue(session.renderer.render_representation)
+            self.assertTrue(
+                session.renderer._representations[wall].projected_geometry
+            )
             height = next(
                 item
                 for item in session.renderer.edit_handles_for(wall)

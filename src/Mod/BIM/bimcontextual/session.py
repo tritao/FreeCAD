@@ -44,7 +44,25 @@ class ContextualSession:
         self._restore_camera = None
         if orient_to_request:
             self._orient_view_to_request()
-        self.renderer = BimContextualRendering.ContextualInteractionRenderer(self.view)
+        self._projected_elevation = (
+            self.request.purpose == ArchRepresentation.RepresentationPurpose.ELEVATION
+        )
+        if self._projected_elevation:
+            self.renderer = BimContextualRendering.ContextualRepresentationRenderer(
+                self.view,
+                replace_source=True,
+                render_representation=True,
+            )
+        else:
+            self.renderer = BimContextualRendering.ContextualInteractionRenderer(self.view)
+        self._hidden_context_marker = None
+        marker = getattr(self.request, "source", None)
+        if self._projected_elevation and marker is not None:
+            try:
+                self.view.setViewVisibility(self.renderer.layer, marker, "Hidden")
+                self._hidden_context_marker = marker
+            except (AttributeError, ReferenceError, RuntimeError):
+                pass
         self.controller = ContextualEditController(
             self.view,
             self.request,
@@ -199,6 +217,14 @@ class ContextualSession:
             self.host.stop_request()
             self.host.clear_value_input()
             self.action_panel.close()
+            if self._hidden_context_marker is not None:
+                try:
+                    self.view.setViewVisibility(
+                        self.renderer.layer, self._hidden_context_marker, "Inherit"
+                    )
+                except (AttributeError, ReferenceError, RuntimeError):
+                    pass
+                self._hidden_context_marker = None
             try:
                 self.renderer.close()
             except (RuntimeError, ReferenceError):
@@ -294,7 +320,11 @@ class ContextualSession:
             try:
                 capabilities = ArchRepresentation.edit_capabilities_for(obj, self.request)
             except ArchRepresentation.RepresentationUnavailable:
-                continue
+                if not self._projected_elevation:
+                    continue
+                capabilities = ArchRepresentation.BIMEditCapabilities(
+                    source=obj, request=self.request
+                )
             except Exception as exc:
                 FreeCAD.Console.PrintError(
                     "Could not query contextual edits for {}: {}\n".format(
@@ -302,11 +332,28 @@ class ContextualSession:
                     )
                 )
                 continue
-            if not capabilities.edit_handles:
+            display = capabilities
+            if self._projected_elevation:
+                try:
+                    import ArchSectionProjection
+
+                    display = ArchSectionProjection.project_elevation_object(
+                        obj, self.request
+                    )
+                except (ArchRepresentation.RepresentationUnavailable, RuntimeError):
+                    display = ArchRepresentation.ViewportRepresentation(
+                        source=obj, request=self.request
+                    )
+                for handle in capabilities.edit_handles:
+                    display.add_edit_handle(handle)
+            if not capabilities.edit_handles and not getattr(
+                display, "projected_geometry", ()
+            ):
                 continue
-            self.renderer.set_representation(capabilities)
+            self.renderer.set_representation(display)
             current_sources.add(obj)
-            current_capabilities.append(capabilities)
+            if capabilities.edit_handles:
+                current_capabilities.append(capabilities)
 
         for source in self._sources - current_sources:
             self.renderer.remove_representation(source)

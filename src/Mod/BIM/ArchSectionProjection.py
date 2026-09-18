@@ -5,7 +5,9 @@
 from dataclasses import dataclass
 
 import ArchCommands
+import ArchRepresentation
 import Draft
+import FreeCAD
 
 
 @dataclass(frozen=True)
@@ -162,3 +164,67 @@ def project_shapes(
         hidden_volume,
         tuple(object_cut_shapes),
     )
+
+
+def project_elevation_object(obj, request, *, deflection=None):
+    """Return a viewport-ready 2D projection of one object on an elevation.
+
+    The generic adapter deliberately uses TechDraw's OCC projection rather
+    than inventing a second HLR implementation. Object-specific BIM providers
+    can replace this result later while preserving the same representation
+    contract and semantic source mappings.
+    """
+
+    if getattr(request, "purpose", None) != ArchRepresentation.RepresentationPurpose.ELEVATION:
+        raise ValueError("An Elevation representation request is required")
+    frame = getattr(request, "reference_frame", None)
+    shape = getattr(obj, "Shape", None)
+    if frame is None or shape is None or shape.isNull():
+        raise ArchRepresentation.RepresentationUnavailable(
+            "Elevation projection requires a reference frame and a shape"
+        )
+
+    local_shape = shape.copy()
+    local_shape.Placement = frame.inverse().multiply(local_shape.Placement)
+    projection_range = getattr(request, "projection_range", None)
+    if projection_range and any(float(value) for value in projection_range):
+        range_min, range_max = sorted(float(value) for value in projection_range)
+        bounds = local_shape.BoundBox
+        if bounds.ZMax < range_min or bounds.ZMin > range_max:
+            return ArchRepresentation.ViewportRepresentation(source=obj, request=request)
+
+    import TechDraw
+
+    try:
+        groups = TechDraw.projectEx(local_shape, FreeCAD.Vector(0, 0, 1))
+    except Exception as error:
+        raise ArchRepresentation.RepresentationUnavailable(
+            "TechDraw could not project this object's shape"
+        ) from error
+    edges = [edge for group in groups[:5] for edge in getattr(group, "Edges", ())]
+    if edges:
+        edges = TechDraw.scrubEdges(edges)
+
+    representation = ArchRepresentation.ViewportRepresentation(source=obj, request=request)
+    target_offset = float(getattr(request, "target_offset", 0.0) or 0.0)
+    if deflection is None:
+        diagonal = max(local_shape.BoundBox.DiagonalLength, 1.0)
+        deflection = max(0.1, min(5.0, diagonal / 1000.0))
+    for index, edge in enumerate(edges, start=1):
+        try:
+            points = edge.discretize(Deflection=float(deflection))
+        except (AttributeError, RuntimeError, TypeError, ValueError):
+            points = [vertex.Point for vertex in edge.Vertexes]
+        if len(points) < 2:
+            continue
+        projected = tuple(
+            frame.multVec(FreeCAD.Vector(point.x, point.y, target_offset))
+            for point in points
+        )
+        representation.add_geometry(
+            "projected_geometry",
+            projected,
+            "ElevationVisibleEdge",
+            subelement="ElevationEdge{}".format(index),
+        )
+    return representation
