@@ -239,25 +239,195 @@ if FreeCAD.GuiUp:
 
     class _ViewportEventFilter(QtCore.QObject):
         def __init__(self, controller):
-            super().__init__(controller.overlay)
+            decorations = getattr(controller, "decoration_widgets", ())
+            super().__init__(decorations[0] if decorations else controller.overlay)
             self.controller = controller
 
         def eventFilter(self, watched, event):
             event_type = event.type()
             if event_type in (QtCore.QEvent.Resize, QtCore.QEvent.Move):
-                self.controller.overlay.sync_geometry()
+                self.controller.refresh()
             elif (
                 watched is self.controller.host_widget
                 and event_type == QtCore.QEvent.MouseMove
             ):
                 pos = event.position() if hasattr(event, "position") else event.pos()
-                self.controller.overlay.set_cursor_position((int(pos.x()), int(pos.y())))
+                self.controller.set_cursor_position((int(pos.x()), int(pos.y())))
             elif (
                 watched is self.controller.host_widget
                 and event_type == QtCore.QEvent.Leave
             ):
-                self.controller.overlay.clear_cursor()
+                self.controller.clear_cursor()
             return QtCore.QObject.eventFilter(self, watched, event)
+
+
+    class _RulerDecoration(QtGui.QWidget):
+        """One ruler band hosted beside, never inside, the Quarter viewport."""
+
+        def __init__(self, edge, transform_provider, parent):
+            super().__init__(parent)
+            self.edge = edge
+            self._transform_provider = transform_provider
+            self.transform = None
+            self.cursor_position = None
+            self.setAttribute(QtCore.Qt.WA_TransparentForMouseEvents, True)
+            if edge == "top":
+                self.setFixedHeight(ViewportRulerOverlay.TOP_BAND)
+            elif edge == "left":
+                self.setFixedWidth(ViewportRulerOverlay.LEFT_BAND)
+            else:
+                self.setFixedSize(
+                    ViewportRulerOverlay.LEFT_BAND, ViewportRulerOverlay.TOP_BAND
+                )
+
+        def refresh_transform(self):
+            self.transform = self._transform_provider()
+            self.update()
+
+        def set_cursor_position(self, position):
+            self.cursor_position = position
+            self.update()
+
+        def clear_cursor(self):
+            self.cursor_position = None
+            self.update()
+
+        def paintEvent(self, _event):
+            painter = QtGui.QPainter(self)
+            try:
+                painter.setRenderHint(QtGui.QPainter.TextAntialiasing, True)
+                painter.fillRect(self.rect(), QtGui.QColor(*ViewportRulerOverlay.BAND_COLOR))
+                if self.edge == "corner":
+                    self._paint_corner(painter)
+                elif self.transform is not None and self.edge == "top":
+                    self._paint_top(painter)
+                elif self.transform is not None:
+                    self._paint_left(painter)
+            finally:
+                painter.end()
+
+        def _paint_corner(self, painter):
+            painter.setPen(QtGui.QColor(*ViewportRulerOverlay.TEXT_COLOR))
+            painter.drawText(6, 11, "X →")
+            painter.drawText(6, 23, "Y ↓")
+            painter.drawText(
+                ViewportRulerOverlay.LEFT_BAND - 13, 18, preferred_length_unit()
+            )
+
+        def _paint_top(self, painter):
+            transform = self.transform
+            line = QtGui.QColor(*ViewportRulerOverlay.LINE_COLOR)
+            text = QtGui.QColor(*ViewportRulerOverlay.TEXT_COLOR)
+            painter.setPen(line)
+            painter.drawLine(0, self.height() - 1, self.width(), self.height() - 1)
+            major_values = tick_values(
+                transform.x_left, transform.x_right, transform.major_interval
+            )
+            major_keys = {round(value / transform.minor_interval) for value in major_values}
+            last_label_right = -10000
+            for value in tick_values(
+                transform.x_left, transform.x_right, transform.minor_interval
+            ):
+                x = int(round(transform.pixel_for_x(value)))
+                if x < 0 or x > self.width():
+                    continue
+                is_major = round(value / transform.minor_interval) in major_keys
+                length = (
+                    ViewportRulerOverlay.MAJOR_TICK
+                    if is_major
+                    else ViewportRulerOverlay.MINOR_TICK
+                )
+                painter.drawLine(x, self.height() - 1, x, self.height() - 1 - length)
+                if is_major:
+                    label = format_length(value, transform.major_interval)
+                    width = painter.fontMetrics().horizontalAdvance(label)
+                    rect = QtCore.QRect(x + 4, 3, width + 2, self.height() - 12)
+                    if rect.left() > last_label_right + ViewportRulerOverlay.LABEL_GAP:
+                        painter.setPen(text)
+                        painter.drawText(
+                            rect, QtCore.Qt.AlignLeft | QtCore.Qt.AlignVCenter, label
+                        )
+                        painter.setPen(line)
+                        last_label_right = rect.right()
+            if self.cursor_position is not None:
+                x = self.cursor_position[0]
+                painter.setPen(self.palette().color(QtGui.QPalette.Highlight))
+                painter.setBrush(self.palette().color(QtGui.QPalette.Highlight))
+                painter.drawPolygon(
+                    QtGui.QPolygon(
+                        (
+                            QtCore.QPoint(x - 4, 1),
+                            QtCore.QPoint(x + 4, 1),
+                            QtCore.QPoint(x, 7),
+                        )
+                    )
+                )
+                label = format_length(transform.x_at_pixel(x), cursor=True)
+                width = painter.fontMetrics().horizontalAdvance(label) + 12
+                left = max(2, min(x + 7, self.width() - width - 2))
+                rect = QtCore.QRect(left, 3, width, self.height() - 9)
+                painter.fillRect(rect, self.palette().color(QtGui.QPalette.Highlight))
+                painter.setPen(self.palette().color(QtGui.QPalette.HighlightedText))
+                painter.drawText(rect, QtCore.Qt.AlignCenter, label)
+
+        def _paint_left(self, painter):
+            transform = self.transform
+            line = QtGui.QColor(*ViewportRulerOverlay.LINE_COLOR)
+            text = QtGui.QColor(*ViewportRulerOverlay.TEXT_COLOR)
+            painter.setPen(line)
+            painter.drawLine(self.width() - 1, 0, self.width() - 1, self.height())
+            major_values = tick_values(
+                transform.y_top, transform.y_bottom, transform.major_interval
+            )
+            major_keys = {round(value / transform.minor_interval) for value in major_values}
+            last_label_bottom = -10000
+            for value in tick_values(
+                transform.y_top, transform.y_bottom, transform.minor_interval
+            ):
+                y = int(round(transform.pixel_for_y(value)))
+                if y < 0 or y > self.height():
+                    continue
+                is_major = round(value / transform.minor_interval) in major_keys
+                length = (
+                    ViewportRulerOverlay.MAJOR_TICK
+                    if is_major
+                    else ViewportRulerOverlay.MINOR_TICK
+                )
+                painter.drawLine(self.width() - 1, y, self.width() - 1 - length, y)
+                if is_major:
+                    rect = QtCore.QRect(3, y - 9, self.width() - 13, 18)
+                    if rect.top() > last_label_bottom + 2:
+                        painter.setPen(text)
+                        painter.drawText(
+                            rect,
+                            QtCore.Qt.AlignRight | QtCore.Qt.AlignVCenter,
+                            format_length(value, transform.major_interval),
+                        )
+                        painter.setPen(line)
+                        last_label_bottom = rect.bottom()
+            if self.cursor_position is not None:
+                y = self.cursor_position[1]
+                painter.setPen(self.palette().color(QtGui.QPalette.Highlight))
+                painter.setBrush(self.palette().color(QtGui.QPalette.Highlight))
+                painter.drawPolygon(
+                    QtGui.QPolygon(
+                        (
+                            QtCore.QPoint(1, y - 4),
+                            QtCore.QPoint(1, y + 4),
+                            QtCore.QPoint(7, y),
+                        )
+                    )
+                )
+                label = format_length(transform.y_at_pixel(y), cursor=True)
+                width = max(
+                    self.width() - 10,
+                    painter.fontMetrics().horizontalAdvance(label) + 12,
+                )
+                top = max(2, min(y - 10, self.height() - 22))
+                rect = QtCore.QRect(3, top, width, 20)
+                painter.fillRect(rect, self.palette().color(QtGui.QPalette.Highlight))
+                painter.setPen(self.palette().color(QtGui.QPalette.HighlightedText))
+                painter.drawText(rect, QtCore.Qt.AlignCenter, label)
 
 
 class ViewportRulerController:
@@ -268,11 +438,12 @@ class ViewportRulerController:
         self.request = request
         self.host_widget = None
         self.overlay = None
+        self.decoration_hosts = []
+        self.decoration_widgets = []
         self.event_filter = None
         self.timer = None
         self._projection_key = None
         self.graphics_view = None
-        self._old_viewport_margins = None
 
     def attach(self):
         if not FreeCAD.GuiUp or not rulers_enabled() or not self._is_plan_request():
@@ -283,24 +454,37 @@ class ViewportRulerController:
         if self.host_widget is None:
             return False
         try:
-            self._old_viewport_margins = graphics_view.viewportMargins()
-        except AttributeError:
-            self._old_viewport_margins = QtCore.QMargins(0, 0, 0, 0)
-        graphics_view.setViewportMargins(
-            ViewportRulerOverlay.LEFT_BAND, ViewportRulerOverlay.TOP_BAND, 0, 0
-        )
+            self.decoration_hosts = [
+                self.session.view.viewportDecoration(edge)
+                for edge in ("top", "left", "corner")
+            ]
+        except (AttributeError, RuntimeError):
+            self.decoration_hosts = []
+            return False
         self.host_widget.setMouseTracking(True)
-        self.overlay = ViewportRulerOverlay(
-            graphics_view, self._make_transform, self.host_widget
-        )
+        self.decoration_widgets = [
+            _RulerDecoration(edge, self._make_transform, host)
+            for edge, host in zip(("top", "left", "corner"), self.decoration_hosts)
+        ]
+        for host, widget in zip(self.decoration_hosts, self.decoration_widgets):
+            layout = host.layout()
+            if layout is None:
+                layout = QtGui.QHBoxLayout(host)
+                layout.setContentsMargins(0, 0, 0, 0)
+                layout.setSpacing(0)
+            layout.addWidget(widget)
+            host.show()
+            widget.show()
+        # Compatibility for callers that only use the overlay as a lifetime anchor.
+        self.overlay = self.decoration_widgets[0]
         self.event_filter = _ViewportEventFilter(self)
         self.host_widget.installEventFilter(self.event_filter)
         graphics_view.installEventFilter(self.event_filter)
-        self.timer = QtCore.QTimer(self.overlay)
+        self.timer = QtCore.QTimer(self.decoration_widgets[0])
         self.timer.setInterval(80)
         self.timer.timeout.connect(self.refresh_if_needed)
         self.timer.start()
-        self.overlay.refresh_transform()
+        self.refresh()
         return True
 
     def set_request(self, request):
@@ -309,15 +493,28 @@ class ViewportRulerController:
         if self.overlay is None and visible:
             self.attach()
         elif self.overlay is not None:
-            self.overlay.setVisible(visible)
-            self.overlay.refresh_transform()
+            for host in self.decoration_hosts:
+                host.setVisible(visible)
+            self.refresh()
 
     def refresh_if_needed(self):
         key = self.session.viewport.get_plan_projection_cache_key()
         if key != self._projection_key:
             self._projection_key = key
             if self.overlay is not None:
-                self.overlay.refresh_transform()
+                self.refresh()
+
+    def refresh(self):
+        for widget in self.decoration_widgets:
+            widget.refresh_transform()
+
+    def set_cursor_position(self, position):
+        for widget in self.decoration_widgets:
+            widget.set_cursor_position(position)
+
+    def clear_cursor(self):
+        for widget in self.decoration_widgets:
+            widget.clear_cursor()
 
     def close(self):
         if self.timer is not None:
@@ -332,20 +529,18 @@ class ViewportRulerController:
                 self.graphics_view.removeEventFilter(self.event_filter)
             except RuntimeError:
                 pass
-        if self.graphics_view is not None and self._old_viewport_margins is not None:
-            margins = self._old_viewport_margins
-            self.graphics_view.setViewportMargins(
-                margins.left(), margins.top(), margins.right(), margins.bottom()
-            )
-        if self.overlay is not None:
-            self.overlay.close()
-            self.overlay.deleteLater()
+        for widget in self.decoration_widgets:
+            widget.close()
+            widget.deleteLater()
+        for host in self.decoration_hosts:
+            host.hide()
         self.timer = None
         self.event_filter = None
         self.overlay = None
+        self.decoration_widgets = []
+        self.decoration_hosts = []
         self.host_widget = None
         self.graphics_view = None
-        self._old_viewport_margins = None
 
     def _is_plan_request(self):
         return getattr(self.request, "purpose", None) in (

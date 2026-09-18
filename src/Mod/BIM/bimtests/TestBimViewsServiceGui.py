@@ -34,7 +34,11 @@ from bimviews.ruler_model import (
 )
 from bimviews.framing import planar_view_bounds
 from bimviews.service import BIMViewService
-from bimviews.viewport_ruler import ViewportRulerOverlay, _ViewportEventFilter
+from bimviews.viewport_ruler import (
+    ViewportRulerController,
+    ViewportRulerOverlay,
+    _ViewportEventFilter,
+)
 from bimplan.runtime.session import activate_representation_request
 
 
@@ -287,6 +291,39 @@ class TestBimViewsServiceGui(TestArchBaseGui):
             )
         finally:
             overlay.close()
+
+    def test_ruler_uses_native_decoration_slots_without_viewport_margins(self):
+        view = FreeCADGui.activeDocument().activeView()
+        graphics_view = view.graphicsView()
+        initial_margins = graphics_view.viewportMargins()
+        request = SimpleNamespace(
+            purpose=ArchRepresentation.RepresentationPurpose.PLAN,
+            reference_frame=None,
+            source=None,
+        )
+        viewport = SimpleNamespace(
+            get_plan_view_widget=lambda: graphics_view,
+            get_plan_point_from_mouse_pos=lambda pos: FreeCAD.Vector(pos[0], pos[1], 0),
+            get_plan_view_units_per_pixel=lambda: 1.0,
+            get_plan_projection_cache_key=lambda: None,
+        )
+        controller = ViewportRulerController(
+            SimpleNamespace(view=view, viewport=viewport), request
+        )
+        try:
+            self.assertTrue(controller.attach())
+            self.assertEqual(initial_margins, graphics_view.viewportMargins())
+            self.assertEqual(
+                [
+                    "View3DViewportTopDecoration",
+                    "View3DViewportLeftDecoration",
+                    "View3DViewportCornerDecoration",
+                ],
+                [host.objectName() for host in controller.decoration_hosts],
+            )
+            self.assertIs(controller.host_widget, graphics_view.viewport())
+        finally:
+            controller.close()
 
     def test_left_cursor_measure_fits_long_values(self):
         host = QtGui.QWidget()
