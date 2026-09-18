@@ -38,12 +38,14 @@ def apply_document_startup(document):
     activated = False
     if definition is not None:
         try:
-            from bimcommands.BimViews import _apply_representation_request
+            from bimplan.runtime.session import activate_representation_request
             from bimviews.service import BIMViewService
 
             activated = BIMViewService(
                 document,
-                representation_applier=_apply_representation_request,
+                representation_applier=lambda request: activate_representation_request(
+                    request, defer_population=True
+                ),
             ).activate_view(definition)
         except Exception as exc:
             FreeCAD.Console.PrintWarning(
@@ -56,9 +58,11 @@ def apply_document_startup(document):
         # deprecated Plan Edit command or opening its task panel.
         try:
             from bimplan.representation_request import representation_request_from_storey
-            from bimcommands.BimViews import _apply_representation_request
+            from bimplan.runtime.session import activate_representation_request
 
-            _apply_representation_request(representation_request_from_storey(context))
+            activate_representation_request(
+                representation_request_from_storey(context), defer_population=True
+            )
             activated = True
         except Exception as exc:
             FreeCAD.Console.PrintWarning(

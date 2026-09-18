@@ -82,6 +82,40 @@ class TestBimPlanEditExamplesGui(TestArchBaseGui):
         self.assertTrue(definition.BIMIsActiveView)
         self.addCleanup(session.shutdown, close_dialog=False)
 
+    def test_basic_example_populates_plan_session_after_presentation_reveal(self):
+        from bimplan.contextual_rendering import PlanContextualRenderingAPI
+        from bimplan.runtime.session import BIMEditingSession
+
+        main_window = FreeCADGui.getMainWindow()
+        phase_gate_states = []
+        original_prepare = BIMEditingSession.prepare
+        original_start = PlanContextualRenderingAPI.start
+
+        def record_prepare(session):
+            phase_gate_states.append(("prepare", main_window.isPresentationFrozen()))
+            return original_prepare(session)
+
+        def record_render_start(rendering):
+            phase_gate_states.append(("populate", main_window.isPresentationFrozen()))
+            return original_start(rendering)
+
+        with patch.object(BIMEditingSession, "prepare", record_prepare), patch.object(
+            PlanContextualRenderingAPI, "start", record_render_start
+        ):
+            self._open_example("BIMPlanEditBasic.FCStd", keep_startup_activity=True)
+
+        from bimplan.runtime.session import get_active_session
+
+        session = get_active_session()
+        self.assertIsNotNone(session)
+        self.addCleanup(session.shutdown, close_dialog=False)
+        self.assertIn(("prepare", True), phase_gate_states)
+        self.assertIn(("populate", False), phase_gate_states)
+        self.assertLess(
+            phase_gate_states.index(("prepare", True)),
+            phase_gate_states.index(("populate", False)),
+        )
+
     def test_basic_example_startup_builds_every_wall_pick_target(self):
         """GUI restore completion must build the complete semantic wall layer."""
 

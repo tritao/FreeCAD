@@ -78,6 +78,33 @@ class _HostedOpeningProxy:
 
 
 class TestBimPlanEditSessionGui(TestArchBaseGui):
+    def test_session_prepare_defers_semantic_rendering_until_populate(self):
+        session = PlanEditSession()
+        self.assertTrue(session.prepare())
+        try:
+            self.assertTrue(session._prepared)
+            self.assertFalse(session._populated)
+            self.assertIsNone(session.contextual_rendering.renderer)
+            self.assertFalse(session.contextual_rendering.is_ready)
+
+            self.assertTrue(session.populate(attach_task_panel=False))
+            self.assertTrue(session._populated)
+            self.assertIsNotNone(session.contextual_rendering.renderer)
+            self.assertTrue(session.contextual_rendering.is_ready)
+        finally:
+            session.shutdown(close_dialog=False)
+
+    def test_session_enter_keeps_synchronous_compatibility_contract(self):
+        session = PlanEditSession()
+        self.assertTrue(session.enter(attach_task_panel=False))
+        try:
+            self.assertTrue(session._prepared)
+            self.assertTrue(session._populated)
+            self.assertIsNotNone(session.contextual_rendering.renderer)
+            self.assertTrue(session.contextual_rendering.is_ready)
+        finally:
+            session.shutdown(close_dialog=False)
+
     def test_freecadgui_adopt_qobject_survives_parent_teardown(self):
         """An adopted Python widget tree may be destroyed by its C++ parent."""
 
