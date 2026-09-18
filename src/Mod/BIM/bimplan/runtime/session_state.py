@@ -157,6 +157,7 @@ class PlanHoverPickState:
     dirty: bool = False
     last_time: float = 0.0
     last_mouse_pos: object = None
+    trailing_pick_queued: bool = False
     cache_queued: bool = False
 
 

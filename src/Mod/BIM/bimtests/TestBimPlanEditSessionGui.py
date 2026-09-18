@@ -78,6 +78,35 @@ class _HostedOpeningProxy:
 
 
 class TestBimPlanEditSessionGui(TestArchBaseGui):
+    def test_hover_throttle_resolves_latest_pointer_position(self):
+        """A stopped pointer must not leave the last throttled hover unresolved."""
+
+        from PySide import QtCore
+        from bimplan.picking import hover as plan_hover
+        from bimplan.runtime.session_state import PlanHoverPickState
+
+        callbacks = []
+        session = SimpleNamespace(
+            hover_pick_state=PlanHoverPickState(last_time=10.0),
+            lifecycle_state=SimpleNamespace(tearing_down=False),
+            performance=SimpleNamespace(plan_perf_count=lambda *args, **kwargs: None),
+        )
+        with (
+            patch.object(plan_hover.time, "monotonic", side_effect=(10.01, 10.02)),
+            patch.object(
+                QtCore.QTimer,
+                "singleShot",
+                side_effect=lambda _delay, callback: callbacks.append(callback),
+            ),
+        ):
+            self.assertTrue(plan_hover.should_skip_hover_pick(session, (10, 20)))
+            self.assertTrue(plan_hover.should_skip_hover_pick(session, (30, 40)))
+
+        self.assertEqual(1, len(callbacks))
+        with patch.object(plan_hover, "update_hovered_plan_target") as update_hover:
+            callbacks[0]()
+        update_hover.assert_called_once_with(session, (30.0, 40.0), force=True)
+
     def test_plan_snap_api_configures_only_the_session_view_context(self):
         """Plan Edit's modes and plane stay local to its originating view."""
 

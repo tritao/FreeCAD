@@ -2,6 +2,7 @@
 
 """Hover target routing for BIM Plan Edit."""
 
+import math
 import time
 
 from bimplan.providers import runtime as plan_provider_runtime
@@ -10,6 +11,29 @@ from bimplan.selection import target_kinds as plan_target_kinds
 from bimplan.selection import targets as plan_selection_targets
 
 _HOVER_PICK_INTERVAL_MS = 80
+
+
+def _queue_trailing_hover_pick(session, delay_ms):
+    """Resolve the newest pointer position after a throttled burst ends."""
+
+    state = session.hover_pick_state
+    if state.trailing_pick_queued:
+        return
+    try:
+        from PySide import QtCore
+    except ImportError:
+        return
+    state.trailing_pick_queued = True
+
+    def resolve_latest():
+        state.trailing_pick_queued = False
+        if session.lifecycle_state.tearing_down or not state.dirty:
+            return
+        mouse_pos = state.last_mouse_pos
+        if mouse_pos is not None:
+            update_hovered_plan_target(session, mouse_pos, force=True)
+
+    QtCore.QTimer.singleShot(max(1, int(math.ceil(delay_ms))), resolve_latest)
 
 
 def get_hovered_plan_target(session):
@@ -69,19 +93,22 @@ def prime_hover_pick_caches(session):
 
 def should_skip_hover_pick(session, mouse_pos, force=False):
     hover_pick_state = session.hover_pick_state
-    if force or mouse_pos is None:
+    if mouse_pos is None:
         return False
     try:
         now = time.monotonic()
     except Exception:
         return False
+    hover_pick_state.last_mouse_pos = (float(mouse_pos[0]), float(mouse_pos[1]))
+    if force:
+        hover_pick_state.last_time = now
+        return False
     elapsed_ms = (now - float(hover_pick_state.last_time or 0.0)) * 1000.0
     if elapsed_ms >= _HOVER_PICK_INTERVAL_MS:
         hover_pick_state.last_time = now
-        hover_pick_state.last_mouse_pos = (float(mouse_pos[0]), float(mouse_pos[1]))
         return False
     hover_pick_state.dirty = True
-    hover_pick_state.last_mouse_pos = (float(mouse_pos[0]), float(mouse_pos[1]))
+    _queue_trailing_hover_pick(session, _HOVER_PICK_INTERVAL_MS - elapsed_ms)
     session.performance.plan_perf_count("hover_pick_skipped")
     return True
 
