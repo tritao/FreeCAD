@@ -60,6 +60,7 @@ public:
     static PyObject* sUpdateGui                (PyObject *self,PyObject *args);
     static PyObject* sInvokeLater              (PyObject *self,PyObject *args);
     static PyObject* sCancelInvoke             (PyObject *self,PyObject *args);
+    static PyObject* sAdoptQObject             (PyObject *self,PyObject *args);
     static PyObject* sDeleteLater              (PyObject *self,PyObject *args);
     static PyObject* sIsValidQObject           (PyObject *self,PyObject *args);
     static PyObject* sUpdateLocale             (PyObject *self,PyObject *args);

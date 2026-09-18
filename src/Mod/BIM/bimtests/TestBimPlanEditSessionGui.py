@@ -78,6 +78,26 @@ class _HostedOpeningProxy:
 
 
 class TestBimPlanEditSessionGui(TestArchBaseGui):
+    def test_freecadgui_adopt_qobject_survives_parent_teardown(self):
+        """An adopted Python widget tree may be destroyed by its C++ parent."""
+
+        from PySide import QtWidgets
+        from shiboken6 import Shiboken
+        import FreeCADGui
+
+        host = QtWidgets.QWidget()
+        child = QtWidgets.QWidget(host)
+        grandchild = QtWidgets.QLabel(child)
+        destroyed = []
+        child.destroyed.connect(lambda: destroyed.append(True))
+
+        FreeCADGui.adoptQObject(child)
+        del grandchild, child
+        Shiboken.delete(host)
+
+        QtWidgets.QApplication.processEvents()
+        self.assertTrue(destroyed)
+
     def test_freecadgui_delete_later_pins_deferred_widget_trees(self):
         """Deferred deletion must keep every wrapped Qt child alive."""
 

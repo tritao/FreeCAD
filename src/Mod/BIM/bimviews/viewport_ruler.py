@@ -492,6 +492,8 @@ class ViewportRulerController:
         self.timer.timeout.connect(self.refresh_if_needed)
         self.timer.start()
         self.refresh()
+        for widget in self.decoration_widgets:
+            FreeCADGui.adoptQObject(widget)
         return True
 
     def set_request(self, request):

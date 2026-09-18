@@ -183,6 +183,7 @@ class ViewportGridController:
         self.timer.timeout.connect(self.refresh_if_needed)
         self.timer.start()
         self.overlay.refresh()
+        FreeCADGui.adoptQObject(self.overlay)
         return True
 
     def set_request(self, request):

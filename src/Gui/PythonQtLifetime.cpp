@@ -91,15 +91,15 @@ private:
     QTimer timer;
 };
 
-class PendingPythonDelete final: public QObject
+class RetainedPythonQObjectTree final: public QObject
 {
 public:
-    explicit PendingPythonDelete(std::vector<Py::Object>&& wrappers)
+    explicit RetainedPythonQObjectTree(std::vector<Py::Object>&& wrappers)
         : QObject(qApp)
         , wrappers(std::make_unique<std::vector<Py::Object>>(std::move(wrappers)))
     {}
 
-    ~PendingPythonDelete() override
+    ~RetainedPythonQObjectTree() override
     {
         if (wrappers && Py_IsInitialized()) {
             Base::PyGILStateLocker lock;
@@ -115,6 +115,19 @@ public:
 private:
     std::unique_ptr<std::vector<Py::Object>> wrappers;
 };
+
+void adoptPythonQObjectTree(QObject* root, PythonWrapper& pySide)
+{
+    if (root->property("_FreeCAD_PythonOwnershipAdopted").toBool()) {
+        return;
+    }
+
+    root->setProperty("_FreeCAD_PythonOwnershipAdopted", true);
+    std::vector<Py::Object> retained;
+    pySide.adoptQObjectTree(root, retained);
+    auto* holder = new RetainedPythonQObjectTree(std::move(retained));
+    QObject::connect(root, &QObject::destroyed, holder, &QObject::deleteLater);
+}
 
 }  // namespace
 
@@ -143,11 +156,20 @@ void deletePythonQObjectLater(PyObject* wrapper)
     }
 
     root->setProperty("_FreeCAD_PythonDeletePending", true);
-    std::vector<Py::Object> retained;
-    pySide.adoptQObjectTree(root, retained);
-    auto* pending = new PendingPythonDelete(std::move(retained));
-    QObject::connect(root, &QObject::destroyed, pending, &QObject::deleteLater);
+    adoptPythonQObjectTree(root, pySide);
     root->deleteLater();
+}
+
+void adoptPythonQObject(PyObject* wrapper)
+{
+    PythonWrapper pySide;
+    Py::Object object(wrapper);
+    QObject* root = pySide.toQObject(object);
+    if (!root) {
+        return;
+    }
+
+    adoptPythonQObjectTree(root, pySide);
 }
 
 }  // namespace Gui

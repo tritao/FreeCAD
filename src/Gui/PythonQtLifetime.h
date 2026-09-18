@@ -17,6 +17,7 @@ namespace Gui
 
 GuiExport QObject* invokePythonLater(PyObject* callback, int delay, QObject* context);
 GuiExport bool cancelPythonInvoke(QObject* handle);
+GuiExport void adoptPythonQObject(PyObject* wrapper);
 GuiExport void deletePythonQObjectLater(PyObject* wrapper);
 
 }  // namespace Gui

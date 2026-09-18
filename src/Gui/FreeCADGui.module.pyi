@@ -413,6 +413,10 @@ def cancelInvoke(handle: object, /) -> None:
     """Cancel a pending call created by :func:`invokeLater`."""
     ...
 
+def adoptQObject(obj: object, /) -> None:
+    """Transfer a Python-created QObject tree to its C++ owner and retain wrappers until destruction."""
+    ...
+
 def deleteLater(obj: object, /) -> None:
     """Adopt a Python-created QObject tree and safely schedule its deletion."""
     ...

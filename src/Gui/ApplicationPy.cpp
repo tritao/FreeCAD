@@ -1060,6 +1060,22 @@ PyObject* ApplicationPy::sDeleteLater(PyObject* /*self*/, PyObject* args)
     Py_RETURN_NONE;
 }
 
+PyObject* ApplicationPy::sAdoptQObject(PyObject* /*self*/, PyObject* args)
+{
+    PyObject* wrapper = nullptr;
+    if (!PyArg_ParseTuple(args, "O", &wrapper)) {
+        return nullptr;
+    }
+    requirePythonMainThread("FreeCADGui.adoptQObject");
+    try {
+        adoptPythonQObject(wrapper);
+    }
+    catch (const Py::Exception&) {
+        return nullptr;
+    }
+    Py_RETURN_NONE;
+}
+
 PyObject* ApplicationPy::sIsValidQObject(PyObject* /*self*/, PyObject* args)
 {
     PyObject* wrapper = nullptr;
