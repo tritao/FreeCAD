@@ -52,6 +52,7 @@
 #include <App/Application.h>
 #include <App/Document.h>
 #include <App/GeoFeature.h>
+#include <App/ViewDefinition.h>
 #include <Base/Builder3D.h>
 #include <Base/Console.h>
 #include <Base/Interpreter.h>
@@ -64,6 +65,7 @@
 #include "Application.h"
 #include "BitmapFactory.h"
 #include "Camera.h"
+#include "CoinCameraCodec.h"
 #include "Document.h"
 #include "FileDialog.h"
 #include "MainWindow.h"
@@ -608,6 +610,14 @@ const std::string& View3DInventor::getCamera() const
 bool View3DInventor::setCamera(const char* pCamera)
 {
     return _viewer->setCamera(pCamera);
+}
+
+bool View3DInventor::applyViewDefinition(const App::ViewDefinition& definition)
+{
+    if (!CoinCameraCodec::apply(definition.camera(), *this)) {
+        return false;
+    }
+    return _viewer->getViewContext().applyDefinition(&definition);
 }
 
 void View3DInventor::toggleClippingPlane()

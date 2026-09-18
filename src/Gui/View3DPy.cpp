@@ -1105,11 +1105,7 @@ Py::Object View3DInventorPy::applyViewDefinition(const Py::Tuple& args)
     if (!definition->getDocument()) {
         return Py::Boolean(false);
     }
-    auto* view = getView3DInventorPtr();
-    if (!CoinCameraCodec::apply(definition->camera(), *view)) {
-        return Py::Boolean(false);
-    }
-    return Py::Boolean(view->getViewer()->getViewContext().applyDefinition(definition));
+    return Py::Boolean(getView3DInventorPtr()->applyViewDefinition(*definition));
 }
 
 Py::Object View3DInventorPy::captureViewDefinition(const Py::Tuple& args)

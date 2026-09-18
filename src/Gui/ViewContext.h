@@ -48,6 +48,8 @@ public:
     bool effectiveVisibility(const ViewProviderDocumentObject* provider) const;
     bool applyDefinition(const App::ViewDefinition* definition);
     bool captureDefinition(App::ViewDefinition* definition) const;
+    /// Definition currently realized in this context, if any.
+    const App::ViewDefinition* appliedDefinition() const;
     void setCamera(App::ViewCamera camera);
     const App::ViewCamera& camera() const;
     void setReferenceFrame(const Base::Placement& frame);
@@ -72,6 +74,8 @@ private:
     ClippingChangedCallback clippingChanged;
     std::vector<const App::ClippingPlane*> activeClippingPlanes;
     App::ViewCamera activeCamera;
+    // Only views that really show a definition re-apply its inspector edits.
+    const App::ViewDefinition* activeDefinition {nullptr};
     Base::Placement activeReferenceFrame;
 };
 

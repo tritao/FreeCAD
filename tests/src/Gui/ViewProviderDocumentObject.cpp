@@ -16,12 +16,14 @@
 #include <App/ClippingPlane.h>
 #include <App/Document.h>
 #include <App/ViewDefinition.h>
+#include <Base/Type.h>
 #include <Gui/Application.h>
 #include <Gui/Inventor/SoViewContextElement.h>
 #include <Gui/Selection/SoFCUnifiedSelection.h>
 #include <Gui/ViewContext.h>
 #include <Gui/ViewInstance.h>
 #include <Gui/ViewProviderDocumentObject.h>
+#include <Gui/ViewProviderViewDefinition.h>
 
 #include <src/App/InitApplication.h>
 
@@ -352,6 +354,41 @@ TEST_F(ViewProviderDocumentObjectTest, viewDefinitionRoundTripsTypedCameraState)
     Gui::ViewContext restored;
     ASSERT_TRUE(restored.applyDefinition(definition));
     EXPECT_EQ(restored.camera(), saved);
+}
+
+TEST_F(ViewProviderDocumentObjectTest, savedViewResolvesDedicatedViewProvider)
+{
+    const Base::Type providerType = Base::Type::fromName("Gui::ViewProviderViewDefinition");
+    ASSERT_FALSE(providerType.isBad());
+    EXPECT_TRUE(providerType.isDerivedFrom(Gui::ViewProviderDocumentObject::getClassTypeId()));
+
+    auto* definition = static_cast<App::ViewDefinition*>(
+        _doc->addObject("App::ViewDefinition", "SavedView")
+    );
+    EXPECT_STREQ(definition->getViewProviderName(), "Gui::ViewProviderViewDefinition");
+
+    Gui::ViewProviderViewDefinition provider;
+    provider.attach(definition);
+    EXPECT_EQ(provider.getObject(), definition);
+}
+
+TEST_F(ViewProviderDocumentObjectTest, viewContextTracksAppliedDefinition)
+{
+    auto* definition = static_cast<App::ViewDefinition*>(
+        _doc->addObject("App::ViewDefinition", "SavedView")
+    );
+    Gui::ViewContext context;
+    EXPECT_EQ(context.appliedDefinition(), nullptr);
+
+    ASSERT_TRUE(context.applyDefinition(definition));
+    EXPECT_EQ(context.appliedDefinition(), definition);
+
+    context.removeObject(definition);
+    EXPECT_EQ(context.appliedDefinition(), nullptr);
+
+    ASSERT_TRUE(context.applyDefinition(definition));
+    context.clear();
+    EXPECT_EQ(context.appliedDefinition(), nullptr);
 }
 
 TEST_F(ViewProviderDocumentObjectTest, clippingReferencesPersistAndRemainViewerLocal)

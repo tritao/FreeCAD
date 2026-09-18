@@ -116,6 +116,7 @@ bool ViewContext::applyDefinition(const App::ViewDefinition* definition)
     }
     definitionVisibility.clear();
     activeCamera = definition->camera();
+    activeDefinition = definition;
     activeReferenceFrame = definition->ReferenceFrame.getValue();
     for (auto* object : definition->ForcedVisible.getValues()) {
         definitionVisibility[object] = Visibility::Visible;
@@ -136,6 +137,11 @@ bool ViewContext::applyDefinition(const App::ViewDefinition* definition)
         notify(object);
     }
     return true;
+}
+
+const App::ViewDefinition* ViewContext::appliedDefinition() const
+{
+    return activeDefinition;
 }
 
 bool ViewContext::captureDefinition(App::ViewDefinition* definition) const
@@ -229,6 +235,9 @@ const std::vector<const App::ClippingPlane*>& ViewContext::clippingPlanes() cons
 
 void ViewContext::removeObject(const App::DocumentObject* object)
 {
+    if (activeDefinition == object) {
+        activeDefinition = nullptr;
+    }
     for (auto& [id, values] : layers) {
         (void)id;
         values.erase(object);
@@ -260,6 +269,7 @@ void ViewContext::clear()
     }
     layers.clear();
     definitionVisibility.clear();
+    activeDefinition = nullptr;
     const bool hadClippingPlanes = !activeClippingPlanes.empty();
     activeClippingPlanes.clear();
     for (const auto* object : affected) {

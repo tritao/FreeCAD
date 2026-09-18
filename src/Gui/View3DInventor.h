@@ -37,6 +37,11 @@ class QOpenGLWidget;
 class QStackedWidget;
 class QWidget;
 
+namespace App
+{
+class ViewDefinition;
+}
+
 namespace Gui
 {
 
@@ -124,6 +129,8 @@ public:
     RayPickInfo getObjInfoRay(Base::Vector3d* startvec, Base::Vector3d* dirvec);
     const std::string& getCamera() const override;
     bool setCamera(const char* pCamera) override;
+    /// Realize a saved view definition in this view.
+    bool applyViewDefinition(const App::ViewDefinition& definition);
     void toggleClippingPlane();
     bool hasClippingPlane() const;
 

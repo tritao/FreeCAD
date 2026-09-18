@@ -895,6 +895,7 @@ SOURCE_GROUP("Widget\\QSintActionPanel\\Mocs" FILES ${qsint_MOC_SRCS})
 SET(View3D_CPP_SRCS
     Camera.cpp
     CoinCameraCodec.cpp
+    ViewProviderViewDefinition.cpp
     Flag.cpp
     GLBuffer.cpp
     GLPainter.cpp
@@ -917,6 +918,7 @@ SET(View3D_SRCS
     ${View3D_CPP_SRCS}
     Camera.h
     CoinCameraCodec.h
+    ViewProviderViewDefinition.h
     Flag.h
     GLBuffer.h
     RubberbandOverlay.h

@@ -144,6 +144,7 @@
 #include "ViewProviderPart.h"
 #include "ViewProviderFeaturePython.h"
 #include "ViewProviderTextDocument.h"
+#include "ViewProviderViewDefinition.h"
 #include "ViewProviderTextureExtension.h"
 #include "ViewProviderVRMLObject.h"
 #include "ViewProviderVarSet.h"
@@ -2427,6 +2428,7 @@ void Application::initTypes()
     Gui::ViewProviderSuppressibleExtensionPython::init();
     Gui::ViewProviderExtern                     ::init();
     Gui::ViewProviderDocumentObject             ::init();
+    Gui::ViewProviderViewDefinition             ::init();
     Gui::ViewProviderFeature                    ::init();
     Gui::ViewProviderDocumentObjectGroup        ::init();
     Gui::ViewProviderDocumentObjectGroupPython  ::init();
