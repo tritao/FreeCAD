@@ -574,6 +574,34 @@ class TestArchSectionPlane(TestArchBase.TestArchBase):
         self.assertIn("L 100 0", svg)
         self.assertIn("L 100 100", svg)
 
+    def testTechDrawIgnoresRelationOnlyObjectsInSemanticScopes(self):
+        """Non-drawable BIM relations must not force legacy sheet rendering."""
+
+        representation = ArchRepresentation.BIMRepresentation()
+        representation.add_geometry(
+            "projected_geometry",
+            (App.Vector(0, 0, 0), App.Vector(100, 0, 0)),
+            "PlanCutOuterBoundary",
+        )
+
+        class Provider:
+            def getRepresentation(self, source, request):
+                return representation
+
+        source = SimpleNamespace(Proxy=Provider())
+        relation = SimpleNamespace(Proxy=SimpleNamespace())
+        context = SimpleNamespace(
+            request=ArchRepresentation.RepresentationRequest(
+                purpose=ArchRepresentation.RepresentationPurpose.PLAN
+            )
+        )
+
+        resolved = techdraw_renderer.representations_for_context(
+            context, (source, relation)
+        )
+
+        self.assertEqual((representation,), resolved)
+
     def testTechDrawSemanticLineworkUsesJoinedCornerCaps(self):
         """Sheet boundaries must not leave cap or miter artifacts at corners."""
 

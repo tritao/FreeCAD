@@ -130,7 +130,9 @@ def build_document():
     service.create_elevation_view("South Elevation", level, direction="South")
     service.create_section_view("Building Section", section)
     plan_view = service.create_plan_view("Ground Floor Plan", level)
-    service.create_sheet_from_view(plan_view, TEMPLATE_PATH, page_scale=0.02)
+    sheet_page, _sheet_view = service.create_sheet_from_view(
+        plan_view, TEMPLATE_PATH, page_scale=0.02
+    )
 
     gui_startup = doc.settings("Gui.Startup")
     gui_startup.setInt("SchemaVersion", 1)
@@ -140,6 +142,9 @@ def build_document():
     bim_startup.setString("Activity", "PlanEdit")
     bim_startup.setString("ContextObject", level.Name)
     bim_startup.setString("ViewObject", plan_view.Name)
+    sheet_page.ViewObject.Visibility = False
+    Gui.activeDocument().activeView().viewAxonometric()
+    Gui.activeDocument().activeView().fitAll()
     doc.recompute()
     doc.saveAs(OUTPUT_PATH)
     App.closeDocument(doc.Name)

@@ -317,6 +317,8 @@ class TestBimPlanEditExamplesGui(TestArchBaseGui):
             "Plan",
             drawing_views[0].BIMViewDefinition.Purpose,
         )
+        self.assertIn('stroke-linecap="butt"', drawing_views[0].Symbol)
+        self.assertNotIn('stroke-linecap="square"', drawing_views[0].Symbol)
         from bimviews.navigator_model import BIMNavigatorModel
 
         project_nodes = BIMNavigatorModel(document).project_nodes()

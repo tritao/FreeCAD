@@ -37,6 +37,23 @@ def representations_for_context(
         view_representation_for,
     )
 
+    # Relation-only BIM objects (for example WallJoint) are included when a
+    # building part scope is expanded, but they do not contribute drawable
+    # geometry. They must not make an otherwise fully semantic scope fall
+    # back to the legacy shape exporter.
+    render_objects = []
+    for obj in objects:
+        has_shape = hasattr(obj, "Shape")
+        proxy = getattr(obj, "Proxy", None)
+        has_provider = callable(getattr(proxy, "getRepresentation", None))
+        view_proxy = getattr(getattr(obj, "ViewObject", None), "Proxy", None)
+        has_provider = has_provider or callable(
+            getattr(view_proxy, "getRepresentation", None)
+        )
+        if has_shape or has_provider:
+            render_objects.append(obj)
+    objects = tuple(render_objects)
+
     if context.request.purpose == RepresentationPurpose.ELEVATION:
         import ArchSectionProjection
 
