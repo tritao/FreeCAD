@@ -50,7 +50,6 @@ if FreeCAD.GuiUp:
         def sync_geometry(self):
             self.setGeometry(self.host_widget.rect())
             self.raise_()
-            self.refresh()
 
         def refresh(self):
             self.transform = self._transform_provider()
@@ -138,6 +137,7 @@ if FreeCAD.GuiUp:
         def eventFilter(self, watched, event):
             if event.type() in (QtCore.QEvent.Resize, QtCore.QEvent.Move):
                 self.controller.overlay.sync_geometry()
+                self.controller.projection.request_refresh()
             return QtCore.QObject.eventFilter(self, watched, event)
 
 
@@ -151,8 +151,7 @@ class ViewportGridController:
         self.graphics_view = None
         self.overlay = None
         self.event_filter = None
-        self.timer = None
-        self._projection_key = None
+        self.projection = session.projection
 
     def attach(self):
         if not FreeCAD.GuiUp or not grid_enabled() or not self._is_planar_request():
@@ -178,11 +177,7 @@ class ViewportGridController:
         self.event_filter = _ViewportGridEventFilter(self)
         self.host_widget.installEventFilter(self.event_filter)
         graphics_view.installEventFilter(self.event_filter)
-        self.timer = QtCore.QTimer(self.overlay)
-        self.timer.setInterval(80)
-        self.timer.timeout.connect(self.refresh_if_needed)
-        self.timer.start()
-        self.overlay.refresh()
+        self.projection.register(self, graphics_view)
         FreeCADGui.adoptQObject(self.overlay)
         return True
 
@@ -194,31 +189,33 @@ class ViewportGridController:
         elif self.overlay is not None:
             self.overlay.setVisible(visible)
             if visible:
-                self.overlay.refresh()
+                self.projection.request_refresh()
 
-    def refresh_if_needed(self):
-        key = self.session.viewport.get_plan_projection_cache_key()
-        if key != self._projection_key:
-            self._projection_key = key
-            if self.overlay is not None:
-                self.overlay.refresh()
+    def invalidate_projection(self):
+        if self.overlay is None:
+            return
+        self.overlay.transform = None
+        self.overlay.lattice = None
+        self.overlay.update()
+
+    def refresh_projection(self):
+        if self.overlay is None or not self.overlay.isVisible():
+            return
+        self.overlay.refresh()
 
     def close(self):
-        if FreeCADGui.isValidQObject(self.timer):
-            self.timer.stop()
+        self.projection.unregister(self)
         viewport_widgets.remove_event_filter(self.host_widget, self.event_filter)
         viewport_widgets.remove_event_filter(self.graphics_view, self.event_filter)
         if FreeCADGui.isValidQObject(self.overlay):
             self.overlay.close()
-            # Delete the overlay (and the timer it parents) while its Python
-            # wrapper is still alive; see viewport_ruler.close().
+            # Delete the overlay while its Python wrapper is still alive; see
+            # viewport_ruler.close().
             FreeCADGui.deleteLater(self.overlay)
-        self.timer = None
         self.event_filter = None
         self.overlay = None
         self.host_widget = None
         self.graphics_view = None
-        self._projection_key = None
 
     def _graphics_view_destroyed(self, *_args):
         self.graphics_view = None

@@ -26,6 +26,10 @@ from bimviews.viewport_grid import ViewportGridController
 from bimviews.model import BIMViewManagerModel
 from bimviews.navigator_model import BIMNavigatorModel
 from bimviews.navigator_qt import BIMNavigatorQtModel, configure_navigator_columns
+from bimviews.projection import (
+    ViewportProjectionCoordinator,
+    ViewportProjectionTransition,
+)
 from bimviews.ruler_model import (
     RulerTransform,
     engineering_interval,
@@ -445,9 +449,9 @@ class TestBimViewsServiceGui(TestArchBaseGui):
             get_plan_view_units_per_pixel=lambda: 1.0,
             get_plan_projection_cache_key=lambda: None,
         )
-        controller = ViewportRulerController(
-            SimpleNamespace(view=view, viewport=viewport), request
-        )
+        session = SimpleNamespace(view=view, viewport=viewport)
+        session.projection = ViewportProjectionCoordinator(session)
+        controller = ViewportRulerController(session, request)
         try:
             self.assertTrue(controller.attach())
             self.assertEqual(initial_margins, graphics_view.viewportMargins())
@@ -462,6 +466,7 @@ class TestBimViewsServiceGui(TestArchBaseGui):
             self.assertIs(controller.host_widget, graphics_view.viewport())
         finally:
             controller.close()
+            session.projection.close()
 
     def test_viewport_controllers_ignore_deleted_graphics_view_wrappers(self):
         graphics_view = QtGui.QGraphicsView()
@@ -475,6 +480,7 @@ class TestBimViewsServiceGui(TestArchBaseGui):
             source=None,
         )
         session = SimpleNamespace(view=None, viewport=viewport)
+        session.projection = ViewportProjectionCoordinator(session)
         ruler = ViewportRulerController(session, request)
         grid = ViewportGridController(session, request)
 
@@ -485,6 +491,7 @@ class TestBimViewsServiceGui(TestArchBaseGui):
             self.assertFalse(grid.attach())
             ruler.close()
             grid.close()
+            session.projection.close()
             ruler.close()
             grid.close()
 
@@ -502,9 +509,9 @@ class TestBimViewsServiceGui(TestArchBaseGui):
             reference_frame=None,
             source=None,
         )
-        controller = ViewportGridController(
-            SimpleNamespace(view=None, viewport=viewport), request
-        )
+        session = SimpleNamespace(view=None, viewport=viewport)
+        session.projection = ViewportProjectionCoordinator(session)
+        controller = ViewportGridController(session, request)
 
         with patch("bimviews.viewport_grid.grid_enabled", return_value=True):
             self.assertTrue(controller.attach())
@@ -515,6 +522,35 @@ class TestBimViewsServiceGui(TestArchBaseGui):
         self.assertIsNone(controller.host_widget)
         controller.close()
         controller.close()
+        session.projection.close()
+
+    def test_projection_transition_refreshes_decorations_once_after_camera_change(self):
+        projection_key = ["initial"]
+        viewport = SimpleNamespace(
+            get_plan_projection_cache_key=lambda: projection_key[0]
+        )
+        session = SimpleNamespace(viewport=viewport)
+        coordinator = ViewportProjectionCoordinator(session)
+        calls = []
+        client = SimpleNamespace(
+            invalidate_projection=lambda: calls.append("invalidate"),
+            refresh_projection=lambda: calls.append("refresh"),
+        )
+        coordinator._clients.append(client)
+
+        with ViewportProjectionTransition():
+            coordinator.request_refresh()
+            self.assertEqual(["invalidate"], calls)
+            projection_key[0] = "final"
+
+        self.assertEqual(["invalidate", "refresh"], calls)
+        self.assertEqual("final", coordinator._projection_key)
+
+        projection_key[0] = "navigated"
+        coordinator.refresh_if_needed()
+        self.assertEqual(
+            ["invalidate", "refresh", "invalidate", "refresh"], calls
+        )
 
     def test_left_cursor_measure_fits_long_values(self):
         host = QtGui.QWidget()

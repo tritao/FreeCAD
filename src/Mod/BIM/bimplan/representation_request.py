@@ -137,12 +137,6 @@ class PlanRepresentationRequestAPI:
         request_unchanged = self.source is source and _request_values_equal(self.request, request)
         self.source = source
         self.request = request
-        view_rulers = getattr(self._session, "view_rulers", None)
-        if view_rulers is not None:
-            view_rulers.set_request(request)
-        view_grid = getattr(self._session, "view_grid", None)
-        if view_grid is not None:
-            view_grid.set_request(request)
         view_runtime = getattr(self._session, "view_runtime", None)
         if view_runtime is not None:
             view_runtime.set_request(request)
@@ -150,20 +144,24 @@ class PlanRepresentationRequestAPI:
             self._session.active_storey = source
         elif source is None:
             self._session.active_storey = None
-        if not refresh:
-            return request
-        if request_unchanged:
-            return request
-        self._session.overlays.geometry.invalidate_plan_overlay_geometry_cache()
-        self._session.viewport.apply_representation_request(request, fit=fit)
-        self._session.visibility.apply_storey_visibility()
-        contextual = self._session.contextual_rendering
-        if contextual.renderer is not None:
-            contextual.close(retain=True)
-            self._session.viewport.flush_scene_graph_mutations()
-            contextual.start()
-        else:
-            contextual.refresh_all()
+        if refresh and not request_unchanged:
+            self._session.overlays.geometry.invalidate_plan_overlay_geometry_cache()
+            self._session.viewport.apply_representation_request(request, fit=fit)
+            self._session.visibility.apply_storey_visibility()
+            contextual = self._session.contextual_rendering
+            if contextual.renderer is not None:
+                contextual.close(retain=True)
+                self._session.viewport.flush_scene_graph_mutations()
+                contextual.start()
+            else:
+                contextual.refresh_all()
+        if refresh:
+            view_rulers = getattr(self._session, "view_rulers", None)
+            if view_rulers is not None:
+                view_rulers.set_request(request)
+            view_grid = getattr(self._session, "view_grid", None)
+            if view_grid is not None:
+                view_grid.set_request(request)
         return request
 
     def includes_object(self, obj):

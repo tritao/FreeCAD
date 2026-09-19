@@ -79,6 +79,7 @@ def discard_runtime_references(session):
     session.view_runtime = None
     session.view_grid.close()
     session.view_rulers.close()
+    session.projection.close()
     session.contextual_rendering.close(retain=False)
     session.viewport.discard_runtime_references()
     session.selection.state.discard_runtime_references()

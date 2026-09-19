@@ -205,6 +205,7 @@ SET(bimviews_SRCS
     bimviews/model.py
     bimviews/navigator_model.py
     bimviews/navigator_qt.py
+    bimviews/projection.py
     bimviews/ruler_model.py
     bimviews/runtime.py
     bimviews/representation_cache.py

@@ -10,6 +10,7 @@ import FreeCAD
 
 from .framing import frame_planar_view, planar_view_bounds
 from .grid_settings import get_grid_settings
+from .projection import ViewportProjectionTransition
 
 
 _SUPPORTED_PURPOSES = {
@@ -104,7 +105,10 @@ class BIMViewService:
         target_view = self._view(view)
         if target_view is None:
             raise RuntimeError("An active 3D view is required to create a floor plan")
-        with self._instant_view_transition(target_view):
+        with (
+            self._instant_view_transition(target_view),
+            ViewportProjectionTransition(),
+        ):
             if self._representation_applier is not None:
                 self._representation_applier(request)
             self._orient_plan_view(request, definition=definition, view=target_view)
@@ -141,7 +145,10 @@ class BIMViewService:
             label, "Section", plane, capture=False, view=target_view
         )
         definition.ReferenceFrame = request.reference_frame
-        with self._instant_view_transition(target_view):
+        with (
+            self._instant_view_transition(target_view),
+            ViewportProjectionTransition(),
+        ):
             if self._representation_applier is not None:
                 self._representation_applier(request)
             self._orient_plan_view(request, definition=definition, view=target_view)
@@ -242,7 +249,10 @@ class BIMViewService:
             label, "Elevation", plane, capture=False, view=target_view
         )
         definition.ReferenceFrame = request.reference_frame
-        with self._instant_view_transition(target_view):
+        with (
+            self._instant_view_transition(target_view),
+            ViewportProjectionTransition(),
+        ):
             if self._representation_applier is not None:
                 self._representation_applier(request)
             self._orient_plan_view(request, definition=definition, view=target_view)
@@ -444,7 +454,10 @@ class BIMViewService:
         # gesture.  The representation bridge may orient the camera before
         # the persisted camera is applied; keep both operations synchronous so
         # switching PLAN/MODEL never waits for a navigation animation.
-        with self._instant_view_transition(target_view):
+        with (
+            self._instant_view_transition(target_view),
+            ViewportProjectionTransition(),
+        ):
             if self._representation_applier is not None:
                 self._representation_applier(context.request)
             applied = bool(target_view.applyViewDefinition(definition))

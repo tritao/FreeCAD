@@ -247,7 +247,7 @@ if FreeCAD.GuiUp:
         def eventFilter(self, watched, event):
             event_type = event.type()
             if event_type in (QtCore.QEvent.Resize, QtCore.QEvent.Move):
-                self.controller.refresh()
+                self.controller.projection.request_refresh()
             elif (
                 watched is self.controller.host_widget
                 and event_type == QtCore.QEvent.MouseMove
@@ -442,8 +442,7 @@ class ViewportRulerController:
         self.decoration_hosts = []
         self.decoration_widgets = []
         self.event_filter = None
-        self.timer = None
-        self._projection_key = None
+        self.projection = session.projection
         self.graphics_view = None
 
     def attach(self):
@@ -487,11 +486,7 @@ class ViewportRulerController:
         self.event_filter = _ViewportEventFilter(self)
         self.host_widget.installEventFilter(self.event_filter)
         graphics_view.installEventFilter(self.event_filter)
-        self.timer = QtCore.QTimer(self.decoration_widgets[0])
-        self.timer.setInterval(80)
-        self.timer.timeout.connect(self.refresh_if_needed)
-        self.timer.start()
-        self.refresh()
+        self.projection.register(self, graphics_view)
         for widget in self.decoration_widgets:
             FreeCADGui.adoptQObject(widget)
         return True
@@ -504,14 +499,18 @@ class ViewportRulerController:
         elif self.overlay is not None:
             for host in self.decoration_hosts:
                 host.setVisible(visible)
-            self.refresh()
+            if visible:
+                self.projection.request_refresh()
 
-    def refresh_if_needed(self):
-        key = self.session.viewport.get_plan_projection_cache_key()
-        if key != self._projection_key:
-            self._projection_key = key
-            if self.overlay is not None:
-                self.refresh()
+    def invalidate_projection(self):
+        for widget in self.decoration_widgets:
+            widget.transform = None
+            widget.update()
+
+    def refresh_projection(self):
+        if not any(host.isVisible() for host in self.decoration_hosts):
+            return
+        self.refresh()
 
     def refresh(self):
         for widget in self.decoration_widgets:
@@ -526,23 +525,21 @@ class ViewportRulerController:
             widget.clear_cursor()
 
     def close(self):
-        if FreeCADGui.isValidQObject(self.timer):
-            self.timer.stop()
+        self.projection.unregister(self)
         viewport_widgets.remove_event_filter(self.host_widget, self.event_filter)
         viewport_widgets.remove_event_filter(self.graphics_view, self.event_filter)
         for widget in self.decoration_widgets:
             if not FreeCADGui.isValidQObject(widget):
                 continue
             widget.close()
-            # Delete the decorations (and the timer they parent) while their
-            # Python wrappers are still alive. Dropping the wrappers first can
+            # Delete decorations while their Python wrappers are still alive.
+            # Dropping the wrappers first can
             # make Shiboken release a widget twice when the view destroys the
             # remaining C++ child tree.
             FreeCADGui.deleteLater(widget)
         for host in self.decoration_hosts:
             if FreeCADGui.isValidQObject(host):
                 host.hide()
-        self.timer = None
         self.event_filter = None
         self.overlay = None
         self.decoration_widgets = []

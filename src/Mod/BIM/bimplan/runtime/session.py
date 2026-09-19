@@ -59,6 +59,7 @@ from bimplan.representation_request import PlanRepresentationRequestAPI
 from bimplan.contextual_editing import PlanContextualEditingAPI
 from bimviews.runtime import BIMViewRuntime
 from bimviews.viewport_grid import ViewportGridController
+from bimviews.projection import ViewportProjectionCoordinator
 from bimviews.viewport_ruler import ViewportRulerController
 
 QT_TRANSLATE_NOOP = FreeCAD.Qt.QT_TRANSLATE_NOOP
@@ -336,6 +337,7 @@ class BIMEditingSession:
         self.contextual_editing = PlanContextualEditingAPI(self)
         self.status_text = PlanStatusTextAPI(self)
         self.task_panels = plan_task_panel.PlanTaskPanelsAPI(self)
+        self.projection = ViewportProjectionCoordinator(self)
         self.view_grid = ViewportGridController(self)
         self.view_rulers = ViewportRulerController(self)
         plan_session_state.initialize_session_state(self)
