@@ -223,6 +223,13 @@ def _clear_hovered_targets(session):
 
 
 def _handle_left_mouse_button_release(session, event_callback):
+    if (
+        _coerce_current_tool(session) == PlanTool.SELECT
+        and session.input_event_state.selection_press_pos is not None
+    ):
+        SelectTool(session).on_left_mouse_up(event_callback)
+        session.input.set_event_handled(event_callback)
+        return True
     if not session.input_event_state.consume_left_button_release:
         return False
     session.input_event_state.consume_left_button_release = False
@@ -230,12 +237,15 @@ def _handle_left_mouse_button_release(session, event_callback):
     return True
 
 
-def _handle_left_mouse_button_down(session, mouse_pos, event_callback):
+def _handle_left_mouse_button_down(session, mouse_pos, event_callback, additive=False):
     session.input_event_state.consume_left_button_release = False
     handler = _get_current_tool_handler(session, _LEFT_MOUSE_DOWN_TOOLS)
     if handler is None:
         return
-    handler.on_left_mouse_down(mouse_pos, event_callback)
+    if _coerce_current_tool(session) == PlanTool.SELECT:
+        handler.on_left_mouse_down(mouse_pos, event_callback, additive=additive)
+    else:
+        handler.on_left_mouse_down(mouse_pos, event_callback)
 
 
 def _record_hovered_after(session):
@@ -287,7 +297,13 @@ def on_mouse_pressed(session, event_callback):
                 if event.getState() == coin.SoMouseButtonEvent.DOWN:
                     if mouse_pos is None:
                         return
-                    _handle_left_mouse_button_down(session, mouse_pos, event_callback)
+                    try:
+                        additive = bool(event.wasCtrlDown())
+                    except Exception:
+                        additive = False
+                    _handle_left_mouse_button_down(
+                        session, mouse_pos, event_callback, additive=additive
+                    )
             finally:
                 selected_after = session.selection.state.get_selected_plan_target()
                 session.performance.plan_perf_set_fields(

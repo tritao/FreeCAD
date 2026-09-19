@@ -6,18 +6,61 @@ from bimplan.runtime import tools as plan_runtime_tools
 from bimplan.selection import edit_nodes as plan_edit_nodes
 
 
+_DRAG_THRESHOLD_PX = 4.0
+
+
 class SelectTool(plan_runtime_tools.PlanToolHandler):
     """Default Plan Edit selection and edit-node activation tool."""
 
     tool_id = plan_runtime_tools.PlanTool.SELECT
 
     def on_mouse_move(self, mouse_pos, event_callback):
-        del event_callback
+        state = self.session.input_event_state
+        if state.selection_press_pos is not None:
+            state.selection_last_pos = mouse_pos
+            dx = float(mouse_pos[0]) - float(state.selection_press_pos[0])
+            dy = float(mouse_pos[1]) - float(state.selection_press_pos[1])
+            if not state.selection_dragging and dx * dx + dy * dy >= _DRAG_THRESHOLD_PX**2:
+                state.selection_dragging = True
+                _show_selection_rubber_band(self.session)
+            if state.selection_dragging:
+                _update_selection_rubber_band(self.session)
+            self.session.input.set_event_handled(event_callback)
+            return True
         return sync_selectable_hover(self.session, mouse_pos)
 
-    def on_left_mouse_down(self, mouse_pos, event_callback):
+    def on_left_mouse_down(self, mouse_pos, event_callback, additive=False):
+        if not additive:
+            node = self.session.picking.pick_edit_node(mouse_pos)
+            if node and _activate_edit_node(self.session, node, event_callback):
+                return True
+        state = self.session.input_event_state
+        state.selection_press_pos = tuple(mouse_pos)
+        state.selection_last_pos = tuple(mouse_pos)
+        state.selection_additive = bool(additive)
+        state.selection_dragging = False
+        # Claim only the press. The release is retained for click-vs-drag resolution.
+        self.session.input.set_event_handled(event_callback)
+        return True
+
+    def on_left_mouse_up(self, event_callback):
         session = self.session
-        if session.selection.activation.is_plan_additive_selection_active():
+        state = session.input_event_state
+        mouse_pos = state.selection_last_pos or state.selection_press_pos
+        additive = bool(state.selection_additive)
+        dragging = bool(state.selection_dragging)
+        start = state.selection_press_pos
+        _clear_selection_gesture(session)
+
+        if dragging:
+            session.selection.activation.select_plan_targets_in_screen_rect(
+                start,
+                mouse_pos,
+                additive=additive,
+            )
+            return True
+
+        if additive:
             if not session.selection.activation.toggle_plan_target_selection_at_position(
                 mouse_pos, event_callback
             ):
@@ -35,6 +78,67 @@ class SelectTool(plan_runtime_tools.PlanToolHandler):
             return True
 
         return _activate_edit_node(session, node, event_callback)
+
+
+def _selection_viewport_widget(session):
+    try:
+        graphics_view = session.view.graphicsView()
+        viewport = graphics_view.viewport()
+        return viewport if viewport is not None else graphics_view
+    except Exception:
+        return None
+
+
+def _selection_qt_rect(session):
+    from PySide import QtCore
+
+    state = session.input_event_state
+    widget = _selection_viewport_widget(session)
+    if widget is None or state.selection_press_pos is None or state.selection_last_pos is None:
+        return None
+    height = int(widget.height())
+    ratio = float(widget.devicePixelRatioF())
+    start = QtCore.QPoint(
+        int(round(state.selection_press_pos[0] / ratio)),
+        height - int(round(state.selection_press_pos[1] / ratio)),
+    )
+    end = QtCore.QPoint(
+        int(round(state.selection_last_pos[0] / ratio)),
+        height - int(round(state.selection_last_pos[1] / ratio)),
+    )
+    return QtCore.QRect(start, end).normalized()
+
+
+def _show_selection_rubber_band(session):
+    from PySide import QtWidgets
+
+    state = session.input_event_state
+    widget = _selection_viewport_widget(session)
+    if widget is None:
+        return
+    if state.selection_rubber_band is None:
+        state.selection_rubber_band = QtWidgets.QRubberBand(
+            QtWidgets.QRubberBand.Rectangle, widget
+        )
+    _update_selection_rubber_band(session)
+    state.selection_rubber_band.show()
+
+
+def _update_selection_rubber_band(session):
+    state = session.input_event_state
+    rect = _selection_qt_rect(session)
+    if state.selection_rubber_band is not None and rect is not None:
+        state.selection_rubber_band.setGeometry(rect)
+
+
+def _clear_selection_gesture(session):
+    state = session.input_event_state
+    if state.selection_rubber_band is not None:
+        state.selection_rubber_band.hide()
+    state.selection_press_pos = None
+    state.selection_last_pos = None
+    state.selection_additive = False
+    state.selection_dragging = False
 
 
 def sync_selectable_hover(session, mouse_pos):

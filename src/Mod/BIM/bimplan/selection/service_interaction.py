@@ -670,6 +670,31 @@ class PlanSelectionActivationService(_SessionAPI):
         self.session.input.claim_left_button_click(event_callback)
         return True
 
+    def select_plan_targets_in_screen_rect(self, start, end, *, additive=False):
+        match_refs = list(self.session.picking.box_select(start, end))
+        matches = [obj for _kind, obj in match_refs]
+
+        if additive:
+            primary_kind, primary_obj, selection = self._get_current_additive_gui_selection()
+            selection = self.session.selection.sync.normalize_gui_object_selection(
+                list(selection) + matches
+            )
+            next_kind, next_obj = self._resolve_next_selected_target(
+                selection,
+                primary_kind,
+                primary_obj,
+                fallback_target=match_refs[0] if match_refs else None,
+            )
+        else:
+            selection = self.session.selection.sync.normalize_gui_object_selection(matches)
+            if match_refs:
+                next_kind, next_obj = match_refs[0]
+            else:
+                next_kind, next_obj = (None, None)
+        return self._apply_additive_selection_update(
+            selection, next_kind, next_obj
+        )
+
     def toggle_raw_plan_object_selection(self, obj, event_callback=None):
         if obj is None:
             return False
@@ -734,10 +759,19 @@ class PlanSelectionActivationService(_SessionAPI):
 
         primary_kind, primary_obj, selection = self._get_current_additive_gui_selection()
 
-        was_selected = target_ref.obj in selection
+        target_key = get_plan_target_state_key(target_ref.kind, target_ref.obj)
+
+        def selection_key(obj):
+            candidate = self.session.selection.targets.get_plan_target_for_object(obj)
+            return get_plan_target_state_key(candidate.kind, candidate.obj)
+
+        was_selected = any(selection_key(obj) == target_key for obj in selection)
         if was_selected:
-            new_selection = [selected for selected in selection if selected != target_ref.obj]
-            fallback_target = None if primary_obj == target_ref.obj else target_ref
+            new_selection = [
+                selected for selected in selection if selection_key(selected) != target_key
+            ]
+            primary_key = get_plan_target_state_key(primary_kind, primary_obj)
+            fallback_target = None if primary_key == target_key else target_ref
             next_kind, next_obj = self._resolve_next_selected_target(
                 new_selection,
                 primary_kind,

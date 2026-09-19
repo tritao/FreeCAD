@@ -115,6 +115,7 @@ SET(bimplan_SRCS
     bimplan/representation_request.py
     bimplan/picking/__init__.py
     bimplan/picking/area.py
+    bimplan/picking/box.py
     bimplan/picking/coordinator.py
     bimplan/picking/debug.py
     bimplan/picking/edit_nodes.py

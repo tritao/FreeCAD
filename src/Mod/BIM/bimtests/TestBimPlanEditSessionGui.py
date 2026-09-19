@@ -1063,6 +1063,89 @@ class TestBimPlanEditSessionGui(TestArchBaseGui):
             session.shutdown(close_dialog=True)
             FreeCADGui.Selection.clearSelection()
 
+    def test_plan_select_drag_and_ctrl_click_share_semantic_selection(self):
+        wall_a = Arch.makeWall(
+            length=1500,
+            width=200,
+            height=2500,
+            align="Center",
+        )
+        wall_a.Placement.Base = FreeCAD.Vector(-2000, 0, 0)
+        wall_b = Arch.makeWall(
+            length=1500,
+            width=200,
+            height=2500,
+            align="Center",
+        )
+        wall_b.Placement.Base = FreeCAD.Vector(1000, 0, 0)
+        self.document.recompute()
+        view = FreeCADGui.activeDocument().activeView()
+        native_selection_enabled = view.isSelectionEnabled()
+        session = PlanEditSession()
+        self.assertTrue(session.enter())
+        try:
+            self.assertFalse(view.isSelectionEnabled())
+            session.view.fitAll()
+            self.pump_gui_events(10)
+            bounds = []
+            for wall in (wall_a, wall_b):
+                projected = [
+                    session.view.getPointOnScreen(point)
+                    for polyline in session.overlays.geometry.get_wall_overlay_polylines(wall)
+                    for point in polyline
+                ]
+                bounds.append(
+                    (
+                        min(point[0] for point in projected),
+                        min(point[1] for point in projected),
+                        max(point[0] for point in projected),
+                        max(point[1] for point in projected),
+                    )
+                )
+            self.assertTrue(all(item is not None for item in bounds))
+            start = (
+                min(item[0] for item in bounds) - 10,
+                min(item[1] for item in bounds) - 10,
+            )
+            end = (
+                max(item[2] for item in bounds) + 10,
+                max(item[3] for item in bounds) + 10,
+            )
+            event_manager = session.viewer.getSoEventManager()
+
+            def send_button(point, state, ctrl=False):
+                event = coin.SoMouseButtonEvent()
+                event.setPosition(coin.SbVec2s(round(point[0]), round(point[1])))
+                event.setButton(coin.SoMouseButtonEvent.BUTTON1)
+                event.setState(state)
+                event.setCtrlDown(bool(ctrl))
+                event_manager.processEvent(event)
+
+            def send_move(point):
+                event = coin.SoLocation2Event()
+                event.setPosition(coin.SbVec2s(round(point[0]), round(point[1])))
+                event_manager.processEvent(event)
+
+            send_button(start, coin.SoButtonEvent.DOWN)
+            send_move(end)
+            send_button(end, coin.SoButtonEvent.UP)
+            self.pump_gui_events(10)
+            self.assertEqual({wall_a, wall_b}, set(FreeCADGui.Selection.getSelection()))
+
+            wall_a_center = session.view.getPointOnScreen(wall_a.Shape.CenterOfMass)
+            with patch.object(session.picking, "pick_edit_node", return_value=None), patch.object(
+                session.picking, "pick", return_value=("wall", wall_a)
+            ):
+                send_button(wall_a_center, coin.SoButtonEvent.DOWN, ctrl=True)
+                send_button(wall_a_center, coin.SoButtonEvent.UP, ctrl=True)
+                self.assertEqual([wall_b], FreeCADGui.Selection.getSelection())
+                self.pump_gui_events(10)
+            self.assertEqual([wall_b], FreeCADGui.Selection.getSelection())
+        finally:
+            session.shutdown(close_dialog=True)
+            self.assertEqual(native_selection_enabled, view.isSelectionEnabled())
+            FreeCADGui.Selection.clearSelection()
+
     def test_shutdown_discards_pending_view_updates(self):
         session = PlanEditSession()
         self.assertTrue(session.enter())

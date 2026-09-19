@@ -3,6 +3,7 @@
 """Session-owned Plan Edit picking API."""
 
 from bimplan.picking import coordinator as plan_picking_coordinator
+from bimplan.picking import box as plan_box_picking
 from bimplan.picking import area as plan_area_picking
 from bimplan.picking import edit_nodes as plan_edit_node_picking
 from bimplan.picking import geometry as plan_picking_geometry
@@ -31,6 +32,11 @@ class PlanPickingAPI:
             self.session,
             viewport_pixel(mouse_pos),
             include_space_fallback=include_space_fallback,
+        )
+
+    def box_select(self, start, end):
+        return plan_box_picking.get_plan_targets_in_screen_rect(
+            self.session, start, end
         )
 
     def hover(self, mouse_pos, force=False):

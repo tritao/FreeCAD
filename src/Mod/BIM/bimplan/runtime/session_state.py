@@ -182,6 +182,11 @@ class PlanInputEventState:
     mouse_pressed_cb: object = None
     key_pressed_cb: object = None
     consume_left_button_release: bool = False
+    selection_press_pos: object = None
+    selection_last_pos: object = None
+    selection_additive: bool = False
+    selection_dragging: bool = False
+    selection_rubber_band: object = None
 
 
 @dataclass
@@ -194,6 +199,7 @@ class PlanOverlayRefreshState:
 @dataclass
 class PlanViewportState:
     render_manager: object = None
+    saved_native_selection_enabled: object = None
     plan_paper_rgb: object = None
     plan_view_locked_actions: object = None
     saved_camera: object = None

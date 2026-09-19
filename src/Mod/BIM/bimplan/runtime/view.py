@@ -831,6 +831,29 @@ def sync_active_plan_target_object(session):
     session.viewport.set_active_object(None)
 
 
+def _disable_native_selection(session):
+    state = session.viewport_state
+    if state.saved_native_selection_enabled is not None:
+        return
+    is_enabled = session.viewport.get_runtime_attr(session.view, "isSelectionEnabled")
+    set_enabled = session.viewport.get_runtime_attr(session.view, "setSelectionEnabled")
+    if is_enabled is None or set_enabled is None:
+        raise RuntimeError("The active view does not support scoped selection ownership")
+    state.saved_native_selection_enabled = bool(is_enabled())
+    set_enabled(False)
+
+
+def _restore_native_selection(session):
+    state = session.viewport_state
+    saved = state.saved_native_selection_enabled
+    if saved is None:
+        return
+    state.saved_native_selection_enabled = None
+    set_enabled = session.viewport.get_runtime_attr(session.view, "setSelectionEnabled")
+    if set_enabled is not None:
+        set_enabled(bool(saved))
+
+
 def register_edit_callbacks(session):
     try:
         from pivy import coin
@@ -853,6 +876,7 @@ def register_edit_callbacks(session):
         session.viewport_state.render_manager = (
             get_render_manager() if get_render_manager is not None else None
         )
+        _disable_native_selection(session)
         input_event_state = session.input_event_state
         if input_event_state.key_pressed_cb is None:
             input_event_state.key_pressed_cb = add_event_callback(
@@ -876,12 +900,25 @@ def register_edit_callbacks(session):
                 coin.SoMouseButtonEvent.getClassTypeId(), session.input.on_mouse_pressed
             )
     except (AttributeError, ReferenceError, RuntimeError):
+        _restore_native_selection(session)
         session.viewport.discard_stale_runtime_object(session.view)
         session.viewport_state.render_manager = None
 
 
 def _clear_edit_callbacks(session):
     input_event_state = session.input_event_state
+    rubber_band = input_event_state.selection_rubber_band
+    if rubber_band is not None:
+        try:
+            rubber_band.hide()
+            rubber_band.deleteLater()
+        except (AttributeError, ReferenceError, RuntimeError):
+            pass
+    input_event_state.selection_rubber_band = None
+    input_event_state.selection_press_pos = None
+    input_event_state.selection_last_pos = None
+    input_event_state.selection_additive = False
+    input_event_state.selection_dragging = False
     input_event_state.key_pressed_cb = None
     input_event_state.mouse_moved_cb = None
     input_event_state.mouse_wheel_cb = None
@@ -894,6 +931,7 @@ def unregister_edit_callbacks(session):
     try:
         from pivy import coin
     except Exception:
+        _restore_native_selection(session)
         _clear_edit_callbacks(session)
         return
 
@@ -922,6 +960,7 @@ def unregister_edit_callbacks(session):
     except RuntimeError:
         pass
 
+    _restore_native_selection(session)
     _clear_edit_callbacks(session)
 
 
