@@ -705,12 +705,18 @@ class BIM_Views:
 
     def placeOnSheet(self):
         from PySide import QtGui
+        from bimsheets import BIMSheetService
 
         definition = self.contextObject
         service = _view_service()
         if not definition or not service.can_place_on_sheet(definition):
             return
-        pages = list(_manager_model().pages())
+        sheet_service = BIMSheetService(FreeCAD.ActiveDocument)
+        pages = [
+            page
+            for page in _manager_model().pages()
+            if sheet_service.is_sheet(page)
+        ]
         if not pages:
             QtGui.QMessageBox.information(
                 self.dialog,
@@ -718,18 +724,20 @@ class BIM_Views:
                 translate("BIM", "Create a TechDraw sheet before placing this view."),
             )
             return
-        labels = [page.Label for page in pages]
-        label, accepted = QtGui.QInputDialog.getItem(
-            self.dialog,
-            translate("BIM", "Place on Sheet"),
-            translate("BIM", "Sheet"),
-            labels,
-            0,
-            False,
-        )
-        if not accepted:
-            return
-        page = pages[labels.index(label)]
+        page = _preferred_sheet(FreeCAD.ActiveDocument, self._selectedObjects())
+        if page is None:
+            labels = [_sheet_display_label(candidate) for candidate in pages]
+            label, accepted = QtGui.QInputDialog.getItem(
+                self.dialog,
+                translate("BIM", "Place on Sheet"),
+                translate("BIM", "Sheet"),
+                labels,
+                0,
+                False,
+            )
+            if not accepted:
+                return
+            page = pages[labels.index(label)]
         existing = service.placements_for(definition, page)
         allow_duplicate = False
         if existing:
@@ -762,6 +770,13 @@ class BIM_Views:
         self.update(False)
         FreeCADGui.Selection.clearSelection()
         FreeCADGui.Selection.addSelection(drawing_view)
+        FreeCADGui.getMainWindow().statusBar().showMessage(
+            translate("BIM", "Placed {view} on {sheet}").format(
+                view=definition.Label,
+                sheet=_sheet_display_label(page),
+            ),
+            5000,
+        )
 
     def newSheet(self):
         """Create a BIM sheet through the shared sheet creation workflow."""
@@ -1663,6 +1678,37 @@ def _manager_model():
     from bimviews.navigator_model import BIMNavigatorModel
 
     return BIMNavigatorModel(FreeCAD.ActiveDocument, legacy_view_predicate=isView)
+
+
+def _preferred_sheet(document, selected_objects=()):
+    """Resolve an unambiguous placement target without prompting the user."""
+
+    from bimsheets import BIMSheetService
+
+    service = BIMSheetService(document)
+    try:
+        gui_document = FreeCADGui.activeDocument()
+        active_view = gui_document.activeView() if gui_document is not None else None
+        page = active_view.getPage() if hasattr(active_view, "getPage") else None
+        if getattr(page, "Document", None) is document and service.is_sheet(page):
+            return page
+    except (AttributeError, ReferenceError, RuntimeError):
+        pass
+    selected_sheets = [
+        obj
+        for obj in selected_objects
+        if getattr(obj, "Document", None) is document and service.is_sheet(obj)
+    ]
+    if len(selected_sheets) == 1:
+        return selected_sheets[0]
+    sheets = [obj for obj in document.Objects if service.is_sheet(obj)]
+    return sheets[0] if len(sheets) == 1 else None
+
+
+def _sheet_display_label(page):
+    number = str(getattr(page, "SheetNumber", "")).strip()
+    title = str(getattr(page, "SheetTitle", "") or page.Label).strip()
+    return "{} — {}".format(number, title) if number else title
 
 
 def _apply_representation_request(request):

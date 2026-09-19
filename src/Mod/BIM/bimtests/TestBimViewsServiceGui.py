@@ -21,6 +21,7 @@ from bimcommands.BimViews import (
     _SectionViewPlacement,
     _apply_representation_request,
     _findModelDock,
+    _preferred_sheet,
     placeInComboView,
     restoreComboViewTitle,
 )
@@ -244,6 +245,42 @@ class TestBimViewsServiceGui(TestArchBaseGui):
         self.assertEqual("Tender", edited.issue)
         self.assertEqual("2026-09-19", edited.issue_date)
         self.assertEqual("A1.svg", edited.template_identity)
+
+    def test_sheet_placement_prefers_active_page_then_selected_or_only_sheet(self):
+        template_path = (
+            FreeCAD.getResourceDir()
+            + "Mod/TechDraw/Templates/Default_Template_A4_Landscape.svg"
+        )
+        service = BIMSheetService(self.document)
+        first = service.create_sheet(
+            template_path, BIMSheetMetadata(number="A-101", title="Plans")
+        )
+        second = service.create_sheet(
+            template_path, BIMSheetMetadata(number="A-201", title="Elevations")
+        )
+        active_view = SimpleNamespace(getPage=lambda: second)
+        gui_document = SimpleNamespace(activeView=lambda: active_view)
+
+        with patch(
+            "bimcommands.BimViews.FreeCADGui.activeDocument",
+            return_value=gui_document,
+        ):
+            self.assertIs(second, _preferred_sheet(self.document, (first,)))
+
+        gui_document = SimpleNamespace(activeView=lambda: SimpleNamespace())
+        with patch(
+            "bimcommands.BimViews.FreeCADGui.activeDocument",
+            return_value=gui_document,
+        ):
+            self.assertIs(first, _preferred_sheet(self.document, (first,)))
+            self.assertIsNone(_preferred_sheet(self.document))
+
+        self.document.removeObject(second.Name)
+        with patch(
+            "bimcommands.BimViews.FreeCADGui.activeDocument",
+            return_value=gui_document,
+        ):
+            self.assertIs(first, _preferred_sheet(self.document))
 
     def test_interactive_sheet_creation_uses_shared_service_path(self):
         template_path = (
