@@ -43,7 +43,7 @@ class SheetPlacementNode:
 
 
 class BIMNavigatorModel:
-    """Expose Project, Views, Current View, and Sheets without Qt widgets."""
+    """Expose Project, Views, Current View, Sheets, and Issues without Qt."""
 
     def __init__(self, document, legacy_view_predicate=None, type_resolver=None):
         self.document = document
@@ -85,6 +85,11 @@ class BIMNavigatorModel:
                 ),
             )
         )
+
+    def issues(self):
+        from bimsheets import BIMSheetIssueService
+
+        return BIMSheetIssueService(self.document).issues()
 
     def legacy_views(self):
         return self.views.legacy_views()
@@ -156,6 +161,7 @@ class BIMNavigatorModel:
                 "CurrentView", "Current View", (self.current_view_scope(definition),)
             ),
             NavigatorSection("Sheets", "Sheets", self.sheet_nodes()),
+            NavigatorSection("Issues", "Issues", self.issues()),
         )
 
     def _storey_node(self, storey, owned_proxies, owned_section_planes):

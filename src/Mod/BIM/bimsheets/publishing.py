@@ -149,6 +149,7 @@ class BIMSheetPublishingService:
         properties = (
             ("LastPublishedAt", "UTC timestamp of the latest publication"),
             ("LastPublishedRevision", "Revision included in the latest publication"),
+            ("LastPublishedIssue", "Issue included in the latest publication"),
             ("LastPublishedFormat", "File format of the latest publication"),
             ("LastPublishedPath", "Output path of the latest publication"),
             ("LastPublishedSHA256", "SHA-256 identity of the latest publication"),
@@ -158,6 +159,7 @@ class BIMSheetPublishingService:
                 page.addProperty("App::PropertyString", name, self.PROPERTY_GROUP, description)
         page.LastPublishedAt = published_at
         page.LastPublishedRevision = page.Revision
+        page.LastPublishedIssue = page.Issue
         page.LastPublishedFormat = format
         page.LastPublishedPath = str(path)
         page.LastPublishedSHA256 = digest

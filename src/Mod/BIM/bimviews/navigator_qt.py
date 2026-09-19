@@ -101,6 +101,22 @@ class BIMNavigatorQtModel(QtCore.QAbstractItemModel):
         for sheet in self.navigator.sheet_nodes():
             self._add_sheet(sheets, sheet)
 
+        issues = self.root.add(_Node("section:issues", self._tr("Issues"), "section"))
+        for issue in self.navigator.issues():
+            from bimsheets import BIMSheetIssueService
+
+            comparison = BIMSheetIssueService(self.navigator.document).compare(issue)
+            changes = len(comparison.added) + len(comparison.removed) + len(comparison.changed)
+            manifest = BIMSheetIssueService.manifest_for(issue)
+            self._add_object(
+                issues,
+                issue,
+                "sheet-issue",
+                label=issue.Label,
+                value="{} sheet(s)".format(len(manifest["sheets"])),
+                height="{} change(s)".format(changes),
+            )
+
     def _add_sheet(self, parent, sheet):
         page = sheet.page
         number = getattr(page, "SheetNumber", "")

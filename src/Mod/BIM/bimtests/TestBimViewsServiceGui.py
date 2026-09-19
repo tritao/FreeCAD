@@ -49,12 +49,14 @@ from bimviews.viewport_ruler import (
 from bimplan.runtime.session import activate_representation_request
 from bimsheets import (
     BIMSheetLayout,
+    BIMSheetIssueService,
     BIMSheetMetadata,
     BIMSheetPublishingService,
     BIMSheetService,
     BIMSheetViewTitleService,
     BIMTitleBlockService,
     SheetPublicationError,
+    SheetIssueError,
     SheetLayoutError,
     SheetRect,
     format_scale,
@@ -393,6 +395,120 @@ class TestBimViewsServiceGui(TestArchBaseGui):
             with self.assertRaisesRegex(RuntimeError, "export failed"):
                 publisher.publish_set(directory, "pdf")
             self.assertEqual([], list(Path(directory).iterdir()))
+
+    def test_sheet_issue_manifest_is_immutable_exportable_and_persistent(self):
+        template_path = (
+            FreeCAD.getResourceDir()
+            + "Mod/TechDraw/Templates/ISO/A4_Landscape_ISO5457_minimal.svg"
+        )
+        page = BIMSheetService(self.document).create_sheet(
+            template_path,
+            BIMSheetMetadata(
+                number="A-101", title="Plan", revision="P01", issue="ISSUE-1"
+            ),
+        )
+
+        def exporter(sheet, path, format):
+            path.write_text(
+                "{}:{}:{}".format(format, sheet.SheetNumber, sheet.Revision),
+                encoding="utf-8",
+            )
+
+        instant = datetime(2026, 9, 19, 14, 0, tzinfo=timezone.utc)
+        with tempfile.TemporaryDirectory() as directory:
+            BIMSheetPublishingService(
+                self.document, exporter=exporter, clock=lambda: instant
+            ).publish_sheet(page, directory)
+            issues = BIMSheetIssueService(self.document, clock=lambda: instant)
+            self.document.openTransaction("Create issue")
+            issue = issues.create_issue("ISSUE-1", "Planning Issue")
+            self.document.commitTransaction()
+            issue_name = issue.Name
+            self.document.undo()
+            self.assertIsNone(self.document.getObject(issue_name))
+            self.document.redo()
+            issue = self.document.getObject(issue_name)
+            manifest_path = issues.export_manifest(
+                issue, Path(directory) / "ISSUE-1.json"
+            )
+
+            self.assertEqual("ISSUE-1", issue.IssueIdentifier)
+            self.assertEqual(1, issue.IssueOrder)
+            self.assertEqual(64, len(issue.ManifestSHA256))
+            self.assertEqual(issue.ManifestJSON + "\n", manifest_path.read_text("utf-8"))
+            self.assertEqual("A-101", issues.manifest_for(issue)["sheets"][0]["number"])
+            with self.assertRaises(Exception):
+                issue.ManifestJSON = "{}"
+
+            manifest_digest = issue.ManifestSHA256
+            document_path = directory + "/issued.FCStd"
+            self.document.saveAs(document_path)
+            FreeCAD.closeDocument(self.document.Name)
+            self.document = FreeCAD.openDocument(document_path)
+            reopened = BIMSheetIssueService(self.document).issues()[0]
+            self.assertEqual("ISSUE-1", reopened.IssueIdentifier)
+            self.assertEqual(manifest_digest, reopened.ManifestSHA256)
+
+    def test_sheet_issue_comparison_detects_added_removed_and_changed_sheets(self):
+        template_path = (
+            FreeCAD.getResourceDir()
+            + "Mod/TechDraw/Templates/ISO/A4_Landscape_ISO5457_minimal.svg"
+        )
+        sheets = BIMSheetService(self.document)
+        first = sheets.create_sheet(
+            template_path,
+            BIMSheetMetadata(number="A-101", title="Plan", revision="P01", issue="I1", order=1),
+        )
+        removed = sheets.create_sheet(
+            template_path,
+            BIMSheetMetadata(number="A-201", title="Section", revision="P01", issue="I1", order=2),
+        )
+
+        def exporter(sheet, path, _format):
+            path.write_text(
+                "{}:{}".format(sheet.SheetNumber, sheet.Revision), encoding="utf-8"
+            )
+
+        with tempfile.TemporaryDirectory() as directory:
+            publisher = BIMSheetPublishingService(self.document, exporter=exporter)
+            publisher.publish_set(directory)
+            service = BIMSheetIssueService(self.document)
+            issue_one = service.create_issue("I1")
+
+            first.Issue = "I2"
+            first.Revision = "P02"
+            first.SheetTitle = "Updated Plan"
+            added = sheets.create_sheet(
+                template_path,
+                BIMSheetMetadata(number="A-301", title="Elevation", revision="P01", issue="I2", order=3),
+            )
+            publisher.publish_sheet(first, directory, overwrite=True)
+            publisher.publish_sheet(added, directory)
+            issue_two = service.create_issue("I2", pages=(first, added))
+            comparison = service.compare(issue_two)
+
+            self.assertIs(issue_one, issue_two.PreviousIssue)
+            self.assertEqual(("A-301",), comparison.added)
+            self.assertEqual(("A-201",), comparison.removed)
+            self.assertEqual(
+                (("A-101", ("revision", "metadata", "output")),),
+                comparison.changed,
+            )
+
+    def test_sheet_issue_rejects_incomplete_or_inconsistent_publications(self):
+        template_path = (
+            FreeCAD.getResourceDir()
+            + "Mod/TechDraw/Templates/ISO/A4_Landscape_ISO5457_minimal.svg"
+        )
+        page = BIMSheetService(self.document).create_sheet(
+            template_path,
+            BIMSheetMetadata(number="A-001", title="Cover", revision="P01", issue="I1"),
+        )
+        service = BIMSheetIssueService(self.document)
+        with self.assertRaisesRegex(SheetIssueError, "has not been published"):
+            service.create_issue("I1")
+        with self.assertRaisesRegex(SheetIssueError, "does not match"):
+            service.create_issue("I2")
 
     def test_sheet_service_rejects_non_page_objects(self):
         obj = self.document.addObject("App::FeaturePython", "NotAPage")
@@ -884,7 +1000,7 @@ class TestBimViewsServiceGui(TestArchBaseGui):
         sections = BIMNavigatorModel(self.document).sections()
 
         self.assertEqual(
-            ("Project", "Views", "CurrentView", "Sheets"),
+            ("Project", "Views", "CurrentView", "Sheets", "Issues"),
             tuple(section.key for section in sections),
         )
 
@@ -949,10 +1065,10 @@ class TestBimViewsServiceGui(TestArchBaseGui):
 
         model = BIMNavigatorQtModel(navigator)
 
-        self.assertEqual(4, model.rowCount())
+        self.assertEqual(5, model.rowCount())
         self.assertEqual(
-            ("Project", "Views", "Current View", "Sheets"),
-            tuple(model.index(row, 0).data() for row in range(4)),
+            ("Project", "Views", "Current View", "Sheets", "Issues"),
+            tuple(model.index(row, 0).data() for row in range(5)),
         )
         current = model.index(2, 0)
         walls = model.index(0, 0, current)

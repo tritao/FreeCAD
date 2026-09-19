@@ -212,6 +212,8 @@ class BIM_Views:
                 ("RefreshTitleBlock", translate("BIM", "Refresh Title Block")),
                 ("PublishSheet", translate("BIM", "Publish Sheet…")),
                 ("PublishSheetSet", translate("BIM", "Publish Sheet Set…")),
+                ("CreateIssue", translate("BIM", "Create Issue…")),
+                ("CompareIssue", translate("BIM", "Compare with Previous Issue")),
                 ("LocatePlacement", translate("BIM", "Locate Placement")),
                 ("RemoveFromSheet", translate("BIM", "Remove from Sheet")),
                 ("Rename", translate("BIM", "Rename")),
@@ -275,6 +277,8 @@ class BIM_Views:
             self.dialog.buttonRefreshTitleBlock.triggered.connect(self.refreshTitleBlock)
             self.dialog.buttonPublishSheet.triggered.connect(self.publishSheet)
             self.dialog.buttonPublishSheetSet.triggered.connect(self.publishSheetSet)
+            self.dialog.buttonCreateIssue.triggered.connect(self.createIssue)
+            self.dialog.buttonCompareIssue.triggered.connect(self.compareIssue)
             self.dialog.buttonLocatePlacement.triggered.connect(self.locatePlacement)
             self.dialog.buttonRemoveFromSheet.triggered.connect(self.removeFromSheet)
             self.dialog.buttonRename.triggered.connect(self.rename)
@@ -879,6 +883,57 @@ class BIM_Views:
         )
         self.update(False)
 
+    def createIssue(self):
+        """Create an immutable issue from the current published sheet set."""
+
+        from PySide import QtGui
+        from bimsheets import BIMSheetIssueService, SheetIssueError
+
+        identifier, accepted = QtGui.QInputDialog.getText(
+            self.dialog,
+            translate("BIM", "Create Drawing Issue"),
+            translate("BIM", "Issue identifier"),
+        )
+        if not accepted or not identifier.strip():
+            return
+        document = FreeCAD.ActiveDocument
+        document.openTransaction("Create BIM sheet issue")
+        try:
+            issue = BIMSheetIssueService(document).create_issue(identifier)
+            document.commitTransaction()
+        except SheetIssueError as error:
+            document.abortTransaction()
+            QtGui.QMessageBox.warning(
+                self.dialog, translate("BIM", "Issue Creation Failed"), str(error)
+            )
+            return
+        self.contextObject = issue
+        self.update(False)
+
+    def compareIssue(self):
+        """Show changes between the selected issue and its predecessor."""
+
+        from PySide import QtGui
+        from bimsheets import BIMSheetIssueService
+
+        issue = self.contextObject
+        service = BIMSheetIssueService(FreeCAD.ActiveDocument)
+        if issue is None or getattr(issue, "BIMType", "") != service.BIM_TYPE:
+            return
+        comparison = service.compare(issue)
+        lines = [
+            translate("BIM", "Added: {}").format(", ".join(comparison.added) or "—"),
+            translate("BIM", "Removed: {}").format(", ".join(comparison.removed) or "—"),
+            translate("BIM", "Changed: {}").format(
+                ", ".join(number for number, _reasons in comparison.changed) or "—"
+            ),
+        ]
+        QtGui.QMessageBox.information(
+            self.dialog,
+            translate("BIM", "Issue Comparison"),
+            "\n".join(lines),
+        )
+
     def addProxy(self):
         "adds a WP proxy"
 
@@ -1135,6 +1190,8 @@ class BIM_Views:
             self.dialog.buttonRefreshTitleBlock,
             self.dialog.buttonPublishSheet,
             self.dialog.buttonPublishSheetSet,
+            self.dialog.buttonCreateIssue,
+            self.dialog.buttonCompareIssue,
             self.dialog.buttonLocatePlacement,
             self.dialog.buttonRemoveFromSheet,
             self.dialog.buttonRename,
@@ -1147,6 +1204,8 @@ class BIM_Views:
         self.dialog.buttonRefreshTitleBlock.setVisible(False)
         self.dialog.buttonPublishSheet.setVisible(False)
         self.dialog.buttonPublishSheetSet.setVisible(False)
+        self.dialog.buttonCreateIssue.setVisible(False)
+        self.dialog.buttonCompareIssue.setVisible(False)
         self.dialog.buttonLocatePlacement.setVisible(False)
         self.dialog.buttonRemoveFromSheet.setVisible(False)
         self.dialog.buttonActive.setText(translate("BIM", "Active"))
@@ -1158,6 +1217,7 @@ class BIM_Views:
             "legacy-view",
             "sheet",
             "sheet-placement",
+            "sheet-issue",
         ) or kind.endswith("group"):
             for action in self.dialog.menu.actions():
                 action.setVisible(False)
@@ -1189,12 +1249,17 @@ class BIM_Views:
                 self.dialog.buttonRefreshTitleBlock.setVisible(True)
                 self.dialog.buttonPublishSheet.setVisible(True)
                 self.dialog.buttonPublishSheetSet.setVisible(True)
+                self.dialog.buttonCreateIssue.setVisible(True)
                 self.dialog.buttonRename.setVisible(True)
             elif kind == "sheet-placement":
                 self.dialog.buttonNewPlanView.setVisible(False)
                 self.dialog.buttonNewModelView.setVisible(False)
                 self.dialog.buttonLocatePlacement.setVisible(True)
                 self.dialog.buttonRemoveFromSheet.setVisible(True)
+            elif kind == "sheet-issue":
+                self.dialog.buttonNewPlanView.setVisible(False)
+                self.dialog.buttonNewModelView.setVisible(False)
+                self.dialog.buttonCompareIssue.setVisible(True)
         elif obj is None:
             for action in self.dialog.menu.actions():
                 action.setVisible(False)
