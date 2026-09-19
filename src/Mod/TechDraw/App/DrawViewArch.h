@@ -53,6 +53,8 @@ public:
     App::PropertyBool         ShowFill;
     App::PropertyEnumeration  CutFillMode;
     App::PropertyColor        FillColor;
+    App::PropertyFloat        CutHatchScale;
+    App::PropertyAngle        CutHatchAngle;
     App::PropertyFloat        LineWidth;
     App::PropertyFloat        FontSize;
     App::PropertyFloat        CutLineWidth;

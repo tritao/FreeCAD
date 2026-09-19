@@ -59,6 +59,34 @@ class CutSurfaceStyle:
 
     mode: CutFillMode = CutFillMode.NONE
     color: tuple = (1.0, 1.0, 1.0)
+    pattern: str = "Diagonal"
+    spacing: float = 3.0
+    angle: float = 45.0
+    line_color: tuple = (0.0, 0.0, 0.0)
+
+
+def cut_surface_style_for(source, fallback):
+    """Resolve renderer-neutral section styling from a BIM material."""
+    if fallback.mode != CutFillMode.MATERIAL:
+        return fallback
+    material = getattr(source, "Material", None)
+    if material and getattr(material, "Materials", None):
+        material = next((item for item in material.Materials if item), material)
+    if not material:
+        return CutSurfaceStyle(CutFillMode.SOLID, fallback.color)
+    values = getattr(material, "Material", {}) if material else {}
+    color = getattr(material, "SectionColor", None) if material else None
+    pattern = values.get("SectionPattern")
+    if not pattern:
+        return CutSurfaceStyle(CutFillMode.SOLID, tuple((color or fallback.color)[:3]))
+    return CutSurfaceStyle(
+        mode=CutFillMode.MATERIAL,
+        color=tuple((color or fallback.color)[:3]),
+        pattern=str(pattern),
+        spacing=float(values.get("SectionPatternScale", fallback.spacing)),
+        angle=float(values.get("SectionPatternAngle", fallback.angle)),
+        line_color=fallback.line_color,
+    )
 
 
 class BIMPreviewStyle(Enum):

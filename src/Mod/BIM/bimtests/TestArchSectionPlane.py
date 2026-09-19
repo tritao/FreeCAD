@@ -377,6 +377,26 @@ class TestArchSectionPlane(TestArchBase.TestArchBase):
         self.assertIsNone(section_plane.Proxy.svgcache)
         self.assertIsNone(section_plane.Proxy.shapecache)
 
+        material = Arch.makeMaterial(name="HatchedWallMaterial")
+        material.Material = {
+            "SectionPattern": "Diagonal",
+            "SectionPatternScale": "4.0",
+            "SectionPatternAngle": "30.0",
+        }
+        material.SectionColor = (0.8, 0.8, 0.8)
+        wall.Material = material
+        hatched = ArchSectionPlane.getSVG(
+            section_plane,
+            techdraw=True,
+            renderMode="Wireframe",
+            showFill=True,
+            cutFillMode="Material",
+            cutHatchScale=3.0,
+        )
+        self.assertEqual(1, hatched.count('<pattern id="bim-cut-pattern-1"'))
+        self.assertIn("url(#bim-cut-pattern-1)", hatched)
+        self.assertIn('patternTransform="rotate(30.0)"', hatched)
+
     def testTechDrawElevationUsesSharedScopeProjection(self):
         front = self._makeBox(length=1000, width=1200, height=50)
         front.Placement.Base.z = -100

@@ -70,6 +70,8 @@ DrawViewArch::DrawViewArch()
                       group,
                       App::Prop_None,
                       "Color used to fill cut areas");
+    ADD_PROPERTY_TYPE(CutHatchScale, (3.0f), group, App::Prop_None, "Cut hatch spacing in paper units");
+    ADD_PROPERTY_TYPE(CutHatchAngle, (45.0), group, App::Prop_None, "Fallback cut hatch angle");
     ADD_PROPERTY_TYPE(LineWidth, (0.25), group, App::Prop_None, "Line width of this view");
     ADD_PROPERTY_TYPE(FontSize, (12.0), group, App::Prop_None, "Text size for this view");
     ADD_PROPERTY_TYPE(CutLineWidth, (0.50), group, App::Prop_None, "Width of cut lines of this view");
@@ -91,6 +93,8 @@ short DrawViewArch::mustExecute() const
             ShowFill.isTouched() ||
             CutFillMode.isTouched() ||
             FillColor.isTouched() ||
+            CutHatchScale.isTouched() ||
+            CutHatchAngle.isTouched() ||
             LineWidth.isTouched() ||
             FontSize.isTouched() ||
             CutLineWidth.isTouched() ||
@@ -144,6 +148,8 @@ App::DocumentObjectExecReturn *DrawViewArch::execute()
                  << ", cutFillMode='" << CutFillMode.getValueAsString() << "'"
                  << ", fillColor=(" << fillColor.r << "," << fillColor.g << "," << fillColor.b
                  << ")"
+                 << ", cutHatchScale=" << CutHatchScale.getValue()
+                 << ", cutHatchAngle=" << CutHatchAngle.getValue()
                  << ", scale=" << getScale()
                  << ", linewidth=" << LineWidth.getValue()
                  << ", fontsize=" << FontSize.getValue()

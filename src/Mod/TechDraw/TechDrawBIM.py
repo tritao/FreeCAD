@@ -74,26 +74,69 @@ def project_representation_to_svg(
     return "".join(fragments)
 
 
-def fill_representation_to_svg(representation, direction, style):
-    """Render closed semantic cut faces with a uniform SVG fill."""
+def fill_representations_to_svg(representations, direction, style, drawing_scale=1.0):
+    """Render semantic cut faces with deduplicated paper-space styles."""
     import Draft
+    from ArchRepresentation import CutFillMode, cut_surface_style_for
 
+    entries = []
+    for representation in representations:
+        for geometry in getattr(representation, "cut_geometry", ()):
+            if getattr(geometry, "ShapeType", "") != "Face":
+                continue
+            mapping = representation.mapping_for(geometry)
+            resolved = cut_surface_style_for(getattr(mapping, "source", None), style)
+            entries.append((geometry, resolved))
+    patterns = {}
+    definitions = []
     fragments = []
-    for geometry in getattr(representation, "cut_geometry", ()):
-        if getattr(geometry, "ShapeType", "") != "Face":
-            continue
-        fragments.append(
-            Draft.get_svg(
-                geometry,
-                linewidth=0,
-                fillstyle=Draft.getrgb(style.color, testbw=False),
-                direction=direction.negative(),
-                color=style.color,
-            )
+    for geometry, resolved in entries:
+        fill = Draft.getrgb(resolved.color, testbw=False)
+        if resolved.mode == CutFillMode.MATERIAL:
+            key = (resolved.pattern, resolved.spacing, resolved.angle, resolved.line_color)
+            pattern_id = patterns.get(key)
+            if pattern_id is None:
+                pattern_id = "bim-cut-pattern-{}".format(len(patterns) + 1)
+                patterns[key] = pattern_id
+                model_per_paper = 1.0 / max(float(drawing_scale), 1e-9)
+                spacing = max(0.1, resolved.spacing) * model_per_paper
+                line_width = 0.2 * model_per_paper
+                line = Draft.getrgb(resolved.line_color, testbw=False)
+                paths = '<path d="M 0 0 L 0 {}" stroke="{}" stroke-width="{}"/>'.format(
+                    spacing, line, line_width
+                )
+                if resolved.pattern.casefold() in ("cross", "crosshatch"):
+                    paths += (
+                        '<path d="M 0 0 L {} 0" stroke="{}" stroke-width="{}"/>'
+                    ).format(spacing, line, line_width)
+                definitions.append(
+                    '<pattern id="{}" patternUnits="userSpaceOnUse" width="{}" '
+                    'height="{}" patternTransform="rotate({})">'
+                    '<rect width="100%" height="100%" fill="{}"/>'
+                    "{}</pattern>".format(
+                        pattern_id,
+                        spacing,
+                        spacing,
+                        resolved.angle,
+                        fill,
+                        paths,
+                    )
+                )
+            fill = "url(#{})".format(pattern_id)
+        fragment = Draft.get_svg(
+            geometry,
+            linewidth=0,
+            fillstyle=fill,
+            direction=direction.negative(),
+            color=resolved.color,
         )
+        fragments.append(fragment)
     if not fragments:
         return ""
-    return '<g transform="rotate(180)">\n{}\n</g>\n'.format("".join(fragments))
+    defs = "<defs>{}</defs>\n".format("".join(definitions)) if definitions else ""
+    return '{}<g transform="rotate(180)">\n{}\n</g>\n'.format(
+        defs, "".join(fragments)
+    )
 
 
 def project_object_to_svg(obj, context, direction, collection="projected_geometry", **styles):

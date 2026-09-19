@@ -421,6 +421,9 @@ class TestBimViewsServiceGui(TestArchBaseGui):
             editor.title_offset.setValue(10)
             editor.title_size.setValue(4)
             editor.show_hidden.setChecked(True)
+            editor.cut_fill_mode.setCurrentText("Material")
+            editor.cut_hatch_scale.setValue(4.5)
+            editor.cut_hatch_angle.setValue(30.0)
             with patch("ArchSectionPlane.getSVG", return_value=""):
                 editor.apply()
         finally:
@@ -437,6 +440,9 @@ class TestBimViewsServiceGui(TestArchBaseGui):
         self.assertLess(annotation.OwnerOffsetY.Value, -10)
         self.assertAlmostEqual(4, annotation.TextSize.Value)
         self.assertTrue(drawing_view.ShowHidden)
+        self.assertEqual("Material", drawing_view.CutFillMode)
+        self.assertAlmostEqual(4.5, drawing_view.CutHatchScale)
+        self.assertAlmostEqual(30.0, drawing_view.CutHatchAngle)
 
     def test_placement_inspector_suggests_layout_without_mutating_document(self):
         source = self.document.addObject("App::FeaturePython", "SuggestionSource")
