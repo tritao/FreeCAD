@@ -52,6 +52,7 @@ public:
     App::PropertyEnumeration ProjectionType;// First or Third angle
 
     App::PropertyInteger NextBalloonIndex;
+    App::PropertyMap EditableTextBindings;
 
     /** @name methods override Feature */
     //@{
@@ -105,6 +106,9 @@ public:
     void redrawCommand();
 
     bool canUpdate() const;
+
+    /// Copy bound page properties into SVG template editable fields.
+    void synchronizeEditableTexts();
 
     bool hasObject(App::DocumentObject* obj);
 

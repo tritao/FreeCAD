@@ -30,7 +30,7 @@ class BIMSheetMetadata:
 class BIMSheetService:
     """Create and identify TechDraw pages participating in a BIM sheet set."""
 
-    SCHEMA_VERSION = 3
+    SCHEMA_VERSION = 4
     PROPERTY_GROUP = "BIM Sheet"
     DISCIPLINES = (
         "General",
@@ -167,6 +167,10 @@ class BIMSheetService:
         page.PrintableMarginTop = metadata.margin_top
         page.PrintableMarginRight = metadata.margin_right
         page.PrintableMarginBottom = metadata.margin_bottom
+        if getattr(page, "Template", None) is not None:
+            from .titleblock import BIMTitleBlockService
+
+            BIMTitleBlockService(self.document).synchronize(page)
         return page
 
     def metadata_for(self, page):

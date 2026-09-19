@@ -50,6 +50,7 @@ from bimsheets import (
     BIMSheetMetadata,
     BIMSheetService,
     BIMSheetViewTitleService,
+    BIMTitleBlockService,
     SheetLayoutError,
     SheetRect,
     format_scale,
@@ -195,6 +196,78 @@ class TestBimViewsServiceGui(TestArchBaseGui):
         self.assertEqual("Cover", page.SheetTitle)
         self.assertEqual(1, page.SheetOrder)
         self.assertEqual(service.SCHEMA_VERSION, page.BIMSheetSchemaVersion)
+
+    def test_sheet_metadata_synchronizes_mapped_title_block_fields(self):
+        template_path = (
+            FreeCAD.getResourceDir()
+            + "Mod/TechDraw/Templates/ISO/A4_Landscape_ISO5457_minimal.svg"
+        )
+        metadata = BIMSheetMetadata(
+            number="A-301",
+            title="Floor Plans",
+            revision="P03",
+            issue_date="2026-09-19",
+        )
+        page = BIMSheetService(self.document).create_sheet(template_path, metadata)
+        title_blocks = BIMTitleBlockService(self.document)
+        texts = dict(page.Template.EditableTexts)
+        creator = texts["creator"]
+
+        self.assertEqual("A-301", texts["drawing_number"])
+        self.assertEqual("Floor Plans", texts["title"])
+        self.assertEqual("P03", texts["revision_index"])
+        self.assertEqual("2026-09-19", texts["date_of_issue"])
+        self.assertEqual(creator, texts["creator"])
+        self.assertEqual("drawing_number", title_blocks.mapping_for(page)["number"])
+        self.assertIn("discipline", page.MissingTitleBlockFields)
+
+        page.SheetNumber = "A-302"
+        page.SheetTitle = "Updated Plans"
+        self.assertEqual("A-302", page.Template.EditableTexts["drawing_number"])
+        self.assertEqual("Updated Plans", page.Template.EditableTexts["title"])
+        self.assertEqual(creator, page.Template.EditableTexts["creator"])
+
+    def test_title_block_mapping_survives_save_reopen_and_is_undoable(self):
+        template_path = (
+            FreeCAD.getResourceDir()
+            + "Mod/TechDraw/Templates/ISO/A4_Landscape_ISO5457_minimal.svg"
+        )
+        page = BIMSheetService(self.document).create_sheet(
+            template_path,
+            BIMSheetMetadata(number="S-001", title="Sections"),
+            name="PersistentTitleBlockPage",
+        )
+        self.document.openTransaction("Change sheet number")
+        page.SheetNumber = "S-002"
+        self.document.commitTransaction()
+        self.assertEqual("S-002", page.Template.EditableTexts["drawing_number"])
+        self.document.undo()
+        self.assertEqual("S-001", page.SheetNumber)
+        self.assertEqual("S-001", page.Template.EditableTexts["drawing_number"])
+
+        with tempfile.TemporaryDirectory() as directory:
+            path = directory + "/title-block.FCStd"
+            self.document.saveAs(path)
+            FreeCAD.closeDocument(self.document.Name)
+            self.document = FreeCAD.openDocument(path)
+            page = self.document.getObject("PersistentTitleBlockPage")
+            self.assertEqual(
+                "drawing_number", page.EditableTextBindings["SheetNumber"]
+            )
+            page.Revision = "C01"
+            self.assertEqual("C01", page.Template.EditableTexts["revision_index"])
+
+    def test_title_block_rejects_unknown_explicit_template_fields(self):
+        template_path = (
+            FreeCAD.getResourceDir()
+            + "Mod/TechDraw/Templates/ISO/A4_Landscape_ISO5457_minimal.svg"
+        )
+        page = BIMSheetService(self.document).create_sheet(template_path)
+
+        with self.assertRaisesRegex(ValueError, "template fields not found"):
+            BIMTitleBlockService(self.document).synchronize(
+                page, {"number": "does_not_exist"}
+            )
 
     def test_sheet_service_rejects_non_page_objects(self):
         obj = self.document.addObject("App::FeaturePython", "NotAPage")

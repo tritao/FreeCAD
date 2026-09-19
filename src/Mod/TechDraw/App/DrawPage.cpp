@@ -82,6 +82,8 @@ DrawPage::DrawPage(void)
 
     ADD_PROPERTY_TYPE(NextBalloonIndex, (1), group, (App::PropertyType)(App::Prop_None),
                       "Auto-numbering for Balloons");
+    ADD_PROPERTY_TYPE(EditableTextBindings, (), group, (App::PropertyType)(App::Prop_None),
+                      "Page property names mapped to SVG template editable fields");
 
     Scale.setConstraints(&scaleRange);
 }
@@ -95,6 +97,12 @@ void DrawPage::onBeforeChange(const App::Property* prop)
 
 void DrawPage::onChanged(const App::Property* prop)
 {
+    if (!isRestoring()) {
+        const auto& bindings = EditableTextBindings.getValues();
+        if (prop == &EditableTextBindings || bindings.contains(prop->getName())) {
+            synchronizeEditableTexts();
+        }
+    }
     if (prop == &KeepUpdated && KeepUpdated.getValue()) {
         if (!isRestoring() && !isUnsetting()) {
             //would be nice if this message was displayed immediately instead of after the recomputeFeature
@@ -136,6 +144,39 @@ void DrawPage::onChanged(const App::Property* prop)
         // TODO: Also update Template graphic.
     }
     App::DocumentObject::onChanged(prop);
+}
+
+void DrawPage::synchronizeEditableTexts()
+{
+    auto* templ = freecad_cast<DrawTemplate*>(Template.getValue());
+    if (!templ) {
+        return;
+    }
+    auto texts = templ->EditableTexts.getValues();
+    bool changed = false;
+    for (const auto& [propertyName, fieldName] : EditableTextBindings.getValues()) {
+        if (!texts.contains(fieldName)) {
+            continue;
+        }
+        auto* property = getPropertyByName(propertyName.c_str());
+        std::string value;
+        if (auto* stringProperty = dynamic_cast<App::PropertyString*>(property)) {
+            value = stringProperty->getValue();
+        }
+        else if (auto* enumeration = dynamic_cast<App::PropertyEnumeration*>(property)) {
+            value = enumeration->getValueAsString();
+        }
+        else {
+            continue;
+        }
+        if (texts[fieldName] != value) {
+            texts[fieldName] = value;
+            changed = true;
+        }
+    }
+    if (changed) {
+        templ->EditableTexts.setValues(texts);
+    }
 }
 
 //Page is just a container. It doesn't "do" anything.

@@ -4,6 +4,7 @@
 
 from .layout import BIMSheetLayout, SheetLayoutError, SheetMargins, SheetRect
 from .service import BIMSheetMetadata, BIMSheetService
+from .titleblock import BIMTitleBlockService, TitleBlockSyncResult
 from .titles import BIMSheetViewTitleService, format_scale
 
 __all__ = (
@@ -11,8 +12,10 @@ __all__ = (
     "BIMSheetMetadata",
     "BIMSheetService",
     "BIMSheetViewTitleService",
+    "BIMTitleBlockService",
     "SheetLayoutError",
     "SheetMargins",
     "SheetRect",
+    "TitleBlockSyncResult",
     "format_scale",
 )

@@ -209,6 +209,7 @@ class BIM_Views:
                 ("DuplicateView", translate("BIM", "Duplicate View")),
                 ("PlaceOnSheet", translate("BIM", "Place on Sheet…")),
                 ("OpenSheet", translate("BIM", "Open Sheet")),
+                ("RefreshTitleBlock", translate("BIM", "Refresh Title Block")),
                 ("LocatePlacement", translate("BIM", "Locate Placement")),
                 ("RemoveFromSheet", translate("BIM", "Remove from Sheet")),
                 ("Rename", translate("BIM", "Rename")),
@@ -269,6 +270,7 @@ class BIM_Views:
             self.dialog.buttonDuplicateView.triggered.connect(self.duplicateView)
             self.dialog.buttonPlaceOnSheet.triggered.connect(self.placeOnSheet)
             self.dialog.buttonOpenSheet.triggered.connect(self.openSheet)
+            self.dialog.buttonRefreshTitleBlock.triggered.connect(self.refreshTitleBlock)
             self.dialog.buttonLocatePlacement.triggered.connect(self.locatePlacement)
             self.dialog.buttonRemoveFromSheet.triggered.connect(self.removeFromSheet)
             self.dialog.buttonRename.triggered.connect(self.rename)
@@ -755,6 +757,41 @@ class BIM_Views:
         FreeCADGui.Selection.clearSelection()
         FreeCADGui.Selection.addSelection(drawing_view)
 
+    def refreshTitleBlock(self):
+        """Undoably refresh and report the selected sheet's title-block mapping."""
+
+        from PySide import QtGui
+        from bimsheets import BIMSheetService, BIMTitleBlockService
+
+        page = self.contextObject
+        if page is None or not BIMSheetService.is_sheet(page):
+            return
+        document = FreeCAD.ActiveDocument
+        document.openTransaction("Refresh BIM sheet title block")
+        try:
+            service = BIMTitleBlockService(document)
+            result = service.synchronize(page)
+            document.commitTransaction()
+        except Exception:
+            document.abortTransaction()
+            raise
+        document.recompute()
+        mapping = service.describe(page)
+        lines = [
+            "{} → {}".format(key, field or translate("BIM", "not mapped"))
+            for key, field in mapping
+        ]
+        if result.missing:
+            lines.append(
+                translate("BIM", "Missing: {}").format(", ".join(result.missing))
+            )
+        QtGui.QMessageBox.information(
+            self.dialog,
+            translate("BIM", "Title Block Mapping"),
+            "\n".join(lines),
+        )
+        self.update(False)
+
     def removeFromSheet(self):
         """Undoably remove the selected placement while retaining its definition."""
 
@@ -1026,6 +1063,7 @@ class BIM_Views:
             self.dialog.buttonDuplicateView,
             self.dialog.buttonPlaceOnSheet,
             self.dialog.buttonOpenSheet,
+            self.dialog.buttonRefreshTitleBlock,
             self.dialog.buttonLocatePlacement,
             self.dialog.buttonRemoveFromSheet,
             self.dialog.buttonRename,
@@ -1035,6 +1073,7 @@ class BIM_Views:
         self.dialog.buttonDuplicateView.setVisible(False)
         self.dialog.buttonPlaceOnSheet.setVisible(False)
         self.dialog.buttonOpenSheet.setVisible(False)
+        self.dialog.buttonRefreshTitleBlock.setVisible(False)
         self.dialog.buttonLocatePlacement.setVisible(False)
         self.dialog.buttonRemoveFromSheet.setVisible(False)
         self.dialog.buttonActive.setText(translate("BIM", "Active"))
@@ -1074,6 +1113,7 @@ class BIM_Views:
                 self.dialog.buttonNewPlanView.setVisible(False)
                 self.dialog.buttonNewModelView.setVisible(False)
                 self.dialog.buttonOpenSheet.setVisible(True)
+                self.dialog.buttonRefreshTitleBlock.setVisible(True)
                 self.dialog.buttonRename.setVisible(True)
             elif kind == "sheet-placement":
                 self.dialog.buttonNewPlanView.setVisible(False)
