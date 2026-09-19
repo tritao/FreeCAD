@@ -270,6 +270,7 @@ def getSVG(
     linespacing=None,
     showFill=False,
     fillColor=(1.0, 1.0, 1.0),
+    cutFillMode=None,
     techdraw=False,
     fillSpaces=False,
     cutlinewidth=0,
@@ -343,6 +344,7 @@ def getSVG(
         linespacing=linespacing,
         showFill=showFill,
         fillColor=fillColor,
+        cutFillMode=cutFillMode,
         techdraw=techdraw,
         fillSpaces=fillSpaces,
         cutlinewidth=cutlinewidth,
@@ -363,6 +365,7 @@ def render_drawing_context(
     linespacing=None,
     showFill=False,
     fillColor=(1.0, 1.0, 1.0),
+    cutFillMode=None,
     techdraw=False,
     fillSpaces=False,
     cutlinewidth=0,
@@ -371,6 +374,14 @@ def render_drawing_context(
     """Render an already resolved :class:`BIMDrawingContext` to SVG."""
 
     import Part
+    from ArchRepresentation import CutFillMode, CutSurfaceStyle
+
+    if cutFillMode is None:
+        cut_fill_mode = CutFillMode.SOLID if showFill else CutFillMode.NONE
+    else:
+        cut_fill_mode = CutFillMode(cutFillMode)
+    showFill = cut_fill_mode != CutFillMode.NONE
+    cut_surface_style = CutSurfaceStyle(cut_fill_mode, tuple(fillColor))
 
     source = context.source
     objs = list(context.objects)
@@ -608,7 +619,7 @@ def render_drawing_context(
                 if showFill:
                     for representation in contextual_representations:
                         svgcache += TechDrawBIM.fill_representation_to_svg(
-                            representation, direction, fillColor
+                            representation, direction, cut_surface_style
                         )
                 for representation in contextual_representations:
                     if representation.projected_geometry:

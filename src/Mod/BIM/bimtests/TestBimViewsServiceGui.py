@@ -1746,6 +1746,11 @@ class TestBimViewsServiceGui(TestArchBaseGui):
         self.assertNotIn("BIMSheetScale", definition.PropertiesList)
         self.assertNotIn("BIMRenderMode", definition.PropertiesList)
         self.assertTrue(drawing_view.ShowFill)
+        self.assertEqual("Solid", drawing_view.CutFillMode)
+        drawing_view.ShowFill = False
+        self.assertEqual("None", drawing_view.CutFillMode)
+        drawing_view.CutFillMode = "Material"
+        self.assertTrue(drawing_view.ShowFill)
 
     def test_sheet_cut_fill_defaults_follow_view_purpose(self):
         source = self.document.addObject("App::FeaturePython", "CutFillSource")

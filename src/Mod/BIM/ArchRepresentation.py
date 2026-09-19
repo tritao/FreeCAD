@@ -45,6 +45,22 @@ class RepresentationMode(Enum):
     VIEWPORT = "ViewportRepresentation"
 
 
+class CutFillMode(Enum):
+    """Renderer-neutral treatment of cut surfaces."""
+
+    NONE = "None"
+    SOLID = "Solid"
+    MATERIAL = "Material"
+
+
+@dataclass(frozen=True)
+class CutSurfaceStyle:
+    """Resolved presentation style for semantic cut surfaces."""
+
+    mode: CutFillMode = CutFillMode.NONE
+    color: tuple = (1.0, 1.0, 1.0)
+
+
 class BIMPreviewStyle(Enum):
     """Renderer-neutral presentation intent for transient semantic geometry."""
 

@@ -343,6 +343,7 @@ class BIMViewService:
         drawing_view.BIMViewDefinition = definition
         purpose = self.normalize_purpose(definition.Purpose)
         drawing_view.ShowFill = purpose in _CUT_FILL_PURPOSES
+        drawing_view.CutFillMode = "Solid" if drawing_view.ShowFill else "None"
         page.addView(drawing_view)
         if getattr(page, "Scale", 0.0):
             drawing_view.Scale = page.Scale

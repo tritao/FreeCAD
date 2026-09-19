@@ -51,6 +51,7 @@ public:
     App::PropertyBool         FillSpaces;
     App::PropertyBool         ShowHidden;
     App::PropertyBool         ShowFill;
+    App::PropertyEnumeration  CutFillMode;
     App::PropertyColor        FillColor;
     App::PropertyFloat        LineWidth;
     App::PropertyFloat        FontSize;
@@ -76,13 +77,15 @@ public:
 
 
 protected:
-/*    virtual void onChanged(const App::Property* prop) override;*/
+    void onChanged(const App::Property* prop) override;
     Base::BoundBox3d bbox;
     std::string getSVGHead();
     std::string getSVGTail();
 
 private:
     static const char* RenderModeEnums[];
+    static const char* CutFillModeEnums[];
+    bool syncingCutFill {false};
 };
 
 } //namespace TechDraw

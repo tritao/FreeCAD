@@ -46,6 +46,7 @@ const char* DrawViewArch::RenderModeEnums[]= {"Wireframe",
                                               "Coin",
                                               "Coin mono",
                                               nullptr};
+const char* DrawViewArch::CutFillModeEnums[]= {"None", "Solid", "Material", nullptr};
 
 DrawViewArch::DrawViewArch()
 {
@@ -62,6 +63,8 @@ DrawViewArch::DrawViewArch()
     ADD_PROPERTY_TYPE(FillSpaces ,(false), group, App::Prop_None, "If True, BIM Spaces are shown as a colored area");
     ADD_PROPERTY_TYPE(ShowHidden ,(false), group, App::Prop_None, "If the hidden geometry behind the section plane is shown or not");
     ADD_PROPERTY_TYPE(ShowFill ,(false), group, App::Prop_None, "If cut areas must be filled or not");
+    CutFillMode.setEnums(CutFillModeEnums);
+    ADD_PROPERTY_TYPE(CutFillMode, ((long)0), group, App::Prop_None, "How cut areas are filled");
     ADD_PROPERTY_TYPE(FillColor,
                       (0.85f, 0.85f, 0.85f),
                       group,
@@ -86,6 +89,7 @@ short DrawViewArch::mustExecute() const
             RenderMode.isTouched() ||
             ShowHidden.isTouched() ||
             ShowFill.isTouched() ||
+            CutFillMode.isTouched() ||
             FillColor.isTouched() ||
             LineWidth.isTouched() ||
             FontSize.isTouched() ||
@@ -137,6 +141,7 @@ App::DocumentObjectExecReturn *DrawViewArch::execute()
                  << ", renderMode=" << RenderMode.getValue()
                  << ", showHidden=" << (ShowHidden.getValue() ? "True" : "False")
                  << ", showFill=" << (ShowFill.getValue() ? "True" : "False")
+                 << ", cutFillMode='" << CutFillMode.getValueAsString() << "'"
                  << ", fillColor=(" << fillColor.r << "," << fillColor.g << "," << fillColor.b
                  << ")"
                  << ", scale=" << getScale()
@@ -162,6 +167,21 @@ App::DocumentObjectExecReturn *DrawViewArch::execute()
     }
     overrideKeepUpdated(false);
     return DrawView::execute();
+}
+
+void DrawViewArch::onChanged(const App::Property* prop)
+{
+    if (!syncingCutFill) {
+        syncingCutFill = true;
+        if (prop == &ShowFill) {
+            CutFillMode.setValue(ShowFill.getValue() ? "Solid" : "None");
+        }
+        else if (prop == &CutFillMode) {
+            ShowFill.setValue(CutFillMode.getValue() != 0);
+        }
+        syncingCutFill = false;
+    }
+    DrawViewSymbol::onChanged(prop);
 }
 
 std::string DrawViewArch::getSVGHead()

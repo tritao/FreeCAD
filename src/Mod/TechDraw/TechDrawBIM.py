@@ -74,7 +74,7 @@ def project_representation_to_svg(
     return "".join(fragments)
 
 
-def fill_representation_to_svg(representation, direction, color):
+def fill_representation_to_svg(representation, direction, style):
     """Render closed semantic cut faces with a uniform SVG fill."""
     import Draft
 
@@ -86,9 +86,9 @@ def fill_representation_to_svg(representation, direction, color):
             Draft.get_svg(
                 geometry,
                 linewidth=0,
-                fillstyle=Draft.getrgb(color, testbw=False),
+                fillstyle=Draft.getrgb(style.color, testbw=False),
                 direction=direction.negative(),
-                color=color,
+                color=style.color,
             )
         )
     if not fragments:
