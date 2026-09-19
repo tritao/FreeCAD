@@ -812,7 +812,7 @@ class HatchTessellator(Tessellator):
             The resulting geometry. ``placement`` is left at its default and is set by the base
             ``compute`` method.
         """
-        import TechDraw
+        from draftutils.hatch import make_hatch_geometry
 
         # Default result: the untouched substrate. Overwritten below if a hatch pattern is
         # successfully generated or if thickness requires an extrusion.
@@ -825,30 +825,18 @@ class HatchTessellator(Tessellator):
         if self.filename and pattern_name:
             pat_shape = None
             try:
-                param_grp = FreeCAD.ParamGet(
-                    "User parameter:BaseApp/Preferences/Mod/TechDraw/debug"
-                )
-                old_allow = (
-                    param_grp.GetBool("allowCrazyEdge")
-                    if "allowCrazyEdge" in param_grp.GetBools()
-                    else None
-                )
-                param_grp.SetBool("allowCrazyEdge", True)
-
                 try:
-                    pat_shape = TechDraw.makeGeomHatch(
-                        substrate, float(self.scale), str(pattern_name), str(self.filename)
+                    pat_shape = make_hatch_geometry(
+                        (substrate,),
+                        self.filename,
+                        pattern_name,
+                        scale=self.scale,
+                        translate=False,
                     )
                 except Exception as e:
                     FreeCAD.Console.PrintWarning(
                         f"ArchTessellation: Hatch generation failed: {e}\n"
                     )
-
-                # Restore preferences
-                if old_allow is None:
-                    param_grp.RemBool("allowCrazyEdge")
-                else:
-                    param_grp.SetBool("allowCrazyEdge", old_allow)
 
                 hatch_succeeded = bool(pat_shape and pat_shape.Edges)
 

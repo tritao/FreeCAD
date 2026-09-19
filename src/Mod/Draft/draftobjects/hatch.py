@@ -29,9 +29,9 @@ import os
 from PySide.QtCore import QT_TRANSLATE_NOOP
 
 import FreeCAD as App
-from draftgeoutils.general import geomType
 from draftobjects.base import DraftObject
 from draftutils import gui_utils
+from draftutils.hatch import make_hatch_geometry
 from draftutils.messages import _err, _log
 from draftutils.translate import translate
 
@@ -159,7 +159,6 @@ class Hatch(DraftObject):
             return
 
         import Part
-        import TechDraw
 
         faces = []
         try:
@@ -181,63 +180,16 @@ class Hatch(DraftObject):
             self._report_face_error(obj)
             return
 
-        # In TechDraw edges longer than 9999.9 (ca. 10m) are considered 'crazy'.
-        # Lines in hatch patterns are also checked. We need to change a parameter:
-        param_grp = App.ParamGet("User parameter:BaseApp/Preferences/Mod/TechDraw/debug")
-        if "allowCrazyEdge" not in param_grp.GetBools():
-            old_allow_crazy_edge = None
-        else:
-            old_allow_crazy_edge = param_grp.GetBool("allowCrazyEdge")
-        param_grp.SetBool("allowCrazyEdge", True)
-
-        shapes = []
-        for face in faces:
-            if face.findPlane():  # Only planar faces.
-                face = face.copy()
-                if obj.Translate:
-                    mtx = None
-                    w = face.normalAt(0, 0)
-                    # Try to base a matrix on the first straight edge with
-                    # a reasonable length (> 0.001):
-                    for e in face.Edges:
-                        if geomType(e) == "Line":
-                            sta = e.firstVertex().Point
-                            end = e.lastVertex().Point
-                            u = end.sub(sta)
-                            if u.Length > 0.001:
-                                u = u.normalize()
-                                v = w.cross(u)
-                                # fmt: off
-                                mtx = App.Matrix(u.x, v.x, w.x, sta.x,
-                                                 u.y, v.y, w.y, sta.y,
-                                                 u.z, v.z, w.z, sta.z,
-                                                 0.0, 0.0, 0.0, 1.0)
-                                # fmt: on
-                                break
-                    # If no suitable straight edge was found use a default matrix:
-                    if not mtx:
-                        cen = face.CenterOfMass
-                        rot = App.Rotation(App.Vector(0, 0, 1), w)
-                        mtx = App.Placement(cen, rot).Matrix
-                    face = face.transformShape(mtx.inverse()).Faces[0]
-                if obj.Rotation.Value:
-                    face.rotate(App.Vector(), App.Vector(0, 0, 1), -obj.Rotation)
-
-                shape = TechDraw.makeGeomHatch(face, obj.Scale, obj.Pattern, pat_file)
-
-                if obj.Rotation.Value:
-                    shape.rotate(App.Vector(), App.Vector(0, 0, 1), obj.Rotation)
-                if obj.Translate:
-                    shape = shape.transformShape(mtx)
-                shapes.append(shape)
-
-        if old_allow_crazy_edge is None:
-            param_grp.RemBool("allowCrazyEdge")
-        else:
-            param_grp.SetBool("allowCrazyEdge", old_allow_crazy_edge)
-
-        if shapes:
-            obj.Shape = Part.makeCompound(shapes)
+        shape = make_hatch_geometry(
+            faces,
+            pat_file,
+            obj.Pattern,
+            scale=obj.Scale,
+            rotation=obj.Rotation,
+            translate=obj.Translate,
+        )
+        if not shape.isNull():
+            obj.Shape = shape
 
     def _report_face_error(self, obj):
         _wrn(obj.Label + ": " + translate("draft", "No valid faces for hatch"))

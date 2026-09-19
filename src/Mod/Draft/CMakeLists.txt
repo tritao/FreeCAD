@@ -88,6 +88,7 @@ SET(Draft_utilities
     draftutils/grid_observer.py
     draftutils/groups.py
     draftutils/gui_utils.py
+    draftutils/hatch.py
     draftutils/init_draft_statusbar.py
     draftutils/init_tools.py
     draftutils/messages.py

@@ -37,11 +37,14 @@
 import math
 import os
 import tempfile
+from unittest.mock import patch
 
 import FreeCAD as App
 import Draft
+import Part
 from FreeCAD import Vector
 from drafttests import test_base
+from draftutils.hatch import make_hatch_geometry
 from draftutils.messages import _msg
 
 
@@ -416,6 +419,34 @@ class DraftCreation(test_base.DraftTestCaseDoc):
             eof_edges = sorted(round(edge.Length, 6) for edge in eof_hatch.Shape.Edges)
 
         self.assertEqual(clean_edges, eof_edges, "'{}' failed".format(operation))
+
+    def test_hatch_geometry_restores_techdraw_preference_after_failure(self):
+        """The shared hatch engine must not leak its temporary preference."""
+
+        class Parameters:
+            value = False
+
+            def GetBools(self):
+                return ["allowCrazyEdge"]
+
+            def GetBool(self, _name):
+                return self.value
+
+            def SetBool(self, _name, value):
+                self.value = value
+
+            def RemBool(self, _name):
+                self.value = None
+
+        parameters = Parameters()
+        face = Part.makePlane(100, 100)
+        with patch("draftutils.hatch.App.ParamGet", return_value=parameters), patch(
+            "draftutils.hatch.TechDraw.makeGeomHatch", side_effect=RuntimeError("failure")
+        ):
+            with self.assertRaises(RuntimeError):
+                make_hatch_geometry((face,), "pattern.pat", "Pattern")
+
+        self.assertFalse(parameters.value)
 
 
 ## @}
