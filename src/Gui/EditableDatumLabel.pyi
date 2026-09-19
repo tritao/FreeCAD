@@ -198,6 +198,18 @@ class EditableDatumLabel(PyObjectBase):
         """
         ...
 
+    def setPickable(self, enabled: bool, /) -> None:
+        """Control whether the datum label can receive pointer clicks."""
+        ...
+
+    def containsPickedPoint(self, pickedPoint: Any, /) -> bool:
+        """Return whether a Coin picked point belongs to this datum label."""
+        ...
+
+    def getTextCenterPoint(self) -> Vector:
+        """Return the world-space center of the rendered value text."""
+        ...
+
     def setLockedAppearance(self, locked: bool, /) -> None:
         """
         Toggle the visual "accepted/locked" appearance of the label.
@@ -250,4 +262,8 @@ class EditableDatumLabel(PyObjectBase):
         """
         Set a callback invoked for the "finish editing on all visible overlays" action.
         """
+        ...
+
+    def setClickedCallback(self, callback: Optional[Callable[[], object]], /) -> None:
+        """Set a callback invoked when the datum label is clicked in the 3D view."""
         ...

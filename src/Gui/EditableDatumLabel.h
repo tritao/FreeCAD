@@ -38,6 +38,7 @@ class SoAnnotation;
 class SoSwitch;
 class SoEventCallback;
 class SoPickStyle;
+class SoPickedPoint;
 
 namespace Gui
 {
@@ -83,6 +84,8 @@ public:
     void setFocus();
     void setPoints(SbVec3f p1, SbVec3f p2);
     void setPoints(Base::Vector3d p1, Base::Vector3d p2);
+    SbVec3f getTextCenterPoint() const;
+    bool containsPickedPoint(const SoPickedPoint* pickedPoint) const;
     void setFocusToSpinbox();
     void clearSelection();  ///< Clears text selection in the spinbox
     void setLabelType(SoDatumLabel::Type type, Function function = Function::Positioning);
@@ -130,7 +133,6 @@ private:
     bool syncValueFromSpinBox(bool emitParameterUnset = true);
     void handleSpinBoxValueChanged();
     void positionSpinbox();
-    SbVec3f getTextCenterPoint() const;
     void initColors();
 
     void handleEvent(SoEventCallback* cb);

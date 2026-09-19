@@ -631,6 +631,11 @@ void EditableDatumLabel::setPickable(bool val)
     pickStyle->style = val ? SoPickStyle::SHAPE_ON_TOP : SoPickStyle::UNPICKABLE;
 }
 
+bool EditableDatumLabel::containsPickedPoint(const SoPickedPoint* pickedPoint) const
+{
+    return pickedPoint && pickedPoint->getPath()->containsNode(annotation);
+}
+
 void EditableDatumLabel::setFocus()
 {
     if (spinBox) {

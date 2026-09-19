@@ -26,6 +26,8 @@
 #include <sstream>
 #include <string>
 
+#include <Inventor/SoPickedPoint.h>
+
 #include <Base/Interpreter.h>
 #include <Base/PlacementPy.h>
 #include <Base/PyWrapParseTupleAndKeywords.h>
@@ -238,6 +240,7 @@ struct EditableDatumLabelPy::CallbackState
     PyObject* editingCanceledCallback {nullptr};
     PyObject* parameterUnsetCallback {nullptr};
     PyObject* finishEditingCallback {nullptr};
+    PyObject* clickedCallback {nullptr};
 };
 
 std::string EditableDatumLabelPy::representation() const
@@ -317,6 +320,11 @@ int EditableDatumLabelPy::initialization()
             invokeCallback(this->callbackState->finishEditingCallback);
         }
     });
+    QObject::connect(label, &EditableDatumLabel::clicked, label, [this](EditableDatumLabel*) {
+        if (this->callbackState) {
+            invokeCallback(this->callbackState->clickedCallback);
+        }
+    });
     return 1;
 }
 
@@ -333,6 +341,7 @@ int EditableDatumLabelPy::finalization()
         Py_XDECREF(callbackState->editingCanceledCallback);
         Py_XDECREF(callbackState->parameterUnsetCallback);
         Py_XDECREF(callbackState->finishEditingCallback);
+        Py_XDECREF(callbackState->clickedCallback);
     }
 
     delete callbackState;
@@ -592,6 +601,44 @@ PyObject* EditableDatumLabelPy::setSpinboxVisibleToMouse(PyObject* args)
     Py_Return;
 }
 
+PyObject* EditableDatumLabelPy::setPickable(PyObject* args)
+{
+    PyObject* value = Py_False;
+    if (!PyArg_ParseTuple(args, "O", &value)) {
+        return nullptr;
+    }
+    asLabel(this)->setPickable(asBool(value));
+    Py_Return;
+}
+
+PyObject* EditableDatumLabelPy::containsPickedPoint(PyObject* args)
+{
+    PyObject* object = nullptr;
+    if (!PyArg_ParseTuple(args, "O", &object)) {
+        return nullptr;
+    }
+    void* pointer = nullptr;
+    Base::Interpreter().convertSWIGPointerObj(
+        "pivy.coin", "_p_SoPickedPoint", object, &pointer, 0
+    );
+    if (!pointer) {
+        PyErr_SetString(PyExc_TypeError, "pickedPoint must be a coin.SoPickedPoint");
+        return nullptr;
+    }
+    return PyBool_FromLong(
+        asLabel(this)->containsPickedPoint(static_cast<SoPickedPoint*>(pointer))
+    );
+}
+
+PyObject* EditableDatumLabelPy::getTextCenterPoint(PyObject* args)
+{
+    if (!PyArg_ParseTuple(args, "")) {
+        return nullptr;
+    }
+    const SbVec3f point = asLabel(this)->getTextCenterPoint();
+    return new Base::VectorPy(new Base::Vector3d(point[0], point[1], point[2]));
+}
+
 PyObject* EditableDatumLabelPy::setLockedAppearance(PyObject* args)
 {
     PyObject* value = Py_False;
@@ -690,6 +737,19 @@ PyObject* EditableDatumLabelPy::setFinishEditingCallback(PyObject* args)
         callbackState = new CallbackState;
     }
     replaceCallback(callbackState->finishEditingCallback, callback);
+    Py_Return;
+}
+
+PyObject* EditableDatumLabelPy::setClickedCallback(PyObject* args)
+{
+    PyObject* callback = Py_None;
+    if (!PyArg_ParseTuple(args, "O", &callback)) {
+        return nullptr;
+    }
+    if (!callbackState) {
+        callbackState = new CallbackState;
+    }
+    replaceCallback(callbackState->clickedCallback, callback);
     Py_Return;
 }
 
