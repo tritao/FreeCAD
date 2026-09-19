@@ -71,13 +71,11 @@ class BIMSheetViewTitleService:
 
     @staticmethod
     def synchronize_position(annotation):
-        """Apply an annotation's owner-relative position immediately."""
+        """Request native owner-relative position synchronization."""
 
         owner = getattr(annotation, "Owner", None)
         if owner is None or not getattr(annotation, "FollowOwnerPosition", False):
             return annotation
-        annotation.X = owner.X.Value + annotation.OwnerOffsetX.Value
-        annotation.Y = owner.Y.Value + annotation.OwnerOffsetY.Value
         annotation.touch()
         return annotation
 

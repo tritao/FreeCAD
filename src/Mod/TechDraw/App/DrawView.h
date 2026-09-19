@@ -128,6 +128,7 @@ public:
     void translateLabel(std::string context, std::string baseName, std::string uniqueName);
 
     virtual App::PropertyLink *getOwnerProperty() { return nullptr; }
+    virtual void onOwnerPositionChanged();
 
     static bool isProjGroupItem(DrawViewPart* item);
 

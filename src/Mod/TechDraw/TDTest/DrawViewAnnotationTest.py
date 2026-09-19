@@ -33,6 +33,29 @@ class DrawViewAnnotationTest(unittest.TestCase):
 
         self.assertTrue("Up-to-date" in anno.State)
 
+    def testFollowOwnerPositionAfterOwnerMoves(self):
+        """A page-owned annotation follows a page-owned view after recompute."""
+        owner = FreeCAD.ActiveDocument.addObject(
+            "TechDraw::DrawViewAnnotation", "AnnotationOwner"
+        )
+        follower = FreeCAD.ActiveDocument.addObject(
+            "TechDraw::DrawViewAnnotation", "FollowingAnnotation"
+        )
+        self.page.addView(owner)
+        self.page.addView(follower)
+        follower.Owner = owner
+        follower.FollowOwnerPosition = True
+        follower.OwnerOffsetX = 2.0
+        follower.OwnerOffsetY = -5.0
+        FreeCAD.ActiveDocument.recompute()
+
+        owner.X = 80.0
+        owner.Y = 60.0
+        FreeCAD.ActiveDocument.recompute()
+
+        self.assertAlmostEqual(82.0, follower.X.Value)
+        self.assertAlmostEqual(55.0, follower.Y.Value)
+
 
 if __name__ == "__main__":
     unittest.main()

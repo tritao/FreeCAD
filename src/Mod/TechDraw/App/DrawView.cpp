@@ -152,6 +152,11 @@ void DrawView::checkScale()
     }
 }
 
+void DrawView::onOwnerPositionChanged()
+{
+    touch();
+}
+
 void DrawView::touchTreeOwner(App::DocumentObject *owner) const
 {
     auto ownerView = dynamic_cast<DrawView *>(owner);
@@ -230,7 +235,12 @@ void DrawView::onChanged(const App::Property* prop)
         requestPaint();
     } else if ( prop == &X ||
                 prop == &Y ) {
-        //X,Y changes are only interesting to DPGI and Gui side
+        // Owned views can derive their position from this view.  The Owner
+        // link establishes ordering, but position changes must also dirty the
+        // children so they execute during the same document recompute.
+        for (auto* child : getUniqueChildren()) {
+            child->onOwnerPositionChanged();
+        }
     }
 
     App::PropertyLink *ownerProp = getOwnerProperty();

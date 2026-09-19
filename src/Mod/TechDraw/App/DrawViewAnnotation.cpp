@@ -246,14 +246,26 @@ App::DocumentObjectExecReturn *DrawViewAnnotation::execute()
         }
         Text.setValues(text);
     }
-    if (FollowOwnerPosition.getValue()) {
-        if (auto* ownerView = dynamic_cast<DrawView*>(owner)) {
-            X.setValue(ownerView->X.getValue() + OwnerOffsetX.getValue());
-            Y.setValue(ownerView->Y.getValue() + OwnerOffsetY.getValue());
-        }
-    }
+    synchronizeOwnerPosition();
     requestPaint();
     return TechDraw::DrawView::execute();
+}
+
+void DrawViewAnnotation::onOwnerPositionChanged()
+{
+    synchronizeOwnerPosition();
+    touch();
+}
+
+void DrawViewAnnotation::synchronizeOwnerPosition()
+{
+    if (!FollowOwnerPosition.getValue()) {
+        return;
+    }
+    if (auto* ownerView = dynamic_cast<DrawView*>(Owner.getValue())) {
+        X.setValue(ownerView->X.getValue() + OwnerOffsetX.getValue());
+        Y.setValue(ownerView->Y.getValue() + OwnerOffsetY.getValue());
+    }
 }
 
 // Python Drawing feature ---------------------------------------------------------
