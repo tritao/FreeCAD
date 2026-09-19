@@ -208,6 +208,7 @@ class BIM_Views:
                 ("SaveVisibility", translate("BIM", "Save Visibility of Objects")),
                 ("DuplicateView", translate("BIM", "Duplicate View")),
                 ("NewSheet", translate("BIM", "New Sheet…")),
+                ("CreateSheetFromView", translate("BIM", "Create Sheet from View")),
                 ("PlaceOnSheet", translate("BIM", "Place on Sheet…")),
                 ("OpenSheet", translate("BIM", "Open Sheet")),
                 ("EditSheet", translate("BIM", "Sheet Properties…")),
@@ -275,6 +276,9 @@ class BIM_Views:
             self.dialog.buttonSaveVisibility.triggered.connect(self.saveVisibility)
             self.dialog.buttonDuplicateView.triggered.connect(self.duplicateView)
             self.dialog.buttonNewSheet.triggered.connect(self.newSheet)
+            self.dialog.buttonCreateSheetFromView.triggered.connect(
+                self.createSheetFromView
+            )
             self.dialog.buttonPlaceOnSheet.triggered.connect(self.placeOnSheet)
             self.dialog.buttonOpenSheet.triggered.connect(self.openSheet)
             self.dialog.buttonEditSheet.triggered.connect(self.editSheet)
@@ -778,6 +782,42 @@ class BIM_Views:
             5000,
         )
 
+    def createSheetFromView(self):
+        """Create, populate and open a dedicated sheet for the clicked view."""
+
+        from bimsheets.gui import default_sheet_template
+
+        definition = self.contextObject
+        service = _view_service()
+        if not definition or not service.can_place_on_sheet(definition):
+            return
+        document = FreeCAD.ActiveDocument
+        document.openTransaction("Create sheet from BIM view")
+        try:
+            page, drawing_view = service.create_sheet_from_view(
+                definition,
+                default_sheet_template(),
+                page_scale=PARAMS.GetFloat("DefaultPageScale", 0.01),
+            )
+            page.Template.Label = translate("BIM", "Template")
+            document.commitTransaction()
+        except Exception:
+            document.abortTransaction()
+            raise
+        document.recompute()
+        page.ViewObject.show()
+        self.contextObject = drawing_view
+        self.update(False)
+        FreeCADGui.Selection.clearSelection()
+        FreeCADGui.Selection.addSelection(drawing_view)
+        FreeCADGui.getMainWindow().statusBar().showMessage(
+            translate("BIM", "Created {sheet} from {view}").format(
+                sheet=_sheet_display_label(page),
+                view=definition.Label,
+            ),
+            5000,
+        )
+
     def newSheet(self):
         """Create a BIM sheet through the shared sheet creation workflow."""
 
@@ -1257,6 +1297,7 @@ class BIM_Views:
             self.dialog.buttonSaveVisibility,
             self.dialog.buttonDuplicateView,
             self.dialog.buttonNewSheet,
+            self.dialog.buttonCreateSheetFromView,
             self.dialog.buttonPlaceOnSheet,
             self.dialog.buttonOpenSheet,
             self.dialog.buttonEditSheet,
@@ -1273,6 +1314,7 @@ class BIM_Views:
             action.setVisible(True)
         self.dialog.buttonDuplicateView.setVisible(False)
         self.dialog.buttonNewSheet.setVisible(False)
+        self.dialog.buttonCreateSheetFromView.setVisible(False)
         self.dialog.buttonPlaceOnSheet.setVisible(False)
         self.dialog.buttonOpenSheet.setVisible(False)
         self.dialog.buttonEditSheet.setVisible(False)
@@ -1308,9 +1350,13 @@ class BIM_Views:
                     self.dialog.buttonSaveVisibility,
                     self.dialog.buttonDuplicateView,
                     self.dialog.buttonRename,
+                    self.dialog.buttonCreateSheetFromView,
                     self.dialog.buttonPlaceOnSheet,
                 ):
                     action.setVisible(True)
+                self.dialog.buttonCreateSheetFromView.setEnabled(
+                    _view_service().can_place_on_sheet(obj)
+                )
                 self.dialog.buttonPlaceOnSheet.setEnabled(
                     _view_service().can_place_on_sheet(obj)
                     and bool(_manager_model().pages())

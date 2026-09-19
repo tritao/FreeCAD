@@ -3,7 +3,7 @@
 """Saved-view lifecycle and activation for the BIM Navigator."""
 
 from contextlib import contextmanager
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 import ArchRepresentation
 import FreeCAD
@@ -367,6 +367,27 @@ class BIMViewService:
             self.document.removeObject(drawing_view.Name)
             raise
         return drawing_view
+
+    def create_sheet_from_view(self, definition, template_path, *, page_scale=None):
+        """Create a dedicated sheet and place one saved planar view on it."""
+
+        if not self.can_place_on_sheet(definition):
+            raise ValueError(
+                "Only PLAN, SECTION or ELEVATION views with a context can create a sheet"
+            )
+        from bimsheets.service import BIMSheetService
+
+        sheet_service = BIMSheetService(self.document)
+        page = sheet_service.create_sheet(template_path)
+        metadata = replace(
+            sheet_service.metadata_for(page),
+            title=definition.Label,
+        )
+        sheet_service.apply_metadata(page, metadata)
+        if page_scale is not None and float(page_scale) > 0.0:
+            page.Scale = float(page_scale)
+        drawing_view = self.place_on_sheet(definition, page)
+        return page, drawing_view
 
     def remove_sheet_placement(self, drawing_view):
         """Remove one placement without deleting its saved BIM view."""

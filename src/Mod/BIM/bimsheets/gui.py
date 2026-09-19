@@ -15,6 +15,23 @@ from .titles import format_scale
 translate = FreeCAD.Qt.translate
 
 
+def default_sheet_template():
+    """Return TechDraw's configured default template, with its standard fallback."""
+
+    fallback = os.path.join(
+        FreeCAD.getResourceDir(),
+        "Mod",
+        "TechDraw",
+        "Templates",
+        "Default_Template_A4_Landscape.svg",
+    )
+    parameters = FreeCAD.ParamGet(
+        "User parameter:BaseApp/Preferences/Mod/TechDraw/Files"
+    )
+    configured = parameters.GetString("TemplateFile", fallback)
+    return configured if configured and os.path.isfile(configured) else fallback
+
+
 class BIMSheetPropertiesWidget(QtGui.QWidget):
     """Reusable editor for the mutable drawing-set metadata of one sheet."""
 

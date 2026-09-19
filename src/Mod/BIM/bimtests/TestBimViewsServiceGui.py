@@ -1774,6 +1774,29 @@ class TestBimViewsServiceGui(TestArchBaseGui):
             bounds.y,
         )
 
+    def test_create_sheet_from_view_uses_shared_creation_and_placement(self):
+        source = self.document.addObject("App::FeaturePython", "SheetShortcutSource")
+        source.addProperty("App::PropertyPlacement", "Placement")
+        service = BIMViewService(self.document, view=_RecordingView([]))
+        definition = service.create_view(
+            "Ground Floor Plan", "Plan", source, capture=False
+        )
+        template_path = (
+            FreeCAD.getResourceDir()
+            + "Mod/TechDraw/Templates/Default_Template_A4_Landscape.svg"
+        )
+
+        page, drawing_view = service.create_sheet_from_view(
+            definition, template_path, page_scale=0.01
+        )
+
+        self.assertTrue(BIMSheetService.is_sheet(page))
+        self.assertEqual("Ground Floor Plan", page.SheetTitle)
+        self.assertEqual("G-001 — Ground Floor Plan", page.Label)
+        self.assertIs(definition, drawing_view.BIMViewDefinition)
+        self.assertIn(drawing_view, page.Views)
+        self.assertGreater(drawing_view.Scale, page.Scale)
+
     def test_sheet_placement_uses_first_free_position_and_explicit_override(self):
         storey = self.document.addObject("App::FeaturePython", "LayoutStorey")
         storey.addProperty("App::PropertyPlacement", "Placement")
