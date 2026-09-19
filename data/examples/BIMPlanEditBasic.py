@@ -16,6 +16,7 @@ import Draft
 import FreeCAD as App
 import FreeCADGui as Gui
 import Part
+from BIMExampleBuilding import make_opening, make_wall
 from bimviews.service import BIMViewService
 from PySide import QtCore
 
@@ -23,45 +24,6 @@ from PySide import QtCore
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 OUTPUT_PATH = os.path.join(ROOT, "data", "examples", "BIMPlanEditBasic.FCStd")
 FONT_PATH = os.path.join(ROOT, "data", "examples", "osifont-lgpl3fe.ttf")
-
-
-def make_wall(doc, name, start, end, *, align="Center", width=200.0):
-    direction = end.sub(start)
-    wall = Arch.makeWall(length=direction.Length, width=width, height=2800.0)
-    wall.Label = name
-    wall.Align = align
-    wall.Placement = App.Placement(
-        (start + end) * 0.5,
-        App.Rotation(App.Vector(1, 0, 0), direction.normalize()),
-    )
-    doc.recompute()
-    return wall
-
-
-def make_opening(doc, wall, name, point, width, height, *, door=False, sill=900.0):
-    placement = App.Placement(
-        point + App.Vector(0, 0, 0 if door else sill),
-        App.Rotation(App.Vector(1, 0, 0), 90),
-    )
-    opening = Arch.makeWindowPreset(
-        "Simple door" if door else "Open 1-pane",
-        width=width,
-        height=height,
-        h1=50.0,
-        h2=50.0,
-        h3=0.0,
-        w1=100.0,
-        w2=40.0 if door else 50.0,
-        o1=0.0,
-        o2=0.0 if door else 50.0,
-        placement=placement,
-    )
-    opening.Label = name
-    if door:
-        opening.Opening = 100
-    Arch.addComponents(opening, wall)
-    doc.recompute()
-    return opening
 
 
 def add_label(text, point, size=170.0):
