@@ -63,6 +63,8 @@ public:
     App::PropertyEnumeration ScaleType;
     App::PropertyAngle Rotation;
     App::PropertyString Caption;
+    App::PropertyString ViewNumber;
+    App::PropertyString ViewTitle;
 
     /** @name methods override Feature */
     //@{
@@ -126,6 +128,7 @@ public:
     void translateLabel(std::string context, std::string baseName, std::string uniqueName);
 
     virtual App::PropertyLink *getOwnerProperty() { return nullptr; }
+    virtual void onOwnerPositionChanged();
 
     static bool isProjGroupItem(DrawViewPart* item);
 

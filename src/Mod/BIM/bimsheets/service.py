@@ -5,7 +5,13 @@
 from dataclasses import dataclass, replace
 from pathlib import Path
 
-from .layout import BIMSheetLayout, SheetMargins, SheetRect, svg_footprint
+from .layout import (
+    BIMSheetLayout,
+    PlacementFootprint,
+    SheetMargins,
+)
+from .footprints import BIMSheetFootprintProvider
+from .identity import BIMSheetIdentityService
 
 
 @dataclass(frozen=True)
@@ -25,6 +31,16 @@ class BIMSheetMetadata:
     margin_top: float = 10.0
     margin_right: float = 10.0
     margin_bottom: float = 10.0
+
+
+@dataclass(frozen=True)
+class BIMSheetPlacementSuggestion:
+    """A non-mutating scale and anchor proposal for one sheet view."""
+
+    x: float
+    y: float
+    scale: float
+    bounds: object
 
 
 class BIMSheetService:
@@ -47,6 +63,18 @@ class BIMSheetService:
         "Shared",
         "Published",
         "Archived",
+    )
+    STANDARD_SCALES = (
+        1.0,
+        0.5,
+        0.2,
+        0.1,
+        0.05,
+        0.02,
+        0.01,
+        0.005,
+        0.002,
+        0.001,
     )
 
     _STRING_PROPERTIES = (
@@ -167,6 +195,9 @@ class BIMSheetService:
         page.PrintableMarginTop = metadata.margin_top
         page.PrintableMarginRight = metadata.margin_right
         page.PrintableMarginBottom = metadata.margin_bottom
+        page.Label = BIMSheetIdentityService.display_label(
+            metadata.number, metadata.title
+        )
         if getattr(page, "Template", None) is not None:
             from .titleblock import BIMTitleBlockService
 
@@ -204,14 +235,17 @@ class BIMSheetService:
         template = self.document.addObject("TechDraw::DrawSVGTemplate", "Template")
         template.Template = template_path
         page.Template = template
-        values = metadata or BIMSheetMetadata(
-            title=Path(template_path).stem,
-            template_identity=Path(template_path).name,
-        )
+        values = metadata
+        if values is None:
+            identity = BIMSheetIdentityService(self.document, self.is_sheet)
+            values = BIMSheetMetadata(
+                number=identity.next_number("General"),
+                title=identity.UNTITLED_TITLE,
+                template_identity=Path(template_path).name,
+            )
         if not values.template_identity:
             values = replace(values, template_identity=Path(template_path).name)
         self.ensure_metadata(page, values)
-        page.Label = values.title or Path(template_path).stem
         return page
 
     def layout_view(
@@ -226,27 +260,163 @@ class BIMSheetService:
     ):
         """Position a new drawing view without moving existing page views."""
 
-        if page is None or not page.isDerivedFrom("TechDraw::DrawPage"):
-            raise TypeError("page must be a TechDraw::DrawPage")
-        if drawing_view not in page.Views:
-            raise ValueError("drawing_view must belong to page")
+        self._validate_layout_subject(page, drawing_view)
         margins = margins or self.margins_for(page)
         engine = BIMSheetLayout(page.PageWidth, page.PageHeight, margins, gap)
-        footprint = size or self._view_footprint(drawing_view)
-        occupied = tuple(
-            SheetRect(view.X.Value, view.Y.Value, *self._view_footprint(view))
-            for view in page.Views
-            if view is not drawing_view
-            and not (
-                view.isDerivedFrom("TechDraw::DrawViewAnnotation")
-                and getattr(view, "Owner", None) is not None
-                and view.Owner.isDerivedFrom("TechDraw::DrawViewArch")
-            )
+        footprint = (
+            PlacementFootprint.centered(*size)
+            if size is not None
+            else self._view_footprint(drawing_view)
         )
-        placement = engine.place(footprint, occupied, position)
-        drawing_view.X = placement.x
-        drawing_view.Y = placement.y
-        return placement
+        occupied = self._occupied_footprints(page, drawing_view)
+        x, y = engine.place_anchor(footprint, occupied, position)
+        drawing_view.X = x
+        drawing_view.Y = y
+        return footprint.at(x, y)
+
+    def validate_view_layout(
+        self,
+        page,
+        drawing_view,
+        *,
+        position,
+        scale=None,
+        title_offset=None,
+        title_size=None,
+        view_number=None,
+        view_title=None,
+        gap=5.0,
+    ):
+        """Validate edited placement geometry without mutating the document."""
+
+        return self._suggest_view_layout(
+            page,
+            drawing_view,
+            position=position,
+            scale=scale,
+            title_offset=title_offset,
+            title_size=title_size,
+            view_number=view_number,
+            view_title=view_title,
+            gap=gap,
+        ).bounds
+
+    def find_free_view_layout(
+        self,
+        page,
+        drawing_view,
+        *,
+        scale=None,
+        title_offset=None,
+        title_size=None,
+        view_number=None,
+        view_title=None,
+        gap=5.0,
+        centered=False,
+    ):
+        """Suggest the first free anchor without changing the document."""
+
+        return self._suggest_view_layout(
+            page,
+            drawing_view,
+            position=None,
+            scale=scale,
+            title_offset=title_offset,
+            title_size=title_size,
+            view_number=view_number,
+            view_title=view_title,
+            gap=gap,
+            centered=centered,
+        )
+
+    def fit_view_layout(
+        self,
+        page,
+        drawing_view,
+        *,
+        preferred_scale=None,
+        title_offset=None,
+        title_size=None,
+        view_number=None,
+        view_title=None,
+        gap=5.0,
+        allow_larger=False,
+        centered=False,
+    ):
+        """Suggest the largest permitted standard scale that fits."""
+
+        preferred = (
+            float(preferred_scale)
+            if preferred_scale is not None
+            else float(drawing_view.Scale)
+        )
+        if preferred <= 0.0:
+            raise ValueError("preferred placement scale must be positive")
+        ceiling = max(self.STANDARD_SCALES) if allow_larger else preferred
+        candidates = sorted(
+            {preferred, *(scale for scale in self.STANDARD_SCALES if scale <= ceiling)},
+            reverse=True,
+        )
+        last_error = None
+        for scale in candidates:
+            try:
+                return self.find_free_view_layout(
+                    page,
+                    drawing_view,
+                    scale=scale,
+                    title_offset=title_offset,
+                    title_size=title_size,
+                    view_number=view_number,
+                    view_title=view_title,
+                    gap=gap,
+                    centered=centered,
+                )
+            except ValueError as error:
+                last_error = error
+        if last_error is not None:
+            raise last_error
+        raise ValueError("no positive placement scale is available")
+
+    def _suggest_view_layout(
+        self,
+        page,
+        drawing_view,
+        *,
+        position,
+        scale=None,
+        title_offset=None,
+        title_size=None,
+        view_number=None,
+        view_title=None,
+        gap=5.0,
+        centered=False,
+    ):
+        self._validate_layout_subject(page, drawing_view)
+        resolved_scale = float(scale) if scale is not None else float(drawing_view.Scale)
+        if resolved_scale <= 0.0:
+            raise ValueError("placement scale must be positive")
+        footprint = BIMSheetFootprintProvider().for_view(
+            drawing_view,
+            scale=resolved_scale,
+            title_offset=title_offset,
+            title_size=title_size,
+            view_number=view_number,
+            view_title=view_title,
+        )
+        occupied = self._occupied_footprints(page, drawing_view)
+        engine = BIMSheetLayout(
+            page.PageWidth, page.PageHeight, self.margins_for(page), gap
+        )
+        if centered:
+            x, y = engine.center_anchor(footprint, occupied)
+        else:
+            x, y = engine.place_anchor(footprint, occupied, position)
+        return BIMSheetPlacementSuggestion(
+            x=x,
+            y=y,
+            scale=resolved_scale,
+            bounds=footprint.at(x, y),
+        )
 
     @staticmethod
     def margins_for(page):
@@ -263,6 +433,28 @@ class BIMSheetService:
         return SheetMargins()
 
     @staticmethod
+    def _validate_layout_subject(page, drawing_view):
+        if page is None or not page.isDerivedFrom("TechDraw::DrawPage"):
+            raise TypeError("page must be a TechDraw::DrawPage")
+        if drawing_view not in page.Views:
+            raise ValueError("drawing_view must belong to page")
+
+    @staticmethod
     def _view_footprint(drawing_view):
-        scale = drawing_view.getScale() if hasattr(drawing_view, "getScale") else 1.0
-        return svg_footprint(getattr(drawing_view, "Symbol", ""), scale)
+        return BIMSheetFootprintProvider().for_view(drawing_view)
+
+    def _occupied_footprints(self, page, excluded_view):
+        return tuple(
+            self._view_footprint(view).at(view.X.Value, view.Y.Value)
+            for view in page.Views
+            if view is not excluded_view and not self._is_owned_title(view)
+        )
+
+    @staticmethod
+    def _is_owned_title(view):
+        owner = getattr(view, "Owner", None)
+        return (
+            view.isDerivedFrom("TechDraw::DrawViewAnnotation")
+            and owner is not None
+            and owner.isDerivedFrom("TechDraw::DrawViewArch")
+        )

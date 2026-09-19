@@ -207,8 +207,11 @@ class BIM_Views:
                 ("SaveView", translate("BIM", "Save Camera View")),
                 ("SaveVisibility", translate("BIM", "Save Visibility of Objects")),
                 ("DuplicateView", translate("BIM", "Duplicate View")),
+                ("NewSheet", translate("BIM", "New Sheet…")),
+                ("CreateSheetFromView", translate("BIM", "Create Sheet from View")),
                 ("PlaceOnSheet", translate("BIM", "Place on Sheet…")),
                 ("OpenSheet", translate("BIM", "Open Sheet")),
+                ("EditSheet", translate("BIM", "Sheet Properties…")),
                 ("RefreshTitleBlock", translate("BIM", "Refresh Title Block")),
                 ("PublishSheet", translate("BIM", "Publish Sheet…")),
                 ("PublishSheetSet", translate("BIM", "Publish Sheet Set…")),
@@ -272,8 +275,13 @@ class BIM_Views:
             self.dialog.buttonSaveView.triggered.connect(self.saveView)
             self.dialog.buttonSaveVisibility.triggered.connect(self.saveVisibility)
             self.dialog.buttonDuplicateView.triggered.connect(self.duplicateView)
+            self.dialog.buttonNewSheet.triggered.connect(self.newSheet)
+            self.dialog.buttonCreateSheetFromView.triggered.connect(
+                self.createSheetFromView
+            )
             self.dialog.buttonPlaceOnSheet.triggered.connect(self.placeOnSheet)
             self.dialog.buttonOpenSheet.triggered.connect(self.openSheet)
+            self.dialog.buttonEditSheet.triggered.connect(self.editSheet)
             self.dialog.buttonRefreshTitleBlock.triggered.connect(self.refreshTitleBlock)
             self.dialog.buttonPublishSheet.triggered.connect(self.publishSheet)
             self.dialog.buttonPublishSheetSet.triggered.connect(self.publishSheetSet)
@@ -314,12 +322,14 @@ class BIM_Views:
 
     def onClose(self, event):
         from PySide import QtGui
+        from bimsheets.gui import hide_sheet_inspector
 
         st = FreeCADGui.getMainWindow().statusBar()
         statuswidget = st.findChild(QtGui.QToolBar, "BIMStatusWidget")
         if statuswidget and hasattr(statuswidget, "bimviewsbutton"):
             statuswidget.bimviewsbutton.setChecked(False)
         PARAMS.SetBool("RestoreBimViews", False)
+        hide_sheet_inspector()
         event.accept()
 
     def connectDock(self):
@@ -404,15 +414,33 @@ class BIM_Views:
             indexes = vm.navigatorModel.indexes_for_object(obj)
             for index in indexes:
                 selection_model.select(index, flags)
+        selected = selection_model.selectedRows(0)
+        self._showSheetInspector(selected[0] if len(selected) == 1 else QtCore.QModelIndex())
 
     def select(self, index):
         """Synchronize an object-backed navigator row with global selection."""
 
         vm = findWidget()
         obj = vm.navigatorModel.object_for_index(index) if vm else None
+        self._showSheetInspector(index)
         if obj is not None:
             FreeCADGui.Selection.clearSelection()
             FreeCADGui.Selection.addSelection(obj)
+
+    def _showSheetInspector(self, index):
+        """Route Navigator context to the standard right-side Task View."""
+
+        from bimsheets.gui import show_sheet_inspector
+
+        vm = findWidget()
+        if vm is None or not index.isValid():
+            show_sheet_inspector(None, "")
+            return
+        show_sheet_inspector(
+            vm.navigatorModel.object_for_index(index),
+            vm.navigatorModel.kind_for_index(index),
+            refresh_callback=lambda: self.update(False),
+        )
 
     def activateIndex(self, index):
         vm = findWidget()
@@ -681,12 +709,18 @@ class BIM_Views:
 
     def placeOnSheet(self):
         from PySide import QtGui
+        from bimsheets import BIMSheetService
 
         definition = self.contextObject
         service = _view_service()
         if not definition or not service.can_place_on_sheet(definition):
             return
-        pages = list(_manager_model().pages())
+        sheet_service = BIMSheetService(FreeCAD.ActiveDocument)
+        pages = [
+            page
+            for page in _manager_model().pages()
+            if sheet_service.is_sheet(page)
+        ]
         if not pages:
             QtGui.QMessageBox.information(
                 self.dialog,
@@ -694,18 +728,20 @@ class BIM_Views:
                 translate("BIM", "Create a TechDraw sheet before placing this view."),
             )
             return
-        labels = [page.Label for page in pages]
-        label, accepted = QtGui.QInputDialog.getItem(
-            self.dialog,
-            translate("BIM", "Place on Sheet"),
-            translate("BIM", "Sheet"),
-            labels,
-            0,
-            False,
-        )
-        if not accepted:
-            return
-        page = pages[labels.index(label)]
+        page = _preferred_sheet(FreeCAD.ActiveDocument, self._selectedObjects())
+        if page is None:
+            labels = [_sheet_display_label(candidate) for candidate in pages]
+            label, accepted = QtGui.QInputDialog.getItem(
+                self.dialog,
+                translate("BIM", "Place on Sheet"),
+                translate("BIM", "Sheet"),
+                labels,
+                0,
+                False,
+            )
+            if not accepted:
+                return
+            page = pages[labels.index(label)]
         existing = service.placements_for(definition, page)
         allow_duplicate = False
         if existing:
@@ -738,6 +774,81 @@ class BIM_Views:
         self.update(False)
         FreeCADGui.Selection.clearSelection()
         FreeCADGui.Selection.addSelection(drawing_view)
+        FreeCADGui.getMainWindow().statusBar().showMessage(
+            translate("BIM", "Placed {view} on {sheet}").format(
+                view=definition.Label,
+                sheet=_sheet_display_label(page),
+            ),
+            5000,
+        )
+
+    def createSheetFromView(self):
+        """Create, populate and open a dedicated sheet for the clicked view."""
+
+        from bimsheets.gui import default_sheet_template
+
+        definition = self.contextObject
+        service = _view_service()
+        if not definition or not service.can_place_on_sheet(definition):
+            return
+        document = FreeCAD.ActiveDocument
+        document.openTransaction("Create sheet from BIM view")
+        try:
+            page, drawing_view = service.create_sheet_from_view(
+                definition,
+                default_sheet_template(),
+                page_scale=PARAMS.GetFloat("DefaultPageScale", 0.01),
+            )
+            page.Template.Label = translate("BIM", "Template")
+            document.commitTransaction()
+        except Exception:
+            document.abortTransaction()
+            raise
+        document.recompute()
+        page.ViewObject.show()
+        self.contextObject = drawing_view
+        self.update(False)
+        FreeCADGui.Selection.clearSelection()
+        FreeCADGui.Selection.addSelection(drawing_view)
+        FreeCADGui.getMainWindow().statusBar().showMessage(
+            translate("BIM", "Created {sheet} from {view}").format(
+                sheet=_sheet_display_label(page),
+                view=definition.Label,
+            ),
+            5000,
+        )
+
+    def newSheet(self):
+        """Create a BIM sheet through the shared sheet creation workflow."""
+
+        from bimsheets.gui import create_sheet_interactive, show_sheet_inspector
+
+        page = create_sheet_interactive(FreeCAD.ActiveDocument, self.dialog)
+        if page is None:
+            return
+        self.contextObject = page
+        self.update(False)
+        FreeCADGui.Selection.clearSelection()
+        FreeCADGui.Selection.addSelection(page)
+        panel = show_sheet_inspector(
+            page,
+            "sheet",
+            refresh_callback=lambda: self.update(False),
+        )
+        if panel is not None:
+            panel.editor.title.setFocus()
+            panel.editor.title.selectAll()
+
+    def editSheet(self):
+        """Edit normalized sheet metadata in one undoable operation."""
+
+        from bimsheets.gui import edit_sheet_interactive
+
+        page = self.contextObject
+        if page is None or not page.isDerivedFrom("TechDraw::DrawPage"):
+            return
+        if edit_sheet_interactive(page, self.dialog):
+            self.update(False)
 
     def openSheet(self):
         """Open the selected sheet or a placement's parent sheet."""
@@ -1185,8 +1296,11 @@ class BIM_Views:
             self.dialog.buttonSaveView,
             self.dialog.buttonSaveVisibility,
             self.dialog.buttonDuplicateView,
+            self.dialog.buttonNewSheet,
+            self.dialog.buttonCreateSheetFromView,
             self.dialog.buttonPlaceOnSheet,
             self.dialog.buttonOpenSheet,
+            self.dialog.buttonEditSheet,
             self.dialog.buttonRefreshTitleBlock,
             self.dialog.buttonPublishSheet,
             self.dialog.buttonPublishSheetSet,
@@ -1199,8 +1313,11 @@ class BIM_Views:
             action.setEnabled(True)
             action.setVisible(True)
         self.dialog.buttonDuplicateView.setVisible(False)
+        self.dialog.buttonNewSheet.setVisible(False)
+        self.dialog.buttonCreateSheetFromView.setVisible(False)
         self.dialog.buttonPlaceOnSheet.setVisible(False)
         self.dialog.buttonOpenSheet.setVisible(False)
+        self.dialog.buttonEditSheet.setVisible(False)
         self.dialog.buttonRefreshTitleBlock.setVisible(False)
         self.dialog.buttonPublishSheet.setVisible(False)
         self.dialog.buttonPublishSheetSet.setVisible(False)
@@ -1233,11 +1350,16 @@ class BIM_Views:
                     self.dialog.buttonSaveVisibility,
                     self.dialog.buttonDuplicateView,
                     self.dialog.buttonRename,
+                    self.dialog.buttonCreateSheetFromView,
                     self.dialog.buttonPlaceOnSheet,
                 ):
                     action.setVisible(True)
+                self.dialog.buttonCreateSheetFromView.setEnabled(
+                    _view_service().can_place_on_sheet(obj)
+                )
                 self.dialog.buttonPlaceOnSheet.setEnabled(
                     _view_service().can_place_on_sheet(obj)
+                    and bool(_manager_model().pages())
                 )
                 if str(getattr(obj, "Purpose", "")) == "Plan":
                     self.dialog.buttonNewSectionView.setVisible(True)
@@ -1245,7 +1367,9 @@ class BIM_Views:
             elif kind == "sheet":
                 self.dialog.buttonNewPlanView.setVisible(False)
                 self.dialog.buttonNewModelView.setVisible(False)
+                self.dialog.buttonNewSheet.setVisible(True)
                 self.dialog.buttonOpenSheet.setVisible(True)
+                self.dialog.buttonEditSheet.setVisible(True)
                 self.dialog.buttonRefreshTitleBlock.setVisible(True)
                 self.dialog.buttonPublishSheet.setVisible(True)
                 self.dialog.buttonPublishSheetSet.setVisible(True)
@@ -1265,6 +1389,10 @@ class BIM_Views:
                 action.setVisible(False)
             self.dialog.buttonNewPlanView.setVisible(True)
             self.dialog.buttonNewModelView.setVisible(True)
+            if vm.navigatorModel.key_for_index(index) == "section:sheets":
+                self.dialog.buttonNewPlanView.setVisible(False)
+                self.dialog.buttonNewModelView.setVisible(False)
+                self.dialog.buttonNewSheet.setVisible(True)
         else:
             self.dialog.buttonNewSectionView.setEnabled(
                 (
@@ -1604,6 +1732,31 @@ def _manager_model():
     from bimviews.navigator_model import BIMNavigatorModel
 
     return BIMNavigatorModel(FreeCAD.ActiveDocument, legacy_view_predicate=isView)
+
+
+def _preferred_sheet(document, selected_objects=()):
+    """Resolve an unambiguous placement target without prompting the user."""
+
+    from bimsheets import BIMSheetService, BIMSheetTargetResolver
+
+    service = BIMSheetService(document)
+    active_page = None
+    try:
+        gui_document = FreeCADGui.activeDocument()
+        active_view = gui_document.activeView() if gui_document is not None else None
+        active_page = active_view.getPage() if hasattr(active_view, "getPage") else None
+    except (AttributeError, ReferenceError, RuntimeError):
+        pass
+    return BIMSheetTargetResolver(document, service.is_sheet).resolve(
+        active_page=active_page,
+        selected=selected_objects,
+    )
+
+
+def _sheet_display_label(page):
+    number = str(getattr(page, "SheetNumber", "")).strip()
+    title = str(getattr(page, "SheetTitle", "") or page.Label).strip()
+    return "{} — {}".format(number, title) if number else title
 
 
 def _apply_representation_request(request):

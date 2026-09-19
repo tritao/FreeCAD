@@ -53,6 +53,10 @@ public:
     App::PropertyEnumeration  TextStyle; // Plain, Bold, Italic, Bold-Italic
     App::PropertyFloat        MaxWidth;
     App::PropertyLink         Owner;
+    App::PropertyStringList   TextTemplate;
+    App::PropertyBool         FollowOwnerPosition;
+    App::PropertyDistance     OwnerOffsetX;
+    App::PropertyDistance     OwnerOffsetY;
 
     QRectF getRect() const override;
 
@@ -71,12 +75,14 @@ public:
 
     bool checkFit() const override {return true;}
     App::PropertyLink *getOwnerProperty() override { return &Owner; }
+    void onOwnerPositionChanged() override;
 
 protected:
     void onChanged(const App::Property* prop) override;
     void handleChangedPropertyType(Base::XMLReader &reader, const char *TypeName, App::Property * prop) override;
 
 private:
+    void synchronizeOwnerPosition();
     static const char* TextStyleEnums[];
 };
 

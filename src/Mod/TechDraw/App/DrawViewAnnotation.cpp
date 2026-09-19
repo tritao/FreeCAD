@@ -24,13 +24,95 @@
  ***************************************************************************/
 
 #include "DrawViewAnnotation.h"
-#include "DrawViewArch.h"
 #include "Preferences.h"
+
+#include <App/PropertyLinks.h>
 
 #include <sstream>
 
 
 using namespace TechDraw;
+
+namespace {
+
+std::string propertyText(App::DocumentObject* object, const std::string& path)
+{
+    std::size_t start = 0;
+    while (object && start < path.size()) {
+        const auto separator = path.find('.', start);
+        const auto name = path.substr(start, separator - start);
+        auto* property = object->getPropertyByName(name.c_str());
+        if (!property) {
+            return {};
+        }
+        if (separator == std::string::npos) {
+            if (auto* value = dynamic_cast<App::PropertyString*>(property)) {
+                return value->getValue();
+            }
+            if (auto* value = dynamic_cast<App::PropertyEnumeration*>(property)) {
+                return value->getValueAsString();
+            }
+            return {};
+        }
+        auto* link = dynamic_cast<App::PropertyLink*>(property);
+        object = link ? link->getValue() : nullptr;
+        start = separator + 1;
+    }
+    return {};
+}
+
+std::string scaleText(App::DocumentObject* owner)
+{
+    auto* view = dynamic_cast<DrawView*>(owner);
+    if (!view || view->getScale() <= 0.0) {
+        return {};
+    }
+    std::ostringstream result;
+    const double scale = view->getScale();
+    if (scale < 1.0) {
+        result << "1:" << 1.0 / scale;
+    }
+    else {
+        result << scale << ":1";
+    }
+    return result.str();
+}
+
+std::string tokenText(App::DocumentObject* owner, const std::string& token)
+{
+    std::size_t start = 0;
+    while (start <= token.size()) {
+        const auto separator = token.find('|', start);
+        const auto alternative = token.substr(start, separator - start);
+        auto value = alternative == "Scale" ? scaleText(owner)
+                                             : propertyText(owner, alternative);
+        if (!value.empty()) {
+            return value;
+        }
+        if (separator == std::string::npos) {
+            break;
+        }
+        start = separator + 1;
+    }
+    return {};
+}
+
+std::string renderTemplate(App::DocumentObject* owner, std::string text)
+{
+    std::size_t start = 0;
+    while ((start = text.find('{', start)) != std::string::npos) {
+        const auto end = text.find('}', start + 1);
+        if (end == std::string::npos) {
+            break;
+        }
+        const auto value = tokenText(owner, text.substr(start + 1, end - start - 1));
+        text.replace(start, end - start + 1, value);
+        start += value.size();
+    }
+    return text;
+}
+
+} // namespace
 
 //===========================================================================
 // DrawViewAnnotation
@@ -62,6 +144,14 @@ DrawViewAnnotation::DrawViewAnnotation()
 
     ADD_PROPERTY_TYPE(Owner, (nullptr), vgroup, (App::PropertyType)(App::Prop_None),
                       "Feature to which this annotation is attached, if any");
+    ADD_PROPERTY_TYPE(TextTemplate, (), vgroup, App::Prop_None,
+                      "Annotation lines containing owner property tokens in braces");
+    ADD_PROPERTY_TYPE(FollowOwnerPosition, (false), vgroup, App::Prop_None,
+                      "Keep this annotation positioned relative to its owner view");
+    ADD_PROPERTY_TYPE(OwnerOffsetX, (0.0), vgroup, App::Prop_None,
+                      "Horizontal offset from the owner view origin");
+    ADD_PROPERTY_TYPE(OwnerOffsetY, (0.0), vgroup, App::Prop_None,
+                      "Vertical offset from the owner view origin");
 
     Scale.setStatus(App::Property::Hidden, true);
     ScaleType.setStatus(App::Property::Hidden, true);
@@ -70,13 +160,23 @@ DrawViewAnnotation::DrawViewAnnotation()
 void DrawViewAnnotation::onChanged(const App::Property* prop)
 {
     if (!isRestoring()) {
+        if (prop == &Owner ||
+            prop == &FollowOwnerPosition ||
+            prop == &OwnerOffsetX ||
+            prop == &OwnerOffsetY) {
+            synchronizeOwnerPosition();
+        }
         if (prop == &Text ||
             prop == &Font ||
             prop == &TextColor ||
             prop == &TextSize ||
             prop == &LineSpace ||
             prop == &TextStyle ||
-            prop == &MaxWidth) {
+            prop == &MaxWidth ||
+            prop == &TextTemplate ||
+            prop == &FollowOwnerPosition ||
+            prop == &OwnerOffsetX ||
+            prop == &OwnerOffsetY) {
             requestPaint();
         }
     }
@@ -88,7 +188,11 @@ short DrawViewAnnotation::mustExecute() const
 {
     if (!isRestoring()) {
         if (Text.isTouched() ||
-            Owner.isTouched()) {
+            Owner.isTouched() ||
+            TextTemplate.isTouched() ||
+            FollowOwnerPosition.isTouched() ||
+            OwnerOffsetX.isTouched() ||
+            OwnerOffsetY.isTouched()) {
             return 1;
         }
     }
@@ -139,41 +243,35 @@ QRectF DrawViewAnnotation::getRect() const
 
 App::DocumentObjectExecReturn *DrawViewAnnotation::execute()
 {
-    if (auto* owner = dynamic_cast<DrawViewArch*>(Owner.getValue())) {
-        auto* definition = owner->BIMViewDefinition.getValue();
-        std::string title = owner->BIMViewTitle.getValue();
-        if (title.empty() && definition) {
-            title = definition->Label.getValue();
+    auto* owner = Owner.getValue();
+    if (owner && !TextTemplate.getValues().empty()) {
+        std::vector<std::string> text;
+        text.reserve(TextTemplate.getValues().size());
+        for (const auto& line : TextTemplate.getValues()) {
+            text.push_back(renderTemplate(owner, line));
         }
-        if (title.empty()) {
-            title = owner->Label.getValue();
-        }
-        std::string heading = owner->BIMViewNumber.getValue();
-        if (!heading.empty() && !title.empty()) {
-            heading += "  ";
-        }
-        heading += title;
-        std::ostringstream scaleLabel;
-        double scale = owner->getScale();
-        if (scale > 0.0) {
-            if (scale < 1.0) {
-                scaleLabel << "1:" << 1.0 / scale;
-            }
-            else {
-                scaleLabel << scale << ":1";
-            }
-        }
-        Text.setValues(std::vector<std::string>{heading, scaleLabel.str()});
-        X.setValue(owner->X.getValue());
-        double offset = 12.0;
-        if (auto* property = dynamic_cast<App::PropertyLength*>(
-                getPropertyByName("TitleOffset"))) {
-            offset = property->getValue();
-        }
-        Y.setValue(owner->Y.getValue() - offset);
+        Text.setValues(text);
     }
+    synchronizeOwnerPosition();
     requestPaint();
     return TechDraw::DrawView::execute();
+}
+
+void DrawViewAnnotation::onOwnerPositionChanged()
+{
+    synchronizeOwnerPosition();
+    touch();
+}
+
+void DrawViewAnnotation::synchronizeOwnerPosition()
+{
+    if (!FollowOwnerPosition.getValue()) {
+        return;
+    }
+    if (auto* ownerView = dynamic_cast<DrawView*>(Owner.getValue())) {
+        X.setValue(ownerView->X.getValue() + OwnerOffsetX.getValue());
+        Y.setValue(ownerView->Y.getValue() + OwnerOffsetY.getValue());
+    }
 }
 
 // Python Drawing feature ---------------------------------------------------------

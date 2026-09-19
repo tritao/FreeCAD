@@ -36,19 +36,59 @@ class SheetRect:
         return self.x + self.width / 2.0
 
     @property
-    def top(self):
+    def bottom(self):
         return self.y - self.height / 2.0
 
     @property
-    def bottom(self):
+    def top(self):
         return self.y + self.height / 2.0
 
     def intersects(self, other, gap=0.0):
         return not (
             self.right + gap <= other.left
             or other.right + gap <= self.left
-            or self.bottom + gap <= other.top
-            or other.bottom + gap <= self.top
+            or self.top + gap <= other.bottom
+            or other.top + gap <= self.bottom
+        )
+
+
+@dataclass(frozen=True)
+class PlacementFootprint:
+    """Bounds around a view anchor, expressed in sheet millimetres."""
+
+    left: float
+    bottom: float
+    right: float
+    top: float
+
+    @classmethod
+    def centered(cls, width, height):
+        half_width = float(width) / 2.0
+        half_height = float(height) / 2.0
+        return cls(-half_width, -half_height, half_width, half_height)
+
+    @property
+    def width(self):
+        return self.right - self.left
+
+    @property
+    def height(self):
+        return self.top - self.bottom
+
+    def union(self, other):
+        return PlacementFootprint(
+            min(self.left, other.left),
+            min(self.bottom, other.bottom),
+            max(self.right, other.right),
+            max(self.top, other.top),
+        )
+
+    def at(self, x, y):
+        return SheetRect(
+            float(x) + (self.left + self.right) / 2.0,
+            float(y) + (self.bottom + self.top) / 2.0,
+            self.width,
+            self.height,
         )
 
 
@@ -64,42 +104,74 @@ class BIMSheetLayout:
             raise SheetLayoutError("sheet dimensions must be positive")
 
     def place(self, size, occupied=(), position=None):
-        width, height = (float(value) for value in size)
+        footprint = (
+            size
+            if isinstance(size, PlacementFootprint)
+            else PlacementFootprint.centered(*size)
+        )
+        anchor = self.place_anchor(footprint, occupied, position)
+        return footprint.at(*anchor)
+
+    def place_anchor(self, footprint, occupied=(), position=None):
+        """Return the view anchor for an anchor-relative footprint."""
+
+        width, height = footprint.width, footprint.height
         if width <= 0.0 or height <= 0.0:
             raise SheetLayoutError("view dimensions must be positive")
         occupied = tuple(occupied)
         if position is not None:
-            result = SheetRect(float(position[0]), float(position[1]), width, height)
+            result = footprint.at(*position)
             self._ensure_inside(result)
-            return result
+            self._ensure_clear(result, occupied)
+            return float(position[0]), float(position[1])
 
         left = self.margins.left
-        top = self.margins.top
-        x_candidates = {left + width / 2.0}
-        y_candidates = {top + height / 2.0}
+        top = self.height - self.margins.top
+        x_candidates = {left - footprint.left}
+        y_candidates = {top - footprint.top}
         for rect in occupied:
-            x_candidates.add(rect.right + self.gap + width / 2.0)
-            y_candidates.add(rect.bottom + self.gap + height / 2.0)
-        for y in sorted(y_candidates):
+            x_candidates.add(rect.right + self.gap - footprint.left)
+            y_candidates.add(rect.bottom - self.gap - footprint.top)
+        for y in sorted(y_candidates, reverse=True):
             for x in sorted(x_candidates):
-                candidate = SheetRect(x, y, width, height)
+                candidate = footprint.at(x, y)
                 if not self._inside(candidate):
                     continue
                 if not any(candidate.intersects(rect, self.gap) for rect in occupied):
-                    return candidate
+                    return x, y
         raise SheetLayoutError("no printable sheet space is available for this view")
+
+    def center_anchor(self, footprint, occupied=()):
+        """Return an anchor that centers a footprint in the printable area."""
+
+        printable_center_x = (
+            self.margins.left + self.width - self.margins.right
+        ) / 2.0
+        printable_center_y = (
+            self.margins.bottom + self.height - self.margins.top
+        ) / 2.0
+        x = printable_center_x - (footprint.left + footprint.right) / 2.0
+        y = printable_center_y - (footprint.bottom + footprint.top) / 2.0
+        result = footprint.at(x, y)
+        self._ensure_inside(result)
+        self._ensure_clear(result, tuple(occupied))
+        return x, y
 
     def _inside(self, rect):
         return (
             rect.left >= self.margins.left
-            and rect.top >= self.margins.top
+            and rect.bottom >= self.margins.bottom
             and rect.right <= self.width - self.margins.right
-            and rect.bottom <= self.height - self.margins.bottom
+            and rect.top <= self.height - self.margins.top
         )
 
     def _ensure_inside(self, rect):
         if not self._inside(rect):
             raise SheetLayoutError("view position lies outside printable sheet bounds")
+
+    def _ensure_clear(self, rect, occupied):
+        if any(rect.intersects(other, self.gap) for other in occupied):
+            raise SheetLayoutError("view position overlaps another sheet view")
 
 
 def svg_footprint(svg, scale=1.0, fallback=(64.0, 64.0)):
@@ -113,10 +185,10 @@ def svg_footprint(svg, scale=1.0, fallback=(64.0, 64.0)):
         ]
         points.extend(zip(values[0::2], values[1::2]))
     if not points:
-        return tuple(float(value) for value in fallback)
+        return tuple(float(value) * float(scale) for value in fallback)
     xs, ys = zip(*points)
     width = (max(xs) - min(xs)) * float(scale)
     height = (max(ys) - min(ys)) * float(scale)
     if width <= 0.0 or height <= 0.0:
-        return tuple(float(value) for value in fallback)
+        return tuple(float(value) * float(scale) for value in fallback)
     return width, height

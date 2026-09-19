@@ -56,10 +56,6 @@ DrawViewArch::DrawViewArch()
     ADD_PROPERTY_TYPE(BIMViewDefinition, (nullptr), group, App::Prop_None,
                       "Saved BIM view that defines this drawing view's context");
     BIMViewDefinition.setScope(App::LinkScope::Global);
-    ADD_PROPERTY_TYPE(BIMViewNumber, (""), group, App::Prop_None,
-                      "View number, unique within the containing sheet");
-    ADD_PROPERTY_TYPE(BIMViewTitle, (""), group, App::Prop_None,
-                      "Optional title override; empty uses the saved view label");
     ADD_PROPERTY_TYPE(AllOn ,(false), group, App::Prop_None, "If hidden objects must be shown or not");
     RenderMode.setEnums(RenderModeEnums);
     ADD_PROPERTY_TYPE(RenderMode, ((long)0), group, App::Prop_None, "The render mode to use");
@@ -70,7 +66,7 @@ DrawViewArch::DrawViewArch()
     ADD_PROPERTY_TYPE(FontSize, (12.0), group, App::Prop_None, "Text size for this view");
     ADD_PROPERTY_TYPE(CutLineWidth, (0.50), group, App::Prop_None, "Width of cut lines of this view");
     ADD_PROPERTY_TYPE(JoinArch ,(false), group, App::Prop_None, "If True, walls and structure will be fused by material");
-    ADD_PROPERTY_TYPE(LineSpacing, (1.0f), group, App::Prop_None, "The spacing between lines to use for multiline texts");
+    ADD_PROPERTY_TYPE(LineSpacing, (1.0f), group, App::Prop_None, "Line spacing as a multiple of the rendered text height");
     ScaleType.setValue("Custom");
 }
 
@@ -81,8 +77,6 @@ short DrawViewArch::mustExecute() const
         if (
             Source.isTouched() ||
             BIMViewDefinition.isTouched() ||
-            BIMViewNumber.isTouched() ||
-            BIMViewTitle.isTouched() ||
             AllOn.isTouched() ||
             RenderMode.isTouched() ||
             ShowHidden.isTouched() ||
@@ -143,7 +137,7 @@ App::DocumentObjectExecReturn *DrawViewArch::execute()
                  << ", rotation=" << Rotation.getValue()
                  << ", fillSpaces=" << (FillSpaces.getValue() ? "True" : "False")
                  << ", cutlinewidth=" << CutLineWidth.getValue()
-                 << ", linespacing=" << LineSpacing.getValue()
+                 << ", linespacing=" << FontSize.getValue() * LineSpacing.getValue() / 2.0
                  << ", joinArch=" << (JoinArch.getValue() ? "True" : "False");
 
         if (definition) {

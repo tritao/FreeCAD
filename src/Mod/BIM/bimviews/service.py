@@ -3,7 +3,7 @@
 """Saved-view lifecycle and activation for the BIM Navigator."""
 
 from contextlib import contextmanager
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 import ArchRepresentation
 import FreeCAD
@@ -338,6 +338,9 @@ class BIMViewService:
 
         sheet_service = BIMSheetService(self.document)
         sheet_service.ensure_metadata(page)
+        first_placement = not any(
+            view.isDerivedFrom("TechDraw::DrawViewArch") for view in page.Views
+        )
         drawing_view = self.document.addObject("TechDraw::DrawViewArch", "BIMSavedView")
         drawing_view.Label = definition.Label
         drawing_view.Source = self.context_source(definition)
@@ -346,11 +349,27 @@ class BIMViewService:
         if getattr(page, "Scale", 0.0):
             drawing_view.Scale = page.Scale
         try:
-            sheet_service.layout_view(page, drawing_view, position=position)
             from bimsheets import BIMSheetViewTitleService
 
-            BIMSheetViewTitleService(self.document).create(page, drawing_view)
-        except (TypeError, ValueError):
+            title_service = BIMSheetViewTitleService(self.document)
+            annotation = title_service.create(page, drawing_view)
+            self.document.recompute()
+            title_service.position_below_view(drawing_view)
+            if position is None:
+                suggestion = sheet_service.fit_view_layout(
+                    page,
+                    drawing_view,
+                    preferred_scale=drawing_view.Scale,
+                    allow_larger=first_placement,
+                    centered=first_placement,
+                )
+                drawing_view.Scale = suggestion.scale
+                drawing_view.X = suggestion.x
+                drawing_view.Y = suggestion.y
+            else:
+                sheet_service.layout_view(page, drawing_view, position=position)
+            title_service.position_below_view(drawing_view)
+        except Exception:
             from bimsheets import BIMSheetViewTitleService
 
             annotation = BIMSheetViewTitleService.annotation_for(drawing_view)
@@ -361,6 +380,27 @@ class BIMViewService:
             self.document.removeObject(drawing_view.Name)
             raise
         return drawing_view
+
+    def create_sheet_from_view(self, definition, template_path, *, page_scale=None):
+        """Create a dedicated sheet and place one saved planar view on it."""
+
+        if not self.can_place_on_sheet(definition):
+            raise ValueError(
+                "Only PLAN, SECTION or ELEVATION views with a context can create a sheet"
+            )
+        from bimsheets.service import BIMSheetService
+
+        sheet_service = BIMSheetService(self.document)
+        page = sheet_service.create_sheet(template_path)
+        metadata = replace(
+            sheet_service.metadata_for(page),
+            title=definition.Label,
+        )
+        sheet_service.apply_metadata(page, metadata)
+        if page_scale is not None and float(page_scale) > 0.0:
+            page.Scale = float(page_scale)
+        drawing_view = self.place_on_sheet(definition, page)
+        return page, drawing_view
 
     def remove_sheet_placement(self, drawing_view):
         """Remove one placement without deleting its saved BIM view."""

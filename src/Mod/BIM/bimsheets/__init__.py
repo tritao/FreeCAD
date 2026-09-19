@@ -2,27 +2,41 @@
 
 """BIM drawing-sheet metadata and lifecycle services."""
 
-from .layout import BIMSheetLayout, SheetLayoutError, SheetMargins, SheetRect
+from .layout import (
+    BIMSheetLayout,
+    PlacementFootprint,
+    SheetLayoutError,
+    SheetMargins,
+    SheetRect,
+)
 from .issues import BIMSheetIssueService, IssueComparison, SheetIssueError
+from .footprints import BIMSheetFootprintProvider
+from .identity import BIMSheetIdentityService
 from .publishing import (
     BIMSheetPublishingService,
     PublishedSheet,
     SheetPublicationError,
     SheetPublicationResult,
 )
-from .service import BIMSheetMetadata, BIMSheetService
+from .service import BIMSheetMetadata, BIMSheetPlacementSuggestion, BIMSheetService
 from .titleblock import BIMTitleBlockService, TitleBlockSyncResult
 from .titles import BIMSheetViewTitleService, format_scale
+from .targeting import BIMSheetTargetResolver
 
 __all__ = (
     "BIMSheetLayout",
     "BIMSheetIssueService",
+    "BIMSheetIdentityService",
+    "BIMSheetFootprintProvider",
     "BIMSheetMetadata",
     "BIMSheetPublishingService",
+    "BIMSheetPlacementSuggestion",
     "BIMSheetService",
+    "BIMSheetTargetResolver",
     "BIMSheetViewTitleService",
     "BIMTitleBlockService",
     "SheetLayoutError",
+    "PlacementFootprint",
     "SheetPublicationError",
     "SheetPublicationResult",
     "SheetMargins",

@@ -105,6 +105,10 @@ DrawView::DrawView():
     Scale.setConstraints(&scaleRange);
 
     ADD_PROPERTY_TYPE(Caption, (""), group, App::Prop_Output, "Short text about the view");
+    ADD_PROPERTY_TYPE(ViewNumber, (""), group, App::Prop_None,
+                      "Identifier shown with the view on a page");
+    ADD_PROPERTY_TYPE(ViewTitle, (""), group, App::Prop_None,
+                      "Optional title used when identifying the view on a page");
 
     setScaleAttribute();
 }
@@ -146,6 +150,11 @@ void DrawView::checkScale()
             }
         }
     }
+}
+
+void DrawView::onOwnerPositionChanged()
+{
+    touch();
 }
 
 void DrawView::touchTreeOwner(App::DocumentObject *owner) const
@@ -220,11 +229,18 @@ void DrawView::onChanged(const App::Property* prop)
         handleXYLock();
         requestPaint();         //change lock icon
     } else if ((prop == &Caption) ||
+        (prop == &ViewNumber) ||
+        (prop == &ViewTitle) ||
         (prop == &Label)) {
         requestPaint();
     } else if ( prop == &X ||
                 prop == &Y ) {
-        //X,Y changes are only interesting to DPGI and Gui side
+        // Owned views can derive their position from this view.  The Owner
+        // link establishes ordering, but position changes must also dirty the
+        // children so they execute during the same document recompute.
+        for (auto* child : getUniqueChildren()) {
+            child->onOwnerPositionChanged();
+        }
     }
 
     App::PropertyLink *ownerProp = getOwnerProperty();
@@ -269,6 +285,8 @@ short DrawView::mustExecute() const
 {
     if (!isRestoring()) {
         if (Scale.isTouched() ||
+            ViewNumber.isTouched() ||
+            ViewTitle.isTouched() ||
             ScaleType.isTouched()) {
             return true;
         }
