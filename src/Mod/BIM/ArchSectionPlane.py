@@ -211,7 +211,18 @@ def isOriented(obj, plane):
     return False
 
 
-def update_svg_cache(source, renderMode, showHidden, showFill, fillSpaces, joinArch, allOn, objs):
+def update_svg_cache(
+    source,
+    renderMode,
+    showHidden,
+    showFill,
+    fillColor,
+    fillSpaces,
+    joinArch,
+    allOn,
+    objs,
+    frame,
+):
     """
     Returns None or cached SVG, clears shape cache if required
     """
@@ -222,7 +233,10 @@ def update_svg_cache(source, renderMode, showHidden, showFill, fillSpaces, joinA
             svgcache = source.Proxy.svgcache[0]
             # empty caches if we want to force-recalculate for certain properties
             if (
-                source.Proxy.svgcache[1] != renderMode
+                len(source.Proxy.svgcache) < 10
+                or source.Proxy.svgcache[8] != frame
+                or source.Proxy.svgcache[9] != fillColor
+                or source.Proxy.svgcache[1] != renderMode
                 or source.Proxy.svgcache[2] != showHidden
                 or source.Proxy.svgcache[3] != showFill
                 or source.Proxy.svgcache[4] != fillSpaces
@@ -232,7 +246,9 @@ def update_svg_cache(source, renderMode, showHidden, showFill, fillSpaces, joinA
             ):
                 svgcache = None
             if (
-                source.Proxy.svgcache[4] != fillSpaces
+                len(source.Proxy.svgcache) < 10
+                or source.Proxy.svgcache[8] != frame
+                or source.Proxy.svgcache[4] != fillSpaces
                 or source.Proxy.svgcache[5] != joinArch
                 or source.Proxy.svgcache[6] != allOn
                 or source.Proxy.svgcache[7] != set(objs)
@@ -302,14 +318,18 @@ def getSVG(
         only_solids=onlySolids,
         clip=clip,
         direction=direction,
-        resolve_request=(
-            techdraw
-            and not showHidden
-            and not showFill
-            and not fillSpaces
-            and not joinArch
-        ),
+        resolve_request=techdraw,
     )
+    if context.request is not None and viewDefinition is not None:
+        from dataclasses import replace
+
+        source_frame = FreeCAD.Placement(source.Placement)
+        request_frame = FreeCAD.Placement(context.request.reference_frame)
+        transform = request_frame.multiply(source_frame.inverse())
+        cutplane = cutplane.copy()
+        cutplane.Placement = transform.multiply(cutplane.Placement)
+        direction = request_frame.Rotation.multVec(FreeCAD.Vector(0, 0, 1))
+        context = replace(context, cutplane=cutplane, direction=direction)
     return render_drawing_context(
         context,
         renderMode=renderMode,
@@ -432,8 +452,18 @@ def render_drawing_context(
     svgLineColor = Draft.getrgb(lineColor)
     svg = ""
     # reading cached version
+    frame = FreeCAD.Placement(cutplane.Placement)
     svgcache = update_svg_cache(
-        source, renderMode, showHidden, showFill, fillSpaces, joinArch, allOn, objs
+        source,
+        renderMode,
+        showHidden,
+        showFill,
+        fillColor,
+        fillSpaces,
+        joinArch,
+        allOn,
+        objs,
+        frame,
     )
     should_update_svg_cache = False
     if contextual_representations or showFill or not svgcache:
@@ -687,6 +717,8 @@ def render_drawing_context(
                 joinArch,
                 allOn,
                 set(objs),
+                frame,
+                fillColor,
             ]
 
     svgcache = svgcache.replace("SVGLINECOLOR", svgLineColor)

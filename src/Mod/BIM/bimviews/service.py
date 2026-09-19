@@ -23,6 +23,12 @@ _PLANAR_PURPOSES = frozenset(
         ArchRepresentation.RepresentationPurpose.ELEVATION,
     )
 )
+_CUT_FILL_PURPOSES = frozenset(
+    (
+        ArchRepresentation.RepresentationPurpose.PLAN,
+        ArchRepresentation.RepresentationPurpose.SECTION,
+    )
+)
 _PLAN_SNAP_MODES = frozenset(
     (
         "Lock",
@@ -335,6 +341,8 @@ class BIMViewService:
         drawing_view.Label = definition.Label
         drawing_view.Source = self.context_source(definition)
         drawing_view.BIMViewDefinition = definition
+        purpose = self.normalize_purpose(definition.Purpose)
+        drawing_view.ShowFill = purpose in _CUT_FILL_PURPOSES
         page.addView(drawing_view)
         if getattr(page, "Scale", 0.0):
             drawing_view.Scale = page.Scale

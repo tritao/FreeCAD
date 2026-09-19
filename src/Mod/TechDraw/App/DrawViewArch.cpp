@@ -61,7 +61,12 @@ DrawViewArch::DrawViewArch()
     ADD_PROPERTY_TYPE(RenderMode, ((long)0), group, App::Prop_None, "The render mode to use");
     ADD_PROPERTY_TYPE(FillSpaces ,(false), group, App::Prop_None, "If True, BIM Spaces are shown as a colored area");
     ADD_PROPERTY_TYPE(ShowHidden ,(false), group, App::Prop_None, "If the hidden geometry behind the section plane is shown or not");
-    ADD_PROPERTY_TYPE(ShowFill ,(false), group, App::Prop_None, "If cut areas must be filled with a hatch pattern or not");
+    ADD_PROPERTY_TYPE(ShowFill ,(false), group, App::Prop_None, "If cut areas must be filled or not");
+    ADD_PROPERTY_TYPE(FillColor,
+                      (0.85f, 0.85f, 0.85f),
+                      group,
+                      App::Prop_None,
+                      "Color used to fill cut areas");
     ADD_PROPERTY_TYPE(LineWidth, (0.25), group, App::Prop_None, "Line width of this view");
     ADD_PROPERTY_TYPE(FontSize, (12.0), group, App::Prop_None, "Text size for this view");
     ADD_PROPERTY_TYPE(CutLineWidth, (0.50), group, App::Prop_None, "Width of cut lines of this view");
@@ -81,6 +86,7 @@ short DrawViewArch::mustExecute() const
             RenderMode.isTouched() ||
             ShowHidden.isTouched() ||
             ShowFill.isTouched() ||
+            FillColor.isTouched() ||
             LineWidth.isTouched() ||
             FontSize.isTouched() ||
             CutLineWidth.isTouched() ||
@@ -126,10 +132,13 @@ App::DocumentObjectExecReturn *DrawViewArch::execute()
         // ArchSectionPlane.getSVG(section, allOn=False, renderMode="Wireframe", showHidden=False, showFill=False, scale=1, linewidth=1, fontsize=1):
 
         std::stringstream paramStr;
+        const auto& fillColor = FillColor.getValue();
         paramStr << ", allOn=" << (AllOn.getValue() ? "True" : "False")
                  << ", renderMode=" << RenderMode.getValue()
                  << ", showHidden=" << (ShowHidden.getValue() ? "True" : "False")
                  << ", showFill=" << (ShowFill.getValue() ? "True" : "False")
+                 << ", fillColor=(" << fillColor.r << "," << fillColor.g << "," << fillColor.b
+                 << ")"
                  << ", scale=" << getScale()
                  << ", linewidth=" << LineWidth.getValue()
                  << ", fontsize=" << FontSize.getValue()

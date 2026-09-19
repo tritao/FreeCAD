@@ -51,6 +51,7 @@ public:
     App::PropertyBool         FillSpaces;
     App::PropertyBool         ShowHidden;
     App::PropertyBool         ShowFill;
+    App::PropertyColor        FillColor;
     App::PropertyFloat        LineWidth;
     App::PropertyFloat        FontSize;
     App::PropertyFloat        CutLineWidth;
