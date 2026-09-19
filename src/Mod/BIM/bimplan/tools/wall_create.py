@@ -126,6 +126,27 @@ class PlanWallCreateAPI:
     def get_wall_defaults(self):
         return get_wall_defaults(self.session)
 
+    def get_wall_types(self):
+        return get_wall_types(self.session)
+
+    def get_active_wall_type(self):
+        return get_active_wall_type(self.session)
+
+    def set_active_wall_type(self, wall_type):
+        return set_active_wall_type(self.session, wall_type)
+
+    def get_selected_wall(self):
+        return get_selected_wall(self.session)
+
+    def assign_selected_wall_type(self, wall_type):
+        return assign_selected_wall_type(self.session, wall_type)
+
+    def create_wall_type(self, source=None):
+        return create_wall_type(self.session, source=source)
+
+    def reset_selected_wall_type_overrides(self):
+        return reset_selected_wall_type_overrides(self.session)
+
     def has_active_rect_wall_tool(self):
         return has_active_rect_wall_tool(self.session)
 
@@ -263,16 +284,153 @@ def activate_rect_wall_tool(session):
 
 
 def get_wall_defaults(session):
-    del session
-
     from draftutils import params
 
-    return {
+    defaults = {
         "align": ["Center", "Left", "Right"][params.get_param_arch("WallAlignment")],
         "width": params.get_param_arch("WallWidth"),
         "height": params.get_param_arch("WallHeight"),
         "offset": params.get_param_arch("WallOffset"),
+        "material": None,
+        "wall_type": get_active_wall_type(session),
     }
+    wall_type = defaults["wall_type"]
+    if wall_type is not None:
+        defaults.update(
+            width=float(wall_type.Width.Value),
+            height=float(wall_type.DefaultHeight.Value),
+            align=str(wall_type.Align),
+            material=getattr(wall_type, "Material", None),
+        )
+    return defaults
+
+
+def get_wall_types(session):
+    return tuple(
+        obj
+        for obj in (getattr(session.doc, "Objects", ()) or ())
+        if getattr(getattr(obj, "Proxy", None), "Type", "") == "WallType"
+    )
+
+
+def get_active_wall_type(session):
+    wall_type = _creation_preview_state(session).active_wall_type
+    return wall_type if wall_type in get_wall_types(session) else None
+
+
+def set_active_wall_type(session, wall_type):
+    if wall_type is not None and wall_type not in get_wall_types(session):
+        raise ValueError("Wall type does not belong to the active document")
+    _creation_preview_state(session).active_wall_type = wall_type
+    session.task_panels.refresh_task_panel_status(reason="selection")
+
+
+def get_selected_wall(session):
+    kind, obj = session.selection.state.get_selected_plan_target()
+    return obj if kind == "wall" else None
+
+
+def assign_selected_wall_type(session, wall_type):
+    wall = get_selected_wall(session)
+    if wall is None:
+        set_active_wall_type(session, wall_type)
+        return None
+    import ArchWall
+
+    try:
+        with session.document_visuals.defer_document_visual_updates():
+            session.doc.openTransaction(translate("BIM_PlanEdit", "Change Wall Type"))
+            ArchWall.assign_wall_type(wall, wall_type, preserve_instance_values=False)
+            session.doc.recompute()
+            session.doc.commitTransaction()
+    except Exception:
+        session.doc.abortTransaction()
+        raise
+    _creation_preview_state(session).active_wall_type = wall_type
+    session.contextual_rendering.refresh_object(wall)
+    session.selection.activation.select_wall_for_plan_edit(wall)
+    session.task_panels.refresh_task_panel_status(reason="selection")
+    return wall
+
+
+def create_wall_type(session, source=None):
+    import Arch
+    import ArchWall
+
+    existing = get_wall_types(session)
+    selected_wall = get_selected_wall(session)
+    base_label = (
+        translate("BIM_PlanEdit", "Copy of {name}").format(name=source.Label)
+        if source is not None
+        else translate("BIM_PlanEdit", "New Wall Type")
+    )
+    labels = {str(getattr(item, "Label", "")) for item in existing}
+    label = base_label
+    suffix = 2
+    while label in labels:
+        label = "{} {}".format(base_label, suffix)
+        suffix += 1
+    try:
+        with session.document_visuals.defer_document_visual_updates():
+            session.doc.openTransaction(translate("BIM_PlanEdit", "Create Wall Type"))
+            wall_type = Arch.makeWallType(label)
+            if source is not None:
+                for prop in (
+                    "Function",
+                    "Width",
+                    "DefaultHeight",
+                    "Align",
+                    "Material",
+                    "PlanHatch",
+                    "PlanHatchSpacing",
+                    "PlanHatchAngle",
+                ):
+                    setattr(wall_type, prop, getattr(source, prop))
+            if selected_wall is not None:
+                ArchWall.assign_wall_type(
+                    selected_wall,
+                    wall_type,
+                    preserve_instance_values=False,
+                )
+            session.doc.recompute()
+            session.doc.commitTransaction()
+    except Exception:
+        session.doc.abortTransaction()
+        raise
+    _creation_preview_state(session).active_wall_type = wall_type
+    if selected_wall is not None:
+        session.contextual_rendering.refresh_object(selected_wall)
+        session.selection.activation.select_wall_for_plan_edit(selected_wall)
+    session.task_panels.refresh_task_panel_status(reason="selection")
+    return wall_type
+
+
+def reset_selected_wall_type_overrides(session):
+    wall = get_selected_wall(session)
+    if wall is None or getattr(wall, "WallType", None) is None:
+        return False
+    import ArchWall
+
+    overrides = tuple(getattr(wall, "TypeOverrides", ()) or ())
+    if not overrides:
+        return False
+    try:
+        with session.document_visuals.defer_document_visual_updates():
+            session.doc.openTransaction(
+                translate("BIM_PlanEdit", "Reset Wall Type Overrides")
+            )
+            for prop in overrides:
+                ArchWall.set_wall_type_override(wall, prop, False)
+            session.doc.recompute()
+            session.doc.commitTransaction()
+    except Exception:
+        session.doc.abortTransaction()
+        raise
+    session.contextual_rendering.refresh_object(wall)
+    _creation_preview_state(session).active_wall_type = wall.WallType
+    session.selection.activation.select_wall_for_plan_edit(wall)
+    session.task_panels.refresh_task_panel_status(reason="selection")
+    return True
 
 
 def has_active_rect_wall_tool(session):
@@ -410,6 +568,8 @@ def _create_wall_segment(session, start, end):
         height=params["height"],
         align=params["align"],
         offset=params["offset"],
+        material=params.get("material"),
+        wall_type=params.get("wall_type"),
     )
 
     def build_wall():
@@ -526,6 +686,8 @@ def create_rect_wall_run(session, corners):
         height=params["height"],
         align=params["align"],
         offset=params["offset"],
+        material=params.get("material"),
+        wall_type=params.get("wall_type"),
     )
     return list(
         wall_construction.construct_wall_run(

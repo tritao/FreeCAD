@@ -34,6 +34,7 @@ import ArchComponent
 import ArchPlanAnalytic
 import ArchRepresentation
 import ArchWall
+import ArchWallConstruction
 import ArchWallExact
 import ArchWallEndCondition
 import Draft
@@ -83,6 +84,31 @@ class TestArchWall(TestArchBase.TestArchBase):
         wall_type.Width = 360
         self.document.recompute()
         self.assertAlmostEqual(360.0, wall.Shape.BoundBox.YLength)
+
+    def test_wall_construction_assigns_type_without_occurrence_overrides(self):
+        wall_type = Arch.makeWallType("Typed Construction")
+        wall_type.Width = 325
+        wall_type.DefaultHeight = 2750
+        wall_type.Align = "Left"
+        spec = ArchWallConstruction.WallConstructionSpec(
+            width=325,
+            height=2750,
+            align="Left",
+            wall_type=wall_type,
+        )
+
+        wall = ArchWallConstruction.create_wall_segment(
+            App.Vector(),
+            App.Vector(2000, 0, 0),
+            spec,
+            auto_group=False,
+        )
+        self.document.recompute()
+
+        self.assertIs(wall.WallType, wall_type)
+        self.assertEqual([], list(wall.TypeOverrides))
+        defaults = ArchWall.get_resolved_wall_defaults(wall)
+        self.assertEqual((325.0, 2750.0, "Left"), (defaults.width, defaults.height, defaults.align))
 
     def test_assigning_wall_type_preserves_differing_instance_values(self):
         wall = Arch.makeWall(length=2000, width=225, height=2600, align="Left")

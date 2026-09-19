@@ -56,6 +56,9 @@ class PlanEditControlsShellMixin:
         status_layout.addWidget(self.status)
         layout.addWidget(self.status_group)
 
+        self.wall_type_editor = self._build_wall_type_editor(QtGui)
+        layout.addWidget(self.wall_type_editor)
+
         self.create_group = self._build_action_group(
             QtGui,
             "Create",
@@ -123,6 +126,10 @@ class PlanEditControlsShellMixin:
             self.join_button,
             self.reapply_button,
             self.grid_snap_checkbox,
+            self.wall_type_combo,
+            self.wall_type_new_button,
+            self.wall_type_duplicate_button,
+            self.wall_type_reset_button,
             self.space_label_edit,
             self.space_type_combo,
             self.space_boundary_list,
@@ -473,6 +480,14 @@ class PlanEditControlsShellMixin:
         self._integration_action_buttons = []
         self._integration_overlay_checkboxes = []
         self.space_editor = None
+        self.wall_type_editor = None
+        self.wall_type_combo = None
+        self.wall_type_summary = None
+        self.wall_type_new_button = None
+        self.wall_type_duplicate_button = None
+        self.wall_type_reset_button = None
+        self._wall_type_items = []
+        self._wall_type_editor_state = None
         self.space_label_edit = None
         self.space_type_combo = None
         self.space_boundary_list = None
@@ -654,6 +669,7 @@ class PlanEditControlsShellMixin:
             self._refresh_action_context()
             if refresh_integrations:
                 self._refresh_integration_panel(defer=defer_integrations)
+            self._refresh_wall_type_editor()
             self._refresh_space_editor()
             self._refresh_region_editor()
             self._refresh_window_editor()
@@ -671,6 +687,7 @@ class PlanEditControlsShellMixin:
                 return
             self._set_status_text(self._build_context_guidance_text())
             self._refresh_action_context()
+            self._refresh_wall_type_editor()
             if self._should_refresh_integration_panel_for_selection(selected_kind):
                 self._refresh_integration_panel(defer=True)
             else:
@@ -735,6 +752,10 @@ class PlanEditControlsShellMixin:
                 self.unjoin_button,
                 self.reapply_button,
                 self.grid_snap_checkbox,
+                self.wall_type_combo,
+                self.wall_type_new_button,
+                self.wall_type_duplicate_button,
+                self.wall_type_reset_button,
             ),
             not modal_active,
         )

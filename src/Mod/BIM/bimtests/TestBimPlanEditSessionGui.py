@@ -7,6 +7,7 @@ from types import SimpleNamespace
 
 import Arch
 from ArchContextualCreation import architectural_contextual_providers
+import ArchWall
 import ArchWallRelation
 import FreeCAD
 import FreeCADGui
@@ -438,11 +439,12 @@ class TestBimPlanEditSessionGui(TestArchBaseGui):
         session.wall_create = wall_create.PlanWallCreateAPI(session)
         created_walls = [object(), object()]
 
-        with patch.object(FreeCADGui.Snapper, "getPoint") as get_point, patch.object(
+        snapper = getattr(FreeCADGui, "Snapper", SimpleNamespace())
+        with patch.object(FreeCADGui, "Snapper", snapper, create=True), patch.object(
+            snapper, "getPoint", create=True
+        ) as get_point, patch.object(
             FreeCADGui, "invokeLater", side_effect=lambda callback: deferred.append(callback)
-        ), patch.object(
-            wall_create, "_create_wall_segment", side_effect=created_walls
-        ) as create_segment:
+        ), patch.object(wall_create, "_create_wall_segment", side_effect=created_walls) as create_segment:
             wall_create.handle_wall_point(session, FreeCAD.Vector(100, 200, 0))
             create_segment.assert_not_called()
             self.assertEqual(len(deferred), 1)
@@ -995,6 +997,49 @@ class TestBimPlanEditSessionGui(TestArchBaseGui):
             self.assertFalse(hasattr(session.task_panel, "exit_button"))
         finally:
             session.shutdown(close_dialog=True)
+
+    def test_task_panel_wall_type_controls_assign_duplicate_and_reset(self):
+        wall_type = Arch.makeWallType("Exterior 300")
+        wall_type.Function = "Exterior"
+        wall_type.Width = 300
+        wall_type.PlanHatch = "Diagonal"
+        wall = Arch.makeWall(length=2000, wall_type=wall_type)
+        wall.Width = 350
+        self.document.recompute()
+        FreeCADGui.Selection.clearSelection()
+        FreeCADGui.Selection.addSelection(wall)
+
+        session = PlanEditSession()
+        self.assertTrue(session.enter())
+        try:
+            panel = session.task_panel
+            self.pump_gui_events(10)
+            panel.refresh_from_session()
+            self.assertIs(panel._wall_type_items[panel.wall_type_combo.currentIndex()], wall_type)
+            self.assertIn("Exterior", panel.wall_type_summary.text())
+            self.assertIn("Overrides: Width", panel.wall_type_summary.text())
+            self.assertTrue(panel.wall_type_reset_button.isEnabled())
+
+            panel.wall_type_reset_button.click()
+            self.pump_gui_events(5)
+            self.assertEqual([], list(wall.TypeOverrides))
+            self.assertAlmostEqual(300.0, ArchWall.get_resolved_wall_defaults(wall).width)
+
+            self.assertTrue(panel.wall_type_duplicate_button.isEnabled())
+            panel.wall_type_duplicate_button.click()
+            self.pump_gui_events(5)
+            duplicated = wall.WallType
+            self.assertIsNot(duplicated, wall_type)
+            self.assertEqual("Exterior", str(duplicated.Function))
+            self.assertEqual("Diagonal", str(duplicated.PlanHatch))
+            self.assertAlmostEqual(300.0, duplicated.Width.Value)
+
+            panel.wall_type_combo.setCurrentIndex(0)
+            self.pump_gui_events(5)
+            self.assertIsNone(wall.WallType)
+        finally:
+            session.shutdown(close_dialog=True)
+            FreeCADGui.Selection.clearSelection()
 
     def test_shutdown_discards_pending_view_updates(self):
         session = PlanEditSession()

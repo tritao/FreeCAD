@@ -325,6 +325,7 @@ class PlanOverlayTransientState:
 
 @dataclass
 class PlanCreationPreviewState:
+    active_wall_type: object = None
     wall_start: object = None
     wall_params: object = None
     wall_previous: object = None

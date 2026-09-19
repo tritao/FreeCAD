@@ -227,6 +227,20 @@ class _TaskPanelWallEditReads(_TaskPanelReadsBase):
         return bool(self.wall_edit.is_selected_wall_endpoint_editable())
 
 
+class _TaskPanelWallTypeReads(_TaskPanelReadsBase):
+    __slots__ = ()
+
+    @property
+    def wall_create(self):
+        return self.session.wall_create
+
+    def get_wall_types(self):
+        return tuple(self.wall_create.get_wall_types() or ())
+
+    def get_active_wall_type(self):
+        return self.wall_create.get_active_wall_type()
+
+
 class _TaskPanelWindowReads(_TaskPanelReadsBase):
     __slots__ = ()
 
@@ -268,6 +282,7 @@ _TASK_PANEL_CONTEXT_READERS = (
     ("spaces", _TaskPanelSpaceReads),
     ("symbols", _TaskPanelSymbolReads),
     ("wall_edit", _TaskPanelWallEditReads),
+    ("wall_types", _TaskPanelWallTypeReads),
     ("hosted_openings", _TaskPanelWindowReads),
 )
 
@@ -345,6 +360,19 @@ class PlanSpaceEditorViewModel:
 
     show_editor: bool = False
     space: object | None = None
+
+
+@dataclass(frozen=True)
+class PlanWallTypeEditorViewModel:
+    """Derived type-selection state for wall creation and occurrences."""
+
+    selected_wall: object | None = None
+    wall_types: tuple = ()
+    current_type: object | None = None
+    state_key: tuple = ()
+    summary_text: str = ""
+    can_duplicate: bool = False
+    can_reset_overrides: bool = False
 
 
 @dataclass(frozen=True)
@@ -1038,6 +1066,63 @@ def build_space_editor_view_model(session_or_context):
             space and context.selection.get_current_tool() in ("Select", "Set Space Text")
         ),
         space=space,
+    )
+
+
+def build_wall_type_editor_view_model(session_or_context):
+    context = as_task_panel_context(session_or_context)
+    selected_kind, selected_obj = context.selection.get_selected_plan_target()
+    selected_wall = selected_obj if selected_kind == "wall" else None
+    wall_types = context.wall_types.get_wall_types()
+    current_type = (
+        getattr(selected_wall, "WallType", None)
+        if selected_wall is not None
+        else context.wall_types.get_active_wall_type()
+    )
+    overrides = tuple(getattr(selected_wall, "TypeOverrides", ()) or ())
+    if current_type is None:
+        summary = translate("BIM_PlanEdit", "Untyped wall defaults")
+    else:
+        import ArchWall
+
+        if selected_wall is not None:
+            defaults = ArchWall.get_resolved_wall_defaults(selected_wall)
+            width = defaults.width
+            height = defaults.height
+            align = defaults.align
+        else:
+            width = float(current_type.Width.Value)
+            height = float(current_type.DefaultHeight.Value)
+            align = str(current_type.Align)
+        summary = translate(
+            "BIM_PlanEdit",
+            "{function} · {width:g} × {height:g} mm · {align} · {hatch}",
+        ).format(
+            function=str(current_type.Function),
+            width=width,
+            height=height,
+            align=align,
+            hatch=str(current_type.PlanHatch),
+        )
+        if overrides:
+            summary += "\n" + translate(
+                "BIM_PlanEdit", "Overrides: {properties}"
+            ).format(properties=", ".join(overrides))
+    state_key = (
+        getattr(selected_wall, "Name", ""),
+        tuple((item.Name, item.Label) for item in wall_types),
+        getattr(current_type, "Name", ""),
+        summary,
+        overrides,
+    )
+    return PlanWallTypeEditorViewModel(
+        selected_wall=selected_wall,
+        wall_types=wall_types,
+        current_type=current_type,
+        state_key=state_key,
+        summary_text=summary,
+        can_duplicate=current_type is not None,
+        can_reset_overrides=bool(selected_wall is not None and current_type and overrides),
     )
 
 

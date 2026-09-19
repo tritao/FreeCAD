@@ -21,6 +21,7 @@ class WallConstructionSpec:
     align: str = "Center"
     offset: float = 0.0
     material: object = None
+    wall_type: object = None
 
     def validated(self):
         width = float(self.width)
@@ -32,7 +33,14 @@ class WallConstructionSpec:
             raise WallConstructionError("Wall height must be greater than zero.")
         if align not in VALID_ALIGNMENTS:
             raise WallConstructionError("Unsupported wall alignment: {}".format(align))
-        return WallConstructionSpec(width, height, align, float(self.offset), self.material)
+        return WallConstructionSpec(
+            width,
+            height,
+            align,
+            float(self.offset),
+            self.material,
+            self.wall_type,
+        )
 
 
 def wall_segments(points, *, closed=False, minimum_length=MINIMUM_WALL_LENGTH):
@@ -81,11 +89,12 @@ def create_wall_segment(
         height=spec.height,
         align=spec.align,
         offset=spec.offset,
+        wall_type=spec.wall_type,
     )
     wall.Placement = FreeCAD.Placement(
         midpoint, FreeCAD.Rotation(FreeCAD.Vector(1, 0, 0), direction)
     )
-    if spec.material is not None:
+    if spec.material is not None and spec.wall_type is None:
         wall.Material = spec.material
     if auto_group and FreeCAD.GuiUp:
         try:

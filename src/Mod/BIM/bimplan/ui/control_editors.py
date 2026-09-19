@@ -120,6 +120,103 @@ class PlanEditEditorPanelsMixin:
                 line_edit.clear()
         return False
 
+    def _build_wall_type_editor(self, QtGui):
+        editor = QtGui.QGroupBox(translate("BIM_PlanEdit", "Wall Type"))
+        layout = QtGui.QVBoxLayout(editor)
+        layout.setContentsMargins(8, 8, 8, 8)
+        layout.setSpacing(6)
+
+        self.wall_type_combo = QtGui.QComboBox(editor)
+        self.wall_type_combo.setMinimumWidth(0)
+        self.wall_type_combo.setSizePolicy(
+            QtGui.QSizePolicy.Ignored, QtGui.QSizePolicy.Fixed
+        )
+        self.wall_type_combo.currentIndexChanged.connect(self.on_wall_type_changed)
+        layout.addWidget(self.wall_type_combo)
+
+        self.wall_type_summary = QtGui.QLabel(editor)
+        self.wall_type_summary.setWordWrap(True)
+        self.wall_type_summary.setMinimumWidth(0)
+        layout.addWidget(self.wall_type_summary)
+
+        primary_buttons = QtGui.QHBoxLayout()
+        primary_buttons.setSpacing(6)
+        self.wall_type_new_button = self._make_button(
+            QtGui, "New", self.on_wall_type_new_clicked
+        )
+        self.wall_type_duplicate_button = self._make_button(
+            QtGui, "Duplicate", self.on_wall_type_duplicate_clicked
+        )
+        self.wall_type_reset_button = self._make_button(
+            QtGui, "Reset Overrides", self.on_wall_type_reset_clicked
+        )
+        primary_buttons.addWidget(self.wall_type_new_button)
+        primary_buttons.addWidget(self.wall_type_duplicate_button)
+        layout.addLayout(primary_buttons)
+        layout.addWidget(self.wall_type_reset_button)
+        return editor
+
+    def _refresh_wall_type_editor(self):
+        if self.wall_type_editor is None or self.wall_type_combo is None:
+            return
+        view_model = plan_task_panel_view_model.build_wall_type_editor_view_model(
+            self.session
+        )
+        self._refreshing_wall_type_editor = True
+        try:
+            if view_model.state_key != self._wall_type_editor_state:
+                self.wall_type_combo.blockSignals(True)
+                try:
+                    self.wall_type_combo.clear()
+                    self._wall_type_items = [None] + list(view_model.wall_types)
+                    self.wall_type_combo.addItem(
+                        translate("BIM_PlanEdit", "None / Untyped")
+                    )
+                    current_index = 0
+                    for index, wall_type in enumerate(view_model.wall_types, start=1):
+                        self.wall_type_combo.addItem(str(wall_type.Label))
+                        if wall_type is view_model.current_type:
+                            current_index = index
+                    self.wall_type_combo.setCurrentIndex(current_index)
+                finally:
+                    self.wall_type_combo.blockSignals(False)
+                self.wall_type_summary.setText(view_model.summary_text)
+                self._wall_type_editor_state = view_model.state_key
+            self._set_widget_enabled(
+                self.wall_type_duplicate_button, view_model.can_duplicate
+            )
+            self._set_widget_enabled(
+                self.wall_type_reset_button, view_model.can_reset_overrides
+            )
+        finally:
+            self._refreshing_wall_type_editor = False
+
+    def on_wall_type_changed(self, index):
+        if self._refreshing_wall_type_editor or index < 0:
+            return
+        wall_type = (
+            self._wall_type_items[index]
+            if index < len(self._wall_type_items)
+            else None
+        )
+        self.session.wall_create.assign_selected_wall_type(wall_type)
+
+    def on_wall_type_new_clicked(self):
+        self.session.wall_create.create_wall_type()
+
+    def on_wall_type_duplicate_clicked(self):
+        index = (
+            self.wall_type_combo.currentIndex()
+            if self.wall_type_combo is not None
+            else -1
+        )
+        source = self._wall_type_items[index] if 0 <= index < len(self._wall_type_items) else None
+        if source is not None:
+            self.session.wall_create.create_wall_type(source=source)
+
+    def on_wall_type_reset_clicked(self):
+        self.session.wall_create.reset_selected_wall_type_overrides()
+
     def _format_region_parent_space_label(self, space):
         label = str(getattr(space, "Label", "") or "").strip()
         name = str(getattr(space, "Name", "") or "").strip()

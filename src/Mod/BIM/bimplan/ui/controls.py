@@ -42,12 +42,15 @@ class PlanEditControlsWidget(
         self._modal_focus_widgets = []
         self._saved_focus_policies = {}
         self._refreshing_window_editor = False
+        self._refreshing_wall_type_editor = False
         self._refreshing_space_editor = False
         self._refreshing_region_editor = False
         self._space_type_option_model = None
         self._space_type_completer = None
         self._space_type_options_cache = None
         self._window_editor_state = None
+        self._wall_type_editor_state = None
+        self._wall_type_items = []
         self._space_editor_label_state = None
         self._space_editor_combo_state = None
         self._space_editor_boundary_state = None
@@ -73,6 +76,12 @@ class PlanEditControlsWidget(
         self.view_settings_content = None
         self.grid_snap_checkbox = None
         self.join_type_widget = None
+        self.wall_type_editor = None
+        self.wall_type_combo = None
+        self.wall_type_summary = None
+        self.wall_type_new_button = None
+        self.wall_type_duplicate_button = None
+        self.wall_type_reset_button = None
         self.form = self._build_form(QtGui)
         try:
             self.form.setObjectName("BIMPlanEditContextControls")
