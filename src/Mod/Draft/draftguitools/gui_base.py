@@ -114,6 +114,7 @@ class DraftInteractionHost:
         extra_widget=None,
         hints=None,
         modifier_resolver=None,
+        task_ui=True,
     ):
         if not hasattr(Gui, "Snapper"):
             return
@@ -135,6 +136,7 @@ class DraftInteractionHost:
             kwargs["hints"] = hints
         if modifier_resolver is not None:
             kwargs["modifier_resolver"] = modifier_resolver
+        kwargs["task_ui"] = bool(task_ui)
         if self.view is not None:
             kwargs["view"] = self.view
         interaction_plane = self.get_interaction_plane()

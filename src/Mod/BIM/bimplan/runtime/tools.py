@@ -18,6 +18,7 @@ class PlanTool(str, Enum):
     REGION = "Region"
     PICK_SPACE_REGION = "Pick Space Region"
     PROVIDER_POINT = "Provider Point"
+    WALL = "Wall"
     RECT_WALL = "Rect Wall"
     SEPARATOR = "Separator"
     STRETCH_START = "Stretch Start"

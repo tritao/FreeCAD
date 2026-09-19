@@ -123,6 +123,7 @@ def start_plan_provider_point_tool(session, tool):
     session.spaces.cancel_space_region_pick(refresh=False)
     session.spaces.cancel_plan_region_tool(refresh=False)
     session.wall_create.cancel_rect_wall_tool(refresh=False)
+    session.wall_create.cancel_wall_tool(refresh=False)
     session.spaces.cancel_space_separator_tool(refresh=False)
     if session.current_tool == plan_runtime_tools.PlanTool.SET_SPACE_TEXT:
         session.spaces.cancel_space_text_position_pick()

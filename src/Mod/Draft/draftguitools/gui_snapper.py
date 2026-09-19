@@ -38,6 +38,7 @@ defined by `gui_trackers.gridTracker`.
 ## \addtogroup draftguitools
 # @{
 import collections as coll
+from contextlib import contextmanager
 import inspect
 import itertools
 import math
@@ -106,6 +107,8 @@ class Snapper:
         self.mask = None
         self.cursorMode = None
         self.cursorQt = None
+        self._cursor_resolution_depth = 0
+        self._pending_cursor_mode = None
         self.maxEdges = params.get_param("maxSnapEdges")
 
         # we still have no 3D view when the draft module initializes
@@ -145,6 +148,7 @@ class Snapper:
         self._fallback_context = SnapViewContext()
         self._current_context = None
         self._point_plane_override_active = False
+        self._point_task_ui_active = False
         self._active_view = None
 
         # snap keys, it's important that they are in this order for
@@ -550,6 +554,27 @@ class Snapper:
         noTracker=False,
         view=None,
     ):
+        """Resolve one snap operation and present its final cursor once."""
+
+        with self._cursor_resolution("passive"):
+            return self._resolve_snap(
+                screenpos,
+                lastpoint=lastpoint,
+                active=active,
+                constrain=constrain,
+                noTracker=noTracker,
+                view=view,
+            )
+
+    def _resolve_snap(
+        self,
+        screenpos,
+        lastpoint=None,
+        active=True,
+        constrain=False,
+        noTracker=False,
+        view=None,
+    ):
         """Return a snapped point from the given (x, y) screen position.
 
         snap(screenpos,lastpoint=None,active=True,constrain=False,
@@ -603,7 +628,6 @@ class Snapper:
         if params.get_param("alwaysSnap"):
             active = True
 
-        self.setCursor("passive")
         if self.tracker:
             self.tracker.off()
         if self.extLine2:
@@ -1617,6 +1641,14 @@ class Snapper:
 
     def setCursor(self, mode=None):
         """Set the cursor to the given mode or unset it."""
+        if self._cursor_resolution_depth:
+            self._pending_cursor_mode = mode
+            return
+        self._apply_cursor(mode)
+
+    def _apply_cursor(self, mode):
+        """Apply a resolved cursor mode to the viewport."""
+
         views = self.get_quarter_widget(Gui.getMainWindow())
         if self.selectMode or mode is None:
             self.cursorMode = None
@@ -1624,8 +1656,7 @@ class Snapper:
             for view in views:
                 view.unsetCursor()
         elif self.cursorMode == mode and self.cursorQt is not None:
-            for view in views:
-                view.setCursor(self.cursorQt)
+            return
         else:
             self.cursorMode = mode
             self.cursorQt = self.get_cursor_with_tail(
@@ -1633,6 +1664,23 @@ class Snapper:
             )
             for view in views:
                 view.setCursor(self.cursorQt)
+
+    @contextmanager
+    def _cursor_resolution(self, default_mode="passive"):
+        """Collect candidate cursor modes and apply only the final choice."""
+
+        outermost = self._cursor_resolution_depth == 0
+        self._cursor_resolution_depth += 1
+        if outermost:
+            self._pending_cursor_mode = default_mode
+        try:
+            yield
+        finally:
+            self._cursor_resolution_depth = max(0, self._cursor_resolution_depth - 1)
+            if outermost:
+                mode = self._pending_cursor_mode
+                self._pending_cursor_mode = None
+                self._apply_cursor(mode)
 
     def restack(self):
         """Lower the grid tracker so it doesn't obscure other objects."""
@@ -1750,8 +1798,9 @@ class Snapper:
         self.pt = None
         self.interaction_plane = None
         toolbar = getattr(Gui, "draftToolBar", None)
-        if toolbar:
+        if toolbar and self._point_task_ui_active:
             toolbar.offUi()
+        self._point_task_ui_active = False
         if hide_hints:
             QtCore.QTimer.singleShot(0, Gui.HintManager.hide)
 
@@ -1872,6 +1921,7 @@ class Snapper:
         interaction_plane=None,
         noTracker=False,
         view=None,
+        task_ui=True,
     ):
         """Get a 3D point from the screen.
 
@@ -1914,6 +1964,9 @@ class Snapper:
 
         ``view`` optionally identifies the originating 3D viewport. When it
         is omitted, the active FreeCAD viewport is used for compatibility.
+
+        ``task_ui=False`` lets an embedding host retain its own task panel
+        while Snapper owns only the viewport point interaction.
         """
         if (
             last is None
@@ -1943,18 +1996,17 @@ class Snapper:
         self.mask = None
         self.constraintAxis = None
         self.ui = Gui.draftToolBar
+        # Embedded point requests do not open Draft's task UI, but they still
+        # need an active mouse channel. Do not inherit a stale keyboard-input
+        # lock from a previous Draft command.
+        self.ui.mouse = True
         self.view = origin_view
 
         # remove any previous leftover callbacks
         self._clear_point_callbacks()
         request_generation = self._point_request_generation
 
-        def move(event_cb):
-            if request_generation != self._point_request_generation:
-                return
-            if not self.ui.mouse:
-                return
-            event = event_cb.getEvent()
+        def snap_event(event):
             mousepos = event.getPosition()
             ctrl = event.wasCtrlDown()
             shift = event.wasShiftDown()
@@ -1964,7 +2016,7 @@ class Snapper:
                     ctrl, shift = modifier_resolver(ctrl, shift, alt)
                 except Exception:
                     pass
-            self.pt = Gui.Snapper.snap(
+            return Gui.Snapper.snap(
                 mousepos,
                 lastpoint=last,
                 active=ctrl,
@@ -1972,6 +2024,14 @@ class Snapper:
                 noTracker=noTracker,
                 view=origin_view,
             )
+
+        def move(event_cb):
+            if request_generation != self._point_request_generation:
+                return
+            if not self.ui.mouse:
+                return
+            event = event_cb.getEvent()
+            self.pt = snap_event(event)
             self.ui.displayPoint(self.pt, last, plane=self._get_wp(), mask=Gui.Snapper.affinity)
             if movecallback:
                 movecallback(self.pt, self.snapInfo)
@@ -2002,6 +2062,10 @@ class Snapper:
                 event.getButton() == coin.SoMouseButtonEvent.BUTTON1
                 and event.getState() == coin.SoButtonEvent.DOWN
             ):
+                # Resolve the actual click position instead of depending on a
+                # preceding location event. Embedded tools may be activated
+                # under a stationary cursor, leaving ``self.pt`` unset.
+                self.pt = snap_event(event)
                 # The active Draft command owns this pointer interaction.
                 # Prevent navigation styles from arming LMB box selection.
                 event_cb.setHandled()
@@ -2040,13 +2104,16 @@ class Snapper:
             interface = self.ui.wireUi
         else:
             interface = self.ui.pointUi
-        if callback:
+        self._point_task_ui_active = False
+        if callback and task_ui:
             if title:
                 interface(
                     title=title, cancel=cancel, getcoords=getcoords, extra=extradlg, rel=bool(last)
                 )
             else:
                 interface(cancel=cancel, getcoords=getcoords, extra=extradlg, rel=bool(last))
+            self._point_task_ui_active = True
+        if callback:
             self.callbackClick = self.view.addEventCallbackPivy(
                 coin.SoMouseButtonEvent.getClassTypeId(), click
             )

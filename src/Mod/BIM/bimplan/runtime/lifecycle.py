@@ -113,6 +113,9 @@ def _cancel_finish_fallback(session):
     if session.embedded_tools.has_active():
         session.embedded_tools.cancel()
         return True
+    if session.wall_create.has_active_wall_tool():
+        session.wall_create.cancel_wall_tool()
+        return True
     if session.wall_create.has_active_rect_wall_tool():
         session.wall_create.cancel_rect_wall_tool()
         return True
@@ -139,6 +142,7 @@ def _cleanup_begin_teardown(session):
     session.view_rulers.close()
     session.status_text.clear_input_hints()
     session.embedded_tools.cancel()
+    session.wall_create.cancel_wall_tool(refresh=False)
     session.wall_create.cancel_rect_wall_tool(refresh=False)
     session.hosted_openings.cancel_window_tool(refresh=False)
     session.spaces.cancel_plan_region_tool(refresh=False)
@@ -157,6 +161,7 @@ def _cleanup_shutdown(session, *, teardown=False):
     session.view_rulers.close()
     session.status_text.clear_input_hints()
     session.embedded_tools.cancel()
+    session.wall_create.cancel_wall_tool(refresh=False)
     session.wall_create.cancel_rect_wall_tool(refresh=False)
     session.spaces.cancel_space_separator_tool(refresh=False)
     session.wall_edit.cancel_wall_edit(restore=not teardown, refresh=False)

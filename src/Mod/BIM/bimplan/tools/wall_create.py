@@ -9,7 +9,6 @@ import Part
 import ArchRepresentation
 
 from bimplan.runtime import tools as plan_runtime_tools
-from bimplan.runtime.embedded_commands import _PlanEditWallHost
 import ArchWallConstruction as wall_construction
 
 translate = FreeCAD.Qt.translate
@@ -130,6 +129,9 @@ class PlanWallCreateAPI:
     def has_active_rect_wall_tool(self):
         return has_active_rect_wall_tool(self.session)
 
+    def has_active_wall_tool(self):
+        return has_active_wall_tool(self.session)
+
     def clear_rect_wall_preview(self):
         return clear_rect_wall_preview(self.session)
 
@@ -139,7 +141,19 @@ class PlanWallCreateAPI:
     def cancel_rect_wall_tool(self, refresh=True):
         return cancel_rect_wall_tool(self.session, refresh=refresh)
 
+    def cancel_wall_tool(self, refresh=True):
+        return cancel_wall_tool(self.session, refresh=refresh)
+
+    def handle_wall_point(self, point=None, obj=None):
+        return handle_wall_point(self.session, point=point, obj=obj)
+
+    def update_wall_preview(self, point, info):
+        return update_wall_preview(self.session, point, info)
+
     def cancel_for_select(self):
+        if self.has_active_wall_tool():
+            self.cancel_wall_tool()
+            return True
         if not self.has_active_rect_wall_tool():
             return False
         self.cancel_rect_wall_tool()
@@ -174,12 +188,27 @@ class RectWallTool(plan_runtime_tools.PlanToolHandler):
         return True
 
 
-def activate_wall_tool(session):
-    from bimcommands import BimWall
+class WallTool(plan_runtime_tools.PlanToolHandler):
+    """Keyboard behavior for native chained wall placement."""
 
+    tool_id = plan_runtime_tools.PlanTool.WALL
+
+    def on_key(self, key, event_callback, coin):
+        del event_callback
+        if key != coin.SoKeyboardEvent.ESCAPE:
+            return False
+        return self.cancel()
+
+    def cancel(self):
+        self.session.wall_create.cancel_wall_tool()
+        return True
+
+
+def activate_wall_tool(session):
     session.spaces.cancel_space_region_pick(refresh=False)
     session.spaces.cancel_plan_region_tool(refresh=False)
     session.wall_create.cancel_rect_wall_tool(refresh=False)
+    session.wall_create.cancel_wall_tool(refresh=False)
     session.hosted_openings.cancel_window_tool(refresh=False)
     session.spaces.cancel_space_separator_tool(refresh=False)
     session.providers.cancel_provider_point_tool(refresh=False)
@@ -192,11 +221,14 @@ def activate_wall_tool(session):
     session.overlays.spaces.clear_selected_space_overlay()
     session.overlays.spaces.clear_secondary_selected_overlays()
     session.selection.sync.set_gui_selection([])
-    session.embedded_tools.start(
-        "Wall",
-        BimWall.Arch_Wall(),
-        host_class=_PlanEditWallHost,
-    )
+    preview_state = _creation_preview_state(session)
+    preview_state.wall_start = None
+    preview_state.wall_previous = None
+    preview_state.wall_params = get_wall_defaults(session)
+    session.current_tool = plan_runtime_tools.PlanTool.WALL
+    session.snap.set_active_draft_command()
+    _arm_wall_point_request(session, first=True)
+    session.task_panels.refresh_task_panel_status()
 
 
 def activate_rect_wall_tool(session):
@@ -207,6 +239,7 @@ def activate_rect_wall_tool(session):
     session.spaces.cancel_space_separator_tool(refresh=False)
     session.providers.cancel_provider_point_tool(refresh=False)
     session.embedded_tools.cancel()
+    session.wall_create.cancel_wall_tool(refresh=False)
     session.wall_edit.cancel_wall_edit()
     session.lifecycle.cancel_pending_edit()
     session.wall_relations.clear_plan_relation_status()
@@ -224,6 +257,7 @@ def activate_rect_wall_tool(session):
         callback=session.wall_create.handle_rect_wall_point,
         title=translate("BIM_PlanEdit", "First rectangle corner"),
         view=session.view,
+        task_ui=False,
     )
     session.task_panels.refresh_task_panel_status()
 
@@ -258,9 +292,168 @@ def clear_rect_wall_preview(session):
 
 def discard_runtime_references(session):
     preview_state = _creation_preview_state(session)
+    preview_state.wall_start = None
+    preview_state.wall_params = None
+    preview_state.wall_previous = None
+    preview_state.wall_preview_source = None
     preview_state.rect_wall_start = None
     preview_state.rect_wall_params = None
     preview_state.rect_wall_preview_source = None
+
+
+def has_active_wall_tool(session):
+    state = _creation_preview_state(session)
+    return state.wall_start is not None or session.current_tool == plan_runtime_tools.PlanTool.WALL
+
+
+def _clear_wall_preview(session):
+    state = _creation_preview_state(session)
+    if state.wall_preview_source is not None:
+        session.contextual_rendering.clear_preview(state.wall_preview_source)
+    state.wall_preview_source = None
+
+
+def cancel_wall_tool(session, refresh=True):
+    state = _creation_preview_state(session)
+    if not session.wall_create.has_active_wall_tool():
+        return False
+    session.snap.stop_snapper()
+    _clear_wall_preview(session)
+    state.wall_start = None
+    state.wall_params = None
+    state.wall_previous = None
+    session.snap.clear_active_draft_command()
+    session.current_tool = plan_runtime_tools.PlanTool.SELECT
+    if refresh:
+        session.task_panels.refresh_task_panel_status()
+    return True
+
+
+def _aligned_wall_point(session, point):
+    state = _creation_preview_state(session)
+    point = session.viewport.project_plan_point(point)
+    start = state.wall_start
+    if point is None or start is None:
+        return point
+    try:
+        from PySide import QtCore, QtGui
+
+        if QtGui.QApplication.keyboardModifiers() & QtCore.Qt.ShiftModifier:
+            return point
+    except Exception:
+        pass
+    delta = point.sub(start)
+    if abs(delta.x) >= abs(delta.y):
+        return FreeCAD.Vector(point.x, start.y, start.z)
+    return FreeCAD.Vector(start.x, point.y, start.z)
+
+
+def _arm_wall_point_request(session, first=False):
+    if (
+        session.lifecycle_state.tearing_down
+        or session.current_tool != plan_runtime_tools.PlanTool.WALL
+    ):
+        return False
+    state = _creation_preview_state(session)
+    kwargs = {
+        "callback": session.wall_create.handle_wall_point,
+        "title": translate(
+            "BIM_PlanEdit", "First wall point" if first else "Next wall point"
+        ),
+        "view": session.view,
+        "task_ui": False,
+    }
+    if not first:
+        if state.wall_start is None:
+            return False
+        kwargs.update(
+            movecallback=session.wall_create.update_wall_preview,
+            last=state.wall_start,
+            mode="line",
+        )
+    FreeCADGui.Snapper.getPoint(**kwargs)
+    return True
+
+
+def _defer_wall_point_request(session):
+    """Arm the next point after the current Coin event has finished dispatching."""
+
+    FreeCADGui.invokeLater(lambda: _arm_wall_point_request(session))
+
+
+def update_wall_preview(session, point, info):
+    del info
+    state = _creation_preview_state(session)
+    end = _aligned_wall_point(session, point)
+    if end is None or end.sub(state.wall_start).Length < _MIN_WALL_LENGTH:
+        _clear_wall_preview(session)
+        return
+    if state.wall_preview_source is None:
+        state.wall_preview_source = object()
+    representation = _wall_preview_representation(
+        session,
+        state.wall_preview_source,
+        ((state.wall_start, end),),
+        state.wall_params["width"],
+        state.wall_params["align"],
+    )
+    session.contextual_rendering.set_preview_state(
+        ArchRepresentation.preview_state_from_representation(representation)
+    )
+
+
+def _create_wall_segment(session, start, end):
+    state = _creation_preview_state(session)
+    params = state.wall_params
+    spec = wall_construction.WallConstructionSpec(
+        width=params["width"],
+        height=params["height"],
+        align=params["align"],
+        offset=params["offset"],
+    )
+
+    def build_wall():
+        return wall_construction.create_wall_segment(
+            start,
+            end,
+            spec,
+            on_created=session.visibility.register_plan_object,
+        )
+
+    return wall_construction.construct_wall(
+        session.doc,
+        build_wall,
+        transaction_name=translate("BIM_PlanEdit", "Create Wall"),
+    )
+
+
+def handle_wall_point(session, point=None, obj=None):
+    del obj
+    state = _creation_preview_state(session)
+    if point is None:
+        session.wall_create.cancel_wall_tool()
+        return
+    if state.wall_start is None:
+        point = session.viewport.project_plan_point(point)
+        if point is None:
+            return
+        state.wall_start = point
+    else:
+        end = _aligned_wall_point(session, point)
+        if end is None:
+            return
+        try:
+            wall = _create_wall_segment(session, state.wall_start, end)
+        except Exception as error:
+            FreeCAD.Console.PrintError(
+                translate("BIM_PlanEdit", "Failed to create wall: {}\n").format(error)
+            )
+            session.wall_create.cancel_wall_tool()
+            return
+        _clear_wall_preview(session)
+        state.wall_start = end
+        state.wall_previous = wall
+    _defer_wall_point_request(session)
 
 
 def cancel_rect_wall_tool(session, refresh=True):
@@ -365,6 +558,7 @@ def handle_rect_wall_point(session, point=None, obj=None):
             title=translate("BIM_PlanEdit", "Opposite rectangle corner"),
             mode="line",
             view=session.view,
+            task_ui=False,
         )
         return
 

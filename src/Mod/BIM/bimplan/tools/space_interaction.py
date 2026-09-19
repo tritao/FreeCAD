@@ -99,6 +99,7 @@ def activate_plan_region_tool(session):
     parent_space = _get_selected_space_for_activation(session)
     session.spaces.cancel_space_region_pick(refresh=False)
     session.wall_create.cancel_rect_wall_tool(refresh=False)
+    session.wall_create.cancel_wall_tool(refresh=False)
     session.hosted_openings.cancel_window_tool(refresh=False)
     session.spaces.cancel_space_separator_tool(refresh=False)
     session.providers.cancel_provider_point_tool(refresh=False)
@@ -128,6 +129,7 @@ def activate_space_separator_tool(session):
     session.spaces.cancel_space_region_pick(refresh=False)
     session.spaces.cancel_plan_region_tool(refresh=False)
     session.wall_create.cancel_rect_wall_tool(refresh=False)
+    session.wall_create.cancel_wall_tool(refresh=False)
     session.hosted_openings.cancel_window_tool(refresh=False)
     session.providers.cancel_provider_point_tool(refresh=False)
     if session.embedded_tools.has_active():
@@ -157,6 +159,7 @@ def activate_space_tool(session):
     if session.current_tool == plan_runtime_tools.PlanTool.SET_SPACE_TEXT:
         session.spaces.cancel_space_text_position_pick()
     session.wall_create.cancel_rect_wall_tool(refresh=False)
+    session.wall_create.cancel_wall_tool(refresh=False)
     session.hosted_openings.cancel_window_tool(refresh=False)
     session.spaces.cancel_space_separator_tool(refresh=False)
     session.providers.cancel_provider_point_tool(refresh=False)

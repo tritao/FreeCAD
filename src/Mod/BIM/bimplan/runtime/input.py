@@ -11,7 +11,7 @@ from bimplan.tools.select import SelectTool
 from bimplan.tools.space_regions import PickSpaceRegionTool
 from bimplan.tools.spaces import RegionTool, SpaceSeparatorTool, SpaceTextTool
 from bimplan.tools.symbol_edit import SymbolEditTool
-from bimplan.tools.wall_create import RectWallTool
+from bimplan.tools.wall_create import RectWallTool, WallTool
 from bimplan.tools.wall_relations import JoinTool
 from bimplan.tools.window_create import WindowTool
 
@@ -22,6 +22,7 @@ _TOOL_HANDLERS = {
     PlanTool.PICK_SPACE_REGION: PickSpaceRegionTool,
     PlanTool.PROVIDER_POINT: ProviderPointTool,
     PlanTool.RECT_WALL: RectWallTool,
+    PlanTool.WALL: WallTool,
     PlanTool.REGION: RegionTool,
     PlanTool.ROTATE_SYMBOL: SymbolEditTool,
     PlanTool.SEPARATOR: SpaceSeparatorTool,
@@ -62,6 +63,10 @@ _ESCAPE_ACTIVE_TOOL_FALLBACKS = (
     (
         lambda session: session.hosted_openings.has_active_window_tool(),
         WindowTool,
+    ),
+    (
+        lambda session: session.wall_create.has_active_wall_tool(),
+        WallTool,
     ),
     (
         lambda session: session.wall_create.has_active_rect_wall_tool(),

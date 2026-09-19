@@ -102,6 +102,46 @@ class DraftSnapper(test_base.DraftTestCaseDoc):
         ):
             self.assertEqual([], snapper.get_quarter_widget(main_window))
 
+    def test_cursor_resolution_applies_only_final_snap_mode(self):
+        snapper = gui_snapper.Snapper()
+        view = SimpleNamespace(
+            setCursor=lambda cursor: applied.append(cursor),
+            unsetCursor=lambda: applied.append(None),
+        )
+        applied = []
+
+        with patch.object(snapper, "get_quarter_widget", return_value=[view]), patch.object(
+            snapper, "get_cursor_with_tail", side_effect=lambda base, tail: tail or base
+        ):
+            with snapper._cursor_resolution("passive"):
+                snapper.setCursor("endpoint")
+                snapper.setCursor("grid")
+            with snapper._cursor_resolution("passive"):
+                snapper.setCursor("grid")
+
+        self.assertEqual([snapper.cursors["grid"]], applied)
+        self.assertEqual("grid", snapper.cursorMode)
+
+    def test_cursor_resolution_recovers_and_applies_final_mode_after_exception(self):
+        snapper = gui_snapper.Snapper()
+        applied = []
+        view = SimpleNamespace(
+            setCursor=lambda cursor: applied.append(cursor),
+            unsetCursor=lambda: applied.append(None),
+        )
+
+        with patch.object(snapper, "get_quarter_widget", return_value=[view]), patch.object(
+            snapper, "get_cursor_with_tail", side_effect=lambda base, tail: tail or base
+        ):
+            with self.assertRaisesRegex(RuntimeError, "snap failed"):
+                with snapper._cursor_resolution("passive"):
+                    snapper.setCursor("endpoint")
+                    raise RuntimeError("snap failed")
+
+        self.assertEqual([snapper.cursors["endpoint"]], applied)
+        self.assertEqual(0, snapper._cursor_resolution_depth)
+        self.assertIsNone(snapper._pending_cursor_mode)
+
     def test_semantic_snap_providers_are_stacked_and_removable(self):
         snapper = gui_snapper.Snapper()
         older = lambda point, tolerance: SimpleNamespace(point=point, role="older")
@@ -193,6 +233,18 @@ class DraftSnapper(test_base.DraftTestCaseDoc):
                     self.move_callback = None
 
     class _FakeMouseEvent:
+        def getPosition(self):
+            return (12, 34)
+
+        def wasCtrlDown(self):
+            return False
+
+        def wasShiftDown(self):
+            return False
+
+        def wasAltDown(self):
+            return False
+
         def getButton(self):
             return 1
 
@@ -249,6 +301,8 @@ class DraftSnapper(test_base.DraftTestCaseDoc):
             gui_snapper.gui_utils, "end_all_events", return_value=None
         ), patch.object(gui_snapper.Gui, "draftToolBar", toolbar, create=True), patch.object(
             snapper, "_teardown_point_request", side_effect=fake_teardown
+        ), patch.object(
+            snapper, "snap", return_value=App.Vector(1, 2, 3)
         ):
             snapper.getPoint(callback=callback)
             snapper.pt = App.Vector(1, 2, 3)
@@ -257,6 +311,26 @@ class DraftSnapper(test_base.DraftTestCaseDoc):
             view.click_callback(self._FakeEventCallback(self._FakeMouseEvent()))
 
         self.assertEqual(received, [App.Vector(1, 2, 3)])
+
+    def test_getpoint_click_resolves_point_without_prior_move(self):
+        """A first click must not submit None under a stationary cursor."""
+
+        snapper = self._get_snapper()
+        toolbar = self._FakeToolbar()
+        view = self._FakeView()
+        received = []
+        expected = App.Vector(40, 50, 0)
+
+        with patch.object(gui_snapper.gui_utils, "get_3d_view", return_value=view), patch.object(
+            gui_snapper.gui_utils, "end_all_events", return_value=None
+        ), patch.object(gui_snapper.Gui, "draftToolBar", toolbar, create=True), patch.object(
+            snapper, "snap", return_value=expected
+        ), patch.object(snapper, "off", return_value=None):
+            snapper.getPoint(callback=lambda point: received.append(point), task_ui=False)
+            self.assertIsNone(snapper.pt)
+            view.click_callback(self._FakeEventCallback(self._FakeMouseEvent()))
+
+        self.assertEqual(received, [expected])
 
     def test_cancel_point_request_removes_callbacks_and_restores_ui(self):
         """Programmatic cancellation should detach callbacks and close point UI."""
@@ -288,6 +362,25 @@ class DraftSnapper(test_base.DraftTestCaseDoc):
         QtCore.QCoreApplication.processEvents()
         self.assertIsNone(view.click_callback)
         self.assertIsNone(view.move_callback)
+
+    def test_embedded_point_request_preserves_host_task_ui(self):
+        """Embedded hosts can use snapping without replacing their task panel."""
+
+        snapper = self._get_snapper()
+        toolbar = self._FakeToolbar()
+        view = self._FakeView()
+
+        with patch.object(gui_snapper.gui_utils, "get_3d_view", return_value=view), patch.object(
+            gui_snapper.gui_utils, "end_all_events", return_value=None
+        ), patch.object(gui_snapper.Gui, "draftToolBar", toolbar, create=True), patch.object(
+            snapper, "off", return_value=None
+        ):
+            snapper.getPoint(callback=lambda point: None, task_ui=False)
+            self.assertIsNotNone(view.click_callback)
+            self.assertFalse(snapper._point_task_ui_active)
+            snapper.cancelPointRequest()
+
+        self.assertEqual(toolbar.off_ui_calls, 0)
 
     def test_temporary_snap_profiles_restore_without_persisting(self):
         """Nested host profiles should restore prior snaps without writing preferences."""
@@ -353,12 +446,16 @@ class DraftSnapper(test_base.DraftTestCaseDoc):
             gui_base.Gui, "Snapper", SimpleNamespace(getPoint=get_point), create=True
         ):
             host.request_point(
-                callback, hints=hints, modifier_resolver=resolver
+                callback,
+                hints=hints,
+                modifier_resolver=resolver,
+                task_ui=False,
             )
 
         self.assertIs(received["callback"], callback)
         self.assertIs(received["modifier_resolver"], resolver)
         self.assertIs(received["hints"], hints)
+        self.assertFalse(received["task_ui"])
 
     def test_interaction_host_drag_request_owns_coin_callbacks(self):
         """Drag acquisition should dispatch once and tear down safely."""

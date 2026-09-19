@@ -95,6 +95,7 @@ class _PlanEditWallHost(gui_base.DraftInteractionHost):
             extra_widget=None,
             hints=hints,
             modifier_resolver=modifier_resolver,
+            task_ui=False,
         )
 
     def clear_ui_state(self):

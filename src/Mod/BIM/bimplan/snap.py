@@ -149,8 +149,7 @@ def stop_snapper():
     toolbar = getattr(FreeCADGui, "draftToolBar", None)
     _set_toolbar_point_focus_suppressed(toolbar, False)
     try:
-        snapper.getPoint()
-        snapper.off()
+        snapper.cancelPointRequest()
     except (AttributeError, ReferenceError, RuntimeError, TypeError):
         pass
 
@@ -231,6 +230,41 @@ class PlanSnapAPI:
                     self._interaction_plane = previous
                     self._interaction_plane_active = True
         return result
+
+    def is_grid_snap_enabled(self):
+        """Return whether the temporary Plan profile currently snaps to its grid."""
+
+        get_snap_modes = _get_snapper_method("get_snap_modes")
+        if get_snap_modes is not None:
+            try:
+                modes = _call_for_view(
+                    get_snap_modes,
+                    view=getattr(self.session, "view", None),
+                )
+                return "Grid" in tuple(modes or ())
+            except Exception:
+                pass
+        return "Grid" in self._plan_snap_modes
+
+    def set_grid_snap_enabled(self, enabled):
+        """Toggle Grid in this temporary profile without saving Draft preferences."""
+
+        modes = set(self._plan_snap_modes)
+        if enabled:
+            modes.add("Grid")
+        else:
+            modes.discard("Grid")
+        self._plan_snap_modes = tuple(modes)
+
+        snapper = _get_snapper()
+        configure = getattr(snapper, "configure_view", None) if snapper else None
+        if not callable(configure):
+            return False
+        try:
+            configure(getattr(self.session, "view", None), modes=self._plan_snap_modes)
+        except Exception:
+            return False
+        return True
 
     def apply_plan_grid(self):
         """Install the session's temporary reference-frame grid once."""
