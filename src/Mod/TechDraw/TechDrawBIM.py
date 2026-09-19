@@ -74,6 +74,28 @@ def project_representation_to_svg(
     return "".join(fragments)
 
 
+def fill_representation_to_svg(representation, direction, color):
+    """Render closed semantic cut faces with a uniform SVG fill."""
+    import Draft
+
+    fragments = []
+    for geometry in getattr(representation, "cut_geometry", ()):
+        if getattr(geometry, "ShapeType", "") != "Face":
+            continue
+        fragments.append(
+            Draft.get_svg(
+                geometry,
+                linewidth=0,
+                fillstyle=Draft.getrgb(color, testbw=False),
+                direction=direction.negative(),
+                color=color,
+            )
+        )
+    if not fragments:
+        return ""
+    return '<g transform="rotate(180)">\n{}\n</g>\n'.format("".join(fragments))
+
+
 def project_object_to_svg(obj, context, direction, collection="projected_geometry", **styles):
     """Request an object's representation and project it with TechDraw."""
     from ArchRepresentation import view_representation_for

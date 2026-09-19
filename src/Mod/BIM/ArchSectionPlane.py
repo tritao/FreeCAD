@@ -419,7 +419,6 @@ def render_drawing_context(
         tuple(objs),
         techdraw=techdraw,
         showHidden=showHidden,
-        showFill=showFill,
         fillSpaces=fillSpaces,
         joinArch=joinArch,
     )
@@ -453,18 +452,20 @@ def render_drawing_context(
     svg = ""
     # reading cached version
     frame = FreeCAD.Placement(cutplane.Placement)
-    svgcache = update_svg_cache(
-        source,
-        renderMode,
-        showHidden,
-        showFill,
-        fillColor,
-        fillSpaces,
-        joinArch,
-        allOn,
-        objs,
-        frame,
-    )
+    svgcache = None
+    if not contextual_representations:
+        svgcache = update_svg_cache(
+            source,
+            renderMode,
+            showHidden,
+            showFill,
+            fillColor,
+            fillSpaces,
+            joinArch,
+            allOn,
+            objs,
+            frame,
+        )
     should_update_svg_cache = False
     if contextual_representations or showFill or not svgcache:
         should_update_svg_cache = True
@@ -604,6 +605,11 @@ def render_drawing_context(
                             "v1Style": silhouette_style,
                         }
                     }
+                if showFill:
+                    for representation in contextual_representations:
+                        svgcache += TechDrawBIM.fill_representation_to_svg(
+                            representation, direction, fillColor
+                        )
                 for representation in contextual_representations:
                     if representation.projected_geometry:
                         svgcache += TechDrawBIM.project_representation_to_svg(
@@ -706,7 +712,7 @@ def render_drawing_context(
                         v0Style=style,
                         v1Style=style,
                     )
-    if should_update_svg_cache:
+    if should_update_svg_cache and not contextual_representations:
         if hasattr(source, "Proxy"):
             source.Proxy.svgcache = [
                 svgcache,
@@ -821,11 +827,10 @@ def _get_contextual_representations(
     *,
     techdraw,
     showHidden,
-    showFill,
     fillSpaces,
     joinArch,
 ):
-    """Return semantic representations when the simple TechDraw path applies.
+    """Return semantic representations for supported TechDraw options.
 
     This is intentionally an all-or-nothing path.  A section containing an
     object that has not adopted ``getRepresentation`` continues through the
@@ -835,7 +840,6 @@ def _get_contextual_representations(
     if (
         not techdraw
         or showHidden
-        or showFill
         or fillSpaces
         or joinArch
         or not objects

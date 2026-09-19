@@ -345,6 +345,38 @@ class TestArchSectionPlane(TestArchBase.TestArchBase):
         self.assertTrue(svg)
         self.assertIn("cut_geometry", calls)
 
+    def testTechDrawFillsSemanticCutFacesWithoutLegacyCutShapes(self):
+        """Cut poche consumes semantic faces without populating legacy caches."""
+
+        wall = Arch.makeWall(length=3000, width=200, height=3000)
+        section_plane = Arch.makeSectionPlane([wall])
+        section_plane.Placement = App.Placement(
+            App.Vector(1500, 0, 0), App.Rotation(App.Vector(0, 1, 0), 90)
+        )
+        self.document.recompute()
+        original_cut_shapes = ArchSectionPlane.getCutShapes
+
+        def fail_legacy_cut_shapes(*args, **kwargs):
+            raise AssertionError("semantic cut fill must not build legacy cut shapes")
+
+        section_plane.Proxy.svgcache = None
+        section_plane.Proxy.shapecache = None
+        ArchSectionPlane.getCutShapes = fail_legacy_cut_shapes
+        try:
+            svg = ArchSectionPlane.getSVG(
+                section_plane,
+                techdraw=True,
+                renderMode="Wireframe",
+                showFill=True,
+                fillColor=(0.25, 0.5, 0.75),
+            )
+        finally:
+            ArchSectionPlane.getCutShapes = original_cut_shapes
+
+        self.assertIn("fill:#3f7fbf", svg.casefold())
+        self.assertIsNone(section_plane.Proxy.svgcache)
+        self.assertIsNone(section_plane.Proxy.shapecache)
+
     def testTechDrawElevationUsesSharedScopeProjection(self):
         front = self._makeBox(length=1000, width=1200, height=50)
         front.Placement.Base.z = -100
