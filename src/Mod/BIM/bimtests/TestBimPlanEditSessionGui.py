@@ -20,7 +20,7 @@ from ArchRepresentation import (
     preview_state_from_representation,
 )
 from bimtests.TestArchBaseGui import TestArchBaseGui
-from bimplan.runtime.session import PlanEditSession
+from bimplan.runtime.session import PlanEditSession, activate_representation_request
 from bimplan import snap as plan_snap
 from bimcontextual.session import ContextualSession
 from bimcontextual.interaction import ContextualInteractionHost
@@ -1261,6 +1261,25 @@ class TestBimPlanEditSessionGui(TestArchBaseGui):
             self.assertIsNot(second_representation, changed_representation)
         finally:
             third_session.shutdown(close_dialog=False)
+
+    def test_model_transition_suspends_plan_geometry_before_returning(self):
+        wall = Arch.makeWall(length=3000, width=200, height=2500, align="Center")
+        self.document.recompute()
+        view = FreeCADGui.ActiveDocument.ActiveView
+        original_visibility = view.getViewVisibility(wall)
+        session = activate_representation_request(
+            RepresentationRequest(purpose=RepresentationPurpose.PLAN)
+        )
+        self.assertIsNotNone(session)
+        renderer = session.contextual_rendering.renderer
+        self.assertEqual(coin.SO_SWITCH_ALL, renderer.root.whichChild.getValue())
+
+        activate_representation_request(
+            RepresentationRequest(purpose=RepresentationPurpose.MODEL)
+        )
+
+        self.assertEqual(coin.SO_SWITCH_NONE, renderer.root.whichChild.getValue())
+        self.assertEqual(original_visibility, view.getViewVisibility(wall))
 
     def test_document_close_discards_pending_semantic_preview(self):
         original_document = self.document

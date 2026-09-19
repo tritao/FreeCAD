@@ -222,7 +222,7 @@ def activate_representation_request(request, *, prepare_only=False):
         # to another representation.
         session = get_active_session()
         if session is not None:
-            session.shutdown(close_dialog=False)
+            session.deactivate_for_view_transition()
         from bimcontextual.session import active_session as active_contextual_session
 
         contextual = active_contextual_session()
@@ -638,7 +638,7 @@ class BIMEditingSession:
     def begin_teardown(self):
         return plan_lifecycle.begin_teardown(self)
 
-    def shutdown(self, close_dialog=True, teardown=False):
+    def _finish_session(self, operation):
         global _active_session
 
         lifecycle_state = self.lifecycle_state
@@ -648,7 +648,7 @@ class BIMEditingSession:
 
         try:
             self.viewport.discard_queued_view_updates()
-            plan_lifecycle.shutdown(self, close_dialog=close_dialog, teardown=teardown)
+            operation()
         finally:
             self.lifecycle.disconnect_teardown_signals()
             lifecycle_state.tearing_down = True
@@ -658,6 +658,18 @@ class BIMEditingSession:
             lifecycle_state.finishing = False
             _refresh_contextual_task_watchers()
         return True
+
+    def deactivate_for_view_transition(self):
+        return self._finish_session(
+            lambda: self.lifecycle.deactivate_for_view_transition(close_dialog=False)
+        )
+
+    def shutdown(self, close_dialog=True, teardown=False):
+        return self._finish_session(
+            lambda: plan_lifecycle.shutdown(
+                self, close_dialog=close_dialog, teardown=teardown
+            )
+        )
 
     def addSelection(self, *args):
         return self.selection.addSelection(*args)

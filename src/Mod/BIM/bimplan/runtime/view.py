@@ -92,6 +92,9 @@ class PlanViewportAPI:
     def restore_state(self):
         return restore_state(self.session)
 
+    def restore_state_for_view_transition(self):
+        return restore_state_for_view_transition(self.session)
+
     def capture_state(self):
         return capture_state(self.session)
 
@@ -583,9 +586,7 @@ def apply_representation_request(session, request, fit=True):
             session.view = None
 
 
-def restore_state(session):
-    import WorkingPlane
-
+def _restore_view_context_state(session):
     restore_preselection_state(session)
     if session.viewer:
         try:
@@ -601,6 +602,8 @@ def restore_state(session):
     session.snap.restore_snap_profile()
     session.viewport_state.interaction_plane = None
 
+
+def _restore_camera_state(session):
     viewport_state = session.viewport_state
     if session.view and viewport_state.saved_camera_type:
         try:
@@ -625,6 +628,11 @@ def restore_state(session):
         except (AttributeError, RuntimeError):
             session.view = None
 
+
+def _restore_working_plane_and_navigation(session):
+    import WorkingPlane
+
+    viewport_state = session.viewport_state
     wp = viewport_state.working_plane or WorkingPlane.get_working_plane(update=False)
     restore = getattr(wp, "restore", None)
     if callable(restore):
@@ -635,6 +643,19 @@ def restore_state(session):
             pass
 
     restore_navigation_state(session)
+
+
+def restore_state(session):
+    _restore_view_context_state(session)
+    _restore_camera_state(session)
+    _restore_working_plane_and_navigation(session)
+
+
+def restore_state_for_view_transition(session):
+    """Restore Plan-owned state while leaving the final camera to the view service."""
+
+    _restore_view_context_state(session)
+    _restore_working_plane_and_navigation(session)
 
 
 def capture_state(session):

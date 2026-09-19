@@ -39,6 +39,11 @@ class PlanLifecycleAPI:
             self.session, restore_wall_visibility=restore_wall_visibility
         )
 
+    def deactivate_for_view_transition(self, *, close_dialog=False):
+        return deactivate_for_view_transition(
+            self.session, close_dialog=close_dialog
+        )
+
 
 def connect_teardown_signal(session, signal):
     try:
@@ -227,6 +232,24 @@ def shutdown(session, close_dialog=True, teardown=False):
                 session.doc = None
             except RuntimeError:
                 session.doc = None
+    return True
+
+
+def deactivate_for_view_transition(session, close_dialog=False):
+    """Synchronously release Plan presentation before another saved view is applied."""
+
+    plan_command_gate.uninstall(session)
+    panel = session.task_panel
+    session.task_panel = None
+    _cleanup_shutdown(session, teardown=False)
+    _close_or_detach_task_panel(panel, close_dialog=close_dialog, teardown=False)
+    session.viewport.flush_scene_graph_mutations()
+    session.viewport.restore_state_for_view_transition()
+    if session.doc:
+        try:
+            session.doc.recompute()
+        except (ReferenceError, RuntimeError):
+            session.doc = None
     return True
 
 
