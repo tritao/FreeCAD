@@ -613,6 +613,65 @@ class TestArchSectionPlane(TestArchBase.TestArchBase):
         self.assertEqual("butt", calls[0]["hStyle"]["stroke-linecap"])
         self.assertEqual("bevel", calls[0]["hStyle"]["stroke-linejoin"])
 
+    def testTechDrawFusesJoinedWallBoundariesBeforeSvgSerialization(self):
+        """Joined walls use one crisp outer boundary plus their joint seam."""
+
+        joint = object()
+
+        def make_face(points):
+            return Part.Face(Part.makePolygon((*points, points[0])))
+
+        first_points = (
+            App.Vector(0, 100, 0),
+            App.Vector(1900, 100, 0),
+            App.Vector(2100, -100, 0),
+            App.Vector(0, -100, 0),
+        )
+        second_points = (
+            App.Vector(2100, -100, 0),
+            App.Vector(1900, 100, 0),
+            App.Vector(1900, 1800, 0),
+            App.Vector(2100, 1800, 0),
+        )
+        first = ArchRepresentation.BIMRepresentation()
+        second = ArchRepresentation.BIMRepresentation()
+        for representation, points in ((first, first_points), (second, second_points)):
+            representation.add_geometry("cut_geometry", make_face(points), "PlanCutFace")
+            representation.add_geometry(
+                "projected_geometry",
+                (*points, points[0]),
+                "PlanCutOuterBoundary",
+            )
+        first.add_geometry(
+            "projected_geometry",
+            (App.Vector(2100, -100, 0), App.Vector(1900, 100, 0)),
+            "WallJointCutLine",
+            related_sources=(joint,),
+        )
+        second.add_geometry(
+            "projected_geometry",
+            (App.Vector(1900, 100, 0), App.Vector(2100, -100, 0)),
+            "WallJointCutLine",
+            related_sources=(joint,),
+        )
+
+        svg = techdraw_renderer.render_representations_to_svg(
+            (first, second),
+            App.Vector(0, 0, 1),
+            ArchRepresentation.CutSurfaceStyle(),
+            drawing_scale=1.0,
+            line_width=0.25,
+        )
+
+        self.assertEqual(2, svg.count("<path"))
+        self.assertIn(
+            "M 0 100 L 1900 100 L 1900 1800 L 2100 1800 L 2100 -100 L 0 -100 Z",
+            svg,
+        )
+        self.assertIn("M 2100 -100 L 1900 100", svg)
+        self.assertNotIn("M 2100 -100 L 1900 100 L 0 100", svg)
+        self.assertIn('stroke-linejoin="miter"', svg)
+
     def testTechDrawAppliesStylesByProjectedLineCategory(self):
         representation = ArchRepresentation.BIMRepresentation()
         representation.add_geometry(

@@ -100,6 +100,8 @@ def render_representations_to_svg(
         "stroke-linejoin": "bevel",
         "stroke-width": "SVGCUTLINEWIDTH",
     }
+    joined_cut_style = dict(cut_style)
+    joined_cut_style["stroke-linejoin"] = "miter"
     elevation_role_styles = {}
     visible_style = style
     if elevation:
@@ -149,22 +151,74 @@ def render_representations_to_svg(
                 v0Style=visible_style,
                 v1Style=visible_style,
                 role_styles=elevation_role_styles,
+                include_joint_lines=True,
             )
         )
     if any(representation.cut_geometry for representation in representations):
-        fragments.append(
-            project_representations_to_svg(
-                representations,
-                direction,
-                collection="cut_geometry",
-                hStyle=cut_style,
-                h0Style=cut_style,
-                h1Style=cut_style,
-                vStyle=cut_style,
-                v0Style=cut_style,
-                v1Style=cut_style,
+        if elevation_role_styles:
+            fragments.append(
+                project_representations_to_svg(
+                    representations,
+                    direction,
+                    collection="cut_geometry",
+                    hStyle=cut_style,
+                    h0Style=cut_style,
+                    h1Style=cut_style,
+                    vStyle=cut_style,
+                    v0Style=cut_style,
+                    v1Style=cut_style,
+                    include_joint_lines=True,
+                )
             )
-        )
+        else:
+            normal_entries, joined_entries = _joined_cut_projection_entries(representations)
+            if not joined_entries:
+                fragments.append(
+                    project_representations_to_svg(
+                        representations,
+                        direction,
+                        collection="cut_geometry",
+                        hStyle=cut_style,
+                        h0Style=cut_style,
+                        h1Style=cut_style,
+                        vStyle=cut_style,
+                        v0Style=cut_style,
+                        v1Style=cut_style,
+                        include_joint_lines=True,
+                    )
+                )
+            else:
+                if normal_entries:
+                    fragments.append(
+                        _project_entries_to_svg(
+                            normal_entries,
+                            direction,
+                            {},
+                            {
+                                "hStyle": cut_style,
+                                "h0Style": cut_style,
+                                "h1Style": cut_style,
+                                "vStyle": cut_style,
+                                "v0Style": cut_style,
+                                "v1Style": cut_style,
+                            },
+                        )
+                    )
+                fragments.append(
+                    _project_entries_to_svg(
+                        joined_entries,
+                        direction,
+                        {},
+                        {
+                            "hStyle": joined_cut_style,
+                            "h0Style": joined_cut_style,
+                            "h1Style": joined_cut_style,
+                            "vStyle": joined_cut_style,
+                            "v0Style": joined_cut_style,
+                            "v1Style": joined_cut_style,
+                        },
+                    )
+                )
     return "".join(fragments)
 
 
@@ -239,19 +293,191 @@ def _project_entries_to_svg(entries, direction, role_styles, styles):
     return "".join(fragments)
 
 
+def _representation_entries(representations, collection):
+    return [
+        (representation, geometry)
+        for representation in representations
+        for geometry in getattr(representation, collection, ())
+    ]
+
+
+def _wall_joint_components(representations):
+    """Return representation groups connected by the same wall joint."""
+    parents = list(range(len(representations)))
+    joint_owner = {}
+
+    def find(index):
+        while parents[index] != index:
+            parents[index] = parents[parents[index]]
+            index = parents[index]
+        return index
+
+    def join(first, second):
+        first_root = find(first)
+        second_root = find(second)
+        if first_root != second_root:
+            parents[second_root] = first_root
+
+    for index, representation in enumerate(representations):
+        for geometry in getattr(representation, "projected_geometry", ()):
+            mapping = representation.mapping_for(geometry)
+            if getattr(mapping, "role", None) != "WallJointCutLine":
+                continue
+            for joint in getattr(mapping, "related_sources", ()) or ():
+                key = id(joint)
+                owner = joint_owner.get(key)
+                if owner is None:
+                    joint_owner[key] = index
+                else:
+                    join(index, owner)
+
+    groups = {}
+    for index in range(len(representations)):
+        groups.setdefault(find(index), []).append(index)
+    return {
+        index: tuple(members)
+        for members in groups.values()
+        if len(members) > 1
+        for index in members
+    }
+
+
+def _split_fused_cut_faces(entries, representations, components):
+    """Split regular entries from fused faces belonging to wall joints."""
+    if not components:
+        return entries, []
+
+    representation_indices = {
+        id(representation): index for index, representation in enumerate(representations)
+    }
+    grouped = {}
+    remaining = []
+    joined_entries = []
+    for representation, geometry in entries:
+        index = representation_indices.get(id(representation))
+        mapping = representation.mapping_for(geometry)
+        if (
+            index is None
+            or index not in components
+            or getattr(geometry, "ShapeType", "") != "Face"
+            or getattr(mapping, "role", None) != "PlanCutFace"
+        ):
+            remaining.append((representation, geometry))
+            continue
+        material_key = tuple(
+            id(source) for source in getattr(mapping, "related_sources", ()) or ()
+        )
+        grouped.setdefault((components[index], material_key), []).append(
+            (representation, geometry)
+        )
+
+    for face_entries in grouped.values():
+        if len(face_entries) == 1:
+            remaining.extend(face_entries)
+            continue
+        joined = face_entries[0][1]
+        try:
+            for _representation, face in face_entries[1:]:
+                joined = joined.fuse(face)
+            joined = joined.removeSplitter()
+        except Exception:
+            joined = None
+        if joined is None or joined.isNull():
+            remaining.extend(face_entries)
+        else:
+            joined_entries.append((face_entries[0][0], joined))
+    return remaining, joined_entries
+
+
+def _fuse_cut_faces(entries, representations, components):
+    """Fuse only coplanar cut faces belonging to one wall-joint component."""
+    remaining, joined_entries = _split_fused_cut_faces(
+        entries, representations, components
+    )
+    return remaining + joined_entries
+
+
+def _joined_cut_projection_entries(representations):
+    """Return regular cut entries and joined-wall entries for separate styling."""
+    components = _wall_joint_components(representations)
+    entries = _representation_entries(representations, "cut_geometry")
+    normal_entries, joined_entries = _split_fused_cut_faces(
+        entries, representations, components
+    )
+    if components:
+        joined_entries.extend(
+            (representation, geometry)
+            for representation in representations
+            for geometry in getattr(representation, "projected_geometry", ())
+            if getattr(representation.mapping_for(geometry), "role", None)
+            == "WallJointCutLine"
+        )
+    return normal_entries, joined_entries
+
+
+def _prepared_projection_entries(
+    representations,
+    collection,
+    *,
+    include_joint_lines=False,
+    role_styles=None,
+):
+    """Prepare sheet linework without merging unrelated semantic objects."""
+    entries = _representation_entries(representations, collection)
+    if role_styles:
+        return entries
+
+    components = _wall_joint_components(representations)
+    if not components:
+        return entries
+
+    if collection == "projected_geometry":
+        joined_indices = set(components)
+        representation_indices = {
+            id(representation): index
+            for index, representation in enumerate(representations)
+        }
+        result = []
+        for representation, geometry in entries:
+            index = representation_indices[id(representation)]
+            mapping = representation.mapping_for(geometry)
+            role = getattr(mapping, "role", None)
+            if index in joined_indices and role == "PlanCutOuterBoundary":
+                continue
+            if index in joined_indices and role == "WallJointCutLine" and include_joint_lines:
+                continue
+            result.append((representation, geometry))
+        return result
+
+    if collection == "cut_geometry":
+        if include_joint_lines:
+            entries.extend(
+                (representation, geometry)
+                for representation in representations
+                for geometry in getattr(representation, "projected_geometry", ())
+                if getattr(representation.mapping_for(geometry), "role", None)
+                == "WallJointCutLine"
+            )
+        return _fuse_cut_faces(entries, representations, components)
+
+    return entries
+
+
 def project_representations_to_svg(
     representations,
     direction,
     collection="projected_geometry",
     role_styles=None,
+    include_joint_lines=False,
     **styles,
 ):
     """Project one semantic collection across all representations as one graph."""
-    entries = [
-        (representation, geometry)
-        for representation in representations
-        for geometry in getattr(representation, collection, ())
-    ]
+    entries = _prepared_projection_entries(
+        representations,
+        collection,
+        include_joint_lines=include_joint_lines,
+        role_styles=role_styles,
+    )
     return _project_entries_to_svg(entries, direction, role_styles, styles)
 
 
