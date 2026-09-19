@@ -355,7 +355,7 @@ class WallGeometryRecipe:
                 merged.append((lower, upper))
         return tuple(merged)
 
-    def plan_boundaries(self, target_z, opening_intervals=()):
+    def plan_boundaries(self, target_z, opening_intervals=(), *, y_min=None, y_max=None):
         """Derive clipped Plan polygons without constructing an OCCT shape."""
 
         start = FreeCAD.Vector(self.axis_start)
@@ -367,11 +367,13 @@ class WallGeometryRecipe:
                 start = start.sub(axis * trim.extension)
             else:
                 end = end.add(axis * trim.extension)
+        lower = self.section.y_min if y_min is None else float(y_min)
+        upper = self.section.y_max if y_max is None else float(y_max)
         polygon = [
-            start.add(self.lateral * self.section.y_min),
-            end.add(self.lateral * self.section.y_min),
-            end.add(self.lateral * self.section.y_max),
-            start.add(self.lateral * self.section.y_max),
+            start.add(self.lateral * lower),
+            end.add(self.lateral * lower),
+            end.add(self.lateral * upper),
+            start.add(self.lateral * upper),
         ]
         for trim in self.trim_planes:
             reference = end if trim.end_name == "Start" else start

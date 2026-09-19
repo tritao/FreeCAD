@@ -35,6 +35,26 @@ class AnalyticWallPlan:
             for boundary in self.boundaries
         )
 
+    def make_layer_faces(self):
+        """Return ``(face, layer index)`` pairs for visible material layers."""
+        import Part
+
+        result = []
+        for index, layer in enumerate(self.recipe.section.layers):
+            if not layer.visible:
+                continue
+            boundaries = self.recipe.plan_boundaries(
+                self.target_z,
+                self.opening_intervals,
+                y_min=layer.y_min,
+                y_max=layer.y_max,
+            )
+            result.extend(
+                (Part.Face(Part.makePolygon((*boundary, boundary[0]))), index)
+                for boundary in boundaries
+            )
+        return tuple(result)
+
     @property
     def face_meshes(self):
         """Return direct convex polygon meshes for Plan rendering and picking."""

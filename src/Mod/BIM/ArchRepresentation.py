@@ -65,11 +65,15 @@ class CutSurfaceStyle:
     line_color: tuple = (0.0, 0.0, 0.0)
 
 
-def cut_surface_style_for(source, fallback):
+def cut_surface_style_for(mapping, fallback):
     """Resolve renderer-neutral section styling from a BIM material."""
     if fallback.mode != CutFillMode.MATERIAL:
         return fallback
-    material = getattr(source, "Material", None)
+    related = tuple(getattr(mapping, "related_sources", ()) or ())
+    material = next((item for item in related if item), None)
+    source = getattr(mapping, "source", None)
+    if material is None:
+        material = getattr(source, "Material", None)
     if material and getattr(material, "Materials", None):
         material = next((item for item in material.Materials if item), material)
     if not material:

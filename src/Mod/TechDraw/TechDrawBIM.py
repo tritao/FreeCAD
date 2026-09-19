@@ -85,7 +85,7 @@ def fill_representations_to_svg(representations, direction, style, drawing_scale
             if getattr(geometry, "ShapeType", "") != "Face":
                 continue
             mapping = representation.mapping_for(geometry)
-            resolved = cut_surface_style_for(getattr(mapping, "source", None), style)
+            resolved = cut_surface_style_for(mapping, style)
             entries.append((geometry, resolved))
     patterns = {}
     definitions = []
