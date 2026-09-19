@@ -14,6 +14,7 @@ from PySide import QtCore, QtGui
 from pivy import coin
 
 from bimcommands.BimViews import (
+    BIM_Views,
     _SectionViewPlacement,
     _apply_representation_request,
     _findModelDock,
@@ -1166,12 +1167,113 @@ class TestBimViewsServiceGui(TestArchBaseGui):
         first = service.place_on_sheet(first_definition, page)
         second = service.place_on_sheet(second_definition, page)
         explicit = service.place_on_sheet(
-            first_definition, page, position=(page.PageWidth - 42, page.PageHeight - 42)
+            first_definition,
+            page,
+            position=(page.PageWidth - 42, page.PageHeight - 42),
+            allow_duplicate=True,
         )
 
         self.assertNotEqual((first.X, first.Y), (second.X, second.Y))
         self.assertEqual(page.PageWidth - 42, explicit.X.Value)
         self.assertEqual(page.PageHeight - 42, explicit.Y.Value)
+
+    def test_sheet_placement_rejects_duplicates_and_removes_only_placement(self):
+        storey = self.document.addObject("App::FeaturePython", "DuplicateStorey")
+        storey.addProperty("App::PropertyPlacement", "Placement")
+        service = BIMViewService(self.document, view=_RecordingView([]))
+        definition = service.create_view(
+            "Duplicate Plan", "Plan", storey, capture=False
+        )
+        page = self.document.addObject("TechDraw::DrawPage", "DuplicatePage")
+        template = self.document.addObject(
+            "TechDraw::DrawSVGTemplate", "DuplicateTemplate"
+        )
+        template.Template = (
+            FreeCAD.getResourceDir()
+            + "Mod/TechDraw/Templates/Default_Template_A4_Landscape.svg"
+        )
+        page.Template = template
+        first = service.place_on_sheet(definition, page)
+
+        with self.assertRaisesRegex(ValueError, "already placed"):
+            service.place_on_sheet(definition, page)
+        second = service.place_on_sheet(definition, page, allow_duplicate=True)
+        self.assertEqual((first, second), service.placements_for(definition, page))
+
+        service.remove_sheet_placement(first)
+
+        self.assertIsNotNone(self.document.getObject(definition.Name))
+        self.assertEqual((second,), service.placements_for(definition, page))
+
+    def test_navigator_locates_and_undoably_removes_sheet_placement(self):
+        storey = self.document.addObject("App::FeaturePython", "ActionStorey")
+        storey.addProperty("App::PropertyPlacement", "Placement")
+        service = BIMViewService(self.document, view=_RecordingView([]))
+        definition = service.create_view("Action Plan", "Plan", storey, capture=False)
+        page = self.document.addObject("TechDraw::DrawPage", "ActionPage")
+        template = self.document.addObject("TechDraw::DrawSVGTemplate", "ActionTemplate")
+        template.Template = (
+            FreeCAD.getResourceDir()
+            + "Mod/TechDraw/Templates/Default_Template_A4_Landscape.svg"
+        )
+        page.Template = template
+        drawing_view = service.place_on_sheet(definition, page)
+        drawing_name = drawing_view.Name
+        command = BIM_Views()
+        command.contextObject = drawing_view
+
+        command.locatePlacement()
+        self.assertEqual([drawing_view], FreeCADGui.Selection.getSelection())
+        command.removeFromSheet()
+        self.assertIsNone(self.document.getObject(drawing_name))
+        self.assertIsNotNone(self.document.getObject(definition.Name))
+
+        self.document.undo()
+        restored = self.document.getObject(drawing_name)
+        self.assertIsNotNone(restored)
+        self.assertIs(definition, restored.BIMViewDefinition)
+        self.assertIn(restored, page.Views)
+
+    def test_navigator_lists_sheet_metadata_and_linked_placements(self):
+        storey = self.document.addObject("App::FeaturePython", "NavigatorSheetStorey")
+        storey.addProperty("App::PropertyPlacement", "Placement")
+        view_service = BIMViewService(self.document, view=_RecordingView([]))
+        definition = view_service.create_view(
+            "Navigator Sheet Plan", "Plan", storey, capture=False
+        )
+        template_path = (
+            FreeCAD.getResourceDir()
+            + "Mod/TechDraw/Templates/Default_Template_A4_Landscape.svg"
+        )
+        page = BIMSheetService(self.document).create_sheet(
+            template_path,
+            BIMSheetMetadata(
+                number="A-201",
+                title="Plans",
+                discipline="Architectural",
+                revision="P02",
+                status="Shared",
+                order=201,
+            ),
+            name="NavigatorSheet",
+        )
+        drawing_view = view_service.place_on_sheet(definition, page)
+        navigator = BIMNavigatorModel(self.document)
+
+        sheet = navigator.sheet_nodes()[0]
+        self.assertIs(page, sheet.page)
+        self.assertEqual((drawing_view,), tuple(p.drawing_view for p in sheet.placements))
+
+        model = BIMNavigatorQtModel(navigator)
+        sheets = model.index(3, 0)
+        sheet_index = model.index(0, 0, sheets)
+        placement_index = model.index(0, 0, sheet_index)
+        self.assertEqual("A-201 — Plans", sheet_index.data())
+        self.assertEqual("Architectural", model.index(0, 1, sheets).data())
+        self.assertEqual("P02 · Shared", model.index(0, 2, sheets).data())
+        self.assertEqual("sheet-placement", model.kind_for_index(placement_index))
+        self.assertIs(drawing_view, model.object_for_index(placement_index))
+        self.assertEqual(2, len(model.indexes_for_object(definition)))
 
     def test_saved_view_visibility_is_applied_within_sheet_source_scope(self):
         normally_visible = self.document.addObject("PartDesign::Feature", "Visible")

@@ -98,17 +98,52 @@ class BIMNavigatorQtModel(QtCore.QAbstractItemModel):
                 self._add_object(category_node, obj, "scope-object", obj in hidden)
 
         sheets = self.root.add(_Node("section:sheets", self._tr("Sheets"), "section"))
-        for page in self.navigator.pages():
-            self._add_object(sheets, page, "sheet")
+        for sheet in self.navigator.sheet_nodes():
+            self._add_sheet(sheets, sheet)
+
+    def _add_sheet(self, parent, sheet):
+        page = sheet.page
+        number = getattr(page, "SheetNumber", "")
+        title = getattr(page, "SheetTitle", "") or page.Label
+        label = "{} — {}".format(number, title) if number else title
+        revision = getattr(page, "Revision", "")
+        status = str(getattr(page, "SheetStatus", ""))
+        details = " · ".join(value for value in (revision, status) if value)
+        node = self._add_object(
+            parent,
+            page,
+            "sheet",
+            label=label,
+            value=str(getattr(page, "Discipline", "")),
+            height=details,
+        )
+        for placement in sheet.placements:
+            child = self._add_object(
+                node,
+                placement.drawing_view,
+                "sheet-placement",
+                label=placement.definition.Label,
+                value=str(placement.definition.Purpose),
+            )
+            self._object_nodes.setdefault(placement.definition.Name, []).append(child)
 
     def _add_project_node(self, parent, project_node):
         node = self._add_object(parent, project_node.object, project_node.kind.lower())
         for child in project_node.children:
             self._add_project_node(node, child)
 
-    def _add_object(self, parent, obj, kind, hidden=False):
+    def _add_object(
+        self,
+        parent,
+        obj,
+        kind,
+        hidden=False,
+        label=None,
+        value=None,
+        height=None,
+    ):
         elevation = ""
-        height = ""
+        object_height = ""
         if kind in ("building", "storey", "workingplane"):
             try:
                 elevation = FreeCAD.Units.Quantity(
@@ -116,17 +151,19 @@ class BIMNavigatorQtModel(QtCore.QAbstractItemModel):
                 ).UserString
             except (AttributeError, RuntimeError):
                 pass
-            value = getattr(obj, "Height", None)
-            if value is not None:
-                height = getattr(value, "UserString", str(value))
+            height_property = getattr(obj, "Height", None)
+            if height_property is not None:
+                object_height = getattr(
+                    height_property, "UserString", str(height_property)
+                )
         node = parent.add(
             _Node(
                 "object:" + obj.Name,
-                obj.Label,
+                label if label is not None else obj.Label,
                 kind,
                 object=obj,
-                value=elevation,
-                height=height,
+                value=elevation if value is None else value,
+                height=object_height if height is None else height,
                 hidden=hidden,
             )
         )
@@ -167,6 +204,19 @@ class BIMNavigatorQtModel(QtCore.QAbstractItemModel):
         if role == self.KeyRole:
             return node.key
         if role == QtCore.Qt.ToolTipRole and node.object is not None:
+            if node.kind == "sheet":
+                page = node.object
+                return "\n".join(
+                    value
+                    for value in (
+                        getattr(page, "SheetNumber", ""),
+                        getattr(page, "SheetTitle", ""),
+                        str(getattr(page, "Discipline", "")),
+                        getattr(page, "Revision", ""),
+                        str(getattr(page, "SheetStatus", "")),
+                    )
+                    if value
+                )
             return node.object.Name
         if role == QtCore.Qt.DecorationRole and index.column() == 0:
             if node.object is not None:

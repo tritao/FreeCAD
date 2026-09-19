@@ -208,6 +208,9 @@ class BIM_Views:
                 ("SaveVisibility", translate("BIM", "Save Visibility of Objects")),
                 ("DuplicateView", translate("BIM", "Duplicate View")),
                 ("PlaceOnSheet", translate("BIM", "Place on Sheet…")),
+                ("OpenSheet", translate("BIM", "Open Sheet")),
+                ("LocatePlacement", translate("BIM", "Locate Placement")),
+                ("RemoveFromSheet", translate("BIM", "Remove from Sheet")),
                 ("Rename", translate("BIM", "Rename")),
             ]:
                 action = QtGui.QAction(button[1])
@@ -265,6 +268,9 @@ class BIM_Views:
             self.dialog.buttonSaveVisibility.triggered.connect(self.saveVisibility)
             self.dialog.buttonDuplicateView.triggered.connect(self.duplicateView)
             self.dialog.buttonPlaceOnSheet.triggered.connect(self.placeOnSheet)
+            self.dialog.buttonOpenSheet.triggered.connect(self.openSheet)
+            self.dialog.buttonLocatePlacement.triggered.connect(self.locatePlacement)
+            self.dialog.buttonRemoveFromSheet.triggered.connect(self.removeFromSheet)
             self.dialog.buttonRename.triggered.connect(self.rename)
             self.dialog.buttonActive.triggered.connect(self.activateContextItem)
             self.dialog.navigator.clicked.connect(self.select)
@@ -386,8 +392,8 @@ class BIM_Views:
         flags = QtCore.QItemSelectionModel.Select | QtCore.QItemSelectionModel.Rows
         for obj in FreeCADGui.Selection.getSelection():
             indexes = vm.navigatorModel.indexes_for_object(obj)
-            if indexes:
-                selection_model.select(indexes[0], flags)
+            for index in indexes:
+                selection_model.select(index, flags)
 
     def select(self, index):
         """Synchronize an object-backed navigator row with global selection."""
@@ -404,6 +410,13 @@ class BIM_Views:
             return
         obj = vm.navigatorModel.object_for_index(index)
         kind = vm.navigatorModel.kind_for_index(index)
+        self.contextObject = obj
+        if kind == "sheet":
+            self.openSheet()
+            return
+        if kind == "sheet-placement":
+            self.locatePlacement()
+            return
         if obj is not None and kind != "scope-object":
             show(obj.Name)
 
@@ -683,15 +696,81 @@ class BIM_Views:
         if not accepted:
             return
         page = pages[labels.index(label)]
+        existing = service.placements_for(definition, page)
+        allow_duplicate = False
+        if existing:
+            answer = QtGui.QMessageBox.question(
+                self.dialog,
+                translate("BIM", "Additional Placement"),
+                translate(
+                    "BIM",
+                    "This view is already on the selected sheet. Add another placement?",
+                ),
+                QtGui.QMessageBox.Yes | QtGui.QMessageBox.No,
+                QtGui.QMessageBox.No,
+            )
+            if answer != QtGui.QMessageBox.Yes:
+                self.contextObject = existing[0]
+                self.locatePlacement()
+                return
+            allow_duplicate = True
         document = FreeCAD.ActiveDocument
         document.openTransaction("Place BIM view on sheet")
         try:
-            service.place_on_sheet(definition, page)
+            drawing_view = service.place_on_sheet(
+                definition, page, allow_duplicate=allow_duplicate
+            )
             document.commitTransaction()
         except Exception:
             document.abortTransaction()
             raise
         document.recompute()
+        self.update(False)
+        FreeCADGui.Selection.clearSelection()
+        FreeCADGui.Selection.addSelection(drawing_view)
+
+    def openSheet(self):
+        """Open the selected sheet or a placement's parent sheet."""
+
+        obj = self.contextObject
+        page = obj if obj and obj.isDerivedFrom("TechDraw::DrawPage") else None
+        if page is None and obj is not None and hasattr(obj, "findParentPage"):
+            page = obj.findParentPage()
+        if page is not None:
+            page.ViewObject.Visibility = True
+            FreeCADGui.Selection.clearSelection()
+            FreeCADGui.Selection.addSelection(page)
+
+    def locatePlacement(self):
+        """Open a placement's sheet and select the placed TechDraw view."""
+
+        drawing_view = self.contextObject
+        if drawing_view is None or not drawing_view.isDerivedFrom(
+            "TechDraw::DrawViewArch"
+        ):
+            return
+        page = drawing_view.findParentPage()
+        if page is not None:
+            page.ViewObject.Visibility = True
+        FreeCADGui.Selection.clearSelection()
+        FreeCADGui.Selection.addSelection(drawing_view)
+
+    def removeFromSheet(self):
+        """Undoably remove the selected placement while retaining its definition."""
+
+        drawing_view = self.contextObject
+        if drawing_view is None:
+            return
+        document = FreeCAD.ActiveDocument
+        document.openTransaction("Remove BIM view from sheet")
+        try:
+            _view_service().remove_sheet_placement(drawing_view)
+            document.commitTransaction()
+        except Exception:
+            document.abortTransaction()
+            raise
+        document.recompute()
+        self.contextObject = None
         self.update(False)
 
     def addProxy(self):
@@ -946,17 +1025,28 @@ class BIM_Views:
             self.dialog.buttonSaveVisibility,
             self.dialog.buttonDuplicateView,
             self.dialog.buttonPlaceOnSheet,
+            self.dialog.buttonOpenSheet,
+            self.dialog.buttonLocatePlacement,
+            self.dialog.buttonRemoveFromSheet,
             self.dialog.buttonRename,
         ):
             action.setEnabled(True)
             action.setVisible(True)
         self.dialog.buttonDuplicateView.setVisible(False)
         self.dialog.buttonPlaceOnSheet.setVisible(False)
+        self.dialog.buttonOpenSheet.setVisible(False)
+        self.dialog.buttonLocatePlacement.setVisible(False)
+        self.dialog.buttonRemoveFromSheet.setVisible(False)
         self.dialog.buttonActive.setText(translate("BIM", "Active"))
         self.dialog.buttonActive.setCheckable(True)
         self.dialog.buttonActive.setChecked(False)
         self.dialog.buttonActive.setToolTip(translate("BIM", "Activates the selected item"))
-        if kind in ("saved-view", "legacy-view", "sheet") or kind.endswith("group"):
+        if kind in (
+            "saved-view",
+            "legacy-view",
+            "sheet",
+            "sheet-placement",
+        ) or kind.endswith("group"):
             for action in self.dialog.menu.actions():
                 action.setVisible(False)
             self.dialog.buttonNewPlanView.setVisible(True)
@@ -980,6 +1070,16 @@ class BIM_Views:
                 if str(getattr(obj, "Purpose", "")) == "Plan":
                     self.dialog.buttonNewSectionView.setVisible(True)
                     self.dialog.buttonNewSectionView.setEnabled(True)
+            elif kind == "sheet":
+                self.dialog.buttonNewPlanView.setVisible(False)
+                self.dialog.buttonNewModelView.setVisible(False)
+                self.dialog.buttonOpenSheet.setVisible(True)
+                self.dialog.buttonRename.setVisible(True)
+            elif kind == "sheet-placement":
+                self.dialog.buttonNewPlanView.setVisible(False)
+                self.dialog.buttonNewModelView.setVisible(False)
+                self.dialog.buttonLocatePlacement.setVisible(True)
+                self.dialog.buttonRemoveFromSheet.setVisible(True)
         elif obj is None:
             for action in self.dialog.menu.actions():
                 action.setVisible(False)

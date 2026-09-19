@@ -26,6 +26,22 @@ class NavigatorSection:
     items: tuple
 
 
+@dataclass(frozen=True)
+class SheetNode:
+    """A BIM sheet and the saved-view placements it contains."""
+
+    page: object
+    placements: tuple
+
+
+@dataclass(frozen=True)
+class SheetPlacementNode:
+    """One TechDraw placement and its linked saved BIM view."""
+
+    drawing_view: object
+    definition: object
+
+
 class BIMNavigatorModel:
     """Expose Project, Views, Current View, and Sheets without Qt widgets."""
 
@@ -44,6 +60,31 @@ class BIMNavigatorModel:
 
     def pages(self):
         return self.views.pages()
+
+    def sheet_nodes(self):
+        from bimsheets import BIMSheetService
+
+        sheet_service = BIMSheetService(self.document)
+        result = []
+        for page in self.pages():
+            if not sheet_service.is_sheet(page):
+                continue
+            placements = tuple(
+                SheetPlacementNode(view, view.BIMViewDefinition)
+                for view in getattr(page, "Views", ())
+                if getattr(view, "BIMViewDefinition", None) is not None
+            )
+            result.append(SheetNode(page, placements))
+        return tuple(
+            sorted(
+                result,
+                key=lambda node: (
+                    getattr(node.page, "SheetOrder", 0),
+                    getattr(node.page, "SheetNumber", ""),
+                    node.page.Label.casefold(),
+                ),
+            )
+        )
 
     def legacy_views(self):
         return self.views.legacy_views()
@@ -114,7 +155,7 @@ class BIMNavigatorModel:
             NavigatorSection(
                 "CurrentView", "Current View", (self.current_view_scope(definition),)
             ),
-            NavigatorSection("Sheets", "Sheets", self.pages()),
+            NavigatorSection("Sheets", "Sheets", self.sheet_nodes()),
         )
 
     def _storey_node(self, storey, owned_proxies, owned_section_planes):
