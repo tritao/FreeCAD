@@ -3,6 +3,7 @@
 """End-to-end GUI checks for the generated BIM Plan Edit examples."""
 
 import os
+import re
 import tempfile
 from unittest.mock import patch
 
@@ -313,6 +314,70 @@ class TestBimPlanEditExamplesGui(TestArchBaseGui):
         definitions = [
             obj for obj in document.Objects if obj.isDerivedFrom("App::ViewDefinition")
         ]
+        from bimsheets import BIMSheetService
+
+        sheets = [obj for obj in document.Objects if BIMSheetService.is_sheet(obj)]
+        self.assertEqual(1, len(sheets))
+        self.assertEqual("G-001", sheets[0].SheetNumber)
+        self.assertEqual("Ground Floor Plan", sheets[0].SheetTitle)
+        drawing_views = [
+            obj
+            for obj in sheets[0].Views
+            if obj.isDerivedFrom("TechDraw::DrawViewArch")
+        ]
+        self.assertEqual(1, len(drawing_views))
+        self.assertEqual(
+            "Plan",
+            drawing_views[0].BIMViewDefinition.Purpose,
+        )
+        self.assertIn('stroke-linecap="butt"', drawing_views[0].Symbol)
+        self.assertNotIn('stroke-linecap="square"', drawing_views[0].Symbol)
+        miter_group = drawing_views[0].Symbol.split(
+            'stroke-linejoin="miter"', 1
+        )[1].split("</g>", 1)[0]
+        miter_paths = re.findall(r'<path[^>]*d="([^"]*)"', miter_group)
+        self.assertTrue(
+            any(path.count("L") >= 2 and " Z" in path for path in miter_paths),
+            "joined wall boundaries must be continuous closed SVG paths",
+        )
+        self.assertTrue(
+            all(path.count("L") >= 2 for path in miter_paths if " Z" in path),
+            "closed wall contours must not use one-segment fallback paths",
+        )
+        from bimplan.representation_request import representation_request_from_storey
+        from bimviews.service import BIMViewService
+
+        request = representation_request_from_storey(
+            BIMViewService(document).context_source(
+                drawing_views[0].BIMViewDefinition
+            )
+        )
+        self.assertTrue(
+            all(
+                wall.Proxy.getRepresentation(wall, request).plan_contours
+                for wall in walls
+            )
+        )
+        import TechDrawGui
+
+        with tempfile.TemporaryDirectory(prefix="freecad-sheet-title-") as directory:
+            export_path = os.path.join(directory, "page.svg")
+            TechDrawGui.exportPageAsSvg(sheets[0], export_path)
+            with open(export_path, encoding="utf-8") as stream:
+                exported_svg = stream.read()
+        title_end = exported_svg.index(">1 Ground Floor Plan</text>")
+        title_transform = re.findall(
+            r'transform="matrix\(([^)]*)\)"', exported_svg[:title_end]
+        )[-1]
+        title_x = float(title_transform.split(",")[4])
+        page_width = float(
+            re.search(r'viewBox="0 0 ([0-9.]+) ', exported_svg).group(1)
+        )
+        self.assertLess(
+            title_x,
+            page_width * 0.75,
+            "a following title must not inherit its owner's scene translation",
+        )
         from bimviews.navigator_model import BIMNavigatorModel
 
         project_nodes = BIMNavigatorModel(document).project_nodes()

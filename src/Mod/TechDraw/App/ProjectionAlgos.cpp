@@ -25,9 +25,15 @@
 //migrated to TechDraw workbench 2022-01-26 by Wandererfan
 
 
+# include <cmath>
+# include <iomanip>
 # include <sstream>
+# include <utility>
+# include <vector>
+# include <BRepAdaptor_Curve.hxx>
 # include <BRepLib.hxx>
 # include <BRepMesh_IncrementalMesh.hxx>
+# include <BRepTools_WireExplorer.hxx>
 # include <HLRAlgo_Projector.hxx>
 # include <HLRBRep_Algo.hxx>
 # include <HLRBRep_HLRToShape.hxx>
@@ -37,6 +43,7 @@
 # include <TopExp_Explorer.hxx>
 # include <TopoDS.hxx>
 # include <TopoDS_Shape.hxx>
+# include <TopoDS_Wire.hxx>
 
 
 #include "ProjectionAlgos.h"
@@ -71,6 +78,274 @@ ProjectionAlgos::ProjectionAlgos(const TopoDS_Shape &Input, const Base::Vector3d
 
 ProjectionAlgos::~ProjectionAlgos()
 {
+}
+
+namespace {
+
+struct ProjectedPoint {
+    double x;
+    double y;
+};
+
+struct LinearPath {
+    std::vector<ProjectedPoint> points;
+};
+
+bool samePoint(const ProjectedPoint &first, const ProjectedPoint &second)
+{
+    constexpr double tolerance = 1.0e-7;
+    return std::abs(first.x - second.x) <= tolerance
+        && std::abs(first.y - second.y) <= tolerance;
+}
+
+ProjectedPoint projectPoint(const gp_Pnt &point,
+                            const gp_Dir &xAxis,
+                            const gp_Dir &yAxis)
+{
+    return {
+        point.X() * xAxis.X() + point.Y() * xAxis.Y() + point.Z() * xAxis.Z(),
+        point.X() * yAxis.X() + point.Y() * yAxis.Y() + point.Z() * yAxis.Z(),
+    };
+}
+
+} // namespace
+
+std::string ProjectionAlgos::getSVGPath(const TopoDS_Shape &shape,
+                                        const Base::Vector3d &direction,
+                                        XmlAttributes style)
+{
+    gp_Ax2 projection(gp_Pnt(0, 0, 0),
+                      gp_Dir(direction.x, direction.y, direction.z));
+    const gp_Dir xAxis = projection.XDirection();
+    const gp_Dir yAxis = projection.YDirection();
+
+    std::vector<LinearPath> paths;
+    auto appendEdge = [&](const TopoDS_Edge &edge, LinearPath &path) {
+        BRepAdaptor_Curve curve(edge);
+        if (curve.GetType() != GeomAbs_Line) {
+            // The caller can fall back to the generic HLR exporter for
+            // curves. Never silently approximate them as straight edges.
+            return false;
+        }
+
+        const ProjectedPoint start = projectPoint(
+            curve.Value(curve.FirstParameter()), xAxis, yAxis);
+        const ProjectedPoint end = projectPoint(
+            curve.Value(curve.LastParameter()), xAxis, yAxis);
+        if (samePoint(start, end)) {
+            return true;
+        }
+        if (path.points.empty()) {
+            path.points = {start, end};
+        }
+        else if (samePoint(path.points.back(), start)) {
+            path.points.push_back(end);
+        }
+        else if (samePoint(path.points.back(), end)) {
+            path.points.push_back(start);
+        }
+        else {
+            return false;
+        }
+        return true;
+    };
+
+    std::vector<TopoDS_Wire> wires;
+    if (shape.ShapeType() == TopAbs_WIRE) {
+        wires.push_back(TopoDS::Wire(shape));
+    }
+    else {
+        for (TopExp_Explorer wireExplorer(shape, TopAbs_WIRE);
+             wireExplorer.More(); wireExplorer.Next()) {
+            wires.push_back(TopoDS::Wire(wireExplorer.Current()));
+        }
+    }
+
+    for (const TopoDS_Wire &wire : wires) {
+        LinearPath path;
+        for (BRepTools_WireExplorer edgeExplorer(wire);
+             edgeExplorer.More(); edgeExplorer.Next()) {
+            if (!appendEdge(TopoDS::Edge(edgeExplorer.Current()), path)) {
+                return {};
+            }
+        }
+        if (path.points.size() >= 2) {
+            paths.push_back(std::move(path));
+        }
+    }
+
+    // A compound made only from loose edges has no wires to preserve. Keep
+    // those edges as open paths so the endpoint join below can still connect
+    // semantic line fragments from separate representations.
+    if (wires.empty()) {
+        for (TopExp_Explorer edges(shape, TopAbs_EDGE); edges.More(); edges.Next()) {
+            LinearPath path;
+            if (!appendEdge(TopoDS::Edge(edges.Current()), path)) {
+                return {};
+            }
+            if (path.points.size() >= 2) {
+                paths.push_back(std::move(path));
+            }
+        }
+    }
+    if (paths.empty()) {
+        return {};
+    }
+
+    auto isClosed = [](const LinearPath &path) {
+        return path.points.size() > 2
+            && samePoint(path.points.front(), path.points.back());
+    };
+
+    auto samePath = [](const LinearPath &first, const LinearPath &second) {
+        if (first.points.size() != second.points.size()) {
+            return false;
+        }
+        bool forward = true;
+        bool reverse = true;
+        for (std::size_t point = 0; point < first.points.size(); ++point) {
+            forward = forward
+                && samePoint(first.points[point], second.points[point]);
+            reverse = reverse
+                && samePoint(first.points[point],
+                             second.points[second.points.size() - point - 1]);
+        }
+        return forward || reverse;
+    };
+
+    // Multiple semantic sources can expose the same projected boundary. A
+    // duplicate path would otherwise make that edge heavier than its style.
+    for (std::size_t first = 0; first < paths.size(); ++first) {
+        for (std::size_t second = first + 1; second < paths.size();) {
+            if (samePath(paths[first], paths[second])) {
+                paths.erase(paths.begin() + second);
+            }
+            else {
+                ++second;
+            }
+        }
+    }
+
+    // Only join open paths at an endpoint with exactly two incident open
+    // paths. Closed face boundaries remain independent, preventing branches
+    // and overlapping wall faces from becoming self-intersecting SVG paths.
+    std::vector<ProjectedPoint> joinPoints;
+    std::vector<int> joinCounts;
+    for (const auto &path : paths) {
+        if (isClosed(path)) {
+            continue;
+        }
+        for (const auto &point : {path.points.front(), path.points.back()}) {
+            std::size_t index = 0;
+            while (index < joinPoints.size() && !samePoint(joinPoints[index], point)) {
+                ++index;
+            }
+            if (index == joinPoints.size()) {
+                joinPoints.push_back(point);
+                joinCounts.push_back(0);
+            }
+            ++joinCounts[index];
+        }
+    }
+    auto endpointDegree = [&](const ProjectedPoint &point) {
+        for (std::size_t index = 0; index < joinPoints.size(); ++index) {
+            if (samePoint(joinPoints[index], point)) {
+                return joinCounts[index];
+            }
+        }
+        return 0;
+    };
+    auto joinAt = [](const LinearPath &first, const LinearPath &second) {
+        LinearPath joined = first;
+        if (samePoint(first.points.back(), second.points.front())) {
+            joined.points.insert(joined.points.end(),
+                                 second.points.begin() + 1, second.points.end());
+        }
+        else if (samePoint(first.points.back(), second.points.back())) {
+            joined.points.insert(joined.points.end(),
+                                 second.points.rbegin() + 1, second.points.rend());
+        }
+        else if (samePoint(first.points.front(), second.points.back())) {
+            joined.points.insert(joined.points.begin(),
+                                 second.points.begin(), second.points.end() - 1);
+        }
+        else if (samePoint(first.points.front(), second.points.front())) {
+            joined.points.insert(joined.points.begin(),
+                                 second.points.rbegin(), second.points.rend() - 1);
+        }
+        else {
+            return first;
+        }
+        return joined;
+    };
+
+    bool changed = true;
+    while (changed) {
+        changed = false;
+        for (std::size_t first = 0; first < paths.size() && !changed; ++first) {
+            if (isClosed(paths[first])) {
+                continue;
+            }
+            for (std::size_t second = first + 1; second < paths.size(); ++second) {
+                if (isClosed(paths[second])) {
+                    continue;
+                }
+                const bool joinsAtDegreeTwoEndpoint =
+                    (samePoint(paths[first].points.front(), paths[second].points.front())
+                     && endpointDegree(paths[first].points.front()) == 2
+                     && endpointDegree(paths[second].points.front()) == 2)
+                    || (samePoint(paths[first].points.front(), paths[second].points.back())
+                        && endpointDegree(paths[first].points.front()) == 2
+                        && endpointDegree(paths[second].points.back()) == 2)
+                    || (samePoint(paths[first].points.back(), paths[second].points.front())
+                        && endpointDegree(paths[first].points.back()) == 2
+                        && endpointDegree(paths[second].points.front()) == 2)
+                    || (samePoint(paths[first].points.back(), paths[second].points.back())
+                        && endpointDegree(paths[first].points.back()) == 2
+                        && endpointDegree(paths[second].points.back()) == 2);
+                if (!joinsAtDegreeTwoEndpoint) {
+                    continue;
+                }
+                paths[first] = joinAt(paths[first], paths[second]);
+                paths.erase(paths.begin() + second);
+                changed = true;
+                break;
+            }
+        }
+    }
+
+    style.insert({"stroke", "rgb(0, 0, 0)"});
+    style.insert({"stroke-width", "1.0"});
+    style.insert({"stroke-linecap", "butt"});
+    style.insert({"stroke-linejoin", "miter"});
+    style.insert({"fill", "none"});
+    style.insert({"transform", "scale(1, -1)"});
+
+    std::ostringstream result;
+    result << "<g";
+    for (const auto &attribute : style) {
+        result << "   " << attribute.first << "=\""
+               << attribute.second << "\"\n";
+    }
+    result << "  >\n";
+    result << std::setprecision(15);
+    for (const auto &path : paths) {
+        if (path.points.size() < 2) {
+            continue;
+        }
+        const bool closed = isClosed(path);
+        const std::size_t pointCount = closed ? path.points.size() - 1 : path.points.size();
+        result << "<path d=\"M " << path.points.front().x << " " << path.points.front().y;
+        for (std::size_t point = 1; point < pointCount; ++point) {
+            result << " L " << path.points[point].x << " " << path.points[point].y;
+        }
+        if (closed) {
+            result << " Z";
+        }
+        result << "\" />\n";
+    }
+    result << "</g>\n";
+    return result.str();
 }
 
 

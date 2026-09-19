@@ -2295,6 +2295,9 @@ class TestBimViewsServiceGui(TestArchBaseGui):
         wrapped = ArchSectionPlane.getSVG(
             section, techdraw=True, viewDefinition=definition
         )
+        explicit = ArchSectionPlane.getTechDrawSVG(
+            section, viewDefinition=definition
+        )
         objects, cutplane, only_solids, clip, direction = (
             ArchSectionPlane.getSectionData(section)
         )
@@ -2313,6 +2316,7 @@ class TestBimViewsServiceGui(TestArchBaseGui):
         )
 
         self.assertTrue(wrapped)
+        self.assertEqual(wrapped, explicit)
         self.assertEqual(wrapped, contextual)
 
     def test_saved_view_visibility_changes_rendered_svg(self):

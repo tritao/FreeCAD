@@ -173,6 +173,10 @@ public:
             "string = projectToSVG(TopoShape[, App.Vector direction, string type, float tolerance, dict vStyle, dict v0Style, dict v1Style, dict hStyle, dict h0Style, dict h1Style])\n"
             " -- Project a shape and return the SVG representation as string."
         );
+        add_keyword_method("projectToSVGPath", &Module::projectToSVGPath,
+            "string = projectToSVGPath(TopoShape[, App.Vector direction, dict style])\n"
+            " -- Project connected linear edges and return joined SVG paths."
+        );
         add_varargs_method("projectToDXF", &Module::projectToDXF,
             "string = projectToDXF(TopoShape[, App.Vector Direction, string type])\n"
             " -- Project a shape and return the DXF representation as string."
@@ -1210,6 +1214,41 @@ private:
             Py::String result(Alg.getSVG(extractionType, tol,
                                          vStyle, v0Style, v1Style,
                                          hStyle, h0Style, h1Style));
+            return result;
+        }
+
+    Py::Object projectToSVGPath(const Py::Tuple& args, const Py::Dict& keys)
+        {
+            static const std::array<const char *, 4> argNames{
+                "topoShape", "direction", "style", nullptr
+            };
+            PyObject *pcObjShape = nullptr;
+            PyObject *pcObjDir = nullptr;
+            PyObject *stylePy = nullptr;
+
+            if (!Base::Wrapped_ParseTupleAndKeywords(
+                    args.ptr(), keys.ptr(),
+                    "O!|O!O",
+                    argNames,
+                    &(TopoShapePy::Type), &pcObjShape,
+                    &(Base::VectorPy::Type), &pcObjDir,
+                    &stylePy)) {
+                throw Py::Exception();
+            }
+
+            TopoShapePy *pShape = static_cast<TopoShapePy *>(pcObjShape);
+            Base::Vector3d directionVector(0, 0, 1);
+            if (pcObjDir) {
+                directionVector = static_cast<Base::VectorPy *>(pcObjDir)->value();
+            }
+
+            ProjectionAlgos::XmlAttributes style;
+            if (stylePy && stylePy != Py_None) {
+                copy(Py::Dict(stylePy), inserter(style, style.begin()));
+            }
+
+            Py::String result(ProjectionAlgos::getSVGPath(
+                pShape->getTopoShapePtr()->getShape(), directionVector, style));
             return result;
         }
 

@@ -11,6 +11,7 @@ Run with the GUI FreeCAD binary from the repository root:
 import os
 
 import Arch
+import ArchPlanContours
 import ArchSpace
 import ArchWall
 import Draft
@@ -19,12 +20,20 @@ import FreeCADGui as Gui
 import Part
 from BIMExampleBuilding import make_opening, make_wall
 from bimviews.service import BIMViewService
+from bimplan.representation_request import representation_request_from_storey
 from PySide import QtCore
 
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 OUTPUT_PATH = os.path.join(ROOT, "data", "examples", "BIMPlanEditBasic.FCStd")
 FONT_PATH = os.path.join(ROOT, "data", "examples", "osifont-lgpl3fe.ttf")
+TEMPLATE_PATH = os.path.join(
+    App.getResourceDir(),
+    "Mod",
+    "TechDraw",
+    "Templates",
+    "Default_Template_A4_Landscape.svg",
+)
 
 
 def make_wall(doc, name, start, end, *, wall_type, align="Center", width=200.0):
@@ -212,6 +221,20 @@ def build_document():
     service.create_elevation_view("South Elevation", level, direction="South")
     service.create_section_view("Building Section", section)
     plan_view = service.create_plan_view("Ground Floor Plan", level)
+    request = representation_request_from_storey(service.context_source(plan_view))
+    wall_representations = tuple(
+        wall.Proxy.getRepresentation(wall, request) for wall in walls
+    )
+    contour_sets = ArchPlanContours.joined_contours(wall_representations)
+    assert contour_sets and all(contours.valid for contours in contour_sets)
+    assert all(
+        contour[0].isEqual(contour[-1], contours.tolerance)
+        for contours in contour_sets
+        for contour in contours.outer_contours
+    )
+    sheet_page, _sheet_view = service.create_sheet_from_view(
+        plan_view, TEMPLATE_PATH, page_scale=0.02
+    )
 
     gui_startup = doc.settings("Gui.Startup")
     gui_startup.setInt("SchemaVersion", 1)
@@ -221,6 +244,9 @@ def build_document():
     bim_startup.setString("Activity", "PlanEdit")
     bim_startup.setString("ContextObject", level.Name)
     bim_startup.setString("ViewObject", plan_view.Name)
+    sheet_page.ViewObject.Visibility = False
+    Gui.activeDocument().activeView().viewAxonometric()
+    Gui.activeDocument().activeView().fitAll()
     doc.recompute()
     doc.saveAs(OUTPUT_PATH)
     App.closeDocument(doc.Name)

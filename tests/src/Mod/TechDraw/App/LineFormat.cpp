@@ -2,8 +2,14 @@
 
 #include <QColor>
 #include <QtCore/Qt>
+#include <BRep_Builder.hxx>
+#include <BRepBuilderAPI_MakePolygon.hxx>
+#include <gp_Pnt.hxx>
+#include <TopoDS_Compound.hxx>
+#include <TopoDS_Wire.hxx>
 
 #include "Mod/TechDraw/App/LineFormat.h"
+#include "Mod/TechDraw/App/ProjectionAlgos.h"
 #include "src/App/InitApplication.h"
 
 class TestLineFormat: public ::testing::Test
@@ -69,4 +75,56 @@ TEST_F(TestLineFormat, setQColorPreservesAlphaValue)
     EXPECT_EQ(roundTripped.green(), 34);
     EXPECT_EQ(roundTripped.blue(), 56);
     EXPECT_EQ(roundTripped.alpha(), 78);
+}
+
+TEST(ProjectionAlgos, joinsConnectedLinearEdgesInOnePath)
+{
+    BRepBuilderAPI_MakePolygon polygon;
+    polygon.Add(gp_Pnt(0, 0, 0));
+    polygon.Add(gp_Pnt(100, 0, 0));
+    polygon.Add(gp_Pnt(100, 100, 0));
+
+    const auto svg = TechDraw::ProjectionAlgos::getSVGPath(
+        polygon.Wire(),
+        Base::Vector3d(0, 0, 1),
+        {{"stroke-linejoin", "miter"}});
+
+    EXPECT_EQ(svg.find("<path"), svg.rfind("<path"));
+    EXPECT_NE(svg.find("L 100 0"), std::string::npos);
+    EXPECT_NE(svg.find("L 100 100"), std::string::npos);
+    EXPECT_NE(svg.find("stroke-linejoin=\"miter\""), std::string::npos);
+}
+
+TEST(ProjectionAlgos, preservesIndependentClosedWireBoundaries)
+{
+    BRepBuilderAPI_MakePolygon first;
+    first.Add(gp_Pnt(0, 0, 0));
+    first.Add(gp_Pnt(100, 0, 0));
+    first.Add(gp_Pnt(100, 100, 0));
+    first.Add(gp_Pnt(0, 100, 0));
+    first.Close();
+
+    BRepBuilderAPI_MakePolygon second;
+    second.Add(gp_Pnt(100, 100, 0));
+    second.Add(gp_Pnt(200, 100, 0));
+    second.Add(gp_Pnt(200, 200, 0));
+    second.Add(gp_Pnt(100, 200, 0));
+    second.Close();
+
+    BRep_Builder builder;
+    TopoDS_Compound compound;
+    builder.MakeCompound(compound);
+    builder.Add(compound, first.Wire());
+    builder.Add(compound, first.Wire());
+    builder.Add(compound, second.Wire());
+
+    const auto svg = TechDraw::ProjectionAlgos::getSVGPath(
+        compound,
+        Base::Vector3d(0, 0, 1));
+
+    const auto firstPath = svg.find("<path");
+    const auto secondPath = svg.find("<path", firstPath + 1);
+    EXPECT_NE(firstPath, std::string::npos);
+    EXPECT_NE(secondPath, std::string::npos);
+    EXPECT_EQ(std::string::npos, svg.find("<path", secondPath + 1));
 }

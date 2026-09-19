@@ -137,7 +137,7 @@ App::DocumentObjectExecReturn *DrawViewArch::execute()
         std::string svgTail = getSVGTail();
         std::string FeatName = getNameInDocument();
         std::string SourceName = sourceObj->getNameInDocument();
-        // ArchSectionPlane.getSVG(section, allOn=False, renderMode="Wireframe", showHidden=False, showFill=False, scale=1, linewidth=1, fontsize=1):
+        // ArchSectionPlane.getTechDrawSVG(section, allOn=False, renderMode="Wireframe", ...):
 
         std::stringstream paramStr;
         const auto& fillColor = FillColor.getValue();
@@ -166,7 +166,7 @@ App::DocumentObjectExecReturn *DrawViewArch::execute()
         }
 
         Base::Interpreter().runString("import ArchSectionPlane");
-        Base::Interpreter().runStringArg("svgBody = ArchSectionPlane.getSVG(App.activeDocument().%s %s)",
+        Base::Interpreter().runStringArg("svgBody = ArchSectionPlane.getTechDrawSVG(App.activeDocument().%s %s)",
                                          SourceName.c_str(), paramStr.str().c_str());
         Base::Interpreter().runStringArg("App.activeDocument().%s.Symbol = '%s' + svgBody + '%s'",
                                           FeatName.c_str(), svgHead.c_str(), svgTail.c_str());

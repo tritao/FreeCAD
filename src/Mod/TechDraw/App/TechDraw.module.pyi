@@ -129,6 +129,14 @@ def projectToSVG(
     """Project one shape and return its SVG representation."""
     ...
 
+def projectToSVGPath(
+    topoShape: Shape,
+    direction: Vector | None = None,
+    style: _ProjectionSvgStyle | None = None,
+) -> str:
+    """Project connected linear edges and return joined SVG paths."""
+    ...
+
 def projectToDXF(
     topoShape: Shape,
     direction: Vector | None = None,

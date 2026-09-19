@@ -716,23 +716,44 @@ QGIView* QGSPage::addWeldSymbol(TechDraw::DrawWeldSymbol* weldFeat)
 }
 
 
+//! synchronize one graphic item's parent with its fully restored document state
+void QGSPage::synchronizeViewParent(QGIView* item)
+{
+    if (!item) {
+        return;
+    }
+
+    auto* currentParent = dynamic_cast<QGIView*>(item->parentItem());
+    auto* desiredParent = findParent(item);
+    if (currentParent == desiredParent) {
+        return;
+    }
+
+    if (currentParent) {
+        currentParent->removeFromGroup(item);
+        currentParent->updateView();
+    }
+
+    if (desiredParent) {
+        addItemToParent(item, desiredParent);
+        desiredParent->updateView();
+    }
+    else {
+        // Page-owned views use absolute feature coordinates.  Reapply them
+        // after detaching because a stale graphics parent may already have
+        // translated the item once during document restoration.
+        item->updatePositionFromFeatureXY();
+    }
+    item->updateView(true);
+}
+
 //! ensure that all QGIViews are parented correctly in the scene
 void QGSPage::setViewParents()
 {
     const std::vector<QGIView*>& allItems = getViews();
 
     for (auto& item : allItems) {
-        if (item->group()) {
-            // this item already has a parent in the scene.  probably should check if it is the
-            // correct parent
-            continue;
-        }
-
-        QGIView* parent = findParent(item);
-        if (parent) {
-            // item has a parent, so make sure it belongs to parent's group
-            addItemToParent(item, parent);
-        }
+        synchronizeViewParent(item);
     }
 }
 
@@ -840,6 +861,11 @@ bool QGSPage::hasQView(App::DocumentObject* obj)
 
 void QGSPage::refreshViews()
 {
+    // Restoration and delayed property updates can change the document-side
+    // ownership policy after graphics items were first attached.  Parentage
+    // affects every scene transform, so repair it before painting or export.
+    setViewParents();
+
     QList<QGraphicsItem*> list = items();
     QList<QGraphicsItem*> qgiv;
     //find only QGIV's
