@@ -288,19 +288,76 @@ def getSVG(
     fillSpaces
         If `True`, shows space objects as filled surfaces.
     """
-    import Part
-
     objs, cutplane, onlySolids, clip, direction = getSectionData(source)
     if not objs:
         return ""
-    if not allOn:
-        visible_objects = set(Draft.removeHidden(objs))
-        if viewDefinition is not None:
-            from bimviews.representation import apply_view_visibility
+    from bimviews.representation import resolve_drawing_context
 
-            objs = apply_view_visibility(objs, viewDefinition, visible_objects)
-        else:
-            objs = [obj for obj in objs if obj in visible_objects]
+    context = resolve_drawing_context(
+        source,
+        objs,
+        view_definition=viewDefinition,
+        normally_visible=None if allOn else Draft.removeHidden(objs),
+        cutplane=cutplane,
+        only_solids=onlySolids,
+        clip=clip,
+        direction=direction,
+        resolve_request=(
+            techdraw
+            and not showHidden
+            and not showFill
+            and not fillSpaces
+            and not joinArch
+        ),
+    )
+    return render_drawing_context(
+        context,
+        renderMode=renderMode,
+        allOn=allOn,
+        showHidden=showHidden,
+        scale=scale,
+        rotation=rotation,
+        linewidth=linewidth,
+        lineColor=lineColor,
+        fontsize=fontsize,
+        linespacing=linespacing,
+        showFill=showFill,
+        fillColor=fillColor,
+        techdraw=techdraw,
+        fillSpaces=fillSpaces,
+        cutlinewidth=cutlinewidth,
+        joinArch=joinArch,
+    )
+
+
+def render_drawing_context(
+    context,
+    renderMode="Wireframe",
+    allOn=False,
+    showHidden=False,
+    scale=1,
+    rotation=0,
+    linewidth=1,
+    lineColor=(0.0, 0.0, 0.0),
+    fontsize=1,
+    linespacing=None,
+    showFill=False,
+    fillColor=(1.0, 1.0, 1.0),
+    techdraw=False,
+    fillSpaces=False,
+    cutlinewidth=0,
+    joinArch=False,
+):
+    """Render an already resolved :class:`BIMDrawingContext` to SVG."""
+
+    import Part
+
+    source = context.source
+    objs = list(context.objects)
+    cutplane = context.cutplane
+    onlySolids = context.only_solids
+    clip = context.clip
+    direction = context.direction
 
     # separate spaces and Draft objects
     spaces = []
@@ -338,14 +395,13 @@ def getSVG(
     # material geometry, or objects that have not adopted the provider
     # contract yet.
     contextual_representations = _get_contextual_representations(
-        source,
-        objs,
+        context,
+        tuple(objs),
         techdraw=techdraw,
         showHidden=showHidden,
         showFill=showFill,
         fillSpaces=fillSpaces,
         joinArch=joinArch,
-        view_definition=viewDefinition,
     )
     if contextual_representations:
         # Semantic providers already computed the section geometry.  Keep only
@@ -728,7 +784,7 @@ def getSVG(
 
 
 def _get_contextual_representations(
-    source,
+    context,
     objects,
     *,
     techdraw,
@@ -736,7 +792,6 @@ def _get_contextual_representations(
     showFill,
     fillSpaces,
     joinArch,
-    view_definition=None,
 ):
     """Return semantic representations when the simple TechDraw path applies.
 
@@ -755,17 +810,7 @@ def _get_contextual_representations(
     ):
         return []
 
-    if view_definition is not None:
-        from bimviews.representation import request_for_view_definition
-
-        request = request_for_view_definition(view_definition)
-    else:
-        request_provider = getattr(
-            getattr(source, "Proxy", None), "getRepresentationRequest", None
-        )
-        if not callable(request_provider):
-            return []
-        request = request_provider(source)
+    request = context.request
     if request is None:
         return []
 

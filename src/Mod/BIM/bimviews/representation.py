@@ -2,7 +2,67 @@
 
 """Representation semantics shared by saved BIM views and drawing views."""
 
+from dataclasses import dataclass
+
 import ArchRepresentation
+
+
+@dataclass(frozen=True)
+class BIMDrawingContext:
+    """Resolved, immutable inputs for one BIM drawing render."""
+
+    source: object
+    objects: tuple
+    request: object = None
+    view_definition: object = None
+    cutplane: object = None
+    only_solids: bool = True
+    clip: bool = False
+    direction: object = None
+
+
+def resolve_drawing_context(
+    source,
+    objects,
+    *,
+    view_definition=None,
+    normally_visible=None,
+    cutplane=None,
+    only_solids=True,
+    clip=False,
+    direction=None,
+    resolve_request=True,
+):
+    """Resolve persistent BIM state into render-ready drawing inputs."""
+
+    objects = tuple(objects)
+    if normally_visible is not None:
+        if view_definition is not None:
+            objects = tuple(
+                apply_view_visibility(objects, view_definition, normally_visible)
+            )
+        else:
+            visible = set(normally_visible)
+            objects = tuple(obj for obj in objects if obj in visible)
+    if not resolve_request:
+        request = None
+    elif view_definition is not None:
+        request = request_for_view_definition(view_definition)
+    else:
+        provider = getattr(
+            getattr(source, "Proxy", None), "getRepresentationRequest", None
+        )
+        request = provider(source) if callable(provider) else None
+    return BIMDrawingContext(
+        source=source,
+        objects=objects,
+        request=request,
+        view_definition=view_definition,
+        cutplane=cutplane,
+        only_solids=only_solids,
+        clip=clip,
+        direction=direction,
+    )
 
 
 def request_for_view_definition(definition):

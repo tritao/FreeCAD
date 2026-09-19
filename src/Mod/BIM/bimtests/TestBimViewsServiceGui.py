@@ -36,7 +36,7 @@ from bimviews.ruler_model import (
     tick_values,
 )
 from bimviews.framing import planar_view_bounds
-from bimviews.representation import apply_view_visibility
+from bimviews.representation import apply_view_visibility, resolve_drawing_context
 from bimviews.service import BIMViewService
 from bimviews.viewport_ruler import (
     ViewportRulerController,
@@ -1257,6 +1257,46 @@ class TestBimViewsServiceGui(TestArchBaseGui):
             self.assertGreater(len(drawing_view.Symbol), 100)
             self.assertAlmostEqual(0.01 * index, drawing_view.Scale)
             self.assertEqual(index == 2, drawing_view.ShowFill)
+
+    def test_get_svg_compatibility_wrapper_matches_context_renderer(self):
+        import Arch
+        import ArchSectionPlane
+        import Draft
+
+        wall = Arch.makeWall(length=3000, width=200, height=3000)
+        section = Arch.makeSectionPlane([wall], name="ContextSection")
+        section.Placement = FreeCAD.Placement(
+            FreeCAD.Vector(1500, 0, 0),
+            FreeCAD.Rotation(FreeCAD.Vector(0, 1, 0), 90),
+        )
+        service = BIMViewService(self.document, view=_RecordingView([]))
+        definition = service.create_view(
+            "Context Section", "Section", section, capture=False
+        )
+        self.document.recompute()
+
+        wrapped = ArchSectionPlane.getSVG(
+            section, techdraw=True, viewDefinition=definition
+        )
+        objects, cutplane, only_solids, clip, direction = (
+            ArchSectionPlane.getSectionData(section)
+        )
+        context = resolve_drawing_context(
+            section,
+            objects,
+            view_definition=definition,
+            normally_visible=Draft.removeHidden(objects),
+            cutplane=cutplane,
+            only_solids=only_solids,
+            clip=clip,
+            direction=direction,
+        )
+        contextual = ArchSectionPlane.render_drawing_context(
+            context, techdraw=True
+        )
+
+        self.assertTrue(wrapped)
+        self.assertEqual(wrapped, contextual)
 
     def test_saved_view_visibility_changes_rendered_svg(self):
         import Arch
