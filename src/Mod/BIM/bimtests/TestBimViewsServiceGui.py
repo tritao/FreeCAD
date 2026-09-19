@@ -142,8 +142,8 @@ class TestBimViewsServiceGui(TestArchBaseGui):
         first = layout.place((50, 40))
         second = layout.place((50, 40), (first,))
 
-        self.assertEqual(SheetRect(35, 30, 50, 40), first)
-        self.assertEqual(SheetRect(90, 30, 50, 40), second)
+        self.assertEqual(SheetRect(35, 90, 50, 40), first)
+        self.assertEqual(SheetRect(90, 90, 50, 40), second)
         self.assertFalse(first.intersects(second, layout.gap))
 
     def test_sheet_layout_validates_overrides_and_full_sheets(self):
@@ -169,7 +169,7 @@ class TestBimViewsServiceGui(TestArchBaseGui):
 
         placement = BIMSheetLayout(100, 80).place(footprint)
 
-        self.assertEqual(SheetRect(20, 22.5, 20, 25), placement)
+        self.assertEqual(SheetRect(20, 57.5, 20, 25), placement)
 
     def test_svg_footprint_uses_rendered_geometry_and_scale(self):
         svg = '<svg><path d="M -10 5 L 90 5 L 90 55 L -10 55" /></svg>'
@@ -200,8 +200,8 @@ class TestBimViewsServiceGui(TestArchBaseGui):
             drawing_view, view_title="A much longer contextual title"
         )
 
-        self.assertLess(footprint.top, -5.0)
-        self.assertEqual(5.0, footprint.bottom)
+        self.assertLess(footprint.bottom, -5.0)
+        self.assertEqual(5.0, footprint.top)
         self.assertGreater(edited.width, footprint.width)
 
     def test_sheet_service_creates_page_with_stable_metadata_contract(self):
@@ -233,7 +233,7 @@ class TestBimViewsServiceGui(TestArchBaseGui):
         self.assertEqual("Default_Template_A4_Landscape.svg", page.TemplateIdentity)
         self.assertEqual(metadata, service.metadata_for(page))
         self.assertEqual(
-            SheetRect(37, 28, 50, 40),
+            SheetRect(37, page.PageHeight - 28, 50, 40),
             BIMSheetLayout(
                 page.PageWidth,
                 page.PageHeight,
@@ -1744,6 +1744,35 @@ class TestBimViewsServiceGui(TestArchBaseGui):
         self.assertIn("BIMViewDefinition", drawing_view.PropertiesList)
         self.assertNotIn("BIMSheetScale", definition.PropertiesList)
         self.assertNotIn("BIMRenderMode", definition.PropertiesList)
+
+    def test_first_sheet_view_fits_and_centers_in_printable_area(self):
+        source = self.document.addObject("App::FeaturePython", "CenteredPlanSource")
+        source.addProperty("App::PropertyPlacement", "Placement")
+        view_service = BIMViewService(self.document, view=_RecordingView([]))
+        definition = view_service.create_view(
+            "Centered Plan", "Plan", source, capture=False
+        )
+        sheet_service = BIMSheetService(self.document)
+        page = sheet_service.create_sheet(
+            FreeCAD.getResourceDir()
+            + "Mod/TechDraw/Templates/Default_Template_A4_Landscape.svg"
+        )
+        page.Scale = 0.01
+
+        drawing_view = view_service.place_on_sheet(definition, page)
+
+        footprint = BIMSheetFootprintProvider().for_view(drawing_view)
+        bounds = footprint.at(drawing_view.X.Value, drawing_view.Y.Value)
+        margins = sheet_service.margins_for(page)
+        self.assertGreater(drawing_view.Scale, page.Scale)
+        self.assertAlmostEqual(
+            (margins.left + page.PageWidth - margins.right) / 2.0,
+            bounds.x,
+        )
+        self.assertAlmostEqual(
+            (margins.bottom + page.PageHeight - margins.top) / 2.0,
+            bounds.y,
+        )
 
     def test_sheet_placement_uses_first_free_position_and_explicit_override(self):
         storey = self.document.addObject("App::FeaturePython", "LayoutStorey")

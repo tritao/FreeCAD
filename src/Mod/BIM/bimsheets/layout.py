@@ -36,19 +36,19 @@ class SheetRect:
         return self.x + self.width / 2.0
 
     @property
-    def top(self):
+    def bottom(self):
         return self.y - self.height / 2.0
 
     @property
-    def bottom(self):
+    def top(self):
         return self.y + self.height / 2.0
 
     def intersects(self, other, gap=0.0):
         return not (
             self.right + gap <= other.left
             or other.right + gap <= self.left
-            or self.bottom + gap <= other.top
-            or other.bottom + gap <= self.top
+            or self.top + gap <= other.bottom
+            or other.top + gap <= self.bottom
         )
 
 
@@ -57,9 +57,9 @@ class PlacementFootprint:
     """Bounds around a view anchor, expressed in sheet millimetres."""
 
     left: float
-    top: float
-    right: float
     bottom: float
+    right: float
+    top: float
 
     @classmethod
     def centered(cls, width, height):
@@ -73,20 +73,20 @@ class PlacementFootprint:
 
     @property
     def height(self):
-        return self.bottom - self.top
+        return self.top - self.bottom
 
     def union(self, other):
         return PlacementFootprint(
             min(self.left, other.left),
-            min(self.top, other.top),
+            min(self.bottom, other.bottom),
             max(self.right, other.right),
-            max(self.bottom, other.bottom),
+            max(self.top, other.top),
         )
 
     def at(self, x, y):
         return SheetRect(
             float(x) + (self.left + self.right) / 2.0,
-            float(y) + (self.top + self.bottom) / 2.0,
+            float(y) + (self.bottom + self.top) / 2.0,
             self.width,
             self.height,
         )
@@ -126,13 +126,13 @@ class BIMSheetLayout:
             return float(position[0]), float(position[1])
 
         left = self.margins.left
-        top = self.margins.top
+        top = self.height - self.margins.top
         x_candidates = {left - footprint.left}
         y_candidates = {top - footprint.top}
         for rect in occupied:
             x_candidates.add(rect.right + self.gap - footprint.left)
-            y_candidates.add(rect.bottom + self.gap - footprint.top)
-        for y in sorted(y_candidates):
+            y_candidates.add(rect.bottom - self.gap - footprint.top)
+        for y in sorted(y_candidates, reverse=True):
             for x in sorted(x_candidates):
                 candidate = footprint.at(x, y)
                 if not self._inside(candidate):
@@ -141,12 +141,28 @@ class BIMSheetLayout:
                     return x, y
         raise SheetLayoutError("no printable sheet space is available for this view")
 
+    def center_anchor(self, footprint, occupied=()):
+        """Return an anchor that centers a footprint in the printable area."""
+
+        printable_center_x = (
+            self.margins.left + self.width - self.margins.right
+        ) / 2.0
+        printable_center_y = (
+            self.margins.bottom + self.height - self.margins.top
+        ) / 2.0
+        x = printable_center_x - (footprint.left + footprint.right) / 2.0
+        y = printable_center_y - (footprint.bottom + footprint.top) / 2.0
+        result = footprint.at(x, y)
+        self._ensure_inside(result)
+        self._ensure_clear(result, tuple(occupied))
+        return x, y
+
     def _inside(self, rect):
         return (
             rect.left >= self.margins.left
-            and rect.top >= self.margins.top
+            and rect.bottom >= self.margins.bottom
             and rect.right <= self.width - self.margins.right
-            and rect.bottom <= self.height - self.margins.bottom
+            and rect.top <= self.height - self.margins.top
         )
 
     def _ensure_inside(self, rect):

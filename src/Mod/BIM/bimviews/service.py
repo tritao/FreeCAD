@@ -328,6 +328,9 @@ class BIMViewService:
 
         sheet_service = BIMSheetService(self.document)
         sheet_service.ensure_metadata(page)
+        first_placement = not any(
+            view.isDerivedFrom("TechDraw::DrawViewArch") for view in page.Views
+        )
         drawing_view = self.document.addObject("TechDraw::DrawViewArch", "BIMSavedView")
         drawing_view.Label = definition.Label
         drawing_view.Source = self.context_source(definition)
@@ -339,7 +342,20 @@ class BIMViewService:
             from bimsheets import BIMSheetViewTitleService
 
             BIMSheetViewTitleService(self.document).create(page, drawing_view)
-            sheet_service.layout_view(page, drawing_view, position=position)
+            self.document.recompute()
+            if position is None:
+                suggestion = sheet_service.fit_view_layout(
+                    page,
+                    drawing_view,
+                    preferred_scale=drawing_view.Scale,
+                    allow_larger=first_placement,
+                    centered=first_placement,
+                )
+                drawing_view.Scale = suggestion.scale
+                drawing_view.X = suggestion.x
+                drawing_view.Y = suggestion.y
+            else:
+                sheet_service.layout_view(page, drawing_view, position=position)
         except Exception:
             from bimsheets import BIMSheetViewTitleService
 

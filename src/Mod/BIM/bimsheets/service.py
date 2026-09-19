@@ -312,6 +312,7 @@ class BIMSheetService:
         view_number=None,
         view_title=None,
         gap=5.0,
+        centered=False,
     ):
         """Suggest the first free anchor without changing the document."""
 
@@ -325,6 +326,7 @@ class BIMSheetService:
             view_number=view_number,
             view_title=view_title,
             gap=gap,
+            centered=centered,
         )
 
     def fit_view_layout(
@@ -338,8 +340,10 @@ class BIMSheetService:
         view_number=None,
         view_title=None,
         gap=5.0,
+        allow_larger=False,
+        centered=False,
     ):
-        """Suggest the largest standard scale up to the preferred scale that fits."""
+        """Suggest the largest permitted standard scale that fits."""
 
         preferred = (
             float(preferred_scale)
@@ -348,8 +352,9 @@ class BIMSheetService:
         )
         if preferred <= 0.0:
             raise ValueError("preferred placement scale must be positive")
+        ceiling = max(self.STANDARD_SCALES) if allow_larger else preferred
         candidates = sorted(
-            {preferred, *(scale for scale in self.STANDARD_SCALES if scale <= preferred)},
+            {preferred, *(scale for scale in self.STANDARD_SCALES if scale <= ceiling)},
             reverse=True,
         )
         last_error = None
@@ -364,6 +369,7 @@ class BIMSheetService:
                     view_number=view_number,
                     view_title=view_title,
                     gap=gap,
+                    centered=centered,
                 )
             except ValueError as error:
                 last_error = error
@@ -383,6 +389,7 @@ class BIMSheetService:
         view_number=None,
         view_title=None,
         gap=5.0,
+        centered=False,
     ):
         self._validate_layout_subject(page, drawing_view)
         resolved_scale = float(scale) if scale is not None else float(drawing_view.Scale)
@@ -400,7 +407,10 @@ class BIMSheetService:
         engine = BIMSheetLayout(
             page.PageWidth, page.PageHeight, self.margins_for(page), gap
         )
-        x, y = engine.place_anchor(footprint, occupied, position)
+        if centered:
+            x, y = engine.center_anchor(footprint, occupied)
+        else:
+            x, y = engine.place_anchor(footprint, occupied, position)
         return BIMSheetPlacementSuggestion(
             x=x,
             y=y,

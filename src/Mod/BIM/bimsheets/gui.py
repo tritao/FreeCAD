@@ -127,7 +127,7 @@ class BIMSheetPlacementPropertiesWidget(QtGui.QWidget):
         self.fit_button.setToolTip(
             translate(
                 "BIM",
-                "Suggest the largest standard scale up to the current scale that fits",
+                "Suggest the largest standard scale that fits and center the view",
             )
         )
         actions = QtGui.QWidget()
@@ -228,6 +228,8 @@ class BIMSheetPlacementPropertiesWidget(QtGui.QWidget):
                 view.findParentPage(),
                 view,
                 preferred_scale=self.scale.value(),
+                allow_larger=True,
+                centered=True,
                 **self._suggestion_arguments(),
             )
         except (TypeError, ValueError, RuntimeError) as error:
