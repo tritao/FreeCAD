@@ -3,6 +3,7 @@
 """End-to-end GUI checks for the generated BIM Plan Edit examples."""
 
 import os
+import re
 import tempfile
 from unittest.mock import patch
 
@@ -319,6 +320,14 @@ class TestBimPlanEditExamplesGui(TestArchBaseGui):
         )
         self.assertIn('stroke-linecap="butt"', drawing_views[0].Symbol)
         self.assertNotIn('stroke-linecap="square"', drawing_views[0].Symbol)
+        miter_group = drawing_views[0].Symbol.split(
+            'stroke-linejoin="miter"', 1
+        )[1].split("</g>", 1)[0]
+        miter_paths = re.findall(r'<path[^>]*d="([^"]*)"', miter_group)
+        self.assertTrue(
+            any(path.count("L") >= 2 and " Z" in path for path in miter_paths),
+            "joined wall boundaries must be continuous closed SVG paths",
+        )
         from bimviews.navigator_model import BIMNavigatorModel
 
         project_nodes = BIMNavigatorModel(document).project_nodes()
