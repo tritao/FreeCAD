@@ -50,6 +50,7 @@ from bimviews.viewport_ruler import (
 )
 from bimplan.runtime.session import activate_representation_request
 from bimsheets import (
+    BIMSheetFootprintProvider,
     BIMSheetLayout,
     BIMSheetIssueService,
     BIMSheetMetadata,
@@ -60,6 +61,7 @@ from bimsheets import (
     SheetPublicationError,
     SheetIssueError,
     SheetLayoutError,
+    PlacementFootprint,
     SheetRect,
     format_scale,
 )
@@ -154,11 +156,52 @@ class TestBimViewsServiceGui(TestArchBaseGui):
         with self.assertRaisesRegex(SheetLayoutError, "no printable sheet space"):
             layout.place((70, 50), (SheetRect(50, 40, 70, 50),))
 
+        with self.assertRaisesRegex(SheetLayoutError, "overlaps"):
+            layout.place(
+                (20, 10),
+                (SheetRect(50, 40, 20, 10),),
+                position=(50, 40),
+            )
+
+    def test_sheet_layout_preserves_anchor_for_offset_footprints(self):
+        footprint = PlacementFootprint(-10, -20, 10, 5)
+
+        placement = BIMSheetLayout(100, 80).place(footprint)
+
+        self.assertEqual(SheetRect(20, 22.5, 20, 25), placement)
+
     def test_svg_footprint_uses_rendered_geometry_and_scale(self):
         svg = '<svg><path d="M -10 5 L 90 5 L 90 55 L -10 55" /></svg>'
 
         self.assertEqual((25.0, 12.5), svg_footprint(svg, scale=0.25))
-        self.assertEqual((64.0, 64.0), svg_footprint("", scale=0.25))
+        self.assertEqual((16.0, 16.0), svg_footprint("", scale=0.25))
+
+    def test_sheet_footprint_includes_owned_title_offset(self):
+        drawing_view = SimpleNamespace(
+            Symbol='<svg><path d="M 0 0 L 10 0 L 10 10 L 0 10" /></svg>',
+            ViewNumber="1",
+            ViewTitle="Plan",
+            Label="Plan",
+            getScale=lambda: 1.0,
+        )
+        annotation = SimpleNamespace(
+            Owner=drawing_view,
+            OwnerOffsetX=0.0,
+            OwnerOffsetY=-20.0,
+            TextSize=4.0,
+            isDerivedFrom=lambda type_name: type_name
+            == "TechDraw::DrawViewAnnotation",
+        )
+        drawing_view.Document = SimpleNamespace(Objects=(annotation,))
+
+        footprint = BIMSheetFootprintProvider().for_view(drawing_view)
+        edited = BIMSheetFootprintProvider().for_view(
+            drawing_view, view_title="A much longer contextual title"
+        )
+
+        self.assertLess(footprint.top, -5.0)
+        self.assertEqual(5.0, footprint.bottom)
+        self.assertGreater(edited.width, footprint.width)
 
     def test_sheet_service_creates_page_with_stable_metadata_contract(self):
         template_path = (
@@ -1659,6 +1702,12 @@ class TestBimViewsServiceGui(TestArchBaseGui):
 
         first = service.place_on_sheet(first_definition, page)
         second = service.place_on_sheet(second_definition, page)
+        with self.assertRaisesRegex(SheetLayoutError, "overlaps"):
+            BIMSheetService(self.document).validate_view_layout(
+                page,
+                second,
+                position=(first.X.Value, first.Y.Value),
+            )
         explicit = service.place_on_sheet(
             first_definition,
             page,

@@ -158,6 +158,16 @@ class BIMSheetPlacementPropertiesWidget(QtGui.QWidget):
         page = view.findParentPage()
         number = self.number.text().strip()
         BIMSheetViewTitleService.validate_number(page, number, view)
+        BIMSheetService(view.Document).validate_view_layout(
+            page,
+            view,
+            position=(self.x.value(), self.y.value()),
+            scale=self.scale.value(),
+            title_offset=self.title_offset.value(),
+            title_size=self.title_size.value(),
+            view_number=number,
+            view_title=self.title.text().strip(),
+        )
         document = view.Document
         document.openTransaction("Edit BIM sheet placement")
         try:

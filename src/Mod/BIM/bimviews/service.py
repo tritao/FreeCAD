@@ -336,11 +336,11 @@ class BIMViewService:
         if getattr(page, "Scale", 0.0):
             drawing_view.Scale = page.Scale
         try:
-            sheet_service.layout_view(page, drawing_view, position=position)
             from bimsheets import BIMSheetViewTitleService
 
             BIMSheetViewTitleService(self.document).create(page, drawing_view)
-        except (TypeError, ValueError):
+            sheet_service.layout_view(page, drawing_view, position=position)
+        except Exception:
             from bimsheets import BIMSheetViewTitleService
 
             annotation = BIMSheetViewTitleService.annotation_for(drawing_view)

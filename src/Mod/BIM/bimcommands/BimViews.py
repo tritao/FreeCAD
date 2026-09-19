@@ -1683,26 +1683,20 @@ def _manager_model():
 def _preferred_sheet(document, selected_objects=()):
     """Resolve an unambiguous placement target without prompting the user."""
 
-    from bimsheets import BIMSheetService
+    from bimsheets import BIMSheetService, BIMSheetTargetResolver
 
     service = BIMSheetService(document)
+    active_page = None
     try:
         gui_document = FreeCADGui.activeDocument()
         active_view = gui_document.activeView() if gui_document is not None else None
-        page = active_view.getPage() if hasattr(active_view, "getPage") else None
-        if getattr(page, "Document", None) is document and service.is_sheet(page):
-            return page
+        active_page = active_view.getPage() if hasattr(active_view, "getPage") else None
     except (AttributeError, ReferenceError, RuntimeError):
         pass
-    selected_sheets = [
-        obj
-        for obj in selected_objects
-        if getattr(obj, "Document", None) is document and service.is_sheet(obj)
-    ]
-    if len(selected_sheets) == 1:
-        return selected_sheets[0]
-    sheets = [obj for obj in document.Objects if service.is_sheet(obj)]
-    return sheets[0] if len(sheets) == 1 else None
+    return BIMSheetTargetResolver(document, service.is_sheet).resolve(
+        active_page=active_page,
+        selected=selected_objects,
+    )
 
 
 def _sheet_display_label(page):

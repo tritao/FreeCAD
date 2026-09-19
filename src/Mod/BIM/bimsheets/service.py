@@ -5,7 +5,12 @@
 from dataclasses import dataclass, replace
 from pathlib import Path
 
-from .layout import BIMSheetLayout, SheetMargins, SheetRect, svg_footprint
+from .layout import (
+    BIMSheetLayout,
+    PlacementFootprint,
+    SheetMargins,
+)
+from .footprints import BIMSheetFootprintProvider
 
 
 @dataclass(frozen=True)
@@ -232,21 +237,46 @@ class BIMSheetService:
             raise ValueError("drawing_view must belong to page")
         margins = margins or self.margins_for(page)
         engine = BIMSheetLayout(page.PageWidth, page.PageHeight, margins, gap)
-        footprint = size or self._view_footprint(drawing_view)
-        occupied = tuple(
-            SheetRect(view.X.Value, view.Y.Value, *self._view_footprint(view))
-            for view in page.Views
-            if view is not drawing_view
-            and not (
-                view.isDerivedFrom("TechDraw::DrawViewAnnotation")
-                and getattr(view, "Owner", None) is not None
-                and view.Owner.isDerivedFrom("TechDraw::DrawViewArch")
-            )
+        footprint = (
+            PlacementFootprint.centered(*size)
+            if size is not None
+            else self._view_footprint(drawing_view)
         )
-        placement = engine.place(footprint, occupied, position)
-        drawing_view.X = placement.x
-        drawing_view.Y = placement.y
-        return placement
+        occupied = self._occupied_footprints(page, drawing_view)
+        x, y = engine.place_anchor(footprint, occupied, position)
+        drawing_view.X = x
+        drawing_view.Y = y
+        return footprint.at(x, y)
+
+    def validate_view_layout(
+        self,
+        page,
+        drawing_view,
+        *,
+        position,
+        scale=None,
+        title_offset=None,
+        title_size=None,
+        view_number=None,
+        view_title=None,
+        gap=5.0,
+    ):
+        """Validate edited placement geometry without mutating the document."""
+
+        footprint = BIMSheetFootprintProvider().for_view(
+            drawing_view,
+            scale=scale,
+            title_offset=title_offset,
+            title_size=title_size,
+            view_number=view_number,
+            view_title=view_title,
+        )
+        occupied = self._occupied_footprints(page, drawing_view)
+        engine = BIMSheetLayout(
+            page.PageWidth, page.PageHeight, self.margins_for(page), gap
+        )
+        x, y = engine.place_anchor(footprint, occupied, position)
+        return footprint.at(x, y)
 
     @staticmethod
     def margins_for(page):
@@ -264,5 +294,20 @@ class BIMSheetService:
 
     @staticmethod
     def _view_footprint(drawing_view):
-        scale = drawing_view.getScale() if hasattr(drawing_view, "getScale") else 1.0
-        return svg_footprint(getattr(drawing_view, "Symbol", ""), scale)
+        return BIMSheetFootprintProvider().for_view(drawing_view)
+
+    def _occupied_footprints(self, page, excluded_view):
+        return tuple(
+            self._view_footprint(view).at(view.X.Value, view.Y.Value)
+            for view in page.Views
+            if view is not excluded_view and not self._is_owned_title(view)
+        )
+
+    @staticmethod
+    def _is_owned_title(view):
+        owner = getattr(view, "Owner", None)
+        return (
+            view.isDerivedFrom("TechDraw::DrawViewAnnotation")
+            and owner is not None
+            and owner.isDerivedFrom("TechDraw::DrawViewArch")
+        )
