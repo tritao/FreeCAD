@@ -44,7 +44,14 @@ from bimviews.viewport_ruler import (
     _ViewportEventFilter,
 )
 from bimplan.runtime.session import activate_representation_request
-from bimsheets import BIMSheetMetadata, BIMSheetService
+from bimsheets import (
+    BIMSheetLayout,
+    BIMSheetMetadata,
+    BIMSheetService,
+    SheetLayoutError,
+    SheetRect,
+)
+from bimsheets.layout import svg_footprint
 
 
 class _RecordingView:
@@ -107,6 +114,32 @@ class _FramingRecordingView(_RecordingView):
 
 
 class TestBimViewsServiceGui(TestArchBaseGui):
+    def test_sheet_layout_places_views_without_overlap(self):
+        layout = BIMSheetLayout(200, 120, gap=5)
+        first = layout.place((50, 40))
+        second = layout.place((50, 40), (first,))
+
+        self.assertEqual(SheetRect(35, 30, 50, 40), first)
+        self.assertEqual(SheetRect(90, 30, 50, 40), second)
+        self.assertFalse(first.intersects(second, layout.gap))
+
+    def test_sheet_layout_validates_overrides_and_full_sheets(self):
+        layout = BIMSheetLayout(100, 80, gap=5)
+
+        explicit = layout.place((20, 10), position=(50, 40))
+
+        self.assertEqual(SheetRect(50, 40, 20, 10), explicit)
+        with self.assertRaisesRegex(SheetLayoutError, "outside printable"):
+            layout.place((20, 10), position=(5, 5))
+        with self.assertRaisesRegex(SheetLayoutError, "no printable sheet space"):
+            layout.place((70, 50), (SheetRect(50, 40, 70, 50),))
+
+    def test_svg_footprint_uses_rendered_geometry_and_scale(self):
+        svg = '<svg><path d="M -10 5 L 90 5 L 90 55 L -10 55" /></svg>'
+
+        self.assertEqual((25.0, 12.5), svg_footprint(svg, scale=0.25))
+        self.assertEqual((64.0, 64.0), svg_footprint("", scale=0.25))
+
     def test_sheet_service_creates_page_with_stable_metadata_contract(self):
         template_path = (
             FreeCAD.getResourceDir()
@@ -123,6 +156,10 @@ class TestBimViewsServiceGui(TestArchBaseGui):
             status="Shared",
             template_identity="Default_Template_A4_Landscape.svg",
             order=101,
+            margin_left=12,
+            margin_top=8,
+            margin_right=15,
+            margin_bottom=20,
         )
 
         page = service.create_sheet(template_path, metadata)
@@ -131,6 +168,14 @@ class TestBimViewsServiceGui(TestArchBaseGui):
         self.assertEqual("Ground Floor Plan", page.Label)
         self.assertEqual("Default_Template_A4_Landscape.svg", page.TemplateIdentity)
         self.assertEqual(metadata, service.metadata_for(page))
+        self.assertEqual(
+            SheetRect(37, 28, 50, 40),
+            BIMSheetLayout(
+                page.PageWidth,
+                page.PageHeight,
+                service.margins_for(page),
+            ).place((50, 40)),
+        )
         self.assertIsNotNone(page.Template)
 
     def test_sheet_metadata_initialization_is_idempotent(self):
@@ -146,7 +191,7 @@ class TestBimViewsServiceGui(TestArchBaseGui):
         self.assertEqual("A-001", page.SheetNumber)
         self.assertEqual("Cover", page.SheetTitle)
         self.assertEqual(1, page.SheetOrder)
-        self.assertEqual(1, page.BIMSheetSchemaVersion)
+        self.assertEqual(service.SCHEMA_VERSION, page.BIMSheetSchemaVersion)
 
     def test_sheet_service_rejects_non_page_objects(self):
         obj = self.document.addObject("App::FeaturePython", "NotAPage")
@@ -1100,6 +1145,34 @@ class TestBimViewsServiceGui(TestArchBaseGui):
         self.assertNotIn("BIMSheetScale", definition.PropertiesList)
         self.assertNotIn("BIMRenderMode", definition.PropertiesList)
 
+    def test_sheet_placement_uses_first_free_position_and_explicit_override(self):
+        storey = self.document.addObject("App::FeaturePython", "LayoutStorey")
+        storey.addProperty("App::PropertyPlacement", "Placement")
+        service = BIMViewService(self.document, view=_RecordingView([]))
+        first_definition = service.create_view(
+            "First Layout Plan", "Plan", storey, capture=False
+        )
+        second_definition = service.create_view(
+            "Second Layout Plan", "Plan", storey, capture=False
+        )
+        page = self.document.addObject("TechDraw::DrawPage", "LayoutPage")
+        template = self.document.addObject("TechDraw::DrawSVGTemplate", "LayoutTemplate")
+        template.Template = (
+            FreeCAD.getResourceDir()
+            + "Mod/TechDraw/Templates/Default_Template_A4_Landscape.svg"
+        )
+        page.Template = template
+
+        first = service.place_on_sheet(first_definition, page)
+        second = service.place_on_sheet(second_definition, page)
+        explicit = service.place_on_sheet(
+            first_definition, page, position=(page.PageWidth - 42, page.PageHeight - 42)
+        )
+
+        self.assertNotEqual((first.X, first.Y), (second.X, second.Y))
+        self.assertEqual(page.PageWidth - 42, explicit.X.Value)
+        self.assertEqual(page.PageHeight - 42, explicit.Y.Value)
+
     def test_saved_view_visibility_is_applied_within_sheet_source_scope(self):
         normally_visible = self.document.addObject("PartDesign::Feature", "Visible")
         forced_visible = self.document.addObject("PartDesign::Feature", "ForcedVisible")
@@ -1180,6 +1253,8 @@ class TestBimViewsServiceGui(TestArchBaseGui):
         drawing_view.BIMViewDefinition = definition
         drawing_view.ShowHidden = True
         drawing_view.Scale = 0.02
+        drawing_view.X = 123
+        drawing_view.Y = 77
 
         with tempfile.TemporaryDirectory() as directory:
             path = directory + "/sheet-view.FCStd"
@@ -1192,6 +1267,8 @@ class TestBimViewsServiceGui(TestArchBaseGui):
             self.assertIs(reopened_definition, reopened_view.BIMViewDefinition)
             self.assertTrue(reopened_view.ShowHidden)
             self.assertAlmostEqual(0.02, reopened_view.Scale)
+            self.assertAlmostEqual(123, reopened_view.X.Value)
+            self.assertAlmostEqual(77, reopened_view.Y.Value)
             self.assertNotIn("BIMShowHidden", reopened_definition.PropertiesList)
 
     def test_plan_section_and_elevation_placements_render_svg(self):

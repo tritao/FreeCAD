@@ -298,7 +298,7 @@ class BIMViewService:
             ArchRepresentation.RepresentationPurpose.ELEVATION,
         ) and self.context_source(definition) is not None
 
-    def place_on_sheet(self, definition, page):
+    def place_on_sheet(self, definition, page, position=None):
         """Create a linked TechDraw BIM view for a sourced planar definition."""
 
         if not self.can_place_on_sheet(definition):
@@ -314,6 +314,16 @@ class BIMViewService:
         page.addView(drawing_view)
         if getattr(page, "Scale", 0.0):
             drawing_view.Scale = page.Scale
+        from bimsheets.service import BIMSheetService
+
+        try:
+            BIMSheetService(self.document).layout_view(
+                page, drawing_view, position=position
+            )
+        except (TypeError, ValueError):
+            page.removeView(drawing_view)
+            self.document.removeObject(drawing_view.Name)
+            raise
         return drawing_view
 
     def capture(self, definition, view=None):

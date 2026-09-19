@@ -218,6 +218,7 @@ SET(bimviews_SRCS
 
 SET(bimsheets_SRCS
     bimsheets/__init__.py
+    bimsheets/layout.py
     bimsheets/service.py
 )
 
