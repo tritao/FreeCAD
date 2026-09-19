@@ -160,6 +160,12 @@ DrawViewAnnotation::DrawViewAnnotation()
 void DrawViewAnnotation::onChanged(const App::Property* prop)
 {
     if (!isRestoring()) {
+        if (prop == &Owner ||
+            prop == &FollowOwnerPosition ||
+            prop == &OwnerOffsetX ||
+            prop == &OwnerOffsetY) {
+            synchronizeOwnerPosition();
+        }
         if (prop == &Text ||
             prop == &Font ||
             prop == &TextColor ||

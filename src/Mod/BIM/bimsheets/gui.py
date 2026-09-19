@@ -159,7 +159,7 @@ class BIMSheetPlacementPropertiesWidget(QtGui.QWidget):
         form.addRow(translate("BIM", "Scale"), self.scale)
         form.addRow(translate("BIM", "Horizontal position"), self.x)
         form.addRow(translate("BIM", "Vertical position"), self.y)
-        form.addRow(translate("BIM", "Title offset"), self.title_offset)
+        form.addRow(translate("BIM", "Title gap"), self.title_offset)
         form.addRow(translate("BIM", "Title text size"), self.title_size)
         form.addRow(translate("BIM", "Render mode"), self.render_mode)
         form.addRow(self.show_hidden)
@@ -189,7 +189,8 @@ class BIMSheetPlacementPropertiesWidget(QtGui.QWidget):
         self.x.setValue(drawing_view.X.Value)
         self.y.setValue(drawing_view.Y.Value)
         if annotation is not None:
-            self.title_offset.setValue(abs(annotation.OwnerOffsetY.Value))
+            gap = getattr(annotation, "BIMTitleGap", annotation.OwnerOffsetY)
+            self.title_offset.setValue(abs(gap.Value))
             self.title_size.setValue(annotation.TextSize.Value)
         self.render_mode.setCurrentText(str(drawing_view.RenderMode))
         self.show_hidden.setChecked(bool(drawing_view.ShowHidden))
@@ -284,9 +285,16 @@ class BIMSheetPlacementPropertiesWidget(QtGui.QWidget):
             view.ShowFill = self.show_fill.isChecked()
             annotation = _title_annotation(view)
             if annotation is not None:
-                annotation.OwnerOffsetY = -self.title_offset.value()
+                if "BIMTitleGap" not in annotation.PropertiesList:
+                    annotation.addProperty(
+                        "App::PropertyLength",
+                        "BIMTitleGap",
+                        "BIM Sheet",
+                        "Clear spacing between the drawing geometry and its title",
+                    )
+                annotation.BIMTitleGap = self.title_offset.value()
                 annotation.TextSize = self.title_size.value()
-                BIMSheetViewTitleService.synchronize_position(annotation)
+                BIMSheetViewTitleService(view.Document).position_below_view(view)
             document.commitTransaction()
         except Exception:
             document.abortTransaction()

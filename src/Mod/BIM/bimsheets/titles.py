@@ -17,6 +17,8 @@ def format_scale(scale):
 class BIMSheetViewTitleService:
     """Create and query numbered title annotations for sheet placements."""
 
+    GAP_PROPERTY = "BIMTitleGap"
+
     def __init__(self, document):
         self.document = document
 
@@ -35,8 +37,15 @@ class BIMSheetViewTitleService:
             "{ViewNumber}  {ViewTitle|BIMViewDefinition.Label|Label}",
             "{Scale}",
         ]
+        annotation.addProperty(
+            "App::PropertyLength",
+            self.GAP_PROPERTY,
+            "BIM Sheet",
+            "Clear spacing between the drawing geometry and its title",
+        )
+        annotation.BIMTitleGap = getattr(page, "ViewTitleOffset", 12.0)
         annotation.FollowOwnerPosition = True
-        annotation.OwnerOffsetY = -getattr(page, "ViewTitleOffset", 12.0)
+        annotation.OwnerOffsetY = -annotation.BIMTitleGap
         annotation.TextSize = getattr(page, "ViewTitleTextSize", 3.5)
         font = getattr(page, "ViewTitleFont", "")
         if font:
@@ -44,6 +53,33 @@ class BIMSheetViewTitleService:
         page.addView(annotation)
         annotation.touch()
         return annotation
+
+    @classmethod
+    def position_below_view(cls, drawing_view):
+        """Place the owned title below the rendered drawing geometry."""
+
+        from .layout import svg_footprint
+
+        annotation = cls.annotation_for(drawing_view)
+        if annotation is None:
+            return None
+        scale = (
+            drawing_view.getScale()
+            if hasattr(drawing_view, "getScale")
+            else float(drawing_view.Scale)
+        )
+        _width, height = svg_footprint(
+            getattr(drawing_view, "Symbol", ""), scale
+        )
+        line_count = max(
+            len(getattr(annotation, "Text", ())),
+            len(getattr(annotation, "TextTemplate", ())),
+            1,
+        )
+        title_height = line_count * annotation.TextSize.Value * 1.25
+        gap = getattr(annotation, cls.GAP_PROPERTY).Value
+        annotation.OwnerOffsetY = -height / 2.0 - gap - title_height / 2.0
+        return cls.synchronize_position(annotation)
 
     @staticmethod
     def annotation_for(drawing_view):

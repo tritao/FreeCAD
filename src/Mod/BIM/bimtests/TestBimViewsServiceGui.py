@@ -433,7 +433,8 @@ class TestBimViewsServiceGui(TestArchBaseGui):
         self.assertAlmostEqual(0.02, drawing_view.Scale)
         self.assertAlmostEqual(80, drawing_view.X.Value)
         self.assertAlmostEqual(60, drawing_view.Y.Value)
-        self.assertAlmostEqual(-10, annotation.OwnerOffsetY.Value)
+        self.assertAlmostEqual(10, annotation.BIMTitleGap.Value)
+        self.assertLess(annotation.OwnerOffsetY.Value, -10)
         self.assertAlmostEqual(4, annotation.TextSize.Value)
         self.assertTrue(drawing_view.ShowHidden)
 
@@ -1779,6 +1780,14 @@ class TestBimViewsServiceGui(TestArchBaseGui):
         self.assertAlmostEqual(
             drawing_view.Y.Value + annotation.OwnerOffsetY.Value,
             annotation.Y.Value,
+        )
+        geometry_height = svg_footprint(
+            drawing_view.Symbol, drawing_view.Scale
+        )[1]
+        title_height = len(annotation.Text) * annotation.TextSize.Value * 1.25
+        self.assertLessEqual(
+            annotation.OwnerOffsetY.Value + title_height / 2.0,
+            -geometry_height / 2.0 - annotation.BIMTitleGap.Value,
         )
 
     def test_create_sheet_from_view_uses_shared_creation_and_placement(self):

@@ -44,11 +44,6 @@ class BIMSheetFootprintProvider:
             else _value(getattr(annotation, "TextSize", 3.5))
         )
         offset_x = _value(getattr(annotation, "OwnerOffsetX", 0.0))
-        offset_y = (
-            -abs(float(title_offset))
-            if title_offset is not None
-            else _value(getattr(annotation, "OwnerOffsetY", 0.0))
-        )
         lines = self._title_lines(
             drawing_view,
             scale,
@@ -57,6 +52,16 @@ class BIMSheetFootprintProvider:
         )
         title_width = max((len(line) for line in lines), default=1) * size * 0.6
         title_height = max(len(lines), 1) * size * 1.25
+        if title_offset is not None:
+            offset_y = result.bottom - abs(float(title_offset)) - title_height / 2.0
+        elif hasattr(annotation, "BIMTitleGap"):
+            offset_y = (
+                result.bottom
+                - _value(annotation.BIMTitleGap)
+                - title_height / 2.0
+            )
+        else:
+            offset_y = _value(getattr(annotation, "OwnerOffsetY", 0.0))
         title = PlacementFootprint(
             offset_x - title_width / 2.0,
             offset_y - title_height / 2.0,
