@@ -136,7 +136,7 @@ static bool findObjectsOfTypeInBox(
  * @param[in] depth Current recursion depth when walking subobjects.
  * @return Matching subelement names, or an empty-string entry for whole-object matches.
  */
-std::vector<std::string> getBoxSelection(
+std::vector<std::string> getObjectBoxSelection(
     ViewProviderDocumentObject* vp,
     SelectionMode mode,
     bool selectElement,
@@ -247,7 +247,9 @@ std::vector<std::string> getBoxSelection(
         }
 
         const auto& sels
-            = getBoxSelection(svp, mode, selectElement, proj, polygon, smat, false, depth + 1);
+            = getObjectBoxSelection(
+                svp, mode, selectElement, proj, polygon, smat, false, depth + 1
+            );
         if (sels.size() == 1 && sels[0].empty()) {
             ++count;
         }
@@ -265,20 +267,21 @@ std::vector<std::string> getBoxSelection(
 
 }  // namespace
 
-void Gui::applyBoxSelection(
+std::vector<Gui::BoxSelectionResult> Gui::queryBoxSelection(
     View3DInventorViewer* viewer,
     const std::vector<SbVec2s>& picked,
     bool selectElement,
-    bool additive
+    bool visibleOnly
 )
 {
+    std::vector<BoxSelectionResult> result;
     if (!viewer || picked.size() < 2) {
-        return;
+        return result;
     }
 
     App::Document* doc = App::GetApplication().getActiveDocument();
     if (!doc) {
-        return;
+        return result;
     }
 
     SelectionMode selectionMode = CENTER;
@@ -307,11 +310,7 @@ void Gui::applyBoxSelection(
 
     SoCamera* cam = viewer->getSoRenderManager()->getCamera();
     if (!cam) {
-        return;
-    }
-
-    if (!additive) {
-        Gui::Selection().clearSelection(doc->getName());
+        return result;
     }
 
     Gui::ViewVolumeProjection proj(cam->getViewVolume());
@@ -325,13 +324,42 @@ void Gui::applyBoxSelection(
         auto vp = freecad_cast<ViewProviderDocumentObject*>(
             Application::Instance->getViewProvider(obj)
         );
-        if (!vp || !vp->isVisible()) {
+        if (!vp || (visibleOnly && !vp->isVisible())) {
             continue;
         }
 
         Base::Matrix4D mat;
-        for (auto& sub : getBoxSelection(vp, selectionMode, selectElement, proj, polygon, mat)) {
-            Gui::Selection().addSelection(doc->getName(), obj->getNameInDocument(), sub.c_str());
+        for (auto& sub :
+             getObjectBoxSelection(vp, selectionMode, selectElement, proj, polygon, mat)) {
+            result.push_back({obj, std::move(sub)});
         }
+    }
+    return result;
+}
+
+void Gui::applyBoxSelection(
+    View3DInventorViewer* viewer,
+    const std::vector<SbVec2s>& picked,
+    bool selectElement,
+    bool additive
+)
+{
+    App::Document* doc = App::GetApplication().getActiveDocument();
+    if (!doc) {
+        return;
+    }
+    const auto matches = queryBoxSelection(viewer, picked, selectElement);
+    if (!additive) {
+        Gui::Selection().clearSelection(doc->getName());
+    }
+    for (const auto& match : matches) {
+        if (!match.object || !match.object->isAttachedToDocument()) {
+            continue;
+        }
+        Gui::Selection().addSelection(
+            match.object->getDocument()->getName(),
+            match.object->getNameInDocument(),
+            match.subName.c_str()
+        );
     }
 }

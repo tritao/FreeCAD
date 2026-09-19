@@ -56,6 +56,7 @@
 #include "Inventor/SoMouseWheelEvent.h"
 #include "Navigation/NavigationStyle.h"
 #include "PythonWrapper.h"
+#include "Selection/BoxSelection.h"
 #include "SoFCDB.h"
 #include "SoFCOffscreenRenderer.h"
 #include "SoFCSelectionAction.h"
@@ -374,6 +375,14 @@ void View3DInventorPy::init_type()
         "graphicsView",
         &View3DInventorPy::graphicsView,
         "graphicsView(): Access this view as QGraphicsView"
+    );
+    add_varargs_method(
+        "getBoxSelection",
+        &View3DInventorPy::getBoxSelection,
+        "getBoxSelection(points, [select_element=False], [visible_only=True]) -> list\n"
+        "\n"
+        "Return document objects and optional subelements matched by a viewport polygon "
+        "without changing the global selection. Two points use window/crossing semantics.\n"
     );
     add_varargs_method(
         "viewportDecoration",
@@ -2820,6 +2829,44 @@ Py::Object View3DInventorPy::graphicsView()
     PythonWrapper wrap;
     wrap.loadWidgetsModule();
     return wrap.fromQWidget(getView3DInventorPtr()->getViewer(), "QGraphicsView");
+}
+
+Py::Object View3DInventorPy::getBoxSelection(const Py::Tuple& args)
+{
+    PyObject* pointsObject;
+    int selectElement = 0;
+    int visibleOnly = 1;
+    if (!PyArg_ParseTuple(args.ptr(), "O|pp", &pointsObject, &selectElement, &visibleOnly)) {
+        throw Py::Exception();
+    }
+
+    Py::Sequence points(pointsObject);
+    std::vector<SbVec2s> picked;
+    picked.reserve(points.size());
+    for (Py_ssize_t index = 0; index < points.size(); ++index) {
+        Py::Sequence point(points[index]);
+        if (point.size() != 2) {
+            throw Py::ValueError("Box-selection points must contain exactly two coordinates");
+        }
+        picked.emplace_back(
+            static_cast<short>(Py::Long(point[0]).as_long()),
+            static_cast<short>(Py::Long(point[1]).as_long())
+        );
+    }
+
+    Py::List result;
+    for (const auto& match : queryBoxSelection(
+             getView3DInventorPtr()->getViewer(), picked, selectElement != 0, visibleOnly != 0)) {
+        if (!match.object || !match.object->isAttachedToDocument()) {
+            continue;
+        }
+        Py::Dict item;
+        item.setItem("Document", Py::String(match.object->getDocument()->getName()));
+        item.setItem("Object", Py::String(match.object->getNameInDocument()));
+        item.setItem("Component", Py::String(match.subName));
+        result.append(item);
+    }
+    return result;
 }
 
 Py::Object View3DInventorPy::viewportDecoration(const Py::Tuple& args)

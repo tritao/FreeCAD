@@ -22,14 +22,34 @@
 #pragma once
 
 #include <vector>
+#include <string>
 
 #include <FCGlobal.h>
 
 class SbVec2s;
 
+namespace App
+{
+class DocumentObject;
+}
+
 namespace Gui
 {
 class View3DInventorViewer;
+
+struct BoxSelectionResult
+{
+    App::DocumentObject* object {nullptr};
+    std::string subName;
+};
+
+/** Collect box-selection matches without changing the global selection. */
+GuiExport std::vector<BoxSelectionResult> queryBoxSelection(
+    View3DInventorViewer* viewer,
+    const std::vector<SbVec2s>& picked,
+    bool selectElement = false,
+    bool visibleOnly = true
+);
 
 /**
  * @brief Apply box selection for the current 3D view polygon.

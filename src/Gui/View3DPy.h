@@ -98,6 +98,7 @@ public:
     Py::Object getCursorPos();
     Py::Object getObjectInfo(const Py::Tuple&);
     Py::Object getObjectsInfo(const Py::Tuple&);
+    Py::Object getBoxSelection(const Py::Tuple&);
     Py::Object getSize();
     Py::Object getObjectInfoRay(const Py::Tuple&);
     Py::Object getPointOnFocalPlane(const Py::Tuple&);
