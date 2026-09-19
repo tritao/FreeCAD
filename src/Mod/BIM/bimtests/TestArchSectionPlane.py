@@ -575,7 +575,7 @@ class TestArchSectionPlane(TestArchBase.TestArchBase):
         self.assertIn("L 100 100", svg)
 
     def testTechDrawSemanticLineworkUsesJoinedCornerCaps(self):
-        """Sheet boundaries must not leave square-cap artifacts at corners."""
+        """Sheet boundaries must not leave cap or miter artifacts at corners."""
 
         representation = ArchRepresentation.BIMRepresentation()
         representation.add_geometry(
@@ -611,7 +611,7 @@ class TestArchSectionPlane(TestArchBase.TestArchBase):
         self.assertEqual("<g/>", svg)
         self.assertEqual(1, len(calls))
         self.assertEqual("butt", calls[0]["hStyle"]["stroke-linecap"])
-        self.assertEqual("miter", calls[0]["hStyle"]["stroke-linejoin"])
+        self.assertEqual("bevel", calls[0]["hStyle"]["stroke-linejoin"])
 
     def testTechDrawAppliesStylesByProjectedLineCategory(self):
         representation = ArchRepresentation.BIMRepresentation()

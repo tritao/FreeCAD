@@ -88,15 +88,16 @@ def render_representations_to_svg(
     """Render a complete semantic BIM representation set for TechDraw."""
     style = {
         "stroke": "SVGLINECOLOR",
-        # The native semantic path exporter preserves connected corners.
+        # The native semantic path exporter preserves connected corners. A
+        # bevel prevents acute wall joins from growing a paper-space spike.
         "stroke-linecap": "butt",
-        "stroke-linejoin": "miter",
+        "stroke-linejoin": "bevel",
         "stroke-width": "SVGLINEWIDTH",
     }
     cut_style = {
         "stroke": "SVGLINECOLOR",
         "stroke-linecap": "butt",
-        "stroke-linejoin": "miter",
+        "stroke-linejoin": "bevel",
         "stroke-width": "SVGCUTLINEWIDTH",
     }
     elevation_role_styles = {}
