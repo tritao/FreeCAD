@@ -301,6 +301,22 @@ class TestBimPlanEditExamplesGui(TestArchBaseGui):
         definitions = [
             obj for obj in document.Objects if obj.isDerivedFrom("App::ViewDefinition")
         ]
+        from bimsheets import BIMSheetService
+
+        sheets = [obj for obj in document.Objects if BIMSheetService.is_sheet(obj)]
+        self.assertEqual(1, len(sheets))
+        self.assertEqual("G-001", sheets[0].SheetNumber)
+        self.assertEqual("Ground Floor Plan", sheets[0].SheetTitle)
+        drawing_views = [
+            obj
+            for obj in sheets[0].Views
+            if obj.isDerivedFrom("TechDraw::DrawViewArch")
+        ]
+        self.assertEqual(1, len(drawing_views))
+        self.assertEqual(
+            "Plan",
+            drawing_views[0].BIMViewDefinition.Purpose,
+        )
         from bimviews.navigator_model import BIMNavigatorModel
 
         project_nodes = BIMNavigatorModel(document).project_nodes()

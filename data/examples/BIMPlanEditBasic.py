@@ -24,6 +24,13 @@ from PySide import QtCore
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 OUTPUT_PATH = os.path.join(ROOT, "data", "examples", "BIMPlanEditBasic.FCStd")
 FONT_PATH = os.path.join(ROOT, "data", "examples", "osifont-lgpl3fe.ttf")
+TEMPLATE_PATH = os.path.join(
+    App.getResourceDir(),
+    "Mod",
+    "TechDraw",
+    "Templates",
+    "Default_Template_A4_Landscape.svg",
+)
 
 
 def add_label(text, point, size=170.0):
@@ -123,6 +130,7 @@ def build_document():
     service.create_elevation_view("South Elevation", level, direction="South")
     service.create_section_view("Building Section", section)
     plan_view = service.create_plan_view("Ground Floor Plan", level)
+    service.create_sheet_from_view(plan_view, TEMPLATE_PATH, page_scale=0.02)
 
     gui_startup = doc.settings("Gui.Startup")
     gui_startup.setInt("SchemaVersion", 1)
