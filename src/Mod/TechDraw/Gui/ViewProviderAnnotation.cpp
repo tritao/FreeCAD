@@ -35,6 +35,7 @@
 #include <Mod/TechDraw/App/DrawViewBalloon.h>
 
 #include "QGIView.h"
+#include "QGSPage.h"
 #include "ViewProviderAnnotation.h"
 
 
@@ -51,6 +52,16 @@ ViewProviderAnnotation::~ViewProviderAnnotation() {}
 
 void ViewProviderAnnotation::updateData(const App::Property* prop)
 {
+    auto* annotation = getViewObject();
+    if (annotation
+        && (prop == &annotation->Owner || prop == &annotation->FollowOwnerPosition)) {
+        if (auto* qgiv = getQView()) {
+            if (auto* page = dynamic_cast<QGSPage*>(qgiv->scene())) {
+                page->synchronizeViewParent(qgiv);
+            }
+        }
+    }
+
     if (prop == &(getViewObject()->Text) || prop == &(getViewObject()->Font)
         || prop == &(getViewObject()->TextColor) || prop == &(getViewObject()->TextSize)
         || prop == &(getViewObject()->LineSpace) || prop == &(getViewObject()->TextStyle)

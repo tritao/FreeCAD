@@ -149,6 +149,7 @@ public:
     void postProcessXml(QTemporaryFile& temporaryFile, QString filename, QString pagename);
 
     // scene parentage fixups
+    void synchronizeViewParent(QGIView* item);
     void setViewParents();
 
     static bool itemClearsSelection(int itemTypeIn);

@@ -346,6 +346,26 @@ class TestBimPlanEditExamplesGui(TestArchBaseGui):
                 for wall in walls
             )
         )
+        import TechDrawGui
+
+        with tempfile.TemporaryDirectory(prefix="freecad-sheet-title-") as directory:
+            export_path = os.path.join(directory, "page.svg")
+            TechDrawGui.exportPageAsSvg(sheets[0], export_path)
+            with open(export_path, encoding="utf-8") as stream:
+                exported_svg = stream.read()
+        title_end = exported_svg.index(">1 Ground Floor Plan</text>")
+        title_transform = re.findall(
+            r'transform="matrix\(([^)]*)\)"', exported_svg[:title_end]
+        )[-1]
+        title_x = float(title_transform.split(",")[4])
+        page_width = float(
+            re.search(r'viewBox="0 0 ([0-9.]+) ', exported_svg).group(1)
+        )
+        self.assertLess(
+            title_x,
+            page_width * 0.75,
+            "a following title must not inherit its owner's scene translation",
+        )
         from bimviews.navigator_model import BIMNavigatorModel
 
         project_nodes = BIMNavigatorModel(document).project_nodes()
