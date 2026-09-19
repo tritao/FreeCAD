@@ -341,7 +341,9 @@ class BIMViewService:
         try:
             from bimsheets import BIMSheetViewTitleService
 
-            BIMSheetViewTitleService(self.document).create(page, drawing_view)
+            annotation = BIMSheetViewTitleService(self.document).create(
+                page, drawing_view
+            )
             self.document.recompute()
             if position is None:
                 suggestion = sheet_service.fit_view_layout(
@@ -356,6 +358,7 @@ class BIMViewService:
                 drawing_view.Y = suggestion.y
             else:
                 sheet_service.layout_view(page, drawing_view, position=position)
+            BIMSheetViewTitleService.synchronize_position(annotation)
         except Exception:
             from bimsheets import BIMSheetViewTitleService
 

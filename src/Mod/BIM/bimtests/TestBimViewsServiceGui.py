@@ -1760,9 +1760,11 @@ class TestBimViewsServiceGui(TestArchBaseGui):
         page.Scale = 0.01
 
         drawing_view = view_service.place_on_sheet(definition, page)
+        self.document.recompute()
 
         footprint = BIMSheetFootprintProvider().for_view(drawing_view)
         bounds = footprint.at(drawing_view.X.Value, drawing_view.Y.Value)
+        annotation = BIMSheetViewTitleService.annotation_for(drawing_view)
         margins = sheet_service.margins_for(page)
         self.assertGreater(drawing_view.Scale, page.Scale)
         self.assertAlmostEqual(
@@ -1772,6 +1774,11 @@ class TestBimViewsServiceGui(TestArchBaseGui):
         self.assertAlmostEqual(
             (margins.bottom + page.PageHeight - margins.top) / 2.0,
             bounds.y,
+        )
+        self.assertAlmostEqual(drawing_view.X.Value, annotation.X.Value)
+        self.assertAlmostEqual(
+            drawing_view.Y.Value + annotation.OwnerOffsetY.Value,
+            annotation.Y.Value,
         )
 
     def test_create_sheet_from_view_uses_shared_creation_and_placement(self):

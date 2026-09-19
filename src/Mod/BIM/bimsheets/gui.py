@@ -286,7 +286,7 @@ class BIMSheetPlacementPropertiesWidget(QtGui.QWidget):
             if annotation is not None:
                 annotation.OwnerOffsetY = -self.title_offset.value()
                 annotation.TextSize = self.title_size.value()
-                annotation.touch()
+                BIMSheetViewTitleService.synchronize_position(annotation)
             document.commitTransaction()
         except Exception:
             document.abortTransaction()

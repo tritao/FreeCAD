@@ -69,6 +69,18 @@ class BIMSheetViewTitleService:
             page.removeView(annotation)
         self.document.removeObject(annotation.Name)
 
+    @staticmethod
+    def synchronize_position(annotation):
+        """Apply an annotation's owner-relative position immediately."""
+
+        owner = getattr(annotation, "Owner", None)
+        if owner is None or not getattr(annotation, "FollowOwnerPosition", False):
+            return annotation
+        annotation.X = owner.X.Value + annotation.OwnerOffsetX.Value
+        annotation.Y = owner.Y.Value + annotation.OwnerOffsetY.Value
+        annotation.touch()
+        return annotation
+
     def next_number(self, page):
         used = {
             int(view.ViewNumber)
