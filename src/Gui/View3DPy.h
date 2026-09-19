@@ -80,6 +80,8 @@ public:
     Py::Object isAnimationEnabled();
     Py::Object setPopupMenuEnabled(const Py::Tuple&);
     Py::Object isPopupMenuEnabled();
+    Py::Object setSelectionEnabled(const Py::Tuple&);
+    Py::Object isSelectionEnabled();
     Py::Object dump(const Py::Tuple&);
     Py::Object dumpNode(const Py::Tuple&);
     Py::Object saveImage(const Py::Tuple&);

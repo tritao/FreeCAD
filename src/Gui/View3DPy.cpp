@@ -164,6 +164,16 @@ void View3DInventorPy::init_type()
         "setPopupMenuEnabled()"
     );
     add_noargs_method("isPopupMenuEnabled", &View3DInventorPy::isPopupMenuEnabled, "isPopupMenuEnabled()");
+    add_varargs_method(
+        "setSelectionEnabled",
+        &View3DInventorPy::setSelectionEnabled,
+        "setSelectionEnabled(enabled): enable or disable native viewer selection"
+    );
+    add_noargs_method(
+        "isSelectionEnabled",
+        &View3DInventorPy::isSelectionEnabled,
+        "isSelectionEnabled(): return whether native viewer selection is enabled"
+    );
     add_varargs_method("dump", &View3DInventorPy::dump, "dump(filename, [onlyVisible=False])");
     add_varargs_method("dumpNode", &View3DInventorPy::dumpNode, "dumpNode(node)");
     add_varargs_method("saveImage", &View3DInventorPy::saveImage, "saveImage()");
@@ -2829,6 +2839,21 @@ Py::Object View3DInventorPy::graphicsView()
     PythonWrapper wrap;
     wrap.loadWidgetsModule();
     return wrap.fromQWidget(getView3DInventorPtr()->getViewer(), "QGraphicsView");
+}
+
+Py::Object View3DInventorPy::setSelectionEnabled(const Py::Tuple& args)
+{
+    int enabled;
+    if (!PyArg_ParseTuple(args.ptr(), "p", &enabled)) {
+        throw Py::Exception();
+    }
+    getView3DInventorPtr()->getViewer()->setSelectionEnabled(enabled != 0);
+    return Py::None();
+}
+
+Py::Object View3DInventorPy::isSelectionEnabled()
+{
+    return Py::Boolean(getView3DInventorPtr()->getViewer()->isSelectionEnabled());
 }
 
 Py::Object View3DInventorPy::getBoxSelection(const Py::Tuple& args)
