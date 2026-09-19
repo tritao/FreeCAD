@@ -22,6 +22,23 @@ def _segment_key(first, second, tolerance):
     return tuple(sorted((_point_key(first, tolerance), _point_key(second, tolerance))))
 
 
+def _segment_contains(container_start, container_end, start, end, tolerance):
+    """Return whether one line segment contains another within ``tolerance``."""
+
+    axis = FreeCAD.Vector(container_end).sub(container_start)
+    length = axis.Length
+    if length <= tolerance:
+        return False
+    direction = axis.multiply(1.0 / length)
+    for point in (start, end):
+        relative = FreeCAD.Vector(point).sub(container_start)
+        distance = relative.cross(direction).Length
+        position = relative.dot(direction)
+        if distance > tolerance or position < -tolerance or position > length + tolerance:
+            return False
+    return True
+
+
 def _closed(points, tolerance):
     result = tuple(FreeCAD.Vector(point) for point in points)
     if len(result) < 3:
@@ -65,6 +82,7 @@ def contours_from_representation(representation, tolerance=DEFAULT_TOLERANCE):
                 getattr(mapping, "source", representation.source),
                 getattr(mapping, "subelement", None),
                 tuple(getattr(mapping, "related_sources", ()) or ()),
+                getattr(mapping, "line_class", None),
             )
         )
     return ArchRepresentation.BIMPlanContours(
@@ -177,6 +195,32 @@ def joined_contours(representations, tolerance=DEFAULT_TOLERANCE):
             )
         )
     return tuple(result)
+
+
+def contour_owns_polyline(contours, polyline, tolerance=None):
+    """Return whether canonical cut contours already own all polyline segments.
+
+    Opening objects retain their jamb geometry for snapping and editing.  When
+    composing a view, however, a jamb coincident with a canonical wall or
+    opening contour must be drawn only by that contour.
+    """
+
+    points = tuple(FreeCAD.Vector(point) for point in polyline)
+    if len(points) < 2:
+        return False
+    tolerance = float(tolerance or getattr(contours, "tolerance", DEFAULT_TOLERANCE))
+    boundary_segments = tuple(
+        (first, second)
+        for contour in (*contours.outer_contours, *contours.opening_contours)
+        for first, second in zip(contour, contour[1:])
+    )
+    return all(
+        any(
+            _segment_contains(boundary_start, boundary_end, start, end, tolerance)
+            for boundary_start, boundary_end in boundary_segments
+        )
+        for start, end in zip(points, points[1:])
+    )
 
 
 def _deduplicate_lines(lines, tolerance):

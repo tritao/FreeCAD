@@ -112,6 +112,31 @@ class TestArchPlanGeometry(TestArchBaseGui):
         self.assertEqual(1, len(contours.outer_contours))
         self.assertEqual((opening,), contours.opening_contours)
 
+    def test_canonical_contour_owns_coincident_opening_jamb(self):
+        representation = self._contour_representation(
+            (
+                FreeCAD.Vector(0, 0),
+                FreeCAD.Vector(1000, 0),
+                FreeCAD.Vector(1000, 200),
+                FreeCAD.Vector(0, 200),
+                FreeCAD.Vector(0, 0),
+            )
+        )
+        contours = representation.plan_contours
+
+        self.assertTrue(
+            ArchPlanContours.contour_owns_polyline(
+                contours,
+                (FreeCAD.Vector(400, 0), FreeCAD.Vector(700, 0)),
+            )
+        )
+        self.assertFalse(
+            ArchPlanContours.contour_owns_polyline(
+                contours,
+                (FreeCAD.Vector(400, 10), FreeCAD.Vector(700, 10)),
+            )
+        )
+
     def test_non_manifold_plan_contours_are_reported_without_open_paths(self):
         joint = object()
         first = self._contour_representation(

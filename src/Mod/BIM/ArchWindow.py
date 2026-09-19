@@ -2534,6 +2534,11 @@ class _HostedOpeningRepresentationGeometry:
                     tuple(polyline),
                     geometry_role,
                     subelement="Preview.{}{}".format(geometry_role, index),
+                    line_class={
+                        "OpeningJambLine": ArchRepresentation.BIMLineClass.CUT_EDGE,
+                        "OpeningSymbol": ArchRepresentation.BIMLineClass.SYMBOL_LINE,
+                        "OpeningGuide": ArchRepresentation.BIMLineClass.GUIDE_LINE,
+                    }[geometry_role],
                 )
         return representation
 
@@ -2699,6 +2704,11 @@ class _HostedOpeningRepresentationGeometry:
                     polyline,
                     role,
                     subelement=f"{role}{index}",
+                    line_class={
+                        "OpeningJambLine": ArchRepresentation.BIMLineClass.CUT_EDGE,
+                        "OpeningSymbol": ArchRepresentation.BIMLineClass.SYMBOL_LINE,
+                        "OpeningGuide": ArchRepresentation.BIMLineClass.GUIDE_LINE,
+                    }[role],
                 )
                 representation.snap_geometry.append(polyline)
                 if role == "OpeningJambLine":

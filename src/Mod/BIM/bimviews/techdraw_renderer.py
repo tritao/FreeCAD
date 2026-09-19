@@ -119,7 +119,15 @@ def render_representations_to_svg(
     }
     joined_cut_style = dict(cut_style)
     joined_cut_style["stroke-linejoin"] = "miter"
-    elevation_role_styles = {}
+    from ArchRepresentation import BIMLineClass, CutFillMode
+
+    projected_line_class_styles = {
+        BIMLineClass.CUT_EDGE: {
+            name: cut_style
+            for name in ("hStyle", "h0Style", "h1Style", "vStyle", "v0Style", "v1Style")
+        }
+    }
+    projected_role_styles = {}
     visible_style = style
     if elevation:
         request = getattr(
@@ -136,7 +144,8 @@ def render_representations_to_svg(
         silhouette_style["stroke-width"] = "{}px".format(
             line_width * silhouette_width
         )
-        elevation_role_styles = {
+        projected_line_class_styles = {}
+        projected_role_styles = {
             "ProjectionSilhouette": {
                 name: silhouette_style
                 for name in ("hStyle", "h0Style", "h1Style", "vStyle", "v0Style", "v1Style")
@@ -144,8 +153,6 @@ def render_representations_to_svg(
         }
 
     fragments = []
-    from ArchRepresentation import CutFillMode
-
     if cut_surface_style.mode != CutFillMode.NONE:
         fragments.append(
             fill_representations_to_svg(
@@ -167,12 +174,13 @@ def render_representations_to_svg(
                 vStyle=visible_style,
                 v0Style=visible_style,
                 v1Style=visible_style,
-                role_styles=elevation_role_styles,
+                role_styles=projected_role_styles,
+                line_class_styles=projected_line_class_styles,
                 include_joint_lines=True,
             )
         )
     if any(representation.cut_geometry for representation in representations):
-        if elevation_role_styles:
+        if elevation:
             fragments.append(
                 project_representations_to_svg(
                     representations,
@@ -211,6 +219,7 @@ def render_representations_to_svg(
                             normal_entries,
                             direction,
                             {},
+                            {},
                             {
                                 "hStyle": cut_style,
                                 "h0Style": cut_style,
@@ -232,6 +241,7 @@ def render_representations_to_svg(
                         joined_entries,
                         direction,
                         {},
+                        {},
                         {
                             "hStyle": joined_cut_style,
                             "h0Style": joined_cut_style,
@@ -252,7 +262,9 @@ def _shape_from_geometry(geometries):
     shapes = []
     for geometry in geometries:
         if hasattr(geometry, "ShapeType"):
-            shapes.append(geometry)
+            # TechDraw's Python projection APIs accept the base Part.Shape
+            # wrapper, not specialized wrappers such as Part.Compound.
+            shapes.append(Part.Shape(geometry))
             continue
         try:
             points = list(geometry)
@@ -265,7 +277,7 @@ def _shape_from_geometry(geometries):
     if len(shapes) == 1:
         return shapes[0]
 
-    return Part.makeCompound(shapes)
+    return Part.Shape(Part.makeCompound(shapes))
 
 
 def _geometry(representation, collection):
@@ -325,29 +337,41 @@ def _project_shape_to_svg(shape, direction, styles):
     import TechDraw
 
     path_style = styles.get("hStyle") or styles.get("vStyle") or {}
-    path_svg = TechDraw.projectToSVGPath(shape, direction, path_style)
+    try:
+        path_svg = TechDraw.projectToSVGPath(shape, direction, path_style)
+    except TypeError:
+        # The connected-path API intentionally accepts Part.Shape but some
+        # role groups resolve to the more specific Part.Compound wrapper.
+        path_svg = ""
     if path_svg:
         return path_svg
     return TechDraw.projectToSVG(shape, direction, **styles)
 
 
-def _project_entries_to_svg(entries, direction, role_styles, styles):
-    if not role_styles:
+def _project_entries_to_svg(
+    entries, direction, role_styles, line_class_styles, styles
+):
+    if not role_styles and not line_class_styles:
         shape = _shape_from_geometry([geometry for _, geometry in entries])
         return "" if shape is None else _project_shape_to_svg(shape, direction, styles)
 
     grouped = {}
     for representation, geometry in entries:
         mapping = representation.mapping_for(geometry)
-        grouped.setdefault(getattr(mapping, "role", None), []).append(geometry)
+        key = (
+            getattr(mapping, "role", None) if role_styles else None,
+            getattr(mapping, "line_class", None) if line_class_styles else None,
+        )
+        grouped.setdefault(key, []).append(geometry)
 
     fragments = []
-    for role, geometries in grouped.items():
+    for (role, line_class), geometries in grouped.items():
         shape = _shape_from_geometry(geometries)
         if shape is None:
             continue
         role_style = dict(styles)
         role_style.update(role_styles.get(role, {}))
+        role_style.update(line_class_styles.get(line_class, {}))
         fragments.append(_project_shape_to_svg(shape, direction, role_style))
     return "".join(fragments)
 
@@ -483,9 +507,26 @@ def _prepared_projection_entries(
 ):
     """Prepare sheet linework without merging unrelated semantic objects."""
     entries = _representation_entries(representations, collection)
-    if role_styles:
-        return entries
+    if collection == "projected_geometry":
+        import ArchPlanContours
 
+        wall_contours = tuple(
+            contours
+            for contours in ArchPlanContours.joined_contours(representations)
+            if contours.outer_contours or contours.opening_contours
+        )
+        entries = [
+            (representation, geometry)
+            for representation, geometry in entries
+            if not (
+                getattr(representation.mapping_for(geometry), "role", None)
+                == "OpeningJambLine"
+                and any(
+                    ArchPlanContours.contour_owns_polyline(contours, geometry)
+                    for contours in wall_contours
+                )
+            )
+        ]
     components = _wall_joint_components(representations)
     if not components:
         return entries
@@ -530,6 +571,7 @@ def project_representations_to_svg(
     direction,
     collection="projected_geometry",
     role_styles=None,
+    line_class_styles=None,
     include_joint_lines=False,
     **styles,
 ):
@@ -540,7 +582,13 @@ def project_representations_to_svg(
         include_joint_lines=include_joint_lines,
         role_styles=role_styles,
     )
-    return _project_entries_to_svg(entries, direction, role_styles, styles)
+    return _project_entries_to_svg(
+        entries,
+        direction,
+        role_styles or {},
+        line_class_styles or {},
+        styles,
+    )
 
 
 def project_representation_to_svg(
@@ -548,6 +596,7 @@ def project_representation_to_svg(
     direction,
     collection="projected_geometry",
     role_styles=None,
+    line_class_styles=None,
     **styles,
 ):
     """Project one semantic BIM representation to SVG.
@@ -561,6 +610,7 @@ def project_representation_to_svg(
         direction,
         collection=collection,
         role_styles=role_styles,
+        line_class_styles=line_class_styles,
         **styles,
     )
 

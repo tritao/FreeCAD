@@ -1381,6 +1381,7 @@ class _Wall(ArchComponent.Component):
                     points,
                     role,
                     subelement=subelement,
+                    line_class=ArchRepresentation.BIMLineClass.CUT_EDGE,
                 )
         if request.purpose == ArchRepresentation.RepresentationPurpose.PLAN:
             _add_plan_hatch_geometry(representation, obj, cut_faces)
@@ -1395,6 +1396,7 @@ class _Wall(ArchComponent.Component):
                 "WallJointCutLine",
                 subelement="Relation.{}.CutLine".format(joint.Name),
                 related_sources=(joint,),
+                line_class=ArchRepresentation.BIMLineClass.SEAM_LINE,
             )
         for index, face in enumerate(cut_faces, start=1):
             for edge_index, edge in enumerate(face.Edges, start=1):

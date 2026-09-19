@@ -45,6 +45,16 @@ class RepresentationMode(Enum):
     VIEWPORT = "ViewportRepresentation"
 
 
+class BIMLineClass(Enum):
+    """Renderer-neutral presentation class for semantic line geometry."""
+
+    CUT_EDGE = "CutEdge"
+    PROJECTION_LINE = "ProjectionLine"
+    SYMBOL_LINE = "SymbolLine"
+    SEAM_LINE = "SeamLine"
+    GUIDE_LINE = "GuideLine"
+
+
 class CutFillMode(Enum):
     """Renderer-neutral treatment of cut surfaces."""
 
@@ -215,12 +225,23 @@ class RepresentationRequest:
 class RepresentationSource:
     """Semantic origin of one piece of transient representation geometry."""
 
-    def __init__(self, geometry, source, role, subelement=None, related_sources=()):
+    def __init__(
+        self,
+        geometry,
+        source,
+        role,
+        subelement=None,
+        related_sources=(),
+        line_class=None,
+    ):
         self.geometry = geometry
         self.source = source
         self.role = role
         self.subelement = subelement
         self.related_sources = tuple(related_sources or ())
+        if line_class is not None and not isinstance(line_class, BIMLineClass):
+            line_class = BIMLineClass(line_class)
+        self.line_class = line_class
 
 
 @dataclass(frozen=True)
@@ -707,6 +728,7 @@ class BIMPlanContourMapping:
     source: object = None
     subelement: object = None
     related_sources: tuple = ()
+    line_class: object = None
 
     @property
     def sources(self):
@@ -757,10 +779,16 @@ class BIMRepresentation:
         *,
         related_sources=(),
         face_mesh=None,
+        line_class=None,
     ):
         """Add geometry to a named collection and preserve semantic mapping."""
         if collection not in self._COLLECTIONS:
             raise ValueError("unknown representation collection: %s" % collection)
+        if line_class is None:
+            if collection == "cut_geometry":
+                line_class = BIMLineClass.CUT_EDGE
+            elif collection == "projected_geometry":
+                line_class = BIMLineClass.PROJECTION_LINE
         getattr(self, collection).append(geometry)
         if face_mesh is not None:
             vertices, triangles = face_mesh
@@ -786,6 +814,7 @@ class BIMRepresentation:
                 role,
                 subelement=subelement,
                 related_sources=related_sources,
+                line_class=line_class,
             )
         )
 

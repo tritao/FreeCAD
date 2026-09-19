@@ -280,6 +280,49 @@ class TestBimPlanEditExamplesGui(TestArchBaseGui):
                 )
             )
 
+    def test_basic_example_wall_contours_own_door_jamb_sheet_edges(self):
+        document = self._open_example("BIMPlanEditBasic.FCStd")
+        door = self._objects_with_ifc_type(document, "Door")[0]
+        drawing_view = next(
+            obj for obj in document.Objects if obj.isDerivedFrom("TechDraw::DrawViewArch")
+        )
+        from bimplan.representation_request import representation_request_from_storey
+        from bimviews.service import BIMViewService
+
+        request = representation_request_from_storey(
+            BIMViewService(document).context_source(drawing_view.BIMViewDefinition)
+        )
+        representation = door.Proxy.getRepresentation(door, request)
+        line_classes = {
+            mapping.role: mapping.line_class
+            for mapping in representation.source_mappings
+            if mapping.role in {"OpeningJambLine", "OpeningSymbol"}
+        }
+        self.assertEqual(
+            ArchRepresentation.BIMLineClass.CUT_EDGE,
+            line_classes["OpeningJambLine"],
+        )
+        self.assertEqual(
+            ArchRepresentation.BIMLineClass.SYMBOL_LINE,
+            line_classes["OpeningSymbol"],
+        )
+
+        symbol_groups = re.findall(r"<g[^>]*>.*?</g>", drawing_view.Symbol, re.S)
+        self.assertNotIn(
+            "M 4300 200 L 4300 -1.989",
+            drawing_view.Symbol,
+        )
+        self.assertNotIn(
+            "M 5200 200 L 5200 -3.126",
+            drawing_view.Symbol,
+        )
+        self.assertEqual(1, drawing_view.Symbol.count("L 4300 200 L 4300"))
+        self.assertEqual(1, drawing_view.Symbol.count("L 5200 200"))
+        door_swing_group = next(
+            group for group in symbol_groups if "4304.333" in group
+        )
+        self.assertIn('stroke-width="12.5px"', door_swing_group)
+
     def test_basic_example_loads_and_renders_semantically(self):
         document = self._open_example("BIMPlanEditBasic.FCStd")
         walls = self._objects_with_ifc_type(document, "Wall")

@@ -473,7 +473,7 @@ def _compute_opening_overlay_geometry(opening_obj, request=None):
             role = getattr(mapping, "role", "")
             if role == "OpeningGuide":
                 guide_polylines.append(polyline)
-            else:
+            elif role == "OpeningSymbol":
                 symbol_polylines.append(polyline)
         return {
             "symbol_polylines": tuple(symbol_polylines),
@@ -495,7 +495,7 @@ def _compute_opening_overlay_geometry(opening_obj, request=None):
             role = getattr(mapping, "role", "")
             if role == "OpeningGuide":
                 guide_polylines.append(polyline)
-            else:
+            elif role == "OpeningSymbol":
                 symbol_polylines.append(polyline)
         return {
             "symbol_polylines": tuple(symbol_polylines),
