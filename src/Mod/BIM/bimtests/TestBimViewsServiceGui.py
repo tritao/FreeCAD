@@ -187,11 +187,59 @@ class TestBimViewsServiceGui(TestArchBaseGui):
                 self.assertIs(fake_session, _apply_representation_request(request))
 
         start.assert_called_once_with(
-            show_task_panel=False,
+            show_task_panel=True,
             initial_request=request,
             prepare_only=False,
         )
         self.assertEqual([], calls)
+
+    def test_plan_startup_preparation_keeps_task_panel_detached(self):
+        request = ArchRepresentation.RepresentationRequest(
+            purpose=ArchRepresentation.RepresentationPurpose.PLAN,
+            source=SimpleNamespace(),
+        )
+        fake_session = SimpleNamespace()
+
+        with patch("bimplan.runtime.session.get_active_session", return_value=None):
+            with patch(
+                "bimplan.runtime.session.start_editing_session",
+                return_value=fake_session,
+            ) as start:
+                self.assertIs(
+                    fake_session,
+                    activate_representation_request(request, prepare_only=True),
+                )
+
+        start.assert_called_once_with(
+            show_task_panel=False,
+            initial_request=request,
+            prepare_only=True,
+        )
+
+    def test_plan_saved_view_activation_attaches_panel_to_existing_runtime(self):
+        request = ArchRepresentation.RepresentationRequest(
+            purpose=ArchRepresentation.RepresentationPurpose.PLAN,
+            source=SimpleNamespace(),
+        )
+        calls = []
+        fake_session = SimpleNamespace(
+            representation_request=SimpleNamespace(
+                set_request=lambda value, fit=False: calls.append(
+                    ("request", value, fit)
+                )
+            ),
+            ensure_task_panel=lambda: calls.append(("panel",)),
+        )
+
+        with patch(
+            "bimplan.runtime.session.get_active_session", return_value=fake_session
+        ), patch("bimcontextual.session.active_session", return_value=None), patch(
+            "bimplan.runtime.session._refresh_contextual_task_watchers"
+        ):
+            self.assertIs(fake_session, activate_representation_request(request))
+
+        self.assertEqual(("request", request, False), calls[0])
+        self.assertEqual(("panel",), calls[1])
 
     def test_elevation_saved_view_starts_contextual_editing_runtime(self):
         source = SimpleNamespace(Objects=("wall", "window"))

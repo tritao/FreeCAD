@@ -37,6 +37,7 @@ class PlanEditControlsShellMixin:
 
     def _build_form(self, QtGui):
         outer = QtGui.QWidget()
+        outer.setMinimumWidth(0)
         try:
             outer.setSizePolicy(QtGui.QSizePolicy.Expanding, QtGui.QSizePolicy.Maximum)
         except (AttributeError, RuntimeError, TypeError):
@@ -46,11 +47,12 @@ class PlanEditControlsShellMixin:
         layout.setSpacing(7)
 
         layout.addWidget(self._build_header(QtGui))
-        layout.addWidget(self._build_storey_section(QtGui))
 
-        self.status_group, status_layout = self._build_section(QtGui, "Status")
+        self.status_group, status_layout = self._build_section(QtGui, "")
         self.status = QtGui.QLabel("")
         self.status.setWordWrap(True)
+        self.status.setMinimumWidth(0)
+        self.status.setSizePolicy(QtGui.QSizePolicy.Ignored, QtGui.QSizePolicy.Preferred)
         status_layout.addWidget(self.status)
         layout.addWidget(self.status_group)
 
@@ -61,37 +63,40 @@ class PlanEditControlsShellMixin:
                 (
                     ("wall_button", "Wall", self.on_wall_clicked),
                     ("rect_wall_button", "Rect Wall", self.on_rect_wall_clicked),
+                ),
+                (
                     ("window_button", "Window", self.on_window_clicked),
                     ("door_button", "Door", self.on_door_clicked),
                 ),
                 (
                     ("space_button", "Space", self.on_space_clicked),
                     ("region_button", "Region", self.on_region_clicked),
+                ),
+                (
                     ("separator_button", "Separator", self.on_separator_clicked),
                 ),
             ),
         )
         layout.addWidget(self.create_group)
 
-        self.modify_group, modify_layout = self._build_section(QtGui, "Modify")
+        self.modify_group, modify_layout = self._build_section(QtGui, "Actions")
         modify_layout.addLayout(
             self._build_button_row(
                 (
                     ("select_button", "Select", self.on_select_clicked),
                     ("move_button", "Move", self.on_move_clicked),
-                    ("join_button", "Join", self.on_join_clicked),
                 )
+            )
+        )
+        modify_layout.addLayout(
+            self._build_button_row(
+                (("join_button", "Join", self.on_join_clicked),)
             )
         )
         modify_layout.addWidget(self._build_join_type_widget(QtGui))
         layout.addWidget(self.modify_group)
 
-        self.view_group = self._build_action_group(
-            QtGui,
-            "View",
-            ((("reapply_button", "Reapply View", self.on_reapply_clicked),),),
-        )
-        layout.addWidget(self.view_group)
+        layout.addWidget(self._build_view_settings(QtGui))
 
         self.space_editor = self._build_space_editor(QtGui)
         layout.addWidget(self.space_editor)
@@ -117,6 +122,7 @@ class PlanEditControlsShellMixin:
             self.move_button,
             self.join_button,
             self.reapply_button,
+            self.grid_snap_checkbox,
             self.space_label_edit,
             self.space_type_combo,
             self.space_boundary_list,
@@ -132,7 +138,6 @@ class PlanEditControlsShellMixin:
             self.window_size_apply_button,
             self.window_preset_combo,
             self.window_preset_apply_button,
-            self.exit_button,
         ]
         self._capture_focus_policies()
         return outer
@@ -148,24 +153,28 @@ class PlanEditControlsShellMixin:
         title_col.setContentsMargins(0, 0, 0, 0)
         title_col.setSpacing(2)
 
-        title = QtGui.QLabel(translate("BIM_PlanEdit", "Plan Edit"))
-        title_font = title.font()
+        self.header_title_label = QtGui.QLabel(translate("BIM_PlanEdit", "Plan"))
+        title_font = self.header_title_label.font()
         title_font.setBold(True)
-        title.setFont(title_font)
-        title_col.addWidget(title)
+        self.header_title_label.setFont(title_font)
+        self.header_title_label.setWordWrap(True)
+        self.header_title_label.setMinimumWidth(0)
+        self.header_title_label.setSizePolicy(
+            QtGui.QSizePolicy.Ignored, QtGui.QSizePolicy.Preferred
+        )
+        title_col.addWidget(self.header_title_label)
 
         self.header_mode_label = QtGui.QLabel("")
         self.header_mode_label.setWordWrap(True)
         title_col.addWidget(self.header_mode_label)
 
         row.addLayout(title_col, 1)
-        self.exit_button = self._make_button(QtGui, "Exit", self.on_exit_clicked)
-        self.exit_button.setMinimumHeight(28)
-        row.addWidget(self.exit_button)
         return header
 
     def _make_button(self, QtGui, label, handler):
         button = QtGui.QPushButton(translate("BIM_PlanEdit", label))
+        button.setMinimumWidth(0)
+        button.setSizePolicy(QtGui.QSizePolicy.Expanding, QtGui.QSizePolicy.Fixed)
         button.clicked.connect(handler)
         return button
 
@@ -182,19 +191,71 @@ class PlanEditControlsShellMixin:
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(4)
 
-        title_label = QtGui.QLabel(translate("BIM_PlanEdit", title))
-        title_font = title_label.font()
-        title_font.setBold(True)
-        title_label.setFont(title_font)
-        layout.addWidget(title_label)
+        if title:
+            title_label = QtGui.QLabel(translate("BIM_PlanEdit", title))
+            title_font = title_label.font()
+            title_font.setBold(True)
+            title_label.setFont(title_font)
+            layout.addWidget(title_label)
         return section, layout
 
     def _build_storey_section(self, QtGui):
         section, layout = self._build_section(QtGui, "Storey")
         self.storey_combo = QtGui.QComboBox()
+        self.storey_combo.setMinimumWidth(0)
+        self.storey_combo.setMinimumContentsLength(8)
+        self.storey_combo.setSizeAdjustPolicy(
+            QtGui.QComboBox.AdjustToMinimumContentsLengthWithIcon
+        )
+        self.storey_combo.setSizePolicy(QtGui.QSizePolicy.Ignored, QtGui.QSizePolicy.Fixed)
         self.storey_combo.currentIndexChanged.connect(self.on_storey_changed)
         layout.addWidget(self.storey_combo)
         return section
+
+    def _build_view_settings(self, QtGui):
+        from PySide import QtCore
+
+        container = QtGui.QWidget()
+        self._set_vertical_size_policy(QtGui, container)
+        layout = QtGui.QVBoxLayout(container)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(4)
+
+        self.view_settings_toggle = QtGui.QToolButton(container)
+        self.view_settings_toggle.setText(translate("BIM_PlanEdit", "View settings"))
+        self.view_settings_toggle.setCheckable(True)
+        self.view_settings_toggle.setChecked(False)
+        self.view_settings_toggle.setToolButtonStyle(QtCore.Qt.ToolButtonTextBesideIcon)
+        self.view_settings_toggle.setArrowType(QtCore.Qt.RightArrow)
+        self.view_settings_toggle.toggled.connect(self.on_view_settings_toggled)
+        layout.addWidget(self.view_settings_toggle)
+
+        self.view_settings_content = QtGui.QWidget(container)
+        content_layout = QtGui.QVBoxLayout(self.view_settings_content)
+        content_layout.setContentsMargins(12, 0, 0, 0)
+        content_layout.setSpacing(7)
+        self.grid_snap_checkbox = QtGui.QCheckBox(
+            translate("BIM_PlanEdit", "Snap to grid"), self.view_settings_content
+        )
+        self.grid_snap_checkbox.setToolTip(
+            translate(
+                "BIM_PlanEdit",
+                "Snap creation and editing points to the Plan grid",
+            )
+        )
+        self.grid_snap_checkbox.toggled.connect(self.on_grid_snap_toggled)
+        content_layout.addWidget(self.grid_snap_checkbox)
+        self.storey_section = self._build_storey_section(QtGui)
+        content_layout.addWidget(self.storey_section)
+        self.view_group = self._build_action_group(
+            QtGui,
+            "",
+            ((("reapply_button", "Reapply View", self.on_reapply_clicked),),),
+        )
+        content_layout.addWidget(self.view_group)
+        self.view_settings_content.setVisible(False)
+        layout.addWidget(self.view_settings_content)
+        return container
 
     def _build_action_group(self, QtGui, title, rows):
         section, layout = self._build_section(QtGui, title)
@@ -220,6 +281,12 @@ class PlanEditControlsShellMixin:
         row.setSpacing(6)
         join_type_label = QtGui.QLabel(translate("BIM_PlanEdit", "Join Type"))
         self.join_type_combo = QtGui.QComboBox()
+        self.join_type_combo.setMinimumWidth(0)
+        self.join_type_combo.setMinimumContentsLength(6)
+        self.join_type_combo.setSizeAdjustPolicy(
+            QtGui.QComboBox.AdjustToMinimumContentsLengthWithIcon
+        )
+        self.join_type_combo.setSizePolicy(QtGui.QSizePolicy.Ignored, QtGui.QSizePolicy.Fixed)
         for join_type in self.session.wall_relations.get_plan_join_types():
             self.join_type_combo.addItem(
                 self.session.wall_relations.get_plan_join_type_label(join_type), join_type
@@ -373,11 +440,16 @@ class PlanEditControlsShellMixin:
         self._task_dialog_document_name = ""
         self._task_dialog_handle = None
         self.status = None
+        self.header_title_label = None
         self.header_mode_label = None
         self.status_group = None
         self.create_group = None
         self.modify_group = None
         self.view_group = None
+        self.storey_section = None
+        self.view_settings_toggle = None
+        self.view_settings_content = None
+        self.grid_snap_checkbox = None
         self.storey_combo = None
         self.select_button = None
         self.wall_button = None
@@ -429,7 +501,6 @@ class PlanEditControlsShellMixin:
         self._space_editor_boundary_state = None
         self._status_text_state = None
         self._modal_interaction_state = None
-        self.exit_button = None
         self._modal_focus_widgets = []
         self._saved_focus_policies = {}
         self._storey_items = []
@@ -513,10 +584,31 @@ class PlanEditControlsShellMixin:
             self.session,
             modal_active=modal_active,
         )
-        if self.header_mode_label is not None:
-            self.header_mode_label.setText(
-                translate("BIM_PlanEdit", "{tool} mode").format(tool=action_context_vm.mode_label)
+        selected_kind, selected_obj = self.session.selection.state.get_selected_plan_target()
+        current_tool = str(self.session.current_tool or "Select")
+        if self.header_title_label is not None:
+            source = getattr(self.session.representation_request, "source", None)
+            context_label = str(
+                getattr(source, "Label", "")
+                or getattr(source, "Name", "")
+                or translate("BIM_PlanEdit", "Plan")
             )
+            self.header_title_label.setText(context_label)
+            self.header_title_label.setToolTip(context_label)
+        if self.header_mode_label is not None:
+            mode_text = translate("BIM_PlanEdit", "PLAN")
+            if current_tool != "Select":
+                mode_text = translate("BIM_PlanEdit", "PLAN · {tool}").format(
+                    tool=action_context_vm.mode_label
+                )
+            self.header_mode_label.setText(mode_text)
+        has_context = selected_obj is not None or current_tool != "Select"
+        self._set_widget_visible(self.modify_group, has_context)
+        self._set_widget_visible(self.select_button, current_tool != "Select")
+        self._set_widget_visible(
+            self.move_button,
+            selected_obj is not None or current_tool == "Move",
+        )
         self._set_widget_enabled(self.join_button, action_context_vm.join_button_enabled)
         self._set_widget_tooltip(self.join_button, action_context_vm.join_button_tooltip)
         self._set_widget_visible(self.join_type_widget, action_context_vm.show_join_options)
@@ -531,14 +623,34 @@ class PlanEditControlsShellMixin:
         self._set_widget_enabled(self.door_button, action_context_vm.door_button_enabled)
         self._set_widget_tooltip(self.door_button, action_context_vm.door_button_tooltip)
 
+    def _build_context_guidance_text(self):
+        selected_kind, selected_obj = self.session.selection.state.get_selected_plan_target()
+        current_tool = str(self.session.current_tool or "Select")
+        status_text = plan_task_panel_view_model.build_status_text_view_model(self.session).text
+        if current_tool != "Select":
+            return status_text
+        if selected_obj is None:
+            return translate(
+                "BIM_PlanEdit",
+                "Select an element for contextual actions. Ctrl-click selects multiple elements.",
+            )
+        lines = [line.strip() for line in str(status_text or "").splitlines() if line.strip()]
+        return "\n".join(lines[:2])
+
     def refresh_from_session(self, defer_integrations=False, refresh_integrations=True):
         with self.session.performance.plan_perf_trace_span("refresh_task_panel_widget"):
-            if self.form is None or self.status is None or self.exit_button is None:
+            if self.form is None or self.status is None:
                 return
             self._sync_join_type_combo_from_session()
-            self._set_status_text(
-                plan_task_panel_view_model.build_status_text_view_model(self.session).text
-            )
+            if self.grid_snap_checkbox is not None:
+                self.grid_snap_checkbox.blockSignals(True)
+                try:
+                    self.grid_snap_checkbox.setChecked(
+                        self.session.snap.is_grid_snap_enabled()
+                    )
+                finally:
+                    self.grid_snap_checkbox.blockSignals(False)
+            self._set_status_text(self._build_context_guidance_text())
             self._refresh_action_context()
             if refresh_integrations:
                 self._refresh_integration_panel(defer=defer_integrations)
@@ -551,15 +663,13 @@ class PlanEditControlsShellMixin:
 
     def refresh_selection_from_session(self):
         with self.session.performance.plan_perf_trace_span("refresh_task_panel_selection_widget"):
-            if self.form is None or self.status is None or self.exit_button is None:
+            if self.form is None or self.status is None:
                 return
             selected_kind, _selected_obj = self.session.selection.state.get_selected_plan_target()
             if self.session.current_tool != "Select" or selected_kind != "wall":
                 self.refresh_from_session(defer_integrations=True)
                 return
-            self._set_status_text(
-                plan_task_panel_view_model.build_status_text_view_model(self.session).text
-            )
+            self._set_status_text(self._build_context_guidance_text())
             self._refresh_action_context()
             if self._should_refresh_integration_panel_for_selection(selected_kind):
                 self._refresh_integration_panel(defer=True)
@@ -624,6 +734,7 @@ class PlanEditControlsShellMixin:
                 self.join_type_combo,
                 self.unjoin_button,
                 self.reapply_button,
+                self.grid_snap_checkbox,
             ),
             not modal_active,
         )
@@ -738,6 +849,37 @@ class PlanEditControlsShellMixin:
         if 0 <= index < len(self._storey_items):
             self.session.storey.set_active_storey(self._storey_items[index])
 
+    def on_view_settings_toggled(self, expanded):
+        from PySide import QtCore
+
+        form = self.form
+        if form is not None:
+            form.setUpdatesEnabled(False)
+        if self.view_settings_content is not None:
+            self.view_settings_content.setVisible(bool(expanded))
+        if self.view_settings_toggle is not None:
+            self.view_settings_toggle.setArrowType(
+                QtCore.Qt.DownArrow if expanded else QtCore.Qt.RightArrow
+            )
+        if form is not None:
+            layout = form.layout()
+            if layout is not None:
+                layout.invalidate()
+                layout.activate()
+            form.updateGeometry()
+            FreeCADGui.invokeLater(
+                lambda current=form: self._finish_view_settings_repaint(current)
+            )
+
+    def _finish_view_settings_repaint(self, form):
+        if form is None or form is not self.form or not FreeCADGui.isValidQObject(form):
+            return
+        form.setUpdatesEnabled(True)
+        form.update()
+
+    def on_grid_snap_toggled(self, enabled):
+        self.session.snap.set_grid_snap_enabled(bool(enabled))
+
     def on_select_clicked(self):
         self.session.lifecycle.activate_select_tool()
 
@@ -780,6 +922,3 @@ class PlanEditControlsShellMixin:
     def on_reapply_clicked(self):
         self.session.viewport.apply_plan_view(fit=False)
         self.refresh_from_session()
-
-    def on_exit_clicked(self):
-        self.session.shutdown()

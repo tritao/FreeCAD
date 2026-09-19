@@ -202,12 +202,12 @@ def start_session():
 def activate_representation_request(request, *, prepare_only=False):
     """Apply a saved BIM request through its compatible editing runtime.
 
-    Saved views are the user-facing editing context.  The former Plan Edit
-    command remains available for compatibility, but opening a PLAN view from
-    the BIM Navigator must initialize the same runtime without requiring the
-    command to have been invoked first.  SECTION and ELEVATION use the shared
-    object-agnostic contextual session; MODEL leaves document interaction to
-    the standard viewport.
+    Saved views are the user-facing editing context.  Opening a PLAN view from
+    the BIM Navigator initializes the runtime and exposes its contextual task
+    panel without requiring the former Plan Edit command.  Startup preparation
+    remains panel-free until presentation has been released.  SECTION and
+    ELEVATION use the shared object-agnostic contextual session; MODEL leaves
+    document interaction to the standard viewport.
     """
 
     if request is None:
@@ -257,7 +257,7 @@ def activate_representation_request(request, *, prepare_only=False):
     created = False
     if session is None:
         session = start_editing_session(
-            show_task_panel=False,
+            show_task_panel=not prepare_only,
             initial_request=request,
             prepare_only=prepare_only,
         )
@@ -274,13 +274,20 @@ def activate_representation_request(request, *, prepare_only=False):
     source = getattr(request, "source", None)
     if source is not None:
         session.representation_request.set_request(request, fit=False)
-        return session
+    else:
+        # A request without a source is still meaningful (it represents the
+        # document-level PLAN context).  Keep all live consumers synchronized
+        # when switching from a sourced view so no stale storey/grid/runtime
+        # state is retained.
+        session.representation_request.set_request(request, fit=False)
 
-    # A request without a source is still meaningful (it represents the
-    # document-level PLAN context).  Keep all live consumers synchronized when
-    # switching from a sourced view so no stale storey/grid/runtime state is
-    # retained.
-    session.representation_request.set_request(request, fit=False)
+    if not prepare_only:
+        session.ensure_task_panel()
+        try:
+            FreeCADGui.Control.showTaskView()
+        except Exception:
+            pass
+        _refresh_contextual_task_watchers()
     return session
 
 

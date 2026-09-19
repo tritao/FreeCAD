@@ -62,11 +62,16 @@ class PlanEditControlsWidget(
         self._integration_overlay_content_layout = None
         self._modal_interaction_state = None
         self._region_parent_space_items = []
+        self.header_title_label = None
         self.header_mode_label = None
         self.status_group = None
         self.create_group = None
         self.modify_group = None
         self.view_group = None
+        self.storey_section = None
+        self.view_settings_toggle = None
+        self.view_settings_content = None
+        self.grid_snap_checkbox = None
         self.join_type_widget = None
         self.form = self._build_form(QtGui)
         try:
