@@ -203,6 +203,7 @@ SET(bimcontextual_SRCS
 SET(bimviews_SRCS
     bimviews/__init__.py
     bimviews/framing.py
+    bimviews/gui.py
     bimviews/grid_settings.py
     bimviews/model.py
     bimviews/navigator_model.py

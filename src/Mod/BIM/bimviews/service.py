@@ -69,10 +69,17 @@ class BIMViewService:
     ACTIVE_PROPERTY = "BIMIsActiveView"
     SHEET_VIEW_PROPERTY = "BIMViewDefinition"
 
-    def __init__(self, document, view=None, representation_applier=None):
+    def __init__(
+        self,
+        document,
+        view=None,
+        representation_applier=None,
+        activation_view_resolver=None,
+    ):
         self.document = document
         self.view = view
         self._representation_applier = representation_applier
+        self._activation_view_resolver = activation_view_resolver
         self.active_storey = None
         self.active_view = self._persisted_active_view()
 
@@ -526,7 +533,7 @@ class BIMViewService:
 
     def activate_view(self, definition, view=None):
         context = self.context_for(definition)
-        target_view = self._view(view)
+        target_view = self._view_for_activation(view)
         if target_view is None or not hasattr(target_view, "applyViewDefinition"):
             raise RuntimeError("An active 3D view is required to activate a BIM view")
         # Saved-view activation is a state change, not a camera-navigation
@@ -546,6 +553,23 @@ class BIMViewService:
             if context.source is not None:
                 self.active_storey = context.source
         return applied
+
+    def _view_for_activation(self, view=None):
+        """Return a 3D viewport, leaving sheet and other non-3D MDI views."""
+
+        # Explicit dependencies remain authoritative for callers and tests.
+        # Otherwise resolve through the service's document rather than the
+        # globally active view, which may belong to another document.
+        if view is not None:
+            return view
+        if self.view is not None:
+            return self.view
+        resolver = self._activation_view_resolver
+        if resolver is None:
+            from .gui import ensure_active_3d_view
+
+            resolver = ensure_active_3d_view
+        return resolver(self.document)
 
     @staticmethod
     @contextmanager

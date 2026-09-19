@@ -28,6 +28,7 @@ from bimcommands.BimViews import (
 from draftutils.grid import GridLattice, adaptive_lattice_interval
 from bimtests.TestArchBaseGui import TestArchBaseGui
 from bimviews.grid_settings import get_grid_settings
+from bimviews.gui import ensure_active_3d_view
 from bimviews.viewport_grid import ViewportGridController
 from bimviews.model import BIMViewManagerModel
 from bimviews.navigator_model import BIMNavigatorModel
@@ -1011,6 +1012,90 @@ class TestBimViewsServiceGui(TestArchBaseGui):
             calls,
         )
         self.assertTrue(view.animation_enabled)
+
+    def test_saved_view_activation_keeps_explicit_view_authoritative(self):
+        calls = []
+        view = _RecordingView(calls)
+
+        def unexpected_resolver(_document):
+            self.fail("The activation resolver must not replace an explicit view")
+
+        service = BIMViewService(
+            self.document,
+            view=view,
+            activation_view_resolver=unexpected_resolver,
+        )
+        definition = service.create_view("Explicit Plan", "Plan", capture=False)
+
+        with patch.object(service, "configure_snap_context"):
+            self.assertTrue(service.activate_view(definition))
+
+        self.assertIn(("apply", definition), calls)
+
+    def test_activation_view_resolver_creates_and_activates_missing_view(self):
+        created_view = _RecordingView([])
+        active = [SimpleNamespace()]
+        calls = []
+
+        class _GuiDocument:
+            def activeView(self):
+                return active[0]
+
+            def mdiViewsOfType(self, type_name):
+                calls.append(("views", type_name))
+                return ()
+
+            def createView(self, type_name):
+                calls.append(("create", type_name))
+                return created_view
+
+        class _MainWindow:
+            @staticmethod
+            def setActiveWindow(view):
+                calls.append(("activate", view))
+                active[0] = view
+
+        with patch("FreeCADGui.getDocument", return_value=_GuiDocument()):
+            with patch("FreeCADGui.getMainWindow", return_value=_MainWindow()):
+                resolved = ensure_active_3d_view(self.document)
+
+        self.assertIs(created_view, resolved)
+        self.assertEqual(
+            [
+                ("views", "Gui::View3DInventor"),
+                ("create", "Gui::View3DInventor"),
+                ("activate", created_view),
+            ],
+            calls,
+        )
+
+    def test_saved_view_activation_resolves_view_when_sheet_is_active(self):
+        gui_document = FreeCADGui.getDocument(self.document.Name)
+        initial_views = tuple(gui_document.mdiViewsOfType("Gui::View3DInventor"))
+        self.assertTrue(initial_views)
+        service = BIMViewService(self.document)
+        definition = service.create_view("Sheet Exit Plan", "Plan", capture=False)
+        page = self.document.addObject("TechDraw::DrawPage", "ActivationPage")
+        template = self.document.addObject(
+            "TechDraw::DrawSVGTemplate", "ActivationTemplate"
+        )
+        template.Template = (
+            FreeCAD.getResourceDir()
+            + "Mod/TechDraw/Templates/Default_Template_A4_Landscape.svg"
+        )
+        page.Template = template
+        page.ViewObject.Visibility = True
+        self.pump_gui_events(20)
+        self.assertFalse(hasattr(gui_document.activeView(), "applyViewDefinition"))
+
+        with patch.object(service, "configure_snap_context"):
+            self.assertTrue(service.activate_view(definition))
+
+        self.assertTrue(hasattr(gui_document.activeView(), "applyViewDefinition"))
+        self.assertEqual(
+            len(initial_views),
+            len(tuple(gui_document.mdiViewsOfType("Gui::View3DInventor"))),
+        )
 
     def test_navigator_tabs_with_model_and_restores_combo_title(self):
         main_window = FreeCADGui.getMainWindow()
