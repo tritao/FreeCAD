@@ -232,7 +232,14 @@ class TestBimPlanEditSessionGui(TestArchBaseGui):
 
             def configure_view(self, candidate, **kwargs):
                 self.configured_view = candidate
-                context.interaction_plane = kwargs["interaction_plane"]
+                if "interaction_plane" in kwargs:
+                    context.interaction_plane = kwargs["interaction_plane"]
+                if "modes" in kwargs:
+                    self.configured_modes = tuple(kwargs["modes"])
+
+            def get_snap_modes(self, view=None):
+                del view
+                return getattr(self, "configured_modes", ("Lock", "Grid"))
 
             def push_snap_modes(self, modes, view=None):
                 self.pushed_modes = tuple(modes)
@@ -249,6 +256,13 @@ class TestBimPlanEditSessionGui(TestArchBaseGui):
             self.assertIs(view, snapper.configured_view)
             self.assertIs(view, snapper.pushed_view)
             self.assertIs(plane, context.interaction_plane)
+            self.assertTrue(api.is_grid_snap_enabled())
+
+            self.assertTrue(api.set_grid_snap_enabled(False))
+            self.assertNotIn("Grid", snapper.configured_modes)
+            self.assertFalse(api.is_grid_snap_enabled())
+            self.assertTrue(api.set_grid_snap_enabled(True))
+            self.assertIn("Grid", snapper.configured_modes)
 
             api.restore_snap_profile()
             self.assertIs(view, snapper.popped_view)
@@ -381,6 +395,110 @@ class TestBimPlanEditSessionGui(TestArchBaseGui):
 
         tracker.finalize()
         self.assertEqual([source], renderer.cleared)
+
+    def test_embedded_wall_point_request_preserves_plan_task_panel(self):
+        from draftguitools import gui_base
+        from bimplan.runtime.embedded_commands import _PlanEditWallHost
+
+        host = _PlanEditWallHost(SimpleNamespace())
+        callback = lambda point: None
+        with patch.object(gui_base.DraftInteractionHost, "request_point") as request_point:
+            host.request_point(callback, title="First Point of Wall")
+
+        request_point.assert_called_once()
+        self.assertIs(request_point.call_args.kwargs["callback"], callback)
+        self.assertFalse(request_point.call_args.kwargs["task_ui"])
+
+    def test_native_plan_wall_chains_points_without_draft_task_ui(self):
+        from bimplan.runtime.session_state import PlanCreationPreviewState
+        from bimplan.tools import wall_create
+
+        state = PlanCreationPreviewState(
+            wall_params={"width": 200.0, "height": 3000.0, "align": "Center", "offset": 0.0}
+        )
+        selected = []
+        projected = []
+        deferred = []
+
+        def project_once(point):
+            projected.append(FreeCAD.Vector(point))
+            return FreeCAD.Vector(point)
+
+        session = SimpleNamespace(
+            creation_preview_state=state,
+            viewport=SimpleNamespace(project_plan_point=project_once),
+            contextual_rendering=SimpleNamespace(clear_preview=lambda source: None),
+            selection=SimpleNamespace(
+                sync=SimpleNamespace(set_gui_selection=lambda objects: selected.extend(objects))
+            ),
+            lifecycle_state=SimpleNamespace(tearing_down=False),
+            current_tool="Wall",
+            view=object(),
+        )
+        session.wall_create = wall_create.PlanWallCreateAPI(session)
+        created_walls = [object(), object()]
+
+        with patch.object(FreeCADGui.Snapper, "getPoint") as get_point, patch.object(
+            FreeCADGui, "invokeLater", side_effect=lambda callback: deferred.append(callback)
+        ), patch.object(
+            wall_create, "_create_wall_segment", side_effect=created_walls
+        ) as create_segment:
+            wall_create.handle_wall_point(session, FreeCAD.Vector(100, 200, 0))
+            create_segment.assert_not_called()
+            self.assertEqual(len(deferred), 1)
+            self.assertEqual(get_point.call_count, 0)
+            deferred.pop()()
+            self.assertEqual(get_point.call_count, 1)
+            wall_create.handle_wall_point(session, FreeCAD.Vector(900, 350, 0))
+            self.assertEqual(len(deferred), 1)
+            deferred.pop()()
+            self.assertEqual(get_point.call_count, 2)
+            wall_create.handle_wall_point(session, FreeCAD.Vector(900, 900, 0))
+
+        self.assertEqual(create_segment.call_count, 2)
+        start, end = create_segment.call_args_list[0].args[1:]
+        self.assertTrue(start.isEqual(FreeCAD.Vector(100, 200, 0), 1e-7))
+        self.assertTrue(end.isEqual(FreeCAD.Vector(900, 200, 0), 1e-7))
+        second_start, second_end = create_segment.call_args_list[1].args[1:]
+        self.assertTrue(second_start.isEqual(end, 1e-7))
+        self.assertTrue(second_end.isEqual(FreeCAD.Vector(900, 900, 0), 1e-7))
+        self.assertIs(state.wall_previous, created_walls[-1])
+        self.assertTrue(state.wall_start.isEqual(second_end, 1e-7))
+        self.assertEqual(selected, [])
+        self.assertEqual(len(projected), 3)
+        self.assertEqual(len(deferred), 1)
+        self.assertEqual(get_point.call_count, 2)
+        self.assertFalse(get_point.call_args.kwargs["task_ui"])
+
+    def test_created_wall_is_added_without_rebuilding_existing_representations(self):
+        """Wall chaining incrementally installs the new semantic source."""
+
+        from bimplan.runtime.session import PlanEditSession
+
+        existing = Arch.makeWall(length=3000, width=200, height=2500, align="Center")
+        self.document.recompute()
+        session = PlanEditSession()
+        self.assertTrue(session.enter())
+        try:
+            renderer = session.contextual_rendering.renderer
+            existing_representation = renderer._representations[existing]
+            with patch.object(
+                session.contextual_rendering,
+                "refresh_all",
+                wraps=session.contextual_rendering.refresh_all,
+            ) as refresh_all:
+                created = Arch.makeWall(
+                    length=1800, width=200, height=2500, align="Center"
+                )
+                session.visibility.register_plan_object(created)
+                self.document.recompute()
+                self.pump_gui_events(4)
+
+            refresh_all.assert_not_called()
+            self.assertIs(existing_representation, renderer._representations[existing])
+            self.assertIn(created, renderer._representations)
+        finally:
+            session.shutdown(close_dialog=True)
 
     def test_rectangular_wall_preview_is_one_semantic_representation(self):
         from bimplan.tools.wall_create import _wall_preview_representation
@@ -846,22 +964,37 @@ class TestBimPlanEditSessionGui(TestArchBaseGui):
             self.assertEqual(view.getViewVisibility(obj), "Inherit")
             self.assertEqual(obj.ViewObject.Visibility, original_visibility[obj.Name])
 
-    def test_task_panel_exit_finishes_the_session(self):
+    def test_task_panel_uses_compact_empty_context_state(self):
+        FreeCADGui.Selection.clearSelection()
         session = PlanEditSession()
-
         self.assertTrue(session.enter())
-        self.assertIsNotNone(session.task_panel)
-        gui_document = session.gui_doc
-        self.assertTrue(FreeCADGui.Control.activeDialog(gui_document))
-        from PySide import QtGui
+        try:
+            panel = session.task_panel
+            self.assertIsNotNone(panel)
+            self.assertEqual("PLAN", panel.header_mode_label.text())
+            self.assertIn("Select an element", panel.status.text())
+            self.assertTrue(panel.modify_group.isHidden())
+            self.assertTrue(panel.view_settings_content.isHidden())
+            self.assertLessEqual(panel.form.minimumSizeHint().width(), 300)
 
-        main_window = FreeCADGui.getMainWindow()
-        self.assertIsNotNone(main_window.findChild(QtGui.QWidget, "BIMPlanEditContextControls"))
-        session.task_panel.exit_button.click()
+            panel.view_settings_toggle.setChecked(True)
+            self.assertFalse(panel.view_settings_content.isHidden())
+            self.assertLessEqual(panel.form.minimumSizeHint().width(), 300)
+            self.assertTrue(panel.grid_snap_checkbox.isChecked())
+            panel.view_settings_toggle.setChecked(False)
+            self.pump_gui_events(2)
+            self.assertTrue(panel.form.updatesEnabled())
+        finally:
+            session.shutdown(close_dialog=True)
 
-        self.assertIsNone(session.task_panel)
-        self.assertIsNone(session.viewport_state.view_context_layer)
-        self.assertFalse(FreeCADGui.Control.activeDialog(gui_document))
+    def test_task_panel_does_not_expose_plan_exit_control(self):
+        session = PlanEditSession()
+        self.assertTrue(session.enter())
+        try:
+            self.assertIsNotNone(session.task_panel)
+            self.assertFalse(hasattr(session.task_panel, "exit_button"))
+        finally:
+            session.shutdown(close_dialog=True)
 
     def test_shutdown_discards_pending_view_updates(self):
         session = PlanEditSession()
@@ -937,20 +1070,25 @@ class TestBimPlanEditSessionGui(TestArchBaseGui):
             session.shutdown(close_dialog=False)
 
     def test_plan_representation_geometry_survives_session_switch(self):
-        """Returning from Model view reuses unchanged document geometry."""
+        """Returning from Model reuses Plan geometry and rehides native shapes."""
 
         wall = Arch.makeWall(length=3000, width=200, height=2500, align="Center")
         self.document.recompute()
+        view = FreeCADGui.ActiveDocument.ActiveView
+        original_visibility = view.getViewVisibility(wall)
         first_session = PlanEditSession()
         self.assertTrue(first_session.enter())
+        self.assertEqual("Hidden", view.getViewVisibility(wall))
         first_representation = first_session.contextual_rendering.renderer._representations[wall]
         first_node = first_session.contextual_rendering.renderer._object_nodes[wall]
         first_session.shutdown(close_dialog=False)
         first_session.viewport.flush_scene_graph_mutations()
+        self.assertEqual(original_visibility, view.getViewVisibility(wall))
 
         second_session = PlanEditSession()
         self.assertTrue(second_session.enter())
         try:
+            self.assertEqual("Hidden", view.getViewVisibility(wall))
             second_representation = second_session.contextual_rendering.renderer._representations[
                 wall
             ]
