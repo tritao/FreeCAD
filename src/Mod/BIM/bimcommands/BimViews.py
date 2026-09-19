@@ -781,7 +781,7 @@ class BIM_Views:
     def newSheet(self):
         """Create a BIM sheet through the shared sheet creation workflow."""
 
-        from bimsheets.gui import create_sheet_interactive
+        from bimsheets.gui import create_sheet_interactive, show_sheet_inspector
 
         page = create_sheet_interactive(FreeCAD.ActiveDocument, self.dialog)
         if page is None:
@@ -790,6 +790,14 @@ class BIM_Views:
         self.update(False)
         FreeCADGui.Selection.clearSelection()
         FreeCADGui.Selection.addSelection(page)
+        panel = show_sheet_inspector(
+            page,
+            "sheet",
+            refresh_callback=lambda: self.update(False),
+        )
+        if panel is not None:
+            panel.editor.title.setFocus()
+            panel.editor.title.selectAll()
 
     def editSheet(self):
         """Edit normalized sheet metadata in one undoable operation."""

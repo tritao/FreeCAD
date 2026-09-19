@@ -11,6 +11,7 @@ from .layout import (
 )
 from .issues import BIMSheetIssueService, IssueComparison, SheetIssueError
 from .footprints import BIMSheetFootprintProvider
+from .identity import BIMSheetIdentityService
 from .publishing import (
     BIMSheetPublishingService,
     PublishedSheet,
@@ -25,6 +26,7 @@ from .targeting import BIMSheetTargetResolver
 __all__ = (
     "BIMSheetLayout",
     "BIMSheetIssueService",
+    "BIMSheetIdentityService",
     "BIMSheetFootprintProvider",
     "BIMSheetMetadata",
     "BIMSheetPublishingService",

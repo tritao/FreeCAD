@@ -11,6 +11,7 @@ from .layout import (
     SheetMargins,
 )
 from .footprints import BIMSheetFootprintProvider
+from .identity import BIMSheetIdentityService
 
 
 @dataclass(frozen=True)
@@ -194,6 +195,9 @@ class BIMSheetService:
         page.PrintableMarginTop = metadata.margin_top
         page.PrintableMarginRight = metadata.margin_right
         page.PrintableMarginBottom = metadata.margin_bottom
+        page.Label = BIMSheetIdentityService.display_label(
+            metadata.number, metadata.title
+        )
         if getattr(page, "Template", None) is not None:
             from .titleblock import BIMTitleBlockService
 
@@ -231,14 +235,17 @@ class BIMSheetService:
         template = self.document.addObject("TechDraw::DrawSVGTemplate", "Template")
         template.Template = template_path
         page.Template = template
-        values = metadata or BIMSheetMetadata(
-            title=Path(template_path).stem,
-            template_identity=Path(template_path).name,
-        )
+        values = metadata
+        if values is None:
+            identity = BIMSheetIdentityService(self.document, self.is_sheet)
+            values = BIMSheetMetadata(
+                number=identity.next_number("General"),
+                title=identity.UNTITLED_TITLE,
+                template_identity=Path(template_path).name,
+            )
         if not values.template_identity:
             values = replace(values, template_identity=Path(template_path).name)
         self.ensure_metadata(page, values)
-        page.Label = values.title or Path(template_path).stem
         return page
 
     def layout_view(

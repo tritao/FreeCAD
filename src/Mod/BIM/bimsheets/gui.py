@@ -351,7 +351,6 @@ class BIMSheetInspectorPanel:
                 self.object.Document.openTransaction("Edit BIM sheet properties")
                 try:
                     service.apply_metadata(self.object, metadata)
-                    self.object.Label = metadata.title or metadata.number or self.object.Label
                     self.object.Document.commitTransaction()
                 except Exception:
                     self.object.Document.abortTransaction()
@@ -475,16 +474,9 @@ def create_sheet_interactive(document, parent=None):
     if not filename:
         return None
 
-    name = os.path.splitext(os.path.basename(filename))[0]
     document.openTransaction("Create BIM sheet")
     try:
-        page = BIMSheetService(document).create_sheet(
-            filename,
-            BIMSheetMetadata(
-                title=name,
-                template_identity=os.path.basename(filename),
-            ),
-        )
+        page = BIMSheetService(document).create_sheet(filename)
         page.Template.Label = translate("BIM", "Template")
         _apply_template_scale(page, parameters.GetFloat("DefaultPageScale", 0.01))
         document.commitTransaction()
@@ -514,7 +506,6 @@ def edit_sheet_interactive(page, parent=None):
     try:
         metadata = dialog.metadata()
         service.apply_metadata(page, metadata)
-        page.Label = metadata.title or metadata.number or page.Label
         page.Document.commitTransaction()
     except Exception:
         page.Document.abortTransaction()

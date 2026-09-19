@@ -220,6 +220,7 @@ SET(bimsheets_SRCS
     bimsheets/__init__.py
     bimsheets/footprints.py
     bimsheets/gui.py
+    bimsheets/identity.py
     bimsheets/layout.py
     bimsheets/issues.py
     bimsheets/publishing.py

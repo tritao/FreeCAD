@@ -51,6 +51,7 @@ from bimviews.viewport_ruler import (
 from bimplan.runtime.session import activate_representation_request
 from bimsheets import (
     BIMSheetFootprintProvider,
+    BIMSheetIdentityService,
     BIMSheetLayout,
     BIMSheetIssueService,
     BIMSheetMetadata,
@@ -228,7 +229,7 @@ class TestBimViewsServiceGui(TestArchBaseGui):
         page = service.create_sheet(template_path, metadata)
 
         self.assertTrue(service.is_sheet(page))
-        self.assertEqual("Ground Floor Plan", page.Label)
+        self.assertEqual("A-101 — Ground Floor Plan", page.Label)
         self.assertEqual("Default_Template_A4_Landscape.svg", page.TemplateIdentity)
         self.assertEqual(metadata, service.metadata_for(page))
         self.assertEqual(
@@ -240,6 +241,30 @@ class TestBimViewsServiceGui(TestArchBaseGui):
             ).place((50, 40)),
         )
         self.assertIsNotNone(page.Template)
+
+    def test_sheet_identity_allocates_discipline_numbers_and_fills_gaps(self):
+        template_path = (
+            FreeCAD.getResourceDir()
+            + "Mod/TechDraw/Templates/Default_Template_A4_Landscape.svg"
+        )
+        service = BIMSheetService(self.document)
+        first = service.create_sheet(template_path)
+        second = service.create_sheet(template_path)
+        service.create_sheet(
+            template_path,
+            BIMSheetMetadata(
+                number="A-001", title="Architectural Plans", discipline="Architectural"
+            ),
+        )
+        identity = BIMSheetIdentityService(self.document, service.is_sheet)
+
+        self.assertEqual("G-001", first.SheetNumber)
+        self.assertEqual("G-002", second.SheetNumber)
+        self.assertEqual("G-001 — Untitled Sheet", first.Label)
+        self.assertEqual("A-002", identity.next_number("Architectural"))
+
+        self.document.removeObject(first.Name)
+        self.assertEqual("G-001", identity.next_number("General"))
 
     def test_sheet_metadata_initialization_is_idempotent(self):
         page = self.document.addObject("TechDraw::DrawPage", "ExistingPage")
@@ -350,7 +375,9 @@ class TestBimViewsServiceGui(TestArchBaseGui):
             page = create_sheet_interactive(self.document)
 
         self.assertTrue(BIMSheetService.is_sheet(page))
-        self.assertEqual("Default_Template_A4_Landscape", page.SheetTitle)
+        self.assertEqual("G-001", page.SheetNumber)
+        self.assertEqual("Untitled Sheet", page.SheetTitle)
+        self.assertEqual("G-001 — Untitled Sheet", page.Label)
         self.assertEqual("Default_Template_A4_Landscape.svg", page.TemplateIdentity)
         self.assertEqual(techdraw_directory, chooser.call_args.args[2])
         self.assertEqual([("TDTemplateDir", techdraw_directory)], saved_directories)
@@ -370,7 +397,7 @@ class TestBimViewsServiceGui(TestArchBaseGui):
 
         self.assertEqual("A-201", page.SheetNumber)
         self.assertEqual("Floor Plans", page.SheetTitle)
-        self.assertEqual("Floor Plans", page.Label)
+        self.assertEqual("A-201 — Floor Plans", page.Label)
         self.assertEqual("P02", page.Revision)
         self.assertEqual("A-201", page.Template.EditableTexts["drawing_number"])
 
