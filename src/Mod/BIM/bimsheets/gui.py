@@ -9,6 +9,7 @@ import FreeCAD
 from PySide import QtGui
 
 from .service import BIMSheetMetadata, BIMSheetService
+from .titles import format_scale
 
 
 translate = FreeCAD.Qt.translate
@@ -114,6 +115,28 @@ class BIMSheetPlacementPropertiesWidget(QtGui.QWidget):
         self.render_mode.addItems(self.RENDER_MODES)
         self.show_hidden = QtGui.QCheckBox(translate("BIM", "Show hidden lines"))
         self.show_fill = QtGui.QCheckBox(translate("BIM", "Show cut fills"))
+        self.find_free_button = QtGui.QPushButton(
+            translate("BIM", "Find Free Position")
+        )
+        self.fit_button = QtGui.QPushButton(
+            translate("BIM", "Fit to Available Space")
+        )
+        self.find_free_button.setToolTip(
+            translate("BIM", "Suggest a free position at the current scale")
+        )
+        self.fit_button.setToolTip(
+            translate(
+                "BIM",
+                "Suggest the largest standard scale up to the current scale that fits",
+            )
+        )
+        actions = QtGui.QWidget()
+        actions_layout = QtGui.QVBoxLayout(actions)
+        actions_layout.setContentsMargins(0, 0, 0, 0)
+        actions_layout.addWidget(self.find_free_button)
+        actions_layout.addWidget(self.fit_button)
+        self.suggestion_status = QtGui.QLabel()
+        self.suggestion_status.setWordWrap(True)
         form.addRow(translate("BIM", "View number"), self.number)
         form.addRow(translate("BIM", "Title override"), self.title)
         form.addRow(translate("BIM", "Scale"), self.scale)
@@ -124,8 +147,12 @@ class BIMSheetPlacementPropertiesWidget(QtGui.QWidget):
         form.addRow(translate("BIM", "Render mode"), self.render_mode)
         form.addRow(self.show_hidden)
         form.addRow(self.show_fill)
+        form.addRow(translate("BIM", "Placement assistance"), actions)
+        form.addRow(self.suggestion_status)
         self.drawing_view = None
         self.set_drawing_view(drawing_view)
+        self.find_free_button.clicked.connect(self.find_free_position)
+        self.fit_button.clicked.connect(self.fit_to_available_space)
 
     @staticmethod
     def _decimal(minimum, maximum, decimals, suffix=""):
@@ -150,6 +177,63 @@ class BIMSheetPlacementPropertiesWidget(QtGui.QWidget):
         self.render_mode.setCurrentText(str(drawing_view.RenderMode))
         self.show_hidden.setChecked(bool(drawing_view.ShowHidden))
         self.show_fill.setChecked(bool(drawing_view.ShowFill))
+        self.suggestion_status.clear()
+
+    def _suggestion_arguments(self):
+        return {
+            "title_offset": self.title_offset.value(),
+            "title_size": self.title_size.value(),
+            "view_number": self.number.text().strip(),
+            "view_title": self.title.text().strip(),
+        }
+
+    def _accept_suggestion(self, suggestion):
+        self.scale.setValue(suggestion.scale)
+        self.x.setValue(suggestion.x)
+        self.y.setValue(suggestion.y)
+        self.suggestion_status.setStyleSheet("color: palette(text);")
+        self.suggestion_status.setText(
+            translate(
+                "BIM",
+                "Suggested {scale} at ({x:.2f}, {y:.2f}) mm. Apply to commit.",
+            ).format(
+                scale=format_scale(suggestion.scale),
+                x=suggestion.x,
+                y=suggestion.y,
+            )
+        )
+
+    def _show_suggestion_error(self, error):
+        self.suggestion_status.setStyleSheet("color: #b04040;")
+        self.suggestion_status.setText(str(error))
+
+    def find_free_position(self):
+        view = self.drawing_view
+        try:
+            suggestion = BIMSheetService(view.Document).find_free_view_layout(
+                view.findParentPage(),
+                view,
+                scale=self.scale.value(),
+                **self._suggestion_arguments(),
+            )
+        except (TypeError, ValueError, RuntimeError) as error:
+            self._show_suggestion_error(error)
+            return
+        self._accept_suggestion(suggestion)
+
+    def fit_to_available_space(self):
+        view = self.drawing_view
+        try:
+            suggestion = BIMSheetService(view.Document).fit_view_layout(
+                view.findParentPage(),
+                view,
+                preferred_scale=self.scale.value(),
+                **self._suggestion_arguments(),
+            )
+        except (TypeError, ValueError, RuntimeError) as error:
+            self._show_suggestion_error(error)
+            return
+        self._accept_suggestion(suggestion)
 
     def apply(self):
         from .titles import BIMSheetViewTitleService

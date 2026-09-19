@@ -17,7 +17,7 @@ from .publishing import (
     SheetPublicationError,
     SheetPublicationResult,
 )
-from .service import BIMSheetMetadata, BIMSheetService
+from .service import BIMSheetMetadata, BIMSheetPlacementSuggestion, BIMSheetService
 from .titleblock import BIMTitleBlockService, TitleBlockSyncResult
 from .titles import BIMSheetViewTitleService, format_scale
 from .targeting import BIMSheetTargetResolver
@@ -28,6 +28,7 @@ __all__ = (
     "BIMSheetFootprintProvider",
     "BIMSheetMetadata",
     "BIMSheetPublishingService",
+    "BIMSheetPlacementSuggestion",
     "BIMSheetService",
     "BIMSheetTargetResolver",
     "BIMSheetViewTitleService",

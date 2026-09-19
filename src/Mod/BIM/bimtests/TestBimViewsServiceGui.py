@@ -410,6 +410,42 @@ class TestBimViewsServiceGui(TestArchBaseGui):
         self.assertAlmostEqual(4, annotation.TextSize.Value)
         self.assertTrue(drawing_view.ShowHidden)
 
+    def test_placement_inspector_suggests_layout_without_mutating_document(self):
+        source = self.document.addObject("App::FeaturePython", "SuggestionSource")
+        source.addProperty("App::PropertyPlacement", "Placement")
+        view_service = BIMViewService(self.document, view=_RecordingView([]))
+        definition = view_service.create_view(
+            "Suggested Plan", "Plan", source, capture=False
+        )
+        page = BIMSheetService(self.document).create_sheet(
+            FreeCAD.getResourceDir()
+            + "Mod/TechDraw/Templates/Default_Template_A4_Landscape.svg"
+        )
+        drawing_view = view_service.place_on_sheet(definition, page)
+        original = (
+            drawing_view.Scale,
+            drawing_view.X.Value,
+            drawing_view.Y.Value,
+        )
+        editor = BIMSheetPlacementPropertiesWidget(drawing_view)
+        try:
+            editor.scale.setValue(100.0)
+            editor.fit_to_available_space()
+
+            self.assertLess(editor.scale.value(), 100.0)
+            self.assertIn("Apply", editor.suggestion_status.text())
+            self.assertEqual(original[0], drawing_view.Scale)
+            self.assertEqual(original[1], drawing_view.X.Value)
+            self.assertEqual(original[2], drawing_view.Y.Value)
+
+            editor.find_free_position()
+            self.assertIn("Apply", editor.suggestion_status.text())
+            self.assertEqual(original[1], drawing_view.X.Value)
+            self.assertEqual(original[2], drawing_view.Y.Value)
+        finally:
+            editor.close()
+            FreeCADGui.deleteLater(editor)
+
     def test_sheet_inspector_uses_standard_contextual_task_view(self):
         page = BIMSheetService(self.document).create_sheet(
             FreeCAD.getResourceDir()
