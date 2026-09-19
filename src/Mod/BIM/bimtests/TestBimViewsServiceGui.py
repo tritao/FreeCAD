@@ -2072,6 +2072,13 @@ class TestBimViewsServiceGui(TestArchBaseGui):
         with patch.object(ArchSectionPlane, "getSVG", return_value="") as get_svg:
             self.document.recompute()
             get_svg.reset_mock()
+            drawing_view.FontSize = 10.0
+            drawing_view.LineSpacing = 1.2
+            self.document.recompute()
+            get_svg.assert_called_once()
+            self.assertAlmostEqual(6.0, get_svg.call_args.kwargs["linespacing"])
+
+            get_svg.reset_mock()
             definition.BIMContextSource = replacement
             self.document.recompute()
             get_svg.assert_called_once()

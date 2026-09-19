@@ -66,7 +66,7 @@ DrawViewArch::DrawViewArch()
     ADD_PROPERTY_TYPE(FontSize, (12.0), group, App::Prop_None, "Text size for this view");
     ADD_PROPERTY_TYPE(CutLineWidth, (0.50), group, App::Prop_None, "Width of cut lines of this view");
     ADD_PROPERTY_TYPE(JoinArch ,(false), group, App::Prop_None, "If True, walls and structure will be fused by material");
-    ADD_PROPERTY_TYPE(LineSpacing, (1.0f), group, App::Prop_None, "The spacing between lines to use for multiline texts");
+    ADD_PROPERTY_TYPE(LineSpacing, (1.0f), group, App::Prop_None, "Line spacing as a multiple of the rendered text height");
     ScaleType.setValue("Custom");
 }
 
@@ -137,7 +137,7 @@ App::DocumentObjectExecReturn *DrawViewArch::execute()
                  << ", rotation=" << Rotation.getValue()
                  << ", fillSpaces=" << (FillSpaces.getValue() ? "True" : "False")
                  << ", cutlinewidth=" << CutLineWidth.getValue()
-                 << ", linespacing=" << LineSpacing.getValue()
+                 << ", linespacing=" << FontSize.getValue() * LineSpacing.getValue() / 2.0
                  << ", joinArch=" << (JoinArch.getValue() ? "True" : "False");
 
         if (definition) {
