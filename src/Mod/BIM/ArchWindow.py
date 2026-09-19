@@ -1546,6 +1546,15 @@ class _HostedOpeningPlanGeometry:
         if not host:
             return fallback
 
+        try:
+            import ArchWall
+
+            resolved_width = ArchWall.get_resolved_wall_defaults(host).width
+        except Exception:
+            resolved_width = 0.0
+        if resolved_width:
+            return resolved_width
+
         width = getattr(host, "Width", None)
         if width is not None:
             try:
@@ -3661,23 +3670,25 @@ class _Window(
                             # of sorted edges of Sketch.
                             widths = host.Base.Proxy.getWidths(host.Base, propSetUuid=propSetUuid)
                 if not widths:
+                    import ArchWall
+
+                    defaults = ArchWall.get_resolved_wall_defaults(host)
                     if host.OverrideWidth:
                         # TODO No need to test as in ArchWall if host.Base is Sketch and sortSketchWidth(), just need the max value
                         widths = host.OverrideWidth
-                    elif host.Width:
-                        widths = [host.Width.Value]
+                    elif defaults.width:
+                        widths = [defaults.width]
 
                     # TODO Below codes copied and adopted from ArchWall.py.
                     #      Consider adding a variable to store the layer's
                     #      thickness as deduced, so the figure there could be
                     #      used directly without re-calculated here below.
-                    if hasattr(host, "Material"):
-                        if host.Material:
-                            if hasattr(host.Material, "Materials"):
-                                thicknesses = [abs(t) for t in host.Material.Thicknesses]
-                                totalThk = sum(thicknesses)
-                                # Append totalThk to widths, find max below
-                                widths.append(totalThk)
+                    if defaults.material:
+                        if hasattr(defaults.material, "Materials"):
+                            thicknesses = [abs(t) for t in defaults.material.Thicknesses]
+                            totalThk = sum(thicknesses)
+                            # Append totalThk to widths, find max below
+                            widths.append(totalThk)
 
                 if widths:
                     width = max(widths)

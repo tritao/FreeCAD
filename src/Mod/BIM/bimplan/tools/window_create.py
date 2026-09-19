@@ -466,7 +466,12 @@ def _get_wall_axis_context(wall):
     if normal.Length <= 1e-9:
         return None
     normal.normalize()
-    wall_width = _coerce_length(getattr(wall, "Width", None), 200.0)
+    try:
+        import ArchWall
+
+        wall_width = ArchWall.get_resolved_wall_defaults(wall).width
+    except Exception:
+        wall_width = _coerce_length(getattr(wall, "Width", None), 200.0)
     return {
         "start": start,
         "end": end,

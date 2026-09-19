@@ -41,6 +41,7 @@ line, then extruding it vertically.
 """
 
 import math
+from dataclasses import dataclass
 
 import FreeCAD
 import ArchCommands
@@ -59,6 +60,39 @@ import DraftVecUtils
 
 from FreeCAD import Vector
 from draftutils import params
+
+
+@dataclass(frozen=True)
+class ResolvedWallDefaults:
+    """Effective type-driven defaults consumed by wall geometry.
+
+    This boundary intentionally resolves to the existing instance properties
+    today.  A future WallType can supply inherited values here without making
+    shape builders, representations, and hosted elements understand type
+    storage or override semantics.
+    """
+
+    width: float
+    height: float
+    align: str
+    offset: float
+    material: object = None
+
+
+def get_resolved_wall_defaults(wall):
+    """Return effective wall defaults through its proxy resolution boundary."""
+
+    proxy = getattr(wall, "Proxy", None)
+    resolver = getattr(proxy, "get_resolved_defaults", None)
+    if callable(resolver):
+        return resolver(wall)
+    return ResolvedWallDefaults(
+        width=float(getattr(getattr(wall, "Width", None), "Value", 0.0) or 0.0),
+        height=float(getattr(getattr(wall, "Height", None), "Value", 0.0) or 0.0),
+        align=str(getattr(wall, "Align", "Center")),
+        offset=float(getattr(getattr(wall, "Offset", None), "Value", 0.0) or 0.0),
+        material=getattr(wall, "Material", None),
+    )
 
 
 def _representation_plane_normal(request):
@@ -654,11 +688,11 @@ class _Wall(ArchComponent.Component):
             # it is not a multi-layer wall.
             should_fuse_solids = False
             if obj.Base and obj.Base.isDerivedFrom("Sketcher::SketchObject"):
+                material = self.get_resolved_defaults(obj).material
                 is_multi_layer = (
-                    hasattr(obj, "Material")
-                    and obj.Material
-                    and hasattr(obj.Material, "Materials")
-                    and obj.Material.Materials
+                    material
+                    and hasattr(material, "Materials")
+                    and material.Materials
                 )
                 if not is_multi_layer:
                     should_fuse_solids = True
@@ -701,7 +735,14 @@ class _Wall(ArchComponent.Component):
                             obj.Base.ViewObject.show()
         # Blocks calculation
         if hasattr(obj, "MakeBlocks") and hasattr(self, "basewires"):
-            if obj.MakeBlocks and self.basewires and extdata and obj.Width and obj.Height:
+            defaults = self.get_resolved_defaults(obj)
+            if (
+                obj.MakeBlocks
+                and self.basewires
+                and extdata
+                and defaults.width
+                and defaults.height
+            ):
                 blocks = self._make_blocks(obj, base_faces[0], extv)
                 if blocks is not None:
                     base = blocks
@@ -777,7 +818,8 @@ class _Wall(ArchComponent.Component):
         # count blocks
         if hasattr(obj, "MakeBlocks"):
             if obj.MakeBlocks:
-                fvol = obj.BlockLength.Value * obj.BlockHeight.Value * obj.Width.Value
+                width = self.get_resolved_defaults(obj).width
+                fvol = obj.BlockLength.Value * obj.BlockHeight.Value * width
                 if fvol:
                     # print("base volume:",fvol)
                     # for s in base.Solids:
@@ -804,7 +846,7 @@ class _Wall(ArchComponent.Component):
                 )
 
         # set the Area property
-        obj.Area = obj.Length.Value * obj.Height.Value
+        obj.Area = obj.Length.Value * self.get_resolved_defaults(obj).height
 
     def onBeforeChange(self, obj, prop):
         """Method called before the object has a property changed.
@@ -1332,7 +1374,7 @@ class _Wall(ArchComponent.Component):
         height_operation = ArchRepresentation.BIMEditOperation(
             "WallHeight",
             "Edit Wall Height",
-            lambda source: source.Height.Value,
+            lambda source: self.get_resolved_defaults(source).height,
             lambda source, value: setattr(source, "Height", value),
             property_name="Height",
             minimum=1.0,
@@ -1408,9 +1450,10 @@ class _Wall(ArchComponent.Component):
                 current_section = self.get_resolved_section(source)
                 if current_section is None:
                     raise ValueError("Wall no longer has an editable uniform section")
-                old_width = float(source.Width.Value)
+                defaults = self.get_resolved_defaults(source)
+                old_width = defaults.width
                 delta = float(value) - old_width
-                align = str(source.Align)
+                align = defaults.align
                 if align == "Center":
                     if side == "Negative":
                         source.Align = "Left"
@@ -1427,7 +1470,7 @@ class _Wall(ArchComponent.Component):
             width_operation = ArchRepresentation.BIMEditOperation(
                 "WallWidth{}Face".format(side),
                 "Edit Wall Width",
-                lambda source: source.Width.Value,
+                lambda source: self.get_resolved_defaults(source).width,
                 set_width_from_face,
                 property_name="Width, Align, Offset",
                 minimum=1.0,
@@ -1452,7 +1495,7 @@ class _Wall(ArchComponent.Component):
                     constraint=ArchRepresentation.AxisConstraint(handle_point, direction),
                 )
             )
-        align = str(wall.Align)
+        align = self.get_resolved_defaults(wall).align
         if align not in ("Left", "Right"):
             return
         offset_direction = -lateral if align == "Left" else lateral
@@ -1494,9 +1537,10 @@ class _Wall(ArchComponent.Component):
         if baseline is None or section is None or float(value) < 1.0:
             return Part.Shape()
         width = float(value)
-        delta = width - float(wall.Width.Value)
-        align = str(wall.Align)
-        offset = float(wall.Offset.Value)
+        defaults = self.get_resolved_defaults(wall)
+        delta = width - defaults.width
+        align = defaults.align
+        offset = defaults.offset
         if align == "Center":
             if side == "Negative":
                 align = "Left"
@@ -2179,7 +2223,8 @@ class _Wall(ArchComponent.Component):
             self.noWidths = True
 
         # Check height.
-        height = obj.Height.Value
+        defaults = self.get_resolved_defaults(obj)
+        height = defaults.height
         if not height:
             height = self.getParentHeight(obj)
         if not height:
@@ -2215,7 +2260,8 @@ class _Wall(ArchComponent.Component):
             # be able in any time change the Width and drive the total thickness
             # - in the latter case, Width property should not be changed to
             # ready-only.
-            if not (0 in obj.Material.Thicknesses):
+            material = defaults.material
+            if material and not (0 in material.Thicknesses):
                 self.multimaterialsWidth = True
         if self.multimaterialsWidth:
             obj.setEditorMode("Width", ["ReadOnly"])
@@ -2241,9 +2287,9 @@ class _Wall(ArchComponent.Component):
                             if normal.getAngle(Vector(0, 0, 1)) > math.pi / 4:
                                 normal.multiply(width)
                                 base = face.extrude(normal)
-                                if obj.Align == "Center":
+                                if defaults.align == "Center":
                                     base.translate(normal.negative().multiply(0.5))
-                                elif obj.Align == "Right":
+                                elif defaults.align == "Right":
                                     base.translate(normal.negative())
                             else:
                                 normal.multiply(height)
@@ -2791,6 +2837,23 @@ class _Wall(ArchComponent.Component):
         widths_list = self._resolved_section_lists(obj)[0]
         return None if not widths_list else (default_width, widths_list)
 
+    @staticmethod
+    def get_resolved_defaults(obj):
+        """Resolve the scalar defaults shared by all wall consumers.
+
+        Keeping this method free of WallType assumptions makes the refactor
+        behavior-preserving.  Type inheritance and explicit instance
+        overrides can be introduced here without another geometry rewrite.
+        """
+
+        return ResolvedWallDefaults(
+            width=float(obj.Width.Value or 0.0),
+            height=float(obj.Height.Value or 0.0),
+            align=str(obj.Align),
+            offset=float(obj.Offset.Value or 0.0),
+            material=getattr(obj, "Material", None),
+        )
+
     def get_layers(self, obj):
         """Return the wall-global material stack used by shape generation.
 
@@ -2847,12 +2910,13 @@ class _Wall(ArchComponent.Component):
         widths = provider_widths or list(obj.OverrideWidth)
         aligns = provider_aligns or list(obj.OverrideAlign)
         offsets = provider_offsets or list(obj.OverrideOffset)
-        if not widths and obj.Width.Value:
-            widths = [obj.Width.Value]
+        defaults = self.get_resolved_defaults(obj)
+        if not widths and defaults.width:
+            widths = [defaults.width]
         if not aligns:
-            aligns = [obj.Align]
+            aligns = [defaults.align]
         if not offsets:
-            offsets = [obj.Offset.Value]
+            offsets = [defaults.offset]
         return list(widths), list(aligns), list(offsets)
 
     def get_resolved_section(self, obj, segment_index=0):
@@ -2927,13 +2991,12 @@ class _Wall(ArchComponent.Component):
             return fallback
         return value
 
-    @staticmethod
-    def _section_defaults(obj):
+    def _section_defaults(self, obj):
         """Return the wall defaults used when no segment value is present."""
-        return obj.Width.Value or 200.0, obj.Align, obj.Offset.Value
+        defaults = self.get_resolved_defaults(obj)
+        return defaults.width or 200.0, defaults.align, defaults.offset
 
-    @staticmethod
-    def _resolve_material_layers(obj):
+    def _resolve_material_layers(self, obj):
         """Resolve the material thickness stack used by every wall segment.
 
         Positive thicknesses are preserved.  Zero-thickness layers divide the
@@ -2942,13 +3005,14 @@ class _Wall(ArchComponent.Component):
         Signed values are retained so negative layers can act as invisible
         cursor steps in ``WallSection``.
         """
-        material = obj.Material
+        defaults = self.get_resolved_defaults(obj)
+        material = defaults.material
         if not material or not hasattr(material, "Materials"):
             return []
         raw_thicknesses = [float(value) for value in material.Thicknesses]
         if not raw_thicknesses:
             return []
-        width = obj.Width.Value or 200.0
+        width = defaults.width or 200.0
         rest_width = width - sum(abs(value) for value in raw_thicknesses)
         zero_count = sum(value == 0 for value in raw_thicknesses)
         variable_width = rest_width / zero_count if rest_width > 0 and zero_count else 0.0
@@ -2986,6 +3050,7 @@ class _Wall(ArchComponent.Component):
             )
             return None
 
+        defaults = self.get_resolved_defaults(obj)
         n = FreeCAD.Vector(extv)
         n.normalize()
         cuts1 = []
@@ -3010,7 +3075,7 @@ class _Wall(ArchComponent.Component):
                         if offset:
                             t = edge.tangentAt(offset)
                             p = t.cross(n)
-                            p.multiply(1.1 * obj.Width.Value + obj.Offset.Value)
+                            p.multiply(1.1 * defaults.width + defaults.offset)
                             p1 = edge.valueAt(offset).add(p)
                             p2 = edge.valueAt(offset).add(p.negative())
                             sh = Part.LineSegment(p1, p2).toShape()
@@ -3029,8 +3094,8 @@ class _Wall(ArchComponent.Component):
             fsize = obj.BlockHeight.Value + obj.Joint.Value
             bh = obj.BlockHeight.Value
         else:
-            fsize = obj.Height.Value
-            bh = obj.Height.Value
+            fsize = defaults.height
+            bh = defaults.height
         bvec = FreeCAD.Vector(n)
         bvec.multiply(bh)
         svec = FreeCAD.Vector(n)

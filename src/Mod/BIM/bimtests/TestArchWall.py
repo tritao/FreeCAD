@@ -32,6 +32,7 @@ import Arch
 import ArchComponent
 import ArchPlanAnalytic
 import ArchRepresentation
+import ArchWall
 import ArchWallExact
 import ArchWallEndCondition
 import Draft
@@ -41,6 +42,25 @@ from bimtests import TestArchBase
 
 
 class TestArchWall(TestArchBase.TestArchBase):
+
+    def test_resolved_wall_defaults_preserve_instance_property_behavior(self):
+        """The future type boundary initially mirrors existing wall values."""
+
+        material = Arch.makeMultiMaterial()
+        wall = Arch.makeWall(length=2400, width=275, height=3150, align="Right", offset=35)
+        wall.Material = material
+
+        defaults = ArchWall.get_resolved_wall_defaults(wall)
+
+        self.assertEqual(275.0, defaults.width)
+        self.assertEqual(3150.0, defaults.height)
+        self.assertEqual("Right", defaults.align)
+        self.assertEqual(35.0, defaults.offset)
+        self.assertIs(material, defaults.material)
+
+        section = wall.Proxy.get_resolved_section(wall)
+        self.assertEqual(35.0, section.y_min)
+        self.assertEqual(310.0, section.y_max)
 
     def _make_hosted_window(self, wall, name, x_start, z_start, width=800.0, height=1200.0):
         sketch = self.document.addObject("Sketcher::SketchObject", name + "Sketch")
