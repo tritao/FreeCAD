@@ -30,10 +30,17 @@ class AnalyticWallPlan:
 
         import Part
 
-        return tuple(
-            Part.Face(Part.makePolygon((*boundary, boundary[0])))
-            for boundary in self.boundaries
-        )
+        faces = []
+        for boundary in self.boundaries:
+            if len(boundary) < 3:
+                continue
+            try:
+                faces.append(Part.Face(Part.makePolygon((*boundary, boundary[0]))))
+            except Part.OCCError:
+                # Invalid edit previews may collapse a clipped region to a
+                # point or line.  Such a region contributes no Plan face.
+                continue
+        return tuple(faces)
 
     @property
     def face_meshes(self):
@@ -45,6 +52,7 @@ class AnalyticWallPlan:
                 tuple((0, index, index + 1) for index in range(1, len(boundary) - 1)),
             )
             for boundary in self.boundaries
+            if len(boundary) >= 3
         )
 
     def make_face(self):
@@ -56,7 +64,7 @@ class AnalyticWallPlan:
         return faces[0] if faces else Part.Face()
 
 
-def straight_wall_plan_model(wall, proxy, request):
+def straight_wall_plan_model(wall, proxy, request, opening_overrides=None):
     """Return an analytic model when a wall needs no BRep-derived Plan result."""
 
     if getattr(request, "cut_offset", None) is None:
@@ -66,7 +74,9 @@ def straight_wall_plan_model(wall, proxy, request):
         frame_normal = frame.Rotation.multVec(FreeCAD.Vector(0, 0, 1))
         if abs(abs(frame_normal.z) - 1.0) > 1e-7:
             return None
-    recipe = straight_wall_geometry_recipe(wall, proxy)
+    recipe = straight_wall_geometry_recipe(
+        wall, proxy, opening_overrides=opening_overrides
+    )
     if recipe is None:
         return None
     cut_z = float(request.cut_offset)
@@ -87,7 +97,9 @@ def straight_wall_plan_model(wall, proxy, request):
     )
 
 
-def straight_wall_geometry_recipe(wall, proxy, geometry_shape=None):
+def straight_wall_geometry_recipe(
+    wall, proxy, geometry_shape=None, opening_overrides=None
+):
     """Resolve the shared geometry recipe for one supported straight wall."""
 
     if _has_manual_end_treatment(wall) or not _has_straight_path(wall):
@@ -132,7 +144,7 @@ def straight_wall_geometry_recipe(wall, proxy, geometry_shape=None):
         z_max=bounds.ZMax,
         trim_planes=trim_planes,
     )
-    openings = _hosted_opening_recipes(wall, recipe)
+    openings = _hosted_opening_recipes(wall, recipe, opening_overrides)
     return None if openings is None else replace(recipe, openings=openings)
 
 
@@ -167,13 +179,20 @@ def _wall_trim_planes(wall):
     return tuple(trim_planes)
 
 
-def _hosted_opening_recipes(wall, recipe):
+def _hosted_opening_recipes(wall, recipe, opening_overrides=None):
     from bimviews import representation_cache
 
     document = getattr(wall, "Document", None)
     openings = []
+    opening_overrides = opening_overrides or {}
     for obj in (getattr(document, "Objects", ()) or ()):
         if wall not in (getattr(obj, "Hosts", None) or ()):
+            continue
+        if obj in opening_overrides:
+            opening = opening_overrides[obj]
+            if opening is None:
+                return None
+            openings.append(opening)
             continue
         provider = getattr(
             getattr(obj, "Proxy", None), "get_hosted_opening_geometry_recipe", None

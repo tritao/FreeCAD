@@ -7,7 +7,7 @@ import FreeCAD
 from bimplan.providers.edit import ProviderMoveTool
 from bimplan.providers.point import ProviderPointTool
 from bimplan.runtime.tools import PlanTool, coerce_plan_tool
-from bimplan.tools.select import SelectTool
+from bimplan.tools.select import SelectTool, clear_selection_gesture
 from bimplan.tools.space_regions import PickSpaceRegionTool
 from bimplan.tools.spaces import RegionTool, SpaceSeparatorTool, SpaceTextTool
 from bimplan.tools.symbol_edit import SymbolEditTool
@@ -291,6 +291,12 @@ def on_mouse_pressed(session, event_callback):
         ):
             try:
                 if event.getState() == coin.SoMouseButtonEvent.UP:
+                    if session.contextual_datums.handle_pointer_release(
+                        event_callback, mouse_pos
+                    ):
+                        clear_selection_gesture(session)
+                        session.input.claim_left_button_click(event_callback)
+                        return
                     if _handle_left_mouse_button_release(session, event_callback):
                         return
 

@@ -2,6 +2,8 @@
 
 """Opening overlay and handle tracker helpers for BIM Plan Edit."""
 
+from bimplan.contextual_datums import ContextualDatumSpec
+
 from . import geometry as overlay_geometry
 from . import manager as overlay_manager
 
@@ -194,6 +196,7 @@ def sync_selected_opening_overlay(session):
             and overlay_state.selected_opening_overlay_render_state == render_state
         ):
             _perf_count(session, "selected_opening_overlay_cache_hits")
+            sync_selected_opening_width_datum(session)
             return
         try:
             import draftguitools.gui_trackers as DraftTrackers
@@ -222,6 +225,7 @@ def sync_selected_opening_overlay(session):
             overlay_state.hovered_opening_overlay_render_state = None
         overlay_state.selected_opening_overlay_render_state = render_state
         overlay_state.selected_opening_overlay_dirty = False
+        sync_selected_opening_width_datum(session)
 
 
 def clear_selected_opening_overlay(session):
@@ -231,10 +235,61 @@ def clear_selected_opening_overlay(session):
     tracker_state.opening_overlay_trackers = []
     overlay_state.selected_opening_overlay_dirty = False
     overlay_state.selected_opening_overlay_render_state = None
+    clear_selected_opening_width_datum(session)
 
 
 def invalidate_selected_opening_overlay_cache(session):
     _opening_overlay_state(session).selected_opening_overlay_dirty = True
+
+
+def _selected_opening_width_datum_context(session):
+    opening = session.selection.state.get_selected_plan_target_object("opening")
+    if session.current_tool != "Select" or not session.openings.is_hosted_opening_object(opening):
+        return None
+    handles = session.contextual_rendering.edit_handles_for(opening)
+    by_role = {handle.role: handle for handle in handles}
+    left = by_role.get("OpeningLeftJamb")
+    right = by_role.get("OpeningRightJamb")
+    if left is None or right is None:
+        return None
+    try:
+        import ArchWindow
+
+        width = float(ArchWindow.getWindowWidthMm(opening) or 0.0)
+    except (AttributeError, TypeError, ValueError):
+        return None
+    if width <= 0.0:
+        return None
+    return opening, left, right, width
+
+
+def sync_selected_opening_width_datum(session):
+    context = _selected_opening_width_datum_context(session)
+    if context is None:
+        clear_selected_opening_width_datum(session)
+        return
+    opening, left, right, width = context
+    render_state = (
+        session.visibility.get_document_object_key(opening),
+        tuple(round(float(value), 6) for point in (left.point, right.point) for value in point),
+        round(width, 6),
+    )
+    start_operation_value = float(right.operation.get_value(right.source))
+    session.contextual_datums.sync(
+        ContextualDatumSpec(
+            key="opening.width",
+            handle=right,
+            points=(left.point, right.point),
+            value=width,
+            render_state=render_state,
+            value_to_operation=lambda value: start_operation_value + float(value) - width,
+            refresh_visuals=("selected_opening",),
+        )
+    )
+
+
+def clear_selected_opening_width_datum(session):
+    session.contextual_datums.clear("opening.width")
 
 
 def sync_selected_wall_opening_context_overlay(session):

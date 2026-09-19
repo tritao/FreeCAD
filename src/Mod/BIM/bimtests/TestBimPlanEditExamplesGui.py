@@ -298,6 +298,18 @@ class TestBimPlanEditExamplesGui(TestArchBaseGui):
         self.assertEqual(1, len(spaces))
         self.assertEqual(1, len(storeys))
         self.assertEqual(6, len(joints))
+        wall_types = list(
+            dict.fromkeys(wall.WallType for wall in walls if wall.WallType is not None)
+        )
+        self.assertEqual(2, len(wall_types))
+        exterior_type = next(item for item in wall_types if item.Function == "Exterior")
+        interior_type = next(item for item in wall_types if item.Function == "Interior")
+        self.assertEqual("Diagonal", str(exterior_type.PlanHatch))
+        self.assertAlmostEqual(100.0, exterior_type.PlanHatchSpacing.Value)
+        self.assertAlmostEqual(45.0, exterior_type.PlanHatchAngle.Value)
+        self.assertEqual("None", str(interior_type.PlanHatch))
+        self.assertEqual(4, sum(wall.WallType is exterior_type for wall in walls))
+        self.assertEqual(1, sum(wall.WallType is interior_type for wall in walls))
         definitions = [
             obj for obj in document.Objects if obj.isDerivedFrom("App::ViewDefinition")
         ]
@@ -864,8 +876,8 @@ class TestBimPlanEditExamplesGui(TestArchBaseGui):
                 world_target = handle.point + handle.direction * offset
                 with patch.object(FreeCADGui.Snapper, "snap", return_value=world_target):
                     send_move(target)
-                self.pump_gui_events(20)
-                send_button(target, coin.SoButtonEvent.DOWN)
+                    self.pump_gui_events(20)
+                    send_button(target, coin.SoButtonEvent.DOWN)
                 send_button(target, coin.SoButtonEvent.UP)
                 self.pump_gui_events(50)
                 self.assertIsNone(session.contextual_editing.editor)
@@ -897,6 +909,7 @@ class TestBimPlanEditExamplesGui(TestArchBaseGui):
         import ArchWindow
         import ArchRepresentation
         import DraftGui
+        from bimplan.overlays import openings as opening_overlays
         from bimplan.selection import edit_nodes as plan_edit_nodes
         from draftguitools import gui_snapper
 
@@ -1117,6 +1130,12 @@ class TestBimPlanEditExamplesGui(TestArchBaseGui):
             expected_host_area = sum(
                 face.Area for face in preview_state.representation_for(host).cut_geometry
             )
+            self.assertTrue(
+                any(
+                    mapping.role == "PlanHatch"
+                    for mapping in preview_state.representation_for(host).source_mappings
+                )
+            )
             expected_space_area = sum(
                 face.Area for face in preview_state.representation_for(space).cut_geometry
             )
@@ -1198,10 +1217,10 @@ class TestBimPlanEditExamplesGui(TestArchBaseGui):
                 self.assertIsNotNone(session.contextual_editing.editor)
                 with patch.object(FreeCADGui.Snapper, "snap", return_value=world_target):
                     send_move(target)
-                self.pump_gui_events(20)
-                self.assertAlmostEqual(original_value, handle.operation.get_value(door))
-                self.assertIn(door, session.contextual_rendering.renderer._preview_nodes)
-                send_button(target, coin.SoButtonEvent.DOWN)
+                    self.pump_gui_events(20)
+                    self.assertAlmostEqual(original_value, handle.operation.get_value(door))
+                    self.assertIn(door, session.contextual_rendering.renderer._preview_nodes)
+                    send_button(target, coin.SoButtonEvent.DOWN)
                 send_button(target, coin.SoButtonEvent.UP)
                 self.pump_gui_events(50)
                 self.assertIsNone(session.contextual_editing.editor)
@@ -1247,12 +1266,43 @@ class TestBimPlanEditExamplesGui(TestArchBaseGui):
             handles = select_and_sync()
             self.assertIn("OpeningPosition", {handle.role for handle in handles})
             self.assertIn(door, session.contextual_rendering.renderer.sources)
+
         finally:
             session.shutdown(close_dialog=False)
             if created_snapper:
                 del FreeCADGui.Snapper
             if created_toolbar:
                 del FreeCADGui.draftToolBar
+
+    def test_opening_width_datum_rejects_zero_then_commits_typed_width(self):
+        import ArchWindow
+        from bimplan.overlays import openings as opening_overlays
+
+        document = self._open_example("BIMPlanEditBasic.FCStd")
+        door = self._objects_with_ifc_type(document, "Door")[0]
+        storey = self._objects_with_ifc_type(document, "Building Storey")[0]
+        session = self._enter_plan_edit(storey)
+        try:
+            session.selection.state.set_selected_plan_target_state("opening", door)
+            session.contextual_rendering.sync_visible_handles()
+            session.viewport.flush_scene_graph_mutations()
+            opening_overlays.sync_selected_opening_overlay(session)
+            width_datum = session.contextual_datums.get("opening.width")
+            self.assertIsNotNone(width_datum)
+            original_width = ArchWindow.getWindowWidthMm(door)
+
+            session.contextual_datums.begin_edit("opening.width")
+
+            session.contextual_datums.finish_edit("opening.width", 0.0)
+            self.assertTrue(width_datum.isInEdit())
+            self.assertAlmostEqual(original_width, ArchWindow.getWindowWidthMm(door))
+
+            session.contextual_datums.finish_edit("opening.width", 600.0)
+            self.assertAlmostEqual(600.0, ArchWindow.getWindowWidthMm(door))
+            self.assertIsNone(session.contextual_editing.editor)
+            session.viewport.flush_scene_graph_mutations()
+        finally:
+            session.shutdown(close_dialog=False)
 
     def test_path_ownership_example_exposes_owner_specific_handles(self):
         document = self._open_example("BIMPlanEditPathOwnership.FCStd")

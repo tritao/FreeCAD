@@ -1894,6 +1894,39 @@ class _HostedOpeningPlanGeometry:
         except ValueError:
             return None
 
+    def get_hosted_opening_preview_geometry_recipe(self, wall_recipe, representation):
+        """Return a host recipe using a proposed non-persistent opening footprint."""
+
+        import ArchWallGeometry
+
+        current = self.get_hosted_opening_geometry_recipe(wall_recipe)
+        faces = tuple(getattr(representation, "cut_geometry", ()) or ())
+        points = tuple(
+            FreeCAD.Vector(vertex.Point) for face in faces for vertex in face.Vertexes
+        )
+        if current is None or not points:
+            return None
+        axis = FreeCAD.Vector(wall_recipe.axis_end).sub(wall_recipe.axis_start)
+        if axis.Length <= 1e-9:
+            return None
+        axis.normalize()
+        origin = FreeCAD.Vector(wall_recipe.axis_start)
+        lateral = FreeCAD.Vector(wall_recipe.lateral)
+        u_values = [point.sub(origin).dot(axis) for point in points]
+        v_values = [point.sub(origin).dot(lateral) for point in points]
+        try:
+            return ArchWallGeometry.WallOpeningRecipe(
+                source=self.Object,
+                u_min=min(u_values),
+                u_max=max(u_values),
+                v_min=min(v_values),
+                v_max=max(v_values),
+                z_min=current.z_min,
+                z_max=current.z_max,
+            )
+        except ValueError:
+            return None
+
     def _get_hosted_opening_placement_target(self):
         obj = getattr(self, "Object", None)
         if not obj:
@@ -2507,8 +2540,6 @@ class _HostedOpeningRepresentationGeometry:
     def get_plan_edit_preview_state(self, role, value, request):
         """Build one proposed opening state and its affected host wall cut."""
 
-        import Part
-
         proposed = self.get_plan_edit_preview_representation(role, value, request)
         if proposed is None:
             return None
@@ -2517,96 +2548,28 @@ class _HostedOpeningRepresentationGeometry:
         host = next(iter(getattr(self.Object, "Hosts", None) or ()), None)
         if host is None:
             return state
+        host_proxy = getattr(host, "Proxy", None)
         try:
-            host_representation = ArchRepresentation.representation_for(host, request)
-        except ArchRepresentation.RepresentationUnavailable:
-            return state
+            import ArchPlanAnalytic
 
-        cut_z = getattr(request, "cut_offset", None)
-        base_z = getattr(request, "target_offset", None)
-        profile = self._get_hosted_opening_plan_frame(self.Object.Shape, cut_z, base_z)
-        if not profile:
-            return state
-        current_values = {
-            "OpeningPosition": (profile["umin"] + profile["umax"]) * 0.5,
-            "OpeningLeftJamb": profile["umin"],
-            "OpeningRightJamb": profile["umax"],
-        }
-        if role not in current_values:
-            return state
-        current = self.get_plan_edit_preview_representation(role, current_values[role], request)
-        current_voids = tuple(current.cut_geometry) if current is not None else ()
-        proposed_voids = tuple(proposed.cut_geometry)
-        if not current_voids or not proposed_voids:
-            return state
-
-        preview_host = ArchRepresentation.BIMRepresentation(source=host, request=request)
-        host_faces = tuple(host_representation.cut_geometry)
-        if not host_faces:
-            return state
-        axis_u = FreeCAD.Vector(profile["axis_u"])
-        axis_v = FreeCAD.Vector(profile["axis_v"])
-        origin = FreeCAD.Vector(profile["origin"])
-        host_vertices = tuple(
-            FreeCAD.Vector(vertex.Point) for face in host_faces for vertex in face.Vertexes
-        )
-        if not host_vertices:
-            return state
-        host_u = [point.sub(origin).dot(axis_u) for point in host_vertices]
-        host_v = [point.sub(origin).dot(axis_v) for point in host_vertices]
-        target_offset = getattr(request, "target_offset", None)
-        base_z = origin.z if target_offset is None else float(target_offset)
-
-        def frame_point(u, v):
-            point = origin.add(axis_u * u).add(axis_v * v)
-            point.z = base_z
-            return point
-
-        envelope_points = (
-            frame_point(min(host_u), min(host_v)),
-            frame_point(max(host_u), min(host_v)),
-            frame_point(max(host_u), max(host_v)),
-            frame_point(min(host_u), max(host_v)),
-        )
-        host_envelope = Part.Face(Part.makePolygon((*envelope_points, envelope_points[0])))
-
-        def clipped_voids(voids):
-            return tuple(
-                face
-                for void in voids
-                for face in void.common(host_envelope, noElementMap=True).Faces
+            wall_recipe = ArchPlanAnalytic.straight_wall_geometry_recipe(host, host_proxy)
+            if wall_recipe is None:
+                return state
+            proposed_recipe = self.get_hosted_opening_preview_geometry_recipe(
+                wall_recipe, proposed
             )
-
-        current_voids = clipped_voids(current_voids)
-        proposed_voids = clipped_voids(proposed_voids)
-        if not current_voids or not proposed_voids:
-            return state
-        result = host_faces[0]
-        for face in host_faces[1:]:
-            result = result.fuse(face)
-        for void in current_voids:
-            result = result.fuse(void)
-        for void in proposed_voids:
-            result = result.cut(void)
-        result_faces = result.Faces
-        for index, face in enumerate(result_faces, start=1):
-            preview_host.add_geometry(
-                "cut_geometry", face, "PlanCutFace", subelement=f"PlanFace{index}"
+            if proposed_recipe is None:
+                return state
+            preview_host = host_proxy.getRepresentation(
+                host,
+                request,
+                opening_overrides={self.Object: proposed_recipe},
             )
-            for wire_index, wire in enumerate(face.Wires, start=1):
-                points = tuple(FreeCAD.Vector(vertex.Point) for vertex in wire.Vertexes)
-                if len(points) > 1:
-                    preview_host.add_geometry(
-                        "projected_geometry",
-                        (*points, points[0]),
-                        "PlanCutBoundary",
-                        subelement=f"PlanFace{index}.Wire{wire_index}",
-                    )
-        if preview_host.cut_geometry:
+        except (AttributeError, ArchRepresentation.RepresentationUnavailable):
+            return state
+        if preview_host is not None and preview_host.cut_geometry:
             state.add_representation(
-                preview_host,
-                replace_committed=True,
-                affects_spatial_boundary=False,
+                preview_host, replace_committed=True, affects_spatial_boundary=False
             )
         return state
 

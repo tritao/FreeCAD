@@ -50,7 +50,7 @@ class SelectTool(plan_runtime_tools.PlanToolHandler):
         additive = bool(state.selection_additive)
         dragging = bool(state.selection_dragging)
         start = state.selection_press_pos
-        _clear_selection_gesture(session)
+        clear_selection_gesture(session)
 
         if dragging:
             session.selection.activation.select_plan_targets_in_screen_rect(
@@ -131,7 +131,7 @@ def _update_selection_rubber_band(session):
         state.selection_rubber_band.setGeometry(rect)
 
 
-def _clear_selection_gesture(session):
+def clear_selection_gesture(session):
     state = session.input_event_state
     if state.selection_rubber_band is not None:
         state.selection_rubber_band.hide()

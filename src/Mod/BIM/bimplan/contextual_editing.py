@@ -68,18 +68,7 @@ class PlanContextualEditingAPI:
         )
 
     def _commit_scope(self):
-        session = self.session
-        class CommitScope:
-            def __enter__(self):
-                session.document_visual_state.contextual_edit_recompute_depth += 1
-            def __exit__(self, exc_type, exc_value, traceback):
-                del exc_type, exc_value, traceback
-                state = session.document_visual_state
-                state.contextual_edit_recompute_depth = max(
-                    0, state.contextual_edit_recompute_depth - 1
-                )
-                return False
-        return CommitScope()
+        return self.session.document_visuals.defer_document_visual_updates()
 
     def begin(self, handle):
         self.controller = self._new_controller()
@@ -89,6 +78,11 @@ class PlanContextualEditingAPI:
         if self.controller is None:
             raise RuntimeError("No BIM edit handle is active")
         return self.controller.preview(pointer)
+
+    def preview_value(self, value):
+        if self.controller is None:
+            raise RuntimeError("No BIM edit handle is active")
+        return self.controller.preview_value(value)
 
     def commit(self, pointer):
         if self.controller is None:

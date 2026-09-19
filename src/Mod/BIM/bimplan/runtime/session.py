@@ -57,6 +57,7 @@ from bimplan.ui.controls import PlanEditControlsWidget
 from bimplan.contextual_rendering import PlanContextualRenderingAPI
 from bimplan.representation_request import PlanRepresentationRequestAPI
 from bimplan.contextual_editing import PlanContextualEditingAPI
+from bimplan.contextual_datums import PlanContextualDatumService
 from bimviews.runtime import BIMViewRuntime
 from bimviews.viewport_grid import ViewportGridController
 from bimviews.projection import ViewportProjectionCoordinator
@@ -335,6 +336,7 @@ class BIMEditingSession:
         self.contextual_rendering = PlanContextualRenderingAPI(self)
         self.representation_request = PlanRepresentationRequestAPI(self)
         self.contextual_editing = PlanContextualEditingAPI(self)
+        self.contextual_datums = PlanContextualDatumService(self)
         self.status_text = PlanStatusTextAPI(self)
         self.task_panels = plan_task_panel.PlanTaskPanelsAPI(self)
         self.projection = ViewportProjectionCoordinator(self)

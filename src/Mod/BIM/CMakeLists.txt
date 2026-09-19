@@ -100,6 +100,7 @@ SET(bimplan_SRCS
     bimplan/__init__.py
     bimplan/contextual_rendering.py
     bimplan/contextual_editing.py
+    bimplan/contextual_datums.py
     bimplan/document_visuals.py
     bimplan/object_visibility.py
     bimplan/overlays/__init__.py

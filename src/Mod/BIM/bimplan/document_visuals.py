@@ -162,6 +162,53 @@ def defer_document_visual_refresh(session):
     _document_visual_state(session).document_visual_refresh_deferred = True
 
 
+def _queue_deferred_document_visual_flush(session):
+    visual_state = _document_visual_state(session)
+    if visual_state.document_visual_flush_queued:
+        return
+    visual_state.document_visual_flush_queued = True
+    queued = session.viewport.queue_scene_graph_mutation(
+        "document_visuals.flush_deferred",
+        lambda: _flush_deferred_document_visual_updates(session),
+    )
+    if not queued:
+        visual_state.document_visual_flush_queued = False
+
+
+def _flush_deferred_document_visual_updates(session):
+    visual_state = _document_visual_state(session)
+    visual_state.document_visual_flush_queued = False
+    if session.lifecycle_state.tearing_down:
+        return False
+    if visual_state.document_visual_update_defer_depth:
+        _queue_deferred_document_visual_flush(session)
+        return False
+    if (
+        visual_state.created_plan_objects_flush_deferred
+        or visual_state.pending_created_plan_objects
+    ):
+        visual_state.created_plan_objects_flush_deferred = False
+        visual_state.document_visual_update_defer_depth += 1
+        try:
+            flush_created_plan_objects(session, force=True)
+        finally:
+            visual_state.document_visual_update_defer_depth -= 1
+    if not (
+        visual_state.document_visual_refresh_deferred
+        or visual_state.deferred_selection_effects
+    ):
+        return False
+    effects = _take_deferred_selection_effects(session)
+    visual_state.document_visual_refresh_deferred = False
+    _apply_deferred_selection_effects(session, effects)
+    if not document_is_alive(session):
+        return False
+    invalidate_document_dependent_plan_visuals(session)
+    session.selection.refresh.refresh_primary_selected_plan_target()
+    session.task_panels.refresh_task_panel_status(reason="selection")
+    return True
+
+
 _DEFERRED_SELECTION_EFFECT_SUSPEND_SELECTED_WALL = "suspend_selected_wall"
 
 
@@ -243,7 +290,7 @@ def detach_document_observer(session):
 
 @contextmanager
 def defer_document_visual_updates(session):
-    """Batch document observer visual work while an external command mutates the model."""
+    """Batch observer work and flush it after the active GUI event returns."""
 
     visual_state = _document_visual_state(session)
     visual_state.document_visual_update_defer_depth += 1
@@ -259,22 +306,10 @@ def defer_document_visual_updates(session):
         if (
             visual_state.created_plan_objects_flush_deferred
             or visual_state.pending_created_plan_objects
+            or visual_state.document_visual_refresh_deferred
+            or visual_state.deferred_selection_effects
         ):
-            visual_state.created_plan_objects_flush_deferred = False
-            visual_state.document_visual_update_defer_depth = 1
-            try:
-                flush_created_plan_objects(session, force=True)
-            finally:
-                visual_state.document_visual_update_defer_depth = 0
-        if visual_state.document_visual_refresh_deferred or visual_state.deferred_selection_effects:
-            effects = _take_deferred_selection_effects(session)
-            visual_state.document_visual_refresh_deferred = False
-            _apply_deferred_selection_effects(session, effects)
-            if not document_is_alive(session):
-                return
-            invalidate_document_dependent_plan_visuals(session)
-            session.selection.refresh.refresh_primary_selected_plan_target()
-            session.task_panels.refresh_task_panel_status(reason="selection")
+            _queue_deferred_document_visual_flush(session)
 
 
 def refresh_plan_object_footprint_display(session, obj, *, request_redraw=True):

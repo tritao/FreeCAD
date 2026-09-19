@@ -1304,7 +1304,7 @@ class _Wall(ArchComponent.Component):
         )
         return (Part.Face(Part.makePolygon((*corners, corners[0]))),)
 
-    def getRepresentation(self, obj, request):
+    def getRepresentation(self, obj, request, opening_overrides=None):
         """Return this wall's renderer-neutral plan representation."""
 
         if request is None:
@@ -1324,7 +1324,12 @@ class _Wall(ArchComponent.Component):
         if request.purpose == ArchRepresentation.RepresentationPurpose.PLAN:
             import ArchPlanAnalytic
 
-            analytic_model = ArchPlanAnalytic.straight_wall_plan_model(obj, self, request)
+            analytic_model = ArchPlanAnalytic.straight_wall_plan_model(
+                obj,
+                self,
+                request,
+                opening_overrides=opening_overrides,
+            )
         if analytic_model is None:
             cut_faces = tuple(self._getCutRepresentation(obj, request))
             face_meshes = ()

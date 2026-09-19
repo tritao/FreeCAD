@@ -106,6 +106,23 @@ class BIMContextualHandleEditor:
         validation = self.handle.operation.validate(self.handle.source, value)
         return BIMEditPreview(self.handle, value, point, validation)
 
+    def preview_value(self, value):
+        """Preview an exact scalar without routing it through pointer input."""
+
+        if self.handle is None:
+            raise RuntimeError("No BIM edit handle is active")
+        if self.handle.operation.value_kind != "Scalar":
+            raise ValueError("This handle does not accept a scalar value.")
+        value = float(value)
+        validation = self.handle.operation.validate(self.handle.source, value)
+        sensitivity = float(self.handle.operation.sensitivity)
+        point = self.handle.point
+        if abs(sensitivity) > 1e-12:
+            point = point + self.handle.direction * (
+                (value - float(self.start_value)) / sensitivity
+            )
+        return BIMEditPreview(self.handle, value, point, validation)
+
     def cancel(self):
         self.handle = None
         self.start_value = None
@@ -192,6 +209,16 @@ class ContextualEditController:
         if self.editor is None:
             raise RuntimeError("No BIM edit handle is active")
         preview = self.editor.preview(pointer)
+        return self._render_preview(preview)
+
+    def preview_value(self, value):
+        """Preview an exact scalar through the active semantic operation."""
+
+        if self.editor is None:
+            raise RuntimeError("No BIM edit handle is active")
+        return self._render_preview(self.editor.preview_value(value))
+
+    def _render_preview(self, preview):
         self._call_renderer("preview_handle", preview.handle, preview.point)
         state = "active" if preview.validation.allowed else "invalid"
         self._call_renderer("set_handle_state", preview.handle, state)
@@ -254,18 +281,28 @@ class ContextualEditController:
         handle = self.editor.handle
         if handle.operation.value_kind != "Scalar":
             return BIMEditResult(False, reason="This handle does not accept a scalar value.")
-        sensitivity = float(handle.operation.sensitivity)
-        if abs(sensitivity) <= 1e-12:
-            return BIMEditResult(False, reason="This handle cannot map a value to pointer motion.")
-        target = handle.point + handle.direction * (
-            (float(value) - float(self.editor.start_value)) / sensitivity
-        )
-        preview = self.preview(target)
+        preview = self.preview_value(value)
         if not preview.validation.allowed:
             reason = preview.validation.reason or "This value is not allowed."
             self._set_feedback(reason)
             return BIMEditResult(False, preview=preview, reason=reason)
-        return self.commit(target)
+        editor = self.editor
+        try:
+            with self.commit_scope():
+                BIMContextualHandleEditor._commit_value(handle, preview.value)
+                if callable(editor.refresh):
+                    editor.refresh(handle.source)
+            editor.cancel()
+            self._clear_feedback()
+            return BIMEditResult(True, preview=preview)
+        except Exception as exc:
+            self._set_feedback(exc)
+            if callable(self.refresh_failure_callback):
+                self.refresh_failure_callback(handle.source)
+            return BIMEditResult(False, preview=preview, reason=str(exc))
+        finally:
+            self._call_renderer("clear_preview", handle.source)
+            self.editor = None
 
     def cancel(self, *, refresh=True):
         editor = self.editor

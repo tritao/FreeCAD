@@ -579,6 +579,72 @@ class TestArchRepresentation(unittest.TestCase):
         self.assertTrue(input_adapter.cleared)
         self.assertIn(("clear", source), renderer.events)
 
+    def test_contextual_edit_controller_commits_exact_values_without_pointer_mapping(self):
+        class Renderer:
+            def preview_handle(self, *_args):
+                pass
+
+            def set_handle_state(self, *_args):
+                pass
+
+            def clear_preview(self, *_args):
+                pass
+
+        source = {"width": 100.0}
+        operation = BIMEditOperation(
+            "set-width",
+            "Set width",
+            lambda value: value["width"],
+            lambda value, width: value.__setitem__("width", width),
+            minimum=10.0,
+            sensitivity=0.0,
+            manages_transaction=True,
+        )
+        handle = BIMEditHandle(
+            source,
+            "width",
+            FreeCAD.Vector(),
+            FreeCAD.Vector(1, 0, 0),
+            operation,
+        )
+        controller = ContextualEditController(
+            object(), RepresentationRequest(purpose="Plan"), Renderer()
+        )
+
+        controller.begin(handle)
+        preview = controller.preview_value(175.0)
+        self.assertEqual(175.0, preview.value)
+        result = controller.commit_value(175.0)
+
+        self.assertTrue(result.success, result.reason)
+        self.assertEqual(175.0, source["width"])
+        self.assertIsNone(controller.active_edit)
+
+    def test_contextual_datum_router_activates_only_on_matching_double_click(self):
+        from types import SimpleNamespace
+
+        from bimplan.contextual_datums import PlanContextualDatumService
+
+        picked_point = object()
+
+        class Datum:
+            def containsPickedPoint(self, candidate):
+                return candidate is picked_point
+
+        class EventCallback:
+            def getPickedPoint(self):
+                return picked_point
+
+        service = PlanContextualDatumService(SimpleNamespace())
+        service._entries["opening.width"] = SimpleNamespace(datum=Datum())
+        activated = []
+        service.begin_edit = activated.append
+
+        self.assertTrue(service.handle_pointer_release(EventCallback(), (100, 200)))
+        self.assertEqual([], activated)
+        self.assertTrue(service.handle_pointer_release(EventCallback(), (102, 198)))
+        self.assertEqual(["opening.width"], activated)
+
     def test_axis_constraint_resolves_pointer_ray_for_scalar_edit(self):
         source = {"height": 20.0}
         operation = BIMEditOperation(
@@ -843,7 +909,22 @@ class TestArchRepresentation(unittest.TestCase):
     def test_hosted_opening_exposes_semantic_plan_geometry_and_handles(self):
         document = FreeCAD.newDocument("ContextualOpeningRepresentationTest")
         self.addCleanup(FreeCAD.closeDocument, document.Name)
-        wall = Arch.makeWall(length=3000, width=200, height=3000)
+        wall_type = Arch.makeWallType("Contextual Exterior Wall")
+        wall_type.Width = 200
+        wall_type.PlanHatch = "Diagonal"
+        wall_type.PlanHatchSpacing = 100
+        wall_type.PlanHatchAngle = 45
+        wall = Arch.makeWall(
+            length=3000, width=200, height=3000, wall_type=wall_type
+        )
+        wall.Placement.Base = FreeCAD.Vector(1500, 0, 0)
+        adjoining_wall = Arch.makeWall(
+            length=2000, width=200, height=3000, wall_type=wall_type
+        )
+        adjoining_wall.Placement = FreeCAD.Placement(
+            FreeCAD.Vector(3000, -1000, 0),
+            FreeCAD.Rotation(FreeCAD.Vector(0, 0, 1), -90),
+        )
         base = Draft.make_rectangle(900, 2100)
         base.Placement.Rotation = FreeCAD.Rotation(FreeCAD.Vector(1, 0, 0), 90)
         opening = Arch.makeWindow(baseobj=base, name="ContextualOpening")
@@ -851,6 +932,9 @@ class TestArchRepresentation(unittest.TestCase):
         opening.Height = 2100
         Arch.addComponents(opening, wall)
         document.recompute()
+        joint = Arch.makeWallJoint(wall, adjoining_wall, "Miter")
+        document.recompute()
+        self.assertEqual("OK", joint.Status, joint.StatusMessage)
 
         # A cold wall-representation cache must resolve hosted openings from
         # the wall recipe already in progress. Asking the opening to query the
@@ -941,6 +1025,20 @@ class TestArchRepresentation(unittest.TestCase):
             if entry.representation.source is wall
         )
         committed_wall = wall.Proxy.getRepresentation(wall, representation.request)
+        self.assertTrue(
+            any(mapping.role == "PlanHatch" for mapping in preview_wall.source_mappings)
+        )
+        self.assertTrue(preview_wall.analytic_model.recipe.trim_planes)
+        self.assertEqual(
+            tuple(
+                (trim.end_name, trim.extension)
+                for trim in committed_wall.analytic_model.recipe.trim_planes
+            ),
+            tuple(
+                (trim.end_name, trim.extension)
+                for trim in preview_wall.analytic_model.recipe.trim_planes
+            ),
+        )
         newly_open = proposed_opening.cut(current_opening)
         self.assertGreater(newly_open.Area, 1.0)
         newly_open_point = newly_open.CenterOfMass
