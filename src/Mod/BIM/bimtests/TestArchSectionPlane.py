@@ -190,6 +190,35 @@ class TestArchSectionPlane(TestArchBase.TestArchBase):
         self.assertIs(box, object_cut_shapes[0][0])
         self.assertEqual(1, len(object_cut_shapes[0][1]))
 
+    def testLegacyRendererCachesStructuredProjectionByRequiredDetail(self):
+        """Legacy cache keys must include hidden and grouped-cut requirements."""
+
+        box = self._makeBox(length=1000, width=1000, height=1000)
+        section_plane = Arch.makeSectionPlane([box])
+        section_plane.Placement = App.Placement(
+            App.Vector(500, 0, 0), App.Rotation(App.Vector(0, 1, 0), 90)
+        )
+        self.document.recompute()
+
+        ArchSectionPlane.getSVG(section_plane, showHidden=False, showFill=False)
+        initial = section_plane.Proxy.legacy_shape_cache
+        self.assertFalse(initial.include_hidden)
+        self.assertFalse(initial.group_cut_shapes)
+
+        ArchSectionPlane.getSVG(section_plane, showHidden=True, showFill=True)
+        detailed = section_plane.Proxy.legacy_shape_cache
+        self.assertIsNot(initial, detailed)
+        self.assertTrue(detailed.include_hidden)
+        self.assertTrue(detailed.group_cut_shapes)
+        self.assertIsInstance(
+            detailed.projection,
+            ArchSectionProjection.ProjectedViewGeometry,
+        )
+        self.assertIsInstance(
+            section_plane.Proxy.legacy_svg_cache,
+            ArchSectionPlane._LegacySvgCache,
+        )
+
     def testElevationProjectionProducesMappedPlanarLines(self):
         """Elevation projection is 2D while retaining the BIM source."""
 
@@ -319,7 +348,7 @@ class TestArchSectionPlane(TestArchBase.TestArchBase):
         self.document.recompute()
         calls = []
         original_project = techdraw_renderer.project_representation_to_svg
-        original_cut_shapes = ArchSectionPlane.getCutShapes
+        original_legacy_projection = ArchSectionProjection.project_shapes
 
         def capture_project(
             representation, direction, collection="projected_geometry", **styles
@@ -329,18 +358,18 @@ class TestArchSectionPlane(TestArchBase.TestArchBase):
                 representation, direction, collection=collection, **styles
             )
 
-        def fail_legacy_cut_shapes(*args, **kwargs):
+        def fail_legacy_projection(*args, **kwargs):
             raise AssertionError("semantic TechDraw must not build legacy cut shapes")
 
         techdraw_renderer.project_representation_to_svg = capture_project
-        ArchSectionPlane.getCutShapes = fail_legacy_cut_shapes
+        ArchSectionProjection.project_shapes = fail_legacy_projection
         try:
             svg = ArchSectionPlane.getSVG(
                 section_plane, techdraw=True, renderMode="Wireframe"
             )
         finally:
             techdraw_renderer.project_representation_to_svg = original_project
-            ArchSectionPlane.getCutShapes = original_cut_shapes
+            ArchSectionProjection.project_shapes = original_legacy_projection
 
         self.assertTrue(svg)
         self.assertIn("cut_geometry", calls)
@@ -354,14 +383,14 @@ class TestArchSectionPlane(TestArchBase.TestArchBase):
             App.Vector(1500, 0, 0), App.Rotation(App.Vector(0, 1, 0), 90)
         )
         self.document.recompute()
-        original_cut_shapes = ArchSectionPlane.getCutShapes
+        original_legacy_projection = ArchSectionProjection.project_shapes
 
-        def fail_legacy_cut_shapes(*args, **kwargs):
+        def fail_legacy_projection(*args, **kwargs):
             raise AssertionError("semantic cut fill must not build legacy cut shapes")
 
-        section_plane.Proxy.svgcache = None
-        section_plane.Proxy.shapecache = None
-        ArchSectionPlane.getCutShapes = fail_legacy_cut_shapes
+        section_plane.Proxy.legacy_svg_cache = None
+        section_plane.Proxy.legacy_shape_cache = None
+        ArchSectionProjection.project_shapes = fail_legacy_projection
         try:
             svg = ArchSectionPlane.getSVG(
                 section_plane,
@@ -371,11 +400,11 @@ class TestArchSectionPlane(TestArchBase.TestArchBase):
                 fillColor=(0.25, 0.5, 0.75),
             )
         finally:
-            ArchSectionPlane.getCutShapes = original_cut_shapes
+            ArchSectionProjection.project_shapes = original_legacy_projection
 
         self.assertIn("fill:#3f7fbf", svg.casefold())
-        self.assertIsNone(section_plane.Proxy.svgcache)
-        self.assertIsNone(section_plane.Proxy.shapecache)
+        self.assertIsNone(section_plane.Proxy.legacy_svg_cache)
+        self.assertIsNone(section_plane.Proxy.legacy_shape_cache)
 
         material = Arch.makeMaterial(name="HatchedWallMaterial")
         import Materials

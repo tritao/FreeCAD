@@ -36,6 +36,7 @@ import tempfile
 import FreeCADGui
 import time
 import uuid
+from dataclasses import dataclass
 
 import FreeCAD
 import ArchCommands
@@ -65,6 +66,42 @@ else:
     # \endcond
 
 ISRENDERING = False  # flag to prevent concurrent runs of the coin renderer
+
+
+@dataclass(frozen=True)
+class _LegacySvgCache:
+    """Named cache key and fragment for the compatibility SVG renderer."""
+
+    fragment: str
+    render_mode: object
+    show_hidden: bool
+    show_fill: bool
+    fill_spaces: bool
+    join_arch: bool
+    all_on: bool
+    objects: frozenset
+    frame: object
+    fill_color: tuple
+
+    def matches(self, **values):
+        return all(getattr(self, name) == value for name, value in values.items())
+
+
+@dataclass(frozen=True)
+class _LegacyShapeCache:
+    """Structured section projection retained by the compatibility renderer."""
+
+    projection: object
+    only_solids: bool
+    clip: bool
+    join_arch: bool
+    include_hidden: bool
+    group_cut_shapes: bool
+    objects: frozenset
+    frame: object
+
+    def matches(self, **values):
+        return all(getattr(self, name) == value for name, value in values.items())
 
 
 def getSectionPlaneLocalBoundBox(objects, placement):
@@ -211,7 +248,7 @@ def isOriented(obj, plane):
     return False
 
 
-def update_svg_cache(
+def _legacy_svg_cache_fragment(
     source,
     renderMode,
     showHidden,
@@ -226,35 +263,29 @@ def update_svg_cache(
     """
     Returns None or cached SVG, clears shape cache if required
     """
-    svgcache = None
-    if hasattr(source, "Proxy"):
-        if hasattr(source.Proxy, "svgcache") and source.Proxy.svgcache:
-            # TODO check array bounds
-            svgcache = source.Proxy.svgcache[0]
-            # empty caches if we want to force-recalculate for certain properties
-            if (
-                len(source.Proxy.svgcache) < 10
-                or source.Proxy.svgcache[8] != frame
-                or source.Proxy.svgcache[9] != fillColor
-                or source.Proxy.svgcache[1] != renderMode
-                or source.Proxy.svgcache[2] != showHidden
-                or source.Proxy.svgcache[3] != showFill
-                or source.Proxy.svgcache[4] != fillSpaces
-                or source.Proxy.svgcache[5] != joinArch
-                or source.Proxy.svgcache[6] != allOn
-                or source.Proxy.svgcache[7] != set(objs)
-            ):
-                svgcache = None
-            if (
-                len(source.Proxy.svgcache) < 10
-                or source.Proxy.svgcache[8] != frame
-                or source.Proxy.svgcache[4] != fillSpaces
-                or source.Proxy.svgcache[5] != joinArch
-                or source.Proxy.svgcache[6] != allOn
-                or source.Proxy.svgcache[7] != set(objs)
-            ):
-                source.Proxy.shapecache = None
-    return svgcache
+    if not hasattr(source, "Proxy"):
+        return None
+    cache = getattr(source.Proxy, "legacy_svg_cache", None)
+    if not isinstance(cache, _LegacySvgCache):
+        return None
+    geometry_key = {
+        "frame": frame,
+        "fill_spaces": fillSpaces,
+        "join_arch": joinArch,
+        "all_on": allOn,
+        "objects": frozenset(objs),
+    }
+    if not cache.matches(**geometry_key):
+        source.Proxy.legacy_shape_cache = None
+    if not cache.matches(
+        **geometry_key,
+        fill_color=tuple(fillColor),
+        render_mode=renderMode,
+        show_hidden=showHidden,
+        show_fill=showFill,
+    ):
+        return None
+    return cache.fragment
 
 
 def getSVG(
@@ -490,7 +521,7 @@ def render_drawing_context(
     frame = FreeCAD.Placement(cutplane.Placement)
     svgcache = None
     if not contextual_representations:
-        svgcache = update_svg_cache(
+        svgcache = _legacy_svg_cache_fragment(
             source,
             renderMode,
             showHidden,
@@ -560,37 +591,41 @@ def render_drawing_context(
         # Wireframe (0) mode
 
         if not contextual_representations:
-            if (
-                hasattr(source, "Proxy")
-                and hasattr(source.Proxy, "shapecache")
-                and source.Proxy.shapecache
+            shape_cache = getattr(source.Proxy, "legacy_shape_cache", None)
+            shape_key = {
+                "only_solids": onlySolids,
+                "clip": clip,
+                "join_arch": joinArch,
+                "include_hidden": showHidden,
+                "group_cut_shapes": showFill,
+                "objects": frozenset(objs),
+                "frame": frame,
+            }
+            if isinstance(shape_cache, _LegacyShapeCache) and shape_cache.matches(
+                **shape_key
             ):
-                vshapes = source.Proxy.shapecache[0]
-                hshapes = source.Proxy.shapecache[1]
-                sshapes = source.Proxy.shapecache[2]
-                cutface = source.Proxy.shapecache[3]
-                # cutvolume = source.Proxy.shapecache[4] # Unused
-                # invcutvolume = source.Proxy.shapecache[5] # Unused
-                objectSshapes = source.Proxy.shapecache[6]
+                projection = shape_cache.projection
             else:
-                if showFill:
-                    vshapes, hshapes, sshapes, cutface, cutvolume, invcutvolume, objectSshapes = (
-                        getCutShapes(objs, cutplane, onlySolids, clip, joinArch, showHidden, True)
-                    )
-                else:
-                    vshapes, hshapes, sshapes, cutface, cutvolume, invcutvolume = getCutShapes(
-                        objs, cutplane, onlySolids, clip, joinArch, showHidden
-                    )
-                    objectSshapes = []
-                source.Proxy.shapecache = [
-                    vshapes,
-                    hshapes,
-                    sshapes,
-                    cutface,
-                    cutvolume,
-                    invcutvolume,
-                    objectSshapes,
-                ]
+                import ArchSectionProjection
+
+                projection = ArchSectionProjection.project_shapes(
+                    objs,
+                    cutplane,
+                    only_solids=onlySolids,
+                    clip=clip,
+                    join_arch=joinArch,
+                    include_hidden=showHidden,
+                    group_cut_shapes_by_object=showFill,
+                )
+                source.Proxy.legacy_shape_cache = _LegacyShapeCache(
+                    projection=projection,
+                    **shape_key,
+                )
+            vshapes = projection.visible_shapes
+            hshapes = projection.hidden_shapes
+            sshapes = projection.cut_shapes
+            cutface = projection.cut_face
+            objectSshapes = projection.object_cut_shapes
 
         if should_update_svg_cache:
             svgcache = ""
@@ -686,18 +721,18 @@ def render_drawing_context(
                     )
     if should_update_svg_cache and not contextual_representations:
         if hasattr(source, "Proxy"):
-            source.Proxy.svgcache = [
-                svgcache,
-                renderMode,
-                showHidden,
-                showFill,
-                fillSpaces,
-                joinArch,
-                allOn,
-                set(objs),
-                frame,
-                fillColor,
-            ]
+            source.Proxy.legacy_svg_cache = _LegacySvgCache(
+                fragment=svgcache,
+                render_mode=renderMode,
+                show_hidden=showHidden,
+                show_fill=showFill,
+                fill_spaces=fillSpaces,
+                join_arch=joinArch,
+                all_on=allOn,
+                objects=frozenset(objs),
+                frame=frame,
+                fill_color=tuple(fillColor),
+            )
 
     svgcache = svgcache.replace("SVGLINECOLOR", svgLineColor)
     svgcache = svgcache.replace("SVGLINECAP", "square")
@@ -823,9 +858,18 @@ def getDXF(obj):
             not in ["BezCurve", "BSpline", "Wire", "Annotation", "Dimension", "Space"]
         )
     ]
-    vshapes, hshapes, sshapes, cutface, cutvolume, invcutvolume = getCutShapes(
-        objs, cutplane, onlySolids, clip, False, showHidden
+    import ArchSectionProjection
+
+    projection = ArchSectionProjection.project_shapes(
+        objs,
+        cutplane,
+        only_solids=onlySolids,
+        clip=clip,
+        include_hidden=showHidden,
     )
+    vshapes = projection.visible_shapes
+    hshapes = projection.hidden_shapes
+    sshapes = projection.cut_shapes
     if vshapes:
         result.append(TechDraw.projectToDXF(Part.makeCompound(vshapes), direction))
     if sshapes:
@@ -1243,8 +1287,8 @@ class _SectionPlane:
         if p.normalAt(0, 0).getAngle(target_normal) > math.pi / 2:
             p.reverse()
         obj.Shape = p
-        self.svgcache = None
-        self.shapecache = None
+        self.legacy_svg_cache = None
+        self.legacy_shape_cache = None
 
     def getNormal(self, obj):
 

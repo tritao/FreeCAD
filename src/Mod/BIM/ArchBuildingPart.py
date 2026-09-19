@@ -427,8 +427,8 @@ class BuildingPart(ArchIFC.IfcProduct):
 
         # clean svg cache if needed
         if prop in ["Placement", "Group"]:
-            self.svgcache = None
-            self.shapecache = None
+            self.legacy_svg_cache = None
+            self.legacy_shape_cache = None
 
         if (prop == "Height" or prop == "HeightPropagate") and obj.Height.Value:
             self.touchChildren(obj)
