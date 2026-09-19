@@ -139,8 +139,8 @@ class BIMNavigatorQtModel(QtCore.QAbstractItemModel):
                 placement.drawing_view,
                 "sheet-placement",
                 label="{}  {}".format(
-                    getattr(placement.drawing_view, "BIMViewNumber", ""),
-                    getattr(placement.drawing_view, "BIMViewTitle", "")
+                    getattr(placement.drawing_view, "ViewNumber", ""),
+                    getattr(placement.drawing_view, "ViewTitle", "")
                     or placement.definition.Label,
                 ).strip(),
                 value=str(placement.definition.Purpose),

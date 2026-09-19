@@ -1609,7 +1609,7 @@ class TestBimViewsServiceGui(TestArchBaseGui):
         with patch.object(ArchSectionPlane, "getSVG", return_value=""):
             drawing_view.Scale = 0.01
             self.document.recompute()
-            self.assertEqual("1", drawing_view.BIMViewNumber)
+            self.assertEqual("1", drawing_view.ViewNumber)
             self.assertEqual(["1  Ground Floor", "1:100"], annotation.Text)
             self.assertIs(drawing_view, annotation.Owner)
             self.assertIn(annotation, page.Views)
@@ -1619,13 +1619,13 @@ class TestBimViewsServiceGui(TestArchBaseGui):
             self.document.recompute()
             self.assertEqual(["1  Level 00", "1:50"], annotation.Text)
 
-            drawing_view.BIMViewTitle = "Entrance Plan"
+            drawing_view.ViewTitle = "Entrance Plan"
             drawing_view.X = 90
             drawing_view.Y = 70
             self.document.recompute()
             self.assertEqual(["1  Entrance Plan", "1:50"], annotation.Text)
             self.assertEqual(90, annotation.X.Value)
-            self.assertEqual(70 - annotation.TitleOffset.Value, annotation.Y.Value)
+            self.assertEqual(70 + annotation.OwnerOffsetY.Value, annotation.Y.Value)
 
     def test_sheet_view_numbers_are_unique_and_fill_gaps(self):
         page = BIMSheetService(self.document).create_sheet(
@@ -1644,6 +1644,33 @@ class TestBimViewsServiceGui(TestArchBaseGui):
             title_service.create(page, second, "2")
         self.assertEqual("1", title_service.next_number(page))
         self.assertEqual("1:20", format_scale(0.05))
+
+    def test_techdraw_title_binding_is_generic(self):
+        owner = self.document.addObject("TechDraw::DrawViewSymbol", "GenericView")
+        owner.ViewNumber = "A"
+        owner.ViewTitle = "Detail"
+        owner.Scale = 0.25
+        owner.X = 40
+        owner.Y = 30
+        annotation = self.document.addObject(
+            "TechDraw::DrawViewAnnotation", "GenericViewTitle"
+        )
+        annotation.Owner = owner
+        annotation.TextTemplate = ["{ViewNumber}  {ViewTitle|Label}", "{Scale}"]
+        annotation.FollowOwnerPosition = True
+        annotation.OwnerOffsetX = 2
+        annotation.OwnerOffsetY = -5
+
+        self.document.recompute()
+
+        self.assertEqual(["A  Detail", "1:4"], annotation.Text)
+        self.assertEqual(42, annotation.X.Value)
+        self.assertEqual(25, annotation.Y.Value)
+
+        owner.ViewTitle = ""
+        owner.Label = "Fallback"
+        self.document.recompute()
+        self.assertEqual(["A  Fallback", "1:4"], annotation.Text)
 
     def test_saved_view_visibility_is_applied_within_sheet_source_scope(self):
         normally_visible = self.document.addObject("PartDesign::Feature", "Visible")
@@ -1801,7 +1828,13 @@ class TestBimViewsServiceGui(TestArchBaseGui):
             drawing_view.ShowFill = index == 2
 
         self.document.recompute()
-        for index, drawing_view in enumerate(page.Views, start=1):
+        drawing_views = [
+            view
+            for view in page.Views
+            if view.isDerivedFrom("TechDraw::DrawViewArch")
+        ]
+        self.assertEqual(3, len(drawing_views))
+        for index, drawing_view in enumerate(drawing_views, start=1):
             self.assertIn("<svg", drawing_view.Symbol)
             self.assertGreater(len(drawing_view.Symbol), 100)
             self.assertAlmostEqual(0.01 * index, drawing_view.Scale)

@@ -53,6 +53,10 @@ public:
     App::PropertyEnumeration  TextStyle; // Plain, Bold, Italic, Bold-Italic
     App::PropertyFloat        MaxWidth;
     App::PropertyLink         Owner;
+    App::PropertyStringList   TextTemplate;
+    App::PropertyBool         FollowOwnerPosition;
+    App::PropertyDistance     OwnerOffsetX;
+    App::PropertyDistance     OwnerOffsetY;
 
     QRectF getRect() const override;
 

@@ -105,6 +105,10 @@ DrawView::DrawView():
     Scale.setConstraints(&scaleRange);
 
     ADD_PROPERTY_TYPE(Caption, (""), group, App::Prop_Output, "Short text about the view");
+    ADD_PROPERTY_TYPE(ViewNumber, (""), group, App::Prop_None,
+                      "Identifier shown with the view on a page");
+    ADD_PROPERTY_TYPE(ViewTitle, (""), group, App::Prop_None,
+                      "Optional title used when identifying the view on a page");
 
     setScaleAttribute();
 }
@@ -220,6 +224,8 @@ void DrawView::onChanged(const App::Property* prop)
         handleXYLock();
         requestPaint();         //change lock icon
     } else if ((prop == &Caption) ||
+        (prop == &ViewNumber) ||
+        (prop == &ViewTitle) ||
         (prop == &Label)) {
         requestPaint();
     } else if ( prop == &X ||
@@ -269,6 +275,8 @@ short DrawView::mustExecute() const
 {
     if (!isRestoring()) {
         if (Scale.isTouched() ||
+            ViewNumber.isTouched() ||
+            ViewTitle.isTouched() ||
             ScaleType.isTouched()) {
             return true;
         }

@@ -63,6 +63,8 @@ public:
     App::PropertyEnumeration ScaleType;
     App::PropertyAngle Rotation;
     App::PropertyString Caption;
+    App::PropertyString ViewNumber;
+    App::PropertyString ViewTitle;
 
     /** @name methods override Feature */
     //@{

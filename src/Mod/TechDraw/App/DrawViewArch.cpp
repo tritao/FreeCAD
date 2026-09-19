@@ -56,10 +56,6 @@ DrawViewArch::DrawViewArch()
     ADD_PROPERTY_TYPE(BIMViewDefinition, (nullptr), group, App::Prop_None,
                       "Saved BIM view that defines this drawing view's context");
     BIMViewDefinition.setScope(App::LinkScope::Global);
-    ADD_PROPERTY_TYPE(BIMViewNumber, (""), group, App::Prop_None,
-                      "View number, unique within the containing sheet");
-    ADD_PROPERTY_TYPE(BIMViewTitle, (""), group, App::Prop_None,
-                      "Optional title override; empty uses the saved view label");
     ADD_PROPERTY_TYPE(AllOn ,(false), group, App::Prop_None, "If hidden objects must be shown or not");
     RenderMode.setEnums(RenderModeEnums);
     ADD_PROPERTY_TYPE(RenderMode, ((long)0), group, App::Prop_None, "The render mode to use");
@@ -81,8 +77,6 @@ short DrawViewArch::mustExecute() const
         if (
             Source.isTouched() ||
             BIMViewDefinition.isTouched() ||
-            BIMViewNumber.isTouched() ||
-            BIMViewTitle.isTouched() ||
             AllOn.isTouched() ||
             RenderMode.isTouched() ||
             ShowHidden.isTouched() ||
