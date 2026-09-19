@@ -180,7 +180,12 @@ void DrawViewArch::onChanged(const App::Property* prop)
     if (!syncingCutFill) {
         syncingCutFill = true;
         if (prop == &ShowFill) {
-            CutFillMode.setValue(ShowFill.getValue() ? "Solid" : "None");
+            if (!ShowFill.getValue()) {
+                CutFillMode.setValue("None");
+            }
+            else if (CutFillMode.getValue() == 0) {
+                CutFillMode.setValue("Solid");
+            }
         }
         else if (prop == &CutFillMode) {
             ShowFill.setValue(CutFillMode.getValue() != 0);

@@ -1757,6 +1757,8 @@ class TestBimViewsServiceGui(TestArchBaseGui):
         self.assertEqual("None", drawing_view.CutFillMode)
         drawing_view.CutFillMode = "Material"
         self.assertTrue(drawing_view.ShowFill)
+        drawing_view.ShowFill = True
+        self.assertEqual("Material", drawing_view.CutFillMode)
 
     def test_sheet_cut_fill_defaults_follow_view_purpose(self):
         source = self.document.addObject("App::FeaturePython", "CutFillSource")
