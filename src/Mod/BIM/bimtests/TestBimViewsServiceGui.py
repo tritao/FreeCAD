@@ -1117,6 +1117,55 @@ class TestBimViewsServiceGui(TestArchBaseGui):
 
         self.assertEqual([normally_visible, forced_visible], visible)
 
+    def test_saved_view_changes_recompute_linked_sheet_view(self):
+        import Arch
+        import ArchSectionPlane
+
+        wall = self.document.addObject("PartDesign::Feature", "RecomputeWall")
+        wall.Shape = Part.makeBox(1000, 200, 1000)
+        original = Arch.makeSectionPlane([wall], name="OriginalSection")
+        replacement = Arch.makeSectionPlane([wall], name="ReplacementSection")
+        service = BIMViewService(self.document, view=_RecordingView([]))
+        definition = service.create_view(
+            "Recomputing Section", "Section", original, capture=False
+        )
+        page = self.document.addObject("TechDraw::DrawPage", "RecomputePage")
+        template = self.document.addObject(
+            "TechDraw::DrawSVGTemplate", "RecomputeTemplate"
+        )
+        template.Template = (
+            FreeCAD.getResourceDir()
+            + "Mod/TechDraw/Templates/Default_Template_A4_Landscape.svg"
+        )
+        page.Template = template
+        drawing_view = service.place_on_sheet(definition, page)
+
+        with patch.object(ArchSectionPlane, "getSVG", return_value="") as get_svg:
+            self.document.recompute()
+            get_svg.reset_mock()
+            definition.BIMContextSource = replacement
+            self.document.recompute()
+            get_svg.assert_called_once()
+            args, kwargs = get_svg.call_args
+            self.assertIs(replacement, args[0])
+            self.assertIs(definition, kwargs["viewDefinition"])
+
+            get_svg.reset_mock()
+            definition.ReferenceFrame = FreeCAD.Placement(
+                FreeCAD.Vector(25, 50, 75), FreeCAD.Rotation()
+            )
+            self.document.recompute()
+            get_svg.assert_called_once()
+
+            get_svg.reset_mock()
+            definition.ForcedHidden = [wall]
+            self.document.recompute()
+            get_svg.assert_called_once()
+
+        self.assertIs(original, drawing_view.Source)
+        request = service.request_for(definition)
+        self.assertEqual(definition.ReferenceFrame, request.reference_frame)
+
     def test_sheet_view_link_and_instance_style_survive_save_reopen(self):
         source = self.document.addObject("App::FeaturePython", "PersistentSource")
         source.addProperty("App::PropertyPlacement", "Placement")
