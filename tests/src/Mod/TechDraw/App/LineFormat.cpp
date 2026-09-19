@@ -2,8 +2,12 @@
 
 #include <QColor>
 #include <QtCore/Qt>
+#include <BRepBuilderAPI_MakePolygon.hxx>
+#include <gp_Pnt.hxx>
+#include <TopoDS_Wire.hxx>
 
 #include "Mod/TechDraw/App/LineFormat.h"
+#include "Mod/TechDraw/App/ProjectionAlgos.h"
 #include "src/App/InitApplication.h"
 
 class TestLineFormat: public ::testing::Test
@@ -69,4 +73,22 @@ TEST_F(TestLineFormat, setQColorPreservesAlphaValue)
     EXPECT_EQ(roundTripped.green(), 34);
     EXPECT_EQ(roundTripped.blue(), 56);
     EXPECT_EQ(roundTripped.alpha(), 78);
+}
+
+TEST(ProjectionAlgos, joinsConnectedLinearEdgesInOnePath)
+{
+    BRepBuilderAPI_MakePolygon polygon;
+    polygon.Add(gp_Pnt(0, 0, 0));
+    polygon.Add(gp_Pnt(100, 0, 0));
+    polygon.Add(gp_Pnt(100, 100, 0));
+
+    const auto svg = TechDraw::ProjectionAlgos::getSVGPath(
+        polygon.Wire(),
+        Base::Vector3d(0, 0, 1),
+        {{"stroke-linejoin", "miter"}});
+
+    EXPECT_EQ(svg.find("<path"), svg.rfind("<path"));
+    EXPECT_NE(svg.find("L 100 0"), std::string::npos);
+    EXPECT_NE(svg.find("L 100 100"), std::string::npos);
+    EXPECT_NE(svg.find("stroke-linejoin=\"miter\""), std::string::npos);
 }

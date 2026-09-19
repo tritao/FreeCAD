@@ -88,12 +88,15 @@ def render_representations_to_svg(
     """Render a complete semantic BIM representation set for TechDraw."""
     style = {
         "stroke": "SVGLINECOLOR",
-        "stroke-linecap": "SVGLINECAP",
+        # The native semantic path exporter preserves connected corners.
+        "stroke-linecap": "butt",
+        "stroke-linejoin": "miter",
         "stroke-width": "SVGLINEWIDTH",
     }
     cut_style = {
         "stroke": "SVGLINECOLOR",
-        "stroke-linecap": "SVGLINECAP",
+        "stroke-linecap": "butt",
+        "stroke-linejoin": "miter",
         "stroke-width": "SVGCUTLINEWIDTH",
     }
     elevation_role_styles = {}
@@ -132,36 +135,35 @@ def render_representations_to_svg(
                 drawing_scale=drawing_scale,
             )
         )
-    for representation in representations:
-        if representation.projected_geometry:
-            fragments.append(
-                project_representation_to_svg(
-                    representation,
-                    direction,
-                    collection="projected_geometry",
-                    hStyle=visible_style,
-                    h0Style=visible_style,
-                    h1Style=visible_style,
-                    vStyle=visible_style,
-                    v0Style=visible_style,
-                    v1Style=visible_style,
-                    role_styles=elevation_role_styles,
-                )
+    if any(representation.projected_geometry for representation in representations):
+        fragments.append(
+            project_representations_to_svg(
+                representations,
+                direction,
+                collection="projected_geometry",
+                hStyle=visible_style,
+                h0Style=visible_style,
+                h1Style=visible_style,
+                vStyle=visible_style,
+                v0Style=visible_style,
+                v1Style=visible_style,
+                role_styles=elevation_role_styles,
             )
-        if representation.cut_geometry:
-            fragments.append(
-                project_representation_to_svg(
-                    representation,
-                    direction,
-                    collection="cut_geometry",
-                    hStyle=cut_style,
-                    h0Style=cut_style,
-                    h1Style=cut_style,
-                    vStyle=cut_style,
-                    v0Style=cut_style,
-                    v1Style=cut_style,
-                )
+        )
+    if any(representation.cut_geometry for representation in representations):
+        fragments.append(
+            project_representations_to_svg(
+                representations,
+                direction,
+                collection="cut_geometry",
+                hStyle=cut_style,
+                h0Style=cut_style,
+                h1Style=cut_style,
+                vStyle=cut_style,
+                v0Style=cut_style,
+                v1Style=cut_style,
             )
+        )
     return "".join(fragments)
 
 
@@ -204,6 +206,54 @@ def _geometry_by_role(representation, collection):
     }
 
 
+def _project_shape_to_svg(shape, direction, styles):
+    """Use TechDraw's connected-path exporter for linear semantic geometry."""
+    import TechDraw
+
+    path_style = styles.get("hStyle") or styles.get("vStyle") or {}
+    path_svg = TechDraw.projectToSVGPath(shape, direction, path_style)
+    if path_svg:
+        return path_svg
+    return TechDraw.projectToSVG(shape, direction, **styles)
+
+
+def _project_entries_to_svg(entries, direction, role_styles, styles):
+    if not role_styles:
+        shape = _shape_from_geometry([geometry for _, geometry in entries])
+        return "" if shape is None else _project_shape_to_svg(shape, direction, styles)
+
+    grouped = {}
+    for representation, geometry in entries:
+        mapping = representation.mapping_for(geometry)
+        grouped.setdefault(getattr(mapping, "role", None), []).append(geometry)
+
+    fragments = []
+    for role, geometries in grouped.items():
+        shape = _shape_from_geometry(geometries)
+        if shape is None:
+            continue
+        role_style = dict(styles)
+        role_style.update(role_styles.get(role, {}))
+        fragments.append(_project_shape_to_svg(shape, direction, role_style))
+    return "".join(fragments)
+
+
+def project_representations_to_svg(
+    representations,
+    direction,
+    collection="projected_geometry",
+    role_styles=None,
+    **styles,
+):
+    """Project one semantic collection across all representations as one graph."""
+    entries = [
+        (representation, geometry)
+        for representation in representations
+        for geometry in getattr(representation, collection, ())
+    ]
+    return _project_entries_to_svg(entries, direction, role_styles, styles)
+
+
 def project_representation_to_svg(
     representation,
     direction,
@@ -217,18 +267,13 @@ def project_representation_to_svg(
     ``snap_geometry``.  The latter is useful for documentation diagnostics,
     but normal drawings should use projected or cut geometry.
     """
-    import TechDraw
-
-    if not role_styles:
-        shape = _geometry(representation, collection)
-        return "" if shape is None else TechDraw.projectToSVG(shape, direction, **styles)
-
-    fragments = []
-    for role, shape in _geometry_by_role(representation, collection).items():
-        role_style = dict(styles)
-        role_style.update(role_styles.get(role, {}))
-        fragments.append(TechDraw.projectToSVG(shape, direction, **role_style))
-    return "".join(fragments)
+    return project_representations_to_svg(
+        (representation,),
+        direction,
+        collection=collection,
+        role_styles=role_styles,
+        **styles,
+    )
 
 
 def fill_representations_to_svg(representations, direction, style, drawing_scale=1.0):

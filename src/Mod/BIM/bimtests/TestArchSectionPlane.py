@@ -347,28 +347,28 @@ class TestArchSectionPlane(TestArchBase.TestArchBase):
         )
         self.document.recompute()
         calls = []
-        original_project = techdraw_renderer.project_representation_to_svg
+        original_project = techdraw_renderer.project_representations_to_svg
         original_legacy_projection = ArchSectionProjection.project_shapes
 
         def capture_project(
-            representation, direction, collection="projected_geometry", **styles
+            representations, direction, collection="projected_geometry", **styles
         ):
             calls.append(collection)
             return original_project(
-                representation, direction, collection=collection, **styles
+                representations, direction, collection=collection, **styles
             )
 
         def fail_legacy_projection(*args, **kwargs):
             raise AssertionError("semantic TechDraw must not build legacy cut shapes")
 
-        techdraw_renderer.project_representation_to_svg = capture_project
+        techdraw_renderer.project_representations_to_svg = capture_project
         ArchSectionProjection.project_shapes = fail_legacy_projection
         try:
             svg = ArchSectionPlane.getSVG(
                 section_plane, techdraw=True, renderMode="Wireframe"
             )
         finally:
-            techdraw_renderer.project_representation_to_svg = original_project
+            techdraw_renderer.project_representations_to_svg = original_project
             ArchSectionProjection.project_shapes = original_legacy_projection
 
         self.assertTrue(svg)
@@ -484,19 +484,19 @@ class TestArchSectionPlane(TestArchBase.TestArchBase):
         self.document.recompute()
 
         calls = []
-        original_project = techdraw_renderer.project_representation_to_svg
+        original_project = techdraw_renderer.project_representations_to_svg
 
         def capture_project(
-            representation, direction, collection="projected_geometry", **styles
+            representations, direction, collection="projected_geometry", **styles
         ):
             calls.append((collection, styles))
             return "<g/>"
 
-        techdraw_renderer.project_representation_to_svg = capture_project
+        techdraw_renderer.project_representations_to_svg = capture_project
         try:
             ArchSectionPlane.getSVG(elevation, techdraw=True, renderMode="Wireframe")
         finally:
-            techdraw_renderer.project_representation_to_svg = original_project
+            techdraw_renderer.project_representations_to_svg = original_project
 
         projected = [styles for collection, styles in calls if collection == "projected_geometry"]
         self.assertTrue(projected)
@@ -522,6 +522,97 @@ class TestArchSectionPlane(TestArchBase.TestArchBase):
         self.assertEqual(1, len(geometry.Edges))
         self.assertEqual(2, len(geometry.Vertexes))
 
+    def testTechDrawJoinsSemanticPolylineEdgesInOneSvgPath(self):
+        """Connected BIM boundary edges must share an SVG miter join."""
+
+        representation = ArchRepresentation.BIMRepresentation()
+        representation.add_geometry(
+            "projected_geometry",
+            (
+                App.Vector(0, 0, 0),
+                App.Vector(100, 0, 0),
+                App.Vector(100, 100, 0),
+            ),
+            "PlanCutOuterBoundary",
+        )
+
+        svg = techdraw_renderer.project_representation_to_svg(
+            representation,
+            App.Vector(0, 0, 1),
+            hStyle={"stroke-linejoin": "miter"},
+        )
+
+        self.assertEqual(1, svg.count("<path"))
+        self.assertIn("L 100 0", svg)
+        self.assertIn("L 100 100", svg)
+
+    def testTechDrawJoinsEdgesAcrossSemanticRepresentations(self):
+        """The semantic edge graph is joined before SVG serialization."""
+
+        first = ArchRepresentation.BIMRepresentation()
+        first.add_geometry(
+            "projected_geometry",
+            (App.Vector(0, 0, 0), App.Vector(100, 0, 0)),
+            "PlanCutOuterBoundary",
+        )
+        second = ArchRepresentation.BIMRepresentation()
+        second.add_geometry(
+            "projected_geometry",
+            (App.Vector(100, 0, 0), App.Vector(100, 100, 0)),
+            "PlanCutOuterBoundary",
+        )
+
+        svg = techdraw_renderer.render_representations_to_svg(
+            (first, second),
+            App.Vector(0, 0, 1),
+            ArchRepresentation.CutSurfaceStyle(),
+            drawing_scale=1.0,
+            line_width=0.25,
+        )
+
+        self.assertEqual(1, svg.count("<path"))
+        self.assertIn("L 100 0", svg)
+        self.assertIn("L 100 100", svg)
+
+    def testTechDrawSemanticLineworkUsesJoinedCornerCaps(self):
+        """Sheet boundaries must not leave square-cap artifacts at corners."""
+
+        representation = ArchRepresentation.BIMRepresentation()
+        representation.add_geometry(
+            "projected_geometry",
+            (
+                App.Vector(0, 0, 0),
+                App.Vector(100, 0, 0),
+                App.Vector(100, 100, 0),
+            ),
+            "PlanCutOuterBoundary",
+        )
+        import TechDraw
+
+        original_project = TechDraw.projectToSVGPath
+        calls = []
+
+        def capture_project(shape, direction, style):
+            calls.append({"hStyle": style})
+            return "<g/>"
+
+        TechDraw.projectToSVGPath = capture_project
+        try:
+            svg = techdraw_renderer.render_representations_to_svg(
+                (representation,),
+                App.Vector(0, 0, 1),
+                ArchRepresentation.CutSurfaceStyle(),
+                drawing_scale=1.0,
+                line_width=0.25,
+            )
+        finally:
+            TechDraw.projectToSVGPath = original_project
+
+        self.assertEqual("<g/>", svg)
+        self.assertEqual(1, len(calls))
+        self.assertEqual("butt", calls[0]["hStyle"]["stroke-linecap"])
+        self.assertEqual("miter", calls[0]["hStyle"]["stroke-linejoin"])
+
     def testTechDrawAppliesStylesByProjectedLineCategory(self):
         representation = ArchRepresentation.BIMRepresentation()
         representation.add_geometry(
@@ -536,14 +627,14 @@ class TestArchSectionPlane(TestArchBase.TestArchBase):
         )
         import TechDraw
 
-        original_project = TechDraw.projectToSVG
+        original_project = TechDraw.projectToSVGPath
         calls = []
 
-        def capture_project(shape, direction, **styles):
-            calls.append(styles)
+        def capture_project(shape, direction, style):
+            calls.append({"hStyle": style})
             return "<g/>"
 
-        TechDraw.projectToSVG = capture_project
+        TechDraw.projectToSVGPath = capture_project
         try:
             svg = techdraw_renderer.project_representation_to_svg(
                 representation,
@@ -556,7 +647,7 @@ class TestArchSectionPlane(TestArchBase.TestArchBase):
                 },
             )
         finally:
-            TechDraw.projectToSVG = original_project
+            TechDraw.projectToSVGPath = original_project
 
         self.assertEqual("<g/><g/>", svg)
         self.assertEqual(2, len(calls))

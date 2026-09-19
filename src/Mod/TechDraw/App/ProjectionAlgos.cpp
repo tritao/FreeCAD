@@ -25,7 +25,12 @@
 //migrated to TechDraw workbench 2022-01-26 by Wandererfan
 
 
+# include <cmath>
+# include <iomanip>
 # include <sstream>
+# include <utility>
+# include <vector>
+# include <BRepAdaptor_Curve.hxx>
 # include <BRepLib.hxx>
 # include <BRepMesh_IncrementalMesh.hxx>
 # include <HLRAlgo_Projector.hxx>
@@ -71,6 +76,153 @@ ProjectionAlgos::ProjectionAlgos(const TopoDS_Shape &Input, const Base::Vector3d
 
 ProjectionAlgos::~ProjectionAlgos()
 {
+}
+
+namespace {
+
+struct ProjectedPoint {
+    double x;
+    double y;
+};
+
+struct LinearSegment {
+    ProjectedPoint start;
+    ProjectedPoint end;
+};
+
+bool samePoint(const ProjectedPoint &first, const ProjectedPoint &second)
+{
+    constexpr double tolerance = 1.0e-7;
+    return std::abs(first.x - second.x) <= tolerance
+        && std::abs(first.y - second.y) <= tolerance;
+}
+
+ProjectedPoint projectPoint(const gp_Pnt &point,
+                            const gp_Dir &xAxis,
+                            const gp_Dir &yAxis)
+{
+    return {
+        point.X() * xAxis.X() + point.Y() * xAxis.Y() + point.Z() * xAxis.Z(),
+        point.X() * yAxis.X() + point.Y() * yAxis.Y() + point.Z() * yAxis.Z(),
+    };
+}
+
+} // namespace
+
+std::string ProjectionAlgos::getSVGPath(const TopoDS_Shape &shape,
+                                        const Base::Vector3d &direction,
+                                        XmlAttributes style)
+{
+    gp_Ax2 projection(gp_Pnt(0, 0, 0),
+                      gp_Dir(direction.x, direction.y, direction.z));
+    const gp_Dir xAxis = projection.XDirection();
+    const gp_Dir yAxis = projection.YDirection();
+
+    std::vector<LinearSegment> segments;
+    for (TopExp_Explorer edges(shape, TopAbs_EDGE); edges.More(); edges.Next()) {
+        const TopoDS_Edge &edge = TopoDS::Edge(edges.Current());
+        BRepAdaptor_Curve curve(edge);
+        if (curve.GetType() != GeomAbs_Line) {
+            // The caller can fall back to the generic HLR exporter for
+            // curves. Never silently approximate them as straight edges.
+            return {};
+        }
+
+        const gp_Pnt start = curve.Value(curve.FirstParameter());
+        const gp_Pnt end = curve.Value(curve.LastParameter());
+        LinearSegment segment{
+            projectPoint(start, xAxis, yAxis),
+            projectPoint(end, xAxis, yAxis),
+        };
+        if (!samePoint(segment.start, segment.end)) {
+            segments.push_back(segment);
+        }
+    }
+    if (segments.empty()) {
+        return {};
+    }
+
+    std::vector<bool> used(segments.size(), false);
+    std::vector<std::vector<ProjectedPoint>> chains;
+    for (std::size_t first = 0; first < segments.size(); ++first) {
+        if (used[first]) {
+            continue;
+        }
+
+        std::vector<ProjectedPoint> chain{
+            segments[first].start,
+            segments[first].end,
+        };
+        used[first] = true;
+
+        while (!samePoint(chain.front(), chain.back())) {
+            bool extended = false;
+            for (std::size_t candidate = 0; candidate < segments.size(); ++candidate) {
+                if (used[candidate]) {
+                    continue;
+                }
+
+                const LinearSegment &segment = segments[candidate];
+                if (samePoint(chain.back(), segment.start)) {
+                    chain.push_back(segment.end);
+                }
+                else if (samePoint(chain.back(), segment.end)) {
+                    chain.push_back(segment.start);
+                }
+                else if (samePoint(chain.front(), segment.end)) {
+                    chain.insert(chain.begin(), segment.start);
+                }
+                else if (samePoint(chain.front(), segment.start)) {
+                    chain.insert(chain.begin(), segment.end);
+                }
+                else {
+                    continue;
+                }
+
+                used[candidate] = true;
+                extended = true;
+                break;
+            }
+            if (!extended) {
+                break;
+            }
+        }
+        chains.push_back(std::move(chain));
+    }
+
+    style.insert({"stroke", "rgb(0, 0, 0)"});
+    style.insert({"stroke-width", "1.0"});
+    style.insert({"stroke-linecap", "butt"});
+    style.insert({"stroke-linejoin", "miter"});
+    style.insert({"fill", "none"});
+    style.insert({"transform", "scale(1, -1)"});
+
+    std::ostringstream result;
+    result << "<g";
+    for (const auto &attribute : style) {
+        result << "   " << attribute.first << "=\""
+               << attribute.second << "\"\n";
+    }
+    result << "  >\n";
+    result << std::setprecision(15);
+    for (const auto &chain : chains) {
+        if (chain.size() < 2) {
+            continue;
+        }
+        const bool closed = chain.size() > 2
+            && samePoint(chain.front(), chain.back());
+        const std::size_t pointCount = closed ? chain.size() - 1 : chain.size();
+        result << "<path d=\"M " << chain.front().x << " " << chain.front().y;
+        for (std::size_t point = 1; point < pointCount; ++point) {
+            result << " L " << chain[point].x << " " << chain[point].y;
+        }
+        if (closed) {
+            result << " Z";
+        }
+        result << "\" />\n";
+    }
+    result << "</g>\n";
+    return result.str();
 }
 
 

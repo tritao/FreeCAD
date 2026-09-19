@@ -60,6 +60,17 @@ public:
 
     using XmlAttributes = std::map<std::string,std::string>;
 
+    /**
+     * Project linear edges directly into one connected SVG path per chain.
+     *
+     * This is intended for already-classified semantic linework, where the
+     * topology of the input edges is meaningful and must survive export.
+     * Generic HLR output continues to use getSVG().
+     */
+    static std::string getSVGPath(const TopoDS_Shape &shape,
+                                  const Base::Vector3d &direction,
+                                  XmlAttributes style=XmlAttributes());
+
     std::string getSVG(ExtractionType type, double tolerance=0.05,
                        XmlAttributes V_style=XmlAttributes(),
                        XmlAttributes V0_style=XmlAttributes(),
