@@ -11,6 +11,7 @@ Run with the GUI FreeCAD binary from the repository root:
 import os
 
 import Arch
+import ArchPlanContours
 import ArchSpace
 import Draft
 import FreeCAD as App
@@ -18,6 +19,7 @@ import FreeCADGui as Gui
 import Part
 from BIMExampleBuilding import make_opening, make_wall
 from bimviews.service import BIMViewService
+from bimplan.representation_request import representation_request_from_storey
 from PySide import QtCore
 
 
@@ -130,6 +132,17 @@ def build_document():
     service.create_elevation_view("South Elevation", level, direction="South")
     service.create_section_view("Building Section", section)
     plan_view = service.create_plan_view("Ground Floor Plan", level)
+    request = representation_request_from_storey(service.context_source(plan_view))
+    wall_representations = tuple(
+        wall.Proxy.getRepresentation(wall, request) for wall in walls
+    )
+    contour_sets = ArchPlanContours.joined_contours(wall_representations)
+    assert contour_sets and all(contours.valid for contours in contour_sets)
+    assert all(
+        contour[0].isEqual(contour[-1], contours.tolerance)
+        for contours in contour_sets
+        for contour in contours.outer_contours
+    )
     sheet_page, _sheet_view = service.create_sheet_from_view(
         plan_view, TEMPLATE_PATH, page_scale=0.02
     )

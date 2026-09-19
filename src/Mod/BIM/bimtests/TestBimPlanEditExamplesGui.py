@@ -328,6 +328,24 @@ class TestBimPlanEditExamplesGui(TestArchBaseGui):
             any(path.count("L") >= 2 and " Z" in path for path in miter_paths),
             "joined wall boundaries must be continuous closed SVG paths",
         )
+        self.assertTrue(
+            all(path.count("L") >= 2 for path in miter_paths if " Z" in path),
+            "closed wall contours must not use one-segment fallback paths",
+        )
+        from bimplan.representation_request import representation_request_from_storey
+        from bimviews.service import BIMViewService
+
+        request = representation_request_from_storey(
+            BIMViewService(document).context_source(
+                drawing_views[0].BIMViewDefinition
+            )
+        )
+        self.assertTrue(
+            all(
+                wall.Proxy.getRepresentation(wall, request).plan_contours
+                for wall in walls
+            )
+        )
         from bimviews.navigator_model import BIMNavigatorModel
 
         project_nodes = BIMNavigatorModel(document).project_nodes()
