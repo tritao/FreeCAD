@@ -357,7 +357,21 @@ def create_sheet_interactive(document, parent=None):
     import TechDraw  # noqa: F401 - load the document object types before creation
 
     parameters = FreeCAD.ParamGet("User parameter:BaseApp/Preferences/Mod/BIM")
-    template_dir = parameters.GetString("TDTemplateDir", "") or None
+    template_dir = parameters.GetString("TDTemplateDir", "")
+    if os.path.isfile(template_dir):
+        template_dir = os.path.dirname(template_dir)
+    if not os.path.isdir(template_dir):
+        techdraw_parameters = FreeCAD.ParamGet(
+            "User parameter:BaseApp/Preferences/Mod/TechDraw/Files"
+        )
+        bundled_templates = os.path.join(
+            FreeCAD.getResourceDir(), "Mod", "TechDraw", "Templates"
+        )
+        template_dir = techdraw_parameters.GetString(
+            "TemplateDir", bundled_templates
+        )
+        if not os.path.isdir(template_dir):
+            template_dir = bundled_templates
     filename, _selected_filter = QtGui.QFileDialog.getOpenFileName(
         parent,
         translate("BIM", "Select Page Template"),
@@ -384,7 +398,9 @@ def create_sheet_interactive(document, parent=None):
         document.abortTransaction()
         raise
 
-    parameters.SetString("TDTemplateDir", filename.replace("\\", "/"))
+    parameters.SetString(
+        "TDTemplateDir", os.path.dirname(filename).replace("\\", "/")
+    )
     page.ViewObject.show()
     document.recompute()
     return page

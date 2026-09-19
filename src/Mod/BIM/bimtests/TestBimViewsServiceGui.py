@@ -2,6 +2,7 @@
 
 """GUI-facing tests for the BIM Navigator service seam."""
 
+import os
 import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
@@ -250,21 +251,29 @@ class TestBimViewsServiceGui(TestArchBaseGui):
             + "Mod/TechDraw/Templates/Default_Template_A4_Landscape.svg"
         )
         saved_directories = []
-        parameters = SimpleNamespace(
-            GetString=lambda _name, default: default,
+        bim_parameters = SimpleNamespace(
+            GetString=lambda _name, _default: "",
             GetFloat=lambda _name, _default: 0.02,
             SetString=lambda name, value: saved_directories.append((name, value)),
         )
-        with patch("bimsheets.gui.FreeCAD.ParamGet", return_value=parameters), patch(
+        techdraw_directory = os.path.dirname(template_path)
+        techdraw_parameters = SimpleNamespace(
+            GetString=lambda _name, _default: techdraw_directory,
+        )
+        with patch(
+            "bimsheets.gui.FreeCAD.ParamGet",
+            side_effect=(bim_parameters, techdraw_parameters),
+        ), patch(
             "bimsheets.gui.QtGui.QFileDialog.getOpenFileName",
             return_value=(template_path, "SVG file (*.svg)"),
-        ):
+        ) as chooser:
             page = create_sheet_interactive(self.document)
 
         self.assertTrue(BIMSheetService.is_sheet(page))
         self.assertEqual("Default_Template_A4_Landscape", page.SheetTitle)
         self.assertEqual("Default_Template_A4_Landscape.svg", page.TemplateIdentity)
-        self.assertTrue(saved_directories)
+        self.assertEqual(techdraw_directory, chooser.call_args.args[2])
+        self.assertEqual([("TDTemplateDir", techdraw_directory)], saved_directories)
 
     def test_sheet_inspector_applies_metadata_without_a_modal_dialog(self):
         page = BIMSheetService(self.document).create_sheet(
