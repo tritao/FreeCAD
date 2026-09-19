@@ -1,11 +1,168 @@
 # SPDX-License-Identifier: LGPL-2.1-or-later
 
-"""TechDraw adapters for semantic BIM representations.
+"""Render semantic BIM representations through TechDraw's generic API.
 
 This module deliberately keeps the BIM contract at the boundary: callers
 provide a ``BIMRepresentation`` and TechDraw projects its selected geometry.
 No temporary Draft or TechDraw document objects are created.
 """
+
+
+def representations_for_context(
+    context,
+    objects,
+    *,
+    show_hidden=False,
+    fill_spaces=False,
+    join_arch=False,
+):
+    """Resolve an all-semantic TechDraw representation set, or return ``()``.
+
+    Mixed semantic/legacy projection is intentionally unsupported.  Returning
+    an empty tuple asks the public Arch compatibility adapter to use its
+    established shape renderer for the complete drawing.
+    """
+    if (
+        show_hidden
+        or fill_spaces
+        or join_arch
+        or not objects
+        or context.request is None
+    ):
+        return ()
+
+    from ArchRepresentation import (
+        RepresentationPurpose,
+        RepresentationUnavailable,
+        view_representation_for,
+    )
+
+    if context.request.purpose == RepresentationPurpose.ELEVATION:
+        import ArchSectionProjection
+
+        projected = ArchSectionProjection.project_elevation_scope(objects, context.request)
+        representations = tuple(projected[obj] for obj in objects)
+        if not any(item.projected_geometry for item in representations):
+            return ()
+        return representations
+
+    representations = []
+    for obj in objects:
+        try:
+            representation = view_representation_for(obj, context.request)
+        except RepresentationUnavailable:
+            return ()
+        if not (
+            getattr(representation, "cut_geometry", None)
+            or getattr(representation, "projected_geometry", None)
+        ):
+            return ()
+        representations.append(representation)
+    return tuple(representations)
+
+
+def cut_face_bounds(representations):
+    """Return a cheap compound of semantic cut faces for symbol filtering."""
+    import Part
+
+    faces = [
+        geometry
+        for representation in representations
+        for geometry in getattr(representation, "cut_geometry", ())
+        if getattr(geometry, "ShapeType", "") == "Face"
+    ]
+    if not faces:
+        return None
+    return faces[0] if len(faces) == 1 else Part.makeCompound(faces)
+
+
+def render_representations_to_svg(
+    representations,
+    direction,
+    cut_surface_style,
+    *,
+    drawing_scale,
+    line_width,
+    elevation=False,
+):
+    """Render a complete semantic BIM representation set for TechDraw."""
+    style = {
+        "stroke": "SVGLINECOLOR",
+        "stroke-linecap": "SVGLINECAP",
+        "stroke-width": "SVGLINEWIDTH",
+    }
+    cut_style = {
+        "stroke": "SVGLINECOLOR",
+        "stroke-linecap": "SVGLINECAP",
+        "stroke-width": "SVGCUTLINEWIDTH",
+    }
+    elevation_role_styles = {}
+    visible_style = style
+    if elevation:
+        request = getattr(
+            getattr(representations[0], "request", None),
+            "presentation_profile",
+            {},
+        ) or {}
+        visible_width = float(request.get("visible_line_width", 1.0))
+        silhouette_width = float(request.get("silhouette_line_width", 1.35))
+        visible_style = dict(style)
+        silhouette_style = dict(style)
+        if visible_width != 1.0:
+            visible_style["stroke-width"] = "{}px".format(line_width * visible_width)
+        silhouette_style["stroke-width"] = "{}px".format(
+            line_width * silhouette_width
+        )
+        elevation_role_styles = {
+            "ProjectionSilhouette": {
+                name: silhouette_style
+                for name in ("hStyle", "h0Style", "h1Style", "vStyle", "v0Style", "v1Style")
+            }
+        }
+
+    fragments = []
+    from ArchRepresentation import CutFillMode
+
+    if cut_surface_style.mode != CutFillMode.NONE:
+        fragments.append(
+            fill_representations_to_svg(
+                representations,
+                direction,
+                cut_surface_style,
+                drawing_scale=drawing_scale,
+            )
+        )
+    for representation in representations:
+        if representation.projected_geometry:
+            fragments.append(
+                project_representation_to_svg(
+                    representation,
+                    direction,
+                    collection="projected_geometry",
+                    hStyle=visible_style,
+                    h0Style=visible_style,
+                    h1Style=visible_style,
+                    vStyle=visible_style,
+                    v0Style=visible_style,
+                    v1Style=visible_style,
+                    role_styles=elevation_role_styles,
+                )
+            )
+        if representation.cut_geometry:
+            fragments.append(
+                project_representation_to_svg(
+                    representation,
+                    direction,
+                    collection="cut_geometry",
+                    hStyle=cut_style,
+                    h0Style=cut_style,
+                    h1Style=cut_style,
+                    vStyle=cut_style,
+                    v0Style=cut_style,
+                    v1Style=cut_style,
+                )
+            )
+    return "".join(fragments)
 
 
 def _shape_from_geometry(geometries):

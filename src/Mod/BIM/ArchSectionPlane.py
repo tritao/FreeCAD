@@ -356,6 +356,17 @@ def getSVG(
     )
 
 
+def getTechDrawSVG(source, **options):
+    """Render a TechDraw view through the semantic-first drawing boundary.
+
+    ``getSVG`` remains the public compatibility API for external callers and
+    non-TechDraw render modes.  TechDraw uses this explicit entry point so its
+    semantic intent does not depend on a boolean hidden among legacy options.
+    """
+    options["techdraw"] = True
+    return getSVG(source, **options)
+
+
 def render_drawing_context(
     context,
     renderMode="Wireframe",
@@ -436,19 +447,22 @@ def render_drawing_context(
     # compatibility fallback for modes that need hidden lines, fills, joined
     # material geometry, or objects that have not adopted the provider
     # contract yet.
-    contextual_representations = _get_contextual_representations(
-        context,
-        tuple(objs),
-        techdraw=techdraw,
-        showHidden=showHidden,
-        fillSpaces=fillSpaces,
-        joinArch=joinArch,
-    )
+    contextual_representations = ()
+    if techdraw:
+        from bimviews import techdraw_renderer
+
+        contextual_representations = techdraw_renderer.representations_for_context(
+            context,
+            tuple(objs),
+            show_hidden=showHidden,
+            fill_spaces=fillSpaces,
+            join_arch=joinArch,
+        )
     if contextual_representations:
         # Semantic providers already computed the section geometry.  Keep only
         # the lightweight bounds needed by space/window filtering; do not
         # populate the legacy cut-shape cache on this path.
-        cutface = _contextual_cut_face(contextual_representations)
+        cutface = techdraw_renderer.cut_face_bounds(contextual_representations)
 
     scaledLineWidth = linewidth / scale
     if renderMode in ["Coin", 2, "Coin mono", 3]:
@@ -585,81 +599,15 @@ def render_drawing_context(
             import Part
 
             if contextual_representations:
-                import TechDrawBIM
-
-                style = {
-                    "stroke": "SVGLINECOLOR",
-                    "stroke-linecap": "SVGLINECAP",
-                    "stroke-width": "SVGLINEWIDTH",
-                }
-                cut_style = {
-                    "stroke": "SVGLINECOLOR",
-                    "stroke-linecap": "SVGLINECAP",
-                    "stroke-width": "SVGCUTLINEWIDTH",
-                }
-                elevation_role_styles = {}
-                if str(getattr(source, "Purpose", "")) == "Elevation":
-                    request = getattr(
-                        getattr(contextual_representations[0], "request", None),
-                        "presentation_profile",
-                        {},
-                    ) or {}
-                    visible_width = float(request.get("visible_line_width", 1.0))
-                    silhouette_width = float(
-                        request.get("silhouette_line_width", 1.35)
-                    )
-                    visible_style = dict(style)
-                    silhouette_style = dict(style)
-                    if visible_width != 1.0:
-                        visible_style["stroke-width"] = "{}px".format(
-                            scaledLineWidth * visible_width
-                        )
-                    silhouette_style["stroke-width"] = "{}px".format(
-                        scaledLineWidth * silhouette_width
-                    )
-                    elevation_role_styles = {
-                        "ProjectionSilhouette": {
-                            "hStyle": silhouette_style,
-                            "h0Style": silhouette_style,
-                            "h1Style": silhouette_style,
-                            "vStyle": silhouette_style,
-                            "v0Style": silhouette_style,
-                            "v1Style": silhouette_style,
-                        }
-                    }
-                if showFill:
-                    svgcache += TechDrawBIM.fill_representations_to_svg(
-                        contextual_representations,
-                        direction,
-                        cut_surface_style,
-                        drawing_scale=scale,
-                    )
-                for representation in contextual_representations:
-                    if representation.projected_geometry:
-                        svgcache += TechDrawBIM.project_representation_to_svg(
-                            representation,
-                            direction,
-                            collection="projected_geometry",
-                            hStyle=visible_style if elevation_role_styles else style,
-                            h0Style=visible_style if elevation_role_styles else style,
-                            h1Style=visible_style if elevation_role_styles else style,
-                            vStyle=visible_style if elevation_role_styles else style,
-                            v0Style=visible_style if elevation_role_styles else style,
-                            v1Style=visible_style if elevation_role_styles else style,
-                            role_styles=elevation_role_styles,
-                        )
-                    if representation.cut_geometry:
-                        svgcache += TechDrawBIM.project_representation_to_svg(
-                            representation,
-                            direction,
-                            collection="cut_geometry",
-                            hStyle=cut_style,
-                            h0Style=cut_style,
-                            h1Style=cut_style,
-                            vStyle=cut_style,
-                            v0Style=cut_style,
-                            v1Style=cut_style,
-                        )
+                from bimviews import techdraw_renderer
+                svgcache += techdraw_renderer.render_representations_to_svg(
+                    contextual_representations,
+                    direction,
+                    cut_surface_style,
+                    drawing_scale=scale,
+                    line_width=scaledLineWidth,
+                    elevation=str(getattr(source, "Purpose", "")) == "Elevation",
+                )
             else:
                 if vshapes:
                     baseshape = Part.makeCompound(vshapes)
@@ -843,88 +791,6 @@ def render_drawing_context(
                 svg += "</g>"
 
     return svg
-
-
-def _get_contextual_representations(
-    context,
-    objects,
-    *,
-    techdraw,
-    showHidden,
-    fillSpaces,
-    joinArch,
-):
-    """Return semantic representations for supported TechDraw options.
-
-    This is intentionally an all-or-nothing path.  A section containing an
-    object that has not adopted ``getRepresentation`` continues through the
-    established cut-shape renderer, so existing Arch and TechDraw behavior is
-    preserved while providers migrate independently.
-    """
-    if (
-        not techdraw
-        or showHidden
-        or fillSpaces
-        or joinArch
-        or not objects
-    ):
-        return []
-
-    request = context.request
-    if request is None:
-        return []
-
-    from ArchRepresentation import (
-        RepresentationPurpose,
-        RepresentationUnavailable,
-        view_representation_for,
-    )
-
-    if request.purpose == RepresentationPurpose.ELEVATION:
-        import ArchSectionProjection
-
-        projected = ArchSectionProjection.project_elevation_scope(objects, request)
-        representations = [projected[obj] for obj in objects]
-        if not any(
-            representation.projected_geometry for representation in representations
-        ):
-            return []
-        return representations
-
-    representations = []
-    for obj in objects:
-        try:
-            representation = view_representation_for(obj, request)
-        except RepresentationUnavailable:
-            return []
-        if not (
-            getattr(representation, "cut_geometry", None)
-            or getattr(representation, "projected_geometry", None)
-        ):
-            return []
-        representations.append(representation)
-    return representations
-
-
-def _contextual_cut_face(representations):
-    """Return a cheap bound shape for semantic section filtering.
-
-    Providers may expose cut edges or symbolic polylines instead of faces.
-    Only actual faces can provide a useful section bound; when none are
-    available the caller falls back to the section plane itself.
-    """
-    import Part
-
-    faces = []
-    for representation in representations or ():
-        faces.extend(
-            geometry
-            for geometry in getattr(representation, "cut_geometry", ())
-            if getattr(geometry, "ShapeType", "") == "Face"
-        )
-    if not faces:
-        return None
-    return faces[0] if len(faces) == 1 else Part.makeCompound(faces)
 
 
 def BoundBoxValid(boundBox) -> bool:

@@ -211,6 +211,7 @@ SET(bimviews_SRCS
     bimviews/representation_layers.py
     bimviews/scope.py
     bimviews/service.py
+    bimviews/techdraw_renderer.py
     bimviews/viewport_grid.py
     bimviews/viewport_widgets.py
     bimviews/viewport_ruler.py

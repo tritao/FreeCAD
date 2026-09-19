@@ -26,7 +26,7 @@ import Arch
 import ArchRepresentation
 import ArchSectionProjection
 import ArchSectionPlane
-import TechDrawBIM
+from bimviews import techdraw_renderer
 import Draft
 import os
 from types import SimpleNamespace
@@ -318,7 +318,7 @@ class TestArchSectionPlane(TestArchBase.TestArchBase):
         )
         self.document.recompute()
         calls = []
-        original_project = TechDrawBIM.project_representation_to_svg
+        original_project = techdraw_renderer.project_representation_to_svg
         original_cut_shapes = ArchSectionPlane.getCutShapes
 
         def capture_project(
@@ -332,14 +332,14 @@ class TestArchSectionPlane(TestArchBase.TestArchBase):
         def fail_legacy_cut_shapes(*args, **kwargs):
             raise AssertionError("semantic TechDraw must not build legacy cut shapes")
 
-        TechDrawBIM.project_representation_to_svg = capture_project
+        techdraw_renderer.project_representation_to_svg = capture_project
         ArchSectionPlane.getCutShapes = fail_legacy_cut_shapes
         try:
             svg = ArchSectionPlane.getSVG(
                 section_plane, techdraw=True, renderMode="Wireframe"
             )
         finally:
-            TechDrawBIM.project_representation_to_svg = original_project
+            techdraw_renderer.project_representation_to_svg = original_project
             ArchSectionPlane.getCutShapes = original_cut_shapes
 
         self.assertTrue(svg)
@@ -455,7 +455,7 @@ class TestArchSectionPlane(TestArchBase.TestArchBase):
         self.document.recompute()
 
         calls = []
-        original_project = TechDrawBIM.project_representation_to_svg
+        original_project = techdraw_renderer.project_representation_to_svg
 
         def capture_project(
             representation, direction, collection="projected_geometry", **styles
@@ -463,11 +463,11 @@ class TestArchSectionPlane(TestArchBase.TestArchBase):
             calls.append((collection, styles))
             return "<g/>"
 
-        TechDrawBIM.project_representation_to_svg = capture_project
+        techdraw_renderer.project_representation_to_svg = capture_project
         try:
             ArchSectionPlane.getSVG(elevation, techdraw=True, renderMode="Wireframe")
         finally:
-            TechDrawBIM.project_representation_to_svg = original_project
+            techdraw_renderer.project_representation_to_svg = original_project
 
         projected = [styles for collection, styles in calls if collection == "projected_geometry"]
         self.assertTrue(projected)
@@ -487,7 +487,7 @@ class TestArchSectionPlane(TestArchBase.TestArchBase):
             "projected_geometry", cut_line, "WallJointCutLine"
         )
 
-        geometry = TechDrawBIM._geometry(representation, "projected_geometry")
+        geometry = techdraw_renderer._geometry(representation, "projected_geometry")
 
         self.assertFalse(geometry.isNull())
         self.assertEqual(1, len(geometry.Edges))
@@ -516,7 +516,7 @@ class TestArchSectionPlane(TestArchBase.TestArchBase):
 
         TechDraw.projectToSVG = capture_project
         try:
-            svg = TechDrawBIM.project_representation_to_svg(
+            svg = techdraw_renderer.project_representation_to_svg(
                 representation,
                 App.Vector(0, 0, 1),
                 hStyle={"stroke-width": "normal"},

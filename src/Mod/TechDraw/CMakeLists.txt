@@ -11,7 +11,6 @@ endif(BUILD_GUI)
 
 set(TechDraw_Scripts
     Init.py
-    TechDrawBIM.py
     TestTechDrawApp.py
     TestTechDrawGui.py
 )
