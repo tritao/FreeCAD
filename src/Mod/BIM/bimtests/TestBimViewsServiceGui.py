@@ -61,6 +61,7 @@ from bimsheets import (
     SheetRect,
     format_scale,
 )
+from bimsheets.gui import BIMSheetPropertiesDialog, create_sheet_interactive
 from bimsheets.layout import svg_footprint
 
 
@@ -202,6 +203,61 @@ class TestBimViewsServiceGui(TestArchBaseGui):
         self.assertEqual("Cover", page.SheetTitle)
         self.assertEqual(1, page.SheetOrder)
         self.assertEqual(service.SCHEMA_VERSION, page.BIMSheetSchemaVersion)
+
+    def test_sheet_properties_dialog_edits_visible_metadata_only(self):
+        metadata = BIMSheetMetadata(
+            number="A-101",
+            title="Floor Plan",
+            discipline="Architectural",
+            revision="P01",
+            issue="Tender",
+            issue_date="2026-09-19",
+            status="Shared",
+            template_identity="A1.svg",
+            order=10,
+        )
+        dialog = BIMSheetPropertiesDialog(metadata)
+        try:
+            dialog.number.setText(" A-102 ")
+            dialog.title.setText(" Reflected Ceiling Plan ")
+            dialog.revision.setText(" P02 ")
+            dialog.status.setCurrentText("Published")
+            dialog.order.setValue(20)
+            edited = dialog.metadata()
+        finally:
+            dialog.close()
+            FreeCADGui.deleteLater(dialog)
+
+        self.assertEqual("A-102", edited.number)
+        self.assertEqual("Reflected Ceiling Plan", edited.title)
+        self.assertEqual("P02", edited.revision)
+        self.assertEqual("Published", edited.status)
+        self.assertEqual(20, edited.order)
+        self.assertEqual("Tender", edited.issue)
+        self.assertEqual("2026-09-19", edited.issue_date)
+        self.assertEqual("A1.svg", edited.template_identity)
+
+    def test_interactive_sheet_creation_uses_shared_service_path(self):
+        template_path = (
+            FreeCAD.getResourceDir()
+            + "Mod/TechDraw/Templates/Default_Template_A4_Landscape.svg"
+        )
+        saved_directories = []
+        parameters = SimpleNamespace(
+            GetString=lambda _name, default: default,
+            GetFloat=lambda _name, _default: 0.02,
+            SetString=lambda name, value: saved_directories.append((name, value)),
+        )
+        with patch("bimsheets.gui.FreeCAD.ParamGet", return_value=parameters), patch(
+            "bimsheets.gui.QtGui.QFileDialog.getOpenFileName",
+            return_value=(template_path, "SVG file (*.svg)"),
+        ):
+            page = create_sheet_interactive(self.document)
+
+        self.assertTrue(BIMSheetService.is_sheet(page))
+        self.assertEqual("Default_Template_A4_Landscape", page.SheetTitle)
+        self.assertEqual("Default_Template_A4_Landscape.svg", page.TemplateIdentity)
+        self.assertTrue(saved_directories)
 
     def test_sheet_metadata_synchronizes_mapped_title_block_fields(self):
         template_path = (

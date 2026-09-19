@@ -207,8 +207,10 @@ class BIM_Views:
                 ("SaveView", translate("BIM", "Save Camera View")),
                 ("SaveVisibility", translate("BIM", "Save Visibility of Objects")),
                 ("DuplicateView", translate("BIM", "Duplicate View")),
+                ("NewSheet", translate("BIM", "New Sheet…")),
                 ("PlaceOnSheet", translate("BIM", "Place on Sheet…")),
                 ("OpenSheet", translate("BIM", "Open Sheet")),
+                ("EditSheet", translate("BIM", "Sheet Properties…")),
                 ("RefreshTitleBlock", translate("BIM", "Refresh Title Block")),
                 ("PublishSheet", translate("BIM", "Publish Sheet…")),
                 ("PublishSheetSet", translate("BIM", "Publish Sheet Set…")),
@@ -272,8 +274,10 @@ class BIM_Views:
             self.dialog.buttonSaveView.triggered.connect(self.saveView)
             self.dialog.buttonSaveVisibility.triggered.connect(self.saveVisibility)
             self.dialog.buttonDuplicateView.triggered.connect(self.duplicateView)
+            self.dialog.buttonNewSheet.triggered.connect(self.newSheet)
             self.dialog.buttonPlaceOnSheet.triggered.connect(self.placeOnSheet)
             self.dialog.buttonOpenSheet.triggered.connect(self.openSheet)
+            self.dialog.buttonEditSheet.triggered.connect(self.editSheet)
             self.dialog.buttonRefreshTitleBlock.triggered.connect(self.refreshTitleBlock)
             self.dialog.buttonPublishSheet.triggered.connect(self.publishSheet)
             self.dialog.buttonPublishSheetSet.triggered.connect(self.publishSheetSet)
@@ -739,6 +743,30 @@ class BIM_Views:
         FreeCADGui.Selection.clearSelection()
         FreeCADGui.Selection.addSelection(drawing_view)
 
+    def newSheet(self):
+        """Create a BIM sheet through the shared sheet creation workflow."""
+
+        from bimsheets.gui import create_sheet_interactive
+
+        page = create_sheet_interactive(FreeCAD.ActiveDocument, self.dialog)
+        if page is None:
+            return
+        self.contextObject = page
+        self.update(False)
+        FreeCADGui.Selection.clearSelection()
+        FreeCADGui.Selection.addSelection(page)
+
+    def editSheet(self):
+        """Edit normalized sheet metadata in one undoable operation."""
+
+        from bimsheets.gui import edit_sheet_interactive
+
+        page = self.contextObject
+        if page is None or not page.isDerivedFrom("TechDraw::DrawPage"):
+            return
+        if edit_sheet_interactive(page, self.dialog):
+            self.update(False)
+
     def openSheet(self):
         """Open the selected sheet or a placement's parent sheet."""
 
@@ -1185,8 +1213,10 @@ class BIM_Views:
             self.dialog.buttonSaveView,
             self.dialog.buttonSaveVisibility,
             self.dialog.buttonDuplicateView,
+            self.dialog.buttonNewSheet,
             self.dialog.buttonPlaceOnSheet,
             self.dialog.buttonOpenSheet,
+            self.dialog.buttonEditSheet,
             self.dialog.buttonRefreshTitleBlock,
             self.dialog.buttonPublishSheet,
             self.dialog.buttonPublishSheetSet,
@@ -1199,8 +1229,10 @@ class BIM_Views:
             action.setEnabled(True)
             action.setVisible(True)
         self.dialog.buttonDuplicateView.setVisible(False)
+        self.dialog.buttonNewSheet.setVisible(False)
         self.dialog.buttonPlaceOnSheet.setVisible(False)
         self.dialog.buttonOpenSheet.setVisible(False)
+        self.dialog.buttonEditSheet.setVisible(False)
         self.dialog.buttonRefreshTitleBlock.setVisible(False)
         self.dialog.buttonPublishSheet.setVisible(False)
         self.dialog.buttonPublishSheetSet.setVisible(False)
@@ -1238,6 +1270,7 @@ class BIM_Views:
                     action.setVisible(True)
                 self.dialog.buttonPlaceOnSheet.setEnabled(
                     _view_service().can_place_on_sheet(obj)
+                    and bool(_manager_model().pages())
                 )
                 if str(getattr(obj, "Purpose", "")) == "Plan":
                     self.dialog.buttonNewSectionView.setVisible(True)
@@ -1245,7 +1278,9 @@ class BIM_Views:
             elif kind == "sheet":
                 self.dialog.buttonNewPlanView.setVisible(False)
                 self.dialog.buttonNewModelView.setVisible(False)
+                self.dialog.buttonNewSheet.setVisible(True)
                 self.dialog.buttonOpenSheet.setVisible(True)
+                self.dialog.buttonEditSheet.setVisible(True)
                 self.dialog.buttonRefreshTitleBlock.setVisible(True)
                 self.dialog.buttonPublishSheet.setVisible(True)
                 self.dialog.buttonPublishSheetSet.setVisible(True)
@@ -1265,6 +1300,10 @@ class BIM_Views:
                 action.setVisible(False)
             self.dialog.buttonNewPlanView.setVisible(True)
             self.dialog.buttonNewModelView.setVisible(True)
+            if vm.navigatorModel.key_for_index(index) == "section:sheets":
+                self.dialog.buttonNewPlanView.setVisible(False)
+                self.dialog.buttonNewModelView.setVisible(False)
+                self.dialog.buttonNewSheet.setVisible(True)
         else:
             self.dialog.buttonNewSectionView.setEnabled(
                 (

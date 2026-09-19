@@ -24,8 +24,6 @@
 
 """The BIM TDPage command"""
 
-import os
-
 import FreeCAD
 import FreeCADGui
 
@@ -49,62 +47,11 @@ class BIM_TDPage:
 
     def Activated(self):
         from PySide import QtGui
-        import TechDraw
+        from bimsheets.gui import create_sheet_interactive
 
-        templatedir = FreeCAD.ParamGet("User parameter:BaseApp/Preferences/Mod/BIM").GetString(
-            "TDTemplateDir", ""
+        create_sheet_interactive(
+            FreeCAD.ActiveDocument, QtGui.QApplication.activeWindow()
         )
-        if not templatedir:
-            templatedir = None
-        filename, _ = QtGui.QFileDialog.getOpenFileName(
-            QtGui.QApplication.activeWindow(),
-            translate("BIM", "Select Page Template"),
-            templatedir,
-            "SVG file (*.svg)",
-        )
-        if filename:
-            name = os.path.splitext(os.path.basename(filename))[0]
-            FreeCAD.ActiveDocument.openTransaction("Create page")
-            from bimsheets import BIMSheetMetadata, BIMSheetService
-
-            page = BIMSheetService(FreeCAD.ActiveDocument).create_sheet(
-                filename,
-                BIMSheetMetadata(
-                    title=name,
-                    template_identity=os.path.basename(filename),
-                ),
-            )
-            page.Template.Label = translate("BIM", "Template")
-            FreeCAD.ActiveDocument.commitTransaction()
-            FreeCAD.ParamGet("User parameter:BaseApp/Preferences/Mod/BIM").SetString(
-                "TDTemplateDir", filename.replace("\\", "/")
-            )
-            for txt in ["scale", "Scale", "SCALE", "scaling", "Scaling", "SCALING"]:
-                if txt in page.Template.EditableTexts:
-                    val = page.Template.EditableTexts[txt]
-                    if val:
-                        val = val.replace(":", "/")
-                        if "/" in val:
-                            try:
-                                num, den = val.split("/", 1)
-                                page.Scale = float(num) / float(den)
-                            except (ValueError, ZeroDivisionError):
-                                pass
-                            else:
-                                break
-                        else:
-                            try:
-                                page.Scale = float(val)
-                            except ValueError:
-                                pass
-                            else:
-                                break
-            else:
-                page.Scale = FreeCAD.ParamGet(
-                    "User parameter:BaseApp/Preferences/Mod/BIM"
-                ).GetFloat("DefaultPageScale", 0.01)
-            page.ViewObject.show()
-            FreeCAD.ActiveDocument.recompute()
 
 
 FreeCADGui.addCommand("BIM_TDPage", BIM_TDPage())
