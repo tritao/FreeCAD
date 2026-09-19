@@ -645,6 +645,28 @@ class TestArchRepresentation(unittest.TestCase):
         self.assertTrue(service.handle_pointer_release(EventCallback(), (102, 198)))
         self.assertEqual(["opening.width"], activated)
 
+    def test_contextual_datum_can_disable_live_preview(self):
+        from types import SimpleNamespace
+
+        from bimplan.contextual_datums import PlanContextualDatumService
+
+        previewed = []
+        contextual_editing = SimpleNamespace(
+            editor=object(),
+            preview_value=previewed.append,
+        )
+        service = PlanContextualDatumService(
+            SimpleNamespace(contextual_editing=contextual_editing)
+        )
+        service._entries["opening.width"] = SimpleNamespace(
+            spec=SimpleNamespace(live_preview=False),
+            editing=True,
+        )
+
+        service._preview("opening.width", 600.0)
+
+        self.assertEqual([], previewed)
+
     def test_axis_constraint_resolves_pointer_ray_for_scalar_edit(self):
         source = {"height": 20.0}
         operation = BIMEditOperation(

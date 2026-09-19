@@ -22,6 +22,7 @@ class ContextualDatumSpec:
     label_mode: str = "dimensioning"
     color: tuple = (0.95, 0.45, 0.08)
     refresh_visuals: tuple = ()
+    live_preview: bool = True
 
 
 @dataclass
@@ -67,7 +68,10 @@ class PlanContextualDatumService:
             datum.setPickable(True)
             entry = _ContextualDatumEntry(spec, datum)
             self._entries[key] = entry
-            datum.setValueChangedCallback(lambda value, key=key: self._preview(key, value))
+            if spec.live_preview:
+                datum.setValueChangedCallback(
+                    lambda value, key=key: self._preview(key, value)
+                )
             datum.setEditingFinishedCallback(lambda value, key=key: self.finish_edit(key, value))
             datum.setEditingCanceledCallback(lambda value, key=key: self.cancel_edit(key))
             datum.activate()
@@ -171,7 +175,12 @@ class PlanContextualDatumService:
 
     def _preview(self, key, value):
         entry = self._entries.get(key)
-        if entry is None or not entry.editing or self.session.contextual_editing.editor is None:
+        if (
+            entry is None
+            or not entry.spec.live_preview
+            or not entry.editing
+            or self.session.contextual_editing.editor is None
+        ):
             return
         try:
             self.session.contextual_editing.preview_value(self._operation_value(entry, value))

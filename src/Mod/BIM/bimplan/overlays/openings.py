@@ -284,6 +284,7 @@ def sync_selected_opening_width_datum(session):
             render_state=render_state,
             value_to_operation=lambda value: start_operation_value + float(value) - width,
             refresh_visuals=("selected_opening",),
+            live_preview=False,
         )
     )
 
