@@ -3,7 +3,9 @@
 """Tests for shared BIM plan-footprint geometry and Coin helpers."""
 
 import ArchComponent
+import ArchPlanContours
 import ArchPlanGeometry
+import ArchRepresentation
 import FreeCAD
 import Part
 from bimtests.TestArchBaseGui import TestArchBaseGui
@@ -11,6 +13,137 @@ from pivy import coin
 
 
 class TestArchPlanGeometry(TestArchBaseGui):
+    @staticmethod
+    def _contour_representation(points, seam=(), joint=None, opening=()):
+        representation = ArchRepresentation.BIMRepresentation(source=object())
+        representation.add_geometry(
+            "projected_geometry", points, "PlanCutOuterBoundary"
+        )
+        if opening:
+            representation.add_geometry(
+                "projected_geometry", opening, "PlanCutInnerBoundary"
+            )
+        if seam:
+            representation.add_geometry(
+                "projected_geometry",
+                seam,
+                "WallJointCutLine",
+                related_sources=(joint,),
+            )
+        representation.plan_contours = ArchPlanContours.contours_from_representation(
+            representation
+        )
+        return representation
+
+    def test_joined_plan_contours_remove_seam_and_preserve_mapping(self):
+        joint = object()
+        first = self._contour_representation(
+            (
+                FreeCAD.Vector(0, 100),
+                FreeCAD.Vector(1900, 100),
+                FreeCAD.Vector(2100, -100),
+                FreeCAD.Vector(0, -100),
+                FreeCAD.Vector(0, 100),
+            ),
+            (FreeCAD.Vector(2100, -100), FreeCAD.Vector(1900, 100)),
+            joint,
+        )
+        second = self._contour_representation(
+            (
+                FreeCAD.Vector(2100, -100),
+                FreeCAD.Vector(1900, 100),
+                FreeCAD.Vector(1900, 1800),
+                FreeCAD.Vector(2100, 1800),
+                FreeCAD.Vector(2100, -100),
+            ),
+            (FreeCAD.Vector(1900, 100), FreeCAD.Vector(2100, -100)),
+            joint,
+        )
+
+        contours = ArchPlanContours.joined_contours((second, first))[0]
+
+        self.assertTrue(contours.valid)
+        self.assertEqual(1, len(contours.outer_contours))
+        self.assertEqual(1, len(contours.seam_lines))
+        self.assertEqual(4, len(contours.source_mappings))
+        self.assertTrue(
+            contours.outer_contours[0][0].isEqual(
+                contours.outer_contours[0][-1], contours.tolerance
+            )
+        )
+
+    def test_joined_plan_contours_use_tolerance_and_keep_openings(self):
+        joint = object()
+        opening = (
+            FreeCAD.Vector(200, 25),
+            FreeCAD.Vector(300, 25),
+            FreeCAD.Vector(300, 75),
+            FreeCAD.Vector(200, 75),
+            FreeCAD.Vector(200, 25),
+        )
+        first = self._contour_representation(
+            (
+                FreeCAD.Vector(0, 0),
+                FreeCAD.Vector(1000, 0),
+                FreeCAD.Vector(1000, 100),
+                FreeCAD.Vector(0, 100),
+                FreeCAD.Vector(0, 0),
+            ),
+            (FreeCAD.Vector(1000, 0), FreeCAD.Vector(1000, 100)),
+            joint,
+            opening,
+        )
+        epsilon = ArchPlanContours.DEFAULT_TOLERANCE * 0.25
+        second = self._contour_representation(
+            (
+                FreeCAD.Vector(1000 + epsilon, 100),
+                FreeCAD.Vector(1000 + epsilon, 0),
+                FreeCAD.Vector(1200, 0),
+                FreeCAD.Vector(1200, 100),
+                FreeCAD.Vector(1000 + epsilon, 100),
+            ),
+            (FreeCAD.Vector(1000 + epsilon, 100), FreeCAD.Vector(1000 + epsilon, 0)),
+            joint,
+        )
+
+        contours = ArchPlanContours.joined_contours((first, second))[0]
+
+        self.assertTrue(contours.valid)
+        self.assertEqual(1, len(contours.outer_contours))
+        self.assertEqual((opening,), contours.opening_contours)
+
+    def test_non_manifold_plan_contours_are_reported_without_open_paths(self):
+        joint = object()
+        first = self._contour_representation(
+            (
+                FreeCAD.Vector(0, 0),
+                FreeCAD.Vector(100, 0),
+                FreeCAD.Vector(100, 100),
+                FreeCAD.Vector(0, 100),
+                FreeCAD.Vector(0, 0),
+            ),
+            (FreeCAD.Vector(100, 0), FreeCAD.Vector(100, 100)),
+            joint,
+        )
+        second = self._contour_representation(
+            (
+                FreeCAD.Vector(50, 50),
+                FreeCAD.Vector(150, 50),
+                FreeCAD.Vector(150, 150),
+                FreeCAD.Vector(50, 150),
+                FreeCAD.Vector(50, 50),
+            ),
+            (FreeCAD.Vector(50, 50), FreeCAD.Vector(150, 50)),
+            joint,
+        )
+
+        contours = ArchPlanContours.joined_contours((first, second))[0]
+
+        self.assertFalse(contours.valid)
+        self.assertTrue(
+            all(path[0].isEqual(path[-1], contours.tolerance) for path in contours.outer_contours)
+        )
+
     def test_face_wire_polylines_are_ordered_and_closed(self):
         wire = Part.Wire(
             [

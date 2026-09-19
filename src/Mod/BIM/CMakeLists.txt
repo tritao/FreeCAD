@@ -19,6 +19,7 @@ SET(Arch_SRCS
     InitGui.py
     ArchComponent.py
     ArchPlanGeometry.py
+    ArchPlanContours.py
     ArchPlanAnalytic.py
     ArchRepresentation.py
     ArchIFC.py

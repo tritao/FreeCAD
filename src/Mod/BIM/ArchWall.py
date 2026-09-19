@@ -1364,6 +1364,12 @@ class _Wall(ArchComponent.Component):
                     subelement=f"PlanFace{index}.Vertex{vertex_index}",
                     related_sources=joints,
                 )
+        if request.purpose == ArchRepresentation.RepresentationPurpose.PLAN:
+            import ArchPlanContours
+
+            representation.plan_contours = ArchPlanContours.contours_from_representation(
+                representation
+            )
         self._add_edit_handles(representation, obj, request)
         return representation
 

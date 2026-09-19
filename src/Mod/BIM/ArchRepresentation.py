@@ -698,6 +698,39 @@ class BIMMeshGeometry:
     name: str
 
 
+@dataclass(frozen=True)
+class BIMPlanContourMapping:
+    """Semantic ownership for one renderer-neutral plan contour."""
+
+    geometry: tuple
+    role: str
+    source: object = None
+    subelement: object = None
+    related_sources: tuple = ()
+
+    @property
+    def sources(self):
+        return tuple(dict.fromkeys((self.source, *self.related_sources)))
+
+
+@dataclass(frozen=True)
+class BIMPlanContours:
+    """Canonical plan linework shared by view, snapping, and export.
+
+    Outer and opening contours are closed point sequences.  Joint seams remain
+    separate because they carry a different architectural meaning.  The
+    tolerance is part of the value so every consumer uses identical vertex
+    equivalence rules.
+    """
+
+    outer_contours: tuple = ()
+    opening_contours: tuple = ()
+    seam_lines: tuple = ()
+    source_mappings: tuple = ()
+    tolerance: float = 1.0e-7
+    valid: bool = True
+
+
 class BIMRepresentation:
     """Renderer-neutral geometry and identity for one BIM object."""
 
@@ -713,6 +746,7 @@ class BIMRepresentation:
         self.edit_handles = []
         self._face_meshes = {}
         self.analytic_model = None
+        self.plan_contours = None
 
     def add_geometry(
         self,
