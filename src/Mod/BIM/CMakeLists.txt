@@ -220,6 +220,7 @@ SET(bimsheets_SRCS
     bimsheets/__init__.py
     bimsheets/layout.py
     bimsheets/service.py
+    bimsheets/titles.py
 )
 
 SET(importers_SRCS

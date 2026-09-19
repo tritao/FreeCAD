@@ -4,12 +4,15 @@
 
 from .layout import BIMSheetLayout, SheetLayoutError, SheetMargins, SheetRect
 from .service import BIMSheetMetadata, BIMSheetService
+from .titles import BIMSheetViewTitleService, format_scale
 
 __all__ = (
     "BIMSheetLayout",
     "BIMSheetMetadata",
     "BIMSheetService",
+    "BIMSheetViewTitleService",
     "SheetLayoutError",
     "SheetMargins",
     "SheetRect",
+    "format_scale",
 )

@@ -337,7 +337,16 @@ class BIMViewService:
             drawing_view.Scale = page.Scale
         try:
             sheet_service.layout_view(page, drawing_view, position=position)
+            from bimsheets import BIMSheetViewTitleService
+
+            BIMSheetViewTitleService(self.document).create(page, drawing_view)
         except (TypeError, ValueError):
+            from bimsheets import BIMSheetViewTitleService
+
+            annotation = BIMSheetViewTitleService.annotation_for(drawing_view)
+            if annotation is not None:
+                page.removeView(annotation)
+                self.document.removeObject(annotation.Name)
             page.removeView(drawing_view)
             self.document.removeObject(drawing_view.Name)
             raise
@@ -353,6 +362,9 @@ class BIMViewService:
         if getattr(drawing_view, self.SHEET_VIEW_PROPERTY, None) is None:
             raise ValueError("drawing_view is not a saved BIM view placement")
         page = drawing_view.findParentPage()
+        from bimsheets import BIMSheetViewTitleService
+
+        BIMSheetViewTitleService(self.document).remove(drawing_view)
         if page is not None:
             page.removeView(drawing_view)
         self.document.removeObject(drawing_view.Name)

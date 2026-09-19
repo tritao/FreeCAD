@@ -30,7 +30,7 @@ class BIMSheetMetadata:
 class BIMSheetService:
     """Create and identify TechDraw pages participating in a BIM sheet set."""
 
-    SCHEMA_VERSION = 2
+    SCHEMA_VERSION = 3
     PROPERTY_GROUP = "BIM Sheet"
     DISCIPLINES = (
         "General",
@@ -128,6 +128,17 @@ class BIMSheetService:
                 group,
                 "Stable sheet ordering key",
             )
+        if "ViewTitleTextSize" not in page.PropertiesList:
+            page.addProperty("App::PropertyLength", "ViewTitleTextSize", group,
+                             "Default text size for view titles")
+            page.ViewTitleTextSize = 3.5
+        if "ViewTitleOffset" not in page.PropertiesList:
+            page.addProperty("App::PropertyLength", "ViewTitleOffset", group,
+                             "Default vertical offset for view titles")
+            page.ViewTitleOffset = 12.0
+        if "ViewTitleFont" not in page.PropertiesList:
+            page.addProperty("App::PropertyString", "ViewTitleFont", group,
+                             "Optional font override for view titles")
 
         if metadata is not None:
             self.apply_metadata(page, metadata)
@@ -222,6 +233,11 @@ class BIMSheetService:
             SheetRect(view.X.Value, view.Y.Value, *self._view_footprint(view))
             for view in page.Views
             if view is not drawing_view
+            and not (
+                view.isDerivedFrom("TechDraw::DrawViewAnnotation")
+                and getattr(view, "Owner", None) is not None
+                and view.Owner.isDerivedFrom("TechDraw::DrawViewArch")
+            )
         )
         placement = engine.place(footprint, occupied, position)
         drawing_view.X = placement.x

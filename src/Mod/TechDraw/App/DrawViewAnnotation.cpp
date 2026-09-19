@@ -24,7 +24,10 @@
  ***************************************************************************/
 
 #include "DrawViewAnnotation.h"
+#include "DrawViewArch.h"
 #include "Preferences.h"
+
+#include <sstream>
 
 
 using namespace TechDraw;
@@ -136,6 +139,39 @@ QRectF DrawViewAnnotation::getRect() const
 
 App::DocumentObjectExecReturn *DrawViewAnnotation::execute()
 {
+    if (auto* owner = dynamic_cast<DrawViewArch*>(Owner.getValue())) {
+        auto* definition = owner->BIMViewDefinition.getValue();
+        std::string title = owner->BIMViewTitle.getValue();
+        if (title.empty() && definition) {
+            title = definition->Label.getValue();
+        }
+        if (title.empty()) {
+            title = owner->Label.getValue();
+        }
+        std::string heading = owner->BIMViewNumber.getValue();
+        if (!heading.empty() && !title.empty()) {
+            heading += "  ";
+        }
+        heading += title;
+        std::ostringstream scaleLabel;
+        double scale = owner->getScale();
+        if (scale > 0.0) {
+            if (scale < 1.0) {
+                scaleLabel << "1:" << 1.0 / scale;
+            }
+            else {
+                scaleLabel << scale << ":1";
+            }
+        }
+        Text.setValues(std::vector<std::string>{heading, scaleLabel.str()});
+        X.setValue(owner->X.getValue());
+        double offset = 12.0;
+        if (auto* property = dynamic_cast<App::PropertyLength*>(
+                getPropertyByName("TitleOffset"))) {
+            offset = property->getValue();
+        }
+        Y.setValue(owner->Y.getValue() - offset);
+    }
     requestPaint();
     return TechDraw::DrawView::execute();
 }

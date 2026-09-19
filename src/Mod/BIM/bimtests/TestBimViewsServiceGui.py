@@ -49,8 +49,10 @@ from bimsheets import (
     BIMSheetLayout,
     BIMSheetMetadata,
     BIMSheetService,
+    BIMSheetViewTitleService,
     SheetLayoutError,
     SheetRect,
+    format_scale,
 )
 from bimsheets.layout import svg_footprint
 
@@ -1274,6 +1276,60 @@ class TestBimViewsServiceGui(TestArchBaseGui):
         self.assertEqual("sheet-placement", model.kind_for_index(placement_index))
         self.assertIs(drawing_view, model.object_for_index(placement_index))
         self.assertEqual(2, len(model.indexes_for_object(definition)))
+
+    def test_sheet_placement_has_persistent_numbered_title(self):
+        source = self.document.addObject("App::FeaturePython", "TitledSource")
+        source.addProperty("App::PropertyPlacement", "Placement")
+        service = BIMViewService(self.document, view=_RecordingView([]))
+        definition = service.create_view("Ground Floor", "Plan", source, capture=False)
+        template_path = (
+            FreeCAD.getResourceDir()
+            + "Mod/TechDraw/Templates/Default_Template_A4_Landscape.svg"
+        )
+        page = BIMSheetService(self.document).create_sheet(template_path)
+        drawing_view = service.place_on_sheet(definition, page)
+        annotation = BIMSheetViewTitleService.annotation_for(drawing_view)
+
+        import ArchSectionPlane
+
+        with patch.object(ArchSectionPlane, "getSVG", return_value=""):
+            drawing_view.Scale = 0.01
+            self.document.recompute()
+            self.assertEqual("1", drawing_view.BIMViewNumber)
+            self.assertEqual(["1  Ground Floor", "1:100"], annotation.Text)
+            self.assertIs(drawing_view, annotation.Owner)
+            self.assertIn(annotation, page.Views)
+
+            drawing_view.Scale = 0.02
+            definition.Label = "Level 00"
+            self.document.recompute()
+            self.assertEqual(["1  Level 00", "1:50"], annotation.Text)
+
+            drawing_view.BIMViewTitle = "Entrance Plan"
+            drawing_view.X = 90
+            drawing_view.Y = 70
+            self.document.recompute()
+            self.assertEqual(["1  Entrance Plan", "1:50"], annotation.Text)
+            self.assertEqual(90, annotation.X.Value)
+            self.assertEqual(70 - annotation.TitleOffset.Value, annotation.Y.Value)
+
+    def test_sheet_view_numbers_are_unique_and_fill_gaps(self):
+        page = BIMSheetService(self.document).create_sheet(
+            FreeCAD.getResourceDir()
+            + "Mod/TechDraw/Templates/Default_Template_A4_Landscape.svg",
+            name="NumberedPage",
+        )
+        title_service = BIMSheetViewTitleService(self.document)
+        first = self.document.addObject("TechDraw::DrawViewArch", "FirstNumbered")
+        second = self.document.addObject("TechDraw::DrawViewArch", "SecondNumbered")
+        page.addView(first)
+        page.addView(second)
+
+        title_service.create(page, first, "2")
+        with self.assertRaisesRegex(ValueError, "unique"):
+            title_service.create(page, second, "2")
+        self.assertEqual("1", title_service.next_number(page))
+        self.assertEqual("1:20", format_scale(0.05))
 
     def test_saved_view_visibility_is_applied_within_sheet_source_scope(self):
         normally_visible = self.document.addObject("PartDesign::Feature", "Visible")
