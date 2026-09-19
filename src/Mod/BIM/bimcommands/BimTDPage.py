@@ -65,12 +65,16 @@ class BIM_TDPage:
         if filename:
             name = os.path.splitext(os.path.basename(filename))[0]
             FreeCAD.ActiveDocument.openTransaction("Create page")
-            page = FreeCAD.ActiveDocument.addObject("TechDraw::DrawPage", "Page")
-            page.Label = name
-            template = FreeCAD.ActiveDocument.addObject("TechDraw::DrawSVGTemplate", "Template")
-            template.Template = filename
-            template.Label = translate("BIM", "Template")
-            page.Template = template
+            from bimsheets import BIMSheetMetadata, BIMSheetService
+
+            page = BIMSheetService(FreeCAD.ActiveDocument).create_sheet(
+                filename,
+                BIMSheetMetadata(
+                    title=name,
+                    template_identity=os.path.basename(filename),
+                ),
+            )
+            page.Template.Label = translate("BIM", "Template")
             FreeCAD.ActiveDocument.commitTransaction()
             FreeCAD.ParamGet("User parameter:BaseApp/Preferences/Mod/BIM").SetString(
                 "TDTemplateDir", filename.replace("\\", "/")

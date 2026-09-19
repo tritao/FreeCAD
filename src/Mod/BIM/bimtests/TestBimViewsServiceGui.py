@@ -2,6 +2,7 @@
 
 """GUI-facing tests for the BIM Navigator service seam."""
 
+import tempfile
 from types import SimpleNamespace
 from unittest.mock import patch
 
@@ -39,6 +40,7 @@ from bimviews.ruler_model import (
     tick_values,
 )
 from bimviews.framing import planar_view_bounds
+from bimviews.representation import apply_view_visibility, resolve_drawing_context
 from bimviews.service import BIMViewService
 from bimviews.viewport_ruler import (
     ViewportRulerController,
@@ -46,6 +48,9 @@ from bimviews.viewport_ruler import (
     _ViewportEventFilter,
 )
 from bimplan.runtime.session import activate_representation_request
+from bimsheets import BIMSheetMetadata, BIMSheetService
+
+
 class _RecordingView:
     def __init__(self, calls):
         self.calls = calls
@@ -106,6 +111,53 @@ class _FramingRecordingView(_RecordingView):
 
 
 class TestBimViewsServiceGui(TestArchBaseGui):
+    def test_sheet_service_creates_page_with_stable_metadata_contract(self):
+        template_path = (
+            FreeCAD.getResourceDir()
+            + "Mod/TechDraw/Templates/Default_Template_A4_Landscape.svg"
+        )
+        service = BIMSheetService(self.document)
+        metadata = BIMSheetMetadata(
+            number="A-101",
+            title="Ground Floor Plan",
+            discipline="Architectural",
+            revision="P01",
+            issue="Planning",
+            issue_date="2026-09-19",
+            status="Shared",
+            template_identity="Default_Template_A4_Landscape.svg",
+            order=101,
+        )
+
+        page = service.create_sheet(template_path, metadata)
+
+        self.assertTrue(service.is_sheet(page))
+        self.assertEqual("Ground Floor Plan", page.Label)
+        self.assertEqual("Default_Template_A4_Landscape.svg", page.TemplateIdentity)
+        self.assertEqual(metadata, service.metadata_for(page))
+        self.assertIsNotNone(page.Template)
+
+    def test_sheet_metadata_initialization_is_idempotent(self):
+        page = self.document.addObject("TechDraw::DrawPage", "ExistingPage")
+        service = BIMSheetService(self.document)
+        service.ensure_metadata(
+            page,
+            BIMSheetMetadata(number="A-001", title="Cover", order=1),
+        )
+
+        service.ensure_metadata(page)
+
+        self.assertEqual("A-001", page.SheetNumber)
+        self.assertEqual("Cover", page.SheetTitle)
+        self.assertEqual(1, page.SheetOrder)
+        self.assertEqual(1, page.BIMSheetSchemaVersion)
+
+    def test_sheet_service_rejects_non_page_objects(self):
+        obj = self.document.addObject("App::FeaturePython", "NotAPage")
+
+        with self.assertRaises(TypeError):
+            BIMSheetService(self.document).ensure_metadata(obj)
+
     def test_section_placement_collects_line_and_side_then_cleans_up(self):
         requests = []
         finishes = []
@@ -1080,6 +1132,290 @@ class TestBimViewsServiceGui(TestArchBaseGui):
         self.assertIs(definition, drawing_view.BIMViewDefinition)
         self.assertIs(storey, drawing_view.Source)
         self.assertIn(drawing_view, page.Views)
+        self.assertIn("BIMViewDefinition", drawing_view.PropertiesList)
+        self.assertNotIn("BIMSheetScale", definition.PropertiesList)
+        self.assertNotIn("BIMRenderMode", definition.PropertiesList)
+
+    def test_saved_view_visibility_is_applied_within_sheet_source_scope(self):
+        normally_visible = self.document.addObject("PartDesign::Feature", "Visible")
+        forced_visible = self.document.addObject("PartDesign::Feature", "ForcedVisible")
+        forced_hidden = self.document.addObject("PartDesign::Feature", "ForcedHidden")
+        outside_scope = self.document.addObject("PartDesign::Feature", "OutsideScope")
+        definition = self.document.addObject("App::ViewDefinition", "VisibilityView")
+        definition.ForcedVisible = [forced_visible, outside_scope]
+        definition.ForcedHidden = [forced_hidden]
+
+        visible = apply_view_visibility(
+            (normally_visible, forced_visible, forced_hidden),
+            definition,
+            (normally_visible, forced_hidden),
+        )
+
+        self.assertEqual([normally_visible, forced_visible], visible)
+
+    def test_saved_view_changes_recompute_linked_sheet_view(self):
+        import Arch
+        import ArchSectionPlane
+
+        wall = self.document.addObject("PartDesign::Feature", "RecomputeWall")
+        wall.Shape = Part.makeBox(1000, 200, 1000)
+        original = Arch.makeSectionPlane([wall], name="OriginalSection")
+        replacement = Arch.makeSectionPlane([wall], name="ReplacementSection")
+        service = BIMViewService(self.document, view=_RecordingView([]))
+        definition = service.create_view(
+            "Recomputing Section", "Section", original, capture=False
+        )
+        page = self.document.addObject("TechDraw::DrawPage", "RecomputePage")
+        template = self.document.addObject(
+            "TechDraw::DrawSVGTemplate", "RecomputeTemplate"
+        )
+        template.Template = (
+            FreeCAD.getResourceDir()
+            + "Mod/TechDraw/Templates/Default_Template_A4_Landscape.svg"
+        )
+        page.Template = template
+        drawing_view = service.place_on_sheet(definition, page)
+
+        with patch.object(ArchSectionPlane, "getSVG", return_value="") as get_svg:
+            self.document.recompute()
+            get_svg.reset_mock()
+            definition.BIMContextSource = replacement
+            self.document.recompute()
+            get_svg.assert_called_once()
+            args, kwargs = get_svg.call_args
+            self.assertIs(replacement, args[0])
+            self.assertIs(definition, kwargs["viewDefinition"])
+
+            get_svg.reset_mock()
+            definition.ReferenceFrame = FreeCAD.Placement(
+                FreeCAD.Vector(25, 50, 75), FreeCAD.Rotation()
+            )
+            self.document.recompute()
+            get_svg.assert_called_once()
+
+            get_svg.reset_mock()
+            definition.ForcedHidden = [wall]
+            self.document.recompute()
+            get_svg.assert_called_once()
+
+        self.assertIs(original, drawing_view.Source)
+        request = service.request_for(definition)
+        self.assertEqual(definition.ReferenceFrame, request.reference_frame)
+
+    def test_sheet_view_link_and_instance_style_survive_save_reopen(self):
+        source = self.document.addObject("App::FeaturePython", "PersistentSource")
+        source.addProperty("App::PropertyPlacement", "Placement")
+        service = BIMViewService(self.document, view=_RecordingView([]))
+        definition = service.create_view(
+            "Persistent Plan", "Plan", source, capture=False
+        )
+        drawing_view = self.document.addObject(
+            "TechDraw::DrawViewArch", "PersistentDrawingView"
+        )
+        drawing_view.Source = source
+        drawing_view.BIMViewDefinition = definition
+        drawing_view.ShowHidden = True
+        drawing_view.Scale = 0.02
+
+        with tempfile.TemporaryDirectory() as directory:
+            path = directory + "/sheet-view.FCStd"
+            self.document.saveAs(path)
+            FreeCAD.closeDocument(self.document.Name)
+            self.document = FreeCAD.openDocument(path)
+
+            reopened_view = self.document.getObject("PersistentDrawingView")
+            reopened_definition = self.document.getObject("BIMView")
+            self.assertIs(reopened_definition, reopened_view.BIMViewDefinition)
+            self.assertTrue(reopened_view.ShowHidden)
+            self.assertAlmostEqual(0.02, reopened_view.Scale)
+            self.assertNotIn("BIMShowHidden", reopened_definition.PropertiesList)
+
+    def test_plan_section_and_elevation_placements_render_svg(self):
+        import Arch
+        import ArchSectionPlane
+
+        plan_wall = Arch.makeWall(length=3000, width=200, height=3000)
+        storey = Arch.makeFloor(name="RenderedStorey")
+        storey.addObject(plan_wall)
+
+        section_wall = Arch.makeWall(length=3000, width=200, height=3000)
+        section = Arch.makeSectionPlane([section_wall], name="RenderedSection")
+        section.Placement = FreeCAD.Placement(
+            FreeCAD.Vector(1500, 0, 0),
+            FreeCAD.Rotation(FreeCAD.Vector(0, 1, 0), 90),
+        )
+
+        elevation_box = self.document.addObject(
+            "PartDesign::Feature", "RenderedElevationBox"
+        )
+        elevation_box.Shape = Part.makeBox(1000, 200, 1200)
+        elevation = Arch.makeSectionPlane([elevation_box], name="RenderedElevation")
+        elevation.Purpose = "Elevation"
+        elevation.Depth = 2000
+        self.document.recompute()
+
+        service = BIMViewService(self.document, view=_RecordingView([]))
+        definitions = (
+            service.create_view("Rendered Plan", "Plan", storey, capture=False),
+            service.create_view(
+                "Rendered Section", "Section", section, capture=False
+            ),
+            service.create_view(
+                "Rendered Elevation", "Elevation", elevation, capture=False
+            ),
+        )
+        page = self.document.addObject("TechDraw::DrawPage", "RenderedPage")
+        template = self.document.addObject(
+            "TechDraw::DrawSVGTemplate", "RenderedTemplate"
+        )
+        template.Template = (
+            FreeCAD.getResourceDir()
+            + "Mod/TechDraw/Templates/Default_Template_A4_Landscape.svg"
+        )
+        page.Template = template
+
+        for index, definition in enumerate(definitions, start=1):
+            source = definition.BIMContextSource
+            svg = ArchSectionPlane.getSVG(
+                source,
+                techdraw=True,
+                renderMode="Wireframe",
+                viewDefinition=definition,
+            )
+            self.assertTrue(svg, definition.Purpose)
+            drawing_view = service.place_on_sheet(definition, page)
+            drawing_view.Scale = 0.01 * index
+            drawing_view.ShowFill = index == 2
+
+        self.document.recompute()
+        for index, drawing_view in enumerate(page.Views, start=1):
+            self.assertIn("<svg", drawing_view.Symbol)
+            self.assertGreater(len(drawing_view.Symbol), 100)
+            self.assertAlmostEqual(0.01 * index, drawing_view.Scale)
+            self.assertEqual(index == 2, drawing_view.ShowFill)
+
+    def test_get_svg_compatibility_wrapper_matches_context_renderer(self):
+        import Arch
+        import ArchSectionPlane
+        import Draft
+
+        wall = Arch.makeWall(length=3000, width=200, height=3000)
+        section = Arch.makeSectionPlane([wall], name="ContextSection")
+        section.Placement = FreeCAD.Placement(
+            FreeCAD.Vector(1500, 0, 0),
+            FreeCAD.Rotation(FreeCAD.Vector(0, 1, 0), 90),
+        )
+        service = BIMViewService(self.document, view=_RecordingView([]))
+        definition = service.create_view(
+            "Context Section", "Section", section, capture=False
+        )
+        self.document.recompute()
+
+        wrapped = ArchSectionPlane.getSVG(
+            section, techdraw=True, viewDefinition=definition
+        )
+        objects, cutplane, only_solids, clip, direction = (
+            ArchSectionPlane.getSectionData(section)
+        )
+        context = resolve_drawing_context(
+            section,
+            objects,
+            view_definition=definition,
+            normally_visible=Draft.removeHidden(objects),
+            cutplane=cutplane,
+            only_solids=only_solids,
+            clip=clip,
+            direction=direction,
+        )
+        contextual = ArchSectionPlane.render_drawing_context(
+            context, techdraw=True
+        )
+
+        self.assertTrue(wrapped)
+        self.assertEqual(wrapped, contextual)
+
+    def test_saved_view_visibility_changes_rendered_svg(self):
+        import Arch
+        import ArchSectionPlane
+
+        first = Arch.makeWall(length=1000, width=200, height=1000)
+        second = Arch.makeWall(length=1000, width=200, height=1000)
+        second.Placement.Base.y = 500
+        section = Arch.makeSectionPlane([first, second], name="VisibilitySection")
+        section.Placement = FreeCAD.Placement(
+            FreeCAD.Vector(500, 0, 0),
+            FreeCAD.Rotation(FreeCAD.Vector(0, 1, 0), 90),
+        )
+        service = BIMViewService(self.document, view=_RecordingView([]))
+        definition = service.create_view(
+            "Visibility Section", "Section", section, capture=False
+        )
+        self.document.recompute()
+
+        complete = ArchSectionPlane.getSVG(
+            section, techdraw=True, viewDefinition=definition
+        )
+        definition.ForcedHidden = [second]
+        hidden = ArchSectionPlane.getSVG(
+            section, techdraw=True, viewDefinition=definition
+        )
+        second.ViewObject.Visibility = False
+        definition.ForcedHidden = []
+        definition.ForcedVisible = [second]
+        restored = ArchSectionPlane.getSVG(
+            section, techdraw=True, viewDefinition=definition
+        )
+
+        self.assertTrue(complete)
+        self.assertTrue(hidden)
+        self.assertNotEqual(complete, hidden)
+        self.assertEqual(complete, restored)
+
+    def test_rendered_sheet_view_reopens_and_tracks_reference_frame(self):
+        import Arch
+
+        wall = Arch.makeWall(length=3000, width=200, height=3000)
+        section = Arch.makeSectionPlane([wall], name="PersistentRenderedSection")
+        section.Placement = FreeCAD.Placement(
+            FreeCAD.Vector(1500, 0, 0),
+            FreeCAD.Rotation(FreeCAD.Vector(0, 1, 0), 90),
+        )
+        service = BIMViewService(self.document, view=_RecordingView([]))
+        definition = service.create_view(
+            "Persistent Render", "Section", section, capture=False
+        )
+        page = self.document.addObject("TechDraw::DrawPage", "PersistentRenderPage")
+        template = self.document.addObject(
+            "TechDraw::DrawSVGTemplate", "PersistentRenderTemplate"
+        )
+        template.Template = (
+            FreeCAD.getResourceDir()
+            + "Mod/TechDraw/Templates/Default_Template_A4_Landscape.svg"
+        )
+        page.Template = template
+        drawing_view = service.place_on_sheet(definition, page)
+        self.document.recompute()
+        original_svg = drawing_view.Symbol
+        self.assertGreater(len(original_svg), 100)
+
+        with tempfile.TemporaryDirectory() as directory:
+            path = directory + "/rendered-sheet-view.FCStd"
+            self.document.saveAs(path)
+            FreeCAD.closeDocument(self.document.Name)
+            self.document = FreeCAD.openDocument(path)
+            reopened_view = self.document.getObject("BIMSavedView")
+            reopened_definition = self.document.getObject("BIMView")
+            self.assertEqual(original_svg, reopened_view.Symbol)
+
+            frame = FreeCAD.Placement(reopened_definition.ReferenceFrame)
+            frame.Rotation = frame.Rotation.multiply(
+                FreeCAD.Rotation(FreeCAD.Vector(0, 0, 1), 30)
+            )
+            reopened_definition.ReferenceFrame = frame
+            self.document.recompute()
+
+            self.assertNotEqual(original_svg, reopened_view.Symbol)
+            self.assertGreater(len(reopened_view.Symbol), 100)
 
     def test_sourced_elevation_view_can_be_linked_to_a_sheet(self):
         facade = self.document.addObject("PartDesign::Feature", "SheetElevationFacade")

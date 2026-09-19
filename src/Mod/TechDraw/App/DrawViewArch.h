@@ -45,6 +45,7 @@ public:
     ~DrawViewArch() override = default;
 
     App::PropertyLink         Source;
+    App::PropertyLink         BIMViewDefinition;
     App::PropertyBool         AllOn;
     App::PropertyEnumeration  RenderMode; // "Wireframe", "Solid"
     App::PropertyBool         FillSpaces;
