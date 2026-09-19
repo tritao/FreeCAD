@@ -113,6 +113,7 @@ class BIMSheetPlacementPropertiesWidget(QtGui.QWidget):
     """Reusable editor for a saved-view placement on a drawing sheet."""
 
     RENDER_MODES = ("Wireframe", "Solid", "Coin", "Coin mono")
+    CUT_FILL_MODES = ("None", "Solid", "Material")
 
     def __init__(self, drawing_view, parent=None):
         super().__init__(parent)
@@ -131,7 +132,10 @@ class BIMSheetPlacementPropertiesWidget(QtGui.QWidget):
         self.render_mode = QtGui.QComboBox()
         self.render_mode.addItems(self.RENDER_MODES)
         self.show_hidden = QtGui.QCheckBox(translate("BIM", "Show hidden lines"))
-        self.show_fill = QtGui.QCheckBox(translate("BIM", "Show cut fills"))
+        self.cut_fill_mode = QtGui.QComboBox()
+        self.cut_fill_mode.addItems(self.CUT_FILL_MODES)
+        self.cut_hatch_scale = self._decimal(0.1, 1000.0, 2, " mm")
+        self.cut_hatch_angle = self._decimal(-360.0, 360.0, 1, "°")
         self.find_free_button = QtGui.QPushButton(
             translate("BIM", "Find Free Position")
         )
@@ -163,7 +167,9 @@ class BIMSheetPlacementPropertiesWidget(QtGui.QWidget):
         form.addRow(translate("BIM", "Title text size"), self.title_size)
         form.addRow(translate("BIM", "Render mode"), self.render_mode)
         form.addRow(self.show_hidden)
-        form.addRow(self.show_fill)
+        form.addRow(translate("BIM", "Cut fill"), self.cut_fill_mode)
+        form.addRow(translate("BIM", "Hatch spacing"), self.cut_hatch_scale)
+        form.addRow(translate("BIM", "Hatch angle"), self.cut_hatch_angle)
         form.addRow(translate("BIM", "Placement assistance"), actions)
         form.addRow(self.suggestion_status)
         self.drawing_view = None
@@ -194,7 +200,9 @@ class BIMSheetPlacementPropertiesWidget(QtGui.QWidget):
             self.title_size.setValue(annotation.TextSize.Value)
         self.render_mode.setCurrentText(str(drawing_view.RenderMode))
         self.show_hidden.setChecked(bool(drawing_view.ShowHidden))
-        self.show_fill.setChecked(bool(drawing_view.ShowFill))
+        self.cut_fill_mode.setCurrentText(str(drawing_view.CutFillMode))
+        self.cut_hatch_scale.setValue(float(drawing_view.CutHatchScale))
+        self.cut_hatch_angle.setValue(float(drawing_view.CutHatchAngle))
         self.suggestion_status.clear()
 
     def _suggestion_arguments(self):
@@ -282,7 +290,9 @@ class BIMSheetPlacementPropertiesWidget(QtGui.QWidget):
             view.Y = self.y.value()
             view.RenderMode = self.render_mode.currentText()
             view.ShowHidden = self.show_hidden.isChecked()
-            view.ShowFill = self.show_fill.isChecked()
+            view.CutFillMode = self.cut_fill_mode.currentText()
+            view.CutHatchScale = self.cut_hatch_scale.value()
+            view.CutHatchAngle = self.cut_hatch_angle.value()
             annotation = _title_annotation(view)
             if annotation is not None:
                 if "BIMTitleGap" not in annotation.PropertiesList:

@@ -45,6 +45,127 @@ class RepresentationMode(Enum):
     VIEWPORT = "ViewportRepresentation"
 
 
+class CutFillMode(Enum):
+    """Renderer-neutral treatment of cut surfaces."""
+
+    NONE = "None"
+    SOLID = "Solid"
+    MATERIAL = "Material"
+
+
+@dataclass(frozen=True)
+class CutSurfaceStyle:
+    """Resolved presentation style for semantic cut surfaces."""
+
+    mode: CutFillMode = CutFillMode.NONE
+    color: tuple = (1.0, 1.0, 1.0)
+    pattern_kind: str = ""
+    pattern_data: str = ""
+    spacing: float = 3.0
+    angle: float = 45.0
+    line_color: tuple = (0.0, 0.0, 0.0)
+    line_weight: float = 0.2
+
+
+def _material_color(value, fallback):
+    if not value:
+        return tuple(fallback[:3])
+    if isinstance(value, (tuple, list)):
+        return tuple(float(component) for component in value[:3])
+    try:
+        return tuple(
+            float(component)
+            for component in str(value).strip().strip("()").split(",")[:3]
+        )
+    except (TypeError, ValueError):
+        return tuple(fallback[:3])
+
+
+def _material_appearance_values(material):
+    """Return official FreeCAD appearance values for a document material."""
+    stored = dict(getattr(material, "Material", {}) or {})
+    card_name = stored.get("CardName") or stored.get("Name")
+    if card_name:
+        try:
+            import Materials
+
+            manager = Materials.MaterialManager()
+            card = next(
+                (
+                    candidate
+                    for candidate in manager.Materials.values()
+                    if str(getattr(candidate, "Name", "")) == str(card_name)
+                ),
+                None,
+            )
+            if card is not None:
+                names = (
+                    "SectionFillPattern",
+                    "SectionColor",
+                    "SectionLinewidth",
+                    "Hatch Pattern",
+                    "Hatch Scale",
+                    "Hatch Weight",
+                    "Hatch Color",
+                    "Pattern File",
+                    "Pattern Scale",
+                    "Pattern Color",
+                )
+                return {
+                    name: value
+                    for name in names
+                    if (value := card.getAppearanceValue(name)) is not None
+                }
+        except (ImportError, RuntimeError):
+            pass
+    return stored
+
+
+def cut_surface_style_for(mapping, fallback):
+    """Resolve renderer-neutral section styling from a BIM material."""
+    if fallback.mode != CutFillMode.MATERIAL:
+        return fallback
+    related = tuple(getattr(mapping, "related_sources", ()) or ())
+    material = next((item for item in related if item), None)
+    source = getattr(mapping, "source", None)
+    if material is None:
+        material = getattr(source, "Material", None)
+    if material and getattr(material, "Materials", None):
+        material = next((item for item in material.Materials if item), material)
+    if not material:
+        return CutSurfaceStyle(CutFillMode.SOLID, fallback.color)
+    values = _material_appearance_values(material)
+    color = values.get("SectionColor") or getattr(material, "SectionColor", None)
+    section_color = _material_color(color, fallback.color)
+    if values.get("Hatch Pattern"):
+        return CutSurfaceStyle(
+            mode=CutFillMode.MATERIAL,
+            color=section_color,
+            pattern_kind="PAT",
+            pattern_data=str(values["Hatch Pattern"]),
+            spacing=float(values.get("Hatch Scale", 1.0)) * fallback.spacing,
+            angle=fallback.angle,
+            line_color=_material_color(values.get("Hatch Color"), fallback.line_color),
+            line_weight=float(values.get("Hatch Weight", fallback.line_weight)),
+        )
+    pattern_file = values.get("Pattern File") or values.get("SectionFillPattern")
+    if pattern_file:
+        return CutSurfaceStyle(
+            mode=CutFillMode.MATERIAL,
+            color=section_color,
+            pattern_kind="SVG",
+            pattern_data=str(pattern_file),
+            spacing=float(values.get("Pattern Scale", 1.0)) * fallback.spacing,
+            angle=fallback.angle,
+            line_color=_material_color(values.get("Pattern Color"), fallback.line_color),
+            line_weight=fallback.line_weight,
+        )
+    return CutSurfaceStyle(
+        mode=CutFillMode.SOLID,
+        color=section_color,
+    )
+
+
 class BIMPreviewStyle(Enum):
     """Renderer-neutral presentation intent for transient semantic geometry."""
 

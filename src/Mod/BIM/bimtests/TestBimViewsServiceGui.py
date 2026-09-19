@@ -425,6 +425,9 @@ class TestBimViewsServiceGui(TestArchBaseGui):
             editor.title_offset.setValue(10)
             editor.title_size.setValue(4)
             editor.show_hidden.setChecked(True)
+            editor.cut_fill_mode.setCurrentText("Material")
+            editor.cut_hatch_scale.setValue(4.5)
+            editor.cut_hatch_angle.setValue(30.0)
             with patch("ArchSectionPlane.getSVG", return_value=""):
                 editor.apply()
         finally:
@@ -441,6 +444,9 @@ class TestBimViewsServiceGui(TestArchBaseGui):
         self.assertLess(annotation.OwnerOffsetY.Value, -10)
         self.assertAlmostEqual(4, annotation.TextSize.Value)
         self.assertTrue(drawing_view.ShowHidden)
+        self.assertEqual("Material", drawing_view.CutFillMode)
+        self.assertAlmostEqual(4.5, drawing_view.CutHatchScale)
+        self.assertAlmostEqual(30.0, drawing_view.CutHatchAngle)
 
     def test_placement_inspector_suggests_layout_without_mutating_document(self):
         source = self.document.addObject("App::FeaturePython", "SuggestionSource")
@@ -1781,6 +1787,32 @@ class TestBimViewsServiceGui(TestArchBaseGui):
         self.assertIn("BIMViewDefinition", drawing_view.PropertiesList)
         self.assertNotIn("BIMSheetScale", definition.PropertiesList)
         self.assertNotIn("BIMRenderMode", definition.PropertiesList)
+        self.assertTrue(drawing_view.ShowFill)
+        self.assertEqual("Solid", drawing_view.CutFillMode)
+        drawing_view.ShowFill = False
+        self.assertEqual("None", drawing_view.CutFillMode)
+        drawing_view.CutFillMode = "Material"
+        self.assertTrue(drawing_view.ShowFill)
+        drawing_view.ShowFill = True
+        self.assertEqual("Material", drawing_view.CutFillMode)
+
+    def test_sheet_cut_fill_defaults_follow_view_purpose(self):
+        source = self.document.addObject("App::FeaturePython", "CutFillSource")
+        source.addProperty("App::PropertyPlacement", "Placement")
+        service = BIMViewService(self.document, view=_RecordingView([]))
+        template_path = (
+            FreeCAD.getResourceDir()
+            + "Mod/TechDraw/Templates/Default_Template_A4_Landscape.svg"
+        )
+
+        purposes = (("Plan", True), ("Section", True), ("Elevation", False))
+        for purpose, expected in purposes:
+            definition = service.create_view(
+                "{} View".format(purpose), purpose, source, capture=False
+            )
+            page = BIMSheetService(self.document).create_sheet(template_path)
+            drawing_view = service.place_on_sheet(definition, page)
+            self.assertEqual(expected, drawing_view.ShowFill)
 
     def test_first_sheet_view_fits_and_centers_in_printable_area(self):
         source = self.document.addObject("App::FeaturePython", "CenteredPlanSource")
@@ -2107,6 +2139,9 @@ class TestBimViewsServiceGui(TestArchBaseGui):
 
         with patch.object(ArchSectionPlane, "getSVG", return_value="") as get_svg:
             self.document.recompute()
+            fill_color = get_svg.call_args.kwargs["fillColor"]
+            for component in fill_color:
+                self.assertAlmostEqual(0.85, component, places=5)
             get_svg.reset_mock()
             drawing_view.FontSize = 10.0
             drawing_view.LineSpacing = 1.2

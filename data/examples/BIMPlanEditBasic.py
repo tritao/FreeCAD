@@ -17,6 +17,7 @@ import Draft
 import FreeCAD as App
 import FreeCADGui as Gui
 import Part
+from BIMExampleBuilding import make_opening, make_wall
 from bimviews.service import BIMViewService
 from PySide import QtCore
 
@@ -64,7 +65,6 @@ def make_opening(doc, wall, name, point, width, height, *, door=False, sill=900.
     Arch.addComponents(opening, wall)
     doc.recompute()
     return opening
-
 
 def add_label(text, point, size=170.0):
     label = Draft.make_shapestring(text, FONT_PATH, Size=size, Tracking=0)

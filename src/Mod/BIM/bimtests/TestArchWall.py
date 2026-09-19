@@ -486,6 +486,71 @@ class TestArchWall(TestArchBase.TestArchBase):
         self.assertEqual(1, len(representation.cut_geometry))
         self.assertAlmostEqual(600000.0, representation.cut_geometry[0].Area)
 
+    def test_multilayer_plan_faces_preserve_layer_material_ownership(self):
+        first_material = Arch.makeMaterial(name="FirstLayerMaterial")
+        second_material = Arch.makeMaterial(name="SecondLayerMaterial")
+        first_material.Material = {
+            "Hatch Pattern": "*Diagonal\n45,0,0,0,4",
+            "Hatch Scale": "1",
+        }
+        second_material.Material = {
+            "Hatch Pattern": "*Cross\n0,0,0,0,4\n90,0,0,0,4",
+            "Hatch Scale": "1",
+        }
+        material = Arch.makeMultiMaterial(name="LayeredWallMaterial")
+        material.Materials = [first_material, second_material]
+        material.Thicknesses = [100, 200]
+        wall = Arch.makeWall(length=3000, width=300, height=2500)
+        wall.Material = material
+        self.document.recompute()
+        request = ArchRepresentation.RepresentationRequest(
+            purpose=ArchRepresentation.RepresentationPurpose.PLAN,
+            cut_offset=1000.0,
+            target_offset=0.0,
+        )
+
+        representation = wall.Proxy.getRepresentation(wall, request)
+
+        self.assertEqual(2, len(representation.cut_geometry))
+        self.assertEqual(
+            [first_material, second_material],
+            [
+                representation.mapping_for(face).related_sources[0]
+                for face in representation.cut_geometry
+            ],
+        )
+        self.assertEqual(
+            [300000.0, 600000.0],
+            sorted(round(face.Area, 6) for face in representation.cut_geometry),
+        )
+        fallback = ArchRepresentation.CutSurfaceStyle(
+            ArchRepresentation.CutFillMode.MATERIAL
+        )
+        self.assertEqual(
+            ["PAT", "PAT"],
+            [
+                ArchRepresentation.cut_surface_style_for(
+                    representation.mapping_for(face), fallback
+                ).pattern_kind
+                for face in representation.cut_geometry
+            ],
+        )
+
+        self._make_hosted_window(wall, "LayeredWallOpening", 800, 500)
+        from bimviews import representation_cache
+
+        representation_cache.invalidate_document(self.document)
+        opened = wall.Proxy.getRepresentation(wall, request)
+        self.assertEqual(2, len(opened.cut_geometry))
+        self.assertLess(sum(face.Area for face in opened.cut_geometry), 900000.0)
+        self.assertEqual(
+            {first_material, second_material},
+            {
+                opened.mapping_for(face).related_sources[0]
+                for face in opened.cut_geometry
+            },
+        )
+
     def test_joined_wall_analytic_outputs_match_exact_shape(self):
         """Joined-wall meshes and directly compiled solids match legacy geometry."""
 

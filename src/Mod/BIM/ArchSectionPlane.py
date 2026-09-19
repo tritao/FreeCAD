@@ -211,7 +211,18 @@ def isOriented(obj, plane):
     return False
 
 
-def update_svg_cache(source, renderMode, showHidden, showFill, fillSpaces, joinArch, allOn, objs):
+def update_svg_cache(
+    source,
+    renderMode,
+    showHidden,
+    showFill,
+    fillColor,
+    fillSpaces,
+    joinArch,
+    allOn,
+    objs,
+    frame,
+):
     """
     Returns None or cached SVG, clears shape cache if required
     """
@@ -222,7 +233,10 @@ def update_svg_cache(source, renderMode, showHidden, showFill, fillSpaces, joinA
             svgcache = source.Proxy.svgcache[0]
             # empty caches if we want to force-recalculate for certain properties
             if (
-                source.Proxy.svgcache[1] != renderMode
+                len(source.Proxy.svgcache) < 10
+                or source.Proxy.svgcache[8] != frame
+                or source.Proxy.svgcache[9] != fillColor
+                or source.Proxy.svgcache[1] != renderMode
                 or source.Proxy.svgcache[2] != showHidden
                 or source.Proxy.svgcache[3] != showFill
                 or source.Proxy.svgcache[4] != fillSpaces
@@ -232,7 +246,9 @@ def update_svg_cache(source, renderMode, showHidden, showFill, fillSpaces, joinA
             ):
                 svgcache = None
             if (
-                source.Proxy.svgcache[4] != fillSpaces
+                len(source.Proxy.svgcache) < 10
+                or source.Proxy.svgcache[8] != frame
+                or source.Proxy.svgcache[4] != fillSpaces
                 or source.Proxy.svgcache[5] != joinArch
                 or source.Proxy.svgcache[6] != allOn
                 or source.Proxy.svgcache[7] != set(objs)
@@ -254,6 +270,9 @@ def getSVG(
     linespacing=None,
     showFill=False,
     fillColor=(1.0, 1.0, 1.0),
+    cutFillMode=None,
+    cutHatchScale=3.0,
+    cutHatchAngle=45.0,
     techdraw=False,
     fillSpaces=False,
     cutlinewidth=0,
@@ -302,14 +321,18 @@ def getSVG(
         only_solids=onlySolids,
         clip=clip,
         direction=direction,
-        resolve_request=(
-            techdraw
-            and not showHidden
-            and not showFill
-            and not fillSpaces
-            and not joinArch
-        ),
+        resolve_request=techdraw,
     )
+    if context.request is not None and viewDefinition is not None:
+        from dataclasses import replace
+
+        source_frame = FreeCAD.Placement(source.Placement)
+        request_frame = FreeCAD.Placement(context.request.reference_frame)
+        transform = request_frame.multiply(source_frame.inverse())
+        cutplane = cutplane.copy()
+        cutplane.Placement = transform.multiply(cutplane.Placement)
+        direction = request_frame.Rotation.multVec(FreeCAD.Vector(0, 0, 1))
+        context = replace(context, cutplane=cutplane, direction=direction)
     return render_drawing_context(
         context,
         renderMode=renderMode,
@@ -323,6 +346,9 @@ def getSVG(
         linespacing=linespacing,
         showFill=showFill,
         fillColor=fillColor,
+        cutFillMode=cutFillMode,
+        cutHatchScale=cutHatchScale,
+        cutHatchAngle=cutHatchAngle,
         techdraw=techdraw,
         fillSpaces=fillSpaces,
         cutlinewidth=cutlinewidth,
@@ -343,6 +369,9 @@ def render_drawing_context(
     linespacing=None,
     showFill=False,
     fillColor=(1.0, 1.0, 1.0),
+    cutFillMode=None,
+    cutHatchScale=3.0,
+    cutHatchAngle=45.0,
     techdraw=False,
     fillSpaces=False,
     cutlinewidth=0,
@@ -351,6 +380,19 @@ def render_drawing_context(
     """Render an already resolved :class:`BIMDrawingContext` to SVG."""
 
     import Part
+    from ArchRepresentation import CutFillMode, CutSurfaceStyle
+
+    if cutFillMode is None:
+        cut_fill_mode = CutFillMode.SOLID if showFill else CutFillMode.NONE
+    else:
+        cut_fill_mode = CutFillMode(cutFillMode)
+    showFill = cut_fill_mode != CutFillMode.NONE
+    cut_surface_style = CutSurfaceStyle(
+        cut_fill_mode,
+        tuple(fillColor),
+        spacing=float(cutHatchScale),
+        angle=float(cutHatchAngle),
+    )
 
     source = context.source
     objs = list(context.objects)
@@ -399,7 +441,6 @@ def render_drawing_context(
         tuple(objs),
         techdraw=techdraw,
         showHidden=showHidden,
-        showFill=showFill,
         fillSpaces=fillSpaces,
         joinArch=joinArch,
     )
@@ -432,9 +473,21 @@ def render_drawing_context(
     svgLineColor = Draft.getrgb(lineColor)
     svg = ""
     # reading cached version
-    svgcache = update_svg_cache(
-        source, renderMode, showHidden, showFill, fillSpaces, joinArch, allOn, objs
-    )
+    frame = FreeCAD.Placement(cutplane.Placement)
+    svgcache = None
+    if not contextual_representations:
+        svgcache = update_svg_cache(
+            source,
+            renderMode,
+            showHidden,
+            showFill,
+            fillColor,
+            fillSpaces,
+            joinArch,
+            allOn,
+            objs,
+            frame,
+        )
     should_update_svg_cache = False
     if contextual_representations or showFill or not svgcache:
         should_update_svg_cache = True
@@ -574,6 +627,13 @@ def render_drawing_context(
                             "v1Style": silhouette_style,
                         }
                     }
+                if showFill:
+                    svgcache += TechDrawBIM.fill_representations_to_svg(
+                        contextual_representations,
+                        direction,
+                        cut_surface_style,
+                        drawing_scale=scale,
+                    )
                 for representation in contextual_representations:
                     if representation.projected_geometry:
                         svgcache += TechDrawBIM.project_representation_to_svg(
@@ -676,7 +736,7 @@ def render_drawing_context(
                         v0Style=style,
                         v1Style=style,
                     )
-    if should_update_svg_cache:
+    if should_update_svg_cache and not contextual_representations:
         if hasattr(source, "Proxy"):
             source.Proxy.svgcache = [
                 svgcache,
@@ -687,6 +747,8 @@ def render_drawing_context(
                 joinArch,
                 allOn,
                 set(objs),
+                frame,
+                fillColor,
             ]
 
     svgcache = svgcache.replace("SVGLINECOLOR", svgLineColor)
@@ -789,11 +851,10 @@ def _get_contextual_representations(
     *,
     techdraw,
     showHidden,
-    showFill,
     fillSpaces,
     joinArch,
 ):
-    """Return semantic representations when the simple TechDraw path applies.
+    """Return semantic representations for supported TechDraw options.
 
     This is intentionally an all-or-nothing path.  A section containing an
     object that has not adopted ``getRepresentation`` continues through the
@@ -803,7 +864,6 @@ def _get_contextual_representations(
     if (
         not techdraw
         or showHidden
-        or showFill
         or fillSpaces
         or joinArch
         or not objects

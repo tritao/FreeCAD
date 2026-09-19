@@ -46,6 +46,7 @@ const char* DrawViewArch::RenderModeEnums[]= {"Wireframe",
                                               "Coin",
                                               "Coin mono",
                                               nullptr};
+const char* DrawViewArch::CutFillModeEnums[]= {"None", "Solid", "Material", nullptr};
 
 DrawViewArch::DrawViewArch()
 {
@@ -61,7 +62,16 @@ DrawViewArch::DrawViewArch()
     ADD_PROPERTY_TYPE(RenderMode, ((long)0), group, App::Prop_None, "The render mode to use");
     ADD_PROPERTY_TYPE(FillSpaces ,(false), group, App::Prop_None, "If True, BIM Spaces are shown as a colored area");
     ADD_PROPERTY_TYPE(ShowHidden ,(false), group, App::Prop_None, "If the hidden geometry behind the section plane is shown or not");
-    ADD_PROPERTY_TYPE(ShowFill ,(false), group, App::Prop_None, "If cut areas must be filled with a hatch pattern or not");
+    ADD_PROPERTY_TYPE(ShowFill ,(false), group, App::Prop_None, "If cut areas must be filled or not");
+    CutFillMode.setEnums(CutFillModeEnums);
+    ADD_PROPERTY_TYPE(CutFillMode, ((long)0), group, App::Prop_None, "How cut areas are filled");
+    ADD_PROPERTY_TYPE(FillColor,
+                      (0.85f, 0.85f, 0.85f),
+                      group,
+                      App::Prop_None,
+                      "Color used to fill cut areas");
+    ADD_PROPERTY_TYPE(CutHatchScale, (3.0f), group, App::Prop_None, "Cut hatch spacing in paper units");
+    ADD_PROPERTY_TYPE(CutHatchAngle, (45.0), group, App::Prop_None, "Fallback cut hatch angle");
     ADD_PROPERTY_TYPE(LineWidth, (0.25), group, App::Prop_None, "Line width of this view");
     ADD_PROPERTY_TYPE(FontSize, (12.0), group, App::Prop_None, "Text size for this view");
     ADD_PROPERTY_TYPE(CutLineWidth, (0.50), group, App::Prop_None, "Width of cut lines of this view");
@@ -81,6 +91,10 @@ short DrawViewArch::mustExecute() const
             RenderMode.isTouched() ||
             ShowHidden.isTouched() ||
             ShowFill.isTouched() ||
+            CutFillMode.isTouched() ||
+            FillColor.isTouched() ||
+            CutHatchScale.isTouched() ||
+            CutHatchAngle.isTouched() ||
             LineWidth.isTouched() ||
             FontSize.isTouched() ||
             CutLineWidth.isTouched() ||
@@ -126,10 +140,16 @@ App::DocumentObjectExecReturn *DrawViewArch::execute()
         // ArchSectionPlane.getSVG(section, allOn=False, renderMode="Wireframe", showHidden=False, showFill=False, scale=1, linewidth=1, fontsize=1):
 
         std::stringstream paramStr;
+        const auto& fillColor = FillColor.getValue();
         paramStr << ", allOn=" << (AllOn.getValue() ? "True" : "False")
                  << ", renderMode=" << RenderMode.getValue()
                  << ", showHidden=" << (ShowHidden.getValue() ? "True" : "False")
                  << ", showFill=" << (ShowFill.getValue() ? "True" : "False")
+                 << ", cutFillMode='" << CutFillMode.getValueAsString() << "'"
+                 << ", fillColor=(" << fillColor.r << "," << fillColor.g << "," << fillColor.b
+                 << ")"
+                 << ", cutHatchScale=" << CutHatchScale.getValue()
+                 << ", cutHatchAngle=" << CutHatchAngle.getValue()
                  << ", scale=" << getScale()
                  << ", linewidth=" << LineWidth.getValue()
                  << ", fontsize=" << FontSize.getValue()
@@ -153,6 +173,26 @@ App::DocumentObjectExecReturn *DrawViewArch::execute()
     }
     overrideKeepUpdated(false);
     return DrawView::execute();
+}
+
+void DrawViewArch::onChanged(const App::Property* prop)
+{
+    if (!syncingCutFill) {
+        syncingCutFill = true;
+        if (prop == &ShowFill) {
+            if (!ShowFill.getValue()) {
+                CutFillMode.setValue("None");
+            }
+            else if (CutFillMode.getValue() == 0) {
+                CutFillMode.setValue("Solid");
+            }
+        }
+        else if (prop == &CutFillMode) {
+            ShowFill.setValue(CutFillMode.getValue() != 0);
+        }
+        syncingCutFill = false;
+    }
+    DrawViewSymbol::onChanged(prop);
 }
 
 std::string DrawViewArch::getSVGHead()

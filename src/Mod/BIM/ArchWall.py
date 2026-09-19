@@ -1333,16 +1333,31 @@ class _Wall(ArchComponent.Component):
         if analytic_model is None:
             cut_faces = tuple(self._getCutRepresentation(obj, request))
             face_meshes = ()
+            face_materials = self._cut_face_materials(obj, cut_faces)
         else:
             representation.analytic_model = analytic_model
-            cut_faces = analytic_model.make_faces()
-            face_meshes = analytic_model.face_meshes
+            material = getattr(obj, "Material", None)
+            materials = tuple(getattr(material, "Materials", ()) or ())
+            if materials:
+                layer_faces = analytic_model.make_layer_faces()
+                cut_faces = tuple(face for face, _index in layer_faces)
+                face_materials = tuple(
+                    materials[index] if index < len(materials) else None
+                    for _face, index in layer_faces
+                )
+                face_meshes = ()
+            else:
+                cut_faces = analytic_model.make_faces()
+                face_meshes = analytic_model.face_meshes
+                face_materials = ()
         for index, face in enumerate(cut_faces, start=1):
+            layer_material = face_materials[index - 1] if face_materials else None
             representation.add_geometry(
                 "cut_geometry",
                 face,
                 "PlanCutFace",
                 subelement=f"PlanFace{index}",
+                related_sources=(layer_material,) if layer_material else (),
                 face_mesh=face_meshes[index - 1] if face_meshes else None,
             )
             outer_wire = getattr(face, "OuterWire", None)
@@ -1412,6 +1427,39 @@ class _Wall(ArchComponent.Component):
                 )
         self._add_edit_handles(representation, obj, request)
         return representation
+
+    def _cut_face_materials(self, obj, faces):
+        """Map BRep-derived cut faces back to resolved material layers."""
+        material = getattr(obj, "Material", None)
+        materials = tuple(getattr(material, "Materials", ()) or ())
+        if not materials or not faces:
+            return ()
+        import ArchPlanAnalytic
+
+        recipe = ArchPlanAnalytic.straight_wall_geometry_recipe(obj, self)
+        if recipe is None:
+            return ()
+        result = []
+        tolerance = 1e-6
+        for face in faces:
+            offset = FreeCAD.Vector(face.CenterOfMass).sub(recipe.axis_start).dot(
+                recipe.lateral
+            )
+            layer_index = next(
+                (
+                    index
+                    for index, layer in enumerate(recipe.section.layers)
+                    if layer.visible
+                    and layer.y_min - tolerance <= offset <= layer.y_max + tolerance
+                ),
+                None,
+            )
+            result.append(
+                materials[layer_index]
+                if layer_index is not None and layer_index < len(materials)
+                else None
+            )
+        return tuple(result)
 
     def _get_model_representation(self, obj, request):
         """Return an opt-in analytic mesh, with the exact Part shape as fallback."""
