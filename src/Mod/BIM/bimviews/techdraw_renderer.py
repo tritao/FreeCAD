@@ -284,171 +284,37 @@ def _geometry_by_role(representation, collection):
     }
 
 
-def _point_key(point):
-    """Return a stable key for one projected semantic point."""
-
-    tolerance = 1.0e-7
-    return tuple(round(float(getattr(point, axis)) / tolerance) for axis in "xyz")
-
-
-def _segment_key(first, second):
-    """Return an orientation-independent key for a straight segment."""
-
-    endpoints = (_point_key(first), _point_key(second))
-    return tuple(sorted(endpoints))
-
-
-def _boundary_graph_paths(representations, indices):
-    """Build continuous wall-boundary cycles with joint seams removed."""
-
-    seam_keys = set()
-    boundary_edges = {}
-    for index in indices:
-        representation = representations[index]
-        for geometry in getattr(representation, "projected_geometry", ()):
-            mapping = representation.mapping_for(geometry)
-            role = getattr(mapping, "role", None)
-            if role not in {"PlanCutOuterBoundary", "WallJointCutLine"}:
-                continue
-            if hasattr(geometry, "ShapeType"):
-                continue
-            points = list(geometry)
-            if len(points) < 2:
-                continue
-            if role == "WallJointCutLine":
-                for first, second in zip(points, points[1:]):
-                    if _point_key(first) != _point_key(second):
-                        seam_keys.add(_segment_key(first, second))
-                continue
-            for first, second in zip(points, points[1:]):
-                if _point_key(first) == _point_key(second):
-                    continue
-                key = _segment_key(first, second)
-                if key not in seam_keys:
-                    boundary_edges.setdefault(key, (first, second))
-
-    if not boundary_edges:
-        return ()
-
-    # Boundary edges may be encountered before their matching joint seam.
-    # Remove those shared seam edges after collecting both geometry roles.
-    boundary_edges = {
-        key: edge for key, edge in boundary_edges.items() if key not in seam_keys
-    }
-    adjacency = {}
-    for edge_index, (first, second) in enumerate(boundary_edges.values()):
-        first_key = _point_key(first)
-        second_key = _point_key(second)
-        adjacency.setdefault(first_key, []).append((edge_index, second_key))
-        adjacency.setdefault(second_key, []).append((edge_index, first_key))
-    if any(len(edges) != 2 for edges in adjacency.values()):
-        return ()
-
-    edges = tuple(boundary_edges.values())
-    paths = []
-    visited = set()
-    for start_index, (first, second) in enumerate(edges):
-        if start_index in visited:
-            continue
-        start_key = _point_key(first)
-        current_key = start_key
-        previous_index = None
-        points = []
-        while True:
-            candidates = [
-                (edge_index, next_key)
-                for edge_index, next_key in adjacency[current_key]
-                if edge_index != previous_index and edge_index not in visited
-            ]
-            if not candidates:
-                return ()
-            edge_index, next_key = candidates[0]
-            visited.add(edge_index)
-            edge_first, edge_second = edges[edge_index]
-            if not points:
-                points.append(
-                    edge_first
-                    if _point_key(edge_first) == current_key
-                    else edge_second
-                )
-            points.append(
-                edge_second
-                if _point_key(edge_first) == current_key
-                else edge_first
-            )
-            previous_index = edge_index
-            current_key = next_key
-            if current_key == start_key:
-                break
-        if len(points) >= 4:
-            paths.append(tuple(points[:-1]))
-    return tuple(paths) if len(visited) == len(edges) else ()
-
-
 def _project_joined_wall_boundaries_to_svg(
     representations, direction, style
 ):
-    """Render joined wall boundaries as continuous stroked SVG paths."""
+    """Serialize canonical BIM contours without repairing their topology."""
+
+    import ArchPlanContours
+    import Part
 
     components = _wall_joint_components(representations)
-    if not components:
-        return ""
-
-    # ``components`` maps each member index to its connected component.  The
-    # values are normalized so each component is rendered exactly once even
-    # when several members point at the same tuple.
-    groups = tuple(sorted({tuple(sorted(value)) for value in components.values()}))
+    joined_representations = tuple(
+        representation
+        for index, representation in enumerate(representations)
+        if index in components
+    )
     fragments = []
-    for indices in groups:
-        paths = _boundary_graph_paths(representations, indices)
-        if not paths:
-            return ""
-        for points in paths:
-            import Part
-
-            try:
-                wire = Part.makePolygon((*points, points[0]))
-                face = Part.Face(wire)
-            except Exception:
-                return ""
+    for contours in ArchPlanContours.joined_contours(joined_representations):
+        for points in (*contours.outer_contours, *contours.opening_contours):
+            wire = Part.makePolygon(points)
+            face = Part.Face(wire)
             fragment = _project_shape_to_svg(
                 face,
                 direction,
                 {"hStyle": style, "vStyle": style},
             )
-            if not fragment:
-                return ""
             fragments.append(fragment)
-
-        seam_entries = []
-        seen_seams = set()
-        for index in indices:
-            representation = representations[index]
-            for geometry in getattr(representation, "projected_geometry", ()):
-                if hasattr(geometry, "ShapeType"):
-                    continue
-                mapping = representation.mapping_for(geometry)
-                if getattr(mapping, "role", None) != "WallJointCutLine":
-                    continue
-                key = _segment_key(geometry[0], geometry[-1])
-                if key in seen_seams:
-                    continue
-                seen_seams.add(key)
-                seam_entries.append((representation, geometry))
-        if seam_entries:
+        for seam in contours.seam_lines:
             fragments.append(
-                _project_entries_to_svg(
-                    seam_entries,
+                _project_shape_to_svg(
+                    Part.makePolygon(seam),
                     direction,
-                    {},
-                    {
-                        "hStyle": style,
-                        "h0Style": style,
-                        "h1Style": style,
-                        "vStyle": style,
-                        "v0Style": style,
-                        "v1Style": style,
-                    },
+                    {"hStyle": style, "vStyle": style},
                 )
             )
     return "".join(fragments)
@@ -635,7 +501,10 @@ def _prepared_projection_entries(
             index = representation_indices[id(representation)]
             mapping = representation.mapping_for(geometry)
             role = getattr(mapping, "role", None)
-            if index in joined_indices and role == "PlanCutOuterBoundary":
+            if index in joined_indices and role in {
+                "PlanCutOuterBoundary",
+                "PlanCutInnerBoundary",
+            }:
                 continue
             if index in joined_indices and role == "WallJointCutLine" and include_joint_lines:
                 continue

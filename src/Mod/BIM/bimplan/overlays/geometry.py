@@ -300,6 +300,9 @@ def get_wall_overlay_polylines(session, wall):
         return []
     proxy = getattr(wall, "Proxy", None)
     representation = get_wall_representation(session, wall)
+    contours = getattr(representation, "plan_contours", None)
+    if contours is not None:
+        return list((*contours.outer_contours, *contours.opening_contours))
     faces = (
         getattr(representation, "cut_geometry", ())
         if representation is not None
