@@ -308,7 +308,22 @@ class BIMViewService:
             ArchRepresentation.RepresentationPurpose.ELEVATION,
         ) and self.context_source(definition) is not None
 
-    def place_on_sheet(self, definition, page):
+    def placements_for(self, definition, page=None):
+        """Return TechDraw placements linked to a saved view."""
+
+        if not self.is_view_definition(definition):
+            return ()
+        return tuple(
+            obj
+            for obj in self.document.Objects
+            if obj.isDerivedFrom("TechDraw::DrawViewArch")
+            and getattr(obj, self.SHEET_VIEW_PROPERTY, None) is definition
+            and (page is None or obj in getattr(page, "Views", ()))
+        )
+
+    def place_on_sheet(
+        self, definition, page, position=None, *, allow_duplicate=False
+    ):
         """Create a linked TechDraw BIM view for a sourced planar definition."""
 
         if not self.can_place_on_sheet(definition):
@@ -317,6 +332,12 @@ class BIMViewService:
             )
         if page is None or not page.isDerivedFrom("TechDraw::DrawPage"):
             raise TypeError("page must be a TechDraw::DrawPage")
+        if self.placements_for(definition, page) and not allow_duplicate:
+            raise ValueError("This BIM view is already placed on the selected sheet")
+        from bimsheets.service import BIMSheetService
+
+        sheet_service = BIMSheetService(self.document)
+        sheet_service.ensure_metadata(page)
         drawing_view = self.document.addObject("TechDraw::DrawViewArch", "BIMSavedView")
         drawing_view.Label = definition.Label
         drawing_view.Source = self.context_source(definition)
@@ -324,7 +345,39 @@ class BIMViewService:
         page.addView(drawing_view)
         if getattr(page, "Scale", 0.0):
             drawing_view.Scale = page.Scale
+        try:
+            sheet_service.layout_view(page, drawing_view, position=position)
+            from bimsheets import BIMSheetViewTitleService
+
+            BIMSheetViewTitleService(self.document).create(page, drawing_view)
+        except (TypeError, ValueError):
+            from bimsheets import BIMSheetViewTitleService
+
+            annotation = BIMSheetViewTitleService.annotation_for(drawing_view)
+            if annotation is not None:
+                page.removeView(annotation)
+                self.document.removeObject(annotation.Name)
+            page.removeView(drawing_view)
+            self.document.removeObject(drawing_view.Name)
+            raise
         return drawing_view
+
+    def remove_sheet_placement(self, drawing_view):
+        """Remove one placement without deleting its saved BIM view."""
+
+        if drawing_view is None or not drawing_view.isDerivedFrom(
+            "TechDraw::DrawViewArch"
+        ):
+            raise TypeError("drawing_view must be a TechDraw::DrawViewArch")
+        if getattr(drawing_view, self.SHEET_VIEW_PROPERTY, None) is None:
+            raise ValueError("drawing_view is not a saved BIM view placement")
+        page = drawing_view.findParentPage()
+        from bimsheets import BIMSheetViewTitleService
+
+        BIMSheetViewTitleService(self.document).remove(drawing_view)
+        if page is not None:
+            page.removeView(drawing_view)
+        self.document.removeObject(drawing_view.Name)
 
     def capture(self, definition, view=None):
         if not self.is_view_definition(definition):

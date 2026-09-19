@@ -5,6 +5,8 @@
 from dataclasses import dataclass, replace
 from pathlib import Path
 
+from .layout import BIMSheetLayout, SheetMargins, SheetRect, svg_footprint
+
 
 @dataclass(frozen=True)
 class BIMSheetMetadata:
@@ -19,12 +21,16 @@ class BIMSheetMetadata:
     status: str = "Work in Progress"
     template_identity: str = ""
     order: int = 0
+    margin_left: float = 10.0
+    margin_top: float = 10.0
+    margin_right: float = 10.0
+    margin_bottom: float = 10.0
 
 
 class BIMSheetService:
     """Create and identify TechDraw pages participating in a BIM sheet set."""
 
-    SCHEMA_VERSION = 1
+    SCHEMA_VERSION = 4
     PROPERTY_GROUP = "BIM Sheet"
     DISCIPLINES = (
         "General",
@@ -50,6 +56,12 @@ class BIMSheetService:
         ("Issue", "Current sheet issue identifier"),
         ("IssueDate", "Current sheet issue date"),
         ("TemplateIdentity", "Stable identity of the sheet template"),
+    )
+    _MARGIN_PROPERTIES = (
+        ("PrintableMarginLeft", "Left printable margin"),
+        ("PrintableMarginTop", "Top printable margin"),
+        ("PrintableMarginRight", "Right printable margin"),
+        ("PrintableMarginBottom", "Bottom printable margin"),
     )
 
     def __init__(self, document):
@@ -84,9 +96,15 @@ class BIMSheetService:
             )
             page.BIMSheetSchemaVersion = self.SCHEMA_VERSION
             page.setEditorMode("BIMSheetSchemaVersion", 1)
+        elif page.BIMSheetSchemaVersion < self.SCHEMA_VERSION:
+            page.BIMSheetSchemaVersion = self.SCHEMA_VERSION
         for name, description in self._STRING_PROPERTIES:
             if name not in page.PropertiesList:
                 page.addProperty("App::PropertyString", name, group, description)
+        for name, description in self._MARGIN_PROPERTIES:
+            if name not in page.PropertiesList:
+                page.addProperty("App::PropertyLength", name, group, description)
+                setattr(page, name, 10.0)
         if "Discipline" not in page.PropertiesList:
             page.addProperty(
                 "App::PropertyEnumeration",
@@ -110,6 +128,17 @@ class BIMSheetService:
                 group,
                 "Stable sheet ordering key",
             )
+        if "ViewTitleTextSize" not in page.PropertiesList:
+            page.addProperty("App::PropertyLength", "ViewTitleTextSize", group,
+                             "Default text size for view titles")
+            page.ViewTitleTextSize = 3.5
+        if "ViewTitleOffset" not in page.PropertiesList:
+            page.addProperty("App::PropertyLength", "ViewTitleOffset", group,
+                             "Default vertical offset for view titles")
+            page.ViewTitleOffset = 12.0
+        if "ViewTitleFont" not in page.PropertiesList:
+            page.addProperty("App::PropertyString", "ViewTitleFont", group,
+                             "Optional font override for view titles")
 
         if metadata is not None:
             self.apply_metadata(page, metadata)
@@ -134,6 +163,14 @@ class BIMSheetService:
         page.SheetStatus = metadata.status
         page.TemplateIdentity = metadata.template_identity
         page.SheetOrder = metadata.order
+        page.PrintableMarginLeft = metadata.margin_left
+        page.PrintableMarginTop = metadata.margin_top
+        page.PrintableMarginRight = metadata.margin_right
+        page.PrintableMarginBottom = metadata.margin_bottom
+        if getattr(page, "Template", None) is not None:
+            from .titleblock import BIMTitleBlockService
+
+            BIMTitleBlockService(self.document).synchronize(page)
         return page
 
     def metadata_for(self, page):
@@ -151,6 +188,10 @@ class BIMSheetService:
             status=str(page.SheetStatus),
             template_identity=page.TemplateIdentity,
             order=page.SheetOrder,
+            margin_left=page.PrintableMarginLeft.Value,
+            margin_top=page.PrintableMarginTop.Value,
+            margin_right=page.PrintableMarginRight.Value,
+            margin_bottom=page.PrintableMarginBottom.Value,
         )
 
     def create_sheet(self, template_path, metadata=None, name="Page"):
@@ -172,3 +213,56 @@ class BIMSheetService:
         self.ensure_metadata(page, values)
         page.Label = values.title or Path(template_path).stem
         return page
+
+    def layout_view(
+        self,
+        page,
+        drawing_view,
+        *,
+        position=None,
+        size=None,
+        margins=None,
+        gap=5.0,
+    ):
+        """Position a new drawing view without moving existing page views."""
+
+        if page is None or not page.isDerivedFrom("TechDraw::DrawPage"):
+            raise TypeError("page must be a TechDraw::DrawPage")
+        if drawing_view not in page.Views:
+            raise ValueError("drawing_view must belong to page")
+        margins = margins or self.margins_for(page)
+        engine = BIMSheetLayout(page.PageWidth, page.PageHeight, margins, gap)
+        footprint = size or self._view_footprint(drawing_view)
+        occupied = tuple(
+            SheetRect(view.X.Value, view.Y.Value, *self._view_footprint(view))
+            for view in page.Views
+            if view is not drawing_view
+            and not (
+                view.isDerivedFrom("TechDraw::DrawViewAnnotation")
+                and getattr(view, "Owner", None) is not None
+                and view.Owner.isDerivedFrom("TechDraw::DrawViewArch")
+            )
+        )
+        placement = engine.place(footprint, occupied, position)
+        drawing_view.X = placement.x
+        drawing_view.Y = placement.y
+        return placement
+
+    @staticmethod
+    def margins_for(page):
+        """Return persisted printable margins or conservative defaults."""
+
+        names = (
+            "PrintableMarginLeft",
+            "PrintableMarginTop",
+            "PrintableMarginRight",
+            "PrintableMarginBottom",
+        )
+        if all(name in page.PropertiesList for name in names):
+            return SheetMargins(*(getattr(page, name).Value for name in names))
+        return SheetMargins()
+
+    @staticmethod
+    def _view_footprint(drawing_view):
+        scale = drawing_view.getScale() if hasattr(drawing_view, "getScale") else 1.0
+        return svg_footprint(getattr(drawing_view, "Symbol", ""), scale)

@@ -3,6 +3,8 @@
 """GUI-facing tests for the BIM Navigator service seam."""
 
 import tempfile
+from datetime import datetime, timezone
+from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
 
@@ -14,6 +16,7 @@ from PySide import QtCore, QtGui
 from pivy import coin
 
 from bimcommands.BimViews import (
+    BIM_Views,
     _SectionViewPlacement,
     _apply_representation_request,
     _findModelDock,
@@ -48,7 +51,21 @@ from bimviews.viewport_ruler import (
     _ViewportEventFilter,
 )
 from bimplan.runtime.session import activate_representation_request
-from bimsheets import BIMSheetMetadata, BIMSheetService
+from bimsheets import (
+    BIMSheetLayout,
+    BIMSheetIssueService,
+    BIMSheetMetadata,
+    BIMSheetPublishingService,
+    BIMSheetService,
+    BIMSheetViewTitleService,
+    BIMTitleBlockService,
+    SheetPublicationError,
+    SheetIssueError,
+    SheetLayoutError,
+    SheetRect,
+    format_scale,
+)
+from bimsheets.layout import svg_footprint
 
 
 class _RecordingView:
@@ -111,6 +128,32 @@ class _FramingRecordingView(_RecordingView):
 
 
 class TestBimViewsServiceGui(TestArchBaseGui):
+    def test_sheet_layout_places_views_without_overlap(self):
+        layout = BIMSheetLayout(200, 120, gap=5)
+        first = layout.place((50, 40))
+        second = layout.place((50, 40), (first,))
+
+        self.assertEqual(SheetRect(35, 30, 50, 40), first)
+        self.assertEqual(SheetRect(90, 30, 50, 40), second)
+        self.assertFalse(first.intersects(second, layout.gap))
+
+    def test_sheet_layout_validates_overrides_and_full_sheets(self):
+        layout = BIMSheetLayout(100, 80, gap=5)
+
+        explicit = layout.place((20, 10), position=(50, 40))
+
+        self.assertEqual(SheetRect(50, 40, 20, 10), explicit)
+        with self.assertRaisesRegex(SheetLayoutError, "outside printable"):
+            layout.place((20, 10), position=(5, 5))
+        with self.assertRaisesRegex(SheetLayoutError, "no printable sheet space"):
+            layout.place((70, 50), (SheetRect(50, 40, 70, 50),))
+
+    def test_svg_footprint_uses_rendered_geometry_and_scale(self):
+        svg = '<svg><path d="M -10 5 L 90 5 L 90 55 L -10 55" /></svg>'
+
+        self.assertEqual((25.0, 12.5), svg_footprint(svg, scale=0.25))
+        self.assertEqual((64.0, 64.0), svg_footprint("", scale=0.25))
+
     def test_sheet_service_creates_page_with_stable_metadata_contract(self):
         template_path = (
             FreeCAD.getResourceDir()
@@ -127,6 +170,10 @@ class TestBimViewsServiceGui(TestArchBaseGui):
             status="Shared",
             template_identity="Default_Template_A4_Landscape.svg",
             order=101,
+            margin_left=12,
+            margin_top=8,
+            margin_right=15,
+            margin_bottom=20,
         )
 
         page = service.create_sheet(template_path, metadata)
@@ -135,6 +182,14 @@ class TestBimViewsServiceGui(TestArchBaseGui):
         self.assertEqual("Ground Floor Plan", page.Label)
         self.assertEqual("Default_Template_A4_Landscape.svg", page.TemplateIdentity)
         self.assertEqual(metadata, service.metadata_for(page))
+        self.assertEqual(
+            SheetRect(37, 28, 50, 40),
+            BIMSheetLayout(
+                page.PageWidth,
+                page.PageHeight,
+                service.margins_for(page),
+            ).place((50, 40)),
+        )
         self.assertIsNotNone(page.Template)
 
     def test_sheet_metadata_initialization_is_idempotent(self):
@@ -150,7 +205,314 @@ class TestBimViewsServiceGui(TestArchBaseGui):
         self.assertEqual("A-001", page.SheetNumber)
         self.assertEqual("Cover", page.SheetTitle)
         self.assertEqual(1, page.SheetOrder)
-        self.assertEqual(1, page.BIMSheetSchemaVersion)
+        self.assertEqual(service.SCHEMA_VERSION, page.BIMSheetSchemaVersion)
+
+    def test_sheet_metadata_synchronizes_mapped_title_block_fields(self):
+        template_path = (
+            FreeCAD.getResourceDir()
+            + "Mod/TechDraw/Templates/ISO/A4_Landscape_ISO5457_minimal.svg"
+        )
+        metadata = BIMSheetMetadata(
+            number="A-301",
+            title="Floor Plans",
+            revision="P03",
+            issue_date="2026-09-19",
+        )
+        page = BIMSheetService(self.document).create_sheet(template_path, metadata)
+        title_blocks = BIMTitleBlockService(self.document)
+        texts = dict(page.Template.EditableTexts)
+        creator = texts["creator"]
+
+        self.assertEqual("A-301", texts["drawing_number"])
+        self.assertEqual("Floor Plans", texts["title"])
+        self.assertEqual("P03", texts["revision_index"])
+        self.assertEqual("2026-09-19", texts["date_of_issue"])
+        self.assertEqual(creator, texts["creator"])
+        self.assertEqual("drawing_number", title_blocks.mapping_for(page)["number"])
+        self.assertIn("discipline", page.MissingTitleBlockFields)
+
+        page.SheetNumber = "A-302"
+        page.SheetTitle = "Updated Plans"
+        self.assertEqual("A-302", page.Template.EditableTexts["drawing_number"])
+        self.assertEqual("Updated Plans", page.Template.EditableTexts["title"])
+        self.assertEqual(creator, page.Template.EditableTexts["creator"])
+
+    def test_title_block_mapping_survives_save_reopen_and_is_undoable(self):
+        template_path = (
+            FreeCAD.getResourceDir()
+            + "Mod/TechDraw/Templates/ISO/A4_Landscape_ISO5457_minimal.svg"
+        )
+        page = BIMSheetService(self.document).create_sheet(
+            template_path,
+            BIMSheetMetadata(number="S-001", title="Sections"),
+            name="PersistentTitleBlockPage",
+        )
+        self.document.openTransaction("Change sheet number")
+        page.SheetNumber = "S-002"
+        self.document.commitTransaction()
+        self.assertEqual("S-002", page.Template.EditableTexts["drawing_number"])
+        self.document.undo()
+        self.assertEqual("S-001", page.SheetNumber)
+        self.assertEqual("S-001", page.Template.EditableTexts["drawing_number"])
+
+        with tempfile.TemporaryDirectory() as directory:
+            path = directory + "/title-block.FCStd"
+            self.document.saveAs(path)
+            FreeCAD.closeDocument(self.document.Name)
+            self.document = FreeCAD.openDocument(path)
+            page = self.document.getObject("PersistentTitleBlockPage")
+            self.assertEqual(
+                "drawing_number", page.EditableTextBindings["SheetNumber"]
+            )
+            page.Revision = "C01"
+            self.assertEqual("C01", page.Template.EditableTexts["revision_index"])
+
+    def test_title_block_rejects_unknown_explicit_template_fields(self):
+        template_path = (
+            FreeCAD.getResourceDir()
+            + "Mod/TechDraw/Templates/ISO/A4_Landscape_ISO5457_minimal.svg"
+        )
+        page = BIMSheetService(self.document).create_sheet(template_path)
+
+        with self.assertRaisesRegex(ValueError, "template fields not found"):
+            BIMTitleBlockService(self.document).synchronize(
+                page, {"number": "does_not_exist"}
+            )
+
+    def test_sheet_set_publication_is_ordered_and_records_output(self):
+        template_path = (
+            FreeCAD.getResourceDir()
+            + "Mod/TechDraw/Templates/ISO/A4_Landscape_ISO5457_minimal.svg"
+        )
+        sheets = BIMSheetService(self.document)
+        second = sheets.create_sheet(
+            template_path,
+            BIMSheetMetadata(number="A-202", title="Upper Plan", revision="P02", order=202),
+            name="SecondPublishedSheet",
+        )
+        first = sheets.create_sheet(
+            template_path,
+            BIMSheetMetadata(number="A-101", title="Ground/Plan", revision="P01", order=101),
+            name="FirstPublishedSheet",
+        )
+        calls = []
+
+        def exporter(page, path, format):
+            calls.append((page, path.name, format))
+            path.write_text("{}:{}".format(format, page.SheetNumber), encoding="utf-8")
+
+        instant = datetime(2026, 9, 19, 12, 30, tzinfo=timezone.utc)
+        publisher = BIMSheetPublishingService(
+            self.document, exporter=exporter, clock=lambda: instant
+        )
+        with tempfile.TemporaryDirectory() as directory:
+            result = publisher.publish_set(directory, "pdf")
+
+            self.assertEqual([first, second], [item.page for item in result.sheets])
+            self.assertEqual(
+                ["A-101 - Ground-Plan.pdf", "A-202 - Upper Plan.pdf"],
+                [item.path.name for item in result.sheets],
+            )
+            self.assertEqual([first, second], [call[0] for call in calls])
+            self.assertTrue(all(item.path.is_file() for item in result.sheets))
+            self.assertEqual("Published", str(first.SheetStatus))
+            self.assertEqual("P01", first.LastPublishedRevision)
+            self.assertEqual("pdf", first.LastPublishedFormat)
+            self.assertEqual(instant.isoformat(), first.LastPublishedAt)
+            self.assertEqual(64, len(first.LastPublishedSHA256))
+
+            path = directory + "/published.FCStd"
+            self.document.saveAs(path)
+            FreeCAD.closeDocument(self.document.Name)
+            self.document = FreeCAD.openDocument(path)
+            reopened = self.document.getObject("FirstPublishedSheet")
+            self.assertEqual("P01", reopened.LastPublishedRevision)
+            self.assertEqual("pdf", reopened.LastPublishedFormat)
+
+    def test_sheet_publication_requires_explicit_overwrite(self):
+        template_path = (
+            FreeCAD.getResourceDir()
+            + "Mod/TechDraw/Templates/ISO/A4_Landscape_ISO5457_minimal.svg"
+        )
+        page = BIMSheetService(self.document).create_sheet(
+            template_path, BIMSheetMetadata(number="A-001", title="Cover")
+        )
+        calls = []
+
+        def exporter(_page, path, _format):
+            calls.append(path)
+            path.write_text("new", encoding="utf-8")
+
+        publisher = BIMSheetPublishingService(self.document, exporter=exporter)
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory) / publisher.filename_for(page, "svg")
+            target.write_text("existing", encoding="utf-8")
+            with self.assertRaisesRegex(SheetPublicationError, "overwrite"):
+                publisher.publish_sheet(page, directory, "svg")
+            self.assertEqual([], calls)
+            self.assertEqual("existing", target.read_text(encoding="utf-8"))
+
+            publisher.publish_sheet(page, directory, "svg", overwrite=True)
+            self.assertEqual("new", target.read_text(encoding="utf-8"))
+
+    def test_sheet_publication_rejects_invalid_format_and_unlinked_views(self):
+        template_path = (
+            FreeCAD.getResourceDir()
+            + "Mod/TechDraw/Templates/ISO/A4_Landscape_ISO5457_minimal.svg"
+        )
+        page = BIMSheetService(self.document).create_sheet(
+            template_path, BIMSheetMetadata(number="A-010", title="Invalid")
+        )
+        publisher = BIMSheetPublishingService(self.document)
+        with self.assertRaisesRegex(ValueError, "unsupported publication format"):
+            publisher.filename_for(page, "dwg")
+
+        unlinked = self.document.addObject("TechDraw::DrawViewArch", "UnlinkedView")
+        page.addView(unlinked)
+        self.document.recompute()
+        with self.assertRaisesRegex(SheetPublicationError, "no saved BIM view"):
+            publisher.validate(page)
+
+    def test_sheet_set_publication_cleans_staged_files_after_failure(self):
+        template_path = (
+            FreeCAD.getResourceDir()
+            + "Mod/TechDraw/Templates/ISO/A4_Landscape_ISO5457_minimal.svg"
+        )
+        sheets = BIMSheetService(self.document)
+        sheets.create_sheet(
+            template_path, BIMSheetMetadata(number="A-001", title="First", order=1)
+        )
+        sheets.create_sheet(
+            template_path, BIMSheetMetadata(number="A-002", title="Second", order=2)
+        )
+        count = 0
+
+        def exporter(_page, path, _format):
+            nonlocal count
+            count += 1
+            if count == 2:
+                raise RuntimeError("export failed")
+            path.write_text("staged", encoding="utf-8")
+
+        publisher = BIMSheetPublishingService(self.document, exporter=exporter)
+        with tempfile.TemporaryDirectory() as directory:
+            with self.assertRaisesRegex(RuntimeError, "export failed"):
+                publisher.publish_set(directory, "pdf")
+            self.assertEqual([], list(Path(directory).iterdir()))
+
+    def test_sheet_issue_manifest_is_immutable_exportable_and_persistent(self):
+        template_path = (
+            FreeCAD.getResourceDir()
+            + "Mod/TechDraw/Templates/ISO/A4_Landscape_ISO5457_minimal.svg"
+        )
+        page = BIMSheetService(self.document).create_sheet(
+            template_path,
+            BIMSheetMetadata(
+                number="A-101", title="Plan", revision="P01", issue="ISSUE-1"
+            ),
+        )
+
+        def exporter(sheet, path, format):
+            path.write_text(
+                "{}:{}:{}".format(format, sheet.SheetNumber, sheet.Revision),
+                encoding="utf-8",
+            )
+
+        instant = datetime(2026, 9, 19, 14, 0, tzinfo=timezone.utc)
+        with tempfile.TemporaryDirectory() as directory:
+            BIMSheetPublishingService(
+                self.document, exporter=exporter, clock=lambda: instant
+            ).publish_sheet(page, directory)
+            issues = BIMSheetIssueService(self.document, clock=lambda: instant)
+            self.document.openTransaction("Create issue")
+            issue = issues.create_issue("ISSUE-1", "Planning Issue")
+            self.document.commitTransaction()
+            issue_name = issue.Name
+            self.document.undo()
+            self.assertIsNone(self.document.getObject(issue_name))
+            self.document.redo()
+            issue = self.document.getObject(issue_name)
+            manifest_path = issues.export_manifest(
+                issue, Path(directory) / "ISSUE-1.json"
+            )
+
+            self.assertEqual("ISSUE-1", issue.IssueIdentifier)
+            self.assertEqual(1, issue.IssueOrder)
+            self.assertEqual(64, len(issue.ManifestSHA256))
+            self.assertEqual(issue.ManifestJSON + "\n", manifest_path.read_text("utf-8"))
+            self.assertEqual("A-101", issues.manifest_for(issue)["sheets"][0]["number"])
+            with self.assertRaises(Exception):
+                issue.ManifestJSON = "{}"
+
+            manifest_digest = issue.ManifestSHA256
+            document_path = directory + "/issued.FCStd"
+            self.document.saveAs(document_path)
+            FreeCAD.closeDocument(self.document.Name)
+            self.document = FreeCAD.openDocument(document_path)
+            reopened = BIMSheetIssueService(self.document).issues()[0]
+            self.assertEqual("ISSUE-1", reopened.IssueIdentifier)
+            self.assertEqual(manifest_digest, reopened.ManifestSHA256)
+
+    def test_sheet_issue_comparison_detects_added_removed_and_changed_sheets(self):
+        template_path = (
+            FreeCAD.getResourceDir()
+            + "Mod/TechDraw/Templates/ISO/A4_Landscape_ISO5457_minimal.svg"
+        )
+        sheets = BIMSheetService(self.document)
+        first = sheets.create_sheet(
+            template_path,
+            BIMSheetMetadata(number="A-101", title="Plan", revision="P01", issue="I1", order=1),
+        )
+        removed = sheets.create_sheet(
+            template_path,
+            BIMSheetMetadata(number="A-201", title="Section", revision="P01", issue="I1", order=2),
+        )
+
+        def exporter(sheet, path, _format):
+            path.write_text(
+                "{}:{}".format(sheet.SheetNumber, sheet.Revision), encoding="utf-8"
+            )
+
+        with tempfile.TemporaryDirectory() as directory:
+            publisher = BIMSheetPublishingService(self.document, exporter=exporter)
+            publisher.publish_set(directory)
+            service = BIMSheetIssueService(self.document)
+            issue_one = service.create_issue("I1")
+
+            first.Issue = "I2"
+            first.Revision = "P02"
+            first.SheetTitle = "Updated Plan"
+            added = sheets.create_sheet(
+                template_path,
+                BIMSheetMetadata(number="A-301", title="Elevation", revision="P01", issue="I2", order=3),
+            )
+            publisher.publish_sheet(first, directory, overwrite=True)
+            publisher.publish_sheet(added, directory)
+            issue_two = service.create_issue("I2", pages=(first, added))
+            comparison = service.compare(issue_two)
+
+            self.assertIs(issue_one, issue_two.PreviousIssue)
+            self.assertEqual(("A-301",), comparison.added)
+            self.assertEqual(("A-201",), comparison.removed)
+            self.assertEqual(
+                (("A-101", ("revision", "metadata", "output")),),
+                comparison.changed,
+            )
+
+    def test_sheet_issue_rejects_incomplete_or_inconsistent_publications(self):
+        template_path = (
+            FreeCAD.getResourceDir()
+            + "Mod/TechDraw/Templates/ISO/A4_Landscape_ISO5457_minimal.svg"
+        )
+        page = BIMSheetService(self.document).create_sheet(
+            template_path,
+            BIMSheetMetadata(number="A-001", title="Cover", revision="P01", issue="I1"),
+        )
+        service = BIMSheetIssueService(self.document)
+        with self.assertRaisesRegex(SheetIssueError, "has not been published"):
+            service.create_issue("I1")
+        with self.assertRaisesRegex(SheetIssueError, "does not match"):
+            service.create_issue("I2")
 
     def test_sheet_service_rejects_non_page_objects(self):
         obj = self.document.addObject("App::FeaturePython", "NotAPage")
@@ -674,7 +1036,7 @@ class TestBimViewsServiceGui(TestArchBaseGui):
         sections = BIMNavigatorModel(self.document).sections()
 
         self.assertEqual(
-            ("Project", "Views", "CurrentView", "Sheets"),
+            ("Project", "Views", "CurrentView", "Sheets", "Issues"),
             tuple(section.key for section in sections),
         )
 
@@ -739,10 +1101,10 @@ class TestBimViewsServiceGui(TestArchBaseGui):
 
         model = BIMNavigatorQtModel(navigator)
 
-        self.assertEqual(4, model.rowCount())
+        self.assertEqual(5, model.rowCount())
         self.assertEqual(
-            ("Project", "Views", "Current View", "Sheets"),
-            tuple(model.index(row, 0).data() for row in range(4)),
+            ("Project", "Views", "Current View", "Sheets", "Issues"),
+            tuple(model.index(row, 0).data() for row in range(5)),
         )
         current = model.index(2, 0)
         walls = model.index(0, 0, current)
@@ -1136,6 +1498,189 @@ class TestBimViewsServiceGui(TestArchBaseGui):
         self.assertNotIn("BIMSheetScale", definition.PropertiesList)
         self.assertNotIn("BIMRenderMode", definition.PropertiesList)
 
+    def test_sheet_placement_uses_first_free_position_and_explicit_override(self):
+        storey = self.document.addObject("App::FeaturePython", "LayoutStorey")
+        storey.addProperty("App::PropertyPlacement", "Placement")
+        service = BIMViewService(self.document, view=_RecordingView([]))
+        first_definition = service.create_view(
+            "First Layout Plan", "Plan", storey, capture=False
+        )
+        second_definition = service.create_view(
+            "Second Layout Plan", "Plan", storey, capture=False
+        )
+        page = self.document.addObject("TechDraw::DrawPage", "LayoutPage")
+        template = self.document.addObject("TechDraw::DrawSVGTemplate", "LayoutTemplate")
+        template.Template = (
+            FreeCAD.getResourceDir()
+            + "Mod/TechDraw/Templates/Default_Template_A4_Landscape.svg"
+        )
+        page.Template = template
+
+        first = service.place_on_sheet(first_definition, page)
+        second = service.place_on_sheet(second_definition, page)
+        explicit = service.place_on_sheet(
+            first_definition,
+            page,
+            position=(page.PageWidth - 42, page.PageHeight - 42),
+            allow_duplicate=True,
+        )
+
+        self.assertNotEqual((first.X, first.Y), (second.X, second.Y))
+        self.assertEqual(page.PageWidth - 42, explicit.X.Value)
+        self.assertEqual(page.PageHeight - 42, explicit.Y.Value)
+
+    def test_sheet_placement_rejects_duplicates_and_removes_only_placement(self):
+        storey = self.document.addObject("App::FeaturePython", "DuplicateStorey")
+        storey.addProperty("App::PropertyPlacement", "Placement")
+        service = BIMViewService(self.document, view=_RecordingView([]))
+        definition = service.create_view(
+            "Duplicate Plan", "Plan", storey, capture=False
+        )
+        page = self.document.addObject("TechDraw::DrawPage", "DuplicatePage")
+        template = self.document.addObject(
+            "TechDraw::DrawSVGTemplate", "DuplicateTemplate"
+        )
+        template.Template = (
+            FreeCAD.getResourceDir()
+            + "Mod/TechDraw/Templates/Default_Template_A4_Landscape.svg"
+        )
+        page.Template = template
+        first = service.place_on_sheet(definition, page)
+
+        with self.assertRaisesRegex(ValueError, "already placed"):
+            service.place_on_sheet(definition, page)
+        second = service.place_on_sheet(definition, page, allow_duplicate=True)
+        self.assertEqual((first, second), service.placements_for(definition, page))
+
+        service.remove_sheet_placement(first)
+
+        self.assertIsNotNone(self.document.getObject(definition.Name))
+        self.assertEqual((second,), service.placements_for(definition, page))
+
+    def test_navigator_locates_and_undoably_removes_sheet_placement(self):
+        storey = self.document.addObject("App::FeaturePython", "ActionStorey")
+        storey.addProperty("App::PropertyPlacement", "Placement")
+        service = BIMViewService(self.document, view=_RecordingView([]))
+        definition = service.create_view("Action Plan", "Plan", storey, capture=False)
+        page = self.document.addObject("TechDraw::DrawPage", "ActionPage")
+        template = self.document.addObject("TechDraw::DrawSVGTemplate", "ActionTemplate")
+        template.Template = (
+            FreeCAD.getResourceDir()
+            + "Mod/TechDraw/Templates/Default_Template_A4_Landscape.svg"
+        )
+        page.Template = template
+        drawing_view = service.place_on_sheet(definition, page)
+        drawing_name = drawing_view.Name
+        command = BIM_Views()
+        command.contextObject = drawing_view
+
+        command.locatePlacement()
+        self.assertEqual([drawing_view], FreeCADGui.Selection.getSelection())
+        command.removeFromSheet()
+        self.assertIsNone(self.document.getObject(drawing_name))
+        self.assertIsNotNone(self.document.getObject(definition.Name))
+
+        self.document.undo()
+        restored = self.document.getObject(drawing_name)
+        self.assertIsNotNone(restored)
+        self.assertIs(definition, restored.BIMViewDefinition)
+        self.assertIn(restored, page.Views)
+
+    def test_navigator_lists_sheet_metadata_and_linked_placements(self):
+        storey = self.document.addObject("App::FeaturePython", "NavigatorSheetStorey")
+        storey.addProperty("App::PropertyPlacement", "Placement")
+        view_service = BIMViewService(self.document, view=_RecordingView([]))
+        definition = view_service.create_view(
+            "Navigator Sheet Plan", "Plan", storey, capture=False
+        )
+        template_path = (
+            FreeCAD.getResourceDir()
+            + "Mod/TechDraw/Templates/Default_Template_A4_Landscape.svg"
+        )
+        page = BIMSheetService(self.document).create_sheet(
+            template_path,
+            BIMSheetMetadata(
+                number="A-201",
+                title="Plans",
+                discipline="Architectural",
+                revision="P02",
+                status="Shared",
+                order=201,
+            ),
+            name="NavigatorSheet",
+        )
+        drawing_view = view_service.place_on_sheet(definition, page)
+        navigator = BIMNavigatorModel(self.document)
+
+        sheet = navigator.sheet_nodes()[0]
+        self.assertIs(page, sheet.page)
+        self.assertEqual((drawing_view,), tuple(p.drawing_view for p in sheet.placements))
+
+        model = BIMNavigatorQtModel(navigator)
+        sheets = model.index(3, 0)
+        sheet_index = model.index(0, 0, sheets)
+        placement_index = model.index(0, 0, sheet_index)
+        self.assertEqual("A-201 — Plans", sheet_index.data())
+        self.assertEqual("Architectural", model.index(0, 1, sheets).data())
+        self.assertEqual("P02 · Shared", model.index(0, 2, sheets).data())
+        self.assertEqual("sheet-placement", model.kind_for_index(placement_index))
+        self.assertIs(drawing_view, model.object_for_index(placement_index))
+        self.assertEqual(2, len(model.indexes_for_object(definition)))
+
+    def test_sheet_placement_has_persistent_numbered_title(self):
+        source = self.document.addObject("App::FeaturePython", "TitledSource")
+        source.addProperty("App::PropertyPlacement", "Placement")
+        service = BIMViewService(self.document, view=_RecordingView([]))
+        definition = service.create_view("Ground Floor", "Plan", source, capture=False)
+        template_path = (
+            FreeCAD.getResourceDir()
+            + "Mod/TechDraw/Templates/Default_Template_A4_Landscape.svg"
+        )
+        page = BIMSheetService(self.document).create_sheet(template_path)
+        drawing_view = service.place_on_sheet(definition, page)
+        annotation = BIMSheetViewTitleService.annotation_for(drawing_view)
+
+        import ArchSectionPlane
+
+        with patch.object(ArchSectionPlane, "getSVG", return_value=""):
+            drawing_view.Scale = 0.01
+            self.document.recompute()
+            self.assertEqual("1", drawing_view.BIMViewNumber)
+            self.assertEqual(["1  Ground Floor", "1:100"], annotation.Text)
+            self.assertIs(drawing_view, annotation.Owner)
+            self.assertIn(annotation, page.Views)
+
+            drawing_view.Scale = 0.02
+            definition.Label = "Level 00"
+            self.document.recompute()
+            self.assertEqual(["1  Level 00", "1:50"], annotation.Text)
+
+            drawing_view.BIMViewTitle = "Entrance Plan"
+            drawing_view.X = 90
+            drawing_view.Y = 70
+            self.document.recompute()
+            self.assertEqual(["1  Entrance Plan", "1:50"], annotation.Text)
+            self.assertEqual(90, annotation.X.Value)
+            self.assertEqual(70 - annotation.TitleOffset.Value, annotation.Y.Value)
+
+    def test_sheet_view_numbers_are_unique_and_fill_gaps(self):
+        page = BIMSheetService(self.document).create_sheet(
+            FreeCAD.getResourceDir()
+            + "Mod/TechDraw/Templates/Default_Template_A4_Landscape.svg",
+            name="NumberedPage",
+        )
+        title_service = BIMSheetViewTitleService(self.document)
+        first = self.document.addObject("TechDraw::DrawViewArch", "FirstNumbered")
+        second = self.document.addObject("TechDraw::DrawViewArch", "SecondNumbered")
+        page.addView(first)
+        page.addView(second)
+
+        title_service.create(page, first, "2")
+        with self.assertRaisesRegex(ValueError, "unique"):
+            title_service.create(page, second, "2")
+        self.assertEqual("1", title_service.next_number(page))
+        self.assertEqual("1:20", format_scale(0.05))
+
     def test_saved_view_visibility_is_applied_within_sheet_source_scope(self):
         normally_visible = self.document.addObject("PartDesign::Feature", "Visible")
         forced_visible = self.document.addObject("PartDesign::Feature", "ForcedVisible")
@@ -1216,6 +1761,8 @@ class TestBimViewsServiceGui(TestArchBaseGui):
         drawing_view.BIMViewDefinition = definition
         drawing_view.ShowHidden = True
         drawing_view.Scale = 0.02
+        drawing_view.X = 123
+        drawing_view.Y = 77
 
         with tempfile.TemporaryDirectory() as directory:
             path = directory + "/sheet-view.FCStd"
@@ -1228,6 +1775,8 @@ class TestBimViewsServiceGui(TestArchBaseGui):
             self.assertIs(reopened_definition, reopened_view.BIMViewDefinition)
             self.assertTrue(reopened_view.ShowHidden)
             self.assertAlmostEqual(0.02, reopened_view.Scale)
+            self.assertAlmostEqual(123, reopened_view.X.Value)
+            self.assertAlmostEqual(77, reopened_view.Y.Value)
             self.assertNotIn("BIMShowHidden", reopened_definition.PropertiesList)
 
     def test_plan_section_and_elevation_placements_render_svg(self):

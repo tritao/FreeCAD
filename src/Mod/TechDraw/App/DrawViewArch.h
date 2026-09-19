@@ -46,6 +46,8 @@ public:
 
     App::PropertyLink         Source;
     App::PropertyLink         BIMViewDefinition;
+    App::PropertyString       BIMViewNumber;
+    App::PropertyString       BIMViewTitle;
     App::PropertyBool         AllOn;
     App::PropertyEnumeration  RenderMode; // "Wireframe", "Solid"
     App::PropertyBool         FillSpaces;

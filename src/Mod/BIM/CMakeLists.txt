@@ -221,7 +221,12 @@ SET(bimviews_SRCS
 
 SET(bimsheets_SRCS
     bimsheets/__init__.py
+    bimsheets/layout.py
+    bimsheets/issues.py
+    bimsheets/publishing.py
     bimsheets/service.py
+    bimsheets/titleblock.py
+    bimsheets/titles.py
 )
 
 SET(importers_SRCS
