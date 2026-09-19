@@ -215,6 +215,11 @@ SET(bimviews_SRCS
     bimviews/viewport_ruler.py
 )
 
+SET(bimsheets_SRCS
+    bimsheets/__init__.py
+    bimsheets/service.py
+)
+
 SET(importers_SRCS
     importers/__init__.py
     importers/importIFC.py
@@ -510,6 +515,7 @@ ADD_CUSTOM_TARGET(BIM ALL
     ${bimplan_SRCS}
     ${bimcontextual_SRCS}
     ${bimviews_SRCS}
+    ${bimsheets_SRCS}
             ${Dice3DS_SRCS}
             ${Arch_presets}
             ${ArchGuiIcon_SVG}
@@ -530,6 +536,7 @@ fc_copy_sources(BIM "${CMAKE_BINARY_DIR}/Mod/BIM" ${Arch_SRCS})
 fc_copy_sources(BIM "${CMAKE_BINARY_DIR}/Mod/BIM" ${bimplan_SRCS})
 fc_copy_sources(BIM "${CMAKE_BINARY_DIR}/Mod/BIM" ${bimcontextual_SRCS})
 fc_copy_sources(BIM "${CMAKE_BINARY_DIR}/Mod/BIM" ${bimviews_SRCS})
+fc_copy_sources(BIM "${CMAKE_BINARY_DIR}/Mod/BIM" ${bimsheets_SRCS})
 fc_copy_sources(BIM "${CMAKE_BINARY_DIR}/Mod/BIM" ${Dice3DS_SRCS})
 fc_copy_sources(BIM "${CMAKE_BINARY_DIR}/Mod/BIM" ${importers_SRCS})
 fc_copy_sources(BIM "${CMAKE_BINARY_DIR}/Mod/BIM" ${bimcommands_SRCS})
@@ -581,6 +588,12 @@ INSTALL(
 
 INSTALL(
     DIRECTORY bimviews
+    DESTINATION Mod/BIM
+    FILES_MATCHING PATTERN "*.py"
+)
+
+INSTALL(
+    DIRECTORY bimsheets
     DESTINATION Mod/BIM
     FILES_MATCHING PATTERN "*.py"
 )

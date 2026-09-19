@@ -42,6 +42,9 @@ from bimviews.viewport_ruler import (
     _ViewportEventFilter,
 )
 from bimplan.runtime.session import activate_representation_request
+from bimsheets import BIMSheetMetadata, BIMSheetService
+
+
 class _RecordingView:
     def __init__(self, calls):
         self.calls = calls
@@ -102,6 +105,53 @@ class _FramingRecordingView(_RecordingView):
 
 
 class TestBimViewsServiceGui(TestArchBaseGui):
+    def test_sheet_service_creates_page_with_stable_metadata_contract(self):
+        template_path = (
+            FreeCAD.getResourceDir()
+            + "Mod/TechDraw/Templates/Default_Template_A4_Landscape.svg"
+        )
+        service = BIMSheetService(self.document)
+        metadata = BIMSheetMetadata(
+            number="A-101",
+            title="Ground Floor Plan",
+            discipline="Architectural",
+            revision="P01",
+            issue="Planning",
+            issue_date="2026-09-19",
+            status="Shared",
+            template_identity="Default_Template_A4_Landscape.svg",
+            order=101,
+        )
+
+        page = service.create_sheet(template_path, metadata)
+
+        self.assertTrue(service.is_sheet(page))
+        self.assertEqual("Ground Floor Plan", page.Label)
+        self.assertEqual("Default_Template_A4_Landscape.svg", page.TemplateIdentity)
+        self.assertEqual(metadata, service.metadata_for(page))
+        self.assertIsNotNone(page.Template)
+
+    def test_sheet_metadata_initialization_is_idempotent(self):
+        page = self.document.addObject("TechDraw::DrawPage", "ExistingPage")
+        service = BIMSheetService(self.document)
+        service.ensure_metadata(
+            page,
+            BIMSheetMetadata(number="A-001", title="Cover", order=1),
+        )
+
+        service.ensure_metadata(page)
+
+        self.assertEqual("A-001", page.SheetNumber)
+        self.assertEqual("Cover", page.SheetTitle)
+        self.assertEqual(1, page.SheetOrder)
+        self.assertEqual(1, page.BIMSheetSchemaVersion)
+
+    def test_sheet_service_rejects_non_page_objects(self):
+        obj = self.document.addObject("App::FeaturePython", "NotAPage")
+
+        with self.assertRaises(TypeError):
+            BIMSheetService(self.document).ensure_metadata(obj)
+
     def test_section_placement_collects_line_and_side_then_cleans_up(self):
         requests = []
         finishes = []
