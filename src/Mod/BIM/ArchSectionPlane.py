@@ -258,6 +258,7 @@ def getSVG(
     fillSpaces=False,
     cutlinewidth=0,
     joinArch=False,
+    viewDefinition=None,
 ):
     """
     Return an SVG fragment from an Arch SectionPlane or BuildingPart.
@@ -293,7 +294,13 @@ def getSVG(
     if not objs:
         return ""
     if not allOn:
-        objs = Draft.removeHidden(objs)
+        visible_objects = set(Draft.removeHidden(objs))
+        if viewDefinition is not None:
+            from bimviews.representation import apply_view_visibility
+
+            objs = apply_view_visibility(objs, viewDefinition, visible_objects)
+        else:
+            objs = [obj for obj in objs if obj in visible_objects]
 
     # separate spaces and Draft objects
     spaces = []
@@ -338,6 +345,7 @@ def getSVG(
         showFill=showFill,
         fillSpaces=fillSpaces,
         joinArch=joinArch,
+        view_definition=viewDefinition,
     )
     if contextual_representations:
         # Semantic providers already computed the section geometry.  Keep only
@@ -728,6 +736,7 @@ def _get_contextual_representations(
     showFill,
     fillSpaces,
     joinArch,
+    view_definition=None,
 ):
     """Return semantic representations when the simple TechDraw path applies.
 
@@ -746,10 +755,17 @@ def _get_contextual_representations(
     ):
         return []
 
-    request_provider = getattr(getattr(source, "Proxy", None), "getRepresentationRequest", None)
-    if not callable(request_provider):
-        return []
-    request = request_provider(source)
+    if view_definition is not None:
+        from bimviews.representation import request_for_view_definition
+
+        request = request_for_view_definition(view_definition)
+    else:
+        request_provider = getattr(
+            getattr(source, "Proxy", None), "getRepresentationRequest", None
+        )
+        if not callable(request_provider):
+            return []
+        request = request_provider(source)
     if request is None:
         return []
 

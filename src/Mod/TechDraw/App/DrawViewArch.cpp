@@ -53,6 +53,9 @@ DrawViewArch::DrawViewArch()
 
     ADD_PROPERTY_TYPE(Source ,(nullptr), group, App::Prop_None, "SectionPlane or BuildingPart object for this view");
     Source.setScope(App::LinkScope::Global);
+    ADD_PROPERTY_TYPE(BIMViewDefinition, (nullptr), group, App::Prop_None,
+                      "Saved BIM view that defines this drawing view's context");
+    BIMViewDefinition.setScope(App::LinkScope::Global);
     ADD_PROPERTY_TYPE(AllOn ,(false), group, App::Prop_None, "If hidden objects must be shown or not");
     RenderMode.setEnums(RenderModeEnums);
     ADD_PROPERTY_TYPE(RenderMode, ((long)0), group, App::Prop_None, "The render mode to use");
@@ -73,6 +76,7 @@ short DrawViewArch::mustExecute() const
     if (!isRestoring()) {
         if (
             Source.isTouched() ||
+            BIMViewDefinition.isTouched() ||
             AllOn.isTouched() ||
             RenderMode.isTouched() ||
             ShowHidden.isTouched() ||
@@ -96,7 +100,15 @@ App::DocumentObjectExecReturn *DrawViewArch::execute()
         return App::DocumentObject::StdReturn;
     }
 
+    App::DocumentObject* definition = BIMViewDefinition.getValue();
     App::DocumentObject* sourceObj = Source.getValue();
+    if (definition) {
+        auto* context = dynamic_cast<App::PropertyLink*>(
+            definition->getPropertyByName("BIMContextSource"));
+        if (context && context->getValue()) {
+            sourceObj = context->getValue();
+        }
+    }
     if (sourceObj) {
         //if (sourceObj is not ArchSection) return
         App::Property* proxy = sourceObj->getPropertyByName("Proxy");
@@ -127,6 +139,11 @@ App::DocumentObjectExecReturn *DrawViewArch::execute()
                  << ", cutlinewidth=" << CutLineWidth.getValue()
                  << ", linespacing=" << LineSpacing.getValue()
                  << ", joinArch=" << (JoinArch.getValue() ? "True" : "False");
+
+        if (definition) {
+            paramStr << ", viewDefinition=App.activeDocument()."
+                     << definition->getNameInDocument();
+        }
 
         Base::Interpreter().runString("import ArchSectionPlane");
         Base::Interpreter().runStringArg("svgBody = ArchSectionPlane.getSVG(App.activeDocument().%s %s)",

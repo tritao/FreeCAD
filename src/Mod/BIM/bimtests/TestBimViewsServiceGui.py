@@ -2,6 +2,7 @@
 
 """GUI-facing tests for the BIM Navigator service seam."""
 
+import tempfile
 from types import SimpleNamespace
 from unittest.mock import patch
 
@@ -35,6 +36,7 @@ from bimviews.ruler_model import (
     tick_values,
 )
 from bimviews.framing import planar_view_bounds
+from bimviews.representation import apply_view_visibility
 from bimviews.service import BIMViewService
 from bimviews.viewport_ruler import (
     ViewportRulerController,
@@ -1094,6 +1096,54 @@ class TestBimViewsServiceGui(TestArchBaseGui):
         self.assertIs(definition, drawing_view.BIMViewDefinition)
         self.assertIs(storey, drawing_view.Source)
         self.assertIn(drawing_view, page.Views)
+        self.assertIn("BIMViewDefinition", drawing_view.PropertiesList)
+        self.assertNotIn("BIMSheetScale", definition.PropertiesList)
+        self.assertNotIn("BIMRenderMode", definition.PropertiesList)
+
+    def test_saved_view_visibility_is_applied_within_sheet_source_scope(self):
+        normally_visible = self.document.addObject("PartDesign::Feature", "Visible")
+        forced_visible = self.document.addObject("PartDesign::Feature", "ForcedVisible")
+        forced_hidden = self.document.addObject("PartDesign::Feature", "ForcedHidden")
+        outside_scope = self.document.addObject("PartDesign::Feature", "OutsideScope")
+        definition = self.document.addObject("App::ViewDefinition", "VisibilityView")
+        definition.ForcedVisible = [forced_visible, outside_scope]
+        definition.ForcedHidden = [forced_hidden]
+
+        visible = apply_view_visibility(
+            (normally_visible, forced_visible, forced_hidden),
+            definition,
+            (normally_visible, forced_hidden),
+        )
+
+        self.assertEqual([normally_visible, forced_visible], visible)
+
+    def test_sheet_view_link_and_instance_style_survive_save_reopen(self):
+        source = self.document.addObject("App::FeaturePython", "PersistentSource")
+        source.addProperty("App::PropertyPlacement", "Placement")
+        service = BIMViewService(self.document, view=_RecordingView([]))
+        definition = service.create_view(
+            "Persistent Plan", "Plan", source, capture=False
+        )
+        drawing_view = self.document.addObject(
+            "TechDraw::DrawViewArch", "PersistentDrawingView"
+        )
+        drawing_view.Source = source
+        drawing_view.BIMViewDefinition = definition
+        drawing_view.ShowHidden = True
+        drawing_view.Scale = 0.02
+
+        with tempfile.TemporaryDirectory() as directory:
+            path = directory + "/sheet-view.FCStd"
+            self.document.saveAs(path)
+            FreeCAD.closeDocument(self.document.Name)
+            self.document = FreeCAD.openDocument(path)
+
+            reopened_view = self.document.getObject("PersistentDrawingView")
+            reopened_definition = self.document.getObject("BIMView")
+            self.assertIs(reopened_definition, reopened_view.BIMViewDefinition)
+            self.assertTrue(reopened_view.ShowHidden)
+            self.assertAlmostEqual(0.02, reopened_view.Scale)
+            self.assertNotIn("BIMShowHidden", reopened_definition.PropertiesList)
 
     def test_sourced_elevation_view_can_be_linked_to_a_sheet(self):
         facade = self.document.addObject("PartDesign::Feature", "SheetElevationFacade")

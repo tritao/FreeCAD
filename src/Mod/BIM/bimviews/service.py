@@ -310,12 +310,6 @@ class BIMViewService:
         drawing_view = self.document.addObject("TechDraw::DrawViewArch", "BIMSavedView")
         drawing_view.Label = definition.Label
         drawing_view.Source = self.context_source(definition)
-        drawing_view.addProperty(
-            "App::PropertyLink",
-            self.SHEET_VIEW_PROPERTY,
-            "BIM",
-            "Saved BIM view represented by this drawing view",
-        )
         drawing_view.BIMViewDefinition = definition
         page.addView(drawing_view)
         if getattr(page, "Scale", 0.0):
@@ -334,27 +328,9 @@ class BIMViewService:
         return getattr(definition, self.CONTEXT_SOURCE_PROPERTY, None)
 
     def request_for(self, definition):
-        if not self.is_view_definition(definition):
-            raise TypeError("definition must be an App::ViewDefinition")
-        purpose = self.normalize_purpose(definition.Purpose)
-        source = self.context_source(definition)
-        if purpose == ArchRepresentation.RepresentationPurpose.PLAN:
-            from bimplan.representation_request import representation_request_from_storey
+        from .representation import request_for_view_definition
 
-            request = representation_request_from_storey(source)
-            request.reference_frame = definition.ReferenceFrame
-            return request
-        provider = getattr(getattr(source, "Proxy", None), "getRepresentationRequest", None)
-        if callable(provider):
-            request = provider(source)
-            if getattr(request, "purpose", None) == purpose:
-                request.reference_frame = definition.ReferenceFrame
-                return request
-        return ArchRepresentation.RepresentationRequest(
-            purpose=purpose,
-            reference_frame=definition.ReferenceFrame,
-            source=source,
-        )
+        return request_for_view_definition(definition)
 
     def _create_elevation_plane(self, source, direction):
         import Arch
