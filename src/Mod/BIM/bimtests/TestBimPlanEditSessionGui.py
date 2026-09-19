@@ -1034,6 +1034,28 @@ class TestBimPlanEditSessionGui(TestArchBaseGui):
             self.assertEqual("Diagonal", str(duplicated.PlanHatch))
             self.assertAlmostEqual(300.0, duplicated.Width.Value)
 
+            panel.wall_type_settings_toggle.setChecked(True)
+            panel.wall_type_label_edit.setText("Exterior 420")
+            panel.wall_type_width_edit.setText("420 mm")
+            panel.wall_type_height_edit.setText("3100 mm")
+            panel.wall_type_hatch_combo.setCurrentIndex(
+                panel.wall_type_hatch_combo.findText("Cross")
+            )
+            panel.wall_type_hatch_spacing_edit.setText("80 mm")
+            panel.wall_type_hatch_angle_edit.setText("30 deg")
+            panel.wall_type_apply_button.click()
+            self.pump_gui_events(5)
+            self.assertEqual("Exterior 420", duplicated.Label)
+            self.assertEqual("Cross", str(duplicated.PlanHatch))
+            self.assertAlmostEqual(420.0, duplicated.Width.Value)
+            self.assertAlmostEqual(3100.0, duplicated.DefaultHeight.Value)
+            self.assertAlmostEqual(80.0, duplicated.PlanHatchSpacing.Value)
+            self.assertAlmostEqual(30.0, duplicated.PlanHatchAngle.Value)
+            self.assertAlmostEqual(420.0, ArchWall.get_resolved_wall_defaults(wall).width)
+            self.assertIs(
+                panel._wall_type_items[panel.wall_type_combo.currentIndex()], duplicated
+            )
+
             panel.wall_type_combo.setCurrentIndex(0)
             self.pump_gui_events(5)
             self.assertIsNone(wall.WallType)

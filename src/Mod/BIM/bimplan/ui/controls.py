@@ -82,6 +82,17 @@ class PlanEditControlsWidget(
         self.wall_type_new_button = None
         self.wall_type_duplicate_button = None
         self.wall_type_reset_button = None
+        self.wall_type_settings_toggle = None
+        self.wall_type_settings_content = None
+        self.wall_type_label_edit = None
+        self.wall_type_function_combo = None
+        self.wall_type_width_edit = None
+        self.wall_type_height_edit = None
+        self.wall_type_align_combo = None
+        self.wall_type_hatch_combo = None
+        self.wall_type_hatch_spacing_edit = None
+        self.wall_type_hatch_angle_edit = None
+        self.wall_type_apply_button = None
         self.form = self._build_form(QtGui)
         try:
             self.form.setObjectName("BIMPlanEditContextControls")

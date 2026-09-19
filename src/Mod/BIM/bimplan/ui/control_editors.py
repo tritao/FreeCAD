@@ -121,6 +121,9 @@ class PlanEditEditorPanelsMixin:
         return False
 
     def _build_wall_type_editor(self, QtGui):
+        from PySide import QtCore
+        import ArchWallType
+
         editor = QtGui.QGroupBox(translate("BIM_PlanEdit", "Wall Type"))
         layout = QtGui.QVBoxLayout(editor)
         layout.setContentsMargins(8, 8, 8, 8)
@@ -154,6 +157,77 @@ class PlanEditEditorPanelsMixin:
         primary_buttons.addWidget(self.wall_type_duplicate_button)
         layout.addLayout(primary_buttons)
         layout.addWidget(self.wall_type_reset_button)
+
+        self.wall_type_settings_toggle = QtGui.QToolButton(editor)
+        self.wall_type_settings_toggle.setText(
+            translate("BIM_PlanEdit", "Type settings")
+        )
+        self.wall_type_settings_toggle.setCheckable(True)
+        self.wall_type_settings_toggle.setToolButtonStyle(QtCore.Qt.ToolButtonTextBesideIcon)
+        self.wall_type_settings_toggle.setArrowType(QtCore.Qt.RightArrow)
+        self.wall_type_settings_toggle.toggled.connect(
+            self.on_wall_type_settings_toggled
+        )
+        layout.addWidget(self.wall_type_settings_toggle)
+
+        self.wall_type_settings_content = QtGui.QWidget(editor)
+        settings_layout = QtGui.QFormLayout(self.wall_type_settings_content)
+        settings_layout.setContentsMargins(0, 0, 0, 0)
+        settings_layout.setSpacing(4)
+
+        self.wall_type_label_edit = QtGui.QLineEdit(self.wall_type_settings_content)
+        self.wall_type_function_combo = QtGui.QComboBox(self.wall_type_settings_content)
+        self.wall_type_function_combo.addItems(list(ArchWallType.WALL_FUNCTIONS))
+        self.wall_type_width_edit = QtGui.QLineEdit(self.wall_type_settings_content)
+        self.wall_type_height_edit = QtGui.QLineEdit(self.wall_type_settings_content)
+        self.wall_type_align_combo = QtGui.QComboBox(self.wall_type_settings_content)
+        self.wall_type_align_combo.addItems(list(ArchWallType.WALL_ALIGNMENTS))
+        self.wall_type_hatch_combo = QtGui.QComboBox(self.wall_type_settings_content)
+        self.wall_type_hatch_combo.addItems(list(ArchWallType.HATCH_PATTERNS))
+        self.wall_type_hatch_spacing_edit = QtGui.QLineEdit(
+            self.wall_type_settings_content
+        )
+        self.wall_type_hatch_angle_edit = QtGui.QLineEdit(
+            self.wall_type_settings_content
+        )
+        for widget in (
+            self.wall_type_label_edit,
+            self.wall_type_function_combo,
+            self.wall_type_width_edit,
+            self.wall_type_height_edit,
+            self.wall_type_align_combo,
+            self.wall_type_hatch_combo,
+            self.wall_type_hatch_spacing_edit,
+            self.wall_type_hatch_angle_edit,
+        ):
+            widget.setMinimumWidth(0)
+            widget.setSizePolicy(QtGui.QSizePolicy.Ignored, QtGui.QSizePolicy.Fixed)
+        settings_layout.addRow(translate("BIM_PlanEdit", "Name"), self.wall_type_label_edit)
+        settings_layout.addRow(
+            translate("BIM_PlanEdit", "Function"), self.wall_type_function_combo
+        )
+        settings_layout.addRow(translate("BIM_PlanEdit", "Width"), self.wall_type_width_edit)
+        settings_layout.addRow(
+            translate("BIM_PlanEdit", "Height"), self.wall_type_height_edit
+        )
+        settings_layout.addRow(
+            translate("BIM_PlanEdit", "Alignment"), self.wall_type_align_combo
+        )
+        settings_layout.addRow(
+            translate("BIM_PlanEdit", "Hatch"), self.wall_type_hatch_combo
+        )
+        settings_layout.addRow(
+            translate("BIM_PlanEdit", "Spacing"), self.wall_type_hatch_spacing_edit
+        )
+        settings_layout.addRow(
+            translate("BIM_PlanEdit", "Angle"), self.wall_type_hatch_angle_edit
+        )
+        self.wall_type_apply_button = self._make_button(
+            QtGui, "Apply Type", self.on_wall_type_apply_clicked
+        )
+        settings_layout.addRow(self.wall_type_apply_button)
+        self.wall_type_settings_content.setVisible(False)
+        layout.addWidget(self.wall_type_settings_content)
         return editor
 
     def _refresh_wall_type_editor(self):
@@ -181,12 +255,42 @@ class PlanEditEditorPanelsMixin:
                 finally:
                     self.wall_type_combo.blockSignals(False)
                 self.wall_type_summary.setText(view_model.summary_text)
+                wall_type = view_model.current_type
+                if wall_type is not None:
+                    self.wall_type_label_edit.setText(str(wall_type.Label))
+                    self.wall_type_function_combo.setCurrentIndex(
+                        self.wall_type_function_combo.findText(str(wall_type.Function))
+                    )
+                    self.wall_type_width_edit.setText(
+                        "{:g} mm".format(float(wall_type.Width.Value))
+                    )
+                    self.wall_type_height_edit.setText(
+                        "{:g} mm".format(float(wall_type.DefaultHeight.Value))
+                    )
+                    self.wall_type_align_combo.setCurrentIndex(
+                        self.wall_type_align_combo.findText(str(wall_type.Align))
+                    )
+                    self.wall_type_hatch_combo.setCurrentIndex(
+                        self.wall_type_hatch_combo.findText(str(wall_type.PlanHatch))
+                    )
+                    self.wall_type_hatch_spacing_edit.setText(
+                        "{:g} mm".format(float(wall_type.PlanHatchSpacing.Value))
+                    )
+                    self.wall_type_hatch_angle_edit.setText(
+                        "{:g} deg".format(float(wall_type.PlanHatchAngle.Value))
+                    )
                 self._wall_type_editor_state = view_model.state_key
             self._set_widget_enabled(
                 self.wall_type_duplicate_button, view_model.can_duplicate
             )
             self._set_widget_enabled(
                 self.wall_type_reset_button, view_model.can_reset_overrides
+            )
+            self._set_widget_enabled(
+                self.wall_type_settings_toggle, view_model.current_type is not None
+            )
+            self._set_widget_enabled(
+                self.wall_type_apply_button, view_model.current_type is not None
             )
         finally:
             self._refreshing_wall_type_editor = False
@@ -216,6 +320,72 @@ class PlanEditEditorPanelsMixin:
 
     def on_wall_type_reset_clicked(self):
         self.session.wall_create.reset_selected_wall_type_overrides()
+
+    def on_wall_type_settings_toggled(self, expanded):
+        from PySide import QtCore
+
+        self.wall_type_settings_toggle.setArrowType(
+            QtCore.Qt.DownArrow if expanded else QtCore.Qt.RightArrow
+        )
+        self.wall_type_settings_content.setVisible(bool(expanded))
+
+    def _coerce_wall_type_angle_degrees(self, value):
+        text = str(value or "").strip()
+        if not text:
+            return None
+        try:
+            quantity = FreeCAD.Units.Quantity(text)
+            try:
+                return float(quantity.getValueAs("deg").Value)
+            except Exception:
+                return float(quantity.Value)
+        except Exception:
+            return None
+
+    def on_wall_type_apply_clicked(self):
+        index = self.wall_type_combo.currentIndex()
+        wall_type = (
+            self._wall_type_items[index]
+            if 0 <= index < len(self._wall_type_items)
+            else None
+        )
+        width = self._coerce_window_length_mm(self.wall_type_width_edit.text())
+        height = self._coerce_window_length_mm(self.wall_type_height_edit.text())
+        spacing = self._coerce_window_length_mm(
+            self.wall_type_hatch_spacing_edit.text()
+        )
+        angle = self._coerce_wall_type_angle_degrees(
+            self.wall_type_hatch_angle_edit.text()
+        )
+        if (
+            wall_type is None
+            or not self.wall_type_label_edit.text().strip()
+            or width is None
+            or height is None
+            or spacing is None
+            or angle is None
+            or width <= 0
+            or height <= 0
+            or spacing <= 0
+        ):
+            FreeCAD.Console.PrintWarning(
+                translate(
+                    "BIM_PlanEdit",
+                    "Wall type settings require a name, positive dimensions, and a valid angle.\n",
+                )
+            )
+            return
+        self.session.wall_create.update_wall_type(
+            wall_type,
+            label=self.wall_type_label_edit.text(),
+            function=self.wall_type_function_combo.currentText(),
+            width=width,
+            default_height=height,
+            align=self.wall_type_align_combo.currentText(),
+            plan_hatch=self.wall_type_hatch_combo.currentText(),
+            hatch_spacing=spacing,
+            hatch_angle=angle,
+        )
 
     def _format_region_parent_space_label(self, space):
         label = str(getattr(space, "Label", "") or "").strip()

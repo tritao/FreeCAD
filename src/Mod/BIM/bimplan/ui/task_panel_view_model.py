@@ -1112,6 +1112,28 @@ def build_wall_type_editor_view_model(session_or_context):
         getattr(selected_wall, "Name", ""),
         tuple((item.Name, item.Label) for item in wall_types),
         getattr(current_type, "Name", ""),
+        (
+            getattr(current_type, "Label", ""),
+            str(getattr(current_type, "Function", "")),
+            float(getattr(getattr(current_type, "Width", None), "Value", 0.0)),
+            float(
+                getattr(getattr(current_type, "DefaultHeight", None), "Value", 0.0)
+            ),
+            str(getattr(current_type, "Align", "")),
+            str(getattr(current_type, "PlanHatch", "")),
+            float(
+                getattr(
+                    getattr(current_type, "PlanHatchSpacing", None), "Value", 0.0
+                )
+            ),
+            float(
+                getattr(
+                    getattr(current_type, "PlanHatchAngle", None), "Value", 0.0
+                )
+            ),
+        )
+        if current_type is not None
+        else (),
         summary,
         overrides,
     )

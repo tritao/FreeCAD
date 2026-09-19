@@ -147,6 +147,9 @@ class PlanWallCreateAPI:
     def reset_selected_wall_type_overrides(self):
         return reset_selected_wall_type_overrides(self.session)
 
+    def update_wall_type(self, wall_type, **settings):
+        return update_wall_type(self.session, wall_type, **settings)
+
     def has_active_rect_wall_tool(self):
         return has_active_rect_wall_tool(self.session)
 
@@ -431,6 +434,59 @@ def reset_selected_wall_type_overrides(session):
     session.selection.activation.select_wall_for_plan_edit(wall)
     session.task_panels.refresh_task_panel_status(reason="selection")
     return True
+
+
+def update_wall_type(
+    session,
+    wall_type,
+    *,
+    label,
+    function,
+    width,
+    default_height,
+    align,
+    plan_hatch,
+    hatch_spacing,
+    hatch_angle,
+):
+    """Update one shared wall type and refresh all of its occurrences."""
+    if wall_type not in get_wall_types(session):
+        raise ValueError("Wall type does not belong to the active document")
+    label = str(label or "").strip()
+    if not label:
+        raise ValueError("Wall type name must not be empty")
+    if width <= 0 or default_height <= 0 or hatch_spacing <= 0:
+        raise ValueError("Wall type dimensions and hatch spacing must be positive")
+
+    selected_wall = get_selected_wall(session)
+    occurrences = tuple(
+        obj
+        for obj in (getattr(wall_type, "InList", ()) or ())
+        if getattr(obj, "WallType", None) is wall_type
+    )
+    try:
+        with session.document_visuals.defer_document_visual_updates():
+            session.doc.openTransaction(translate("BIM_PlanEdit", "Edit Wall Type"))
+            wall_type.Label = label
+            wall_type.Function = str(function)
+            wall_type.Width = float(width)
+            wall_type.DefaultHeight = float(default_height)
+            wall_type.Align = str(align)
+            wall_type.PlanHatch = str(plan_hatch)
+            wall_type.PlanHatchSpacing = float(hatch_spacing)
+            wall_type.PlanHatchAngle = float(hatch_angle)
+            session.doc.recompute()
+            session.doc.commitTransaction()
+    except Exception:
+        session.doc.abortTransaction()
+        raise
+
+    for occurrence in occurrences:
+        session.contextual_rendering.refresh_object(occurrence)
+    if selected_wall is not None:
+        session.selection.activation.select_wall_for_plan_edit(selected_wall)
+    session.task_panels.refresh_task_panel_status(reason="selection")
+    return wall_type
 
 
 def has_active_rect_wall_tool(session):
