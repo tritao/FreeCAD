@@ -318,12 +318,14 @@ class BIM_Views:
 
     def onClose(self, event):
         from PySide import QtGui
+        from bimsheets.gui import hide_sheet_inspector
 
         st = FreeCADGui.getMainWindow().statusBar()
         statuswidget = st.findChild(QtGui.QToolBar, "BIMStatusWidget")
         if statuswidget and hasattr(statuswidget, "bimviewsbutton"):
             statuswidget.bimviewsbutton.setChecked(False)
         PARAMS.SetBool("RestoreBimViews", False)
+        hide_sheet_inspector()
         event.accept()
 
     def connectDock(self):
@@ -408,15 +410,33 @@ class BIM_Views:
             indexes = vm.navigatorModel.indexes_for_object(obj)
             for index in indexes:
                 selection_model.select(index, flags)
+        selected = selection_model.selectedRows(0)
+        self._showSheetInspector(selected[0] if len(selected) == 1 else QtCore.QModelIndex())
 
     def select(self, index):
         """Synchronize an object-backed navigator row with global selection."""
 
         vm = findWidget()
         obj = vm.navigatorModel.object_for_index(index) if vm else None
+        self._showSheetInspector(index)
         if obj is not None:
             FreeCADGui.Selection.clearSelection()
             FreeCADGui.Selection.addSelection(obj)
+
+    def _showSheetInspector(self, index):
+        """Route Navigator context to the standard right-side Task View."""
+
+        from bimsheets.gui import show_sheet_inspector
+
+        vm = findWidget()
+        if vm is None or not index.isValid():
+            show_sheet_inspector(None, "")
+            return
+        show_sheet_inspector(
+            vm.navigatorModel.object_for_index(index),
+            vm.navigatorModel.kind_for_index(index),
+            refresh_callback=lambda: self.update(False),
+        )
 
     def activateIndex(self, index):
         vm = findWidget()

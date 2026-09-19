@@ -24,7 +24,7 @@ class BIMSheetViewTitleService:
         if drawing_view not in page.Views:
             raise ValueError("drawing_view must belong to page")
         number = str(number) if number is not None else self.next_number(page)
-        self._validate_number(page, number, drawing_view)
+        self.validate_number(page, number, drawing_view)
         drawing_view.ViewNumber = number
         annotation = self.document.addObject(
             "TechDraw::DrawViewAnnotation", "BIMViewTitle"
@@ -82,7 +82,9 @@ class BIMSheetViewTitleService:
         return str(candidate)
 
     @staticmethod
-    def _validate_number(page, number, drawing_view=None):
+    def validate_number(page, number, drawing_view=None):
+        """Require a non-empty placement number unique within one sheet."""
+
         if not number.strip():
             raise ValueError("view number cannot be empty")
         for view in page.Views:

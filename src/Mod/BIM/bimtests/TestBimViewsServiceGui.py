@@ -61,7 +61,14 @@ from bimsheets import (
     SheetRect,
     format_scale,
 )
-from bimsheets.gui import BIMSheetPropertiesDialog, create_sheet_interactive
+from bimsheets.gui import (
+    BIMSheetInspectorPanel,
+    BIMSheetPlacementPropertiesWidget,
+    BIMSheetPropertiesDialog,
+    create_sheet_interactive,
+    hide_sheet_inspector,
+    show_sheet_inspector,
+)
 from bimsheets.layout import svg_footprint
 
 
@@ -258,6 +265,74 @@ class TestBimViewsServiceGui(TestArchBaseGui):
         self.assertEqual("Default_Template_A4_Landscape", page.SheetTitle)
         self.assertEqual("Default_Template_A4_Landscape.svg", page.TemplateIdentity)
         self.assertTrue(saved_directories)
+
+    def test_sheet_inspector_applies_metadata_without_a_modal_dialog(self):
+        page = BIMSheetService(self.document).create_sheet(
+            FreeCAD.getResourceDir()
+            + "Mod/TechDraw/Templates/ISO/A4_Landscape_ISO5457_minimal.svg",
+            BIMSheetMetadata(number="A-101", title="Plan", order=1),
+        )
+        panel = BIMSheetInspectorPanel()
+        panel.set_context(page, "sheet")
+        panel.editor.number.setText("A-201")
+        panel.editor.title.setText("Floor Plans")
+        panel.editor.revision.setText("P02")
+        panel.apply()
+
+        self.assertEqual("A-201", page.SheetNumber)
+        self.assertEqual("Floor Plans", page.SheetTitle)
+        self.assertEqual("Floor Plans", page.Label)
+        self.assertEqual("P02", page.Revision)
+        self.assertEqual("A-201", page.Template.EditableTexts["drawing_number"])
+
+    def test_placement_inspector_applies_generic_techdraw_properties(self):
+        source = self.document.addObject("App::FeaturePython", "InspectorSource")
+        source.addProperty("App::PropertyPlacement", "Placement")
+        service = BIMViewService(self.document, view=_RecordingView([]))
+        definition = service.create_view("Plan", "Plan", source, capture=False)
+        page = BIMSheetService(self.document).create_sheet(
+            FreeCAD.getResourceDir()
+            + "Mod/TechDraw/Templates/Default_Template_A4_Landscape.svg"
+        )
+        drawing_view = service.place_on_sheet(definition, page)
+        editor = BIMSheetPlacementPropertiesWidget(drawing_view)
+        try:
+            editor.number.setText("D1")
+            editor.title.setText("Lobby Detail")
+            editor.scale.setValue(0.02)
+            editor.x.setValue(80)
+            editor.y.setValue(60)
+            editor.title_offset.setValue(10)
+            editor.title_size.setValue(4)
+            editor.show_hidden.setChecked(True)
+            with patch("ArchSectionPlane.getSVG", return_value=""):
+                editor.apply()
+        finally:
+            editor.close()
+            FreeCADGui.deleteLater(editor)
+
+        annotation = BIMSheetViewTitleService.annotation_for(drawing_view)
+        self.assertEqual("D1", drawing_view.ViewNumber)
+        self.assertEqual("Lobby Detail", drawing_view.ViewTitle)
+        self.assertAlmostEqual(0.02, drawing_view.Scale)
+        self.assertAlmostEqual(80, drawing_view.X.Value)
+        self.assertAlmostEqual(60, drawing_view.Y.Value)
+        self.assertAlmostEqual(-10, annotation.OwnerOffsetY.Value)
+        self.assertAlmostEqual(4, annotation.TextSize.Value)
+        self.assertTrue(drawing_view.ShowHidden)
+
+    def test_sheet_inspector_uses_standard_contextual_task_view(self):
+        page = BIMSheetService(self.document).create_sheet(
+            FreeCAD.getResourceDir()
+            + "Mod/TechDraw/Templates/Default_Template_A4_Landscape.svg"
+        )
+        try:
+            panel = show_sheet_inspector(page, "sheet")
+            self.assertIsNotNone(panel)
+            self.assertEqual("Sheet Inspector", panel.form.windowTitle())
+            self.assertIsNotNone(FreeCADGui.Control.activeDialog(FreeCADGui.activeDocument()))
+        finally:
+            hide_sheet_inspector()
 
     def test_sheet_metadata_synchronizes_mapped_title_block_fields(self):
         template_path = (
