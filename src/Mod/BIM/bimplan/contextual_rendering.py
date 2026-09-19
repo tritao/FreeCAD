@@ -47,6 +47,7 @@ class PlanContextualRenderingAPI:
             self._sources = represented
             self._pending_sources = self._required_sources() - represented
             self._ready = not self._pending_sources
+            self.reconcile_replaced_source_visibility()
         self._session.viewport.flush_scene_graph_mutations()
         self._sync_readiness_from_renderer()
         if self._pending_sources:
@@ -94,10 +95,22 @@ class PlanContextualRenderingAPI:
         )
 
     def _install_representation(self, renderer, representation):
-        """Install a semantic drawing before suppressing its native geometry."""
+        """Install semantic geometry without coupling it to viewport visibility."""
 
         renderer.set_representation(representation)
-        self._session.visibility.hide_replaced_plan_source(representation.source)
+
+    def reconcile_replaced_source_visibility(self):
+        """Make native visibility agree with the active semantic Plan layer.
+
+        Geometry layers may be newly built, incrementally refreshed, or reused
+        from the viewport cache.  Visibility is contextual state and must be
+        reconciled independently every time the represented source set becomes
+        active.
+        """
+
+        self._session.visibility.apply_storey_visibility()
+        for source in tuple(self._sources):
+            self._session.visibility.hide_replaced_plan_source(source)
 
     def mapping_for_node(self, node):
         if self._renderer is None:
@@ -222,6 +235,7 @@ class PlanContextualRenderingAPI:
         self._sources = current
         self._pending_sources = pending
         self._ready = not pending
+        self.reconcile_replaced_source_visibility()
         self.sync_visible_handles()
 
     def _requires_representation(self, obj):
@@ -265,6 +279,7 @@ class PlanContextualRenderingAPI:
                 affected.add(opening)
         for source in affected:
             self._refresh_source(source)
+        self.reconcile_replaced_source_visibility()
 
     def refresh_edit_dependencies(self, obj):
         """Refresh the bounded semantic neighborhood affected by a BIM edit."""
@@ -306,6 +321,7 @@ class PlanContextualRenderingAPI:
                     lambda renderer, value=source: renderer.remove_representation(value),
                 )
                 self._sources.discard(source)
+        self.reconcile_replaced_source_visibility()
 
     def _refresh_source(self, source):
         representation = None

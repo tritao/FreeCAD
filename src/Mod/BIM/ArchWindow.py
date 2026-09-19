@@ -1759,7 +1759,9 @@ class _HostedOpeningPlanGeometry:
 
         return self._get_host_plan_basis()
 
-    def _get_hosted_opening_plan_frame(self, shape, cut_z, base_z):
+    def _get_hosted_opening_plan_frame(
+        self, shape, cut_z, base_z, host_v_bounds=None
+    ):
         """Return one canonical host-wall frame for hosted opening plan geometry."""
 
         source_profile = self._get_plan_symbol_source_profile(shape, cut_z, base_z)
@@ -1800,9 +1802,19 @@ class _HostedOpeningPlanGeometry:
         source_vmin = center_v - half_width_v
         source_vmax = center_v + half_width_v
 
-        host_v_bounds = self._get_host_plan_v_bounds_from_thickness(center_v)
+        # The host footprint carries its resolved alignment and offset.  A
+        # thickness span centred on the opening is only a fallback: for Left-
+        # and Right-aligned walls the authored opening base commonly lies on a
+        # wall face, so centring the host thickness there shifts the complete
+        # plan symbol by half a wall width.
+        # Geometry recipes are built from an already-resolved host-wall
+        # recipe. In that path its section bounds must be supplied by the
+        # caller: asking the host for its footprint here recursively rebuilds
+        # the same wall representation through its hosted openings.
         if host_v_bounds is None:
             host_v_bounds = self._get_host_plan_v_bounds(origin, axis_u, axis_v)
+        if host_v_bounds is None:
+            host_v_bounds = self._get_host_plan_v_bounds_from_thickness(center_v)
         if host_v_bounds is not None:
             vmin, vmax = host_v_bounds
             host_span_v = max(vmax - vmin, 0.0)
@@ -1838,7 +1850,10 @@ class _HostedOpeningPlanGeometry:
             return None
         cut_z = (min(point.z for point in points) + max(point.z for point in points)) * 0.5
         profile = self._get_hosted_opening_plan_frame(
-            getattr(self.Object, "Shape", None), cut_z, wall_recipe.z_min
+            getattr(self.Object, "Shape", None),
+            cut_z,
+            wall_recipe.z_min,
+            host_v_bounds=(wall_recipe.section.y_min, wall_recipe.section.y_max),
         )
         if not profile:
             return None
@@ -2264,13 +2279,9 @@ class _HostedOpeningRepresentationGeometry:
 
     @staticmethod
     def _get_door_symbol_v_bounds(section_profile):
-        source_vmin = section_profile.get("source_vmin")
-        source_vmax = section_profile.get("source_vmax")
-        if source_vmin is not None and source_vmax is not None:
-            source_vmin = float(source_vmin)
-            source_vmax = float(source_vmax)
-            if source_vmax > source_vmin:
-                return source_vmin, source_vmax
+        # Door leaves and arcs start at a resolved host face.  The source
+        # profile can be centred on the wall axis (or anchored to one face),
+        # and therefore is not a reliable lateral placement after hosting.
         return float(section_profile.get("vmin", 0.0)), float(section_profile.get("vmax", 0.0))
 
     def _get_symbol_footprint_polylines(self, profile, base_z):
@@ -2349,8 +2360,11 @@ class _HostedOpeningRepresentationGeometry:
             polylines.append(points)
         return self._clamp_symbol_polylines_u(polylines, origin, axis_u, axis_v, umin, umax)
 
-    @staticmethod
-    def _get_plan_overlay_guide_polylines(profile, base_z):
+    def _get_plan_overlay_guide_polylines(self, profile, base_z):
+        # The guide is useful as a window centre-line, but on a door it draws
+        # a spurious wall-like line straight through the clear opening.
+        if self._get_effective_opening_kind() == "Door":
+            return []
         if not profile or profile["vmax"] <= profile["vmin"]:
             return []
         mid_v = (profile["vmin"] + profile["vmax"]) * 0.5

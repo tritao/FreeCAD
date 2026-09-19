@@ -629,6 +629,7 @@ def register_plan_objects(session, objects):
     apply_storey_visibility(session)
     for obj in registered:
         session.document_visuals.refresh_plan_object_footprint_display(obj, request_redraw=False)
+        session.document_visuals.queue_contextual_representation_refresh(obj)
     session.viewport.request_view_redraw()
 
 

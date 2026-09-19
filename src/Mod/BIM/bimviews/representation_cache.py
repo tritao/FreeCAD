@@ -154,7 +154,21 @@ def invalidate_document(document):
         representation_layers.invalidate_document(document)
 
 
+def invalidate_document_derived_values(document):
+    """Discard document-wide lookup data without invalidating object drawings.
+
+    Adding an object can change relationship and classification lookups, but it
+    does not make the cached geometry of every existing object incorrect.  The
+    new object is installed incrementally by an active contextual session.
+    """
+
+    if document is not None:
+        _document_derived_values.pop(_document_key(document), None)
+
+
 def invalidate_object(obj):
+    """Invalidate one object's cached drawing without staling its whole layer."""
+
     document = getattr(obj, "Document", None)
     name = getattr(obj, "Name", None)
     if document is None or not name:
@@ -165,9 +179,6 @@ def invalidate_object(obj):
             if key[0] == name:
                 cache.pop(key, None)
     _document_derived_values.pop(_document_key(document), None)
-    from . import representation_layers
-
-    representation_layers.invalidate_document(document)
 
 
 def invalidate_for_object_change(obj, prop):
@@ -180,7 +191,23 @@ def invalidate_for_object_change(obj, prop):
         pass
     if str(prop or "") not in _GEOMETRY_PROPERTIES:
         return False
-    invalidate_document(getattr(obj, "Document", None))
+    document = getattr(obj, "Document", None)
+    name = getattr(obj, "Name", None)
+    cache = (
+        _document_caches.get(_document_key(document))
+        if document is not None
+        else None
+    )
+    has_cached_representation = bool(
+        name and cache and any(key[0] == name for key in cache)
+    )
+    if has_cached_representation:
+        invalidate_document(document)
+    else:
+        # A newly constructed object has no installed representation to make
+        # stale.  Preserve every existing drawing while discarding only the
+        # document-wide relationship data that may include this object.
+        invalidate_document_derived_values(document)
     return True
 
 
@@ -215,7 +242,7 @@ class _RepresentationCacheObserver:
 
     @staticmethod
     def slotCreatedObject(obj):
-        invalidate_document(getattr(obj, "Document", None))
+        invalidate_document_derived_values(getattr(obj, "Document", None))
 
     @staticmethod
     def slotDeletedObject(obj):

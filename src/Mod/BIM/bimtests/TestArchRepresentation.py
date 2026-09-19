@@ -852,6 +852,19 @@ class TestArchRepresentation(unittest.TestCase):
         Arch.addComponents(opening, wall)
         document.recompute()
 
+        # A cold wall-representation cache must resolve hosted openings from
+        # the wall recipe already in progress. Asking the opening to query the
+        # host footprint here recursively rebuilds this same representation.
+        from bimviews import representation_cache
+
+        representation_cache.invalidate_document(document)
+        wall_representation = wall.Proxy.getRepresentation(
+            wall,
+            RepresentationRequest(purpose="Plan", cut_offset=1000, target_offset=0),
+        )
+        self.assertIs(wall_representation.source, wall)
+        self.assertTrue(wall_representation.cut_geometry)
+
         representation = opening.Proxy.getRepresentation(
             opening,
             RepresentationRequest(purpose="Plan", cut_offset=1000, target_offset=0),
@@ -974,6 +987,42 @@ class TestArchRepresentation(unittest.TestCase):
         )
         self.assertAlmostEqual(original_width, wall.Width.Value)
         self.assertEqual(before, base.Placement)
+
+    def test_door_plan_symbol_uses_host_faces_without_an_opening_guide(self):
+        document = FreeCAD.newDocument("AlignedDoorPlanRepresentationTest")
+        self.addCleanup(FreeCAD.closeDocument, document.Name)
+        wall = Arch.makeWall(length=3000, width=200, height=3000, align="Left")
+        base = Draft.make_rectangle(900, 2100)
+        base.Placement.Rotation = FreeCAD.Rotation(FreeCAD.Vector(1, 0, 0), 90)
+        base.Placement.Base = FreeCAD.Vector(1000, 0, 0)
+        door = Arch.makeWindow(baseobj=base, name="AlignedDoor")
+        door.Width = 900
+        door.Height = 2100
+        door.IfcType = "Door"
+        Arch.addComponents(door, wall)
+        document.recompute()
+
+        request = RepresentationRequest(purpose="Plan", cut_offset=1000, target_offset=0)
+        frame = door.Proxy._get_hosted_opening_plan_frame(door.Shape, 1000, 0)
+        representation = door.Proxy.getRepresentation(door, request)
+        mappings_by_role = {}
+        for mapping in representation.source_mappings:
+            mappings_by_role.setdefault(mapping.role, []).append(mapping)
+
+        wall_v = [
+            FreeCAD.Vector(vertex.Point).sub(frame["origin"]).dot(frame["axis_v"])
+            for face in wall.Proxy.getFootprint(wall)
+            for vertex in face.Vertexes
+        ]
+        self.assertAlmostEqual(min(wall_v), frame["vmin"])
+        self.assertAlmostEqual(max(wall_v), frame["vmax"])
+        self.assertNotIn("OpeningGuide", mappings_by_role)
+        self.assertEqual(2, len(mappings_by_role["OpeningJambLine"]))
+        self.assertEqual(2, len(mappings_by_role["OpeningSymbol"]))
+        hinge = mappings_by_role["OpeningSymbol"][0].geometry[0]
+        _hinge_at_min, swing_sign = door.Proxy._get_door_symbol_style()
+        hinge_v = FreeCAD.Vector(hinge).sub(frame["origin"]).dot(frame["axis_v"])
+        self.assertAlmostEqual(frame["vmin"] if swing_sign < 0 else frame["vmax"], hinge_v)
 
     def test_wall_representation_supports_a_rotated_section_frame(self):
         document = FreeCAD.newDocument("ArbitraryWallRepresentationTest")
