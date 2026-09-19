@@ -41,6 +41,7 @@ line, then extruding it vertically.
 """
 
 import math
+import os
 from dataclasses import dataclass
 
 import FreeCAD
@@ -80,6 +81,10 @@ class ResolvedWallDefaults:
 
 
 _WALL_TYPE_PROPERTIES = ("Width", "Height", "Align", "Material")
+_PLAN_HATCH_PATTERNS = {
+    "Diagonal": ("Diagonal4", 4.0, 45.0),
+    "Cross": ("Diamond4", 4.0, 45.0),
+}
 
 
 def _wall_type_value(wall_type, property_name):
@@ -140,6 +145,55 @@ def assign_wall_type(wall, wall_type, *, preserve_instance_values=True):
     finally:
         proxy._assigning_wall_type = False
     wall.touch()
+
+
+def _add_plan_hatch_geometry(representation, obj, cut_faces):
+    """Add type-driven PAT hatch lines to a wall plan representation."""
+
+    wall_type = getattr(obj, "WallType", None)
+    pattern = _PLAN_HATCH_PATTERNS.get(
+        str(getattr(wall_type, "PlanHatch", "None") or "None")
+    )
+    if pattern is None or not cut_faces:
+        return
+    pattern_name, base_spacing, base_angle = pattern
+    spacing = float(
+        getattr(getattr(wall_type, "PlanHatchSpacing", 0.0), "Value", 0.0) or 0.0
+    )
+    if spacing <= 0.0:
+        return
+    angle = float(
+        getattr(getattr(wall_type, "PlanHatchAngle", base_angle), "Value", base_angle)
+    )
+    pattern_file = os.path.join(
+        FreeCAD.getResourceDir(), "Mod", "TechDraw", "PAT", "FCPAT.pat"
+    )
+    try:
+        from draftutils.hatch import make_hatch_geometry
+
+        hatch = make_hatch_geometry(
+            cut_faces,
+            pattern_file,
+            pattern_name,
+            scale=spacing / base_spacing,
+            rotation=angle - base_angle,
+            translate=False,
+        )
+    except Exception as error:
+        FreeCAD.Console.PrintWarning(
+            "Unable to generate plan hatch for {}: {}\n".format(obj.Label, error)
+        )
+        return
+    for index, edge in enumerate(getattr(hatch, "Edges", ()) or (), start=1):
+        points = tuple(ArchPlanGeometry.collect_edge_points(edge))
+        if len(points) < 2:
+            continue
+        representation.add_geometry(
+            "projected_geometry",
+            points,
+            "PlanHatch",
+            subelement=f"PlanHatch{index}",
+        )
 
 
 def get_resolved_wall_defaults(wall):
@@ -1308,6 +1362,8 @@ class _Wall(ArchComponent.Component):
                     role,
                     subelement=subelement,
                 )
+        if request.purpose == ArchRepresentation.RepresentationPurpose.PLAN:
+            _add_plan_hatch_geometry(representation, obj, cut_faces)
         joint_edges = self._wall_joint_snap_edges(representation, obj)
         for edge, joint in joint_edges:
             points = tuple(FreeCAD.Vector(vertex.Point) for vertex in edge.Vertexes)

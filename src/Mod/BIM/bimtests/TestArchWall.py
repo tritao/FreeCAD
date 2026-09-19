@@ -24,6 +24,7 @@
 
 # Unit tests for the Arch wall module
 
+import math
 import os
 import tempfile
 from unittest.mock import patch
@@ -112,6 +113,98 @@ class TestArchWall(TestArchBase.TestArchBase):
         self.assertNotIn("Width", wall.TypeOverrides)
         self.assertEqual(125.0, ArchWall.get_resolved_wall_defaults(wall).width)
         self.assertAlmostEqual(125.0, wall.Shape.BoundBox.YLength)
+
+    def _wall_plan_representation(self, wall):
+        request = ArchRepresentation.RepresentationRequest(
+            purpose=ArchRepresentation.RepresentationPurpose.PLAN,
+            cut_offset=1000.0,
+            target_offset=0.0,
+        )
+        return ArchRepresentation.representation_for(wall, request)
+
+    @staticmethod
+    def _plan_hatch_mappings(representation):
+        return tuple(
+            mapping
+            for mapping in representation.source_mappings
+            if mapping.role == "PlanHatch"
+        )
+
+    def test_wall_type_plan_hatch_is_clipped_to_cut_faces(self):
+        wall_type = Arch.makeWallType("Exterior Hatched")
+        wall_type.Function = "Exterior"
+        wall_type.PlanHatch = "Diagonal"
+        wall_type.PlanHatchSpacing = 100
+        wall_type.PlanHatchAngle = 45
+        wall = Arch.makeWall(length=2000, wall_type=wall_type)
+        self._make_hosted_window(wall, "HatchWindow", 700, 0, width=600, height=2000)
+        self.document.recompute()
+
+        representation = self._wall_plan_representation(wall)
+        hatches = self._plan_hatch_mappings(representation)
+
+        self.assertGreater(len(hatches), 0)
+        for mapping in hatches:
+            self.assertIs(mapping.source, wall)
+            start, end = mapping.geometry[0], mapping.geometry[-1]
+            midpoint = start.add(end).multiply(0.5)
+            self.assertTrue(
+                any(face.isInside(midpoint, 0.001, True) for face in representation.cut_geometry)
+            )
+
+    def test_wall_type_plan_hatch_respects_angle_and_spacing(self):
+        wall_type = Arch.makeWallType("Exterior Hatched")
+        wall_type.PlanHatch = "Diagonal"
+        wall_type.PlanHatchSpacing = 100
+        wall_type.PlanHatchAngle = 30
+        wall = Arch.makeWall(length=2000, width=400, wall_type=wall_type)
+        self.document.recompute()
+
+        coarse = self._plan_hatch_mappings(self._wall_plan_representation(wall))
+        directions = set()
+        for mapping in coarse:
+            vector = mapping.geometry[-1].sub(mapping.geometry[0])
+            directions.add(round(math.degrees(math.atan2(vector.y, vector.x)) % 180.0, 3))
+        self.assertEqual({30.0}, directions)
+
+        wall_type.PlanHatchSpacing = 50
+        self.document.recompute()
+        fine = self._plan_hatch_mappings(self._wall_plan_representation(wall))
+        self.assertGreater(len(fine), len(coarse))
+
+    def test_cross_plan_hatch_adds_two_directions(self):
+        wall_type = Arch.makeWallType("Cross Hatched")
+        wall_type.PlanHatch = "Cross"
+        wall_type.PlanHatchSpacing = 100
+        wall_type.PlanHatchAngle = 45
+        wall = Arch.makeWall(length=1000, width=400, wall_type=wall_type)
+        self.document.recompute()
+
+        directions = set()
+        for mapping in self._plan_hatch_mappings(self._wall_plan_representation(wall)):
+            vector = mapping.geometry[-1].sub(mapping.geometry[0])
+            directions.add(round(math.degrees(math.atan2(vector.y, vector.x)) % 180.0, 3))
+        self.assertEqual({45.0, 135.0}, directions)
+
+    def test_wall_type_plan_hatch_change_invalidates_cached_wall_representation(self):
+        from bimviews import representation_cache
+
+        wall_type = Arch.makeWallType("Cached Hatch")
+        wall_type.PlanHatch = "Diagonal"
+        wall = Arch.makeWall(length=1000, wall_type=wall_type)
+        self.document.recompute()
+        request = ArchRepresentation.RepresentationRequest(
+            purpose=ArchRepresentation.RepresentationPurpose.PLAN,
+            cut_offset=1000.0,
+            target_offset=0.0,
+        )
+        representation = self._wall_plan_representation(wall)
+        representation_cache.cache_representation(wall, request, representation)
+
+        wall_type.PlanHatchSpacing = 50
+        self.document.recompute()
+
+        self.assertIsNone(representation_cache.get_cached_representation(wall, request))
 
     def _make_hosted_window(self, wall, name, x_start, z_start, width=800.0, height=1200.0):
         sketch = self.document.addObject("Sketcher::SketchObject", name + "Sketch")
