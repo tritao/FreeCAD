@@ -12,6 +12,7 @@ import os
 
 import Arch
 import ArchSpace
+import ArchWall
 import Draft
 import FreeCAD as App
 import FreeCADGui as Gui
@@ -25,7 +26,7 @@ OUTPUT_PATH = os.path.join(ROOT, "data", "examples", "BIMPlanEditBasic.FCStd")
 FONT_PATH = os.path.join(ROOT, "data", "examples", "osifont-lgpl3fe.ttf")
 
 
-def make_wall(doc, name, start, end, *, align="Center", width=200.0):
+def make_wall(doc, name, start, end, *, wall_type, align="Center", width=200.0):
     direction = end.sub(start)
     wall = Arch.makeWall(length=direction.Length, width=width, height=2800.0)
     wall.Label = name
@@ -34,6 +35,7 @@ def make_wall(doc, name, start, end, *, align="Center", width=200.0):
         (start + end) * 0.5,
         App.Rotation(App.Vector(1, 0, 0), direction.normalize()),
     )
+    ArchWall.assign_wall_type(wall, wall_type, preserve_instance_values=True)
     doc.recompute()
     return wall
 
@@ -87,12 +89,61 @@ def build_document():
     if hasattr(level, "PlanCutHeight"):
         level.PlanCutHeight = 1200.0
 
+    exterior_wall_type = Arch.makeWallType("Exterior Wall Type")
+    exterior_wall_type.Function = "Exterior"
+    exterior_wall_type.Width = 200.0
+    exterior_wall_type.DefaultHeight = 2800.0
+    exterior_wall_type.Align = "Center"
+    exterior_wall_type.PlanHatch = "Diagonal"
+    exterior_wall_type.PlanHatchSpacing = 100.0
+    exterior_wall_type.PlanHatchAngle = 45.0
+
+    interior_wall_type = Arch.makeWallType("Interior Wall Type")
+    interior_wall_type.Function = "Interior"
+    interior_wall_type.Width = 150.0
+    interior_wall_type.DefaultHeight = 2800.0
+    interior_wall_type.Align = "Center"
+    interior_wall_type.PlanHatch = "None"
+
     walls = [
-        make_wall(doc, "North - Center aligned", App.Vector(0, 4000), App.Vector(6000, 4000)),
-        make_wall(doc, "East - Right aligned", App.Vector(6000, 4000), App.Vector(6000, 0), align="Right"),
-        make_wall(doc, "South - Left aligned", App.Vector(6000, 0), App.Vector(0, 0), align="Left"),
-        make_wall(doc, "West - Center aligned", App.Vector(0, 0), App.Vector(0, 4000)),
-        make_wall(doc, "Interior editable wall", App.Vector(3000, 0), App.Vector(3000, 4000), width=150.0),
+        make_wall(
+            doc,
+            "North - Center aligned",
+            App.Vector(0, 4000),
+            App.Vector(6000, 4000),
+            wall_type=exterior_wall_type,
+        ),
+        make_wall(
+            doc,
+            "East - Right aligned",
+            App.Vector(6000, 4000),
+            App.Vector(6000, 0),
+            wall_type=exterior_wall_type,
+            align="Right",
+        ),
+        make_wall(
+            doc,
+            "South - Left aligned",
+            App.Vector(6000, 0),
+            App.Vector(0, 0),
+            wall_type=exterior_wall_type,
+            align="Left",
+        ),
+        make_wall(
+            doc,
+            "West - Center aligned",
+            App.Vector(0, 0),
+            App.Vector(0, 4000),
+            wall_type=exterior_wall_type,
+        ),
+        make_wall(
+            doc,
+            "Interior editable wall",
+            App.Vector(3000, 0),
+            App.Vector(3000, 4000),
+            wall_type=interior_wall_type,
+            width=150.0,
+        ),
     ]
     for wall in walls:
         level.addObject(wall)
