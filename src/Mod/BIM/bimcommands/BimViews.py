@@ -210,6 +210,8 @@ class BIM_Views:
                 ("PlaceOnSheet", translate("BIM", "Place on Sheet…")),
                 ("OpenSheet", translate("BIM", "Open Sheet")),
                 ("RefreshTitleBlock", translate("BIM", "Refresh Title Block")),
+                ("PublishSheet", translate("BIM", "Publish Sheet…")),
+                ("PublishSheetSet", translate("BIM", "Publish Sheet Set…")),
                 ("LocatePlacement", translate("BIM", "Locate Placement")),
                 ("RemoveFromSheet", translate("BIM", "Remove from Sheet")),
                 ("Rename", translate("BIM", "Rename")),
@@ -271,6 +273,8 @@ class BIM_Views:
             self.dialog.buttonPlaceOnSheet.triggered.connect(self.placeOnSheet)
             self.dialog.buttonOpenSheet.triggered.connect(self.openSheet)
             self.dialog.buttonRefreshTitleBlock.triggered.connect(self.refreshTitleBlock)
+            self.dialog.buttonPublishSheet.triggered.connect(self.publishSheet)
+            self.dialog.buttonPublishSheetSet.triggered.connect(self.publishSheetSet)
             self.dialog.buttonLocatePlacement.triggered.connect(self.locatePlacement)
             self.dialog.buttonRemoveFromSheet.triggered.connect(self.removeFromSheet)
             self.dialog.buttonRename.triggered.connect(self.rename)
@@ -810,6 +814,71 @@ class BIM_Views:
         self.contextObject = None
         self.update(False)
 
+    def publishSheet(self):
+        """Publish the selected sheet to an output directory."""
+
+        self._publishSheets(False)
+
+    def publishSheetSet(self):
+        """Publish all BIM sheets in deterministic drawing-set order."""
+
+        self._publishSheets(True)
+
+    def _publishSheets(self, publish_set):
+        from PySide import QtGui
+        from bimsheets import BIMSheetPublishingService, SheetPublicationError
+
+        page = self.contextObject
+        if page is None or not page.isDerivedFrom("TechDraw::DrawPage"):
+            return
+        directory = QtGui.QFileDialog.getExistingDirectory(
+            self.dialog, translate("BIM", "Publish Drawing Sheets")
+        )
+        if not directory:
+            return
+        format, accepted = QtGui.QInputDialog.getItem(
+            self.dialog,
+            translate("BIM", "Publication Format"),
+            translate("BIM", "Format"),
+            ["PDF", "SVG"],
+            0,
+            False,
+        )
+        if not accepted:
+            return
+        service = BIMSheetPublishingService(FreeCAD.ActiveDocument)
+        publish = service.publish_set if publish_set else service.publish_sheet
+        try:
+            if publish_set:
+                result = publish(directory, format.lower())
+            else:
+                result = publish(page, directory, format.lower())
+        except SheetPublicationError as error:
+            if "overwrite" not in str(error):
+                QtGui.QMessageBox.warning(
+                    self.dialog, translate("BIM", "Publication Failed"), str(error)
+                )
+                return
+            answer = QtGui.QMessageBox.question(
+                self.dialog,
+                translate("BIM", "Replace Published Files?"),
+                str(error),
+                QtGui.QMessageBox.Yes | QtGui.QMessageBox.No,
+                QtGui.QMessageBox.No,
+            )
+            if answer != QtGui.QMessageBox.Yes:
+                return
+            if publish_set:
+                result = publish(directory, format.lower(), overwrite=True)
+            else:
+                result = publish(page, directory, format.lower(), overwrite=True)
+        QtGui.QMessageBox.information(
+            self.dialog,
+            translate("BIM", "Publication Complete"),
+            translate("BIM", "Published {} sheet(s).").format(len(result.sheets)),
+        )
+        self.update(False)
+
     def addProxy(self):
         "adds a WP proxy"
 
@@ -1064,6 +1133,8 @@ class BIM_Views:
             self.dialog.buttonPlaceOnSheet,
             self.dialog.buttonOpenSheet,
             self.dialog.buttonRefreshTitleBlock,
+            self.dialog.buttonPublishSheet,
+            self.dialog.buttonPublishSheetSet,
             self.dialog.buttonLocatePlacement,
             self.dialog.buttonRemoveFromSheet,
             self.dialog.buttonRename,
@@ -1074,6 +1145,8 @@ class BIM_Views:
         self.dialog.buttonPlaceOnSheet.setVisible(False)
         self.dialog.buttonOpenSheet.setVisible(False)
         self.dialog.buttonRefreshTitleBlock.setVisible(False)
+        self.dialog.buttonPublishSheet.setVisible(False)
+        self.dialog.buttonPublishSheetSet.setVisible(False)
         self.dialog.buttonLocatePlacement.setVisible(False)
         self.dialog.buttonRemoveFromSheet.setVisible(False)
         self.dialog.buttonActive.setText(translate("BIM", "Active"))
@@ -1114,6 +1187,8 @@ class BIM_Views:
                 self.dialog.buttonNewModelView.setVisible(False)
                 self.dialog.buttonOpenSheet.setVisible(True)
                 self.dialog.buttonRefreshTitleBlock.setVisible(True)
+                self.dialog.buttonPublishSheet.setVisible(True)
+                self.dialog.buttonPublishSheetSet.setVisible(True)
                 self.dialog.buttonRename.setVisible(True)
             elif kind == "sheet-placement":
                 self.dialog.buttonNewPlanView.setVisible(False)

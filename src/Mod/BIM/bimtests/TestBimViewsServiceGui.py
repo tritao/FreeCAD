@@ -3,6 +3,8 @@
 """GUI-facing tests for the BIM Navigator service seam."""
 
 import tempfile
+from datetime import datetime, timezone
+from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
 
@@ -48,9 +50,11 @@ from bimplan.runtime.session import activate_representation_request
 from bimsheets import (
     BIMSheetLayout,
     BIMSheetMetadata,
+    BIMSheetPublishingService,
     BIMSheetService,
     BIMSheetViewTitleService,
     BIMTitleBlockService,
+    SheetPublicationError,
     SheetLayoutError,
     SheetRect,
     format_scale,
@@ -268,6 +272,127 @@ class TestBimViewsServiceGui(TestArchBaseGui):
             BIMTitleBlockService(self.document).synchronize(
                 page, {"number": "does_not_exist"}
             )
+
+    def test_sheet_set_publication_is_ordered_and_records_output(self):
+        template_path = (
+            FreeCAD.getResourceDir()
+            + "Mod/TechDraw/Templates/ISO/A4_Landscape_ISO5457_minimal.svg"
+        )
+        sheets = BIMSheetService(self.document)
+        second = sheets.create_sheet(
+            template_path,
+            BIMSheetMetadata(number="A-202", title="Upper Plan", revision="P02", order=202),
+            name="SecondPublishedSheet",
+        )
+        first = sheets.create_sheet(
+            template_path,
+            BIMSheetMetadata(number="A-101", title="Ground/Plan", revision="P01", order=101),
+            name="FirstPublishedSheet",
+        )
+        calls = []
+
+        def exporter(page, path, format):
+            calls.append((page, path.name, format))
+            path.write_text("{}:{}".format(format, page.SheetNumber), encoding="utf-8")
+
+        instant = datetime(2026, 9, 19, 12, 30, tzinfo=timezone.utc)
+        publisher = BIMSheetPublishingService(
+            self.document, exporter=exporter, clock=lambda: instant
+        )
+        with tempfile.TemporaryDirectory() as directory:
+            result = publisher.publish_set(directory, "pdf")
+
+            self.assertEqual([first, second], [item.page for item in result.sheets])
+            self.assertEqual(
+                ["A-101 - Ground-Plan.pdf", "A-202 - Upper Plan.pdf"],
+                [item.path.name for item in result.sheets],
+            )
+            self.assertEqual([first, second], [call[0] for call in calls])
+            self.assertTrue(all(item.path.is_file() for item in result.sheets))
+            self.assertEqual("Published", str(first.SheetStatus))
+            self.assertEqual("P01", first.LastPublishedRevision)
+            self.assertEqual("pdf", first.LastPublishedFormat)
+            self.assertEqual(instant.isoformat(), first.LastPublishedAt)
+            self.assertEqual(64, len(first.LastPublishedSHA256))
+
+            path = directory + "/published.FCStd"
+            self.document.saveAs(path)
+            FreeCAD.closeDocument(self.document.Name)
+            self.document = FreeCAD.openDocument(path)
+            reopened = self.document.getObject("FirstPublishedSheet")
+            self.assertEqual("P01", reopened.LastPublishedRevision)
+            self.assertEqual("pdf", reopened.LastPublishedFormat)
+
+    def test_sheet_publication_requires_explicit_overwrite(self):
+        template_path = (
+            FreeCAD.getResourceDir()
+            + "Mod/TechDraw/Templates/ISO/A4_Landscape_ISO5457_minimal.svg"
+        )
+        page = BIMSheetService(self.document).create_sheet(
+            template_path, BIMSheetMetadata(number="A-001", title="Cover")
+        )
+        calls = []
+
+        def exporter(_page, path, _format):
+            calls.append(path)
+            path.write_text("new", encoding="utf-8")
+
+        publisher = BIMSheetPublishingService(self.document, exporter=exporter)
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory) / publisher.filename_for(page, "svg")
+            target.write_text("existing", encoding="utf-8")
+            with self.assertRaisesRegex(SheetPublicationError, "overwrite"):
+                publisher.publish_sheet(page, directory, "svg")
+            self.assertEqual([], calls)
+            self.assertEqual("existing", target.read_text(encoding="utf-8"))
+
+            publisher.publish_sheet(page, directory, "svg", overwrite=True)
+            self.assertEqual("new", target.read_text(encoding="utf-8"))
+
+    def test_sheet_publication_rejects_invalid_format_and_unlinked_views(self):
+        template_path = (
+            FreeCAD.getResourceDir()
+            + "Mod/TechDraw/Templates/ISO/A4_Landscape_ISO5457_minimal.svg"
+        )
+        page = BIMSheetService(self.document).create_sheet(
+            template_path, BIMSheetMetadata(number="A-010", title="Invalid")
+        )
+        publisher = BIMSheetPublishingService(self.document)
+        with self.assertRaisesRegex(ValueError, "unsupported publication format"):
+            publisher.filename_for(page, "dwg")
+
+        unlinked = self.document.addObject("TechDraw::DrawViewArch", "UnlinkedView")
+        page.addView(unlinked)
+        self.document.recompute()
+        with self.assertRaisesRegex(SheetPublicationError, "no saved BIM view"):
+            publisher.validate(page)
+
+    def test_sheet_set_publication_cleans_staged_files_after_failure(self):
+        template_path = (
+            FreeCAD.getResourceDir()
+            + "Mod/TechDraw/Templates/ISO/A4_Landscape_ISO5457_minimal.svg"
+        )
+        sheets = BIMSheetService(self.document)
+        sheets.create_sheet(
+            template_path, BIMSheetMetadata(number="A-001", title="First", order=1)
+        )
+        sheets.create_sheet(
+            template_path, BIMSheetMetadata(number="A-002", title="Second", order=2)
+        )
+        count = 0
+
+        def exporter(_page, path, _format):
+            nonlocal count
+            count += 1
+            if count == 2:
+                raise RuntimeError("export failed")
+            path.write_text("staged", encoding="utf-8")
+
+        publisher = BIMSheetPublishingService(self.document, exporter=exporter)
+        with tempfile.TemporaryDirectory() as directory:
+            with self.assertRaisesRegex(RuntimeError, "export failed"):
+                publisher.publish_set(directory, "pdf")
+            self.assertEqual([], list(Path(directory).iterdir()))
 
     def test_sheet_service_rejects_non_page_objects(self):
         obj = self.document.addObject("App::FeaturePython", "NotAPage")
