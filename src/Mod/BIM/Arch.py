@@ -1745,6 +1745,7 @@ def makeWall(
     offset=None,
     face=None,
     name=None,
+    wall_type=None,
 ):
     """Create a wall based on a given object, and returns the generated wall.
 
@@ -1813,12 +1814,24 @@ def makeWall(
         align if align else ["Center", "Left", "Right"][params.get_param_arch("WallAlignment")]
     )
     wall.Offset = offset if offset else params.get_param_arch("WallOffset")
+    if wall_type is not None:
+        import ArchWall
+
+        ArchWall.assign_wall_type(wall, wall_type, preserve_instance_values=False)
 
     if wall.Base and FreeCAD.GuiUp:
         if Draft.getType(wall.Base) != "Space":
             wall.Base.ViewObject.hide()
 
     return wall
+
+
+def makeWallType(name=None):
+    """Create a reusable wall type definition in the active document."""
+
+    import ArchWallType
+
+    return ArchWallType.makeWallType(name=name)
 
 
 def makeWallJoint(wall_a=None, wall_b=None, joint_type="Miter", name=None):

@@ -26,6 +26,7 @@ SET(Arch_SRCS
     ArchIFCSchema.py
     ArchProject.py
     ArchWall.py
+    ArchWallType.py
     ArchWallConstruction.py
     ArchOpeningConstruction.py
     ArchOpeningSemantic.py

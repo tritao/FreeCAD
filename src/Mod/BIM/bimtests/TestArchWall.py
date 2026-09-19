@@ -62,6 +62,57 @@ class TestArchWall(TestArchBase.TestArchBase):
         self.assertEqual(35.0, section.y_min)
         self.assertEqual(310.0, section.y_max)
 
+    def test_wall_type_supplies_inherited_geometry_defaults(self):
+        wall_type = Arch.makeWallType("Exterior 300")
+        wall_type.Function = "Exterior"
+        wall_type.Width = 300
+        wall_type.DefaultHeight = 2800
+        wall_type.Align = "Center"
+
+        wall = Arch.makeWall(length=2400, wall_type=wall_type)
+        self.document.recompute()
+
+        defaults = ArchWall.get_resolved_wall_defaults(wall)
+        self.assertEqual(300.0, defaults.width)
+        self.assertEqual(2800.0, defaults.height)
+        self.assertEqual([], list(wall.TypeOverrides))
+        self.assertAlmostEqual(300.0, wall.Shape.BoundBox.YLength)
+        self.assertAlmostEqual(2800.0, wall.Shape.BoundBox.ZLength)
+
+        wall_type.Width = 360
+        self.document.recompute()
+        self.assertAlmostEqual(360.0, wall.Shape.BoundBox.YLength)
+
+    def test_assigning_wall_type_preserves_differing_instance_values(self):
+        wall = Arch.makeWall(length=2000, width=225, height=2600, align="Left")
+        wall_type = Arch.makeWallType("Generic")
+        wall_type.Width = 300
+        wall_type.DefaultHeight = 3000
+        wall_type.Align = "Center"
+
+        ArchWall.assign_wall_type(wall, wall_type, preserve_instance_values=True)
+        defaults = ArchWall.get_resolved_wall_defaults(wall)
+
+        self.assertEqual({"Width", "Height", "Align"}, set(wall.TypeOverrides))
+        self.assertEqual(225.0, defaults.width)
+        self.assertEqual(2600.0, defaults.height)
+        self.assertEqual("Left", defaults.align)
+
+    def test_wall_type_instance_override_can_be_reset_to_type(self):
+        wall_type = Arch.makeWallType("Partition")
+        wall_type.Width = 125
+        wall = Arch.makeWall(length=2000, wall_type=wall_type)
+
+        wall.Width = 175
+        self.assertIn("Width", wall.TypeOverrides)
+        self.assertEqual(175.0, ArchWall.get_resolved_wall_defaults(wall).width)
+
+        ArchWall.set_wall_type_override(wall, "Width", False)
+        self.document.recompute()
+        self.assertNotIn("Width", wall.TypeOverrides)
+        self.assertEqual(125.0, ArchWall.get_resolved_wall_defaults(wall).width)
+        self.assertAlmostEqual(125.0, wall.Shape.BoundBox.YLength)
+
     def _make_hosted_window(self, wall, name, x_start, z_start, width=800.0, height=1200.0):
         sketch = self.document.addObject("Sketcher::SketchObject", name + "Sketch")
         sketch.addGeometry(

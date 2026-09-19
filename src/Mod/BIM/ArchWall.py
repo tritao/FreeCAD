@@ -79,6 +79,69 @@ class ResolvedWallDefaults:
     material: object = None
 
 
+_WALL_TYPE_PROPERTIES = ("Width", "Height", "Align", "Material")
+
+
+def _wall_type_value(wall_type, property_name):
+    type_property = "DefaultHeight" if property_name == "Height" else property_name
+    return getattr(wall_type, type_property, None)
+
+
+def _comparable_wall_value(value):
+    return getattr(value, "Value", value)
+
+
+def _wall_values_equal(left, right):
+    left = _comparable_wall_value(left)
+    right = _comparable_wall_value(right)
+    try:
+        return abs(float(left) - float(right)) <= 1e-7
+    except (TypeError, ValueError):
+        return left == right
+
+
+def is_wall_property_overridden(wall, property_name):
+    return property_name in tuple(getattr(wall, "TypeOverrides", ()) or ())
+
+
+def set_wall_type_override(wall, property_name, enabled=True):
+    """Enable or clear one explicit occurrence-level type override."""
+
+    if property_name not in _WALL_TYPE_PROPERTIES:
+        raise ValueError("Unsupported wall type override: {}".format(property_name))
+    overrides = list(dict.fromkeys(getattr(wall, "TypeOverrides", ()) or ()))
+    if enabled and property_name not in overrides:
+        overrides.append(property_name)
+    elif not enabled and property_name in overrides:
+        overrides.remove(property_name)
+    wall.TypeOverrides = overrides
+    wall.touch()
+
+
+def assign_wall_type(wall, wall_type, *, preserve_instance_values=True):
+    """Assign a type, optionally inheriting all of its defaults immediately."""
+
+    proxy = getattr(wall, "Proxy", None)
+    if proxy is None or not hasattr(wall, "WallType"):
+        raise TypeError("Object is not an Arch wall")
+    proxy._assigning_wall_type = True
+    try:
+        wall.WallType = wall_type
+        overrides = []
+        if wall_type is not None and preserve_instance_values:
+            overrides = [
+                name
+                for name in _WALL_TYPE_PROPERTIES
+                if not _wall_values_equal(
+                    getattr(wall, name, None), _wall_type_value(wall_type, name)
+                )
+            ]
+        wall.TypeOverrides = overrides
+    finally:
+        proxy._assigning_wall_type = False
+    wall.touch()
+
+
 def get_resolved_wall_defaults(wall):
     """Return effective wall defaults through its proxy resolution boundary."""
 
@@ -216,6 +279,8 @@ class _Wall(ArchComponent.Component):
         self._normalizing_end_condition_order = False
         self._resolved_geometry_signatures = {}
         self._invalidating_wall_relations = False
+        self._assigning_wall_type = False
+        self._updating_type_overrides = False
         self.setProperties(obj)
         obj.IfcType = "Wall"
 
@@ -251,6 +316,24 @@ class _Wall(ArchComponent.Component):
                 QT_TRANSLATE_NOOP(
                     "App::Property",
                     "The width of this wall. Not used if this wall is based on a face. Disabled and ignored if Base object (ArchSketch) provides the information.",
+                ),
+                locked=True,
+            )
+        if "WallType" not in lp:
+            obj.addProperty(
+                "App::PropertyLinkGlobal",
+                "WallType",
+                "Wall",
+                QT_TRANSLATE_NOOP("App::Property", "Reusable defaults for this wall"),
+                locked=True,
+            )
+        if "TypeOverrides" not in lp:
+            obj.addProperty(
+                "App::PropertyStringList",
+                "TypeOverrides",
+                "Wall",
+                QT_TRANSLATE_NOOP(
+                    "App::Property", "Wall properties explicitly overridden on this occurrence"
                 ),
                 locked=True,
             )
@@ -530,6 +613,10 @@ class _Wall(ArchComponent.Component):
     def loads(self, state):
         self.Type = "Wall"
         self._normalizing_end_condition_order = False
+        self._resolved_geometry_signatures = {}
+        self._invalidating_wall_relations = False
+        self._assigning_wall_type = False
+        self._updating_type_overrides = False
         if state == None:
             return
         elif state[0] == "W":  # state[1] == 'a', behaviour before 2024.11.28
@@ -883,6 +970,30 @@ class _Wall(ArchComponent.Component):
         prop: string
             The name of the property that has changed.
         """
+
+        if prop == "WallType" and not self._assigning_wall_type:
+            wall_type = getattr(obj, "WallType", None)
+            overrides = []
+            if wall_type is not None:
+                overrides = [
+                    name
+                    for name in _WALL_TYPE_PROPERTIES
+                    if not _wall_values_equal(
+                        getattr(obj, name, None), _wall_type_value(wall_type, name)
+                    )
+                ]
+            self._updating_type_overrides = True
+            try:
+                obj.TypeOverrides = overrides
+            finally:
+                self._updating_type_overrides = False
+        elif (
+            prop in _WALL_TYPE_PROPERTIES
+            and getattr(obj, "WallType", None) is not None
+            and not self._assigning_wall_type
+            and not self._updating_type_overrides
+        ):
+            set_wall_type_override(obj, prop, True)
 
         if prop in ("EndConditionOrderStart", "EndConditionOrderEnd"):
             self._normalize_end_condition_order_property(obj, prop)
@@ -2253,7 +2364,10 @@ class _Wall(ArchComponent.Component):
         # check total width and update Wall's Width
         if layers:
             total = sum(abs(layer) for layer in layers)
-            if obj.Width.Value != total:
+            width_is_inherited = getattr(obj, "WallType", None) is not None and not (
+                is_wall_property_overridden(obj, "Width")
+            )
+            if not width_is_inherited and obj.Width.Value != total:
                 obj.Width = total
             # If there is no 0 (zero) in any of the layers, the total thickness
             # is driven by the multi-materials itself.  Otherwise, user should
@@ -2846,12 +2960,24 @@ class _Wall(ArchComponent.Component):
         overrides can be introduced here without another geometry rewrite.
         """
 
+        wall_type = getattr(obj, "WallType", None)
+        overrides = set(getattr(obj, "TypeOverrides", ()) or ())
+
+        def resolved(property_name):
+            if wall_type is not None and property_name not in overrides:
+                value = _wall_type_value(wall_type, property_name)
+                if value is not None:
+                    return value
+            return getattr(obj, property_name, None)
+
+        width = resolved("Width")
+        height = resolved("Height")
         return ResolvedWallDefaults(
-            width=float(obj.Width.Value or 0.0),
-            height=float(obj.Height.Value or 0.0),
-            align=str(obj.Align),
+            width=float(getattr(width, "Value", width) or 0.0),
+            height=float(getattr(height, "Value", height) or 0.0),
+            align=str(resolved("Align") or "Center"),
             offset=float(obj.Offset.Value or 0.0),
-            material=getattr(obj, "Material", None),
+            material=resolved("Material"),
         )
 
     def get_layers(self, obj):
