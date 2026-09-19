@@ -370,8 +370,14 @@ class TestArchWall(TestArchBase.TestArchBase):
     def test_multilayer_plan_faces_preserve_layer_material_ownership(self):
         first_material = Arch.makeMaterial(name="FirstLayerMaterial")
         second_material = Arch.makeMaterial(name="SecondLayerMaterial")
-        first_material.Material = {"SectionPattern": "Diagonal"}
-        second_material.Material = {"SectionPattern": "Cross"}
+        first_material.Material = {
+            "Hatch Pattern": "*Diagonal\n45,0,0,0,4",
+            "Hatch Scale": "1",
+        }
+        second_material.Material = {
+            "Hatch Pattern": "*Cross\n0,0,0,0,4\n90,0,0,0,4",
+            "Hatch Scale": "1",
+        }
         material = Arch.makeMultiMaterial(name="LayeredWallMaterial")
         material.Materials = [first_material, second_material]
         material.Thicknesses = [100, 200]
@@ -402,11 +408,11 @@ class TestArchWall(TestArchBase.TestArchBase):
             ArchRepresentation.CutFillMode.MATERIAL
         )
         self.assertEqual(
-            ["Diagonal", "Cross"],
+            ["PAT", "PAT"],
             [
                 ArchRepresentation.cut_surface_style_for(
                     representation.mapping_for(face), fallback
-                ).pattern
+                ).pattern_kind
                 for face in representation.cut_geometry
             ],
         )

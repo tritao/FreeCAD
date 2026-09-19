@@ -378,11 +378,15 @@ class TestArchSectionPlane(TestArchBase.TestArchBase):
         self.assertIsNone(section_plane.Proxy.shapecache)
 
         material = Arch.makeMaterial(name="HatchedWallMaterial")
-        material.Material = {
-            "SectionPattern": "Diagonal",
-            "SectionPatternScale": "4.0",
-            "SectionPatternAngle": "30.0",
-        }
+        import Materials
+
+        card_path = (
+            App.getResourceDir()
+            + "Mod/Material/Resources/Materials/Patterns/PAT/Diagonal4.FCMat"
+        )
+        material.Material = Materials.MaterialManager().getMaterialByPath(
+            card_path
+        ).Properties
         material.SectionColor = (0.8, 0.8, 0.8)
         wall.Material = material
         hatched = ArchSectionPlane.getSVG(
@@ -395,7 +399,25 @@ class TestArchSectionPlane(TestArchBase.TestArchBase):
         )
         self.assertEqual(1, hatched.count('<pattern id="bim-cut-pattern-1"'))
         self.assertIn("url(#bim-cut-pattern-1)", hatched)
-        self.assertIn('patternTransform="rotate(30.0)"', hatched)
+        self.assertIn('transform="rotate(90.0 ', hatched)
+
+        svg_card_path = (
+            App.getResourceDir()
+            + "Mod/Material/Resources/Materials/Patterns/Pattern Files/concrete.FCMat"
+        )
+        material.Material = Materials.MaterialManager().getMaterialByPath(
+            svg_card_path
+        ).Properties
+        patterned = ArchSectionPlane.getSVG(
+            section_plane,
+            techdraw=True,
+            renderMode="Wireframe",
+            showFill=True,
+            cutFillMode="Material",
+        )
+        self.assertIn('<pattern patternTransform="scale(', patterned)
+        self.assertIn('id="bim-cut-pattern-1"', patterned)
+        self.assertIn("url(#bim-cut-pattern-1)", patterned)
 
     def testTechDrawElevationUsesSharedScopeProjection(self):
         front = self._makeBox(length=1000, width=1200, height=50)

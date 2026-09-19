@@ -93,33 +93,22 @@ def fill_representations_to_svg(representations, direction, style, drawing_scale
     for geometry, resolved in entries:
         fill = Draft.getrgb(resolved.color, testbw=False)
         if resolved.mode == CutFillMode.MATERIAL:
-            key = (resolved.pattern, resolved.spacing, resolved.angle, resolved.line_color)
+            key = (
+                resolved.pattern_kind,
+                resolved.pattern_data,
+                resolved.spacing,
+                resolved.angle,
+                resolved.line_color,
+                resolved.line_weight,
+            )
             pattern_id = patterns.get(key)
             if pattern_id is None:
                 pattern_id = "bim-cut-pattern-{}".format(len(patterns) + 1)
                 patterns[key] = pattern_id
                 model_per_paper = 1.0 / max(float(drawing_scale), 1e-9)
-                spacing = max(0.1, resolved.spacing) * model_per_paper
-                line_width = 0.2 * model_per_paper
-                line = Draft.getrgb(resolved.line_color, testbw=False)
-                paths = '<path d="M 0 0 L 0 {}" stroke="{}" stroke-width="{}"/>'.format(
-                    spacing, line, line_width
-                )
-                if resolved.pattern.casefold() in ("cross", "crosshatch"):
-                    paths += (
-                        '<path d="M 0 0 L {} 0" stroke="{}" stroke-width="{}"/>'
-                    ).format(spacing, line, line_width)
                 definitions.append(
-                    '<pattern id="{}" patternUnits="userSpaceOnUse" width="{}" '
-                    'height="{}" patternTransform="rotate({})">'
-                    '<rect width="100%" height="100%" fill="{}"/>'
-                    "{}</pattern>".format(
-                        pattern_id,
-                        spacing,
-                        spacing,
-                        resolved.angle,
-                        fill,
-                        paths,
+                    _svg_pattern_definition(
+                        pattern_id, resolved, fill, model_per_paper, Draft
                     )
                 )
             fill = "url(#{})".format(pattern_id)
@@ -137,6 +126,89 @@ def fill_representations_to_svg(representations, direction, style, drawing_scale
     return '{}<g transform="rotate(180)">\n{}\n</g>\n'.format(
         defs, "".join(fragments)
     )
+
+
+def _svg_pattern_definition(pattern_id, style, background, model_per_paper, Draft):
+    """Translate an official FreeCAD PAT or Pattern File appearance to SVG."""
+    if style.pattern_kind == "SVG":
+        import os
+        import re
+
+        pattern_data = style.pattern_data
+        if "<" not in pattern_data and os.path.isfile(pattern_data):
+            with open(pattern_data, encoding="utf-8") as pattern_file:
+                pattern_data = pattern_file.read()
+        match = re.search(r"<pattern\b[^>]*>.*?</pattern>", pattern_data, re.DOTALL)
+        if match:
+            pattern = re.sub(
+                r'id=["\'][^"\']+["\']', 'id="{}"'.format(pattern_id), match.group(0), count=1
+            )
+            scale = max(style.spacing, 1e-9) * model_per_paper
+            line = Draft.getrgb(style.line_color, testbw=False)
+            pattern = pattern.replace("#000000", line).replace("stroke:black", "stroke:" + line)
+            pattern = pattern.replace(
+                ">",
+                '><rect width="100%" height="100%" fill="{}"/>'.format(background),
+                1,
+            )
+            pattern = pattern.replace(
+                "<pattern ",
+                '<pattern patternTransform="scale({}) rotate({})" '.format(
+                    scale, style.angle
+                ),
+                1,
+            )
+            return pattern
+
+    families = _parse_pat_families(style.pattern_data)
+    scale = max(style.spacing, 1e-9) * model_per_paper
+    line = Draft.getrgb(style.line_color, testbw=False)
+    weight = max(style.line_weight, 0.01) * model_per_paper
+    tile = max((abs(family[4]) for family in families), default=1.0) * scale
+    tile = max(tile, scale)
+    paths = []
+    for angle, origin_x, origin_y, _delta_x, _delta_y, dashes in families:
+        dash = ""
+        positive = [abs(value) * scale for value in dashes if value]
+        if positive:
+            dash = ' stroke-dasharray="{}"'.format(
+                ",".join(str(value) for value in positive)
+            )
+        paths.append(
+            '<path d="M {} {} L {} {}" transform="rotate({} {} {})" '
+            'stroke="{}" stroke-width="{}"{} />'.format(
+                origin_x * scale,
+                origin_y * scale - tile * 2,
+                origin_x * scale,
+                origin_y * scale + tile * 3,
+                angle + style.angle,
+                origin_x * scale,
+                origin_y * scale,
+                line,
+                weight,
+                dash,
+            )
+        )
+    return (
+        '<pattern id="{}" patternUnits="userSpaceOnUse" width="{}" height="{}">'
+        '<rect width="100%" height="100%" fill="{}"/>{}</pattern>'
+    ).format(pattern_id, tile, tile, background, "".join(paths))
+
+
+def _parse_pat_families(data):
+    """Parse PAT line-family records, ignoring headers and comments."""
+    families = []
+    for raw_line in str(data or "").splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith(("*", ";")):
+            continue
+        try:
+            values = [float(value.strip()) for value in line.split(",")]
+        except ValueError:
+            continue
+        if len(values) >= 5:
+            families.append((*values[:5], tuple(values[5:])))
+    return tuple(families)
 
 
 def project_object_to_svg(obj, context, direction, collection="projected_geometry", **styles):
