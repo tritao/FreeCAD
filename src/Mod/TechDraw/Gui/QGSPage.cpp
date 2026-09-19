@@ -772,6 +772,14 @@ QGIView* QGSPage::findParent(QGIView* view) const
     const std::vector<QGIView*> qviews = getViews();
     TechDraw::DrawView* myFeat = view->getViewObject();
 
+    // Following annotations keep absolute page coordinates synchronized by
+    // their document objects.  Parenting their graphics items to the owner
+    // would apply the owner's translation a second time.
+    if (auto* annotation = freecad_cast<TechDraw::DrawViewAnnotation*>(myFeat);
+        annotation && annotation->FollowOwnerPosition.getValue()) {
+        return nullptr;
+    }
+
     TechDraw::DrawView *ownerFeat = myFeat->claimParent();
     if (ownerFeat) {
         QGIView *ownerView = getQGIVByName(ownerFeat->getNameInDocument());
