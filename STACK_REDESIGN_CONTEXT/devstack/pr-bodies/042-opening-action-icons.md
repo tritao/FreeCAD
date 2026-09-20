@@ -1,0 +1,58 @@
+---
+title: "BIM: use semantic icons for opening actions"
+---
+
+## Summary
+
+Uses semantic SVG glyphs for door hinge and opening-direction actions.
+
+## Why
+
+Cross and Plus markers do not communicate these discrete operations clearly.
+
+## Architectural invariant
+
+> BIM names semantic icons without depending on Qt, SVG parsing, or renderer paths.
+
+## Changes
+
+- adds renderer-neutral `icon_name` handle metadata
+- passes semantic icon keys to the generic Coin glyph
+- adds hinge-flip and opening-direction SVG resources
+- verifies metadata, resource resolution, Coin image creation, and actions
+
+## Compatibility
+
+Geometric opening move and resize handles remain unchanged.
+
+## Tests
+
+- real Coin opening-handle end-to-end test
+- pre-commit checks
+
+## Intentionally deferred
+
+Additional icons will be added only with concrete semantic operations.
+
+<!-- AUTOGEN:BEGIN -->
+### Patch Set
+
+> [!IMPORTANT]
+> Part `42/52` of a stacked series. Depends on `pr/unified-bim-plan-perfect/041-overlay-icon-glyphs`; review and merge in order.
+
+- Group: `representation-fidelity` — Semantic representation fidelity (`4/5`)
+
+<details>
+<summary>About this group</summary>
+
+# Semantic representation fidelity
+
+Complete renderer-neutral BIM representations with architectural geometry that
+must remain consistent across interactive display, snapping, picking and
+documentation output.
+
+</details>
+
+<!-- DEVSTACK:REVIEWSTACK {"version":2,"current_branch":"pr/unified-bim-plan-perfect/042-opening-action-icons","stack":[{"branch":"pr/unified-bim-plan-perfect/052-opening-edit-measurements","commits":["9afd0e98c959022010d00bdbcf4bd6290005bdcb"]},{"branch":"pr/unified-bim-plan-perfect/051-overlay-labels","commits":["7eb990b86e2e564427407922746168be347b4cd6"]},{"branch":"pr/unified-bim-plan-perfect/050-typed-3d-edit-values","commits":["92885714fbcd94d8596c4fb4a668123cbcdbef03"]},{"branch":"pr/unified-bim-plan-perfect/049-model-constraint-tests","commits":["d3e33eae66e763b9fe31f2b8d31af667af172217"]},{"branch":"pr/unified-bim-plan-perfect/048-contextual-editing-3d","commits":["5e80a9e92a3c7c12b73b65c7284fb6146059842e"]},{"branch":"pr/unified-bim-plan-perfect/047-model-edit-capabilities","commits":["7579a4eee618a296fac5adb0e02cf99f7ea2f5d5"]},{"branch":"pr/unified-bim-plan-perfect/046-3d-handle-constraints","commits":["3653c3081bd302ad257146caf1980c9dd7b17250"]},{"branch":"pr/unified-bim-plan-perfect/045-contextual-handle-overlays","commits":["44777243da01059f6906550e6f4a166b93d6eafc"]},{"branch":"pr/unified-bim-plan-perfect/044-contextual-edit-controller","commits":["d9cc7dabc1cc25b06af0ef5a5d4572add91b1450"]},{"branch":"pr/unified-bim-plan-perfect/043-opening-edit-previews","commits":["dff35005cf381f3aa9bf098b9a81c20706e8bdd8"]},{"branch":"pr/unified-bim-plan-perfect/042-opening-action-icons","commits":["697a92b0bfcf6512eb89a629fd4b65d1724aab82"]},{"branch":"pr/unified-bim-plan-perfect/041-overlay-icon-glyphs","commits":["f752ecfbbcdbce3252bfd0917ecd0cd47c10d364"]},{"branch":"pr/unified-bim-plan-perfect/040-opening-geometry-handles","commits":["5f4dc91b60d647ecca35014be36fe92e22b55374"]},{"branch":"pr/unified-bim-plan-perfect/039-wall-joint-cut-geometry","commits":["9481c9c346a09b48df61c91fde99fa004fbc2398"]},{"branch":"pr/unified-bim-plan-perfect/038-contextual-renderer-safety","commits":["b4e37692421fc9db6ac1d57fae68b2ba2d885f85"]},{"branch":"pr/unified-bim-plan-perfect/037-examples","commits":["0da5b30c5cc901252bb1a3638d3370343266a7c8"]},{"branch":"pr/unified-bim-plan-perfect/036-techdraw-consumer","commits":["ccf067115e0b057ea5035e7b1b00ab7ce72e0ac9"]},{"branch":"pr/unified-bim-plan-perfect/035-arbitrary-plane","commits":["813b61ddb8073ef8941a169793eb25b1bda82ac5"]},{"branch":"pr/unified-bim-plan-perfect/034-wall-opening-editing","commits":["ac62c7c96346740cb528797fad977ae949129482"]},{"branch":"pr/unified-bim-plan-perfect/033-path-editing","commits":["b97d0edc7123e222245525874cb75b93b78b1487"]},{"branch":"pr/unified-bim-plan-perfect/032-contextual-editing","commits":["76a7fec8f2fc5b20390b1a14b440c4d2863ebade"]},{"branch":"pr/unified-bim-plan-perfect/031-semantic-interaction","commits":["70348543abe08249f6e82eae39b63b5224b3361f"]},{"branch":"pr/unified-bim-plan-perfect/030-provider-workflows","commits":["30a44b4360b15d8e2ef37dce4f855312d0f91d66"]},{"branch":"pr/unified-bim-plan-perfect/029-spaces-regions","commits":["9dd30e6f4c9d4cc281a5ccd7ad8ce9742230906a"]},{"branch":"pr/unified-bim-plan-perfect/028-plan-library-integration","commits":["b5622c63f135a45cdcfc63997fbce52ebda0800a"]},{"branch":"pr/unified-bim-plan-perfect/027-contextual-task-sections","commits":["503e670aec156ac0d77bb46727743c3767bbfed6"]},{"branch":"pr/unified-bim-plan-perfect/026-library-previews","commits":["a966dcd4a1c170b2e1ce48331504a2be5fecbe3e"]},{"branch":"pr/unified-bim-plan-perfect/025-library-sources","commits":["a8b0f44aeb3646ba4783462d0a47f1d4acd156da"]},{"branch":"pr/unified-bim-plan-perfect/024-library-semantics","commits":["74b25bbe0c0a3621ba5f1a29c6bfdea9993dce7c"]},{"branch":"pr/unified-bim-plan-perfect/023-plan-edit-session","commits":["2dfdee8cfc2dd1b53f869b74fdeb23727d6e8b10"]},{"branch":"bim-wall-joins","commits":["854685a838fa7f857c129ff1b79d1a6527e77765"]},{"branch":"pr/unified-bim-plan-perfect/021-footprint-providers","commits":["2cf60499b9eb141814f6334549a1f8a4215868b9"]},{"branch":"pr-bim-footprint-foundation","commits":["a57cce8409c6e968e0c39c166e2c6cfee7fc30c8"]},{"branch":"pr/unified-bim-plan-perfect/019-bim-representation-contract","commits":["36107706e636c7c344e97cbeab2a29a602c66fe1"]},{"branch":"pr/unified-bim-plan-perfect/018-qrc-dependencies","commits":["a926e43a3f84a25ec8d1277784c0131ff30a8848"]},{"branch":"pr/unified-bim-plan-perfect/017-draft-interaction-hosts","commits":["c15c613a4ffff9c8bdd9c0905a6a7be9f7c09445","2f003770739b54616e9c3a3beaaebf97214656f2","e7c126f092a985b48fa29379dc77f1b53162449c","b3a4a1dd11dff9ce66d8d4d69d86fe5cf501aa99","a5b9702ede88183208af3ec2af69b272dfaa249a","97d828fdfd6b76072594a786dd46cfeb0c089899","739836ec2bd57aff916fc701fba8293ce2b42d01","50cf37642492f553cccaba7327039485eaabcdfd"]},{"branch":"pr/unified-bim-plan-perfect/016-overlay-glyphs","commits":["068f37fc86a4312c730fe728a954ebfd864afa6b"]},{"branch":"pr/unified-bim-plan-perfect/015-viewer-representation-instances","commits":["16b8e8db5a11b6d1caf9bd686866899b10dbaed7"]},{"branch":"pr/unified-bim-plan-perfect/014-contextual-task-view","commits":["993a1c0ceb37032bfc2b085b5ebd64c9b2f16ea3"]},{"branch":"pr/unified-bim-plan-perfect/013-dynamic-display-modes","commits":["c463b905515815373724c4368323eecdb4682e7c"]},{"branch":"pr/unified-bim-plan-perfect/012-viewer-session-appearance","commits":["147395bbb430439086a0daaec640cbfa59999f2f"]},{"branch":"pr/unified-bim-plan-perfect/011-workbench-context-policy","commits":["ba3a7815dfb1c4f7635e1950101271c32f1cb795"]},{"branch":"pr/unified-bim-plan-perfect/010-contextual-clipping","commits":["35552c1db06ebf423eaa5ddcbbd0a9175815955f"]},{"branch":"pr/unified-bim-plan-perfect/009-camera-capture","commits":["d8487a974b0b1da190a73605346775768e344f16"]},{"branch":"pr/unified-bim-plan-perfect/008-saved-view-definition","commits":["eaee136aa4c1d7b13d2d0c58966294a32d5e0f7e"]},{"branch":"pr/unified-bim-plan-perfect/007-view-context","commits":["51d51d0c3638ae2addddd9ef5129b9a02436a09c"]},{"branch":"pr/unified-bim-plan-perfect/006-view-provider-back-root","commits":["b67a832f6b3ba4ebb79c1e5f4ae2aac219c313ea"]},{"branch":"pr/unified-bim-plan-perfect/005-scene-node-ownership","commits":["7371210804b36df12557ab74c27a17066eb4c319"]},{"branch":"pr/unified-bim-plan-perfect/004-coin-sensor-activation","commits":["a7ba98fe391ccd947997132cdc5c4cb950ec0ef5"]},{"branch":"pr/unified-bim-plan-perfect/003-task-dialog-documents","commits":["45fe63ab4382cd82fd918b47b3abcc419ef5949b"]},{"branch":"pr/unified-bim-plan-perfect/002-camera-animation","commits":["570d870e9c517d7a5d4140f7d9feefe35db040bb"]},{"branch":"pr/unified-bim-plan-perfect/001-ci-output-robustness","commits":["4f66ad96980065709cbd47079bc954ee31adc268"]}]} -->
+
+<!-- AUTOGEN:END -->
