@@ -490,13 +490,28 @@ class TestArchWall(TestArchBase.TestArchBase):
         """Supported exact walls avoid generic projected-area computation."""
 
         wall = Arch.makeWall(length=3000, width=200, height=2500)
+        original_apply_shape = ArchComponent.Component.applyShape
+        apply_shape_options = []
+
+        def observe_apply_shape(proxy, *args, **kwargs):
+            apply_shape_options.append(kwargs)
+            return original_apply_shape(proxy, *args, **kwargs)
+
         with patch.object(
             ArchComponent.AreaCalculator,
             "compute",
             side_effect=AssertionError("generic area projection must not run"),
+        ), patch.object(
+            ArchComponent.Component,
+            "applyShape",
+            autospec=True,
+            side_effect=observe_apply_shape,
         ):
             self.document.recompute()
 
+        self.assertTrue(
+            any(options.get("shape_is_validated") for options in apply_shape_options)
+        )
         self.assertAlmostEqual(16000000.0, wall.VerticalArea.Value)
         self.assertAlmostEqual(600000.0, wall.HorizontalArea.Value)
         self.assertAlmostEqual(6400.0, wall.PerimeterLength.Value)

@@ -910,7 +910,13 @@ class _Wall(ArchComponent.Component):
             # ``pl`` after assigning the shape.
             base = compilation.shape.copy()
             base.Placement = pl.inverse().multiply(base.Placement)
-            self.applyShape(obj, base, pl, compute_areas=False)
+            self.applyShape(
+                obj,
+                base,
+                pl,
+                compute_areas=False,
+                shape_is_validated=True,
+            )
             self._apply_exact_area_metrics(obj, compilation)
             self._finish_execute(obj, base)
             return

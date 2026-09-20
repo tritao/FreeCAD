@@ -1485,6 +1485,7 @@ class Component(ArchIFC.IfcProduct):
         allowinvalid=False,
         allownosolid=False,
         compute_areas=True,
+        shape_is_validated=False,
     ):
         """Check the given shape, then assign it to the object.
 
@@ -1513,11 +1514,16 @@ class Component(ArchIFC.IfcProduct):
         compute_areas: bool, optional
             Whether to update generic projected area properties after assigning
             the shape. Callers that already own exact area metrics can disable it.
+        shape_is_validated: bool, optional
+            Whether the caller has already validated this exact shape. This is
+            intended for compiler-owned shapes whose construction contract
+            includes a successful validity check. The default preserves full
+            validation for legacy and externally supplied geometry.
         """
 
         if shape:
             if not shape.isNull():
-                if shape.isValid():
+                if shape_is_validated or shape.isValid():
                     if shape.Solids:
                         if shape.Volume < 0:
                             shape.reverse()

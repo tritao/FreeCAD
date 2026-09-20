@@ -285,7 +285,7 @@ def _extrude_window_part_profile(outer_wire, inner_wires, vector):
             noElementMap=True,
         )
         shape = profile.extrude(vector)
-        if not shape.isNull() and shape.isValid() and len(shape.Solids) == 1:
+        if not shape.isNull() and len(shape.Solids) == 1:
             return shape
     except Part.OCCError:
         pass
@@ -294,7 +294,7 @@ def _extrude_window_part_profile(outer_wire, inner_wires, vector):
         for wire in inner_wires:
             profile = profile.cut(Part.Face(wire))
         shape = profile.extrude(vector)
-        if not shape.isNull() and shape.isValid():
+        if not shape.isNull():
             return shape
     except Part.OCCError:
         pass
