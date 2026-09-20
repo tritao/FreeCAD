@@ -189,6 +189,16 @@ class TestArchWindow(TestArchBase.TestArchBase):
             self.document.recompute()
 
         self.assertTrue(window.Shape.isValid())
+        self.assertIsNotNone(window.Proxy._exact_compilation)
+        with patch.object(
+            window.Proxy,
+            "_collect_edge_points",
+            side_effect=AssertionError("the compiled opening envelope must be reused"),
+        ):
+            point_lists = window.Proxy._get_base_global_point_lists()
+        self.assertTrue(point_lists)
+        window.Width = window.Width.Value + 1.0
+        self.assertIsNone(window.Proxy._exact_compilation)
 
     def test_create_from_sketch_two_wires_default_parts(self):
         """Test creating a window from two-wire sketch (concentric), relying on default parts."""

@@ -9,11 +9,27 @@ import FreeCAD
 
 
 @dataclass(frozen=True)
+class HostedOpeningEnvelope:
+    """Document-space base geometry shared by native, wall and plan compilers."""
+
+    point_lists: tuple
+    z_min: float
+    z_max: float
+
+    def vectors(self):
+        return tuple(
+            tuple(FreeCAD.Vector(*coordinates) for coordinates in point_list)
+            for point_list in self.point_lists
+        )
+
+
+@dataclass(frozen=True)
 class WindowExactCompilation:
     """A final WindowParts shape with compiler-owned topology."""
 
     shape: object
     part_shapes: tuple
+    opening_envelope: HostedOpeningEnvelope
 
 
 def compile_window_parts(obj):
@@ -106,7 +122,42 @@ def compile_window_parts(obj):
     shape = Part.makeCompound(result)
     if shape.isNull():
         return None
-    return WindowExactCompilation(shape=shape, part_shapes=tuple(result))
+    envelope = _opening_envelope(base_shape)
+    if envelope is None:
+        return None
+    return WindowExactCompilation(
+        shape=shape,
+        part_shapes=tuple(result),
+        opening_envelope=envelope,
+    )
+
+
+def _opening_envelope(base_shape):
+    point_lists = []
+    z_values = []
+    for edge in base_shape.Edges:
+        points = edge.tessellate(1)
+        if isinstance(points, tuple):
+            points = points[0]
+        if len(points) < 2:
+            try:
+                points = edge.discretize(Deflection=1.0)
+            except Exception:
+                points = []
+        if len(points) < 2:
+            points = [vertex.Point for vertex in edge.Vertexes]
+        if len(points) < 2:
+            continue
+        coordinates = tuple((point.x, point.y, point.z) for point in points)
+        point_lists.append(coordinates)
+        z_values.extend(point[2] for point in coordinates)
+    if not point_lists or not z_values:
+        return None
+    return HostedOpeningEnvelope(
+        point_lists=tuple(point_lists),
+        z_min=min(z_values),
+        z_max=max(z_values),
+    )
 
 
 def _parse_selector(selector, base_shape):

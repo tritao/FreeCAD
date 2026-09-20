@@ -1449,6 +1449,10 @@ class _HostedOpeningPlanGeometry:
         return cut_z, base_z
 
     def _get_base_global_point_lists(self):
+        compilation = getattr(self, "_exact_compilation", None)
+        if compilation is not None:
+            return compilation.opening_envelope.vectors()
+
         base = getattr(self.Object, "Base", None)
         if not base or not hasattr(base, "Shape") or not base.Shape:
             return []
@@ -1962,7 +1966,14 @@ class _HostedOpeningPlanGeometry:
         points = [FreeCAD.Vector(point) for point_list in point_lists for point in point_list]
         if len(points) < 2:
             return None
-        cut_z = (min(point.z for point in points) + max(point.z for point in points)) * 0.5
+        compilation = getattr(self, "_exact_compilation", None)
+        if compilation is not None:
+            z_min = compilation.opening_envelope.z_min
+            z_max = compilation.opening_envelope.z_max
+        else:
+            z_min = min(point.z for point in points)
+            z_max = max(point.z for point in points)
+        cut_z = (z_min + z_max) * 0.5
         profile = self._get_hosted_opening_plan_frame(
             getattr(self.Object, "Shape", None),
             cut_z,
@@ -1985,7 +1996,6 @@ class _HostedOpeningPlanGeometry:
         ]
         u_values = [point.sub(origin).dot(axis) for point in corners]
         v_values = [point.sub(origin).dot(lateral) for point in corners]
-        z_values = [point.z for point in points]
         try:
             return ArchWallGeometry.WallOpeningRecipe(
                 source=self.Object,
@@ -1993,8 +2003,8 @@ class _HostedOpeningPlanGeometry:
                 u_max=max(u_values),
                 v_min=min(v_values),
                 v_max=max(v_values),
-                z_min=min(z_values),
-                z_max=max(z_values),
+                z_min=z_min,
+                z_max=z_max,
             )
         except ValueError:
             return None
@@ -3061,6 +3071,7 @@ class _Window(
         self.Object = obj
         self.Type = "Window"
         self._opening_tool_cache = {}
+        self._exact_compilation = None
         self.setProperties(obj)
         obj.IfcType = "Window"
         obj.MoveWithHost = True
@@ -3263,6 +3274,7 @@ class _Window(
 
         self.Object = obj
         self._opening_tool_cache = {}
+        self._exact_compilation = None
         ArchComponent.Component.onDocumentRestored(self, obj)
         if "Hosts" in obj.PropertiesList:
             self._migrate_hosts_property(obj)
@@ -3291,6 +3303,7 @@ class _Window(
 
         self.Type = "Window"
         self._opening_tool_cache = {}
+        self._exact_compilation = None
 
     def onBeforeChange(self, obj, prop):
 
@@ -3300,6 +3313,20 @@ class _Window(
     def onChanged(self, obj, prop):
 
         self.hideSubobjects(obj, prop)
+        if prop in {
+            "Base",
+            "Placement",
+            "WindowParts",
+            "Width",
+            "Height",
+            "Frame",
+            "Offset",
+            "Opening",
+            "Normal",
+            "AutoNormalReversed",
+            "Shape",
+        }:
+            self._exact_compilation = None
         if prop == "Hosts" and "Restore" not in obj.State:
             self._sync_host_dependencies(obj, getattr(self, "Hosts", ()))
         if prop in {
@@ -3621,6 +3648,7 @@ class _Window(
         import DraftGeomUtils
         import math
 
+        self._exact_compilation = None
         pl = obj.Placement
         base = None
         exact_compilation = None
@@ -3677,6 +3705,7 @@ class _Window(
                     shape_is_refined=bool(obj.WindowParts),
                     shape_is_validated=exact_compilation is not None,
                 )
+                self._exact_compilation = exact_compilation
             _set_placement_if_changed(obj, pl)
         else:
             obj.Shape = Part.Shape()
