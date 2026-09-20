@@ -660,7 +660,7 @@ class TestArchWindow(TestArchBase.TestArchBase):
     def test_addComponents_window_to_wall(self):
         """
         Tests the Arch.addComponents function for adding a window to a wall.
-        Verifies that the Hosts, InList, and OutList properties are correctly
+        Verifies that the semantic and computational host links are correctly
         updated, and that the geometric opening is created.
         """
         self.printTestMessage("Testing Arch.addComponents for window-wall hosting...")
@@ -697,10 +697,17 @@ class TestArchWindow(TestArchBase.TestArchBase):
         # Property assertions
         self.assertIn(wall, window.Hosts, "Wall should be in window.Hosts after addComponents.")
         self.assertEqual(len(window.Hosts), 1, "Window.Hosts should contain exactly one host.")
+        self.assertEqual(
+            "App::PropertyLinkListHidden", window.getTypeIdOfProperty("Hosts")
+        )
+        self.assertIn(window, wall.HostedOpenings)
 
         # Dependency graph assertions
-        self.assertIn(window, wall.InList, "Window should be in wall's InList after hosting.")
-        self.assertIn(wall, window.OutList, "Wall should be in window's OutList after hosting.")
+        self.assertIn(window, wall.OutList, "Wall should depend on its opening.")
+        self.assertIn(wall, window.InList, "Opening should feed its host wall.")
+        self.assertNotIn(wall, window.OutList, "A semantic host is not an opening input.")
+        self.assertIn(window, wall.Proxy.getHosts(wall))
+        self.assertIn(window, wall.Proxy.getMovableChildren(wall))
 
         # Negative assertion
         self.assertNotIn(
@@ -724,6 +731,30 @@ class TestArchWindow(TestArchBase.TestArchBase):
             delta=1e-5,
             msg="The volume removed from the wall is incorrect.",
         )
+
+        window.Hosts = []
+        self.assertNotIn(window, wall.HostedOpenings)
+        self.assertNotIn(window, wall.OutList)
+
+    def test_legacy_hosts_property_migrates_to_semantic_link(self):
+        """Legacy host links restore without creating a reverse dependency."""
+
+        wall = Arch.makeWall(length=3000, width=200, height=2500)
+        window = self.document.addObject("PartDesign::FeaturePython", "LegacyWindow")
+        window.addProperty("App::PropertyLinkList", "Hosts", "Window")
+        window.Hosts = [wall]
+        proxy = ArchWindow._Window(window)
+        window.Proxy = proxy
+
+        proxy.onDocumentRestored(window)
+
+        self.assertEqual(
+            "App::PropertyLinkListHidden", window.getTypeIdOfProperty("Hosts")
+        )
+        self.assertEqual([wall], window.Hosts)
+        self.assertIn(window, wall.HostedOpenings)
+        self.assertIn(window, wall.OutList)
+        self.assertNotIn(wall, window.OutList)
 
     def _create_sketch_with_wires(
         self, name: str, wire_definitions: list[tuple[float, float, float, float]]

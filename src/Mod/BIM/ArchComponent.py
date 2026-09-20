@@ -364,6 +364,59 @@ def addToComponent(compobject, addobject, prop):
                 addobject.Placement.move(compobject.Placement.Base.negative())
 
 
+def getHostedObjects(obj, recursive=False):
+    """Return objects that declare *obj* as a semantic host.
+
+    New hosted openings are indexed explicitly on the host so the dependency
+    graph points from host geometry to the opening it consumes.  The InList
+    fallback keeps older files and other Arch host relationships working.
+    """
+
+    links = list(getattr(obj, "HostedOpenings", None) or ())
+    links.extend(obj.InListRecursive if recursive else obj.InList)
+    result = []
+    for link in links:
+        if link in result:
+            continue
+        if hasattr(link, "Host") and link.Host == obj:
+            result.append(link)
+        elif hasattr(link, "Hosts") and obj in link.Hosts:
+            result.append(link)
+    return result
+
+
+def _setHostedOpening(host, opening, present=True):
+    """Maintain one host-to-opening computational dependency."""
+
+    if "HostedOpenings" not in host.PropertiesList:
+        host.addProperty(
+            "App::PropertyLinkList",
+            "HostedOpenings",
+            "Component",
+            "The openings whose geometry this object hosts",
+            locked=True,
+        )
+        host.setEditorMode("HostedOpenings", 2)
+    openings = list(host.HostedOpenings)
+    if present and opening not in openings:
+        openings.append(opening)
+    elif not present and opening in openings:
+        openings.remove(opening)
+    else:
+        return
+    host.HostedOpenings = openings
+
+
+def syncHostedObjectHosts(obj, previous=()):
+    """Synchronize semantic Hosts with correctly directed dependencies."""
+
+    current = tuple(getattr(obj, "Hosts", None) or ())
+    for host in set(previous) - set(current):
+        _setHostedOpening(host, obj, present=False)
+    for host in current:
+        _setHostedOpening(host, obj)
+
+
 def removeFromComponent(compobject, subobject):
     """Remove the object from the given component.
 
@@ -755,13 +808,7 @@ class Component(ArchIFC.IfcProduct):
         """
 
         child_list = obj.Additions + obj.Subtractions
-        for o in obj.InList:
-            if hasattr(o, "Hosts"):
-                if obj in o.Hosts:
-                    child_list.append(o)
-            elif hasattr(o, "Host"):
-                if obj == o.Host:
-                    child_list.append(o)
+        child_list.extend(getHostedObjects(obj))
 
         # Stairs railings should be considered as children
         # (RailingLeft and RailingRight property)
@@ -1263,7 +1310,7 @@ class Component(ArchIFC.IfcProduct):
 
         # treat subtractions
         subs = list(obj.Subtractions)
-        for link in obj.InListRecursive:
+        for link in getHostedObjects(obj, recursive=True):
             if hasattr(link, "Host"):
                 if (
                     Draft.getType(link) != "Rebar"
@@ -1616,7 +1663,7 @@ class Component(ArchIFC.IfcProduct):
 
         hosts = []
 
-        for link in obj.InListRecursive:
+        for link in getHostedObjects(obj, recursive=True):
             if hasattr(link, "Host"):
                 if link.Host == obj and not self._objectInInternalLinkgroup(link):
                     hosts.append(link)

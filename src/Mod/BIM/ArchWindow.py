@@ -474,6 +474,7 @@ def getWindowResizeRecomputeRoots(obj):
     for target in (
         getattr(obj, "Base", None),
         obj,
+        *(getattr(obj, "Hosts", None) or ()),
     ):
         if target is not None and target not in roots:
             roots.append(target)
@@ -3002,12 +3003,13 @@ class _Window(
         lp = obj.PropertiesList
         if not "Hosts" in lp:
             obj.addProperty(
-                "App::PropertyLinkList",
+                "App::PropertyLinkListHidden",
                 "Hosts",
                 "Window",
                 QT_TRANSLATE_NOOP("App::Property", "The objects that host this window"),
                 locked=True,
             )
+
         if not "WindowParts" in lp:
             obj.addProperty(
                 "App::PropertyStringList",
@@ -3172,12 +3174,30 @@ class _Window(
         obj.setEditorMode("HorizontalArea", 2)
         obj.setEditorMode("PerimeterLength", 2)
 
+    def _sync_host_dependencies(self, obj, previous=()):
+        ArchComponent.syncHostedObjectHosts(obj, previous)
+
+    def _migrate_hosts_property(self, obj):
+        """Convert legacy Hosts links without making hosts upstream inputs."""
+
+        if obj.getTypeIdOfProperty("Hosts") == "App::PropertyLinkListHidden":
+            return
+        hosts = list(obj.Hosts)
+        obj.setPropertyStatus("Hosts", "-LockDynamic")
+        if not obj.removeProperty("Hosts"):
+            return
+        self.setProperties(obj)
+        obj.Hosts = hosts
+
     def onDocumentRestored(self, obj):
 
         self.Object = obj
         self._opening_tool_cache = {}
         ArchComponent.Component.onDocumentRestored(self, obj)
+        if "Hosts" in obj.PropertiesList:
+            self._migrate_hosts_property(obj)
         self.setProperties(obj, mode="ODR")
+        self._sync_host_dependencies(obj)
 
         # During the v1.1 dev cycle an experiment with a new SillHeight handling was
         # undertaken. This did not work out as intended and was therefore reverted.
@@ -3212,6 +3232,8 @@ class _Window(
     def onChanged(self, obj, prop):
 
         self.hideSubobjects(obj, prop)
+        if prop == "Hosts" and "Restore" not in obj.State:
+            self._sync_host_dependencies(obj, getattr(self, "Hosts", ()))
         if prop in {
             "Base",
             "Placement",

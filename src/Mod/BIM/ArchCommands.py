@@ -158,6 +158,7 @@ def addComponents(objectsList, host):
                     ensure_link_overrides(o)
                     if hasattr(o, "Hosts") and host not in o.Hosts:
                         o.Hosts += [host]
+                        ArchComponent.syncHostedObjectHosts(o)
                 elif o in outList:
                     FreeCAD.Console.PrintWarning(
                         translate(
@@ -226,6 +227,7 @@ def removeComponents(objectsList, host=None):
                     ensure_link_overrides(o)
                     if hasattr(o, "Hosts") and host not in o.Hosts:
                         o.Hosts += [host]
+                        ArchComponent.syncHostedObjectHosts(o)
                 elif not o in s:
                     s.append(o)
                     if FreeCAD.GuiUp:
@@ -300,8 +302,7 @@ def removeComponents(objectsList, host=None):
                 # Ensure the hosts are recomputed upon window removal
                 old_hosts = o.Hosts[:]
                 o.Hosts = []
-                for old_host in old_hosts:
-                    old_host.touch()
+                ArchComponent.syncHostedObjectHosts(o, old_hosts)
 
 
 def makeComponent(baseobj=None, name=None, delete=False):

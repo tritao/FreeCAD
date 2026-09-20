@@ -1265,10 +1265,20 @@ class TestArchRepresentation(unittest.TestCase):
 
         request = RepresentationRequest(purpose="Plan", cut_offset=1000, target_offset=0)
         before = wall.Proxy.getRepresentation(wall, request).analytic_model.opening_intervals
+        recomputed = []
+
+        class RecomputeObserver:
+            def slotRecomputedObject(self, obj):
+                if getattr(obj, "Document", None) is document:
+                    recomputed.append(obj)
+
+        observer = RecomputeObserver()
+        FreeCAD.addDocumentObserver(observer)
+        self.addCleanup(FreeCAD.removeDocumentObserver, observer)
         status = ArchWindow.validateWindowResize(door, width=800)
         ArchWindow._apply_window_resize_mutation(door, status, width=800)
         roots = ArchWindow.getWindowResizeRecomputeRoots(door)
-        self.assertNotIn(wall, roots)
+        self.assertIn(wall, roots)
         _recompute_edit_impact(
             document,
             BIMEditImpact(recompute=BIMRecomputePlan(roots=roots)),
@@ -1281,6 +1291,7 @@ class TestArchRepresentation(unittest.TestCase):
         after = wall.Proxy.getRepresentation(wall, request).analytic_model.opening_intervals
         self.assertNotEqual(before, after)
         self.assertAlmostEqual(800.0, after[0][1] - after[0][0])
+        self.assertEqual(1, recomputed.count(wall))
 
     def test_wall_representation_supports_a_rotated_section_frame(self):
         document = FreeCAD.newDocument("ArbitraryWallRepresentationTest")
