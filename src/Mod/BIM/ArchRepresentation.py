@@ -482,6 +482,24 @@ class BIMEditValidation:
     maximum: float | None = None
 
 
+@dataclass(frozen=True)
+class BIMRecomputePlan:
+    """Document roots whose dependency graph must be recomputed."""
+
+    roots: tuple = ()
+
+
+@dataclass(frozen=True)
+class BIMEditImpact:
+    """Renderer-neutral declaration of model and presentation edit effects."""
+
+    recompute: BIMRecomputePlan | None = None
+    representation_sources: tuple = ()
+    refresh_primary_selection: bool = False
+    refresh_dependent_spaces: bool = False
+    refresh_secondary_selection: bool = False
+
+
 class BIMEditOperation:
     """Typed semantic mutation used by a renderer-independent edit handle."""
 
@@ -503,6 +521,7 @@ class BIMEditOperation:
         preview=None,
         preview_label=None,
         validator=None,
+        impact=None,
     ):
         self.key = str(key)
         self.label = str(label)
@@ -519,6 +538,17 @@ class BIMEditOperation:
         self._preview = preview
         self._preview_label = preview_label
         self._validator = validator
+        self._impact = impact
+
+    def get_impact(self, source, value):
+        if not callable(self._impact):
+            return None
+        impact = self._impact(source, value)
+        if impact is None:
+            return None
+        if not isinstance(impact, BIMEditImpact):
+            raise TypeError("impact must return BIMEditImpact")
+        return impact
 
     def get_preview(self, source, value, request):
         if not callable(self._preview):

@@ -196,13 +196,33 @@ def _flush_deferred_document_visual_updates(session):
     if not (
         visual_state.document_visual_refresh_deferred
         or visual_state.deferred_selection_effects
+        or visual_state.deferred_contextual_edit_impacts
     ):
         return False
+    contextual_impacts = tuple(visual_state.deferred_contextual_edit_impacts)
+    visual_state.deferred_contextual_edit_impacts.clear()
     effects = _take_deferred_selection_effects(session)
     visual_state.document_visual_refresh_deferred = False
     _apply_deferred_selection_effects(session, effects)
     if not document_is_alive(session):
         return False
+    if contextual_impacts:
+        refreshed_sources = {
+            source
+            for impact in contextual_impacts
+            for source in impact.representation_sources
+            if source is not None
+        }
+        visual_state.dirty_contextual_representation_sources.difference_update(
+            refreshed_sources
+        )
+        if visual_state.dirty_contextual_representation_sources:
+            queue_contextual_representation_refresh(
+                session,
+                next(iter(visual_state.dirty_contextual_representation_sources)),
+            )
+        session.task_panels.refresh_task_panel_status(reason="selection")
+        return True
     invalidate_document_dependent_plan_visuals(session)
     session.selection.refresh.refresh_primary_selected_plan_target()
     session.task_panels.refresh_task_panel_status(reason="selection")
@@ -310,6 +330,16 @@ def defer_document_visual_updates(session):
             or visual_state.deferred_selection_effects
         ):
             _queue_deferred_document_visual_flush(session)
+
+
+@contextmanager
+def defer_contextual_edit_updates(session, impact):
+    """Batch observers for an edit with an explicitly declared impact."""
+
+    if impact is not None:
+        _document_visual_state(session).deferred_contextual_edit_impacts.append(impact)
+    with defer_document_visual_updates(session):
+        yield
 
 
 def refresh_plan_object_footprint_display(session, obj, *, request_redraw=True):
@@ -555,6 +585,11 @@ def queue_contextual_representation_refresh(session, obj):
         return
     visual_state = _document_visual_state(session)
     visual_state.dirty_contextual_representation_sources.add(obj)
+    if (
+        visual_state.document_visual_update_defer_depth
+        and visual_state.deferred_contextual_edit_impacts
+    ):
+        return
     if visual_state.contextual_representation_refresh_queued:
         return
     visual_state.contextual_representation_refresh_queued = True
@@ -622,6 +657,9 @@ class PlanDocumentVisualsAPI:
 
     def defer_document_visual_updates(self):
         return defer_document_visual_updates(self.session)
+
+    def defer_contextual_edit_updates(self, impact):
+        return defer_contextual_edit_updates(self.session, impact)
 
     def document_is_alive(self):
         return document_is_alive(self.session)

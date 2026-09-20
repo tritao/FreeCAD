@@ -2,6 +2,8 @@
 
 """Plan-specific adapters for the shared BIM contextual editing engine."""
 
+from contextlib import nullcontext
+
 import FreeCAD
 from draftguitools.gui_base import DraftInteractionHost
 
@@ -65,10 +67,25 @@ class PlanContextualEditingAPI:
             feedback_callback=self._set_feedback,
             clear_feedback_callback=self._clear_feedback,
             commit_scope=self._commit_scope,
+            trace_scope=getattr(
+                self.session.performance, "plan_perf_trace_span", None
+            ),
         )
 
-    def _commit_scope(self):
-        return self.session.document_visuals.defer_document_visual_updates()
+    def _commit_scope(self, impact):
+        if impact is not None:
+            plan = getattr(impact, "recompute", None)
+            set_fields = getattr(
+                self.session.performance, "plan_perf_set_fields", None
+            )
+            if callable(set_fields):
+                set_fields(
+                    recompute_roots=tuple(getattr(plan, "roots", ()) or ()),
+                    representation_sources=tuple(
+                        getattr(impact, "representation_sources", ()) or ()
+                    ),
+                )
+        return self.session.document_visuals.defer_contextual_edit_updates(impact)
 
     def begin(self, handle):
         self.controller = self._new_controller()
@@ -87,7 +104,8 @@ class PlanContextualEditingAPI:
     def commit(self, pointer):
         if self.controller is None:
             raise RuntimeError("No BIM edit handle is active")
-        return self.controller.commit(pointer)
+        with self._commit_trace("pointer"):
+            return self.controller.commit(pointer)
 
     def cancel(self, *, refresh=True):
         if self.controller is not None:
@@ -98,7 +116,12 @@ class PlanContextualEditingAPI:
     def activate(self, handle):
         self.cancel()
         self.controller = self._new_controller()
-        if not self.controller.activate(handle):
+        if handle.interaction == "Immediate":
+            with self._commit_trace("immediate", handle=handle):
+                activated = self.controller.activate(handle)
+        else:
+            activated = self.controller.activate(handle)
+        if not activated:
             return False
         if handle.operation.value_kind == "Scalar":
             self.input_adapter.set_value_input(
@@ -111,10 +134,27 @@ class PlanContextualEditingAPI:
     def commit_value(self, value):
         if self.controller is None or self.controller.editor is None:
             return False
-        result = self.controller.commit_value(value)
+        with self._commit_trace("value"):
+            result = self.controller.commit_value(value)
         if result.success:
             self.input_adapter.clear_value_input()
         return result.success
+
+    def _commit_trace(self, interaction, handle=None):
+        if handle is None:
+            handle = self.controller.active_edit if self.controller is not None else None
+        operation = getattr(handle, "operation", None)
+        trace_event = getattr(
+            self.session.performance, "plan_perf_trace_event", None
+        )
+        if not callable(trace_event):
+            return nullcontext()
+        return trace_event(
+            "contextual_edit_commit",
+            interaction=interaction,
+            operation=getattr(operation, "name", None),
+            source=getattr(handle, "source", None),
+        )
 
     def _set_feedback(self, message):
         self.session.status_text.set_integration_feedback_message(message)

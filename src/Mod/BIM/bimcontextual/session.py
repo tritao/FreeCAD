@@ -204,7 +204,7 @@ class ContextualSession:
     def show_feedback(self, message):
         self._show_feedback(message)
 
-    def refresh_source(self, _source=None):
+    def refresh_source(self, _source=None, _impact=None):
         """Refresh capabilities after commit or a failed semantic operation."""
 
         self._queue_selection_refresh()

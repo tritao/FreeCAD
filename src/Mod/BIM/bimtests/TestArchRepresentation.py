@@ -2,10 +2,12 @@
 
 import unittest
 import ast
+from contextlib import nullcontext
 from pathlib import Path
 from unittest.mock import patch
 
 import Arch
+import ArchWindow
 import FreeCAD
 import Part
 import ArchSpaceSemantic
@@ -25,6 +27,8 @@ import Draft
 
 from ArchRepresentation import (
     AxisConstraint,
+    BIMEditImpact,
+    BIMRecomputePlan,
     BIMEditRay,
     BIMEditHandle,
     BIMEditOperation,
@@ -48,6 +52,7 @@ from ArchRepresentation import (
 from bimcontextual.editing import (
     BIMContextualHandleEditor,
     ContextualEditController,
+    _recompute_edit_impact,
 )
 from bimcontextual.editable_points import get_contextual_edit_points
 from ArchWallSemantic import evaluate_wall_candidate, evaluate_wall_length
@@ -56,6 +61,26 @@ from bimcontextual.context_policy import capabilities_for, supports
 
 
 class TestArchRepresentation(unittest.TestCase):
+    def test_edit_impact_uses_dependency_aware_document_recompute(self):
+        events = []
+
+        class Target:
+            def __init__(self, name):
+                self.name = name
+
+        targets = tuple(Target(name) for name in ("base", "opening", "host"))
+
+        class Document:
+            def recompute(self, roots):
+                events.append(("document", tuple(root.name for root in roots)))
+
+        impact = BIMEditImpact(
+            recompute=BIMRecomputePlan(roots=targets)
+        )
+        _recompute_edit_impact(Document(), impact)
+
+        self.assertEqual([("document", ("base", "opening", "host"))], events)
+
     def test_document_derived_values_are_reused_until_invalidation(self):
         from bimviews import representation_cache
 
@@ -82,6 +107,43 @@ class TestArchRepresentation(unittest.TestCase):
         )
         self.assertIsNot(first, third)
         self.assertEqual(2, len(created))
+
+    def test_plan_object_invalidation_clears_contextual_representation(self):
+        from types import SimpleNamespace
+
+        from bimplan.overlays.geometry import invalidate_plan_overlay_geometry_cache
+
+        document = FreeCAD.newDocument("PlanRepresentationInvalidationTest")
+        self.addCleanup(FreeCAD.closeDocument, document.Name)
+        wall = document.addObject("PartDesign::Feature", "Wall")
+        caches = {
+            "wall": {wall.Name: {"overlay_polylines": object()}},
+            "representation": {wall.Name: {"representation": object()}},
+        }
+        session = SimpleNamespace(
+            overlay_cache_state=SimpleNamespace(plan_overlay_geometry_cache=caches),
+            visibility=SimpleNamespace(
+                get_plan_semantic_object=lambda obj: obj,
+                get_document_object_key=lambda obj: obj.Name,
+            ),
+            selection=SimpleNamespace(
+                targets=SimpleNamespace(
+                    is_plan_selectable_wall=lambda obj: obj is wall,
+                    is_plan_space_object=lambda _obj: False,
+                    is_plan_region_object=lambda _obj: False,
+                ),
+                state=SimpleNamespace(
+                    is_selected_plan_target=lambda *_args: False
+                ),
+            ),
+            openings=SimpleNamespace(is_hosted_opening_object=lambda _obj: False),
+            hovered_opening=None,
+        )
+
+        invalidate_plan_overlay_geometry_cache(session, wall)
+
+        self.assertNotIn(wall.Name, caches["wall"])
+        self.assertNotIn(wall.Name, caches["representation"])
 
     def test_representation_request_key_includes_presentation_profile(self):
         from bimviews import representation_cache
@@ -563,7 +625,7 @@ class TestArchRepresentation(unittest.TestCase):
             RepresentationRequest(purpose="Plan"),
             renderer,
             input_adapter,
-            refresh_callback=refreshed.append,
+            refresh_callback=lambda source, _impact: refreshed.append(source),
         )
 
         self.assertTrue(controller.activate(handle))
@@ -591,6 +653,10 @@ class TestArchRepresentation(unittest.TestCase):
                 pass
 
         source = {"width": 100.0}
+        impact = BIMEditImpact(
+            representation_sources=(source,),
+            refresh_primary_selection=True,
+        )
         operation = BIMEditOperation(
             "set-width",
             "Set width",
@@ -599,6 +665,7 @@ class TestArchRepresentation(unittest.TestCase):
             minimum=10.0,
             sensitivity=0.0,
             manages_transaction=True,
+            impact=lambda _source, _value: impact,
         )
         handle = BIMEditHandle(
             source,
@@ -607,8 +674,27 @@ class TestArchRepresentation(unittest.TestCase):
             FreeCAD.Vector(1, 0, 0),
             operation,
         )
+        scoped_impacts = []
+        refreshed = []
+        traced_phases = []
+
+        def commit_scope(edit_impact):
+            scoped_impacts.append(edit_impact)
+            return nullcontext()
+
+        def trace_scope(name):
+            traced_phases.append(name)
+            return nullcontext()
+
         controller = ContextualEditController(
-            object(), RepresentationRequest(purpose="Plan"), Renderer()
+            object(),
+            RepresentationRequest(purpose="Plan"),
+            Renderer(),
+            refresh_callback=lambda value, edit_impact: refreshed.append(
+                (value, edit_impact)
+            ),
+            commit_scope=commit_scope,
+            trace_scope=trace_scope,
         )
 
         controller.begin(handle)
@@ -618,6 +704,13 @@ class TestArchRepresentation(unittest.TestCase):
 
         self.assertTrue(result.success, result.reason)
         self.assertEqual(175.0, source["width"])
+        self.assertIs(impact, result.impact)
+        self.assertEqual([impact], scoped_impacts)
+        self.assertEqual([(source, impact)], refreshed)
+        self.assertEqual(
+            ["contextual_edit_apply", "contextual_edit_presentation_refresh"],
+            traced_phases,
+        )
         self.assertIsNone(controller.active_edit)
 
     def test_contextual_datum_router_activates_only_on_matching_double_click(self):
@@ -1143,6 +1236,50 @@ class TestArchRepresentation(unittest.TestCase):
         _hinge_at_min, swing_sign = door.Proxy._get_door_symbol_style()
         hinge_v = FreeCAD.Vector(hinge).sub(frame["origin"]).dot(frame["axis_v"])
         self.assertAlmostEqual(frame["vmin"] if swing_sign < 0 else frame["vmax"], hinge_v)
+
+    def test_opening_jamb_commit_updates_shape_and_host_cut(self):
+        document = FreeCAD.newDocument("OpeningJambCommitTest")
+        self.addCleanup(FreeCAD.closeDocument, document.Name)
+        wall = Arch.makeWall(length=3000, width=200, height=3000)
+        base = document.addObject("Sketcher::SketchObject", "DoorProfile")
+        points = (
+            FreeCAD.Vector(0, 0, 0),
+            FreeCAD.Vector(900, 0, 0),
+            FreeCAD.Vector(900, 2100, 0),
+            FreeCAD.Vector(0, 2100, 0),
+        )
+        base.addGeometry(
+            [
+                Part.LineSegment(start, end)
+                for start, end in zip(points, points[1:] + points[:1])
+            ]
+        )
+        base.Placement.Rotation = FreeCAD.Rotation(FreeCAD.Vector(1, 0, 0), 90)
+        base.Placement.Base = FreeCAD.Vector(1000, 0, 0)
+        door = Arch.makeWindow(baseobj=base, name="ResizableDoor")
+        door.Width = 900
+        door.Height = 2100
+        door.IfcType = "Door"
+        Arch.addComponents(door, wall)
+        document.recompute()
+
+        request = RepresentationRequest(purpose="Plan", cut_offset=1000, target_offset=0)
+        before = wall.Proxy.getRepresentation(wall, request).analytic_model.opening_intervals
+        status = ArchWindow.validateWindowResize(door, width=800)
+        ArchWindow._apply_window_resize_mutation(door, status, width=800)
+        roots = ArchWindow.getWindowResizeRecomputeRoots(door)
+        _recompute_edit_impact(
+            document,
+            BIMEditImpact(recompute=BIMRecomputePlan(roots=roots)),
+        )
+
+        self.assertAlmostEqual(800.0, door.Width.Value)
+        self.assertAlmostEqual(
+            800.0, max(base.Shape.BoundBox.XLength, base.Shape.BoundBox.YLength)
+        )
+        after = wall.Proxy.getRepresentation(wall, request).analytic_model.opening_intervals
+        self.assertNotEqual(before, after)
+        self.assertAlmostEqual(800.0, after[0][1] - after[0][0])
 
     def test_wall_representation_supports_a_rotated_section_frame(self):
         document = FreeCAD.newDocument("ArbitraryWallRepresentationTest")

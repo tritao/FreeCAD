@@ -227,6 +227,7 @@ class PlanDocumentVisualState:
     document_visual_update_defer_depth: int = 0
     document_visual_refresh_deferred: bool = False
     document_visual_flush_queued: bool = False
+    deferred_contextual_edit_impacts: list = field(default_factory=list)
     deferred_selection_effects: list = field(default_factory=list)
     document_observer_added: bool = False
     representation_cache_listener_added: bool = False

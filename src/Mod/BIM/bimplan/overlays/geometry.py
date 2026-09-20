@@ -138,6 +138,12 @@ def invalidate_plan_overlay_geometry_cache(session, obj=None, kinds=None):
             target_kinds = tuple(session.overlay_cache_state.plan_overlay_geometry_cache.keys())
         else:
             target_kinds = get_plan_overlay_geometry_kinds_for_object(session, obj)
+    if obj is not None and "representation" not in target_kinds:
+        # Contextual representations are cached twice: in the document-owned
+        # representation cache and in this session-local geometry cache. Both
+        # must be invalidated together or a changed object can immediately
+        # repopulate the document cache with its old session representation.
+        target_kinds = (*target_kinds, "representation")
     if not target_kinds:
         return
     if obj is None:

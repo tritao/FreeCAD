@@ -2,6 +2,8 @@
 
 """Viewer-local committed BIM representations used by Plan Edit."""
 
+from contextlib import nullcontext
+
 import ArchWallRelation
 from bimviews import representation_layers
 
@@ -281,31 +283,70 @@ class PlanContextualRenderingAPI:
             self._refresh_source(source)
         self.reconcile_replaced_source_visibility()
 
-    def refresh_edit_dependencies(self, obj):
+    def refresh_edit_dependencies(self, obj, impact=None):
         """Refresh the bounded semantic neighborhood affected by a BIM edit."""
 
         if self._renderer is None or obj is None:
             return
         session = self._session
         semantic_obj = session.visibility.get_plan_semantic_object(obj)
-        walls = (
-            {semantic_obj}
-            if session.selection.targets.is_plan_selectable_wall(semantic_obj)
-            else set()
-        )
-        for relation in ArchWallRelation.iter_wall_relations(semantic_obj):
-            walls.update(
-                wall for wall in ArchWallRelation.get_relation_walls(relation) if wall is not None
+        sources = tuple(getattr(impact, "representation_sources", ()) or ())
+        if not sources:
+            walls = (
+                {semantic_obj}
+                if session.selection.targets.is_plan_selectable_wall(semantic_obj)
+                else set()
             )
+            for relation in ArchWallRelation.iter_wall_relations(semantic_obj):
+                walls.update(
+                    wall
+                    for wall in ArchWallRelation.get_relation_walls(relation)
+                    if wall is not None
+                )
+            sources = tuple(walls or (semantic_obj,))
+        opening = next(
+            (
+                source
+                for source in sources
+                if session.openings.is_hosted_opening_object(source)
+            ),
+            None,
+        )
 
-        session.openings.invalidate_wall_hosted_openings_cache()
-        for wall in walls:
-            session.overlays.geometry.invalidate_plan_overlay_geometry_cache(wall)
-            self.refresh_object(wall)
-        space_visuals = tuple(session.spaces.refresh_document_dependent_visuals())
-        session.selection.refresh.refresh_document_dependent_secondary_selection_visuals()
-        visual_kinds = list(space_visuals)
-        if session.selection.state.is_selected_plan_target("wall"):
+        # Invalidate the complete declared set before rebuilding any member.
+        # Host geometry derives opening intervals from the opening, while the
+        # native footprint derives from the same semantic geometry. Rebuilding
+        # between invalidations can leave one display path on the old result.
+        from bimviews import representation_cache
+
+        trace_span = getattr(session.performance, "plan_perf_trace_span", None)
+        phase = trace_span or (lambda _name: nullcontext())
+        with phase("contextual_edit_cache_invalidation"):
+            representation_cache.invalidate_document_derived_values(session.doc)
+            for source in sources:
+                representation_cache.invalidate_object(source)
+                session.overlays.geometry.invalidate_plan_overlay_geometry_cache(source)
+            session.openings.invalidate_wall_hosted_openings_cache()
+        # The contextual renderer is the sole committed drawing for represented
+        # Plan sources. Rebuilding their hidden legacy Footprint nodes duplicates
+        # expensive section work and can leave an old native symbol alongside
+        # the freshly installed semantic representation.
+        with phase("contextual_edit_representations"):
+            for source in sources:
+                self._refresh_source(source)
+            self.reconcile_replaced_source_visibility()
+            representation_layers.mark_current(self._renderer)
+        visual_kinds = []
+        if getattr(impact, "refresh_primary_selection", False):
+            if opening is not None:
+                visual_kinds.append("selected_opening")
+            elif session.selection.state.is_selected_plan_target("wall"):
+                visual_kinds.append("selected_wall")
+        if impact is None or getattr(impact, "refresh_dependent_spaces", False):
+            visual_kinds.extend(session.spaces.refresh_document_dependent_visuals())
+        if impact is None or getattr(impact, "refresh_secondary_selection", False):
+            session.selection.refresh.refresh_document_dependent_secondary_selection_visuals()
+        if impact is None and session.selection.state.is_selected_plan_target("wall"):
             visual_kinds.append("selected_wall")
         if visual_kinds:
             session.overlays.queue_plan_overlay_visual_refresh(*visual_kinds)

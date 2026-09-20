@@ -467,6 +467,48 @@ def canEditWindowHeight(obj):
     return validateWindowResize(obj, height=current_height).allowed
 
 
+def getWindowResizeRecomputeRoots(obj):
+    """Return the minimal explicit recompute roots for an opening resize."""
+
+    roots = []
+    for target in (
+        getattr(obj, "Base", None),
+        obj,
+        *(getattr(obj, "Hosts", None) or ()),
+    ):
+        if target is not None and target not in roots:
+            roots.append(target)
+    return tuple(roots)
+
+
+def _apply_window_resize_mutation(obj, status, *, width=None, height=None, anchor_shift=None):
+    """Apply validated resize properties without transaction or recompute policy."""
+
+    base = getattr(obj, "Base", None)
+    if "rewrite" in {status.width_mode, status.height_mode}:
+        if base is None:
+            raise RuntimeError("Opening base sketch is unavailable")
+        if not _rewrite_window_size_by_scaling(
+            base,
+            target_width=status.target_width if width is not None else None,
+            target_height=status.target_height if height is not None else None,
+        ):
+            raise RuntimeError("Opening size rewrite failed")
+
+    if width is not None and hasattr(obj, "Width"):
+        obj.Width = status.target_width
+    if height is not None and hasattr(obj, "Height"):
+        obj.Height = status.target_height
+    if anchor_shift is not None:
+        target = base or obj
+        placement = FreeCAD.Placement(target.Placement)
+        placement.Base = placement.Base.add(FreeCAD.Vector(anchor_shift))
+        target.Placement = placement
+    obj.touch()
+    for host in set(getattr(obj, "Hosts", None) or ()):
+        host.touch()
+
+
 def resizeWindow(
     obj,
     width=None,
@@ -492,7 +534,6 @@ def resizeWindow(
             raise ValueError("Opening document is unavailable")
         return False
 
-    base = getattr(obj, "Base", None)
     old_anchor = _get_window_anchor(obj) if preserve_anchor else None
     if not transaction_label:
         transaction_label = translate("Arch", "Resize Opening")
@@ -500,20 +541,13 @@ def resizeWindow(
     try:
         doc.openTransaction(transaction_label)
 
-        if "rewrite" in {status.width_mode, status.height_mode}:
-            if base is None:
-                raise RuntimeError("Opening base sketch is unavailable")
-            if not _rewrite_window_size_by_scaling(
-                base,
-                target_width=status.target_width if width is not None else None,
-                target_height=status.target_height if height is not None else None,
-            ):
-                raise RuntimeError("Opening size rewrite failed")
-
-        if width is not None and hasattr(obj, "Width"):
-            obj.Width = status.target_width
-        if height is not None and hasattr(obj, "Height"):
-            obj.Height = status.target_height
+        _apply_window_resize_mutation(
+            obj,
+            status,
+            width=width,
+            height=height,
+            anchor_shift=None,
+        )
 
         if old_anchor is not None:
             doc.recompute()
@@ -523,16 +557,8 @@ def resizeWindow(
             placement = FreeCAD.Placement(target.Placement)
             placement.Base = placement.Base.add(FreeCAD.Vector(anchor_shift))
             target.Placement = placement
-        obj.touch()
-        hosts = set(getattr(obj, "Hosts", None) or [])
-        for host in hosts:
-            host.touch()
         if anchor_shift is not None and not preserve_anchor:
-            recompute_targets = []
-            for target in (base, obj, *hosts):
-                if target is not None and target not in recompute_targets:
-                    recompute_targets.append(target)
-            doc.recompute(recompute_targets)
+            doc.recompute(getWindowResizeRecomputeRoots(obj))
         else:
             doc.recompute()
         doc.commitTransaction()
@@ -751,24 +777,34 @@ def _opening_width_edit_operation(helper, side):
             new_width = value - left_u
             new_center_u = (left_u + value) * 0.5
         shift = FreeCAD.Vector(axis).multiply(new_center_u - center_u)
-        setWindowWidth(
+        status = validateWindowResize(source, width=new_width)
+        if not status.allowed:
+            raise ValueError(str(status.reason or "Invalid window resize"))
+        _apply_window_resize_mutation(
             source,
-            new_width,
-            preserve_anchor=False,
+            status,
+            width=new_width,
             anchor_shift=shift,
-            transaction_label=translate("Arch", "Edit Opening Width"),
-            raise_on_error=True,
         )
 
     minimum = host_min if side == "Left" else left_u + 1.0
     maximum = right_u - 1.0 if side == "Left" else host_max
+
+    def edit_impact(_source, _value):
+        hosts = tuple(getattr(source, "Hosts", None) or ())
+        roots = getWindowResizeRecomputeRoots(source)
+        return ArchRepresentation.BIMEditImpact(
+            recompute=ArchRepresentation.BIMRecomputePlan(roots=roots),
+            representation_sources=(source, *hosts),
+            refresh_primary_selection=True,
+        )
+
     return ArchRepresentation.BIMEditOperation(
         "Opening{}Jamb".format(side),
         translate("Arch", "Edit Opening Width"),
         current_jamb,
         apply_jamb,
         property_name="Width",
-        manages_transaction=True,
         minimum=minimum,
         maximum=maximum,
         available=lambda _source: canEditWindowWidth(source),
@@ -778,6 +814,7 @@ def _opening_width_edit_operation(helper, side):
         preview_label=lambda _source, value, request: helper.get_plan_edit_preview_label(
             "Opening{}Jamb".format(side), value, request
         ),
+        impact=edit_impact,
     )
 
 

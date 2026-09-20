@@ -2,6 +2,8 @@
 
 """View and viewport helpers for BIM Plan Edit."""
 
+from contextlib import nullcontext
+
 import FreeCAD
 import FreeCADGui
 _VIEW_PREFERENCES_PATH = "User parameter:BaseApp/Preferences/View"
@@ -1056,13 +1058,28 @@ def flush_scene_graph_mutations(session):
     state.scene_graph_mutations.clear()
     changed = False
     stopping = session.lifecycle_state.tearing_down or session.lifecycle_state.finishing
-    for mutation, finalizer in mutations:
-        if stopping and not finalizer:
-            continue
-        try:
-            changed = bool(mutation()) or changed
-        except Exception:
-            continue
+    performance = session.performance
+    trace_event = getattr(performance, "plan_perf_trace_event", None)
+    trace_span = getattr(performance, "plan_perf_trace_span", None)
+    event_scope = (
+        trace_event("scene_graph_mutation_flush", mutation_count=len(mutations))
+        if callable(trace_event)
+        else nullcontext()
+    )
+    install_scope = (
+        trace_span("scene_graph_install")
+        if callable(trace_span)
+        else nullcontext()
+    )
+    with event_scope:
+        with install_scope:
+            for mutation, finalizer in mutations:
+                if stopping and not finalizer:
+                    continue
+                try:
+                    changed = bool(mutation()) or changed
+                except Exception:
+                    continue
     if changed:
         request_view_redraw(session)
     return changed

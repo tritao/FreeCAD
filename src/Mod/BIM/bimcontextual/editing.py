@@ -35,6 +35,7 @@ class BIMEditResult:
     success: bool
     preview: object = None
     reason: str = ""
+    impact: object = None
 
     @property
     def value(self):
@@ -132,26 +133,41 @@ class BIMContextualHandleEditor:
         handle = preview.handle
         if not preview.validation.allowed:
             raise ValueError(preview.validation.reason)
+        impact = handle.operation.get_impact(handle.source, preview.value)
         try:
-            self._commit_value(handle, preview.value)
+            self._commit_value(handle, preview.value, impact)
             if callable(self.refresh):
                 self.refresh(handle.source)
         finally:
             self.cancel()
-        return BIMEditResult(True, preview=preview)
+        return BIMEditResult(True, preview=preview, impact=impact)
 
     @staticmethod
-    def _commit_value(handle, value):
+    def _commit_value(handle, value, impact=None, trace_scope=None):
         obj = handle.source
         doc = getattr(obj, "Document", None) or FreeCAD.ActiveDocument
         operation = handle.operation
+        phase = trace_scope or (lambda _name: nullcontext())
         if operation.manages_transaction:
-            operation.apply(obj, value)
+            with phase("contextual_edit_apply"):
+                operation.apply(obj, value)
             return
         with BIMEditTransaction(doc, operation.label):
-            operation.apply(obj, value)
+            with phase("contextual_edit_apply"):
+                operation.apply(obj, value)
             if doc is not None:
-                doc.recompute()
+                with phase("contextual_edit_recompute"):
+                    _recompute_edit_impact(doc, impact)
+
+
+def _recompute_edit_impact(doc, impact):
+    """Recompute an edit through FreeCAD's dependency-aware document path."""
+
+    plan = getattr(impact, "recompute", None)
+    if plan is None:
+        doc.recompute()
+        return
+    doc.recompute(tuple(target for target in plan.roots if target is not None))
 
 
 class ContextualEditController:
@@ -174,6 +190,7 @@ class ContextualEditController:
         feedback_callback=None,
         clear_feedback_callback=None,
         commit_scope=None,
+        trace_scope=None,
     ):
         self.view = view
         self.request = getattr(representation_request, "request", representation_request)
@@ -183,7 +200,8 @@ class ContextualEditController:
         self.refresh_failure_callback = refresh_failure_callback
         self.feedback_callback = feedback_callback
         self.clear_feedback_callback = clear_feedback_callback
-        self.commit_scope = commit_scope or nullcontext
+        self.commit_scope = commit_scope or (lambda _impact: nullcontext())
+        self.trace_scope = trace_scope
         self.editor = None
 
     @property
@@ -259,16 +277,27 @@ class ContextualEditController:
             raise RuntimeError("No BIM edit handle is active")
         handle = self.editor.handle
         editor = self.editor
+        preview = editor.preview(pointer)
         try:
-            with self.commit_scope():
-                result = editor.commit(pointer)
+            if not preview.validation.allowed:
+                raise ValueError(preview.validation.reason)
+            impact = handle.operation.get_impact(handle.source, preview.value)
+            with self.commit_scope(impact):
+                BIMContextualHandleEditor._commit_value(
+                    handle, preview.value, impact, self.trace_scope
+                )
+                if callable(self.refresh_callback):
+                    phase = self.trace_scope or (lambda _name: nullcontext())
+                    with phase("contextual_edit_presentation_refresh"):
+                        self.refresh_callback(handle.source, impact)
+            editor.cancel()
             self._clear_feedback()
-            return result
+            return BIMEditResult(True, preview=preview, impact=impact)
         except Exception as exc:
             self._set_feedback(exc)
             if callable(self.refresh_failure_callback):
                 self.refresh_failure_callback(handle.source)
-            return BIMEditResult(False, reason=str(exc))
+            return BIMEditResult(False, preview=preview, reason=str(exc))
         finally:
             self._call_renderer("clear_preview", handle.source)
             self.editor = None
@@ -287,14 +316,19 @@ class ContextualEditController:
             self._set_feedback(reason)
             return BIMEditResult(False, preview=preview, reason=reason)
         editor = self.editor
+        impact = handle.operation.get_impact(handle.source, preview.value)
         try:
-            with self.commit_scope():
-                BIMContextualHandleEditor._commit_value(handle, preview.value)
+            with self.commit_scope(impact):
+                BIMContextualHandleEditor._commit_value(
+                    handle, preview.value, impact, self.trace_scope
+                )
                 if callable(editor.refresh):
-                    editor.refresh(handle.source)
+                    phase = self.trace_scope or (lambda _name: nullcontext())
+                    with phase("contextual_edit_presentation_refresh"):
+                        editor.refresh(handle.source, impact)
             editor.cancel()
             self._clear_feedback()
-            return BIMEditResult(True, preview=preview)
+            return BIMEditResult(True, preview=preview, impact=impact)
         except Exception as exc:
             self._set_feedback(exc)
             if callable(self.refresh_failure_callback):
@@ -325,11 +359,16 @@ class ContextualEditController:
                 self._set_feedback(validation.reason)
                 return False
             try:
-                BIMContextualHandleEditor._commit_value(
-                    handle, handle.operation.get_value(handle.source)
-                )
-                if callable(self.refresh_callback):
-                    self.refresh_callback(handle.source)
+                value = handle.operation.get_value(handle.source)
+                impact = handle.operation.get_impact(handle.source, value)
+                with self.commit_scope(impact):
+                    BIMContextualHandleEditor._commit_value(
+                        handle, value, impact, self.trace_scope
+                    )
+                    if callable(self.refresh_callback):
+                        phase = self.trace_scope or (lambda _name: nullcontext())
+                        with phase("contextual_edit_presentation_refresh"):
+                            self.refresh_callback(handle.source, impact)
                 self._call_renderer("sync_visible_handles")
                 self._clear_feedback()
                 return True
