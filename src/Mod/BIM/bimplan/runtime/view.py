@@ -3,6 +3,7 @@
 """View and viewport helpers for BIM Plan Edit."""
 
 from contextlib import nullcontext
+import time
 
 import FreeCAD
 import FreeCADGui
@@ -1072,6 +1073,14 @@ def flush_scene_graph_mutations(session):
         else nullcontext()
     )
     with event_scope:
+        pending = session.performance_state.pending_contextual_edit_trace
+        if pending is not None:
+            performance.plan_perf_set_fields(
+                contextual_edit_seq=pending.get("seq"),
+                since_contextual_edit_ms=(
+                    time.perf_counter() - pending["started"]
+                ) * 1000.0,
+            )
         with install_scope:
             for mutation, finalizer in mutations:
                 if stopping and not finalizer:
@@ -1119,8 +1128,55 @@ def flush_view_redraw(session):
     redraw = session.viewport.get_runtime_attr(session.view, "scheduleRedraw")
     if redraw is not None:
         try:
-            redraw()
+            performance = session.performance
+            pending = session.performance_state.pending_contextual_edit_trace
+            trace_event = getattr(performance, "plan_perf_trace_event", None)
+            event_scope = (
+                trace_event(
+                    "contextual_edit_redraw_scheduled",
+                    contextual_edit_seq=pending.get("seq"),
+                    since_contextual_edit_ms=(
+                        time.perf_counter() - pending["started"]
+                    ) * 1000.0,
+                )
+                if pending is not None and callable(trace_event)
+                else nullcontext()
+            )
+            with event_scope:
+                redraw()
+            if pending is not None:
+                FreeCADGui.invokeLater(
+                    lambda expected=pending: _finish_contextual_edit_gui_trace(
+                        session, expected
+                    )
+                )
             return True
         except Exception:
             session.viewport.discard_stale_runtime_object(session.view)
     return False
+
+
+def _finish_contextual_edit_gui_trace(session, expected):
+    """Record the first GUI turn after a contextual edit redraw was scheduled."""
+
+    performance = session.performance
+    state = session.performance_state
+    if state.pending_contextual_edit_trace is not expected:
+        return False
+    trace_event = getattr(performance, "plan_perf_trace_event", None)
+    if callable(trace_event):
+        with trace_event(
+            "contextual_edit_gui_settled",
+            contextual_edit_seq=expected.get("seq"),
+            since_contextual_edit_ms=(
+                time.perf_counter() - expected["started"]
+            ) * 1000.0,
+            after_sync_ms=(
+                (time.perf_counter() - expected["sync_finished"]) * 1000.0
+                if expected.get("sync_finished") is not None
+                else None
+            ),
+        ):
+            pass
+    state.pending_contextual_edit_trace = None
+    return True

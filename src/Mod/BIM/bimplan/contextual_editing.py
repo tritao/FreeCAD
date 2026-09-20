@@ -2,7 +2,8 @@
 
 """Plan-specific adapters for the shared BIM contextual editing engine."""
 
-from contextlib import ExitStack, nullcontext
+from contextlib import ExitStack, contextmanager, nullcontext
+import time
 
 import FreeCAD
 from draftguitools.gui_base import DraftInteractionHost
@@ -157,6 +158,7 @@ class PlanContextualEditingAPI:
             self.input_adapter.clear_value_input()
         return result.success
 
+    @contextmanager
     def _commit_trace(self, interaction, handle=None):
         if handle is None:
             handle = self.controller.active_edit if self.controller is not None else None
@@ -165,13 +167,27 @@ class PlanContextualEditingAPI:
             self.session.performance, "plan_perf_trace_event", None
         )
         if not callable(trace_event):
-            return nullcontext()
-        return trace_event(
+            yield None
+            return
+        started = time.perf_counter()
+        with trace_event(
             "contextual_edit_commit",
             interaction=interaction,
             operation=getattr(operation, "name", None),
             source=getattr(handle, "source", None),
-        )
+        ) as event:
+            if event is not None:
+                self.session.performance_state.pending_contextual_edit_trace = {
+                    "seq": event.get("seq"),
+                    "started": started,
+                    "sync_finished": None,
+                }
+            try:
+                yield event
+            finally:
+                pending = self.session.performance_state.pending_contextual_edit_trace
+                if pending is not None and pending.get("seq") == event.get("seq"):
+                    pending["sync_finished"] = time.perf_counter()
 
     def _set_feedback(self, message):
         self.session.status_text.set_integration_feedback_message(message)

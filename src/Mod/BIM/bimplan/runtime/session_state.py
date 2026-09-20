@@ -241,6 +241,7 @@ class PlanPerformanceState:
     plan_perf_log_path: object = None
     plan_pick_debug_log_path: object = None
     plan_perf_current_event: object = None
+    pending_contextual_edit_trace: object = None
     plan_perf_sequence: int = 0
     plan_pick_debug_sequence: int = 0
     plan_pick_debug_scope_depth: int = 0
@@ -400,6 +401,7 @@ def initialize_session_state(session):
         session.performance.resolve_plan_pick_debug_log_path()
     )
     performance_state.plan_perf_current_event = None
+    performance_state.pending_contextual_edit_trace = None
     performance_state.plan_perf_sequence = 0
     performance_state.plan_pick_debug_sequence = 0
     performance_state.plan_pick_debug_scope_depth = 0
