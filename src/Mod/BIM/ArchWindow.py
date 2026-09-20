@@ -3229,8 +3229,6 @@ class _Window(
 
         if prop in ["Base", "WindowParts", "Placement", "HoleDepth", "Height", "Width", "Hosts"]:
             setattr(self, prop, getattr(obj, prop))
-        if prop in ["Height", "Width", "Opening", "WindowParts"] and obj.CloneOf is None:
-            self.TouchOnShapeChange = True  # touch hosts after next "Shape" change
 
     def onChanged(self, obj, prop):
 
@@ -3248,31 +3246,6 @@ class _Window(
         }:
             self._opening_tool_cache = {}
         if not "Restore" in obj.State:
-            if prop in [
-                "Base",
-                "WindowParts",
-                "Placement",
-                "HoleDepth",
-                "Height",
-                "Width",
-                "Hosts",
-                "Shape",
-                "Opening",
-            ]:
-                # anti-recursive loops, bc the base sketch will touch the Placement all the time
-                touchhosts = False
-                if prop == "Shape":
-                    if hasattr(self, "TouchOnShapeChange") and self.TouchOnShapeChange:
-                        self.TouchOnShapeChange = False
-                        touchhosts = True
-                elif hasattr(self, prop) and getattr(self, prop) != getattr(obj, prop):
-                    touchhosts = True
-                if touchhosts:
-                    hosts = self.Hosts if hasattr(self, "Hosts") else []
-                    hosts += obj.Hosts if hasattr(obj, "Hosts") else []
-                    for host in set(hosts):  # use set to remove duplicates
-                        # mark host to recompute so it can detect this object
-                        host.touch()
             if prop in ["Width", "Height", "Frame"]:
                 if obj.Base:
                     if hasattr(obj.Base, "Constraints") and (
