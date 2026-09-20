@@ -2127,11 +2127,6 @@ class _HostedOpeningPlanGeometry:
         )
         center_point.z = base_z
 
-        _target, placement = self._get_hosted_opening_placement_target()
-        reference_offset = FreeCAD.Vector()
-        if placement is not None:
-            reference_offset = FreeCAD.Vector(placement.Base).sub(center_point)
-
         move_u_min = move_u_max = None
         opening_half_width_u = max(section_profile["umax"] - section_profile["umin"], 0.0) * 0.5
         host = next(iter(getattr(self.Object, "Hosts", None) or []), None)
@@ -2160,7 +2155,6 @@ class _HostedOpeningPlanGeometry:
             "base_z": base_z,
             "opening_half_width_u": opening_half_width_u,
             "center_point": center_point,
-            "reference_offset": reference_offset,
             "move_u_min": move_u_min,
             "move_u_max": move_u_max,
         }
@@ -3095,6 +3089,11 @@ class _Window(
 
         source = obj or self.Object
         return self._exact_compilation_cache.ensure(source)
+
+    def invalidateExactCompilation(self):
+        """Discard exact geometry after an external semantic input changes."""
+
+        self._exact_compilation_cache.invalidate()
 
     def __init__(self, obj):
 

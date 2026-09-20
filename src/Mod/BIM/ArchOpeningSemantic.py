@@ -39,13 +39,24 @@ def move_hosted_opening(opening, point, anchor="center"):
     if current_placement is None:
         return False
 
+    center = move_context.get("center_point")
+    if center is None:
+        return False
+    # Move by the requested semantic-center delta. Opening profiles are not
+    # required to be centered on their placement origin, so reconstructing an
+    # absolute placement from that offset can drift after profile recompute.
     placement = FreeCAD.Placement(current_placement)
-    placement.Base = FreeCAD.Vector(projected).add(
-        FreeCAD.Vector(move_context.get("reference_offset") or FreeCAD.Vector())
+    placement.Base = placement.Base.add(
+        FreeCAD.Vector(projected).sub(FreeCAD.Vector(center))
     )
     target.Placement = placement
 
     if target is not opening:
+        invalidate_compilation = getattr(
+            getattr(opening, "Proxy", None), "invalidateExactCompilation", None
+        )
+        if callable(invalidate_compilation):
+            invalidate_compilation()
         touch = getattr(opening, "touch", None)
         if callable(touch):
             touch()
