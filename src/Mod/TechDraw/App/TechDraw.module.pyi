@@ -93,6 +93,16 @@ def makeGeomHatch(
     """Create a compound of hatch edges trimmed to all faces in a shape."""
     ...
 
+def makeGeomHatchSegments(
+    shape: Shape,
+    scale: float = 1.0,
+    patName: str = "",
+    patFile: str = "",
+    /,
+) -> list[tuple[Vector, Vector]]:
+    """Create hatch line endpoint pairs trimmed to all faces in a shape."""
+    ...
+
 # Projection helpers
 @overload
 def project(shape: Shape, /) -> _ProjectedParts:

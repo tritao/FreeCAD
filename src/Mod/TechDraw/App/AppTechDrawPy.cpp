@@ -24,6 +24,7 @@
  ***************************************************************************/
 
 # include <BRep_Builder.hxx>
+# include <BRep_Tool.hxx>
 # include <BRepBuilderAPI_Transform.hxx>
 # include <gp_Trsf.hxx>
 # include <gp_Vec.hxx>
@@ -163,6 +164,9 @@ public:
         );
         add_varargs_method("makeGeomHatch", &Module::makeGeomHatch,
             "makeGeomHatch(shape, [patScale], [patName], [patFile]) -- draw a geom hatch on the faces of a shape, using optionally the given scale (default 1) and a given pattern name (ex. Diamond) and .pat file (the default pattern name and/or .pat files set in preferences are used if none are given). Returns a Part compound shape."
+        );
+        add_varargs_method("makeGeomHatchSegments", &Module::makeGeomHatchSegments,
+            "makeGeomHatchSegments(shape, [patScale], [patName], [patFile]) -- return geom hatch lines as endpoint pairs without constructing a result compound."
         );
         add_varargs_method("project", &Module::project,
             "[visiblyG0, visiblyG1, hiddenG0, hiddenG1] = project(TopoShape[, App.Vector Direction, string type])\n"
@@ -1009,7 +1013,7 @@ private:
     }
 
 
-    Py::Object makeGeomHatch(const Py::Tuple& args)
+    std::vector<LineSet> makeGeomHatchLineSets(const Py::Tuple& args)
     {
         PyObject* pFace(nullptr);
         double scale = 1.0;
@@ -1045,7 +1049,7 @@ private:
         Base::FileInfo fi(patFile);
         if (!fi.isReadable()) {
             Base::Console().error(".pat File: %s is not readable\n", patFile.c_str());
-            return Py::None();
+            return {};
         }
         std::vector<TechDraw::PATLineSpec> specs = TechDraw::DrawGeomHatch::getDecodedSpecsFromFile(patFile, patName);
         std::vector<LineSet> lineSets;
@@ -1054,7 +1058,12 @@ private:
             lSet.setPATLineSpec(hLine);
             lineSets.push_back(lSet);
         }
-        std::vector<LineSet> lsresult = TechDraw::DrawGeomHatch::getTrimmedLines(source, lineSets, faces, scale);
+        return TechDraw::DrawGeomHatch::getTrimmedLines(source, lineSets, faces, scale);
+    }
+
+    Py::Object makeGeomHatch(const Py::Tuple& args)
+    {
+        std::vector<LineSet> lsresult = makeGeomHatchLineSets(args);
         if (!lsresult.empty()) {
             /* below code returns a list of edges, but probably slower to handle
             Py::List result;
@@ -1094,6 +1103,34 @@ private:
             return Py::asObject(pycomp);
         }
         return Py::None();
+    }
+
+    Py::Object makeGeomHatchSegments(const Py::Tuple& args)
+    {
+        std::vector<LineSet> lineSets = makeGeomHatchLineSets(args);
+        Py::List result;
+        for (auto& lineSet : lineSets) {
+            for (const auto& edge : lineSet.getEdges()) {
+                if (edge.IsNull()) {
+                    continue;
+                }
+                TopoDS_Vertex firstVertex;
+                TopoDS_Vertex lastVertex;
+                TopExp::Vertices(edge, firstVertex, lastVertex, true);
+                if (firstVertex.IsNull() || lastVertex.IsNull()) {
+                    continue;
+                }
+                const auto first = BRep_Tool::Pnt(firstVertex);
+                const auto last = BRep_Tool::Pnt(lastVertex);
+                Py::Tuple segment(2);
+                segment[0] = Py::asObject(new Base::VectorPy(
+                    new Base::Vector3d(first.X(), first.Y(), first.Z())));
+                segment[1] = Py::asObject(new Base::VectorPy(
+                    new Base::Vector3d(last.X(), last.Y(), last.Z())));
+                result.append(segment);
+            }
+        }
+        return result;
     }
 
     Py::Object project(const Py::Tuple& args)
