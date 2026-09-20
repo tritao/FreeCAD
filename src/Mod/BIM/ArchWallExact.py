@@ -22,6 +22,9 @@ class WallExactCompilation:
 
     shape: object
     face_roles: tuple
+    vertical_area: float
+    horizontal_area: float
+    perimeter_length: float
 
 
 def compile_straight_wall(wall, proxy, geometry_shape=None):
@@ -168,7 +171,7 @@ def compile_wall_recipe(recipe, tolerance=1e-7):
         return None
     if shape.isNull() or not shape.isValid() or len(shape.Solids) != 1:
         return None
-    return WallExactCompilation(shape, _classify_faces(shape, recipe, axis, tolerance))
+    return _compilation(shape, recipe, axis, tolerance)
 
 
 def _polygon_u_extents_at_v(polygon, target_v, tolerance):
@@ -318,9 +321,7 @@ def _compile_boundary_shell(recipe, axis, lateral, footprint, side_extents, tole
         return None
     if shape.isNull() or not shape.isValid() or len(shape.Solids) != 1:
         return None
-    return WallExactCompilation(
-        shape, _classify_faces(shape, recipe, axis, tolerance)
-    )
+    return _compilation(shape, recipe, axis, tolerance)
 
 
 def _elevation_outline(u_min, u_max, z_min, z_max, bottom_openings):
@@ -405,3 +406,29 @@ def _classify_faces(shape, recipe, axis, tolerance):
                 role = "EndStart" if u < middle_u else "EndEnd"
         roles.append(WallExactFaceRole(index, role, source))
     return tuple(roles)
+
+
+def _compilation(shape, recipe, axis, tolerance):
+    roles = _classify_faces(shape, recipe, axis, tolerance)
+    faces_by_index = {
+        index: face for index, face in enumerate(shape.Faces, start=1)
+    }
+    horizontal_roles = {"Top", "Bottom", "OpeningSill", "OpeningHead"}
+    vertical_area = sum(
+        faces_by_index[item.face_index].Area
+        for item in roles
+        if item.role not in horizontal_roles
+    )
+    top_faces = tuple(
+        faces_by_index[item.face_index] for item in roles if item.role == "Top"
+    )
+    if len(top_faces) != 1:
+        return None
+    top_face = top_faces[0]
+    return WallExactCompilation(
+        shape=shape,
+        face_roles=roles,
+        vertical_area=vertical_area,
+        horizontal_area=top_face.Area,
+        perimeter_length=top_face.OuterWire.Length,
+    )

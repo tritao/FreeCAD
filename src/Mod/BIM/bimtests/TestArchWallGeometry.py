@@ -220,6 +220,9 @@ class TestArchWallGeometry(TestArchBase.TestArchBase):
         self.assertIn("OpeningSill", roles)
         self.assertIn("OpeningHead", roles)
         self.assertEqual(2, roles.count("OpeningJamb"))
+        self.assertAlmostEqual(14560000.0, compilation.vertical_area)
+        self.assertAlmostEqual(600000.0, compilation.horizontal_area)
+        self.assertAlmostEqual(6400.0, compilation.perimeter_length)
         self.assertTrue(
             all(
                 item.source is opening_source

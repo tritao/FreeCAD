@@ -1477,7 +1477,15 @@ class Component(ArchIFC.IfcProduct):
             return True
         return False
 
-    def applyShape(self, obj, shape, placement, allowinvalid=False, allownosolid=False):
+    def applyShape(
+        self,
+        obj,
+        shape,
+        placement,
+        allowinvalid=False,
+        allownosolid=False,
+        compute_areas=True,
+    ):
         """Check the given shape, then assign it to the object.
 
         Check if the shape is valid, isn't null, and if it has volume. Remove
@@ -1502,6 +1510,9 @@ class Component(ArchIFC.IfcProduct):
             Whether to allow invalid shapes, or to throw an error.
         allownosolid: bool, optional
             Whether to allow non-solid shapes, or to throw an error.
+        compute_areas: bool, optional
+            Whether to update generic projected area properties after assigning
+            the shape. Callers that already own exact area metrics can disable it.
         """
 
         if shape:
@@ -1553,7 +1564,8 @@ class Component(ArchIFC.IfcProduct):
                 FreeCAD.Console.PrintWarning(
                     obj.Label + " " + translate("Arch", "has a null shape") + "\n"
                 )
-        self.computeAreas(obj)
+        if compute_areas:
+            self.computeAreas(obj)
 
     def computeAreas(self, obj):
         """Compute the area properties of the object's shape.

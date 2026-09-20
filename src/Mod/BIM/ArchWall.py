@@ -910,7 +910,8 @@ class _Wall(ArchComponent.Component):
             # ``pl`` after assigning the shape.
             base = compilation.shape.copy()
             base.Placement = pl.inverse().multiply(base.Placement)
-            self.applyShape(obj, base, pl)
+            self.applyShape(obj, base, pl, compute_areas=False)
+            self._apply_exact_area_metrics(obj, compilation)
             self._finish_execute(obj, base)
             return
 
@@ -941,6 +942,18 @@ class _Wall(ArchComponent.Component):
         self.applyShape(obj, base, pl)
 
         self._finish_execute(obj, base)
+
+    @staticmethod
+    def _apply_exact_area_metrics(obj, compilation):
+        """Publish area properties already known by the exact compiler."""
+
+        for property_name, value in (
+            ("VerticalArea", compilation.vertical_area),
+            ("HorizontalArea", compilation.horizontal_area),
+            ("PerimeterLength", compilation.perimeter_length),
+        ):
+            if getattr(obj, property_name).Value != value:
+                setattr(obj, property_name, value)
 
     def _finish_execute(self, obj, base):
         """Update derived wall properties after assigning its final shape."""

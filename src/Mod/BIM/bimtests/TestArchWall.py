@@ -486,6 +486,21 @@ class TestArchWall(TestArchBase.TestArchBase):
         self.assertEqual(1, len(representation.cut_geometry))
         self.assertAlmostEqual(600000.0, representation.cut_geometry[0].Area)
 
+    def test_exact_wall_execution_uses_compiler_area_metrics(self):
+        """Supported exact walls avoid generic projected-area computation."""
+
+        wall = Arch.makeWall(length=3000, width=200, height=2500)
+        with patch.object(
+            ArchComponent.AreaCalculator,
+            "compute",
+            side_effect=AssertionError("generic area projection must not run"),
+        ):
+            self.document.recompute()
+
+        self.assertAlmostEqual(16000000.0, wall.VerticalArea.Value)
+        self.assertAlmostEqual(600000.0, wall.HorizontalArea.Value)
+        self.assertAlmostEqual(6400.0, wall.PerimeterLength.Value)
+
     def test_multilayer_plan_faces_preserve_layer_material_ownership(self):
         first_material = Arch.makeMaterial(name="FirstLayerMaterial")
         second_material = Arch.makeMaterial(name="SecondLayerMaterial")
