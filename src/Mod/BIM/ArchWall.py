@@ -1629,7 +1629,9 @@ class _Wall(ArchComponent.Component):
             solution = self._cached_wall_joint_solution(joint)
             if not solution.is_ok() or solution.trim_for_wall(wall) is None:
                 continue
-            anchor = self._wall_joint_handle_point(representation, wall, solution.intersection)
+            anchor = self._cached_wall_joint_handle_point(
+                representation, wall, joint, solution.intersection
+            )
             candidates = []
             for face in representation.cut_geometry:
                 for edge in face.Edges:
@@ -2320,7 +2322,12 @@ class _Wall(ArchComponent.Component):
                 ),
             )
             handle_point = _edit_handle_point(
-                self._wall_joint_handle_point(representation, wall, data["solution"].intersection),
+                self._cached_wall_joint_handle_point(
+                    representation,
+                    wall,
+                    joint,
+                    data["solution"].intersection,
+                ),
                 request,
             )
             representation.add_edit_handle(
@@ -2424,6 +2431,28 @@ class _Wall(ArchComponent.Component):
         if not candidates:
             return FreeCAD.Vector(intersection)
         return min(candidates, key=lambda item: item[0])[1]
+
+    def _cached_wall_joint_handle_point(
+        self, representation, wall, joint, intersection
+    ):
+        """Reuse a stable joint anchor across unrelated representation edits."""
+
+        from bimviews import representation_cache
+
+        request_key = representation_cache.geometry_request_key(
+            getattr(representation, "request", None)
+        )
+        related_walls = tuple(ArchWallRelation.get_relation_walls(joint))
+        point = representation_cache.get_or_create_derived_value(
+            wall.Document,
+            "wall-joint-handle-point",
+            (wall.Name, joint.Name, request_key),
+            lambda: self._wall_joint_handle_point(
+                representation, wall, intersection
+            ),
+            dependencies=(joint, *related_walls),
+        )
+        return FreeCAD.Vector(point)
 
     def _can_edit_native_path(self, wall):
         return bool(

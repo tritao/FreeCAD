@@ -985,7 +985,25 @@ class TestArchRepresentation(unittest.TestCase):
         self.assertEqual("OK", joint.Status, joint.StatusMessage)
 
         request = RepresentationRequest(purpose="Plan", cut_offset=1000, target_offset=0)
-        representation = horizontal.Proxy.getRepresentation(horizontal, request)
+        from bimviews import representation_cache
+
+        with patch.object(
+            horizontal.Proxy,
+            "_wall_joint_handle_point",
+            wraps=horizontal.Proxy._wall_joint_handle_point,
+        ) as resolve_anchor:
+            representation = horizontal.Proxy.getRepresentation(horizontal, request)
+            self.assertEqual(1, resolve_anchor.call_count)
+            representation_cache.invalidate_object_representation(horizontal)
+            rebuilt = horizontal.Proxy.getRepresentation(horizontal, request)
+            self.assertEqual(1, resolve_anchor.call_count)
+        first_anchor = next(
+            item.point for item in representation.edit_handles if item.role == "WallJointMove"
+        )
+        rebuilt_anchor = next(
+            item.point for item in rebuilt.edit_handles if item.role == "WallJointMove"
+        )
+        self.assertTrue(first_anchor.isEqual(rebuilt_anchor, 1e-7))
         handle = next(item for item in representation.edit_handles if item.role == "WallJointMove")
         semantic_point = handle.operation.get_value(handle.source)
 
