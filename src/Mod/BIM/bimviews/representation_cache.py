@@ -103,7 +103,10 @@ def representation_request_key(request, *, include_presentation=True):
         _range_key(getattr(request, "projection_range", None)),
     )
     if include_presentation:
-        key += (tuple(sorted(getattr(request, "presentation_profile", {}).items())),)
+        key += (
+            tuple(sorted(getattr(request, "presentation_profile", {}).items())),
+            bool(getattr(request, "include_edit_handles", True)),
+        )
     return key
 
 

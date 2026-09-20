@@ -351,7 +351,12 @@ class PlanContextualRenderingAPI:
                     "contextual_edit_representation_source_{}".format(source_name),
                     representation_source=source,
                 ):
-                    self._refresh_source(source)
+                    reuse_handles = None
+                    if opening is not None and source is not opening:
+                        current = self._renderer.representation_for(source)
+                        if current is not None:
+                            reuse_handles = tuple(current.edit_handles)
+                    self._refresh_source(source, reuse_edit_handles=reuse_handles)
             # A contextual edit replaces geometry for sources already owned by
             # this renderer. It does not change storey membership or native
             # visibility, so rescanning the full document here is redundant.
@@ -384,10 +389,21 @@ class PlanContextualRenderingAPI:
                 self._sources.discard(source)
         self.reconcile_replaced_source_visibility()
 
-    def _refresh_source(self, source):
+    def _refresh_source(self, source, reuse_edit_handles=None):
         representation = None
         if self._is_in_active_context(source):
-            representation = self._representation_for(source)
+            request = None
+            if reuse_edit_handles is not None:
+                request = (
+                    self._session.representation_request.request.with_edit_handles(False)
+                )
+            representation = self._representation_for(
+                source,
+                request=request,
+                cache_result=reuse_edit_handles is None,
+            )
+            if representation is not None and reuse_edit_handles is not None:
+                representation.edit_handles.extend(reuse_edit_handles)
         if representation is None:
             if self._requires_representation(source):
                 self._pending_sources.add(source)
@@ -407,8 +423,10 @@ class PlanContextualRenderingAPI:
         self._pending_sources.discard(representation.source)
         self._ready = not self._pending_sources
 
-    def _representation_for(self, obj):
-        return self._session.overlays.geometry.get_contextual_representation(obj)
+    def _representation_for(self, obj, request=None, *, cache_result=True):
+        return self._session.overlays.geometry.get_contextual_representation(
+            obj, request=request, cache_result=cache_result
+        )
 
     def _is_in_active_context(self, obj):
         return self._session.representation_request.includes_object(obj)

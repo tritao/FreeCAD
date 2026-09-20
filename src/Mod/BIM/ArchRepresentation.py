@@ -206,6 +206,7 @@ class RepresentationRequest:
         target_offset=None,
         representation_mode=RepresentationMode.PART_SHAPE,
         presentation_profile=None,
+        include_edit_handles=True,
     ):
         if not isinstance(purpose, RepresentationPurpose):
             purpose = RepresentationPurpose(purpose)
@@ -220,6 +221,23 @@ class RepresentationRequest:
             representation_mode = RepresentationMode(representation_mode)
         self.representation_mode = representation_mode
         self.presentation_profile = dict(presentation_profile or {})
+        self.include_edit_handles = bool(include_edit_handles)
+
+    def with_edit_handles(self, include_edit_handles):
+        """Return an equivalent request with the requested handle policy."""
+
+        return RepresentationRequest(
+            purpose=self.purpose,
+            reference_frame=self.reference_frame,
+            cut_range=self.cut_range,
+            projection_range=self.projection_range,
+            source=self.source,
+            cut_offset=self.cut_offset,
+            target_offset=self.target_offset,
+            representation_mode=self.representation_mode,
+            presentation_profile=self.presentation_profile,
+            include_edit_handles=include_edit_handles,
+        )
 
 
 class RepresentationSource:

@@ -338,7 +338,7 @@ def get_wall_representation(session, wall):
     )
 
 
-def get_contextual_representation(session, obj):
+def get_contextual_representation(session, obj, request=None, *, cache_result=True):
     """Request an object-owned representation for the active BIM request.
 
     Resolution is delegated to the shared architectural-view projector. This
@@ -348,12 +348,15 @@ def get_contextual_representation(session, obj):
     semantic_obj = session.visibility.get_plan_semantic_object(obj)
     if semantic_obj is None:
         return None
-    request = _active_representation_request(session)
+    use_overlay_cache = request is None
+    if use_overlay_cache:
+        request = _active_representation_request(session)
 
-    cached = representation_cache.get_cached_representation(semantic_obj, request)
-    if cached is not None:
-        _perf_count(session, "document_representation_cache_hits")
-        return cached
+    if cache_result:
+        cached = representation_cache.get_cached_representation(semantic_obj, request)
+        if cached is not None:
+            _perf_count(session, "document_representation_cache_hits")
+            return cached
 
     def compute(source):
         try:
@@ -361,13 +364,16 @@ def get_contextual_representation(session, obj):
         except (ArchRepresentation.RepresentationUnavailable, RuntimeError, TypeError):
             return None
 
-    representation = get_cached_plan_overlay_geometry(
-        session,
-        "representation",
-        semantic_obj,
-        "representation",
-        compute,
-    )
+    if use_overlay_cache:
+        representation = get_cached_plan_overlay_geometry(
+            session,
+            "representation",
+            semantic_obj,
+            "representation",
+            compute,
+        )
+    else:
+        representation = compute(semantic_obj)
     if representation is None:
         return None
     if not any(
@@ -375,7 +381,11 @@ def get_contextual_representation(session, obj):
         for name in ("cut_geometry", "projected_geometry", "snap_geometry", "edit_handles")
     ):
         return None
-    return representation_cache.cache_representation(semantic_obj, request, representation)
+    if cache_result:
+        return representation_cache.cache_representation(
+            semantic_obj, request, representation
+        )
+    return representation
 
 
 def get_wall_snap_geometry(session, wall):

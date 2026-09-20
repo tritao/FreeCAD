@@ -1520,7 +1520,8 @@ class _Wall(ArchComponent.Component):
             representation.plan_contours = ArchPlanContours.contours_from_representation(
                 representation
             )
-        self._add_edit_handles(representation, obj, request)
+        if getattr(request, "include_edit_handles", True):
+            self._add_edit_handles(representation, obj, request)
         return representation
 
     def _cut_face_materials(self, obj, faces):

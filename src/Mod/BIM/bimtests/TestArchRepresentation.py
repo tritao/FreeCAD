@@ -290,6 +290,23 @@ class TestArchRepresentation(unittest.TestCase):
             representation_cache.geometry_request_key(changed),
         )
 
+    def test_representation_request_key_separates_edit_handle_policy(self):
+        from bimviews import representation_cache
+
+        request = RepresentationRequest(purpose=RepresentationPurpose.PLAN)
+        geometry_only = request.with_edit_handles(False)
+
+        self.assertTrue(request.include_edit_handles)
+        self.assertFalse(geometry_only.include_edit_handles)
+        self.assertNotEqual(
+            representation_cache.representation_request_key(request),
+            representation_cache.representation_request_key(geometry_only),
+        )
+        self.assertEqual(
+            representation_cache.geometry_request_key(request),
+            representation_cache.geometry_request_key(geometry_only),
+        )
+
     def test_plan_request_comparison_includes_presentation_profile(self):
         from bimplan.representation_request import _request_values_equal
 
@@ -1045,6 +1062,23 @@ class TestArchRepresentation(unittest.TestCase):
         self.assertEqual("WallMove", move_handle.operation.interaction_intent)
         endpoints = wall.Proxy.calc_endpoints(wall)
         self.assertTrue(move_handle.point.isEqual((endpoints[0] + endpoints[1]) * 0.5, 1e-7))
+
+    def test_wall_plan_representation_can_omit_edit_handles(self):
+        document = FreeCAD.newDocument("WallGeometryOnlyRepresentationTest")
+        self.addCleanup(FreeCAD.closeDocument, document.Name)
+        wall = Arch.makeWall(length=4000, width=200, height=3000)
+        document.recompute()
+
+        request = RepresentationRequest(
+            purpose="Plan",
+            cut_offset=1000,
+            target_offset=0,
+            include_edit_handles=False,
+        )
+        representation = wall.Proxy.getRepresentation(wall, request)
+
+        self.assertTrue(representation.cut_geometry)
+        self.assertFalse(representation.edit_handles)
 
     def test_joint_handle_anchors_to_offset_miter_seam(self):
         document = FreeCAD.newDocument("OffsetMiterHandleTest")

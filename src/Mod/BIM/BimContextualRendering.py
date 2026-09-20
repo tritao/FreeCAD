@@ -269,6 +269,11 @@ class ContextualRepresentationRenderer:
     def sources(self):
         return tuple(self._representations)
 
+    def representation_for(self, source):
+        """Return the currently installed representation for *source*."""
+
+        return self._representations.get(source)
+
     def query_snap(self, point, tolerance, request=None):
         """Resolve a semantic snap against this viewer's live representations."""
 
