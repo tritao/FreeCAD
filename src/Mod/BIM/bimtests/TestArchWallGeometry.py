@@ -20,6 +20,8 @@
 
 """Direct tests for the wall path and section value objects."""
 
+from dataclasses import replace
+
 import ArchWallGeometry
 import ArchWallExact
 import FreeCAD as App
@@ -266,3 +268,57 @@ class TestArchWallGeometry(TestArchBase.TestArchBase):
             ),
         )
         self.assertIsNone(ArchWallExact.compile_wall_recipe(nonvertical))
+
+    def test_exact_compiler_reuses_unchanged_boundary_faces(self):
+        """A resized opening rebuilds only boundary faces whose geometry changed."""
+
+        section = ArchWallGeometry.WallSection(
+            (ArchWallGeometry.WallSectionLayer(200, -100, 100),)
+        )
+        opening = ArchWallGeometry.WallOpeningRecipe(
+            object(), 900, 1700, -100, 100, 0, 2100
+        )
+        recipe = ArchWallGeometry.WallGeometryRecipe(
+            axis_start=App.Vector(0, 0, 0),
+            axis_end=App.Vector(3000, 0, 0),
+            lateral=App.Vector(0, 1, 0),
+            section=section,
+            z_min=0,
+            z_max=2500,
+            trim_planes=(
+                ArchWallGeometry.WallTrimPlane(
+                    "End", App.Vector(2900, 0, 0), App.Vector(1, 0, 0)
+                ),
+            ),
+            openings=(opening,),
+        )
+
+        initial = ArchWallExact.compile_wall_recipe(recipe)
+        resized_recipe = replace(
+            recipe,
+            openings=(replace(opening, u_max=1600),),
+        )
+        incremental = ArchWallExact.compile_wall_recipe(
+            resized_recipe, previous=initial
+        )
+        fresh = ArchWallExact.compile_wall_recipe(resized_recipe)
+
+        self.assertIsNotNone(initial)
+        self.assertIsNotNone(incremental)
+        self.assertTrue(incremental.shape.isValid())
+        initial_faces = dict(initial.boundary_components)
+        incremental_faces = dict(incremental.boundary_components)
+        reused_signatures = set(initial_faces).intersection(incremental_faces)
+        self.assertTrue(reused_signatures)
+        self.assertTrue(
+            all(
+                incremental_faces[signature] is initial_faces[signature]
+                for signature in reused_signatures
+            )
+        )
+        self.assertAlmostEqual(
+            fresh.shape.Volume, incremental.shape.Volume, delta=1e-3
+        )
+        self.assertAlmostEqual(
+            0.0, fresh.shape.distToShape(incremental.shape)[0], delta=1e-7
+        )

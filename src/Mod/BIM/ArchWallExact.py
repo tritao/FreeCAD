@@ -26,9 +26,10 @@ class WallExactCompilation:
     vertical_area: float
     horizontal_area: float
     perimeter_length: float
+    boundary_components: tuple = ()
 
 
-def compile_straight_wall(wall, proxy, geometry_shape=None):
+def compile_straight_wall(wall, proxy, geometry_shape=None, previous=None):
     """Compile a supported wall without invoking a three-dimensional boolean."""
 
     if (
@@ -44,10 +45,10 @@ def compile_straight_wall(wall, proxy, geometry_shape=None):
     recipe = ArchPlanAnalytic.straight_wall_geometry_recipe(
         wall, proxy, geometry_shape=geometry_shape
     )
-    return compile_wall_recipe(recipe) if recipe is not None else None
+    return compile_wall_recipe(recipe, previous=previous) if recipe is not None else None
 
 
-def compile_wall_recipe(recipe, tolerance=1e-7):
+def compile_wall_recipe(recipe, tolerance=1e-7, previous=None):
     """Build one perforated wall solid directly, or return ``None``.
 
     Supported walls are horizontal, straight and single-layer. End trims must
@@ -140,7 +141,7 @@ def compile_wall_recipe(recipe, tolerance=1e-7):
             return compilation
     if recipe.trim_planes or boundary_openings:
         return _compile_boundary_shell(
-            recipe, axis, lateral, footprint, side_extents, tolerance
+            recipe, axis, lateral, footprint, side_extents, tolerance, previous
         )
 
     import Part
@@ -274,7 +275,9 @@ def _polygon_u_extents_at_v(polygon, target_v, tolerance):
     return min(intersections), max(intersections)
 
 
-def _compile_boundary_shell(recipe, axis, lateral, footprint, side_extents, tolerance):
+def _compile_boundary_shell(
+    recipe, axis, lateral, footprint, side_extents, tolerance, previous=None
+):
     """Build joined or bottom-open wall geometry without a three-dimensional BOP."""
 
     import Part
@@ -293,12 +296,21 @@ def _compile_boundary_shell(recipe, axis, lateral, footprint, side_extents, tole
         return Part.makePolygon((*values, values[0]))
 
     faces = []
+    signatures = []
+    reusable = dict(previous.boundary_components) if previous is not None else {}
 
     def add_face(points, holes=()):
+        signature = _face_signature(points, holes, tolerance)
+        cached = reusable.get(signature)
+        if cached is not None:
+            faces.append(cached)
+            signatures.append(signature)
+            return
         outer = wire(points)
         inner = tuple(wire(hole, reverse=True) for hole in holes)
         face = Part.Face([outer, *inner]) if inner else Part.Face(outer)
         faces.append(face)
+        signatures.append(signature)
 
     top = tuple(point(u, v, recipe.z_max) for u, v in footprint)
     add_face(top)
@@ -402,7 +414,27 @@ def _compile_boundary_shell(recipe, axis, lateral, footprint, side_extents, tole
         return None
     if shape.isNull() or not shape.isValid() or len(shape.Solids) != 1:
         return None
-    return _compilation(shape, recipe, axis, tolerance)
+    return _compilation(
+        shape,
+        recipe,
+        axis,
+        tolerance,
+        boundary_components=tuple(zip(signatures, faces)),
+    )
+
+
+def _face_signature(points, holes, tolerance):
+    """Return a stable geometric key for one compiler-owned boundary face."""
+
+    scale = 1.0 / tolerance
+
+    def polygon(values):
+        return tuple(
+            tuple(round(coordinate * scale) for coordinate in point)
+            for point in values
+        )
+
+    return (polygon(points), tuple(polygon(hole) for hole in holes))
 
 
 def _elevation_outline(u_min, u_max, z_min, z_max, bottom_openings):
@@ -489,7 +521,14 @@ def _classify_faces(shape, recipe, axis, tolerance):
     return tuple(roles)
 
 
-def _compilation(shape, recipe, axis, tolerance):
+def _compilation(
+    shape,
+    recipe,
+    axis,
+    tolerance,
+    *,
+    boundary_components=(),
+):
     roles = _classify_faces(shape, recipe, axis, tolerance)
     faces_by_index = {
         index: face for index, face in enumerate(shape.Faces, start=1)
@@ -513,4 +552,5 @@ def _compilation(shape, recipe, axis, tolerance):
         vertical_area=vertical_area,
         horizontal_area=top_face.Area,
         perimeter_length=top_face.OuterWire.Length,
+        boundary_components=boundary_components,
     )

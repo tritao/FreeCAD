@@ -332,6 +332,8 @@ class _Wall(ArchComponent.Component):
         self._invalidating_wall_relations = False
         self._assigning_wall_type = False
         self._updating_type_overrides = False
+        self._exact_compilation = None
+        self._previous_exact_compilation = None
         self.setProperties(obj)
         obj.IfcType = "Wall"
 
@@ -668,6 +670,8 @@ class _Wall(ArchComponent.Component):
         self._invalidating_wall_relations = False
         self._assigning_wall_type = False
         self._updating_type_overrides = False
+        self._exact_compilation = None
+        self._previous_exact_compilation = None
         if state == None:
             return
         elif state[0] == "W":  # state[1] == 'a', behaviour before 2024.11.28
@@ -690,6 +694,8 @@ class _Wall(ArchComponent.Component):
         # Relation invalidation state is runtime-only and is not serialized.
         self._resolved_geometry_signatures = {}
         self._invalidating_wall_relations = False
+        self._exact_compilation = None
+        self._previous_exact_compilation = None
         self.setProperties(obj)
 
         # In V1.0 the handling of wall normals has changed. As a result existing
@@ -763,7 +769,13 @@ class _Wall(ArchComponent.Component):
         a mesh, just copy the mesh.
         """
 
+        previous_exact_compilation = getattr(self, "_exact_compilation", None)
+        if previous_exact_compilation is None:
+            previous_exact_compilation = getattr(
+                self, "_previous_exact_compilation", None
+            )
         self._exact_compilation = None
+        self._previous_exact_compilation = None
         if self.clone(obj):
             return
 
@@ -900,7 +912,10 @@ class _Wall(ArchComponent.Component):
         compiler_shape = base.copy()
         compiler_shape.Placement = pl.multiply(compiler_shape.Placement)
         compilation = ArchWallExact.compile_straight_wall(
-            obj, self, geometry_shape=compiler_shape
+            obj,
+            self,
+            geometry_shape=compiler_shape,
+            previous=previous_exact_compilation,
         )
         if compilation is not None:
             # Recipes and compiler results use document coordinates. Convert
@@ -1043,6 +1058,8 @@ class _Wall(ArchComponent.Component):
             The name of the property that has changed.
         """
 
+        if getattr(self, "_exact_compilation", None) is not None:
+            self._previous_exact_compilation = self._exact_compilation
         self._exact_compilation = None
 
         if prop == "WallType" and not self._assigning_wall_type:

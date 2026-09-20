@@ -560,6 +560,11 @@ class TestArchWall(TestArchBase.TestArchBase):
 
         wall.Width = 250.0
         self.assertIsNone(wall.Proxy._exact_compilation)
+        self.assertIs(compilation, wall.Proxy._previous_exact_compilation)
+
+        self.document.recompute()
+        self.assertIsNotNone(wall.Proxy._exact_compilation)
+        self.assertIsNone(wall.Proxy._previous_exact_compilation)
 
     def test_multilayer_plan_faces_preserve_layer_material_ownership(self):
         first_material = Arch.makeMaterial(name="FirstLayerMaterial")
