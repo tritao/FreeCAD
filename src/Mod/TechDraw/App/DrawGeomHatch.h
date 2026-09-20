@@ -34,6 +34,7 @@
 
 class TopoDS_Edge;
 class TopoDS_Face;
+class TopoDS_Shape;
 class Bnd_Box;
 
 namespace TechDraw
@@ -87,6 +88,11 @@ public:
                                                 std::vector<LineSet> lineSets,
                                                 TopoDS_Face face,
                                                 double scale , double hatchRotation = 0.0,
+                                                Base::Vector3d hatchOffset = Base::Vector3d(0.0, 0.0, 0.0));
+    static std::vector<LineSet> getTrimmedLines(DrawViewPart* source,
+                                                std::vector<LineSet> lineSets,
+                                                const TopoDS_Shape& faces,
+                                                double scale, double hatchRotation = 0.0,
                                                 Base::Vector3d hatchOffset = Base::Vector3d(0.0, 0.0, 0.0));
     static std::vector<LineSet> getTrimmedLinesSection(DrawViewSection* source,
                                                                 std::vector<LineSet> lineSets,

@@ -84,13 +84,13 @@ def makeDistanceDim3d(
     ...
 
 def makeGeomHatch(
-    face: Face,
+    shape: Shape,
     scale: float = 1.0,
     patName: str = "",
     patFile: str = "",
     /,
 ) -> Compound | None:
-    """Create a compound of hatch edges trimmed to one face."""
+    """Create a compound of hatch edges trimmed to all faces in a shape."""
     ...
 
 # Projection helpers

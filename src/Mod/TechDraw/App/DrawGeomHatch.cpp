@@ -25,16 +25,24 @@
 
 # include <iomanip>
 # include <limits>
+# include <mutex>
 # include <sstream>
+# include <unordered_map>
+# include <algorithm>
+# include <cmath>
 
 #include <Bnd_Box.hxx>
+#include <BRepAdaptor_Curve.hxx>
 #include <BRep_Builder.hxx>
+#include <BRep_Tool.hxx>
 #include <Mod/Part/App/FCBRepAlgoAPI_Common.h>
 #include <BRepBndLib.hxx>
 #include <BRepBuilderAPI_MakeEdge.hxx>
 #include <BRepBuilderAPI_MakeFace.hxx>
 #include <BRepBuilderAPI_MakeVertex.hxx>
 #include <BRepBuilderAPI_Transform.hxx>
+#include <BRepTools_WireExplorer.hxx>
+#include <GeomAbs_CurveType.hxx>
 #include <gp_Pln.hxx>
 #include <gp_Pnt.hxx>
 #include <Precision.hxx>
@@ -52,6 +60,7 @@
 #include <Base/Converter.h>
 #include <Base/FileInfo.h>
 #include <Base/Parameter.h>
+#include <Base/TimeInfo.h>
 #include <Base/Tools.h>
 
 #include "DrawGeomHatch.h"
@@ -67,6 +76,198 @@
 
 using namespace TechDraw;
 using DU = DrawUtil;
+
+namespace {
+
+struct Point2d
+{
+    double x;
+    double y;
+};
+
+using PolygonLoop = std::vector<Point2d>;
+using PolygonFace = std::vector<PolygonLoop>;
+
+Point2d subtract2d(const Point2d& first, const Point2d& second)
+{
+    return {first.x - second.x, first.y - second.y};
+}
+
+double cross2d(const Point2d& first, const Point2d& second)
+{
+    return first.x * second.y - first.y * second.x;
+}
+
+bool pointInLoop(const Point2d& point, const PolygonLoop& loop)
+{
+    bool inside = false;
+    for (std::size_t index = 0, previous = loop.size() - 1; index < loop.size();
+         previous = index++) {
+        const auto& first = loop[index];
+        const auto& second = loop[previous];
+        const bool crosses = (first.y > point.y) != (second.y > point.y);
+        if (crosses
+            && point.x
+                < (second.x - first.x) * (point.y - first.y) / (second.y - first.y)
+                    + first.x) {
+            inside = !inside;
+        }
+    }
+    return inside;
+}
+
+bool pointInFace(const Point2d& point, const PolygonFace& face)
+{
+    bool inside = false;
+    for (const auto& loop : face) {
+        if (pointInLoop(point, loop)) {
+            inside = !inside;
+        }
+    }
+    return inside;
+}
+
+bool collectPlanarPolygonFaces(const TopoDS_Shape& shape, std::vector<PolygonFace>& polygons)
+{
+    TopTools_IndexedMapOfShape faceMap;
+    TopExp::MapShapes(shape, TopAbs_FACE, faceMap);
+    for (int faceIndex = 1; faceIndex <= faceMap.Extent(); ++faceIndex) {
+        const auto face = TopoDS::Face(faceMap(faceIndex));
+        PolygonFace polygonFace;
+        TopTools_IndexedMapOfShape wireMap;
+        TopExp::MapShapes(face, TopAbs_WIRE, wireMap);
+        for (int wireIndex = 1; wireIndex <= wireMap.Extent(); ++wireIndex) {
+            const auto wire = TopoDS::Wire(wireMap(wireIndex));
+            PolygonLoop loop;
+            for (BRepTools_WireExplorer explorer(wire, face); explorer.More(); explorer.Next()) {
+                const auto edge = explorer.Current();
+                if (BRepAdaptor_Curve(edge).GetType() != GeomAbs_Line) {
+                    return false;
+                }
+                const auto point = BRep_Tool::Pnt(explorer.CurrentVertex());
+                if (std::abs(point.Z()) > Precision::Confusion()) {
+                    return false;
+                }
+                loop.push_back({point.X(), point.Y()});
+            }
+            if (loop.size() < 3) {
+                return false;
+            }
+            polygonFace.push_back(std::move(loop));
+        }
+        if (polygonFace.empty()) {
+            return false;
+        }
+        polygons.push_back(std::move(polygonFace));
+    }
+    return !polygons.empty();
+}
+
+std::vector<TopoDS_Edge> clipLineToPolygons(const TopoDS_Edge& candidate,
+                                            const std::vector<PolygonFace>& polygons,
+                                            const Base::Vector3d& offset)
+{
+    TopoDS_Vertex firstVertex;
+    TopoDS_Vertex lastVertex;
+    TopExp::Vertices(candidate, firstVertex, lastVertex, true);
+    const auto first3d = BRep_Tool::Pnt(firstVertex);
+    const auto last3d = BRep_Tool::Pnt(lastVertex);
+    const Point2d first {first3d.X() + offset.x, first3d.Y() + offset.y};
+    const Point2d last {last3d.X() + offset.x, last3d.Y() + offset.y};
+    const Point2d direction = subtract2d(last, first);
+    std::vector<double> parameters {0.0, 1.0};
+    for (const auto& face : polygons) {
+        for (const auto& loop : face) {
+            for (std::size_t index = 0; index < loop.size(); ++index) {
+                const auto& edgeStart = loop[index];
+                const auto& edgeEnd = loop[(index + 1) % loop.size()];
+                const Point2d boundary = subtract2d(edgeEnd, edgeStart);
+                const double denominator = cross2d(direction, boundary);
+                if (std::abs(denominator) <= Precision::Confusion()) {
+                    continue;
+                }
+                const Point2d delta = subtract2d(edgeStart, first);
+                const double parameter = cross2d(delta, boundary) / denominator;
+                const double boundaryParameter = cross2d(delta, direction) / denominator;
+                if (parameter > 0.0 && parameter < 1.0 && boundaryParameter >= 0.0
+                    && boundaryParameter <= 1.0) {
+                    parameters.push_back(parameter);
+                }
+            }
+        }
+    }
+    std::sort(parameters.begin(), parameters.end());
+    parameters.erase(std::unique(parameters.begin(), parameters.end(), [](double left, double right) {
+                         return std::abs(left - right) <= Precision::Confusion();
+                     }),
+                     parameters.end());
+    std::vector<TopoDS_Edge> result;
+    for (std::size_t index = 1; index < parameters.size(); ++index) {
+        const double lower = parameters[index - 1];
+        const double upper = parameters[index];
+        if (upper - lower <= Precision::Confusion()) {
+            continue;
+        }
+        const double middle = (lower + upper) * 0.5;
+        const Point2d midpoint {first.x + middle * direction.x, first.y + middle * direction.y};
+        if (!std::any_of(polygons.begin(), polygons.end(), [&](const auto& face) {
+                return pointInFace(midpoint, face);
+            })) {
+            continue;
+        }
+        result.push_back(DrawGeomHatch::makeLine(
+            Base::Vector3d(
+                first.x + lower * direction.x, first.y + lower * direction.y, 0.0),
+            Base::Vector3d(
+                first.x + upper * direction.x, first.y + upper * direction.y, 0.0)));
+    }
+    return result;
+}
+
+bool makePlanarPolygonHatch(const TopoDS_Shape& faces,
+                            std::vector<LineSet>& lineSets,
+                            const Bnd_Box& box,
+                            double scale,
+                            double rotation,
+                            const Base::Vector3d& offset,
+                            std::vector<LineSet>& result)
+{
+    std::vector<PolygonFace> polygons;
+    if (!collectPlanarPolygonFaces(faces, polygons)) {
+        return false;
+    }
+    for (auto& sourceSet : lineSets) {
+        auto outputSet = sourceSet;
+        const auto candidates = DrawGeomHatch::makeEdgeOverlay(
+            sourceSet.getPATLineSpec(), box, scale, rotation);
+        std::vector<TopoDS_Edge> edges;
+        for (const auto& candidate : candidates) {
+            auto clipped = clipLineToPolygons(candidate, polygons, offset);
+            edges.insert(edges.end(), clipped.begin(), clipped.end());
+        }
+        if (edges.empty()) {
+            continue;
+        }
+        Bnd_Box resultBox;
+        std::vector<TechDraw::BaseGeomPtr> geometries;
+        geometries.reserve(edges.size());
+        for (const auto& edge : edges) {
+            BRepBndLib::AddOptimal(edge, resultBox);
+            auto geometry = TechDraw::BaseGeom::baseFactory(edge);
+            if (!geometry) {
+                return false;
+            }
+            geometries.push_back(geometry);
+        }
+        outputSet.setBBox(resultBox);
+        outputSet.setEdges(edges);
+        outputSet.setGeoms(geometries);
+        result.push_back(std::move(outputSet));
+    }
+    return true;
+}
+
+}  // namespace
 
 App::PropertyFloatConstraint::Constraints DrawGeomHatch::scaleRange = {
     Precision::Confusion(), std::numeric_limits<double>::max(), (0.1)}; // increment by 0.1
@@ -231,7 +432,20 @@ std::vector<PATLineSpec> DrawGeomHatch::getDecodedSpecsFromFile(std::string file
         Base::Console().error("DrawGeomHatch::getDecodedSpecsFromFile not able to open %s!\n", fileSpec.c_str());
         return std::vector<PATLineSpec>();
     }
-    return PATLineSpec::getSpecsForPattern(fileSpec, myPattern);
+    using CacheStamp = std::pair<std::time_t, unsigned int>;
+    const CacheStamp stamp {fi.lastModified().getTime_t(), fi.size()};
+    const std::string key = fileSpec + '\n' + myPattern;
+    using CacheEntry = std::pair<CacheStamp, std::vector<PATLineSpec>>;
+    static std::mutex cacheMutex;
+    static std::unordered_map<std::string, CacheEntry> cache;
+    std::scoped_lock lock(cacheMutex);
+    const auto found = cache.find(key);
+    if (found != cache.end() && found->second.first == stamp) {
+        return found->second.second;
+    }
+    auto specs = PATLineSpec::getSpecsForPattern(fileSpec, myPattern);
+    cache.insert_or_assign(key, CacheEntry {stamp, specs});
+    return specs;
 }
 
 std::vector<LineSet>  DrawGeomHatch::getTrimmedLines(int iFace)   //get the trimmed hatch lines for face i
@@ -306,6 +520,17 @@ std::vector<LineSet> DrawGeomHatch::getTrimmedLines(DrawViewPart* source,
                                                     double hatchRotation,
                                                     Base::Vector3d hatchOffset)
 {
+    return getTrimmedLines(source, std::move(lineSets), TopoDS_Shape(f), scale,
+                           hatchRotation, hatchOffset);
+}
+
+std::vector<LineSet> DrawGeomHatch::getTrimmedLines(DrawViewPart* source,
+                                                    std::vector<LineSet> lineSets,
+                                                    const TopoDS_Shape& faces,
+                                                    double scale,
+                                                    double hatchRotation,
+                                                    Base::Vector3d hatchOffset)
+{
 //    Base::Console().message("DGH::getTrimmedLines() - rotation: %.3f hatchOffset: %s\n", hatchRotation, DrawUtil::formatVector(hatchOffset).c_str());
     (void)source;
     std::vector<LineSet> result;
@@ -314,7 +539,7 @@ std::vector<LineSet> DrawGeomHatch::getTrimmedLines(DrawViewPart* source,
         return result;
     }
 
-    TopoDS_Face face = f;
+    const TopoDS_Shape& face = faces;
 
     Bnd_Box bBox;
     BRepBndLib::AddOptimal(face, bBox);
@@ -323,6 +548,11 @@ std::vector<LineSet> DrawGeomHatch::getTrimmedLines(DrawViewPart* source,
     auto cornerMin = bBox.CornerMin().Translated(-translateVector);
     auto cornerMax = bBox.CornerMax().Translated(-translateVector);
     bBox = Bnd_Box(cornerMin, cornerMax);
+
+    if (makePlanarPolygonHatch(
+            faces, lineSets, bBox, scale, hatchRotation, hatchOffset, result)) {
+        return result;
+    }
 
     for (auto& ls: lineSets) {
         PATLineSpec hl = ls.getPATLineSpec();

@@ -27,11 +27,14 @@
 # include <BRepBuilderAPI_Transform.hxx>
 # include <gp_Trsf.hxx>
 # include <gp_Vec.hxx>
+# include <TopAbs_ShapeEnum.hxx>
+# include <TopExp.hxx>
 # include <TopoDS.hxx>
 # include <TopoDS_Compound.hxx>
 # include <TopoDS_Edge.hxx>
 # include <TopoDS_Face.hxx>
 # include <TopoDS_Wire.hxx>
+# include <TopTools_IndexedMapOfShape.hxx>
 
 
 #include <boost_regex.hpp>
@@ -159,7 +162,7 @@ public:
             "makeDistanceDim(DrawViewPart, dimType, 3dFromPoint, 3dToPoint) -- draw a Length dimension between fromPoint to toPoint.  FromPoint and toPoint are unscaled 3d model points. dimType is one of ['Distance', 'DistanceX', 'DistanceY'."
         );
         add_varargs_method("makeGeomHatch", &Module::makeGeomHatch,
-            "makeGeomHatch(face, [patScale], [patName], [patFile]) -- draw a geom hatch on a given face, using optionally the given scale (default 1) and a given pattern name (ex. Diamond) and .pat file (the default pattern name and/or .pat files set in preferences are used if none are given). Returns a Part compound shape."
+            "makeGeomHatch(shape, [patScale], [patName], [patFile]) -- draw a geom hatch on the faces of a shape, using optionally the given scale (default 1) and a given pattern name (ex. Diamond) and .pat file (the default pattern name and/or .pat files set in preferences are used if none are given). Returns a Part compound shape."
         );
         add_varargs_method("project", &Module::project,
             "[visiblyG0, visiblyG1, hiddenG0, hiddenG1] = project(TopoShape[, App.Vector Direction, string type])\n"
@@ -1013,7 +1016,7 @@ private:
         const char* pPatName = {nullptr};
         const char* pPatFile = {nullptr};
         TechDraw::DrawViewPart* source = nullptr;
-        TopoDS_Face face;
+        TopoDS_Shape faces;
 
         if (!PyArg_ParseTuple(args.ptr(), "O|dss", &pFace, &scale, &pPatName, &pPatFile)) {
             throw Py::TypeError("expected (face, [scale], [patName], [patFile])");
@@ -1022,12 +1025,16 @@ private:
         std::string patName = std::string(pPatName);
         std::string patFile = std::string(pPatFile);
 
-        if (PyObject_TypeCheck(pFace, &(TopoShapeFacePy::Type))) {
-            const TopoDS_Shape& shape = static_cast<TopoShapePy*>(pFace)->getTopoShapePtr()->getShape();
-            face = TopoDS::Face(shape);
+        if (PyObject_TypeCheck(pFace, &(TopoShapePy::Type))) {
+            faces = static_cast<TopoShapePy*>(pFace)->getTopoShapePtr()->getShape();
+            TopTools_IndexedMapOfShape faceMap;
+            TopExp::MapShapes(faces, TopAbs_FACE, faceMap);
+            if (faceMap.IsEmpty()) {
+                throw Py::TypeError("first argument must contain at least one face");
+            }
         }
         else {
-            throw Py::TypeError("first argument must be a Part.Face instance");
+            throw Py::TypeError("first argument must be a Part.Shape containing faces");
         }
         if (patName.empty()) {
             patName = TechDraw::DrawGeomHatch::prefGeomHatchName();
@@ -1047,7 +1054,7 @@ private:
             lSet.setPATLineSpec(hLine);
             lineSets.push_back(lSet);
         }
-        std::vector<LineSet> lsresult = TechDraw::DrawGeomHatch::getTrimmedLines(source, lineSets, face, scale);
+        std::vector<LineSet> lsresult = TechDraw::DrawGeomHatch::getTrimmedLines(source, lineSets, faces, scale);
         if (!lsresult.empty()) {
             /* below code returns a list of edges, but probably slower to handle
             Py::List result;
