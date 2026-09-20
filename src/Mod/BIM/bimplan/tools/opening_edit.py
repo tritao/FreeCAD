@@ -72,6 +72,18 @@ def queue_prime_wall_hosted_openings_cache(session):
     return plan_hosted_openings.queue_prime_wall_hosted_openings_cache(session)
 
 
+def queue_warm_exact_compilations(session):
+    from bimplan.tools import hosted_openings as plan_hosted_openings
+
+    return plan_hosted_openings.queue_warm_exact_compilations(session)
+
+
+def cancel_exact_compilation_warmup(session):
+    from bimplan.tools import hosted_openings as plan_hosted_openings
+
+    return plan_hosted_openings.cancel_exact_compilation_warmup(session)
+
+
 def prime_wall_hosted_openings_cache(session):
     from bimplan.tools import hosted_openings as plan_hosted_openings
 
@@ -206,6 +218,12 @@ class PlanOpeningsAPI(_SessionAPI):
 
     def queue_prime_wall_hosted_openings_cache(self, *args, **kwargs):
         return queue_prime_wall_hosted_openings_cache(self.session, *args, **kwargs)
+
+    def queue_warm_exact_compilations(self):
+        return queue_warm_exact_compilations(self.session)
+
+    def cancel_exact_compilation_warmup(self):
+        return cancel_exact_compilation_warmup(self.session)
 
     def prime_wall_hosted_openings_cache(self, *args, **kwargs):
         return prime_wall_hosted_openings_cache(self.session, *args, **kwargs)

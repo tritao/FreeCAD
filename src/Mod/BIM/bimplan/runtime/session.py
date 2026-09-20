@@ -540,6 +540,8 @@ class BIMEditingSession:
                     self.ensure_task_panel()
             with self.performance.plan_perf_trace_span("queue_prime_wall_hosted_openings_cache"):
                 self.openings.queue_prime_wall_hosted_openings_cache()
+            with self.performance.plan_perf_trace_span("queue_warm_exact_compilations"):
+                self.openings.queue_warm_exact_compilations()
             with self.performance.plan_perf_trace_span("queue_prime_hover_pick_caches"):
                 self.selection.hover.queue_prime_hover_pick_caches()
             with self.performance.plan_perf_trace_span("install_command_gate"):

@@ -268,6 +268,8 @@ class PlanOpeningTransientState:
     selected_opening_hard_refresh_queued: bool = False
     opening_host_recompute_queued: bool = False
     opening_host_recompute_running: bool = False
+    exact_compilation_warm_generation: int = 0
+    exact_compilation_warm_queue: tuple = ()
     symbol_edit_preview_trackers: list = field(default_factory=list)
 
 

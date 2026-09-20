@@ -144,6 +144,7 @@ def _cancel_current_tool_for_shutdown(session):
 
 
 def _cleanup_begin_teardown(session):
+    session.openings.cancel_exact_compilation_warmup()
     session.view_grid.close()
     session.view_rulers.close()
     session.status_text.clear_input_hints()
@@ -164,6 +165,7 @@ def _cleanup_begin_teardown(session):
 
 
 def _cleanup_shutdown(session, *, teardown=False):
+    session.openings.cancel_exact_compilation_warmup()
     session.view_grid.close()
     session.view_rulers.close()
     session.status_text.clear_input_hints()

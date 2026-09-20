@@ -125,6 +125,66 @@ def prime_wall_hosted_openings_cache(session):
     )
 
 
+def queue_warm_exact_compilations(session):
+    """Prepare exact opening metadata incrementally after Plan activation."""
+
+    if session.lifecycle_state.tearing_down or not session.doc:
+        return
+    try:
+        import FreeCADGui
+    except ImportError:
+        return
+    state = session.opening_transient_state
+    state.exact_compilation_warm_generation += 1
+    generation = state.exact_compilation_warm_generation
+    state.exact_compilation_warm_queue = tuple(
+        opening
+        for opening in session.openings.get_plan_opening_instances()
+        if session.representation_request.includes_object(opening)
+        and getattr(getattr(opening, "Proxy", None), "_exact_compilation", None) is None
+        and callable(
+            getattr(getattr(opening, "Proxy", None), "ensureExactCompilation", None)
+        )
+    )
+    if state.exact_compilation_warm_queue:
+        FreeCADGui.invokeLater(
+            lambda: warm_next_exact_compilation(session, generation), 50
+        )
+
+
+def warm_next_exact_compilation(session, generation):
+    """Compile one opening, yielding to the GUI before continuing."""
+
+    state = session.opening_transient_state
+    if (
+        generation != state.exact_compilation_warm_generation
+        or session.lifecycle_state.tearing_down
+        or not session.document_visuals.document_is_alive()
+    ):
+        return
+    queue = state.exact_compilation_warm_queue
+    if not queue:
+        return
+    opening, queue = queue[0], queue[1:]
+    state.exact_compilation_warm_queue = queue
+    try:
+        opening.Proxy.ensureExactCompilation(opening)
+    except (AttributeError, ReferenceError, RuntimeError, TypeError):
+        pass
+    if queue:
+        import FreeCADGui
+
+        FreeCADGui.invokeLater(
+            lambda: warm_next_exact_compilation(session, generation), 25
+        )
+
+
+def cancel_exact_compilation_warmup(session):
+    state = session.opening_transient_state
+    state.exact_compilation_warm_generation += 1
+    state.exact_compilation_warm_queue = ()
+
+
 def build_wall_hosted_openings_cache(session):
     cache = {}
     if not session.doc:

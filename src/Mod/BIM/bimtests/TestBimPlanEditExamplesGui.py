@@ -83,6 +83,26 @@ class TestBimPlanEditExamplesGui(TestArchBaseGui):
         self.assertTrue(definition.BIMIsActiveView)
         self.addCleanup(session.shutdown, close_dialog=False)
 
+    def test_basic_example_warms_exact_opening_compilations(self):
+        document = self._open_example(
+            "BIMPlanEditBasic.FCStd", keep_startup_activity=True
+        )
+        from bimplan.runtime.session import get_active_session
+
+        session = get_active_session()
+        self.assertIsNotNone(session)
+        self.addCleanup(session.shutdown, close_dialog=False)
+        openings = session.openings.get_plan_opening_instances()
+        self.assertTrue(openings)
+        self.assertTrue(
+            self.pump_gui_events_until(
+                lambda: all(
+                    getattr(opening.Proxy, "_exact_compilation", None) is not None
+                    for opening in openings
+                )
+            )
+        )
+
     def test_basic_example_populates_plan_session_after_presentation_reveal(self):
         from bimplan.runtime.session import BIMEditingSession
 
