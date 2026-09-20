@@ -175,6 +175,7 @@ class TestArchWindow(TestArchBase.TestArchBase):
         legacy = Part.makeCompound(window.Proxy.buildShapes(window))
 
         self.assertIsNotNone(compilation)
+        self.assertEqual(0, compilation.shape.ElementMapSize)
         self.assertAlmostEqual(legacy.Volume, compilation.shape.Volume, places=6)
         self.assertAlmostEqual(
             legacy.BoundBox.DiagonalLength,

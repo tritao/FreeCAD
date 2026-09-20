@@ -180,7 +180,11 @@ def compile_window_parts(obj, previous=None):
 
     if not result:
         return None
-    shape = Part.makeCompound(result)
+    # This compiler owns the final topology and exposes part identity through
+    # ``part_shapes`` rather than persistent element names. ``makeCompound``
+    # nevertheless synthesizes a large element map from its inputs; dropping
+    # it here avoids expanding irrelevant naming history when Shape is assigned.
+    shape = Part.makeCompound(result).copy(noElementMap=True)
     if shape.isNull():
         return None
     envelope = _opening_envelope(base_shape)
