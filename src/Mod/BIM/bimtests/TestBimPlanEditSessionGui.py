@@ -2037,7 +2037,17 @@ class TestBimPlanEditSessionGui(TestArchBaseGui):
             self.assertNotIn(wall, session.contextual_rendering.renderer._preview_nodes)
 
             session.contextual_editing.begin(handle)
-            result = session.contextual_editing.commit(handle.point + handle.direction * 50)
+            from bimplan import object_visibility
+
+            with patch.object(
+                object_visibility,
+                "apply_storey_visibility",
+                wraps=object_visibility.apply_storey_visibility,
+            ) as apply_storey_visibility:
+                result = session.contextual_editing.commit(
+                    handle.point + handle.direction * 50
+                )
+            apply_storey_visibility.assert_not_called()
             session.viewport.flush_scene_graph_mutations()
 
             self.assertTrue(result.success)

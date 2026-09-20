@@ -349,7 +349,9 @@ class PlanContextualRenderingAPI:
                     representation_source=source,
                 ):
                     self._refresh_source(source)
-            self.reconcile_replaced_source_visibility()
+            # A contextual edit replaces geometry for sources already owned by
+            # this renderer. It does not change storey membership or native
+            # visibility, so rescanning the full document here is redundant.
             representation_layers.mark_current(self._renderer)
         visual_kinds = []
         if getattr(impact, "refresh_primary_selection", False):
