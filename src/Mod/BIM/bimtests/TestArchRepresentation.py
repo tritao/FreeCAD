@@ -1268,6 +1268,7 @@ class TestArchRepresentation(unittest.TestCase):
         status = ArchWindow.validateWindowResize(door, width=800)
         ArchWindow._apply_window_resize_mutation(door, status, width=800)
         roots = ArchWindow.getWindowResizeRecomputeRoots(door)
+        self.assertNotIn(wall, roots)
         _recompute_edit_impact(
             document,
             BIMEditImpact(recompute=BIMRecomputePlan(roots=roots)),

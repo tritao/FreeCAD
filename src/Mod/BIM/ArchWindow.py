@@ -474,7 +474,6 @@ def getWindowResizeRecomputeRoots(obj):
     for target in (
         getattr(obj, "Base", None),
         obj,
-        *(getattr(obj, "Hosts", None) or ()),
     ):
         if target is not None and target not in roots:
             roots.append(target)
@@ -505,8 +504,6 @@ def _apply_window_resize_mutation(obj, status, *, width=None, height=None, ancho
         placement.Base = placement.Base.add(FreeCAD.Vector(anchor_shift))
         target.Placement = placement
     obj.touch()
-    for host in set(getattr(obj, "Hosts", None) or ()):
-        host.touch()
 
 
 def resizeWindow(
