@@ -515,8 +515,9 @@ def resizeWindow(
         if height is not None and hasattr(obj, "Height"):
             obj.Height = status.target_height
 
-        doc.recompute()
-        _preserve_window_anchor(obj, old_anchor)
+        if old_anchor is not None:
+            doc.recompute()
+            _preserve_window_anchor(obj, old_anchor)
         if anchor_shift is not None:
             target = getattr(obj, "Base", None) or obj
             placement = FreeCAD.Placement(target.Placement)
@@ -745,6 +746,7 @@ def _opening_width_edit_operation(helper, side):
         setWindowWidth(
             source,
             new_width,
+            preserve_anchor=False,
             anchor_shift=shift,
             transaction_label=translate("Arch", "Edit Opening Width"),
             raise_on_error=True,
