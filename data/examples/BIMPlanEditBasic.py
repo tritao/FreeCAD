@@ -12,6 +12,7 @@ import os
 
 import Arch
 import ArchPlanContours
+import ArchOpeningProfile
 import ArchSpace
 import ArchWall
 import Draft
@@ -69,6 +70,14 @@ def make_opening(doc, wall, name, point, width, height, *, door=False, sill=900.
         placement=placement,
     )
     opening.Label = name
+    sketch = opening.Base
+    doc.recompute()
+    profile = ArchOpeningProfile.replace_opening_sketch(
+        opening, name="{}Profile".format(opening.Name)
+    )
+    if profile is None:
+        raise RuntimeError("Unable to create lightweight opening profile")
+    doc.removeObject(sketch.Name)
     if door:
         opening.Opening = 100
     Arch.addComponents(opening, wall)
