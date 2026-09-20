@@ -1170,6 +1170,9 @@ class TestBimPlanEditSessionGui(TestArchBaseGui):
         try:
             renderer = session.contextual_rendering.renderer
             original_node = renderer._object_nodes[wall]
+            original_geometry_nodes = tuple(
+                binding.group for binding in renderer._geometry_bindings[wall]
+            )
 
             session.overlays.geometry.invalidate_plan_overlay_geometry_cache(
                 wall, kinds=("representation",)
@@ -1181,7 +1184,11 @@ class TestBimPlanEditSessionGui(TestArchBaseGui):
             self.assertIn(key, session.viewport_state.scene_graph_mutations)
             self.assertIs(original_node, renderer._object_nodes[wall])
             session.viewport.flush_scene_graph_mutations()
-            self.assertIsNot(original_node, renderer._object_nodes[wall])
+            self.assertIs(original_node, renderer._object_nodes[wall])
+            self.assertEqual(
+                original_geometry_nodes,
+                tuple(binding.group for binding in renderer._geometry_bindings[wall]),
+            )
 
             stale_callbacks = []
             self.assertTrue(
@@ -2039,6 +2046,12 @@ class TestBimPlanEditSessionGui(TestArchBaseGui):
             session.contextual_editing.begin(handle)
             from bimplan import object_visibility
 
+            renderer = session.contextual_rendering.renderer
+            representation_before = renderer._representations[wall]
+            root_before = renderer._object_nodes[wall]
+            geometry_nodes_before = tuple(
+                binding.group for binding in renderer._geometry_bindings[wall]
+            )
             with patch.object(
                 object_visibility,
                 "apply_storey_visibility",
@@ -2055,6 +2068,12 @@ class TestBimPlanEditSessionGui(TestArchBaseGui):
             self.assertEqual("Right", wall.Align)
             self.assertAlmostEqual(-100.0, wall.Offset.Value)
             self.assertNotIn(wall, session.contextual_rendering.renderer._preview_nodes)
+            self.assertIs(root_before, renderer._object_nodes[wall])
+            self.assertIsNot(representation_before, renderer._representations[wall])
+            self.assertEqual(
+                geometry_nodes_before,
+                tuple(binding.group for binding in renderer._geometry_bindings[wall]),
+            )
             self.document.undo()
             self.assertAlmostEqual(200.0, wall.Width.Value)
             self.assertEqual("Center", wall.Align)

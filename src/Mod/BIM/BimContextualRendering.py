@@ -65,6 +65,26 @@ class ContextualNodeMapping:
     geometry: object
 
 
+@dataclass(frozen=True)
+class _GeometryBinding:
+    """Mutable Coin fields retained for one rendered semantic geometry item."""
+
+    kind: str
+    group: object
+    material: object
+    style: object
+    coordinates: object
+    primitive: object
+
+
+@dataclass(frozen=True)
+class _HandleBinding:
+    """Retained Coin glyph for one semantic edit handle."""
+
+    glyph: object
+    handle: object
+
+
 class ContextualRepresentationRenderer:
     """Own contextual representation nodes in one viewer and context layer."""
 
@@ -80,6 +100,8 @@ class ContextualRepresentationRenderer:
         self.scene.addChild(self.root)
         self._object_nodes = {}
         self._representations = {}
+        self._geometry_bindings = {}
+        self._handle_bindings = {}
         self._node_mappings = {}
         self._handle_position_fields = {}
         self._handle_color_fields = {}
@@ -93,10 +115,12 @@ class ContextualRepresentationRenderer:
         self._hidden_sources = set()
 
     def set_representation(self, representation):
-        """Replace one object's viewer-local representation."""
+        """Install or update one object's viewer-local representation."""
 
         source = representation.source
         if self._representations.get(source) is representation:
+            return self._object_nodes[source]
+        if source in self._object_nodes and self._update_representation(representation):
             return self._object_nodes[source]
         handles_were_visible = source in self._visible_handle_sources
         self.remove_representation(source, restore_visibility=False)
@@ -104,16 +128,22 @@ class ContextualRepresentationRenderer:
             self._visible_handle_sources.add(source)
         root = coin.SoSwitch()
         root.whichChild = coin.SO_SWITCH_ALL
+        geometry_bindings = []
         if self.render_representation:
-            self._append_faces(root, representation)
-            self._append_lines(root, representation)
-        handle_switch = self._append_edit_handles(root, representation)
+            self._append_faces(root, representation, bindings=geometry_bindings)
+            self._append_lines(root, representation, bindings=geometry_bindings)
+        handle_bindings = []
+        handle_switch = self._append_edit_handles(
+            root, representation, bindings=handle_bindings
+        )
         if handle_switch is not None:
             self._handle_switches[source] = handle_switch
             self._apply_handle_visibility(source)
         self.root.addChild(root)
         self._object_nodes[source] = root
         self._representations[source] = representation
+        self._geometry_bindings[source] = tuple(geometry_bindings)
+        self._handle_bindings[source] = tuple(handle_bindings)
         self._apply_source_visibility(source)
         if self.replace_source:
             self.view.setViewVisibility(self.layer, source, "Hidden")
@@ -123,6 +153,8 @@ class ContextualRepresentationRenderer:
         self._clear_preview_geometry(source)
         node = self._object_nodes.pop(source, None)
         self._representations.pop(source, None)
+        self._geometry_bindings.pop(source, None)
+        self._handle_bindings.pop(source, None)
         if node is not None:
             self.root.removeChild(node)
             stale = [key for key, value in self._node_mappings.items() if value.source is source]
@@ -292,6 +324,8 @@ class ContextualRepresentationRenderer:
         finally:
             self._object_nodes.clear()
             self._representations.clear()
+            self._geometry_bindings.clear()
+            self._handle_bindings.clear()
             self._node_mappings.clear()
             self._handle_position_fields.clear()
             self._handle_color_fields.clear()
@@ -450,6 +484,148 @@ class ContextualRepresentationRenderer:
                 mapping.geometry,
             )
 
+    @staticmethod
+    def _set_values(field, values):
+        """Replace an SoMField value without retaining a stale trailing range."""
+
+        field.setNum(len(values))
+        if values:
+            field.setValues(0, len(values), values)
+
+    def _representation_payloads(self, representation):
+        """Return normalized payloads in the same order as the Coin subtree."""
+
+        payloads = []
+        for face in representation.cut_geometry:
+            try:
+                mesh = representation.face_mesh_for(face)
+                vertices, triangles = mesh.vertices, mesh.triangles
+            except Exception:
+                continue
+            if not vertices or not triangles:
+                continue
+            indices = []
+            for triangle in triangles:
+                indices.extend((*triangle, -1))
+            payloads.append(
+                ("face", face, [_xyz(point) for point in vertices], indices, None)
+            )
+        for geometry in representation.projected_geometry:
+            if isinstance(geometry, ArchRepresentation.BIMLineBatch):
+                if not geometry.vertices or not geometry.segments:
+                    continue
+                indices = []
+                for first, second in geometry.segments:
+                    indices.extend((first, second, -1))
+                payloads.append(
+                    (
+                        "line_batch",
+                        geometry,
+                        [_xyz(point) for point in geometry.vertices],
+                        indices,
+                        None,
+                    )
+                )
+                continue
+            try:
+                points = [_xyz(point) for point in geometry]
+            except Exception:
+                continue
+            if len(points) >= 2:
+                payloads.append(("line", geometry, points, None, [len(points)]))
+        return payloads
+
+    def _update_representation(self, representation):
+        """Update a structurally compatible source without replacing its subtree."""
+
+        source = representation.source
+        bindings = self._geometry_bindings.get(source, ())
+        payloads = (
+            self._representation_payloads(representation)
+            if self.render_representation
+            else []
+        )
+        handles = tuple(representation.edit_handles)
+        handle_bindings = self._handle_bindings.get(source, ())
+        if (
+            len(bindings) != len(payloads)
+            or any(
+                binding.kind != payload[0]
+                for binding, payload in zip(bindings, payloads)
+            )
+        ):
+            return False
+
+        self._clear_preview_geometry(source)
+        for binding, (_, geometry, points, indices, vertex_counts) in zip(
+            bindings, payloads
+        ):
+            self._set_values(binding.coordinates.point, points)
+            if indices is not None:
+                self._set_values(binding.primitive.coordIndex, indices)
+            else:
+                self._set_values(binding.primitive.numVertices, vertex_counts)
+            mapping = representation.mapping_for(geometry)
+            role = getattr(mapping, "role", None)
+            if binding.style is not None:
+                color, width = _line_appearance(
+                    representation, role, (0.1, 0.1, 0.1), 2.0
+                )
+                binding.material.diffuseColor = color
+                binding.style.lineWidth = width
+            self._node_mappings.pop(_node_key(binding.group), None)
+            self._record_node(binding.group, representation, geometry)
+
+        if len(handle_bindings) == len(handles):
+            self._update_handle_bindings(source, handle_bindings, handles)
+        else:
+            self._replace_handle_bindings(source, representation)
+        self._representations[source] = representation
+        self._apply_source_visibility(source)
+        self._apply_handle_visibility(source)
+        return True
+
+    def _update_handle_bindings(self, source, bindings, handles):
+        for binding, handle in zip(bindings, handles):
+            old_handle = binding.handle
+            self._handle_position_fields.pop((old_handle.source, id(old_handle)), None)
+            self._handle_color_fields.pop((old_handle.source, id(old_handle)), None)
+            glyph = binding.glyph
+            glyph.position = _xyz(handle.point)
+            glyph.color = (0.95, 0.35, 0.05)
+            glyph.glyph = str(getattr(handle, "glyph", "Circle")).upper()
+            glyph.size = int(getattr(handle, "glyph_size", 9))
+            glyph.iconName = str(getattr(handle, "icon_name", ""))
+            self._handle_position_fields[(handle.source, id(handle))] = glyph.position
+            self._handle_color_fields[(handle.source, id(handle))] = glyph.color
+            self._node_mappings[_node_key(glyph)] = ContextualNodeMapping(
+                handle.source, handle.subelement, handle.role, handle
+            )
+        self._handle_bindings[source] = tuple(
+            _HandleBinding(binding.glyph, handle)
+            for binding, handle in zip(bindings, handles)
+        )
+
+    def _replace_handle_bindings(self, source, representation):
+        """Rebuild only handles when their semantic structure has changed."""
+
+        root = self._object_nodes[source]
+        old_switch = self._handle_switches.pop(source, None)
+        for binding in self._handle_bindings.pop(source, ()):
+            handle = binding.handle
+            self._handle_position_fields.pop((handle.source, id(handle)), None)
+            self._handle_color_fields.pop((handle.source, id(handle)), None)
+            self._node_mappings.pop(_node_key(binding.glyph), None)
+        if old_switch is not None:
+            root.removeChild(old_switch)
+        bindings = []
+        handle_switch = self._append_edit_handles(
+            root, representation, bindings=bindings
+        )
+        self._handle_bindings[source] = tuple(bindings)
+        if handle_switch is not None:
+            self._handle_switches[source] = handle_switch
+
     def _append_faces(
         self,
         root,
@@ -458,6 +634,7 @@ class ContextualRepresentationRenderer:
         color=(0.82, 0.82, 0.82),
         transparency=0.0,
         record_mappings=True,
+        bindings=None,
     ):
         for face in representation.cut_geometry:
             try:
@@ -485,6 +662,10 @@ class ContextualRepresentationRenderer:
             faces.coordIndex.setValues(0, len(indices), indices)
             group.addChild(faces)
             root.addChild(group)
+            if bindings is not None:
+                bindings.append(
+                    _GeometryBinding("face", group, material, None, coordinates, faces)
+                )
             if record_mappings:
                 self._record_node(group, representation, face)
 
@@ -496,6 +677,7 @@ class ContextualRepresentationRenderer:
         color=(0.1, 0.1, 0.1),
         line_width=2.0,
         record_mappings=True,
+        bindings=None,
     ):
         for geometry in representation.projected_geometry:
             if isinstance(geometry, ArchRepresentation.BIMLineBatch):
@@ -506,6 +688,7 @@ class ContextualRepresentationRenderer:
                     color=color,
                     line_width=line_width,
                     record_mappings=record_mappings,
+                    bindings=bindings,
                 )
                 continue
             try:
@@ -533,6 +716,12 @@ class ContextualRepresentationRenderer:
             lines.numVertices.setValues(0, 1, [len(points)])
             group.addChild(lines)
             root.addChild(group)
+            if bindings is not None:
+                bindings.append(
+                    _GeometryBinding(
+                        "line", group, material, style, coordinates, lines
+                    )
+                )
             if record_mappings:
                 self._record_node(group, representation, geometry)
 
@@ -545,6 +734,7 @@ class ContextualRepresentationRenderer:
         color,
         line_width,
         record_mappings,
+        bindings=None,
     ):
         """Render one semantic line batch through a single Coin node group."""
 
@@ -574,10 +764,16 @@ class ContextualRepresentationRenderer:
         lines.coordIndex.setValues(0, len(indices), indices)
         group.addChild(lines)
         root.addChild(group)
+        if bindings is not None:
+            bindings.append(
+                _GeometryBinding(
+                    "line_batch", group, material, style, coordinates, lines
+                )
+            )
         if record_mappings:
             self._record_node(group, representation, geometry)
 
-    def _append_edit_handles(self, root, representation):
+    def _append_edit_handles(self, root, representation, bindings=None):
         if not representation.edit_handles:
             return None
         handle_switch = coin.SoSwitch()
@@ -596,6 +792,8 @@ class ContextualRepresentationRenderer:
             self._handle_position_fields[key] = glyph.position
             self._handle_color_fields[key] = glyph.color
             handle_switch.addChild(glyph)
+            if bindings is not None:
+                bindings.append(_HandleBinding(glyph, handle))
             self._node_mappings[_node_key(glyph)] = ContextualNodeMapping(
                 handle.source,
                 handle.subelement,
