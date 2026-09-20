@@ -1486,6 +1486,7 @@ class Component(ArchIFC.IfcProduct):
         allownosolid=False,
         compute_areas=True,
         shape_is_validated=False,
+        shape_is_refined=False,
     ):
         """Check the given shape, then assign it to the object.
 
@@ -1519,6 +1520,10 @@ class Component(ArchIFC.IfcProduct):
             intended for compiler-owned shapes whose construction contract
             includes a successful validity check. The default preserves full
             validation for legacy and externally supplied geometry.
+        shape_is_refined: bool, optional
+            Whether the caller owns the final topology and guarantees that no
+            redundant splitter removal is required. The default preserves the
+            legacy refinement pass for externally supplied geometry.
         """
 
         if shape:
@@ -1532,14 +1537,15 @@ class Component(ArchIFC.IfcProduct):
                                 translate("Arch", "Error computing the shape of this object") + "\n"
                             )
                             return
-                        import Part
+                        if not shape_is_refined:
+                            import Part
 
-                        try:
-                            r = shape.removeSplitter()
-                        except Part.OCCError:
-                            pass
-                        else:
-                            shape = r
+                            try:
+                                r = shape.removeSplitter()
+                            except Part.OCCError:
+                                pass
+                            else:
+                                shape = r
                         p = self.spread(
                             obj, shape, placement
                         ).Placement.copy()  # for some reason this gets zeroed in next line

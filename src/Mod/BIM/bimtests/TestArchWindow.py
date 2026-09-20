@@ -27,6 +27,7 @@ from unittest.mock import patch
 import FreeCAD
 from bimtests import TestArchBase
 import Arch
+import ArchComponent
 import ArchWindow  # For ArchWindow._Window proxy class
 import Part
 import Draft
@@ -128,6 +129,31 @@ class TestArchWindow(TestArchBase.TestArchBase):
         self.assertIn("Wire0", window.WindowParts[2])
         self.assertFalse(window.Shape.isNull())
         self.assertGreater(len(window.Shape.Solids), 0)
+
+    def test_window_parts_skip_redundant_compound_refinement(self):
+        sketch = self._create_sketch_with_wires(
+            "SketchWindowPartsContract", [(0, 0, 1000, 1200)]
+        )
+        window = Arch.makeWindow(baseobj=sketch, name="WindowPartsContract")
+        original_apply_shape = ArchComponent.Component.applyShape
+        apply_shape_options = []
+
+        def observe_apply_shape(proxy, *args, **kwargs):
+            apply_shape_options.append(kwargs)
+            return original_apply_shape(proxy, *args, **kwargs)
+
+        with patch.object(
+            ArchComponent.Component,
+            "applyShape",
+            autospec=True,
+            side_effect=observe_apply_shape,
+        ):
+            self.document.recompute()
+
+        self.assertTrue(
+            any(options.get("shape_is_refined") for options in apply_shape_options)
+        )
+        self.assertTrue(window.Shape.isValid())
 
     def test_create_from_sketch_two_wires_default_parts(self):
         """Test creating a window from two-wire sketch (concentric), relying on default parts."""

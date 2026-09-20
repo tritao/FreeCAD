@@ -3659,7 +3659,17 @@ class _Window(
                 if b:
                     base = Part.makeCompound([base] + b)
                     # base = Part.makeCompound([base]+self.sshapes+self.vshapes)
-                self.applyShape(obj, base, pl, allowinvalid=True, allownosolid=True)
+                self.applyShape(
+                    obj,
+                    base,
+                    pl,
+                    allowinvalid=True,
+                    allownosolid=True,
+                    # WindowParts already describe the intended final part
+                    # boundaries. Refining their compound adds an OCCT pass
+                    # without improving the construction result.
+                    shape_is_refined=bool(obj.WindowParts),
+                )
             _set_placement_if_changed(obj, pl)
         else:
             obj.Shape = Part.Shape()
