@@ -117,3 +117,44 @@ def make_hatch_geometry(faces, filename, pattern, scale=1.0, rotation=0.0, trans
                 shape = shape.transformShape(frame)
             shapes.append(shape)
     return Part.makeCompound(shapes) if shapes else Part.Shape()
+
+
+def make_hatch_segments(faces, filename, pattern, scale=1.0, rotation=0.0, translate=True):
+    """Return PAT hatch lines as endpoint pairs without result topology."""
+
+    rotation = float(getattr(rotation, "Value", rotation) or 0.0)
+    faces = tuple(faces or ())
+    result = []
+
+    def hatch_shape(source_shape, output_frame=None):
+        if rotation:
+            source_shape.rotate(App.Vector(), App.Vector(0, 0, 1), -rotation)
+        segments = TechDraw.makeGeomHatchSegments(
+            source_shape,
+            float(scale),
+            str(pattern),
+            str(filename),
+        )
+        restore_rotation = App.Rotation(App.Vector(0, 0, 1), rotation)
+        for start, end in segments:
+            points = (App.Vector(start), App.Vector(end))
+            if rotation:
+                points = tuple(restore_rotation.multVec(point) for point in points)
+            if output_frame is not None:
+                points = tuple(output_frame.multVec(point) for point in points)
+            result.append(points)
+
+    with _allow_long_hatch_edges():
+        if not translate:
+            planar_faces = tuple(face.copy() for face in faces if face.findPlane() is not None)
+            if planar_faces:
+                hatch_shape(Part.makeCompound(planar_faces))
+            return tuple(result)
+        for source_face in faces:
+            if source_face.findPlane() is None:
+                continue
+            frame = _planar_face_frame(source_face)
+            local_faces = source_face.copy().transformShape(frame.inverse()).Faces
+            if local_faces:
+                hatch_shape(local_faces[0], frame)
+    return tuple(result)

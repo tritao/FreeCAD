@@ -21,6 +21,30 @@ def _node_key(node):
         return id(node)
 
 
+def _line_appearance(representation, role, color, line_width):
+    """Resolve shared line color and width for scalar and batched geometry."""
+
+    category_widths = {
+        ArchRepresentation.ProjectedLineCategory.SILHOUETTE.value: 1.35,
+        ArchRepresentation.ProjectedLineCategory.VISIBLE_HARD.value: 1.0,
+        ArchRepresentation.ProjectedLineCategory.VISIBLE_SMOOTH.value: 0.75,
+        ArchRepresentation.ProjectedLineCategory.VISIBLE_SEAM.value: 0.75,
+        ArchRepresentation.ProjectedLineCategory.VISIBLE_ISO.value: 0.6,
+        "PlanHatch": 0.35,
+    }
+    profile = getattr(getattr(representation, "request", None), "presentation_profile", {})
+    if role == ArchRepresentation.ProjectedLineCategory.SILHOUETTE.value:
+        category_widths[role] = float(
+            profile.get("silhouette_line_width", category_widths[role])
+        )
+    elif role:
+        category_widths[role] = float(
+            profile.get("visible_line_width", category_widths.get(role, 1.0))
+        )
+    resolved_color = (0.35, 0.35, 0.35) if role == "PlanHatch" else color
+    return resolved_color, float(line_width) * category_widths.get(role, 1.0)
+
+
 def ray_from_view(view, mouse_pos):
     """Convert a viewer pixel into a normalized world-space BIM edit ray."""
 
@@ -474,6 +498,16 @@ class ContextualRepresentationRenderer:
         record_mappings=True,
     ):
         for geometry in representation.projected_geometry:
+            if isinstance(geometry, ArchRepresentation.BIMLineBatch):
+                self._append_line_batch(
+                    root,
+                    representation,
+                    geometry,
+                    color=color,
+                    line_width=line_width,
+                    record_mappings=record_mappings,
+                )
+                continue
             try:
                 points = [_xyz(point) for point in geometry]
             except Exception:
@@ -483,28 +517,14 @@ class ContextualRepresentationRenderer:
             group = coin.SoSeparator()
             mapping = representation.mapping_for(geometry)
             role = getattr(mapping, "role", None)
-            category_widths = {
-                ArchRepresentation.ProjectedLineCategory.SILHOUETTE.value: 1.35,
-                ArchRepresentation.ProjectedLineCategory.VISIBLE_HARD.value: 1.0,
-                ArchRepresentation.ProjectedLineCategory.VISIBLE_SMOOTH.value: 0.75,
-                ArchRepresentation.ProjectedLineCategory.VISIBLE_SEAM.value: 0.75,
-                ArchRepresentation.ProjectedLineCategory.VISIBLE_ISO.value: 0.6,
-                "PlanHatch": 0.35,
-            }
-            profile = getattr(getattr(representation, "request", None), "presentation_profile", {})
-            if role == ArchRepresentation.ProjectedLineCategory.SILHOUETTE.value:
-                category_widths[role] = float(
-                    profile.get("silhouette_line_width", category_widths[role])
-                )
-            elif role:
-                category_widths[role] = float(
-                    profile.get("visible_line_width", category_widths.get(role, 1.0))
-                )
+            resolved_color, resolved_width = _line_appearance(
+                representation, role, color, line_width
+            )
             material = coin.SoMaterial()
-            material.diffuseColor = (0.35, 0.35, 0.35) if role == "PlanHatch" else color
+            material.diffuseColor = resolved_color
             group.addChild(material)
             style = coin.SoDrawStyle()
-            style.lineWidth = float(line_width) * category_widths.get(role, 1.0)
+            style.lineWidth = resolved_width
             group.addChild(style)
             coordinates = coin.SoCoordinate3()
             coordinates.point.setValues(0, len(points), points)
@@ -515,6 +535,47 @@ class ContextualRepresentationRenderer:
             root.addChild(group)
             if record_mappings:
                 self._record_node(group, representation, geometry)
+
+    def _append_line_batch(
+        self,
+        root,
+        representation,
+        geometry,
+        *,
+        color,
+        line_width,
+        record_mappings,
+    ):
+        """Render one semantic line batch through a single Coin node group."""
+
+        if not geometry.vertices or not geometry.segments:
+            return
+        mapping = representation.mapping_for(geometry)
+        role = getattr(mapping, "role", None)
+        resolved_color, resolved_width = _line_appearance(
+            representation, role, color, line_width
+        )
+        group = coin.SoSeparator()
+        material = coin.SoMaterial()
+        material.diffuseColor = resolved_color
+        group.addChild(material)
+        style = coin.SoDrawStyle()
+        style.lineWidth = resolved_width
+        group.addChild(style)
+        coordinates = coin.SoCoordinate3()
+        coordinates.point.setValues(
+            0, len(geometry.vertices), [_xyz(point) for point in geometry.vertices]
+        )
+        group.addChild(coordinates)
+        lines = coin.SoIndexedLineSet()
+        indices = []
+        for first, second in geometry.segments:
+            indices.extend((first, second, -1))
+        lines.coordIndex.setValues(0, len(indices), indices)
+        group.addChild(lines)
+        root.addChild(group)
+        if record_mappings:
+            self._record_node(group, representation, geometry)
 
     def _append_edit_handles(self, root, representation):
         if not representation.edit_handles:

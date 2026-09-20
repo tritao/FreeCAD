@@ -258,9 +258,16 @@ def render_representations_to_svg(
 def _shape_from_geometry(geometries):
     """Return one shape suitable for TechDraw projection, or ``None``."""
     import Part
+    from ArchRepresentation import BIMLineBatch
 
     shapes = []
     for geometry in geometries:
+        if isinstance(geometry, BIMLineBatch):
+            shapes.extend(
+                Part.makeLine(start, end)
+                for start, end in geometry.iter_segments()
+            )
+            continue
         if hasattr(geometry, "ShapeType"):
             # TechDraw's Python projection APIs accept the base Part.Shape
             # wrapper, not specialized wrappers such as Part.Compound.

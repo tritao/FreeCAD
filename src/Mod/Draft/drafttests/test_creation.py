@@ -44,7 +44,7 @@ import Draft
 import Part
 from FreeCAD import Vector
 from drafttests import test_base
-from draftutils.hatch import make_hatch_geometry
+from draftutils.hatch import make_hatch_geometry, make_hatch_segments
 from draftutils.messages import _msg
 
 
@@ -472,16 +472,16 @@ class DraftCreation(test_base.DraftTestCaseDoc):
         face = Part.makeFace([outer, inner], "Part::FaceMakerCheese")
         pattern_file = App.getResourceDir() + "Mod/TechDraw/PAT/FCPAT.pat"
 
-        hatch = make_hatch_geometry(
+        segments = make_hatch_segments(
             (face,), pattern_file, "Diagonal4", scale=2.5, translate=False
         )
 
-        self.assertTrue(hatch.Edges)
+        self.assertTrue(segments)
         hole = Part.Face(inner)
         self.assertTrue(
             all(
-                not hole.isInside(edge.CenterOfMass, 1e-7, False)
-                for edge in hatch.Edges
+                not hole.isInside(start.add(end).multiply(0.5), 1e-7, False)
+                for start, end in segments
             )
         )
 
@@ -491,13 +491,16 @@ class DraftCreation(test_base.DraftTestCaseDoc):
         face = Part.Face(Part.Wire([Part.makeCircle(50)]))
         pattern_file = App.getResourceDir() + "Mod/TechDraw/PAT/FCPAT.pat"
 
-        hatch = make_hatch_geometry(
+        segments = make_hatch_segments(
             (face,), pattern_file, "Diagonal4", scale=2.5, translate=False
         )
 
-        self.assertTrue(hatch.Edges)
+        self.assertTrue(segments)
         self.assertTrue(
-            all(face.isInside(edge.CenterOfMass, 1e-7, True) for edge in hatch.Edges)
+            all(
+                face.isInside(start.add(end).multiply(0.5), 1e-7, True)
+                for start, end in segments
+            )
         )
 
 

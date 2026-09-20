@@ -156,6 +156,17 @@ class TestArchWall(TestArchBase.TestArchBase):
             if mapping.role == "PlanHatch"
         )
 
+    @classmethod
+    def _plan_hatch_segments(cls, representation):
+        result = []
+        for mapping in cls._plan_hatch_mappings(representation):
+            geometry = mapping.geometry
+            if isinstance(geometry, ArchRepresentation.BIMLineBatch):
+                result.extend(geometry.iter_segments())
+            else:
+                result.append((geometry[0], geometry[-1]))
+        return tuple(result)
+
     def test_wall_type_plan_hatch_is_clipped_to_cut_faces(self):
         wall_type = Arch.makeWallType("Exterior Hatched")
         wall_type.Function = "Exterior"
@@ -170,8 +181,8 @@ class TestArchWall(TestArchBase.TestArchBase):
 
         with patch.object(
             TechDraw,
-            "makeGeomHatch",
-            wraps=TechDraw.makeGeomHatch,
+            "makeGeomHatchSegments",
+            wraps=TechDraw.makeGeomHatchSegments,
         ) as make_hatch:
             representation = self._wall_plan_representation(wall)
         self.assertEqual(1, make_hatch.call_count)
@@ -180,7 +191,7 @@ class TestArchWall(TestArchBase.TestArchBase):
         self.assertGreater(len(hatches), 0)
         for mapping in hatches:
             self.assertIs(mapping.source, wall)
-            start, end = mapping.geometry[0], mapping.geometry[-1]
+        for start, end in self._plan_hatch_segments(representation):
             midpoint = start.add(end).multiply(0.5)
             self.assertTrue(
                 any(face.isInside(midpoint, 0.001, True) for face in representation.cut_geometry)
@@ -194,16 +205,16 @@ class TestArchWall(TestArchBase.TestArchBase):
         wall = Arch.makeWall(length=2000, width=400, wall_type=wall_type)
         self.document.recompute()
 
-        coarse = self._plan_hatch_mappings(self._wall_plan_representation(wall))
+        coarse = self._plan_hatch_segments(self._wall_plan_representation(wall))
         directions = set()
-        for mapping in coarse:
-            vector = mapping.geometry[-1].sub(mapping.geometry[0])
+        for start, end in coarse:
+            vector = end.sub(start)
             directions.add(round(math.degrees(math.atan2(vector.y, vector.x)) % 180.0, 3))
         self.assertEqual({30.0}, directions)
 
         wall_type.PlanHatchSpacing = 50
         self.document.recompute()
-        fine = self._plan_hatch_mappings(self._wall_plan_representation(wall))
+        fine = self._plan_hatch_segments(self._wall_plan_representation(wall))
         self.assertGreater(len(fine), len(coarse))
 
     def test_cross_plan_hatch_adds_two_directions(self):
@@ -215,8 +226,8 @@ class TestArchWall(TestArchBase.TestArchBase):
         self.document.recompute()
 
         directions = set()
-        for mapping in self._plan_hatch_mappings(self._wall_plan_representation(wall)):
-            vector = mapping.geometry[-1].sub(mapping.geometry[0])
+        for start, end in self._plan_hatch_segments(self._wall_plan_representation(wall)):
+            vector = end.sub(start)
             directions.add(round(math.degrees(math.atan2(vector.y, vector.x)) % 180.0, 3))
         self.assertEqual({45.0, 135.0}, directions)
 

@@ -36,6 +36,7 @@ from ArchRepresentation import (
     BIMPreviewStyle,
     BIMEditTransaction,
     BIMEditCapabilities,
+    BIMLineBatch,
     BIMRepresentation,
     PlaneConstraint,
     RepresentationUnavailable,
@@ -61,6 +62,43 @@ from bimcontextual.context_policy import capabilities_for, supports
 
 
 class TestArchRepresentation(unittest.TestCase):
+    def test_line_batch_preserves_one_identity_for_rendering_and_picking(self):
+        source = object()
+        batch = BIMLineBatch.from_segments(
+            (
+                (FreeCAD.Vector(0, 0), FreeCAD.Vector(10, 0)),
+                (FreeCAD.Vector(0, 5), FreeCAD.Vector(10, 5)),
+            )
+        )
+        representation = BIMRepresentation(source=source)
+        representation.add_geometry("projected_geometry", batch, "PlanHatch")
+
+        mapping = representation.mapping_for(batch)
+        picked = query_representation_pick(
+            (representation,),
+            (5, 5),
+            lambda point: (point.x, point.y),
+            1,
+        )
+
+        self.assertEqual("PlanHatch", mapping.role)
+        self.assertIs(source, picked.source)
+        self.assertIs(batch, picked.target.geometry)
+
+    def test_line_batch_converts_to_part_edges_at_export_boundary(self):
+        from bimviews import techdraw_renderer
+
+        batch = BIMLineBatch.from_segments(
+            (
+                (FreeCAD.Vector(0, 0), FreeCAD.Vector(10, 0)),
+                (FreeCAD.Vector(0, 5), FreeCAD.Vector(10, 5)),
+            )
+        )
+
+        shape = techdraw_renderer._shape_from_geometry((batch,))
+
+        self.assertEqual(2, len(shape.Edges))
+
     def test_edit_impact_uses_dependency_aware_document_recompute(self):
         events = []
 

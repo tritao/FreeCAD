@@ -169,9 +169,9 @@ def _add_plan_hatch_geometry(representation, obj, cut_faces):
         FreeCAD.getResourceDir(), "Mod", "TechDraw", "PAT", "FCPAT.pat"
     )
     try:
-        from draftutils.hatch import make_hatch_geometry
+        from draftutils.hatch import make_hatch_segments
 
-        hatch = make_hatch_geometry(
+        hatch_segments = make_hatch_segments(
             cut_faces,
             pattern_file,
             pattern_name,
@@ -184,15 +184,12 @@ def _add_plan_hatch_geometry(representation, obj, cut_faces):
             "Unable to generate plan hatch for {}: {}\n".format(obj.Label, error)
         )
         return
-    for index, edge in enumerate(getattr(hatch, "Edges", ()) or (), start=1):
-        points = tuple(ArchPlanGeometry.collect_edge_points(edge))
-        if len(points) < 2:
-            continue
+    if hatch_segments:
         representation.add_geometry(
             "projected_geometry",
-            points,
+            ArchRepresentation.BIMLineBatch.from_segments(hatch_segments),
             "PlanHatch",
-            subelement=f"PlanHatch{index}",
+            subelement="PlanHatch",
         )
 
 

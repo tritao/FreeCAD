@@ -751,6 +751,43 @@ class BIMMeshGeometry:
 
 
 @dataclass(frozen=True)
+class BIMLineBatch:
+    """Immutable renderer-neutral line segments sharing one semantic identity."""
+
+    vertices: tuple
+    segments: tuple
+
+    def __post_init__(self):
+        vertices = tuple(FreeCAD.Vector(point) for point in self.vertices)
+        segments = tuple(tuple(int(index) for index in segment) for segment in self.segments)
+        if any(
+            len(segment) != 2
+            or min(segment) < 0
+            or max(segment) >= len(vertices)
+            for segment in segments
+        ):
+            raise ValueError("line batch segments must reference two valid vertices")
+        object.__setattr__(self, "vertices", vertices)
+        object.__setattr__(self, "segments", segments)
+
+    @classmethod
+    def from_segments(cls, segments):
+        """Build one compact batch from point-pair segments."""
+
+        vertices = []
+        indices = []
+        for start, end in segments:
+            first = len(vertices)
+            vertices.extend((FreeCAD.Vector(start), FreeCAD.Vector(end)))
+            indices.append((first, first + 1))
+        return cls(tuple(vertices), tuple(indices))
+
+    def iter_segments(self):
+        for first, second in self.segments:
+            yield self.vertices[first], self.vertices[second]
+
+
+@dataclass(frozen=True)
 class BIMPlanContourMapping:
     """Semantic ownership for one renderer-neutral plan contour."""
 
@@ -953,6 +990,19 @@ def project_direction_to_representation_plane(direction, request):
 
 
 def _nearest_snap_point(geometry, point):
+    if isinstance(geometry, BIMLineBatch):
+        winner = None
+        for start, end in geometry.iter_segments():
+            direction = end.sub(start)
+            length_squared = direction.dot(direction)
+            parameter = 0.0
+            if length_squared > 1e-18:
+                parameter = min(max(point.sub(start).dot(direction) / length_squared, 0.0), 1.0)
+            candidate = start.add(direction.multiply(parameter))
+            distance = candidate.distanceToPoint(point)
+            if winner is None or distance < winner[1]:
+                winner = candidate, distance
+        return winner or (None, None)
     shape_type = getattr(geometry, "ShapeType", "")
     if shape_type == "Vertex":
         candidate = FreeCAD.Vector(geometry.Point)
@@ -1036,6 +1086,9 @@ def query_representation_snap(representations, point, tolerance, request=None):
 
 def _iter_pick_polylines(geometry):
     if isinstance(geometry, BIMMeshGeometry):
+        return
+    if isinstance(geometry, BIMLineBatch):
+        yield from geometry.iter_segments()
         return
     shape_type = getattr(geometry, "ShapeType", "")
     if shape_type == "Vertex":
