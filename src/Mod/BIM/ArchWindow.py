@@ -1670,11 +1670,24 @@ class _HostedOpeningPlanGeometry:
             return None
 
         proxy = getattr(host, "Proxy", None)
-        if not proxy or not hasattr(proxy, "getFootprint"):
+        if not proxy:
+            return None
+
+        bounds_provider = getattr(proxy, "get_plan_lateral_bounds", None)
+        if callable(bounds_provider):
+            try:
+                bounds = bounds_provider(host, origin, axis_v)
+            except Exception:
+                bounds = None
+            if bounds is not None:
+                return bounds
+
+        footprint_provider = getattr(proxy, "getFootprint", None)
+        if not callable(footprint_provider):
             return None
 
         try:
-            faces = proxy.getFootprint(host)
+            faces = footprint_provider(host)
         except Exception:
             return None
         if not faces:

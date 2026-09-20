@@ -1068,7 +1068,11 @@ class TestArchRepresentation(unittest.TestCase):
             opening.Proxy,
             "_get_host_plan_v_bounds",
             wraps=opening.Proxy._get_host_plan_v_bounds,
-        ) as resolve_host_bounds:
+        ) as resolve_host_bounds, patch.object(
+            wall.Proxy,
+            "getFootprint",
+            side_effect=AssertionError("opening bounds must not build the wall footprint"),
+        ):
             representation = opening.Proxy.getRepresentation(
                 opening,
                 RepresentationRequest(purpose="Plan", cut_offset=1000, target_offset=0),

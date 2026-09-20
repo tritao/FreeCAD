@@ -1248,6 +1248,50 @@ class _Wall(ArchComponent.Component):
         request = self.getDefaultPlanRequest(obj)
         return self.getRepresentation(obj, request).cut_geometry
 
+    def get_plan_lateral_bounds(self, obj, origin, axis_v):
+        """Return the resolved wall-section span projected onto a plan axis."""
+
+        baseline = self.get_global_baseline(obj)
+        section = self.get_resolved_section(obj)
+        if baseline is None or section is None:
+            return None
+        axis = FreeCAD.Vector(baseline.end_point).sub(
+            FreeCAD.Vector(baseline.start_point)
+        )
+        normal = FreeCAD.Vector(baseline.normal)
+        if axis.Length <= 1e-9 or normal.Length <= 1e-9:
+            return None
+        axis.normalize()
+        if normal.z < 0:
+            normal = normal.negative()
+        lateral = axis.cross(normal)
+        if lateral.Length <= 1e-9:
+            return None
+        lateral.normalize()
+
+        section_center = (float(section.y_min) + float(section.y_max)) * 0.5
+        if not obj.Shape.isNull() and abs(section_center) > 1e-7:
+            baseline_midpoint = FreeCAD.Vector(baseline.start_point).add(
+                FreeCAD.Vector(baseline.end_point)
+            ) * 0.5
+            if (
+                FreeCAD.Vector(obj.Shape.BoundBox.Center)
+                .sub(baseline_midpoint)
+                .dot(lateral)
+                * section_center
+                < 0
+            ):
+                lateral = lateral.negative()
+
+        start = FreeCAD.Vector(baseline.start_point)
+        origin = FreeCAD.Vector(origin)
+        axis_v = FreeCAD.Vector(axis_v)
+        values = tuple(
+            start.add(lateral * offset).sub(origin).dot(axis_v)
+            for offset in (float(section.y_min), float(section.y_max))
+        )
+        return min(values), max(values)
+
     def getPlanRepresentation(self, obj, request):
         """Return wall plan faces for the supplied plan request.
 
