@@ -310,7 +310,10 @@ class ContextualEditController:
         handle = self.editor.handle
         if handle.operation.value_kind != "Scalar":
             return BIMEditResult(False, reason="This handle does not accept a scalar value.")
-        preview = self.preview_value(value)
+        # Exact-value submission has no intervening frame in which a preview
+        # could be presented. Validate through the renderer-independent editor
+        # and let the committed refresh install the resulting representation.
+        preview = self.editor.preview_value(value)
         if not preview.validation.allowed:
             reason = preview.validation.reason or "This value is not allowed."
             self._set_feedback(reason)

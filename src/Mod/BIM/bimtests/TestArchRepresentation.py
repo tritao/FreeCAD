@@ -731,15 +731,17 @@ class TestArchRepresentation(unittest.TestCase):
         self.assertIn(("clear", source), renderer.events)
 
     def test_contextual_edit_controller_commits_exact_values_without_pointer_mapping(self):
+        renderer_events = []
+
         class Renderer:
             def preview_handle(self, *_args):
-                pass
+                renderer_events.append("preview_handle")
 
             def set_handle_state(self, *_args):
-                pass
+                renderer_events.append("set_handle_state")
 
             def clear_preview(self, *_args):
-                pass
+                renderer_events.append("clear_preview")
 
         source = {"width": 100.0}
         impact = BIMEditImpact(
@@ -789,6 +791,7 @@ class TestArchRepresentation(unittest.TestCase):
         controller.begin(handle)
         preview = controller.preview_value(175.0)
         self.assertEqual(175.0, preview.value)
+        renderer_events.clear()
         result = controller.commit_value(175.0)
 
         self.assertTrue(result.success, result.reason)
@@ -800,6 +803,7 @@ class TestArchRepresentation(unittest.TestCase):
             ["contextual_edit_apply", "contextual_edit_presentation_refresh"],
             traced_phases,
         )
+        self.assertEqual(["clear_preview"], renderer_events)
         self.assertIsNone(controller.active_edit)
 
     def test_contextual_datum_router_activates_only_on_matching_double_click(self):
