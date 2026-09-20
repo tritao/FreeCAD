@@ -335,7 +335,10 @@ class PlanContextualRenderingAPI:
                 )
             for source in sources:
                 representation_cache.invalidate_object_representation(source)
-                session.overlays.geometry.invalidate_plan_overlay_geometry_cache(source)
+                session.overlays.geometry.invalidate_plan_overlay_geometry_cache(
+                    source,
+                    invalidate_representation=False,
+                )
             session.openings.invalidate_wall_hosted_openings_cache()
         # The contextual renderer is the sole committed drawing for represented
         # Plan sources. Rebuilding their hidden legacy Footprint nodes duplicates

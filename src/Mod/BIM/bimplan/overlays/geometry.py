@@ -131,7 +131,9 @@ def get_plan_overlay_geometry_cache_entry(session, kind, obj, create=False):
     return (semantic_obj, key, entry)
 
 
-def invalidate_plan_overlay_geometry_cache(session, obj=None, kinds=None):
+def invalidate_plan_overlay_geometry_cache(
+    session, obj=None, kinds=None, *, invalidate_representation=True
+):
     target_kinds = tuple(kinds or ())
     if not target_kinds:
         if obj is None:
@@ -156,7 +158,8 @@ def invalidate_plan_overlay_geometry_cache(session, obj=None, kinds=None):
         opening_overlays.invalidate_selected_opening_overlay_cache(session)
         space_overlays.invalidate_selected_space_overlay_cache(session)
         return
-    representation_cache.invalidate_object(obj)
+    if invalidate_representation:
+        representation_cache.invalidate_object(obj)
     semantic_obj, key, _entry = get_plan_overlay_geometry_cache_entry(
         session, target_kinds[0], obj, create=False
     )

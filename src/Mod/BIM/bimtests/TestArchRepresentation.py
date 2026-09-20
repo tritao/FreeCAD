@@ -201,6 +201,7 @@ class TestArchRepresentation(unittest.TestCase):
         from types import SimpleNamespace
 
         from bimplan.overlays.geometry import invalidate_plan_overlay_geometry_cache
+        from bimviews import representation_cache
 
         document = FreeCAD.newDocument("PlanRepresentationInvalidationTest")
         self.addCleanup(FreeCAD.closeDocument, document.Name)
@@ -228,11 +229,45 @@ class TestArchRepresentation(unittest.TestCase):
             openings=SimpleNamespace(is_hosted_opening_object=lambda _obj: False),
             hovered_opening=None,
         )
+        derived = object()
+        representation_cache.get_or_create_derived_value(
+            document,
+            "test",
+            "wall-derived",
+            lambda: derived,
+            dependencies=(wall,),
+        )
 
-        invalidate_plan_overlay_geometry_cache(session, wall)
+        invalidate_plan_overlay_geometry_cache(
+            session,
+            wall,
+            invalidate_representation=False,
+        )
 
         self.assertNotIn(wall.Name, caches["wall"])
         self.assertNotIn(wall.Name, caches["representation"])
+        self.assertIs(
+            derived,
+            representation_cache.get_or_create_derived_value(
+                document,
+                "test",
+                "wall-derived",
+                object,
+                dependencies=(wall,),
+            ),
+        )
+
+        invalidate_plan_overlay_geometry_cache(session, wall)
+        self.assertIsNot(
+            derived,
+            representation_cache.get_or_create_derived_value(
+                document,
+                "test",
+                "wall-derived",
+                object,
+                dependencies=(wall,),
+            ),
+        )
 
     def test_representation_request_key_includes_presentation_profile(self):
         from bimviews import representation_cache
