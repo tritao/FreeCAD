@@ -126,6 +126,17 @@ def compile_wall_recipe(recipe, tolerance=1e-7):
         for opening in openings
         if opening.z_min <= recipe.z_min + tolerance
     )
+    if boundary_openings and not recipe.trim_planes:
+        compilation = _compile_prismatic_profile(
+            recipe,
+            axis,
+            lateral,
+            side_extents,
+            boundary_openings,
+            tolerance,
+        )
+        if compilation is not None:
+            return compilation
     if recipe.trim_planes or boundary_openings:
         return _compile_boundary_shell(
             recipe, axis, lateral, footprint, side_extents, tolerance
@@ -167,6 +178,75 @@ def compile_wall_recipe(recipe, tolerance=1e-7):
         shape = profile.extrude(
             lateral * (recipe.section.y_max - recipe.section.y_min)
         )
+    except Part.OCCError:
+        return None
+    if shape.isNull() or not shape.isValid() or len(shape.Solids) != 1:
+        return None
+    return _compilation(shape, recipe, axis, tolerance)
+
+
+def _compile_prismatic_profile(
+    recipe,
+    axis,
+    lateral,
+    side_extents,
+    bottom_openings,
+    tolerance,
+):
+    """Extrude one elevation profile for an untrimmed straight wall."""
+
+    import Part
+
+    first_extents, second_extents = tuple(side_extents.values())
+    if any(
+        abs(first - second) > tolerance
+        for first, second in zip(first_extents, second_extents)
+    ):
+        return None
+    u_min, u_max = first_extents
+
+    def point(u, z):
+        result = recipe.axis_start.add(axis * float(u)).add(
+            lateral * recipe.section.y_min
+        )
+        result.z = float(z)
+        return result
+
+    def wire(points, reverse=False):
+        values = [point(u, z) for u, z in points]
+        if reverse:
+            values.reverse()
+        return Part.makePolygon((*values, values[0]))
+
+    outer = wire(
+        _elevation_outline(
+            u_min,
+            u_max,
+            recipe.z_min,
+            recipe.z_max,
+            bottom_openings,
+        )
+    )
+    holes = tuple(
+        wire(
+            (
+                (opening.u_min, opening.z_min),
+                (opening.u_max, opening.z_min),
+                (opening.u_max, opening.z_max),
+                (opening.u_min, opening.z_max),
+            ),
+            reverse=True,
+        )
+        for opening in recipe.openings
+        if opening not in bottom_openings
+    )
+    try:
+        profile = Part.Face([outer, *holes]) if holes else Part.Face(outer)
+        shape = profile.extrude(
+            lateral * (recipe.section.y_max - recipe.section.y_min)
+        )
+        if shape.Volume < 0:
+            shape.reverse()
     except Part.OCCError:
         return None
     if shape.isNull() or not shape.isValid() or len(shape.Solids) != 1:

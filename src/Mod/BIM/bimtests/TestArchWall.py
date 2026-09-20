@@ -883,7 +883,14 @@ class TestArchWall(TestArchBase.TestArchBase):
                 )
             legacy_shape = wall.Shape.copy()
 
-        compilation = ArchWallExact.compile_straight_wall(wall, wall.Proxy)
+        with patch.object(
+            Part,
+            "makeShell",
+            side_effect=AssertionError(
+                "untrimmed floor openings must use the prismatic compiler"
+            ),
+        ):
+            compilation = ArchWallExact.compile_straight_wall(wall, wall.Proxy)
         self.assertIsNotNone(compilation)
         self.assertTrue(compilation.shape.isValid())
         self.assertAlmostEqual(legacy_shape.Volume, compilation.shape.Volume, delta=1e-3)
