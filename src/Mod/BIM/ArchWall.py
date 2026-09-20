@@ -763,6 +763,7 @@ class _Wall(ArchComponent.Component):
         a mesh, just copy the mesh.
         """
 
+        self._exact_compilation = None
         if self.clone(obj):
             return
 
@@ -916,6 +917,7 @@ class _Wall(ArchComponent.Component):
             )
             self._apply_exact_area_metrics(obj, compilation)
             self._finish_execute(obj, base)
+            self._exact_compilation = compilation
             return
 
         relation_endings = ArchWallRelationResolver.collect_wall_relation_endings(obj)
@@ -1040,6 +1042,8 @@ class _Wall(ArchComponent.Component):
         prop: string
             The name of the property that has changed.
         """
+
+        self._exact_compilation = None
 
         if prop == "WallType" and not self._assigning_wall_type:
             wall_type = getattr(obj, "WallType", None)
@@ -1384,12 +1388,18 @@ class _Wall(ArchComponent.Component):
         if request.purpose == ArchRepresentation.RepresentationPurpose.PLAN:
             import ArchPlanAnalytic
 
-            analytic_model = ArchPlanAnalytic.straight_wall_plan_model(
-                obj,
-                self,
-                request,
-                opening_overrides=opening_overrides,
-            )
+            compilation = getattr(self, "_exact_compilation", None)
+            if compilation is not None and opening_overrides is None:
+                analytic_model = ArchPlanAnalytic.wall_plan_model_from_recipe(
+                    obj, compilation.recipe, request
+                )
+            else:
+                analytic_model = ArchPlanAnalytic.straight_wall_plan_model(
+                    obj,
+                    self,
+                    request,
+                    opening_overrides=opening_overrides,
+                )
         if analytic_model is None:
             cut_faces = tuple(self._getCutRepresentation(obj, request))
             face_meshes = ()

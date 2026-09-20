@@ -21,6 +21,7 @@ class WallExactCompilation:
     """An exact OCCT wall shape and its compiler-owned face semantics."""
 
     shape: object
+    recipe: object
     face_roles: tuple
     vertical_area: float
     horizontal_area: float
@@ -507,6 +508,7 @@ def _compilation(shape, recipe, axis, tolerance):
     top_face = top_faces[0]
     return WallExactCompilation(
         shape=shape,
+        recipe=recipe,
         face_roles=roles,
         vertical_area=vertical_area,
         horizontal_area=top_face.Area,

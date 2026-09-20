@@ -99,6 +99,19 @@ def straight_wall_plan_model(wall, proxy, request, opening_overrides=None):
     )
     if recipe is None:
         return None
+    return wall_plan_model_from_recipe(wall, recipe, request)
+
+
+def wall_plan_model_from_recipe(wall, recipe, request):
+    """Derive a requested Plan cut from an already resolved wall recipe."""
+
+    if getattr(request, "cut_offset", None) is None:
+        return None
+    frame = getattr(request, "reference_frame", None)
+    if frame is not None:
+        frame_normal = frame.Rotation.multVec(FreeCAD.Vector(0, 0, 1))
+        if abs(abs(frame_normal.z) - 1.0) > 1e-7:
+            return None
     cut_z = float(request.cut_offset)
     if frame is not None:
         cut_z = frame.multVec(FreeCAD.Vector(0, 0, cut_z)).z

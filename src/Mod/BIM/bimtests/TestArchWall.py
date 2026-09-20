@@ -535,6 +535,32 @@ class TestArchWall(TestArchBase.TestArchBase):
         self.assertAlmostEqual(600000.0, wall.HorizontalArea.Value)
         self.assertAlmostEqual(6400.0, wall.PerimeterLength.Value)
 
+    def test_exact_wall_plan_reuses_recomputed_geometry_recipe(self):
+        """Plan representation reuses exact state until the wall changes."""
+
+        wall = Arch.makeWall(length=3000, width=200, height=2500)
+        self.document.recompute()
+        compilation = wall.Proxy._exact_compilation
+        self.assertIsNotNone(compilation)
+
+        request = ArchRepresentation.RepresentationRequest(
+            purpose=ArchRepresentation.RepresentationPurpose.PLAN,
+            cut_offset=1000.0,
+            target_offset=0.0,
+        )
+        with patch.object(
+            ArchPlanAnalytic,
+            "straight_wall_geometry_recipe",
+            side_effect=AssertionError("resolved exact recipe must be reused"),
+        ):
+            representation = wall.Proxy.getRepresentation(wall, request)
+
+        self.assertIs(representation.analytic_model.recipe, compilation.recipe)
+        self.assertAlmostEqual(600000.0, representation.cut_geometry[0].Area)
+
+        wall.Width = 250.0
+        self.assertIsNone(wall.Proxy._exact_compilation)
+
     def test_multilayer_plan_faces_preserve_layer_material_ownership(self):
         first_material = Arch.makeMaterial(name="FirstLayerMaterial")
         second_material = Arch.makeMaterial(name="SecondLayerMaterial")
