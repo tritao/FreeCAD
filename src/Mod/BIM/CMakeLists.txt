@@ -30,6 +30,7 @@ SET(Arch_SRCS
     ArchWallType.py
     ArchWallConstruction.py
     ArchOpeningConstruction.py
+    ArchOpeningProfile.py
     ArchOpeningSemantic.py
     ArchContextualCreation.py
     ArchWallEndpoint.py

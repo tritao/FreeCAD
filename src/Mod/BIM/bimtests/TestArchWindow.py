@@ -28,6 +28,7 @@ import FreeCAD
 from bimtests import TestArchBase
 import Arch
 import ArchComponent
+import ArchOpeningProfile
 import ArchWindow  # For ArchWindow._Window proxy class
 import ArchWindowExact
 import Part
@@ -230,6 +231,33 @@ class TestArchWindow(TestArchBase.TestArchBase):
         self.assertIsNotNone(fresh)
         self.assertAlmostEqual(fresh.shape.Volume, reused.Volume, places=5)
         self.assertLess(fresh.shape.distToShape(reused)[0], 1e-6)
+
+    def test_rectangular_opening_profile_resizes_without_sketcher(self):
+        sketch = self._create_sketch_with_wires(
+            "SketchLightweightProfile",
+            [(0, 0, 900, 2100), (50, 50, 800, 2000)],
+        )
+        window = Arch.makeWindow(baseobj=sketch, name="LightweightProfile")
+        window.Width = 900
+        window.Height = 2100
+        self.document.recompute()
+
+        profile = ArchOpeningProfile.replace_opening_sketch(
+            window, name="LightweightProfileBase"
+        )
+        self.assertIsNotNone(profile)
+        self.document.removeObject(sketch.Name)
+        self.document.recompute()
+
+        self.assertEqual("RectangularOpeningProfile", profile.Proxy.Type)
+        self.assertEqual(2, len(profile.Shape.Wires))
+        window.Width = 1000
+        self.document.recompute()
+        self.assertAlmostEqual(1000.0, profile.Width.Value)
+        self.assertAlmostEqual(1000.0, profile.Shape.BoundBox.XLength)
+        self.assertAlmostEqual(50.0, profile.Shape.Wires[1].BoundBox.XMin)
+        self.assertAlmostEqual(950.0, profile.Shape.Wires[1].BoundBox.XMax)
+        self.assertTrue(window.Shape.isValid())
 
     def test_exact_window_compilation_cache_ensures_once(self):
         sketch = self._create_sketch_with_wires(

@@ -1285,6 +1285,9 @@ def _rewrite_window_size_by_scaling(base, target_width=None, target_height=None)
 def _get_window_resize_mode(base, prop_name, current_length):
     if base is None:
         return "property"
+    proxy = getattr(base, "Proxy", None)
+    if callable(getattr(proxy, "setOpeningDimension", None)):
+        return "property"
     if _has_named_constraint(base, prop_name):
         return "property"
     if current_length and current_length > 0.0:
@@ -3365,7 +3368,14 @@ class _Window(
         if not "Restore" in obj.State:
             if prop in ["Width", "Height", "Frame"]:
                 if obj.Base:
-                    if hasattr(obj.Base, "Constraints") and (
+                    profile_setter = getattr(
+                        getattr(obj.Base, "Proxy", None),
+                        "setOpeningDimension",
+                        None,
+                    )
+                    if prop in {"Width", "Height"} and callable(profile_setter):
+                        profile_setter(obj.Base, prop, getattr(obj, prop).Value)
+                    elif hasattr(obj.Base, "Constraints") and (
                         prop in [c.Name for c in obj.Base.Constraints]
                     ):
                         val = getattr(obj, prop).Value
