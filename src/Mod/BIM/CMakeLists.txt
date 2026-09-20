@@ -53,6 +53,7 @@ SET(Arch_SRCS
     ArchSectionPlane.py
     ArchSectionProjection.py
     ArchWindow.py
+    ArchWindowExact.py
     ArchWindowPresets.py
     ArchAxis.py
     ArchAxisSystem.py

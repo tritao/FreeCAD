@@ -43,6 +43,7 @@ import FreeCAD
 import ArchCommands
 import ArchComponent
 import ArchRepresentation
+import ArchWindowExact
 import ArchWindowPresets
 import Draft
 import DraftVecUtils
@@ -3622,15 +3623,20 @@ class _Window(
 
         pl = obj.Placement
         base = None
+        exact_compilation = None
         self.sshapes = []
         self.vshapes = []
         if obj.Base:
             if hasattr(obj, "Shape"):
                 if hasattr(obj, "WindowParts"):
                     if obj.WindowParts and (len(obj.WindowParts) % 5 == 0):
-                        shapes = self.buildShapes(obj)
-                        if shapes:
-                            base = Part.makeCompound(shapes)
+                        exact_compilation = ArchWindowExact.compile_window_parts(obj)
+                        if exact_compilation is not None:
+                            base = exact_compilation.shape
+                        else:
+                            shapes = self.buildShapes(obj)
+                            if shapes:
+                                base = Part.makeCompound(shapes)
                     elif not obj.WindowParts:
                         if obj.Base.Shape.Solids:
                             base = obj.Base.Shape.copy()
@@ -3669,6 +3675,7 @@ class _Window(
                     # boundaries. Refining their compound adds an OCCT pass
                     # without improving the construction result.
                     shape_is_refined=bool(obj.WindowParts),
+                    shape_is_validated=exact_compilation is not None,
                 )
             _set_placement_if_changed(obj, pl)
         else:

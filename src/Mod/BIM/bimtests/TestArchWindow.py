@@ -29,6 +29,7 @@ from bimtests import TestArchBase
 import Arch
 import ArchComponent
 import ArchWindow  # For ArchWindow._Window proxy class
+import ArchWindowExact
 import Part
 import Draft
 import Sketcher
@@ -153,6 +154,40 @@ class TestArchWindow(TestArchBase.TestArchBase):
         self.assertTrue(
             any(options.get("shape_is_refined") for options in apply_shape_options)
         )
+        self.assertTrue(window.Shape.isValid())
+
+    def test_exact_window_compiler_matches_legacy_planar_parts(self):
+        sketch = self._create_sketch_with_wires(
+            "SketchExactWindowParts",
+            [(0, 0, 1000, 1200), (100, 100, 800, 1000)],
+        )
+        window = Arch.makeWindow(baseobj=sketch, name="ExactWindowParts")
+        self.document.recompute()
+
+        compilation = ArchWindowExact.compile_window_parts(window)
+        legacy = Part.makeCompound(window.Proxy.buildShapes(window))
+
+        self.assertIsNotNone(compilation)
+        self.assertAlmostEqual(legacy.Volume, compilation.shape.Volume, places=6)
+        self.assertAlmostEqual(
+            legacy.BoundBox.DiagonalLength,
+            compilation.shape.BoundBox.DiagonalLength,
+            places=6,
+        )
+
+    def test_standard_window_execution_uses_exact_compiler(self):
+        sketch = self._create_sketch_with_wires(
+            "SketchExactWindowExecution", [(0, 0, 1000, 1200)]
+        )
+        window = Arch.makeWindow(baseobj=sketch, name="ExactWindowExecution")
+
+        with patch.object(
+            window.Proxy,
+            "buildShapes",
+            side_effect=AssertionError("supported WindowParts must use the exact compiler"),
+        ):
+            self.document.recompute()
+
         self.assertTrue(window.Shape.isValid())
 
     def test_create_from_sketch_two_wires_default_parts(self):
@@ -580,6 +615,36 @@ class TestArchWindow(TestArchBase.TestArchBase):
         )
         # The Y-coordinate should remain largely unchanged for a bottom-hinged (awning-style) window.
         self.assertAlmostEqual(initial_center.y, new_center.y, places=3)
+
+    def test_exact_window_compiler_matches_hinged_legacy_parts(self):
+        window = Arch.makeWindowPreset(
+            "Open 1-pane",
+            width=1000,
+            height=1200,
+            h1=50,
+            h2=50,
+            h3=0,
+            w1=100,
+            w2=50,
+            o1=0,
+            o2=50,
+        )
+        window.SymbolPlan = False
+        window.SymbolElevation = False
+        window.Opening = 50
+        self.document.recompute()
+
+        compilation = ArchWindowExact.compile_window_parts(window)
+        legacy = Part.makeCompound(window.Proxy.buildShapes(window))
+
+        self.assertIsNotNone(compilation)
+        self.assertAlmostEqual(legacy.Volume, compilation.shape.Volume, places=6)
+        self.assertEqual(len(legacy.Solids), len(compilation.shape.Solids))
+        for expected, actual in zip(legacy.Solids, compilation.shape.Solids):
+            self.assertLess(
+                expected.CenterOfMass.distanceToPoint(actual.CenterOfMass),
+                1e-6,
+            )
 
     def test_symbol_plan_creates_wire_geometry(self):
         """Test that enabling SymbolPlan adds 2D wire geometry to the window's shape."""
