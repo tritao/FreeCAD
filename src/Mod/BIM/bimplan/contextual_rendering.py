@@ -333,7 +333,12 @@ class PlanContextualRenderingAPI:
         # the freshly installed semantic representation.
         with phase("contextual_edit_representations"):
             for source in sources:
-                self._refresh_source(source)
+                source_name = str(getattr(source, "Name", "unknown") or "unknown")
+                with phase(
+                    "contextual_edit_representation_source_{}".format(source_name),
+                    representation_source=source,
+                ):
+                    self._refresh_source(source)
             self.reconcile_replaced_source_visibility()
             representation_layers.mark_current(self._renderer)
         visual_kinds = []
