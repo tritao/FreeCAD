@@ -269,6 +269,51 @@ def _set_placement_if_changed(obj, placement):
         obj.Placement = placement
 
 
+def _extrude_window_part_profile(outer_wire, inner_wires, vector):
+    """Extrude a perforated part profile without a three-dimensional Boolean."""
+
+    import Part
+
+    inner_wires = tuple(inner_wires)
+    if not inner_wires:
+        return Part.Face(outer_wire).extrude(vector)
+    try:
+        profile_wires = [outer_wire, *inner_wires]
+        profile = Part.makeFace(
+            profile_wires,
+            "Part::FaceMakerCheese",
+            noElementMap=True,
+        )
+        shape = profile.extrude(vector)
+        if not shape.isNull() and shape.isValid() and len(shape.Solids) == 1:
+            return shape
+    except Part.OCCError:
+        pass
+    try:
+        profile = Part.Face(outer_wire)
+        for wire in inner_wires:
+            profile = profile.cut(Part.Face(wire))
+        shape = profile.extrude(vector)
+        if not shape.isNull() and shape.isValid():
+            return shape
+    except Part.OCCError:
+        pass
+    return _extrude_window_part_profile_with_booleans(
+        outer_wire, inner_wires, vector
+    )
+
+
+def _extrude_window_part_profile_with_booleans(outer_wire, inner_wires, vector):
+    """Compatibility fallback for profiles unsupported by the face maker."""
+
+    import Part
+
+    shape = Part.Face(outer_wire).extrude(vector)
+    for wire in inner_wires:
+        shape = shape.cut(Part.Face(wire).extrude(vector))
+    return shape
+
+
 def canApplyWindowPreset(obj, preset_name=None):
     """Return True when the object can accept an in-place built-in preset rewrite."""
 
@@ -3499,11 +3544,7 @@ class _Window(
                 thk = float(thk) + V
                 if thk:
                     exv = DraftVecUtils.scaleTo(norm, thk)
-                    shape = shape.extrude(exv)
-                    for w in wires:
-                        f = Part.Face(w)
-                        f = f.extrude(exv)
-                        shape = shape.cut(f)
+                    shape = _extrude_window_part_profile(ext, wires, exv)
                 if obj.WindowParts[(i * 5) + 4]:
                     V = 0
                     zof = obj.WindowParts[(i * 5) + 4]

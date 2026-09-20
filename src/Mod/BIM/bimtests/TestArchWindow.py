@@ -22,6 +22,8 @@
 # *                                                                         *
 # ***************************************************************************
 
+from unittest.mock import patch
+
 import FreeCAD
 from bimtests import TestArchBase
 import Arch
@@ -32,6 +34,64 @@ import Sketcher
 
 
 class TestArchWindow(TestArchBase.TestArchBase):
+
+    def test_perforated_window_part_extrudes_without_changing_volume(self):
+        outer = Part.makePolygon(
+            [
+                FreeCAD.Vector(0, 0, 0),
+                FreeCAD.Vector(100, 0, 0),
+                FreeCAD.Vector(100, 100, 0),
+                FreeCAD.Vector(0, 100, 0),
+                FreeCAD.Vector(0, 0, 0),
+            ]
+        )
+        inner = Part.makePolygon(
+            [
+                FreeCAD.Vector(20, 20, 0),
+                FreeCAD.Vector(80, 20, 0),
+                FreeCAD.Vector(80, 80, 0),
+                FreeCAD.Vector(20, 80, 0),
+                FreeCAD.Vector(20, 20, 0),
+            ]
+        )
+
+        with patch.object(
+            ArchWindow,
+            "_extrude_window_part_profile_with_booleans",
+            side_effect=AssertionError("valid perforated profiles must not use a Boolean"),
+        ):
+            shape = ArchWindow._extrude_window_part_profile(
+                outer, (inner,), FreeCAD.Vector(0, 0, 20)
+            )
+
+        self.assertTrue(shape.isValid())
+        self.assertEqual(1, len(shape.Solids))
+        self.assertAlmostEqual((10000 - 3600) * 20, shape.Volume)
+
+    def test_open_window_part_subtracts_touching_profile_before_extrusion(self):
+        outer = Part.makePlane(100, 100).OuterWire
+        cutout = Part.makePolygon(
+            [
+                FreeCAD.Vector(0, 20, 0),
+                FreeCAD.Vector(50, 20, 0),
+                FreeCAD.Vector(50, 80, 0),
+                FreeCAD.Vector(0, 80, 0),
+                FreeCAD.Vector(0, 20, 0),
+            ]
+        )
+
+        with patch.object(
+            ArchWindow,
+            "_extrude_window_part_profile_with_booleans",
+            side_effect=AssertionError("open profiles must use a two-dimensional cut"),
+        ):
+            shape = ArchWindow._extrude_window_part_profile(
+                outer, (cutout,), FreeCAD.Vector(0, 0, 20)
+            )
+
+        self.assertTrue(shape.isValid())
+        self.assertEqual(1, len(shape.Solids))
+        self.assertAlmostEqual((10000 - 3000) * 20, shape.Volume)
 
     def test_create_no_args(self):
         """Test creating a window with no arguments."""
