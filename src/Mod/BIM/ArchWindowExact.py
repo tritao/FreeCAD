@@ -109,7 +109,7 @@ def compile_window_parts(obj, previous=None):
         parsed = _parse_selector(parts[index + 2], base_shape)
         if parsed is None:
             return None
-        wires, hinge_index, mode = parsed
+        wires, wire_indices, hinge_index, mode = parsed
         outer = max(wires, key=lambda wire: wire.BoundBox.DiagonalLength)
         inner = tuple(wire for wire in wires if not wire.isSame(outer))
         try:
@@ -133,11 +133,18 @@ def compile_window_parts(obj, previous=None):
         )
         reused = shape is not None
         if not reused:
+            profile_face = None
+            face_provider = getattr(
+                getattr(base, "Proxy", None), "makeSelectedFace", None
+            )
+            if callable(face_provider):
+                profile_face = face_provider(base, wire_indices)
             shape = _extrude_window_part_profile(
                 outer,
                 inner,
                 extrusion,
                 outer_face=face,
+                profile_face=profile_face,
             )
         if not shape or shape.isNull() or len(shape.Solids) != 1:
             return None
@@ -303,6 +310,7 @@ def _opening_envelope(base_shape):
 
 def _parse_selector(selector, base_shape):
     wires = []
+    wire_indices = []
     hinge_index = None
     mode = None
     try:
@@ -312,6 +320,7 @@ def _parse_selector(selector, base_shape):
                 if wire_index < 0 or wire_index >= len(base_shape.Wires):
                     return None
                 wires.append(base_shape.Wires[wire_index])
+                wire_indices.append(wire_index)
             elif token.startswith("Edge"):
                 hinge_index = int(token[4:]) - 1
                 if hinge_index < 0 or hinge_index >= len(base_shape.Edges):
@@ -324,7 +333,7 @@ def _parse_selector(selector, base_shape):
                 return None
     except ValueError:
         return None
-    return (tuple(wires), hinge_index, mode) if wires else None
+    return (tuple(wires), tuple(wire_indices), hinge_index, mode) if wires else None
 
 
 def _part_normal(obj, face):

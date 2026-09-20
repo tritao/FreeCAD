@@ -258,11 +258,15 @@ def validateWindowPresetApplication(obj, preset_name=None):
     )
 
 
-def _extrude_window_part_profile(outer_wire, inner_wires, vector, outer_face=None):
+def _extrude_window_part_profile(
+    outer_wire, inner_wires, vector, outer_face=None, profile_face=None
+):
     """Extrude a perforated part profile without a three-dimensional Boolean."""
 
     import Part
 
+    if profile_face is not None:
+        return profile_face.extrude(vector)
     inner_wires = tuple(inner_wires)
     if not inner_wires:
         profile = outer_face if outer_face is not None else Part.Face(outer_wire)

@@ -81,6 +81,69 @@ class RectangularOpeningProfile:
             wires.append(Part.makePolygon((*points, points[0])))
         obj.Shape = Part.makeCompound(wires)
 
+    @staticmethod
+    def makeSelectedFace(obj, wire_indices, tolerance=1e-7):
+        """Build a directly bounded face for one supported wire selection."""
+
+        import Part
+
+        indices = tuple(int(index) for index in wire_indices)
+        values = tuple(float(value) for value in obj.ProfileInsets)
+        insets = tuple(zip(values[0::4], values[1::4], values[2::4], values[3::4]))
+        if len(indices) != 2 or any(index < 0 or index >= len(insets) for index in indices):
+            return None
+
+        width = float(obj.Width.Value)
+        height = float(obj.Height.Value)
+
+        def rectangle(index):
+            left, right, bottom, top = insets[index]
+            return (left, width - right, bottom, height - top)
+
+        outer = rectangle(indices[0])
+        inner = rectangle(indices[1])
+        ox0, ox1, oy0, oy1 = outer
+        ix0, ix1, iy0, iy1 = inner
+        if not (
+            ox0 <= ix0 + tolerance
+            and ix1 <= ox1 + tolerance
+            and oy0 <= iy0 + tolerance
+            and iy1 <= oy1 + tolerance
+        ):
+            return None
+
+        if abs(iy0 - oy0) <= tolerance:
+            coordinates = (
+                (ox0, oy0), (ix0, oy0), (ix0, iy1), (ix1, iy1),
+                (ix1, oy0), (ox1, oy0), (ox1, oy1), (ox0, oy1),
+            )
+        elif abs(iy1 - oy1) <= tolerance:
+            coordinates = (
+                (ox0, oy0), (ox1, oy0), (ox1, oy1), (ix1, oy1),
+                (ix1, iy0), (ix0, iy0), (ix0, oy1), (ox0, oy1),
+            )
+        elif abs(ix0 - ox0) <= tolerance:
+            coordinates = (
+                (ox0, oy0), (ox1, oy0), (ox1, oy1), (ox0, oy1),
+                (ox0, iy1), (ix1, iy1), (ix1, iy0), (ox0, iy0),
+            )
+        elif abs(ix1 - ox1) <= tolerance:
+            coordinates = (
+                (ox0, oy0), (ox1, oy0), (ox1, iy0), (ix0, iy0),
+                (ix0, iy1), (ox1, iy1), (ox1, oy1), (ox0, oy1),
+            )
+        else:
+            return None
+
+        placement = obj.getGlobalPlacement()
+        points = tuple(
+            placement.multVec(FreeCAD.Vector(x, y, 0.0)) for x, y in coordinates
+        )
+        try:
+            return Part.Face(Part.makePolygon((*points, points[0])))
+        except Part.OCCError:
+            return None
+
 
 def make_rectangular_opening_profile(
     width,

@@ -261,6 +261,19 @@ class TestArchWindow(TestArchBase.TestArchBase):
         self.assertAlmostEqual(950.0, profile.Shape.Wires[1].BoundBox.XMax)
         self.assertTrue(window.Shape.isValid())
 
+        open_profile = ArchOpeningProfile.make_rectangular_opening_profile(
+            900,
+            2100,
+            ((0, 0, 0, 0), (50, 50, 0, 50)),
+            name="DirectOpenProfile",
+            document=self.document,
+        )
+        self.document.recompute()
+        face = open_profile.Proxy.makeSelectedFace(open_profile, (0, 1))
+        self.assertIsNotNone(face)
+        self.assertTrue(face.isValid())
+        self.assertAlmostEqual(900 * 2100 - 800 * 2050, face.Area)
+
     def test_exact_window_compilation_cache_ensures_once(self):
         sketch = self._create_sketch_with_wires(
             "SketchExactCache", [(0, 0, 900, 1200)]
