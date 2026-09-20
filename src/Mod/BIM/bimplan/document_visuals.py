@@ -175,6 +175,25 @@ def _queue_deferred_document_visual_flush(session):
         visual_state.document_visual_flush_queued = False
 
 
+def _contextual_edit_consumed_sources(impacts):
+    """Return invalidations covered by an edit's recompute and visual refresh."""
+
+    consumed_sources = set()
+    for impact in impacts:
+        consumed_sources.update(
+            source
+            for source in impact.representation_sources
+            if source is not None
+        )
+        recompute = getattr(impact, "recompute", None)
+        consumed_sources.update(
+            root
+            for root in tuple(getattr(recompute, "roots", ()) or ())
+            if root is not None
+        )
+    return consumed_sources
+
+
 def _flush_deferred_document_visual_updates(session):
     visual_state = _document_visual_state(session)
     visual_state.document_visual_flush_queued = False
@@ -207,14 +226,8 @@ def _flush_deferred_document_visual_updates(session):
     if not document_is_alive(session):
         return False
     if contextual_impacts:
-        refreshed_sources = {
-            source
-            for impact in contextual_impacts
-            for source in impact.representation_sources
-            if source is not None
-        }
         visual_state.dirty_contextual_representation_sources.difference_update(
-            refreshed_sources
+            _contextual_edit_consumed_sources(contextual_impacts)
         )
         if visual_state.dirty_contextual_representation_sources:
             queue_contextual_representation_refresh(

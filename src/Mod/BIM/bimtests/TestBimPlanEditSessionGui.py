@@ -21,6 +21,7 @@ from ArchRepresentation import (
 )
 from bimtests.TestArchBaseGui import TestArchBaseGui
 from bimplan.runtime.session import PlanEditSession, activate_representation_request
+from bimplan import document_visuals as plan_document_visuals
 from bimplan import snap as plan_snap
 from bimcontextual.session import ContextualSession
 from bimcontextual.interaction import ContextualInteractionHost
@@ -2047,6 +2048,20 @@ class TestBimPlanEditSessionGui(TestArchBaseGui):
         finally:
             session.close()
             FreeCADGui.Selection.clearSelection()
+
+    def test_contextual_edit_consumes_declared_recompute_and_visual_sources(self):
+        base = object()
+        source = object()
+        unrelated = object()
+        impact = SimpleNamespace(
+            recompute=SimpleNamespace(roots=(base, None)),
+            representation_sources=(source, None),
+        )
+
+        consumed = plan_document_visuals._contextual_edit_consumed_sources((impact,))
+
+        self.assertEqual({base, source}, consumed)
+        self.assertNotIn(unrelated, consumed)
 
     def test_contextual_wall_width_edit_is_transactional(self):
         wall = Arch.makeWall(length=3000, width=200, height=2500, align="Center")
