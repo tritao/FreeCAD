@@ -227,6 +227,26 @@ class TestArchWindow(TestArchBase.TestArchBase):
         self.assertAlmostEqual(fresh.shape.Volume, reused.Volume, places=5)
         self.assertLess(fresh.shape.distToShape(reused)[0], 1e-6)
 
+    def test_exact_window_compilation_cache_ensures_once(self):
+        sketch = self._create_sketch_with_wires(
+            "SketchExactCache", [(0, 0, 900, 1200)]
+        )
+        window = Arch.makeWindow(baseobj=sketch, name="ExactCache")
+        self.document.recompute()
+        window.Proxy._exact_compilation_cache.clear()
+
+        with patch.object(
+            ArchWindowExact,
+            "compile_window_parts",
+            wraps=ArchWindowExact.compile_window_parts,
+        ) as compile_parts:
+            first = window.Proxy.ensureExactCompilation(window)
+            second = window.Proxy.ensureExactCompilation(window)
+
+        self.assertIsNotNone(first)
+        self.assertIs(first, second)
+        self.assertEqual(1, compile_parts.call_count)
+
     def test_create_from_sketch_two_wires_default_parts(self):
         """Test creating a window from two-wire sketch (concentric), relying on default parts."""
         sketch = self._create_sketch_with_wires(

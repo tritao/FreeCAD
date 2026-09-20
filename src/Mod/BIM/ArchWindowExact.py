@@ -36,6 +36,33 @@ class WindowExactCompilation:
     source_signature: tuple
 
 
+class WindowExactCompilationCache:
+    """Derived exact geometry retained by one Window proxy."""
+
+    def __init__(self):
+        self.current = None
+        self.previous = None
+
+    def invalidate(self):
+        if self.current is not None:
+            self.previous = self.current
+        self.current = None
+
+    def clear(self):
+        self.current = None
+        self.previous = None
+
+    def ensure(self, obj):
+        if self.current is None:
+            self.current = compile_window_parts(obj, previous=self.previous)
+            self.previous = None
+        return self.current
+
+    def publish(self, compilation):
+        self.current = compilation
+        self.previous = None
+
+
 def compile_window_parts(obj, previous=None):
     """Compile supported planar WindowParts, or return ``None``.
 

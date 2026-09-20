@@ -3060,14 +3060,24 @@ class _Window(
     # without triggering a deep copy of the geometry. See ArchComponent.Component.appLinkExecute()
     LinkOverrideProperties = ["Hosts"]
 
+    @property
+    def _exact_compilation(self):
+        cache = getattr(self, "_exact_compilation_cache", None)
+        return cache.current if cache is not None else None
+
+    def ensureExactCompilation(self, obj=None):
+        """Return current exact geometry, compiling it once when necessary."""
+
+        source = obj or self.Object
+        return self._exact_compilation_cache.ensure(source)
+
     def __init__(self, obj):
 
         ArchComponent.Component.__init__(self, obj)
         self.Object = obj
         self.Type = "Window"
         self._opening_tool_cache = {}
-        self._exact_compilation = None
-        self._previous_exact_compilation = None
+        self._exact_compilation_cache = ArchWindowExact.WindowExactCompilationCache()
         self.setProperties(obj)
         obj.IfcType = "Window"
         obj.MoveWithHost = True
@@ -3270,8 +3280,7 @@ class _Window(
 
         self.Object = obj
         self._opening_tool_cache = {}
-        self._exact_compilation = None
-        self._previous_exact_compilation = None
+        self._exact_compilation_cache = ArchWindowExact.WindowExactCompilationCache()
         ArchComponent.Component.onDocumentRestored(self, obj)
         if "Hosts" in obj.PropertiesList:
             self._migrate_hosts_property(obj)
@@ -3300,8 +3309,7 @@ class _Window(
 
         self.Type = "Window"
         self._opening_tool_cache = {}
-        self._exact_compilation = None
-        self._previous_exact_compilation = None
+        self._exact_compilation_cache = ArchWindowExact.WindowExactCompilationCache()
 
     def onBeforeChange(self, obj, prop):
 
@@ -3324,9 +3332,7 @@ class _Window(
             "AutoNormalReversed",
             "Shape",
         }:
-            if self._exact_compilation is not None:
-                self._previous_exact_compilation = self._exact_compilation
-            self._exact_compilation = None
+            self._exact_compilation_cache.invalidate()
         if prop == "Hosts" and "Restore" not in obj.State:
             self._sync_host_dependencies(obj, getattr(self, "Hosts", ()))
         if prop in {
@@ -3648,11 +3654,6 @@ class _Window(
         import DraftGeomUtils
         import math
 
-        previous_exact_compilation = getattr(
-            self, "_previous_exact_compilation", None
-        )
-        self._exact_compilation = None
-        self._previous_exact_compilation = None
         pl = obj.Placement
         base = None
         exact_compilation = None
@@ -3662,9 +3663,7 @@ class _Window(
             if hasattr(obj, "Shape"):
                 if hasattr(obj, "WindowParts"):
                     if obj.WindowParts and (len(obj.WindowParts) % 5 == 0):
-                        exact_compilation = ArchWindowExact.compile_window_parts(
-                            obj, previous=previous_exact_compilation
-                        )
+                        exact_compilation = self.ensureExactCompilation(obj)
                         if exact_compilation is not None:
                             base = exact_compilation.shape
                         else:
@@ -3711,7 +3710,7 @@ class _Window(
                     shape_is_refined=bool(obj.WindowParts),
                     shape_is_validated=exact_compilation is not None,
                 )
-                self._exact_compilation = exact_compilation
+                self._exact_compilation_cache.publish(exact_compilation)
             ArchComponent.set_placement_if_changed(obj, pl)
         else:
             obj.Shape = Part.Shape()
