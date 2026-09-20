@@ -524,9 +524,17 @@ def resizeWindow(
             placement.Base = placement.Base.add(FreeCAD.Vector(anchor_shift))
             target.Placement = placement
         obj.touch()
-        for host in set(getattr(obj, "Hosts", None) or []):
+        hosts = set(getattr(obj, "Hosts", None) or [])
+        for host in hosts:
             host.touch()
-        doc.recompute()
+        if anchor_shift is not None and not preserve_anchor:
+            recompute_targets = []
+            for target in (base, obj, *hosts):
+                if target is not None and target not in recompute_targets:
+                    recompute_targets.append(target)
+            doc.recompute(recompute_targets)
+        else:
+            doc.recompute()
         doc.commitTransaction()
     except Exception:
         try:
