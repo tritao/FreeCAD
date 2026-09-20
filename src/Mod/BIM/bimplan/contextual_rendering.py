@@ -333,7 +333,7 @@ class PlanContextualRenderingAPI:
         # the freshly installed semantic representation.
         with phase("contextual_edit_representations"):
             for source in sources:
-                source_name = str(getattr(source, "Name", "unknown") or "unknown")
+                source_name = source.Name
                 with phase(
                     "contextual_edit_representation_source_{}".format(source_name),
                     representation_source=source,
