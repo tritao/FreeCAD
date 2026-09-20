@@ -267,18 +267,19 @@ def _extrude_window_part_profile(outer_wire, inner_wires, vector, outer_face=Non
     if not inner_wires:
         profile = outer_face if outer_face is not None else Part.Face(outer_wire)
         return profile.extrude(vector)
-    try:
-        profile_wires = [outer_wire, *inner_wires]
-        profile = Part.makeFace(
-            profile_wires,
-            "Part::FaceMakerCheese",
-            noElementMap=True,
-        )
-        shape = profile.extrude(vector)
-        if not shape.isNull() and len(shape.Solids) == 1:
-            return shape
-    except Part.OCCError:
-        pass
+    if not _window_profile_wires_touch(outer_wire, inner_wires):
+        try:
+            profile_wires = [outer_wire, *inner_wires]
+            profile = Part.makeFace(
+                profile_wires,
+                "Part::FaceMakerCheese",
+                noElementMap=True,
+            )
+            shape = profile.extrude(vector)
+            if not shape.isNull() and len(shape.Solids) == 1:
+                return shape
+        except Part.OCCError:
+            pass
     try:
         profile = outer_face if outer_face is not None else Part.Face(outer_wire)
         for wire in inner_wires:
@@ -294,6 +295,22 @@ def _extrude_window_part_profile(outer_wire, inner_wires, vector, outer_face=Non
         vector,
         outer_face=outer_face,
     )
+
+
+def _window_profile_wires_touch(outer_wire, inner_wires, tolerance=1e-7):
+    """Return whether nominal profile holes meet another profile boundary."""
+
+    import Part
+
+    boundaries = (outer_wire, *inner_wires)
+    for index, first in enumerate(boundaries):
+        for second in boundaries[index + 1 :]:
+            try:
+                if first.distToShape(second)[0] <= tolerance:
+                    return True
+            except Part.OCCError:
+                return True
+    return False
 
 
 def _extrude_window_part_profile_with_booleans(

@@ -86,6 +86,10 @@ class TestArchWindow(TestArchBase.TestArchBase):
             ArchWindow,
             "_extrude_window_part_profile_with_booleans",
             side_effect=AssertionError("open profiles must use a two-dimensional cut"),
+        ), patch.object(
+            Part,
+            "makeFace",
+            side_effect=AssertionError("touching wires must skip the hole face maker"),
         ):
             shape = ArchWindow._extrude_window_part_profile(
                 outer, (cutout,), FreeCAD.Vector(0, 0, 20)
