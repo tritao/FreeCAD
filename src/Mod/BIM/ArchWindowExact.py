@@ -29,10 +29,14 @@ class WindowExactCompilation:
 
     shape: object
     part_shapes: tuple
+    closed_part_shapes: tuple
+    part_profiles: tuple
     opening_envelope: HostedOpeningEnvelope
+    base_placement: object
+    source_signature: tuple
 
 
-def compile_window_parts(obj):
+def compile_window_parts(obj, previous=None):
     """Compile supported planar WindowParts, or return ``None``.
 
     This deliberately covers only construction geometry. Legacy plan/elevation
@@ -68,9 +72,13 @@ def compile_window_parts(obj):
     import Part
     from ArchWindow import _extrude_window_part_profile
 
+    source_signature = _source_signature(obj, parts)
+    base_placement = FreeCAD.Placement(base.getGlobalPlacement())
     result = []
+    closed_shapes = []
+    part_profiles = []
     movement = None
-    for index in range(0, len(parts), 5):
+    for part_index, index in enumerate(range(0, len(parts), 5)):
         parsed = _parse_selector(parts[index + 2], base_shape)
         if parsed is None:
             return None
@@ -88,18 +96,32 @@ def compile_window_parts(obj):
             return None
 
         extrusion = DraftVecUtils.scaleTo(normal, thickness)
-        shape = _extrude_window_part_profile(
-            outer,
-            inner,
-            extrusion,
-            outer_face=face,
+        profile = _profile_points(wires, base_placement)
+        shape = _reuse_closed_part(
+            previous,
+            part_index,
+            profile,
+            base_placement,
+            source_signature,
         )
+        reused = shape is not None
+        if not reused:
+            shape = _extrude_window_part_profile(
+                outer,
+                inner,
+                extrusion,
+                outer_face=face,
+            )
         if not shape or shape.isNull() or len(shape.Solids) != 1:
             return None
         offset_vector = FreeCAD.Vector()
         if offset:
             offset_vector = DraftVecUtils.scaleTo(normal, offset)
-            shape.translate(offset_vector)
+            if not reused:
+                shape.translate(offset_vector)
+
+        closed_shapes.append(shape.copy())
+        part_profiles.append(profile)
 
         if hinge_index is not None and mode:
             movement = _part_movement(
@@ -133,8 +155,95 @@ def compile_window_parts(obj):
     return WindowExactCompilation(
         shape=shape,
         part_shapes=tuple(result),
+        closed_part_shapes=tuple(closed_shapes),
+        part_profiles=tuple(part_profiles),
         opening_envelope=envelope,
+        base_placement=base_placement,
+        source_signature=source_signature,
     )
+
+
+def _source_signature(obj, parts):
+    normal = FreeCAD.Vector(getattr(obj, "Normal", FreeCAD.Vector()))
+    return (
+        parts,
+        float(getattr(getattr(obj, "Frame", 0.0), "Value", 0.0)),
+        float(getattr(getattr(obj, "Offset", 0.0), "Value", 0.0)),
+        (normal.x, normal.y, normal.z),
+        bool(getattr(obj, "AutoNormalReversed", False)),
+    )
+
+
+def _profile_points(wires, placement):
+    inverse = placement.inverse()
+    return tuple(
+        tuple(
+            tuple(inverse.multVec(vertex.Point))
+            for vertex in wire.Vertexes
+        )
+        for wire in wires
+    )
+
+
+def _reuse_closed_part(previous, index, profile, placement, source_signature):
+    """Reuse one part only when its selected wires share one exact affine map."""
+
+    if (
+        previous is None
+        or previous.source_signature != source_signature
+        or index >= len(previous.closed_part_shapes)
+        or index >= len(previous.part_profiles)
+    ):
+        return None
+    old_profile = previous.part_profiles[index]
+    if tuple(map(len, old_profile)) != tuple(map(len, profile)):
+        return None
+    old_points = tuple(point for wire in old_profile for point in wire)
+    new_points = tuple(point for wire in profile for point in wire)
+    if not old_points:
+        return None
+
+    def axis_transform(axis):
+        old_values = [point[axis] for point in old_points]
+        new_values = [point[axis] for point in new_points]
+        old_span = max(old_values) - min(old_values)
+        new_span = max(new_values) - min(new_values)
+        if old_span <= 1e-9:
+            return (1.0, new_values[0] - old_values[0])
+        scale = new_span / old_span
+        return (scale, min(new_values) - min(old_values) * scale)
+
+    scale_x, offset_x = axis_transform(0)
+    scale_y, offset_y = axis_transform(1)
+    scale_z, offset_z = axis_transform(2)
+    for old, new in zip(old_points, new_points):
+        mapped = (
+            old[0] * scale_x + offset_x,
+            old[1] * scale_y + offset_y,
+            old[2] * scale_z + offset_z,
+        )
+        if any(abs(actual - expected) > 1e-6 for actual, expected in zip(mapped, new)):
+            return None
+
+    local_scale = FreeCAD.Matrix()
+    local_scale.A11 = scale_x
+    local_scale.A22 = scale_y
+    local_scale.A33 = scale_z
+    local_scale.A14 = offset_x
+    local_scale.A24 = offset_y
+    local_scale.A34 = offset_z
+    transform = (
+        placement.toMatrix()
+        * local_scale
+        * previous.base_placement.inverse().toMatrix()
+    )
+    try:
+        shape = previous.closed_part_shapes[index].transformGeometry(transform)
+    except Exception:
+        return None
+    if not shape or shape.isNull() or len(shape.Solids) != 1:
+        return None
+    return shape
 
 
 def _opening_envelope(base_shape):

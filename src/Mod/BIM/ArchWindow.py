@@ -3067,6 +3067,7 @@ class _Window(
         self.Type = "Window"
         self._opening_tool_cache = {}
         self._exact_compilation = None
+        self._previous_exact_compilation = None
         self.setProperties(obj)
         obj.IfcType = "Window"
         obj.MoveWithHost = True
@@ -3270,6 +3271,7 @@ class _Window(
         self.Object = obj
         self._opening_tool_cache = {}
         self._exact_compilation = None
+        self._previous_exact_compilation = None
         ArchComponent.Component.onDocumentRestored(self, obj)
         if "Hosts" in obj.PropertiesList:
             self._migrate_hosts_property(obj)
@@ -3299,6 +3301,7 @@ class _Window(
         self.Type = "Window"
         self._opening_tool_cache = {}
         self._exact_compilation = None
+        self._previous_exact_compilation = None
 
     def onBeforeChange(self, obj, prop):
 
@@ -3321,6 +3324,8 @@ class _Window(
             "AutoNormalReversed",
             "Shape",
         }:
+            if self._exact_compilation is not None:
+                self._previous_exact_compilation = self._exact_compilation
             self._exact_compilation = None
         if prop == "Hosts" and "Restore" not in obj.State:
             self._sync_host_dependencies(obj, getattr(self, "Hosts", ()))
@@ -3643,7 +3648,11 @@ class _Window(
         import DraftGeomUtils
         import math
 
+        previous_exact_compilation = getattr(
+            self, "_previous_exact_compilation", None
+        )
         self._exact_compilation = None
+        self._previous_exact_compilation = None
         pl = obj.Placement
         base = None
         exact_compilation = None
@@ -3653,7 +3662,9 @@ class _Window(
             if hasattr(obj, "Shape"):
                 if hasattr(obj, "WindowParts"):
                     if obj.WindowParts and (len(obj.WindowParts) % 5 == 0):
-                        exact_compilation = ArchWindowExact.compile_window_parts(obj)
+                        exact_compilation = ArchWindowExact.compile_window_parts(
+                            obj, previous=previous_exact_compilation
+                        )
                         if exact_compilation is not None:
                             base = exact_compilation.shape
                         else:

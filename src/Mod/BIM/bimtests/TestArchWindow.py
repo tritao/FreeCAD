@@ -200,6 +200,33 @@ class TestArchWindow(TestArchBase.TestArchBase):
         window.Width = window.Width.Value + 1.0
         self.assertIsNone(window.Proxy._exact_compilation)
 
+    def test_exact_window_resize_reuses_closed_part_solids(self):
+        sketch = self._create_sketch_with_wires(
+            "SketchExactResize",
+            [(0, 0, 900, 2100), (100, 100, 700, 1900)],
+        )
+        window = Arch.makeWindow(baseobj=sketch, name="ExactResize")
+        window.Opening = 100
+        self.document.recompute()
+
+        status = ArchWindow.validateWindowResize(window, width=800)
+        self.assertTrue(status.allowed)
+        ArchWindow._apply_window_resize_mutation(window, status, width=800)
+        original_extrude = ArchWindow._extrude_window_part_profile
+        with patch.object(
+            ArchWindow,
+            "_extrude_window_part_profile",
+            wraps=original_extrude,
+        ) as extrude:
+            self.document.recompute()
+        self.assertLess(extrude.call_count, len(window.WindowParts) // 5)
+
+        reused = window.Shape.copy()
+        fresh = ArchWindowExact.compile_window_parts(window)
+        self.assertIsNotNone(fresh)
+        self.assertAlmostEqual(fresh.shape.Volume, reused.Volume, places=5)
+        self.assertLess(fresh.shape.distToShape(reused)[0], 1e-6)
+
     def test_create_from_sketch_two_wires_default_parts(self):
         """Test creating a window from two-wire sketch (concentric), relying on default parts."""
         sketch = self._create_sketch_with_wires(
