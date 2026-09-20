@@ -258,18 +258,6 @@ def validateWindowPresetApplication(obj, preset_name=None):
     )
 
 
-def _set_placement_if_changed(obj, placement):
-    """Assign placement without dirtying the object when it is unchanged."""
-
-    try:
-        delta = FreeCAD.Placement(obj.Placement).inverse().multiply(FreeCAD.Placement(placement))
-        unchanged = delta.Base.Length < 1e-6 and delta.Rotation.Angle < 1e-6
-    except Exception:
-        unchanged = False
-    if not unchanged:
-        obj.Placement = placement
-
-
 def _extrude_window_part_profile(outer_wire, inner_wires, vector, outer_face=None):
     """Extrude a perforated part profile without a three-dimensional Boolean."""
 
@@ -3713,7 +3701,7 @@ class _Window(
                     shape_is_validated=exact_compilation is not None,
                 )
                 self._exact_compilation = exact_compilation
-            _set_placement_if_changed(obj, pl)
+            ArchComponent.set_placement_if_changed(obj, pl)
         else:
             obj.Shape = Part.Shape()
         if hasattr(obj, "Area"):

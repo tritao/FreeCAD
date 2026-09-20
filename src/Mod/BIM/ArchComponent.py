@@ -68,6 +68,22 @@ else:
     # \endcond
 
 
+def set_placement_if_changed(obj, placement, tolerance=1e-6):
+    """Assign ``placement`` only when it differs from the object's placement."""
+
+    try:
+        delta = FreeCAD.Placement(obj.Placement).inverse().multiply(
+            FreeCAD.Placement(placement)
+        )
+        unchanged = (
+            delta.Base.Length < tolerance and delta.Rotation.Angle < tolerance
+        )
+    except Exception:
+        unchanged = False
+    if not unchanged:
+        obj.Placement = placement
+
+
 def _copy_without_element_map(shape):
     """Return a transient copy that does not retain element-map metadata."""
 
@@ -1530,9 +1546,11 @@ class Component(ArchIFC.IfcProduct):
             if not shape.isNull():
                 if shape_is_validated or shape.isValid():
                     if shape.Solids:
-                        if shape.Volume < 0:
+                        volume = shape.Volume
+                        if volume < 0:
                             shape.reverse()
-                        if shape.Volume < 0:
+                            volume = shape.Volume
+                        if volume < 0:
                             FreeCAD.Console.PrintError(
                                 translate("Arch", "Error computing the shape of this object") + "\n"
                             )
@@ -1546,19 +1564,22 @@ class Component(ArchIFC.IfcProduct):
                                 pass
                             else:
                                 shape = r
-                        p = self.spread(
-                            obj, shape, placement
-                        ).Placement.copy()  # for some reason this gets zeroed in next line
-                        obj.Shape = self.spread(obj, shape, placement)
-                        if not self.isIdentity(placement):
-                            obj.Placement = placement
-                        else:
-                            obj.Placement = p
+                        applied_shape = self.spread(obj, shape, placement)
+                        # Shape assignment can zero the incoming shape placement,
+                        # so preserve it before handing the shape to the object.
+                        shape_placement = applied_shape.Placement.copy()
+                        obj.Shape = applied_shape
+                        target_placement = (
+                            shape_placement
+                            if self.isIdentity(placement)
+                            else placement
+                        )
+                        set_placement_if_changed(obj, target_placement)
                     else:
                         if allownosolid:
                             obj.Shape = self.spread(obj, shape, placement)
                             if not self.isIdentity(placement):
-                                obj.Placement = placement
+                                set_placement_if_changed(obj, placement)
                         else:
                             FreeCAD.Console.PrintWarning(
                                 obj.Label + " " + translate("Arch", "has no solid") + "\n"
@@ -1567,7 +1588,7 @@ class Component(ArchIFC.IfcProduct):
                     if allowinvalid:
                         obj.Shape = self.spread(obj, shape, placement)
                         if not self.isIdentity(placement):
-                            obj.Placement = placement
+                            set_placement_if_changed(obj, placement)
                     else:
                         FreeCAD.Console.PrintWarning(
                             obj.Label + " " + translate("Arch", "has an invalid shape") + "\n"

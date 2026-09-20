@@ -34,6 +34,7 @@ from bimtests import TestArchBase
 from draftutils.messages import _msg
 
 from math import pi, cos, sin, radians
+from unittest.mock import patch
 
 
 class TestArchComponent(TestArchBase.TestArchBase):
@@ -744,6 +745,44 @@ class TestArchComponent(TestArchBase.TestArchBase):
             2,
             "Generic Arch Component failed to spread geometry to Axis points.",
         )
+
+    def test_apply_shape_spreads_once_and_skips_unchanged_placement(self):
+        """Shape application avoids duplicate work and no-op notifications."""
+
+        class ShapeTarget:
+            Label = "ShapeTarget"
+
+            def __init__(self):
+                self.Shape = Part.Shape()
+                self._placement = App.Placement()
+                self.placement_writes = 0
+
+            @property
+            def Placement(self):
+                return self._placement
+
+            @Placement.setter
+            def Placement(self, placement):
+                self.placement_writes += 1
+                self._placement = App.Placement(placement)
+
+        target = ShapeTarget()
+        proxy = ArchComponent.Component.__new__(ArchComponent.Component)
+        shape = Part.makeBox(100, 100, 100)
+
+        with patch.object(proxy, "spread", wraps=proxy.spread) as spread:
+            proxy.applyShape(
+                target,
+                shape,
+                App.Placement(),
+                compute_areas=False,
+                shape_is_validated=True,
+                shape_is_refined=True,
+            )
+
+        self.assertEqual(1, spread.call_count)
+        self.assertEqual(0, target.placement_writes)
+        self.assertAlmostEqual(shape.Volume, target.Shape.Volume)
 
     def test_component_double_transformation(self):
         """Test that Arch Components do not suffer from double-transformation."""
