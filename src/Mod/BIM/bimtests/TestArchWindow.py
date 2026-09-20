@@ -253,6 +253,9 @@ class TestArchWindow(TestArchBase.TestArchBase):
         self.document.recompute()
 
         self.assertEqual("RectangularOpeningProfile", profile.Proxy.Type)
+        self.assertEqual(
+            "minimum", profile.Proxy.getOpeningDimensionAnchor(profile, "Width")
+        )
         self.assertEqual(2, len(profile.Shape.Wires))
         window.Width = 1000
         self.document.recompute()
@@ -274,6 +277,25 @@ class TestArchWindow(TestArchBase.TestArchBase):
         self.assertIsNotNone(face)
         self.assertTrue(face.isValid())
         self.assertAlmostEqual(900 * 2100 - 800 * 2050, face.Area)
+
+    def test_sketch_rewrite_can_preserve_either_width_edge(self):
+        for anchor, expected_bounds in (
+            ("minimum", (0.0, 1000.0)),
+            ("maximum", (-100.0, 900.0)),
+        ):
+            with self.subTest(anchor=anchor):
+                sketch = self._create_sketch_with_wires(
+                    "AnchoredRewrite{}".format(anchor.title()),
+                    [(0, 0, 900, 2100)],
+                )
+                self.assertTrue(
+                    ArchWindow._rewrite_window_size_by_scaling(
+                        sketch, target_width=1000, width_anchor=anchor
+                    )
+                )
+                bounds = ArchWindow._get_sketch_local_axis_bounds_mm(sketch)[0]
+                self.assertAlmostEqual(expected_bounds[0], bounds[0])
+                self.assertAlmostEqual(expected_bounds[1], bounds[1])
 
     def test_exact_window_compilation_cache_ensures_once(self):
         sketch = self._create_sketch_with_wires(

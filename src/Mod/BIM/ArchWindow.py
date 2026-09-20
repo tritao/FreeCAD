@@ -544,7 +544,15 @@ def getWindowResizeRecomputeRoots(obj):
     return tuple(roots)
 
 
-def _apply_window_resize_mutation(obj, status, *, width=None, height=None, anchor_shift=None):
+def _apply_window_resize_mutation(
+    obj,
+    status,
+    *,
+    width=None,
+    height=None,
+    anchor_shift=None,
+    width_anchor=None,
+):
     """Apply validated resize properties without transaction or recompute policy."""
 
     base = getattr(obj, "Base", None)
@@ -555,6 +563,7 @@ def _apply_window_resize_mutation(obj, status, *, width=None, height=None, ancho
             base,
             target_width=status.target_width if width is not None else None,
             target_height=status.target_height if height is not None else None,
+            width_anchor=width_anchor,
         ):
             raise RuntimeError("Opening size rewrite failed")
 
@@ -841,11 +850,44 @@ def _opening_width_edit_operation(helper, side, move_context=None):
         status = validateWindowResize(source, width=new_width)
         if not status.allowed:
             raise ValueError(str(status.reason or "Invalid window resize"))
+        width_anchor = None
+        base = getattr(source, "Base", None)
+        placement = base.getGlobalPlacement() if base is not None else None
+        local_width_axis = (
+            placement.Rotation.multVec(FreeCAD.Vector(1.0, 0.0, 0.0))
+            if placement is not None
+            else None
+        )
+        axes_align = local_width_axis is not None and local_width_axis.dot(axis) >= 0.0
+        fixed_host_side = "minimum" if side == "Right" else "maximum"
+        width_anchor = (
+            fixed_host_side
+            if axes_align
+            else {"minimum": "maximum", "maximum": "minimum"}[fixed_host_side]
+        )
+        anchor_shift = shift
+        if status.width_mode == "rewrite":
+            anchor_shift = None
+        elif local_width_axis is not None:
+            anchor_provider = getattr(
+                getattr(base, "Proxy", None), "getOpeningDimensionAnchor", None
+            )
+            intrinsic_anchor = (
+                anchor_provider(base, "Width") if callable(anchor_provider) else None
+            )
+            if intrinsic_anchor in {"minimum", "maximum"}:
+                width_delta = new_width - width
+                desired_sign = 1.0 if width_anchor == "minimum" else -1.0
+                intrinsic_sign = 1.0 if intrinsic_anchor == "minimum" else -1.0
+                anchor_shift = FreeCAD.Vector(local_width_axis).multiply(
+                    (desired_sign - intrinsic_sign) * width_delta * 0.5
+                )
         _apply_window_resize_mutation(
             source,
             status,
             width=new_width,
-            anchor_shift=shift,
+            anchor_shift=anchor_shift,
+            width_anchor=width_anchor if status.width_mode == "rewrite" else None,
         )
 
     minimum = host_min if side == "Left" else left_u + 1.0
@@ -1224,7 +1266,9 @@ def _rewrite_sketch_geometry(target, source):
             pass
 
 
-def _rewrite_window_size_by_scaling(base, target_width=None, target_height=None):
+def _rewrite_window_size_by_scaling(
+    base, target_width=None, target_height=None, width_anchor=None
+):
     import Part
 
     if base is None or not _is_simple_window_scalable_sketch(base):
@@ -1247,7 +1291,10 @@ def _rewrite_window_size_by_scaling(base, target_width=None, target_height=None)
     if target_width <= 0.0 or target_height <= 0.0:
         return False
 
-    center_x = (x_bounds[0] + x_bounds[1]) * 0.5
+    center_x = {
+        "minimum": x_bounds[0],
+        "maximum": x_bounds[1],
+    }.get(width_anchor, (x_bounds[0] + x_bounds[1]) * 0.5)
     center_y = (y_bounds[0] + y_bounds[1]) * 0.5
     scale_x = float(target_width) / float(current_width)
     scale_y = float(target_height) / float(current_height)

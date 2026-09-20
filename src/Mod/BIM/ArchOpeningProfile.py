@@ -51,6 +51,14 @@ class RectangularOpeningProfile:
         setattr(obj, name, float(value))
         return True
 
+    @staticmethod
+    def getOpeningDimensionAnchor(obj, name):
+        """Return the local profile edge preserved by a dimension change."""
+
+        if name in {"Width", "Height"}:
+            return "minimum"
+        return None
+
     def execute(self, obj):
         import Part
 
