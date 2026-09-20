@@ -71,7 +71,7 @@ class TestArchWindow(TestArchBase.TestArchBase):
         self.assertEqual(1, len(shape.Solids))
         self.assertAlmostEqual((10000 - 3600) * 20, shape.Volume)
 
-    def test_open_window_part_subtracts_touching_profile_before_extrusion(self):
+    def test_open_window_part_unifies_touching_profile_before_extrusion(self):
         outer = Part.makePlane(100, 100).OuterWire
         cutout = Part.makePolygon(
             [
@@ -83,6 +83,7 @@ class TestArchWindow(TestArchBase.TestArchBase):
             ]
         )
 
+        original_make_face = Part.makeFace
         with patch.object(
             ArchWindow,
             "_extrude_window_part_profile_with_booleans",
@@ -90,12 +91,13 @@ class TestArchWindow(TestArchBase.TestArchBase):
         ), patch.object(
             Part,
             "makeFace",
-            side_effect=AssertionError("touching wires must skip the hole face maker"),
-        ):
+            wraps=original_make_face,
+        ) as make_face:
             shape = ArchWindow._extrude_window_part_profile(
                 outer, (cutout,), FreeCAD.Vector(0, 0, 20)
             )
 
+        self.assertEqual("Part::FaceMakerUnified", make_face.call_args.args[1])
         self.assertTrue(shape.isValid())
         self.assertEqual(1, len(shape.Solids))
         self.assertAlmostEqual((10000 - 3000) * 20, shape.Volume)

@@ -267,19 +267,20 @@ def _extrude_window_part_profile(outer_wire, inner_wires, vector, outer_face=Non
     if not inner_wires:
         profile = outer_face if outer_face is not None else Part.Face(outer_wire)
         return profile.extrude(vector)
-    if not _window_profile_wires_touch(outer_wire, inner_wires):
-        try:
-            profile_wires = [outer_wire, *inner_wires]
-            profile = Part.makeFace(
-                profile_wires,
-                "Part::FaceMakerCheese",
-                noElementMap=True,
-            )
-            shape = profile.extrude(vector)
-            if not shape.isNull() and len(shape.Solids) == 1:
-                return shape
-        except Part.OCCError:
-            pass
+    touching = _window_profile_wires_touch(outer_wire, inner_wires)
+    face_maker = "Part::FaceMakerUnified" if touching else "Part::FaceMakerCheese"
+    try:
+        profile_wires = [outer_wire, *inner_wires]
+        profile = Part.makeFace(
+            profile_wires,
+            face_maker,
+            noElementMap=True,
+        )
+        shape = profile.extrude(vector)
+        if not shape.isNull() and len(shape.Solids) == 1:
+            return shape
+    except Part.OCCError:
+        pass
     try:
         profile = outer_face if outer_face is not None else Part.Face(outer_wire)
         for wire in inner_wires:
