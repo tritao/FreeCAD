@@ -270,14 +270,15 @@ def _set_placement_if_changed(obj, placement):
         obj.Placement = placement
 
 
-def _extrude_window_part_profile(outer_wire, inner_wires, vector):
+def _extrude_window_part_profile(outer_wire, inner_wires, vector, outer_face=None):
     """Extrude a perforated part profile without a three-dimensional Boolean."""
 
     import Part
 
     inner_wires = tuple(inner_wires)
     if not inner_wires:
-        return Part.Face(outer_wire).extrude(vector)
+        profile = outer_face if outer_face is not None else Part.Face(outer_wire)
+        return profile.extrude(vector)
     try:
         profile_wires = [outer_wire, *inner_wires]
         profile = Part.makeFace(
@@ -291,7 +292,7 @@ def _extrude_window_part_profile(outer_wire, inner_wires, vector):
     except Part.OCCError:
         pass
     try:
-        profile = Part.Face(outer_wire)
+        profile = outer_face if outer_face is not None else Part.Face(outer_wire)
         for wire in inner_wires:
             profile = profile.cut(Part.Face(wire))
         shape = profile.extrude(vector)
@@ -300,16 +301,22 @@ def _extrude_window_part_profile(outer_wire, inner_wires, vector):
     except Part.OCCError:
         pass
     return _extrude_window_part_profile_with_booleans(
-        outer_wire, inner_wires, vector
+        outer_wire,
+        inner_wires,
+        vector,
+        outer_face=outer_face,
     )
 
 
-def _extrude_window_part_profile_with_booleans(outer_wire, inner_wires, vector):
+def _extrude_window_part_profile_with_booleans(
+    outer_wire, inner_wires, vector, outer_face=None
+):
     """Compatibility fallback for profiles unsupported by the face maker."""
 
     import Part
 
-    shape = Part.Face(outer_wire).extrude(vector)
+    profile = outer_face if outer_face is not None else Part.Face(outer_wire)
+    shape = profile.extrude(vector)
     for wire in inner_wires:
         shape = shape.cut(Part.Face(wire).extrude(vector))
     return shape

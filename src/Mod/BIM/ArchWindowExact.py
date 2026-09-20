@@ -88,7 +88,12 @@ def compile_window_parts(obj):
             return None
 
         extrusion = DraftVecUtils.scaleTo(normal, thickness)
-        shape = _extrude_window_part_profile(outer, inner, extrusion)
+        shape = _extrude_window_part_profile(
+            outer,
+            inner,
+            extrusion,
+            outer_face=face,
+        )
         if not shape or shape.isNull() or len(shape.Solids) != 1:
             return None
         offset_vector = FreeCAD.Vector()
