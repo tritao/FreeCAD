@@ -108,6 +108,57 @@ class TestArchRepresentation(unittest.TestCase):
         self.assertIsNot(first, third)
         self.assertEqual(2, len(created))
 
+    def test_scoped_change_invalidation_preserves_unrelated_derived_values(self):
+        from bimviews import representation_cache
+
+        document = FreeCAD.newDocument("ScopedDerivedInvalidationTest")
+        self.addCleanup(FreeCAD.closeDocument, document.Name)
+        obj = document.addObject("PartDesign::Feature", "Opening")
+        joint_source = document.addObject("PartDesign::Feature", "Joint")
+        joint = object()
+        opening = object()
+        untracked = object()
+        representation_cache.get_or_create_derived_value(
+            document,
+            "wall-joint-solution",
+            "joint",
+            lambda: joint,
+            dependencies=(joint_source,),
+        )
+        representation_cache.get_or_create_derived_value(
+            document,
+            "hosted-opening-recipe",
+            "opening",
+            lambda: opening,
+            dependencies=(obj,),
+        )
+        representation_cache.get_or_create_derived_value(
+            document, "legacy", "untracked", lambda: untracked
+        )
+
+        with representation_cache.scoped_derived_invalidation((obj,)):
+            representation_cache.invalidate_for_object_change(obj, "Shape")
+            representation_cache._RepresentationCacheObserver.slotCreatedObject(obj)
+
+        self.assertIs(
+            joint,
+            representation_cache.get_or_create_derived_value(
+                document, "wall-joint-solution", "joint", object
+            ),
+        )
+        self.assertIsNot(
+            opening,
+            representation_cache.get_or_create_derived_value(
+                document, "hosted-opening-recipe", "opening", object
+            ),
+        )
+        self.assertIsNot(
+            untracked,
+            representation_cache.get_or_create_derived_value(
+                document, "legacy", "untracked", object
+            ),
+        )
+
     def test_plan_object_invalidation_clears_contextual_representation(self):
         from types import SimpleNamespace
 
@@ -1054,13 +1105,20 @@ class TestArchRepresentation(unittest.TestCase):
         # A cold wall-representation cache must resolve hosted openings from
         # the wall recipe already in progress. Asking the opening to query the
         # host footprint here recursively rebuilds this same representation.
+        import ArchWallRelation
         from bimviews import representation_cache
 
         representation_cache.invalidate_document(document)
-        wall_representation = wall.Proxy.getRepresentation(
-            wall,
-            RepresentationRequest(purpose="Plan", cut_offset=1000, target_offset=0),
-        )
+        with patch.object(
+            ArchWallRelation,
+            "solve_wall_joint",
+            wraps=ArchWallRelation.solve_wall_joint,
+        ) as solve_wall_joint:
+            wall_representation = wall.Proxy.getRepresentation(
+                wall,
+                RepresentationRequest(purpose="Plan", cut_offset=1000, target_offset=0),
+            )
+        self.assertEqual(1, solve_wall_joint.call_count)
         self.assertIs(wall_representation.source, wall)
         self.assertTrue(wall_representation.cut_geometry)
 
@@ -1275,6 +1333,16 @@ class TestArchRepresentation(unittest.TestCase):
 
         request = RepresentationRequest(purpose="Plan", cut_offset=1000, target_offset=0)
         before = wall.Proxy.getRepresentation(wall, request).analytic_model.opening_intervals
+        door_representation = door.Proxy.getRepresentation(door, request)
+        jamb_handle = next(
+            handle
+            for handle in door_representation.edit_handles
+            if handle.role == "OpeningLeftJamb"
+        )
+        jamb_impact = jamb_handle.operation.get_impact(
+            door, jamb_handle.operation.get_value(door)
+        )
+        self.assertEqual((door,), jamb_impact.derived_value_sources)
         recomputed = []
 
         class RecomputeObserver:

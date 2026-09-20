@@ -322,9 +322,19 @@ class PlanContextualRenderingAPI:
         trace_span = getattr(session.performance, "plan_perf_trace_span", None)
         phase = trace_span or (lambda _name: nullcontext())
         with phase("contextual_edit_cache_invalidation"):
-            representation_cache.invalidate_document_derived_values(session.doc)
+            if impact is None:
+                representation_cache.invalidate_document_derived_values(session.doc)
+            else:
+                derived_sources = (
+                    impact.derived_value_sources
+                    if impact.derived_value_sources is not None
+                    else sources
+                )
+                representation_cache.invalidate_derived_values_for_objects(
+                    derived_sources
+                )
             for source in sources:
-                representation_cache.invalidate_object(source)
+                representation_cache.invalidate_object_representation(source)
                 session.overlays.geometry.invalidate_plan_overlay_geometry_cache(source)
             session.openings.invalidate_wall_hosted_openings_cache()
         # The contextual renderer is the sole committed drawing for represented

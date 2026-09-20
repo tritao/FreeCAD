@@ -498,6 +498,7 @@ class BIMEditImpact:
     refresh_primary_selection: bool = False
     refresh_dependent_spaces: bool = False
     refresh_secondary_selection: bool = False
+    derived_value_sources: tuple | None = None
 
 
 class BIMEditOperation:

@@ -339,6 +339,7 @@ def project_elevation_scope(objects, request, *, deflection=None):
         "elevation-scope",
         cache_key,
         compute_scope,
+        dependencies=objects,
     )
     for obj, shape, edges in projection.sources:
         representations[obj] = _representation_from_edges(

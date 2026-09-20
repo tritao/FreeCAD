@@ -2,7 +2,7 @@
 
 """Plan-specific adapters for the shared BIM contextual editing engine."""
 
-from contextlib import nullcontext
+from contextlib import ExitStack, nullcontext
 
 import FreeCAD
 from draftguitools.gui_base import DraftInteractionHost
@@ -85,7 +85,24 @@ class PlanContextualEditingAPI:
                         getattr(impact, "representation_sources", ()) or ()
                     ),
                 )
-        return self.session.document_visuals.defer_contextual_edit_updates(impact)
+        stack = ExitStack()
+        if impact is not None:
+            from bimviews import representation_cache
+
+            derived_sources = (
+                impact.derived_value_sources
+                if impact.derived_value_sources is not None
+                else impact.representation_sources
+            )
+            stack.enter_context(
+                representation_cache.scoped_derived_invalidation(
+                    derived_sources
+                )
+            )
+        stack.enter_context(
+            self.session.document_visuals.defer_contextual_edit_updates(impact)
+        )
+        return stack
 
     def begin(self, handle):
         self.controller = self._new_controller()

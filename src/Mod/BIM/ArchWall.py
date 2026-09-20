@@ -1607,7 +1607,7 @@ class _Wall(ArchComponent.Component):
         for joint in ArchWallRelation.iter_wall_joints(wall):
             if not getattr(joint, "Enabled", True):
                 continue
-            solution = ArchWallRelation.solve_wall_joint(joint)
+            solution = self._cached_wall_joint_solution(joint)
             if not solution.is_ok() or solution.trim_for_wall(wall) is None:
                 continue
             anchor = self._wall_joint_handle_point(representation, wall, solution.intersection)
@@ -2214,7 +2214,7 @@ class _Wall(ArchComponent.Component):
         for joint in ArchWallRelation.iter_wall_joints(wall):
             if not getattr(joint, "Enabled", True):
                 continue
-            solution = ArchWallRelation.solve_wall_joint(joint)
+            solution = self._cached_wall_joint_solution(joint)
             if not solution.is_ok():
                 continue
             claim = solution.trim_for_wall(wall)
@@ -2225,7 +2225,7 @@ class _Wall(ArchComponent.Component):
     def _movable_wall_joint_data(self, joint):
         if not getattr(joint, "Enabled", True):
             return None
-        solution = ArchWallRelation.solve_wall_joint(joint)
+        solution = self._cached_wall_joint_solution(joint)
         if not solution.is_ok():
             return None
         walls = tuple(ArchWallRelation.get_relation_walls(joint))
@@ -2242,6 +2242,20 @@ class _Wall(ArchComponent.Component):
             "walls": walls,
             "ends": ends,
         }
+
+    @staticmethod
+    def _cached_wall_joint_solution(joint):
+        """Reuse a joint solution across one contextual representation build."""
+
+        from bimviews import representation_cache
+
+        return representation_cache.get_or_create_derived_value(
+            joint.Document,
+            "wall-joint-solution",
+            joint.Name,
+            lambda: ArchWallRelation.solve_wall_joint(joint),
+            dependencies=(joint, *ArchWallRelation.get_relation_walls(joint)),
+        )
 
     def _add_wall_joint_edit_handles(self, representation, wall, request):
         for joint in ArchWallRelation.iter_wall_joints(wall):

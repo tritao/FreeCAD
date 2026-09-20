@@ -794,6 +794,7 @@ def _opening_width_edit_operation(helper, side, move_context=None):
         return ArchRepresentation.BIMEditImpact(
             recompute=ArchRepresentation.BIMRecomputePlan(roots=roots),
             representation_sources=(source, *hosts),
+            derived_value_sources=(source,),
             refresh_primary_selection=True,
         )
 

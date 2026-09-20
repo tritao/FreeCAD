@@ -179,10 +179,11 @@ def _wall_trim_planes(wall):
         if not ArchWallRelation.is_wall_joint(relation):
             return None
         solution = representation_cache.get_or_create_derived_value(
-            getattr(relation, "Document", None),
+            relation.Document,
             "wall-joint-solution",
-            getattr(relation, "Name", id(relation)),
+            relation.Name,
             lambda relation=relation: ArchWallRelation.solve_wall_joint(relation),
+            dependencies=(relation, *ArchWallRelation.get_relation_walls(relation)),
         )
         if not solution.is_ok():
             return None
@@ -224,6 +225,7 @@ def _hosted_opening_recipes(wall, recipe, opening_overrides=None):
             "hosted-opening-recipe",
             (getattr(obj, "Name", id(obj)), getattr(wall, "Name", id(wall))),
             lambda provider=provider, recipe=recipe: provider(recipe),
+            dependencies=(obj, getattr(obj, "Base", None), wall),
         )
         if opening is None:
             return None
