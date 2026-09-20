@@ -1064,10 +1064,16 @@ class TestArchRepresentation(unittest.TestCase):
         self.assertIs(wall_representation.source, wall)
         self.assertTrue(wall_representation.cut_geometry)
 
-        representation = opening.Proxy.getRepresentation(
-            opening,
-            RepresentationRequest(purpose="Plan", cut_offset=1000, target_offset=0),
-        )
+        with patch.object(
+            opening.Proxy,
+            "_get_host_plan_v_bounds",
+            wraps=opening.Proxy._get_host_plan_v_bounds,
+        ) as resolve_host_bounds:
+            representation = opening.Proxy.getRepresentation(
+                opening,
+                RepresentationRequest(purpose="Plan", cut_offset=1000, target_offset=0),
+            )
+        self.assertEqual(1, resolve_host_bounds.call_count)
 
         self.assertIs(representation.source, opening)
         self.assertTrue(representation.projected_geometry)

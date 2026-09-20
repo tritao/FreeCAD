@@ -687,8 +687,8 @@ def _opening_base_placement_sill_edit_operation():
     )
 
 
-def _opening_position_edit_operation(helper):
-    move_context = helper.get_hosted_opening_move_context()
+def _opening_position_edit_operation(helper, move_context=None):
+    move_context = move_context or helper.get_hosted_opening_move_context()
     if not move_context:
         return None
     origin = move_context["origin"]
@@ -735,8 +735,8 @@ def _opening_position_edit_operation(helper):
     )
 
 
-def _opening_width_edit_operation(helper, side):
-    move_context = helper.get_hosted_opening_move_context()
+def _opening_width_edit_operation(helper, side, move_context=None):
+    move_context = move_context or helper.get_hosted_opening_move_context()
     source = helper.Object
     width = getWindowWidthMm(source)
     if not move_context or not width or not canEditWindowWidth(source):
@@ -2012,18 +2012,19 @@ class _HostedOpeningPlanGeometry:
 
         return ("center", "left", "right")
 
-    def get_hosted_opening_move_context(self):
+    def get_hosted_opening_move_context(self, section_profile=None):
         """Return the host-aligned move context for plan editing."""
 
         if not hasattr(self, "Object"):
             return None
 
-        shape = getattr(self.Object, "Shape", None)
-        cut_z, base_z = self._get_footprint_cut_context()
-        if cut_z is None:
-            return None
-
-        section_profile = self._get_hosted_opening_plan_frame(shape, cut_z, base_z)
+        _cut_z, base_z = self._get_footprint_cut_context()
+        if section_profile is None:
+            shape = getattr(self.Object, "Shape", None)
+            cut_z, base_z = self._get_footprint_cut_context()
+            if cut_z is None:
+                return None
+            section_profile = self._get_hosted_opening_plan_frame(shape, cut_z, base_z)
         if not section_profile:
             return None
 
@@ -2651,8 +2652,11 @@ class _HostedOpeningRepresentationGeometry:
         quantity = FreeCAD.Units.Quantity(measurement, FreeCAD.Units.Length)
         return "{}: {}".format(label, quantity.UserString)
 
-    def get_plan_overlay_geometry(self, request=None):
+    def get_plan_overlay_geometry(self, request=None, _include_frame=False):
         """Return horizontal plan symbols for the supplied representation request."""
+
+        def result(value, frame=None):
+            return (value, frame) if _include_frame else value
 
         if request is None:
             request = self._get_default_opening_plan_request(self.Object)
@@ -2666,31 +2670,31 @@ class _HostedOpeningRepresentationGeometry:
             if base_z is None:
                 base_z = default_request.target_offset
         if cut_z is None:
-            return {
+            return result({
                 "jamb_polylines": (),
                 "symbol_polylines": (),
                 "guide_polylines": (),
-            }
+            })
         frame = getattr(request, "reference_frame", None)
         if frame is not None:
             frame_normal = frame.Rotation.multVec(FreeCAD.Vector(0, 0, 1))
             if abs(abs(frame_normal.z) - 1.0) > 1e-7:
-                return {
+                return result({
                     "jamb_polylines": (),
                     "symbol_polylines": (),
                     "guide_polylines": (),
-                }
+                })
             cut_z = frame.multVec(FreeCAD.Vector(0, 0, float(cut_z))).z
             if base_z is not None:
                 base_z = frame.multVec(FreeCAD.Vector(0, 0, float(base_z))).z
         profile = self._get_hosted_opening_plan_frame(shape, cut_z, base_z)
         if not profile:
-            return {
+            return result({
                 "jamb_polylines": (),
                 "symbol_polylines": (),
                 "guide_polylines": (),
-            }
-        return {
+            })
+        return result({
             "jamb_polylines": tuple(
                 tuple(polyline) for polyline in self._get_plan_jamb_polylines(profile, base_z)
             ),
@@ -2702,7 +2706,7 @@ class _HostedOpeningRepresentationGeometry:
                 tuple(polyline)
                 for polyline in self._get_plan_overlay_guide_polylines(profile, base_z)
             ),
-        }
+        }, profile)
 
     def getRepresentation(self, obj=None, request=None):
         import Part
@@ -2711,8 +2715,9 @@ class _HostedOpeningRepresentationGeometry:
         if request is None:
             request = self._get_default_opening_plan_request(source)
         representation = ArchRepresentation.BIMRepresentation(source=source, request=request)
-        self._add_position_edit_handle(representation, source, request)
         purpose = getattr(request, "purpose", ArchRepresentation.RepresentationPurpose.PLAN)
+        if purpose != ArchRepresentation.RepresentationPurpose.PLAN:
+            self._add_position_edit_handle(representation, source, request)
         if (
             getattr(request, "reference_frame", None) is not None
             and purpose != ArchRepresentation.RepresentationPurpose.PLAN
@@ -2736,7 +2741,8 @@ class _HostedOpeningRepresentationGeometry:
             self._add_section_edit_handles(representation, source, request)
             return representation
 
-        geometry = self.get_plan_overlay_geometry(request)
+        geometry, plan_frame = self.get_plan_overlay_geometry(request, _include_frame=True)
+        self._add_position_edit_handle(representation, source, request, plan_frame)
         for role, polylines in (
             ("OpeningJambLine", geometry["jamb_polylines"]),
             ("OpeningSymbol", geometry["symbol_polylines"]),
@@ -2764,10 +2770,10 @@ class _HostedOpeningRepresentationGeometry:
                             "OpeningJambPoint",
                             subelement=f"{role}{index}.Point{point_index}",
                         )
-        self._add_plan_action_edit_handles(representation, source, request)
+        self._add_plan_action_edit_handles(representation, source, request, plan_frame)
         return representation
 
-    def _add_position_edit_handle(self, representation, source, request):
+    def _add_position_edit_handle(self, representation, source, request, plan_frame=None):
         purpose = getattr(request, "purpose", ArchRepresentation.RepresentationPurpose.PLAN)
         if purpose not in (
             ArchRepresentation.RepresentationPurpose.PLAN,
@@ -2775,8 +2781,8 @@ class _HostedOpeningRepresentationGeometry:
             ArchRepresentation.RepresentationPurpose.ELEVATION,
         ):
             return
-        move_context = self.get_hosted_opening_move_context()
-        operation = _opening_position_edit_operation(self)
+        move_context = self.get_hosted_opening_move_context(plan_frame)
+        operation = _opening_position_edit_operation(self, move_context)
         if not move_context or operation is None or not operation.is_available(source):
             return
         point = ArchRepresentation.project_to_representation_plane(
@@ -2811,7 +2817,7 @@ class _HostedOpeningRepresentationGeometry:
                 + move_context["opening_half_width_u"],
             ),
         ):
-            jamb_operation = _opening_width_edit_operation(self, side)
+            jamb_operation = _opening_width_edit_operation(self, side, move_context)
             if jamb_operation is None or not jamb_operation.is_available(source):
                 continue
             jamb_point = move_context["origin"].add(
@@ -2831,7 +2837,7 @@ class _HostedOpeningRepresentationGeometry:
                 )
             )
 
-    def _add_plan_action_edit_handles(self, representation, source, request):
+    def _add_plan_action_edit_handles(self, representation, source, request, profile=None):
         if getattr(request, "purpose", None) != ArchRepresentation.RepresentationPurpose.PLAN:
             return
         if self._get_effective_opening_kind() != "Door":
@@ -2839,11 +2845,12 @@ class _HostedOpeningRepresentationGeometry:
         capabilities = self._get_plan_edit_capabilities()
         if not capabilities.get("can_flip_opening"):
             return
-        profile = self._get_hosted_opening_plan_frame(
-            source.Shape,
-            getattr(request, "cut_offset", None),
-            getattr(request, "target_offset", None),
-        )
+        if profile is None:
+            profile = self._get_hosted_opening_plan_frame(
+                source.Shape,
+                getattr(request, "cut_offset", None),
+                getattr(request, "target_offset", None),
+            )
         if not profile:
             return
         origin = profile["origin"]
