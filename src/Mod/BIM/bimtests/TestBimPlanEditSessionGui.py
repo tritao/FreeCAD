@@ -1206,6 +1206,31 @@ class TestBimPlanEditSessionGui(TestArchBaseGui):
         finally:
             session.shutdown(close_dialog=False)
 
+    def test_contextual_edit_refreshes_are_deferred_coalesced_and_guarded(self):
+        wall = Arch.makeWall(length=3000, width=200, height=2500, align="Center")
+        self.document.recompute()
+        session = PlanEditSession()
+        self.assertTrue(session.enter())
+        callbacks = []
+        try:
+            with patch.object(
+                FreeCADGui, "invokeLater", side_effect=callbacks.append
+            ), patch.object(
+                session.contextual_rendering, "_refresh_source"
+            ) as refresh_source:
+                session.contextual_rendering._queue_edit_refresh((wall,), {wall}, set())
+                session.contextual_rendering._queue_edit_refresh((wall,), set(), set())
+                self.assertEqual(1, len(callbacks))
+                callbacks.pop()()
+                refresh_source.assert_called_once_with(wall, reuse_edit_handles=None)
+                session.contextual_rendering._queue_edit_refresh((wall,), {wall}, set())
+                stale_callback = callbacks.pop()
+                session.contextual_rendering.close()
+                stale_callback()
+                self.assertEqual(1, refresh_source.call_count)
+        finally:
+            session.shutdown(close_dialog=False)
+
     def test_reapplying_same_plan_context_preserves_rendered_nodes(self):
         """An identical saved-plan request must not rebuild contextual geometry."""
 

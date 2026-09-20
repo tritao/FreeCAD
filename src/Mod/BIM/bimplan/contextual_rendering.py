@@ -18,6 +18,10 @@ class PlanContextualRenderingAPI:
         self._generation = 0
         self._pending_sources = set()
         self._ready = False
+        self._edit_refresh_queued = False
+        self._pending_edit_sources = set()
+        self._pending_edit_handle_reuse_sources = set()
+        self._pending_edit_visual_flags = set()
 
     @property
     def renderer(self):
@@ -68,6 +72,10 @@ class PlanContextualRenderingAPI:
         self._renderer = None
         self._sources.clear()
         self._pending_sources.clear()
+        self._edit_refresh_queued = False
+        self._pending_edit_sources.clear()
+        self._pending_edit_handle_reuse_sources.clear()
+        self._pending_edit_visual_flags.clear()
         self._ready = False
         self._generation += 1
         if renderer is not None:
@@ -340,41 +348,84 @@ class PlanContextualRenderingAPI:
                     invalidate_representation=False,
                 )
             session.openings.invalidate_wall_hosted_openings_cache()
-        # The contextual renderer is the sole committed drawing for represented
-        # Plan sources. Rebuilding their hidden legacy Footprint nodes duplicates
-        # expensive section work and can leave an old native symbol alongside
-        # the freshly installed semantic representation.
+        reusable_sources = {
+            source for source in sources if opening is not None and source is not opening
+        }
+        visual_kinds = set()
+        if getattr(impact, "refresh_primary_selection", False):
+            if opening is not None:
+                visual_kinds.add("selected_opening")
+            elif session.selection.state.is_selected_plan_target("wall"):
+                visual_kinds.add("selected_wall")
+        if impact is None or getattr(impact, "refresh_dependent_spaces", False):
+            visual_kinds.add("dependent_spaces")
+        if impact is None or getattr(impact, "refresh_secondary_selection", False):
+            visual_kinds.add("secondary_selection")
+        if impact is None and session.selection.state.is_selected_plan_target("wall"):
+            visual_kinds.add("selected_wall")
+        self._queue_edit_refresh(sources, reusable_sources, visual_kinds)
+
+    def _queue_edit_refresh(self, sources, reusable_sources, visual_flags):
+        """Coalesce committed edit presentation work onto the next GUI turn."""
+
+        sources = set(sources)
+        new_sources = sources - self._pending_edit_sources
+        self._pending_edit_sources.update(sources)
+        self._pending_edit_handle_reuse_sources.update(
+            new_sources.intersection(reusable_sources)
+        )
+        self._pending_edit_handle_reuse_sources.difference_update(
+            sources - set(reusable_sources)
+        )
+        self._pending_edit_visual_flags.update(visual_flags)
+        if self._edit_refresh_queued:
+            return
+        self._edit_refresh_queued = True
+        renderer = self._renderer
+        generation = self._generation
+        import FreeCADGui
+
+        FreeCADGui.invokeLater(lambda: self._flush_edit_refresh(renderer, generation))
+
+    def _flush_edit_refresh(self, renderer, generation):
+        """Build and atomically install the latest coalesced edit visuals."""
+
+        if self._renderer is not renderer or self._generation != generation:
+            return False
+        self._edit_refresh_queued = False
+        sources = tuple(self._pending_edit_sources)
+        reusable_sources = set(self._pending_edit_handle_reuse_sources)
+        visual_flags = set(self._pending_edit_visual_flags)
+        self._pending_edit_sources.clear()
+        self._pending_edit_handle_reuse_sources.clear()
+        self._pending_edit_visual_flags.clear()
+        session = self._session
+        if session.lifecycle_state.tearing_down:
+            return False
+        trace_span = getattr(session.performance, "plan_perf_trace_span", None)
+        phase = trace_span or (lambda _name, **_fields: nullcontext())
         with phase("contextual_edit_representations"):
             for source in sources:
-                source_name = source.Name
                 with phase(
-                    "contextual_edit_representation_source_{}".format(source_name),
+                    "contextual_edit_representation_source_{}".format(source.Name),
                     representation_source=source,
                 ):
                     reuse_handles = None
-                    if opening is not None and source is not opening:
-                        current = self._renderer.representation_for(source)
+                    if source in reusable_sources:
+                        current = renderer.representation_for(source)
                         if current is not None:
                             reuse_handles = tuple(current.edit_handles)
                     self._refresh_source(source, reuse_edit_handles=reuse_handles)
-            # A contextual edit replaces geometry for sources already owned by
-            # this renderer. It does not change storey membership or native
-            # visibility, so rescanning the full document here is redundant.
-            representation_layers.mark_current(self._renderer)
-        visual_kinds = []
-        if getattr(impact, "refresh_primary_selection", False):
-            if opening is not None:
-                visual_kinds.append("selected_opening")
-            elif session.selection.state.is_selected_plan_target("wall"):
-                visual_kinds.append("selected_wall")
-        if impact is None or getattr(impact, "refresh_dependent_spaces", False):
-            visual_kinds.extend(session.spaces.refresh_document_dependent_visuals())
-        if impact is None or getattr(impact, "refresh_secondary_selection", False):
+            representation_layers.mark_current(renderer)
+        visual_kinds = visual_flags - {"dependent_spaces", "secondary_selection"}
+        if "dependent_spaces" in visual_flags:
+            visual_kinds.update(session.spaces.refresh_document_dependent_visuals())
+        if "secondary_selection" in visual_flags:
             session.selection.refresh.refresh_document_dependent_secondary_selection_visuals()
-        if impact is None and session.selection.state.is_selected_plan_target("wall"):
-            visual_kinds.append("selected_wall")
         if visual_kinds:
             session.overlays.queue_plan_overlay_visual_refresh(*visual_kinds)
+        session.viewport.flush_scene_graph_mutations()
+        return True
 
     def remove_object(self, obj):
         if self._renderer is None or obj is None:
