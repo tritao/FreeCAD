@@ -755,6 +755,7 @@ class TestArchWindow(TestArchBase.TestArchBase):
         self.assertIn(window, wall.HostedOpenings)
         self.assertIn(window, wall.OutList)
         self.assertNotIn(wall, window.OutList)
+        self.assertNotIn(window, wall.InList)
 
     def _create_sketch_with_wires(
         self, name: str, wire_definitions: list[tuple[float, float, float, float]]

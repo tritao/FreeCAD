@@ -3183,6 +3183,9 @@ class _Window(
         if obj.getTypeIdOfProperty("Hosts") == "App::PropertyLinkListHidden":
             return
         hosts = list(obj.Hosts)
+        # Clear the legacy property while it still owns the links so core can
+        # remove their reverse dependency entries before the property vanishes.
+        obj.Hosts = []
         obj.setPropertyStatus("Hosts", "-LockDynamic")
         if not obj.removeProperty("Hosts"):
             return
