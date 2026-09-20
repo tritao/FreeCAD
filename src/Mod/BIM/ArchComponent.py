@@ -2203,13 +2203,68 @@ class ViewProviderComponent:
         generic attach/update paths for the rest of the view provider.
         """
 
+        if getattr(self, "_footprint_refresh_defer_depth", 0):
+            if self._isFootprintVisibleInAnyView():
+                # A newly visible viewer now consumes the shared ViewProvider
+                # cache. Cancel outstanding deferrals and refresh immediately.
+                self._footprint_refresh_defer_depth = 0
+            else:
+                self._footprint_refresh_dirty = True
+                return False
         if not self.ensureFootprintGroup(vobj):
             return False
         try:
             self.updateFootprint()
         except Exception:
             return False
+        self._footprint_refresh_dirty = False
         return True
+
+    def deferFootprintRefresh(self):
+        """Defer this derived cache while another renderer owns the display."""
+
+        depth = getattr(self, "_footprint_refresh_defer_depth", 0)
+        if not depth and self._isFootprintVisibleInAnyView():
+            return False
+        self._footprint_refresh_defer_depth = (
+            depth + 1
+        )
+        return True
+
+    def _isFootprintVisibleInAnyView(self):
+        """Return whether any current 3D viewer can consume this shared cache."""
+
+        obj = getattr(self, "Object", None)
+        document = getattr(obj, "Document", None)
+        view_object = getattr(obj, "ViewObject", None)
+        if obj is None or document is None or view_object is None:
+            return True
+        try:
+            import FreeCADGui
+
+            gui_document = FreeCADGui.getDocument(document.Name)
+            views = gui_document.mdiViewsOfType("Gui::View3DInventor")
+        except (AttributeError, ImportError, ReferenceError, RuntimeError, TypeError):
+            return True
+        for view in views:
+            try:
+                visibility = view.getViewVisibility(obj)
+            except (AttributeError, ReferenceError, RuntimeError, TypeError):
+                return True
+            if visibility == "Visible" or (
+                visibility == "Inherit" and bool(view_object.Visibility)
+            ):
+                return True
+        return False
+
+    def resumeFootprintRefresh(self, vobj=None):
+        """Refresh dirty data before the native Footprint becomes visible."""
+
+        depth = max(0, getattr(self, "_footprint_refresh_defer_depth", 0) - 1)
+        self._footprint_refresh_defer_depth = depth
+        if depth or not getattr(self, "_footprint_refresh_dirty", False):
+            return False
+        return self.refreshFootprint(vobj)
 
     def getIcon(self):
         """Return the path to the appropriate icon.

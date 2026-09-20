@@ -1389,6 +1389,45 @@ class TestBimPlanEditSessionGui(TestArchBaseGui):
         try:
             renderer.set_representation(representation)
             self.assertEqual("Hidden", view.getViewVisibility(wall))
+            view_provider = wall.ViewObject.Proxy
+            self.assertEqual(1, view_provider._footprint_refresh_defer_depth)
+            with patch.object(
+                view_provider,
+                "updateFootprint",
+                wraps=view_provider.updateFootprint,
+            ) as update_footprint:
+                self.assertFalse(view_provider.refreshFootprint())
+                update_footprint.assert_not_called()
+                renderer.remove_representation(wall)
+                update_footprint.assert_called_once()
+            self.assertEqual(0, view_provider._footprint_refresh_defer_depth)
+            self.assertFalse(view_provider._footprint_refresh_dirty)
+            self.assertEqual("Inherit", view.getViewVisibility(wall))
+
+            renderer.set_representation(representation)
+            self.assertEqual(1, view_provider._footprint_refresh_defer_depth)
+            with (
+                patch.object(
+                    view_provider, "_isFootprintVisibleInAnyView", return_value=True
+                ),
+                patch.object(
+                    view_provider,
+                    "updateFootprint",
+                    wraps=view_provider.updateFootprint,
+                ) as update_footprint,
+            ):
+                self.assertTrue(view_provider.refreshFootprint())
+                update_footprint.assert_called_once()
+            self.assertEqual(0, view_provider._footprint_refresh_defer_depth)
+            renderer.remove_representation(wall)
+
+            with patch.object(
+                view_provider, "_isFootprintVisibleInAnyView", return_value=True
+            ):
+                renderer.set_representation(representation)
+            self.assertNotIn(wall, renderer._deferred_footprint_sources)
+            self.assertEqual(0, view_provider._footprint_refresh_defer_depth)
+            renderer.remove_representation(wall)
         finally:
             renderer.close()
         self.assertEqual("Inherit", view.getViewVisibility(wall))

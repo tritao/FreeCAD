@@ -113,6 +113,26 @@ class ContextualRepresentationRenderer:
         self._preview_label_parts = {}
         self._visible_handle_sources = set()
         self._hidden_sources = set()
+        self._deferred_footprint_sources = set()
+
+    def _defer_source_footprint(self, source):
+        if source in self._deferred_footprint_sources:
+            return
+        view_object = getattr(source, "ViewObject", None)
+        proxy = getattr(view_object, "Proxy", None) if view_object is not None else None
+        defer = getattr(proxy, "deferFootprintRefresh", None)
+        if callable(defer) and defer():
+            self._deferred_footprint_sources.add(source)
+
+    def _resume_source_footprint(self, source):
+        if source not in self._deferred_footprint_sources:
+            return
+        self._deferred_footprint_sources.discard(source)
+        view_object = getattr(source, "ViewObject", None)
+        proxy = getattr(view_object, "Proxy", None) if view_object is not None else None
+        resume = getattr(proxy, "resumeFootprintRefresh", None)
+        if callable(resume):
+            resume(view_object)
 
     def set_representation(self, representation):
         """Install or update one object's viewer-local representation."""
@@ -147,6 +167,7 @@ class ContextualRepresentationRenderer:
         self._apply_source_visibility(source)
         if self.replace_source:
             self.view.setViewVisibility(self.layer, source, "Hidden")
+            self._defer_source_footprint(source)
         return root
 
     def remove_representation(self, source, restore_visibility=True):
@@ -170,6 +191,7 @@ class ContextualRepresentationRenderer:
         if restore_visibility:
             self._hidden_sources.discard(source)
             if self.replace_source:
+                self._resume_source_footprint(source)
                 self.view.setViewVisibility(self.layer, source, "Inherit")
 
     def mapping_for_node(self, node):
@@ -291,6 +313,7 @@ class ContextualRepresentationRenderer:
         self.root.whichChild = coin.SO_SWITCH_NONE
         if self.replace_source:
             for source in self._representations:
+                self._resume_source_footprint(source)
                 self.view.setViewVisibility(self.layer, source, "Inherit")
         return True
 
@@ -303,6 +326,7 @@ class ContextualRepresentationRenderer:
         if self.replace_source:
             for source in self._representations:
                 self.view.setViewVisibility(self.layer, source, "Hidden")
+                self._defer_source_footprint(source)
         return True
 
     def close(self):
@@ -313,6 +337,8 @@ class ContextualRepresentationRenderer:
             self.clear_preview()
         except (AttributeError, ReferenceError, RuntimeError):
             pass
+        for source in tuple(self._deferred_footprint_sources):
+            self._resume_source_footprint(source)
         try:
             self.scene.removeChild(root)
         except (AttributeError, ReferenceError, RuntimeError):
@@ -337,6 +363,7 @@ class ContextualRepresentationRenderer:
             self._preview_groups.clear()
             self._visible_handle_sources.clear()
             self._hidden_sources.clear()
+            self._deferred_footprint_sources.clear()
             root.unref()
             self.root = None
 
