@@ -74,9 +74,28 @@ def make_hatch_geometry(faces, filename, pattern, scale=1.0, rotation=0.0, trans
     """
 
     rotation = float(getattr(rotation, "Value", rotation) or 0.0)
+    faces = tuple(faces or ())
     shapes = []
     with _allow_long_hatch_edges():
-        for source_face in faces or ():
+        if not translate:
+            planar_faces = tuple(face.copy() for face in faces if face.findPlane() is not None)
+            if not planar_faces:
+                return Part.Shape()
+            source_shape = Part.makeCompound(planar_faces)
+            if rotation:
+                source_shape.rotate(App.Vector(), App.Vector(0, 0, 1), -rotation)
+            shape = TechDraw.makeGeomHatch(
+                source_shape,
+                float(scale),
+                str(pattern),
+                str(filename),
+            )
+            if shape is None:
+                return Part.Shape()
+            if rotation:
+                shape.rotate(App.Vector(), App.Vector(0, 0, 1), rotation)
+            return shape
+        for source_face in faces:
             if source_face.findPlane() is None:
                 continue
             face = source_face.copy()

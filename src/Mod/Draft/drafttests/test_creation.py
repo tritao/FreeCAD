@@ -448,5 +448,57 @@ class DraftCreation(test_base.DraftTestCaseDoc):
 
         self.assertFalse(parameters.value)
 
+    def test_hatch_geometry_clips_planar_polygon_holes(self):
+        """The native planar path must preserve inner-wire exclusions."""
+
+        outer = Part.makePolygon(
+            (
+                Vector(0, 0),
+                Vector(100, 0),
+                Vector(100, 100),
+                Vector(0, 100),
+                Vector(0, 0),
+            )
+        )
+        inner = Part.makePolygon(
+            (
+                Vector(30, 30),
+                Vector(70, 30),
+                Vector(70, 70),
+                Vector(30, 70),
+                Vector(30, 30),
+            )
+        )
+        face = Part.makeFace([outer, inner], "Part::FaceMakerCheese")
+        pattern_file = App.getResourceDir() + "Mod/TechDraw/PAT/FCPAT.pat"
+
+        hatch = make_hatch_geometry(
+            (face,), pattern_file, "Diagonal4", scale=2.5, translate=False
+        )
+
+        self.assertTrue(hatch.Edges)
+        hole = Part.Face(inner)
+        self.assertTrue(
+            all(
+                not hole.isInside(edge.CenterOfMass, 1e-7, False)
+                for edge in hatch.Edges
+            )
+        )
+
+    def test_hatch_geometry_falls_back_for_curved_boundaries(self):
+        """Curved planar faces retain the general OCCT clipping path."""
+
+        face = Part.Face(Part.Wire([Part.makeCircle(50)]))
+        pattern_file = App.getResourceDir() + "Mod/TechDraw/PAT/FCPAT.pat"
+
+        hatch = make_hatch_geometry(
+            (face,), pattern_file, "Diagonal4", scale=2.5, translate=False
+        )
+
+        self.assertTrue(hatch.Edges)
+        self.assertTrue(
+            all(face.isInside(edge.CenterOfMass, 1e-7, True) for edge in hatch.Edges)
+        )
+
 
 ## @}

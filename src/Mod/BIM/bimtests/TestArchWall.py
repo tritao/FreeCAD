@@ -166,7 +166,15 @@ class TestArchWall(TestArchBase.TestArchBase):
         self._make_hosted_window(wall, "HatchWindow", 700, 0, width=600, height=2000)
         self.document.recompute()
 
-        representation = self._wall_plan_representation(wall)
+        import TechDraw
+
+        with patch.object(
+            TechDraw,
+            "makeGeomHatch",
+            wraps=TechDraw.makeGeomHatch,
+        ) as make_hatch:
+            representation = self._wall_plan_representation(wall)
+        self.assertEqual(1, make_hatch.call_count)
         hatches = self._plan_hatch_mappings(representation)
 
         self.assertGreater(len(hatches), 0)
