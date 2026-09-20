@@ -1628,6 +1628,10 @@ class _Wall(ArchComponent.Component):
     def _wall_joint_snap_edges(self, representation, wall):
         """Map each resolved relation to its physical wall-end boundary edge."""
 
+        analytic_edges = self._analytic_wall_joint_edges(representation, wall)
+        if analytic_edges is not None:
+            return analytic_edges
+
         result = []
         claimed_edges = []
         for joint in ArchWallRelation.iter_wall_joints(wall):
@@ -1657,6 +1661,57 @@ class _Wall(ArchComponent.Component):
             _distance, edge = min(candidates, key=lambda item: item[0])
             result.append((edge, joint))
             claimed_edges.append(edge)
+        return result
+
+    def _analytic_wall_joint_edges(self, representation, wall, tolerance=1e-7):
+        """Resolve joint boundaries directly from analytic trim semantics.
+
+        Return ``None`` when no analytic wall recipe is available so legacy
+        and section-derived representations retain their topology fallback.
+        """
+
+        model = getattr(representation, "analytic_model", None)
+        recipe = getattr(model, "recipe", None)
+        if recipe is None:
+            return None
+        trims_by_end = {
+            trim.end_name: trim for trim in getattr(recipe, "trim_planes", ())
+        }
+        if not trims_by_end:
+            return []
+
+        joints_by_end = {}
+        for joint in ArchWallRelation.iter_wall_joints(wall):
+            if not getattr(joint, "Enabled", True):
+                continue
+            solution = self._cached_wall_joint_solution(joint)
+            claim = solution.trim_for_wall(wall) if solution.is_ok() else None
+            if claim is not None and claim.end_name in trims_by_end:
+                joints_by_end[claim.end_name] = joint
+
+        result = []
+        claimed = set()
+        for face in representation.cut_geometry:
+            for edge in face.Edges:
+                vertices = tuple(edge.Vertexes)
+                if len(vertices) < 2:
+                    continue
+                for end_name, joint in joints_by_end.items():
+                    if joint in claimed:
+                        continue
+                    trim = trims_by_end[end_name]
+                    if all(
+                        abs(
+                            FreeCAD.Vector(vertex.Point)
+                            .sub(trim.origin)
+                            .dot(trim.normal)
+                        )
+                        <= tolerance
+                        for vertex in vertices
+                    ):
+                        result.append((edge, joint))
+                        claimed.add(joint)
+                        break
         return result
 
     @staticmethod

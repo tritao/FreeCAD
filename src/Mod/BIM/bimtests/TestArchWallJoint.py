@@ -22,6 +22,7 @@
 
 import os
 import tempfile
+from unittest.mock import patch
 
 import Arch
 import ArchWallGeometry
@@ -148,6 +149,17 @@ class TestArchWallJoint(TestArchBase.TestArchBase):
             self.assertTrue(
                 all(joint in target.related_sources for target in cut_points)
             )
+
+            with patch.object(
+                wall.Proxy,
+                "_cached_wall_joint_handle_point",
+                side_effect=AssertionError("analytic joint edges must use trim semantics"),
+            ):
+                semantic_edges = wall.Proxy._wall_joint_snap_edges(
+                    representation, wall
+                )
+            self.assertEqual(1, len(semantic_edges))
+            self.assertIs(joint, semantic_edges[0][1])
 
         rotated_frame = App.Placement(
             App.Vector(250, -125, 0), App.Rotation(App.Vector(0, 0, 1), 37)
